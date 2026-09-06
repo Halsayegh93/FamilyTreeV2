@@ -1,81 +1,101 @@
 import Foundation
 import SwiftUI
 import Combine
+import Supabase
 
-// MARK: - AppState
-// Central coordinator that owns all ViewModels and wires their dependencies.
-// Injected at app root as @StateObject; individual VMs are injected as @EnvironmentObject.
-
+/// ViewModels belong to one authenticated session, never to the lifetime of the app.
 @MainActor
 class AppState: ObservableObject {
     let authVM: AuthViewModel
-    let memberVM: MemberViewModel
-    let newsVM: NewsViewModel
-    let notificationVM: NotificationViewModel
-    let adminRequestVM: AdminRequestViewModel
-    let projectsVM: ProjectsViewModel
-    let appSettingsVM: AppSettingsViewModel
-
+    @Published private(set) var memberVM: MemberViewModel
+    @Published private(set) var newsVM: NewsViewModel
+    @Published private(set) var notificationVM: NotificationViewModel
+    @Published private(set) var adminRequestVM: AdminRequestViewModel
+    @Published private(set) var projectsVM: ProjectsViewModel
+    @Published private(set) var appSettingsVM: AppSettingsViewModel
+    @Published private(set) var sessionRevision = UUID()
+    private var activeProfileId: UUID?
+    private var loadTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        // 1. Create all VMs independently
-        let auth = AuthViewModel()
-        let member = MemberViewModel()
-        let news = NewsViewModel()
-        let notification = NotificationViewModel()
-        let admin = AdminRequestViewModel()
-        let projects = ProjectsViewModel()
-        let appSettings = AppSettingsViewModel()
-
-        // 2. Wire dependencies after creation (avoids circular init)
-        auth.notificationVM = notification
-        auth.appSettingsVM = appSettings
-        appSettings.authVM = auth
-        notification.configure(authVM: auth)
-        notification.appSettingsVM = appSettings
-        member.configure(authVM: auth, notificationVM: notification)
-        news.configure(authVM: auth, memberVM: member, notificationVM: notification)
-        admin.configure(authVM: auth, memberVM: member, notificationVM: notification, newsVM: news)
-        projects.configure(authVM: auth, notificationVM: notification)
-
-        // 3. Store references
-        self.authVM = auth
-        self.memberVM = member
-        self.newsVM = news
-        self.notificationVM = notification
-        self.adminRequestVM = admin
-        self.projectsVM = projects
-        self.appSettingsVM = appSettings
-
-        // 4. ربط RealtimeManager بالـ ViewModels
-        let realtime = RealtimeManager.shared
-        realtime.memberVM = member
-        realtime.newsVM = news
-        realtime.notificationVM = notification
-        realtime.projectsVM = projects
-
-        // 5. تحميل كل البيانات بالتوازي عند تسجيل الدخول — يمنع اللودنج في كل تاب
-        auth.$status
-            .removeDuplicates()
-            .sink { [weak self] status in
-                guard status == .fullyAuthenticated else { return }
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    async let m: () = self.memberVM.fetchAllMembers(force: true)
-                    async let n: () = self.newsVM.fetchNews()
-                    async let notif: () = self.notificationVM.fetchNotifications()
-                    async let proj: () = self.projectsVM.fetchProjects()
-                    _ = await (m, n, notif, proj)
-
-                    // بدء الاشتراكات الحية بعد تحميل البيانات
-                    RealtimeManager.shared.subscribe()
-
-                    // تسجيل الجهاز + Push Token بعد تسجيل الدخول
-                    await self.notificationVM.registerDevice()
-                    await self.notificationVM.reRegisterPushTokenIfNeeded()
-                }
-            }
+        authVM = AuthViewModel()
+        memberVM = MemberViewModel()
+        newsVM = NewsViewModel()
+        notificationVM = NotificationViewModel()
+        adminRequestVM = AdminRequestViewModel()
+        projectsVM = ProjectsViewModel()
+        appSettingsVM = AppSettingsViewModel()
+        wireDependencies()
+        authVM.$status.combineLatest(authVM.$currentUser.map { $0?.id })
+            .sink { [weak self] status, profileId in self?.updateSession(status: status, profileId: profileId) }
             .store(in: &cancellables)
+    }
+
+    private func wireDependencies() {
+        authVM.notificationVM = notificationVM
+        authVM.appSettingsVM = appSettingsVM
+        appSettingsVM.authVM = authVM
+        notificationVM.configure(authVM: authVM)
+        notificationVM.appSettingsVM = appSettingsVM
+        memberVM.configure(authVM: authVM, notificationVM: notificationVM)
+        newsVM.configure(authVM: authVM, memberVM: memberVM, notificationVM: notificationVM)
+        adminRequestVM.configure(authVM: authVM, memberVM: memberVM, notificationVM: notificationVM, newsVM: newsVM)
+        projectsVM.configure(authVM: authVM, notificationVM: notificationVM)
+        let realtime = RealtimeManager.shared
+        realtime.memberVM = memberVM
+        realtime.newsVM = newsVM
+        realtime.notificationVM = notificationVM
+        realtime.projectsVM = projectsVM
+    }
+
+    private func replaceSessionModels() {
+        memberVM = MemberViewModel()
+        newsVM = NewsViewModel()
+        notificationVM = NotificationViewModel()
+        adminRequestVM = AdminRequestViewModel()
+        projectsVM = ProjectsViewModel()
+        appSettingsVM = AppSettingsViewModel()
+        wireDependencies()
+        sessionRevision = UUID()
+    }
+
+    private func updateSession(status: AuthViewModel.AuthStatus, profileId: UUID?) {
+        guard status == .fullyAuthenticated, let profileId,
+              let accountId = authVM.supabase.auth.currentUser?.id else {
+            if activeProfileId != nil || status == .unauthenticated || status == .accountFrozen {
+                loadTask?.cancel()
+                loadTask = nil
+                activeProfileId = nil
+                RealtimeManager.shared.unsubscribe()
+                CacheManager.shared.clearAll()
+                SharedSessionStore.clear()
+                replaceSessionModels()
+            }
+            return
+        }
+        guard activeProfileId != profileId else { return }
+        loadTask?.cancel()
+        RealtimeManager.shared.unsubscribe()
+        if activeProfileId != nil { CacheManager.shared.clearAll() }
+        CacheManager.shared.beginAccount(accountId)
+        activeProfileId = profileId
+        replaceSessionModels()
+        let revision = sessionRevision
+        // Capture this bundle; a suspended task must never operate on a newer one.
+        let member = memberVM, news = newsVM, notifications = notificationVM, projects = projectsVM
+        loadTask = Task { @MainActor [weak self] in
+            async let m: () = member.fetchAllMembers(force: true)
+            async let n: () = news.fetchNews(force: true)
+            async let notif: () = notifications.fetchNotifications(force: true)
+            async let proj: () = projects.fetchProjects()
+            _ = await (m,n,notif,proj)
+            guard !Task.isCancelled, let self, self.sessionRevision == revision,
+                  self.activeProfileId == profileId, self.authVM.status == .fullyAuthenticated else { return }
+            RealtimeManager.shared.subscribe()
+            await notifications.registerDevice()
+            guard !Task.isCancelled, self.sessionRevision == revision else { return }
+            await notifications.reRegisterPushTokenIfNeeded()
+        }
     }
 }

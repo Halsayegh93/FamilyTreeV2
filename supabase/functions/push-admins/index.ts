@@ -1,3 +1,5 @@
+import { deliveryGuard } from "../_shared/delivery-guard.ts";
+import { ownsPendingRequest, adminRoles, requestTitle } from "../_shared/admin-request-policy.ts";
 import { handleCors, validatePost, json } from "../_shared/cors.ts";
 import { createServiceClient, authenticateRequest, parseBody } from "../_shared/auth.ts";
 import { createApnsJwt, getApnsConfig, apnsHostFor } from "../_shared/apns.ts";
@@ -29,8 +31,9 @@ Deno.serve(async (req) => {
 
   // التحقق من هوية المرسل — أي مستخدم مسجّل يقدر يصدر إشعار للإدارة
   // (طلبات الأعضاء العاديين تحتاج إشعارات للأدمن، فلا نقيّد بالأدوار)
-  const auth = await authenticateRequest(req);
+  const auth = await authenticateRequest(req, undefined, { allowInactive: true });
   if (auth instanceof Response) return auth;
+  if (!["active", "pending"].includes(auth.status ?? "")) return json(403, { ok: false, message: "Account not authorized" });
   // نستثني المُرسِل من المستلمين عند وجود أكثر من مدير (تجنّب إشعار الذات)،
   // ونُبقيه فقط لو كان المدير الوحيد — انظر فلترة adminIds أدناه.
 
@@ -39,11 +42,35 @@ Deno.serve(async (req) => {
   if (parsed instanceof Response) return parsed;
   const payload = parsed;
 
-  const title = (payload.title ?? "").trim();
-  const body = (payload.body ?? "").trim();
-  if (!title || !body) {
-    return json(400, { ok: false, message: "title/body required" });
+  if (!payload || typeof payload !== "object") return json(400, { ok: false, message: "Invalid request" });
+  const supabase = createServiceClient();
+  const privileged = auth.status === "active" && adminRoles.includes(auth.role ?? "");
+  let title: string;
+  let body: string;
+  if (typeof payload.request_id === "string") {
+    if (!/^[0-9a-f-]{36}$/i.test(payload.request_id)) return json(400, { ok: false, message: "Invalid request id" });
+    if (payload.request_type === "join_request") {
+      const { data: member, error } = await supabase.from("profiles").select("id,status").eq("id", payload.request_id).maybeSingle();
+      if (error) return json(503, { ok: false, message: "Request lookup failed" });
+      if (!member || member.id !== auth.profileId || member.status !== "pending") return json(403, { ok: false, message: "Request not authorized" });
+    } else {
+      const { data: saved, error } = await supabase.from("admin_requests")
+        .select("id,requester_id,member_id,request_type,status").eq("id", payload.request_id).maybeSingle();
+      if (error) return json(503, { ok: false, message: "Request lookup failed" });
+      if (!ownsPendingRequest(saved, auth.profileId)) return json(403, { ok: false, message: "Request not authorized" });
+      payload.request_type = saved!.request_type;
+    }
+    title = requestTitle(payload.request_type ?? "");
+    body = "يوجد طلب جديد بانتظار المراجعة في مركز طلبات الإدارة.";
+    payload.kind = "admin_request";
+  } else {
+    if (!privileged) return json(403, { ok: false, message: "A saved request is required" });
+    title = typeof payload.title === "string" ? payload.title.trim() : "";
+    body = typeof payload.body === "string" ? payload.body.trim() : "";
   }
+  if (!title || !body || title.length > 200 || body.length > 2000) return json(400, { ok: false, message: "Invalid notification" });
+  const limited = await deliveryGuard("push-admins", auth.profileId, payload.request_id ?? [title,body], privileged ? 60 : 10, payload.request_id ? 604800 : 300);
+  if (limited) return limited;
 
   // APNs config
   let apnsConfig;
@@ -54,13 +81,12 @@ Deno.serve(async (req) => {
   }
   const { teamId, keyId, bundleId, privateKey } = apnsConfig;
 
-  const supabase = createServiceClient();
-
   // جلب أعضاء فريق الإدارة (مع استثناء المُرسِل لو هو نفسه أدمن — لتجنب إشعار الذات)
   const { data: admins, error: adminsErr } = await supabase
     .from("profiles")
     .select("id")
-    .in("role", ["owner", "admin", "monitor", "supervisor"]);
+    .in("role", ["owner", "admin", "monitor", "supervisor"])
+    .eq("status", "active");
 
   if (adminsErr) {
     return json(500, {
@@ -76,7 +102,7 @@ Deno.serve(async (req) => {
 
   // استثناء المُرسِل لتجنّب «إشعار الذات» (سبب رئيسي لتكرار وصول نفس الإشعار
   // للمدير المنفّذ). نُبقيه فقط لو كان المدير الوحيد — ليستلم تأكيداً على أجهزته.
-  const senderId = auth.user.id;
+  const senderId = auth.profileId;
   if (adminIds.length > 1) {
     adminIds = adminIds.filter((id) => id !== senderId);
   }

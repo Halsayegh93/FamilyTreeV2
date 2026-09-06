@@ -1,0 +1,68 @@
+// npm install --prefix <tools> @electric-sql/pglite, then PGLITE_MODULE=<absolute module> node this-file.
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const { PGlite } = await import(process.env.PGLITE_MODULE || '@electric-sql/pglite');
+const db = new PGlite();
+const ids = {owner:'10000000-0000-0000-0000-000000000001',admin:'10000000-0000-0000-0000-000000000002',supervisor:'10000000-0000-0000-0000-000000000003',member:'10000000-0000-0000-0000-000000000004',pending:'10000000-0000-0000-0000-000000000005',frozen:'10000000-0000-0000-0000-000000000006',stranger:'10000000-0000-0000-0000-000000000007'};
+await db.exec(`create role anon; create role authenticated; create role service_role;
+create schema auth; create schema storage;
+create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
+create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;
+create function auth.role() returns text language sql stable as $$select auth.jwt()->>'role'$$;
+grant usage on schema auth to public; grant execute on all functions in schema auth to public;
+create table public.profiles(id uuid primary key,role text,status text,first_name text,full_name text,phone_number text,is_phone_hidden bool default false,father_id uuid,sort_order int,email text,bio text,cover_url text);
+grant select,insert,update on public.profiles to authenticated;
+create table storage.objects(bucket_id text,name text,owner_id text);
+create table public.projects(id uuid,owner_id uuid);
+`);
+for (const [role,id] of Object.entries(ids).filter(([r])=>r!=='stranger')) await db.query('insert into profiles(id,role,status,phone_number,is_phone_hidden) values($1,$2,$3,$4,true)',[id,role==='frozen'?'admin':role,role==='pending'?'pending':role==='frozen'?'frozen':'active','synthetic']);
+await db.exec(await fs.readFile('supabase/migrations/20260906180000_security_high_priority.sql','utf8'));
+async function actor(id,extra={}) { await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:id,role:'authenticated',...extra})]); }
+async function scalar(sql) { return Object.values((await db.query(sql)).rows[0])[0]; }
+async function denied(sql) { await assert.rejects(db.exec(sql), /forbidden|protected|approval_required|account_inactive|privileged_role/); }
+await actor(ids.supervisor);
+await denied(`update profiles set role='owner' where id='${ids.supervisor}'`);
+await denied(`update profiles set role='admin' where id='${ids.supervisor}'`);
+await actor(ids.admin);
+await denied(`update profiles set role='supervisor' where id='${ids.member}'`);
+await actor(ids.owner);
+await db.exec(`update profiles set role='monitor' where id='${ids.member}'`);
+await denied(`update profiles set status='frozen' where id='${ids.owner}'`);
+await denied(`update profiles set role='owner' where id='${ids.member}'`);
+await actor(ids.pending,{user_metadata:{profile_id:ids.owner}});
+assert.equal(await scalar('select is_approved_member()'),false);
+assert.equal(await scalar(`select get_member_phone('${ids.owner}')`),null);
+await denied(`update profiles set role='member', status='active' where id='${ids.pending}'`);
+await actor(ids.stranger,{user_metadata:{profile_id:ids.owner}});
+assert.equal(await scalar('select is_approved_member()'),false);
+await denied(`insert into profiles(id,role,status) values('${ids.stranger}','member','active')`);
+await actor(ids.frozen);
+assert.equal(await scalar('select current_user_role()'),'frozen');
+await denied(`update profiles set first_name='changed' where id='${ids.frozen}'`);
+await actor(ids.stranger,{app_metadata:{profile_id:ids.admin},user_metadata:{profile_id:ids.owner}});
+assert.equal(await scalar('select current_profile_id()'),ids.admin);
+await actor(ids.admin);
+await db.exec(`update profiles set role='member',status='active' where id='${ids.pending}'`);
+await actor(ids.admin);
+await db.exec(`update profiles set status='owner' where id='${ids.member}'`);
+await actor(ids.member);
+assert.equal(await scalar('select is_approved_member()'),false);
+await actor(ids.admin);
+console.log('PASS: role escalation, owner protection, approval, frozen account, trusted identity');
+// Deletion integration fixture: all core table names match the application schema.
+for (const [table,columns] of Object.entries({news:'author_id uuid',news_comments:'author_id uuid',news_likes:'member_id uuid',news_poll_votes:'member_id uuid',notifications:'target_member_id uuid,created_by uuid',device_tokens:'member_id uuid',admin_requests:'member_id uuid,requester_id uuid',diwaniyas:'owner_id uuid',member_gallery_photos:'member_id uuid'})) await db.exec(`create table public.${table}(${columns})`);
+await db.exec(await fs.readFile('supabase/migrations/20260906181000_account_deletion_jobs.sql','utf8'));
+await assert.rejects(db.query('select prepare_account_deletion($1,$1)',[ids.pending]),/service_only/);
+await actor(ids.admin,{role:'service_role'});
+await db.exec(`update profiles set email='synthetic@example.invalid',bio='private',cover_url='private-cover' where id='${ids.pending}'; insert into news values('${ids.pending}'); insert into storage.objects values('avatars','cover_${ids.pending}.jpg',null);`);
+const job=(await db.query('select prepare_account_deletion($1,$1) as job',[ids.pending])).rows[0].job;
+assert.equal(job.storage_files.length,1);
+assert.equal(await scalar(`select status from profiles where id='${ids.pending}'`),'frozen');
+await db.query('select finalize_account_deletion($1)',[ids.pending]);
+await db.query('select finalize_account_deletion($1)',[ids.pending]);
+assert.equal(await scalar('select count(*)::int from news'),0);
+const person=(await db.query('select role,status,email,bio,cover_url from profiles where id=$1',[ids.pending])).rows[0];
+assert.deepEqual(person,{role:'member',status:'deleted',email:null,bio:null,cover_url:null});
+await assert.rejects(db.query('select prepare_account_deletion($1,$1)',[ids.owner]),/owner_account_protected/);
+console.log('PASS: deletion service boundary, manifest, privacy cleanup, retry, owner protection');
+await db.close();

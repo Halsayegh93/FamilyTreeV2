@@ -5,6 +5,8 @@ import Combine
 
 @MainActor
 class NewsViewModel: ObservableObject {
+    private let cacheSession = CacheManager.shared.session
+
 
     // MARK: - Private Types
 
@@ -32,6 +34,15 @@ class NewsViewModel: ObservableObject {
     @Published var newsPollFeatureAvailable: Bool = true
     @Published var newsPostErrorMessage: String?
     @Published var isLoading: Bool = false
+    @Published var isLoadingNews = false
+    @Published var isLoadingMoreNews = false
+    @Published var hasMoreNews = true
+    @Published var newsLoadError: String?
+    private var newsFetchRevision = UUID()
+    private var feedSearch = ""
+    private var feedType: String?
+    private var nextNewsCursor: NewsPost?
+    private let newsPageSize = 25
 
     // MARK: - Fetch Throttle
 
@@ -105,134 +116,106 @@ class NewsViewModel: ObservableObject {
 
     // MARK: - Fetch News
 
+    func setNewsFilter(search: String, type: String?) async {
+        let trimmed = String(search.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        guard trimmed != feedSearch || type != feedType else { return }
+        feedSearch = trimmed
+        feedType = type
+        allNews = []
+        await fetchNews(force: true)
+    }
+
     func fetchNews(force: Bool = false) async {
-        // تحميل من الكاش أولاً
-        if allNews.isEmpty,
-           let cached = CacheManager.shared.load([NewsPost].self, for: .news) {
-            self.allNews = cached
-            Log.info("[News] تم تحميل \(cached.count) خبر من الكاش")
+        if allNews.isEmpty, feedSearch.isEmpty, feedType == nil,
+           let cached = CacheManager.shared.load([NewsPost].self, for: .news, in: cacheSession) {
+            allNews = Array(cached.prefix(newsPageSize))
         }
+        guard force || (!isLoadingNews && throttler.canFetch(key: "news", interval: 10)) || allNews.isEmpty else { return }
+        let revision = UUID()
+        newsFetchRevision = revision
+        isLoadingNews = true
+        isLoadingMoreNews = false
+        newsLoadError = nil
+        defer { if newsFetchRevision == revision { isLoadingNews = false } }
+        await fetchNewsPage(after: nil, revision: revision)
+    }
 
-        guard throttler.canFetch(key: "news", interval: 10, force: force) || allNews.isEmpty else { return }
+    func loadMoreNews() async {
+        guard hasMoreNews, !isLoadingNews, !isLoadingMoreNews, let cursor = nextNewsCursor else { return }
+        let revision = newsFetchRevision
+        isLoadingMoreNews = true
+        newsLoadError = nil
+        defer { if newsFetchRevision == revision { isLoadingMoreNews = false } }
+        await fetchNewsPage(after: cursor, revision: revision)
+    }
 
-        guard NetworkMonitor.shared.isConnected else { return }
-
-        throttler.didFetch(key: "news")
+    private func fetchNewsPage(after cursor: NewsPost?, revision: UUID) async {
+        guard NetworkMonitor.shared.isConnected else {
+            newsLoadError = L10n.t("لا يوجد اتصال بالإنترنت. اسحب للتحديث أو أعد المحاولة.", "You're offline. Refresh or try again.")
+            return
+        }
         do {
-            let response: [NewsPost] = try await supabase.from("news")
-                .select()
-                .order("created_at", ascending: false)
-                .limit(10000)
-                .execute()
-                .value
-
-            let userId = currentUser?.id
-            if canModerate {
-                self.allNews = response
-            } else {
-                self.allNews = response.filter { post in
-                    post.isApproved || post.ownerId == userId
-                }
+            let params: [String: AnyEncodable] = [
+                "p_before_time": AnyEncodable(cursor?.created_at),
+                "p_before_id": AnyEncodable(cursor?.id.uuidString),
+                "p_search": AnyEncodable(feedSearch),
+                "p_type": AnyEncodable(feedType),
+                "p_limit": AnyEncodable(newsPageSize)
+            ]
+            let page: [NewsPost] = try await supabase.rpc("news_feed_page", params: params).execute().value
+            guard revision == newsFetchRevision, !Task.isCancelled, CacheManager.shared.isCurrent(cacheSession) else { return }
+            if cursor == nil { allNews = page } else {
+                let existing = Set(allNews.map(\.id))
+                allNews.append(contentsOf: page.filter { !existing.contains($0.id) })
             }
-
-            // حفظ في الكاش
-            CacheManager.shared.save(self.allNews, for: .news)
-
-            // تجنب إطلاق طلبات فرعية إذا تم إلغاء المهمة
-            guard !Task.isCancelled else { return }
-
-            let pollPostIds = allNews.filter { $0.hasPoll }.map(\.id)
-            let allPostIds = allNews.map(\.id)
-            await fetchNewsPollVotes(for: pollPostIds)
-            await fetchNewsLikes(for: allPostIds)
-            await fetchNewsComments(for: allPostIds)
+            nextNewsCursor = page.last
+            hasMoreNews = page.count == newsPageSize
+            throttler.didFetch(key: "news")
+            if feedSearch.isEmpty, feedType == nil {
+                CacheManager.shared.save(Array(allNews.prefix(newsPageSize)), for: .news, in: cacheSession)
+            }
+            await fetchNewsStats(for: page.map(\.id))
         } catch {
+            guard revision == newsFetchRevision, !Task.isCancelled, !ErrorHelper.isCancellation(error) else { return }
+            newsLoadError = L10n.t("تعذر تحميل الأخبار. أعد المحاولة.", "Couldn't load news. Please try again.")
             Log.fetchError("خطأ جلب الأخبار", error)
         }
     }
 
-    // MARK: - Fetch Poll Votes
+    private struct NewsStats: Decodable {
+        let news_id: UUID
+        let likes_count: Int
+        let comments_count: Int
+        let is_liked: Bool
+        let poll_counts: [String: Int]
+        let my_vote: Int?
+    }
 
-    func fetchNewsPollVotes(for postIds: [UUID]) async {
-        guard newsPollFeatureAvailable else {
-            pollVotesByPost = [:]
-            userVoteByPost = [:]
-            return
-        }
-        guard !postIds.isEmpty else {
-            pollVotesByPost = [:]
-            userVoteByPost = [:]
-            return
-        }
-
+    private func fetchNewsStats(for ids: [UUID]) async {
+        guard !ids.isEmpty else { return }
+        let revision = newsFetchRevision
         do {
-            let votes: [NewsPollVoteRecord] = try await supabase
-                .from("news_poll_votes")
-                .select("news_id,member_id,option_index")
-                .in("news_id", values: postIds.map(\.uuidString))
-                .execute()
-                .value
-
-            var aggregated: [UUID: [Int: Int]] = [:]
-            var userSelection: [UUID: Int] = [:]
-            let currentUserId = currentUser?.id
-
-            for vote in votes {
-                aggregated[vote.news_id, default: [:]][vote.option_index, default: 0] += 1
-                if let currentUserId, vote.member_id == currentUserId {
-                    userSelection[vote.news_id] = vote.option_index
+            for start in stride(from: 0, to: ids.count, by: 50) {
+                let chunk = Array(ids[start..<min(start + 50, ids.count)])
+                let rows: [NewsStats] = try await supabase.rpc("news_page_stats", params: ["p_ids": chunk.map(\.uuidString)]).execute().value
+                guard revision == newsFetchRevision, !Task.isCancelled, CacheManager.shared.isCurrent(cacheSession) else { return }
+                for row in rows {
+                    likesCountByPost[row.news_id] = row.likes_count
+                    commentsCountByPost[row.news_id] = row.comments_count
+                    if row.is_liked { likedPosts.insert(row.news_id) } else { likedPosts.remove(row.news_id) }
+                    pollVotesByPost[row.news_id] = Dictionary(uniqueKeysWithValues: row.poll_counts.compactMap { key, value in Int(key).map { ($0,value) } })
+                    userVoteByPost[row.news_id] = row.my_vote
                 }
             }
-
-            pollVotesByPost.merge(aggregated) { _, new in new }
-            userVoteByPost.merge(userSelection) { _, new in new }
-            newsPollFeatureAvailable = true
         } catch {
-            if ErrorHelper.isMissingTable(error, table: "news_poll_votes") {
-                newsPollFeatureAvailable = false
-                pollVotesByPost = [:]
-                userVoteByPost = [:]
-            } else {
-                Log.fetchError("خطأ جلب أصوات التصويت", error)
-            }
+            guard revision == newsFetchRevision, !Task.isCancelled else { return }
+            newsLoadError = L10n.t("الأخبار متاحة، لكن تعذر تحديث التفاعلات. أعد المحاولة.", "News loaded, but reactions couldn't refresh. Please try again.")
+            Log.fetchError("خطأ جلب تفاعلات الأخبار", error)
         }
     }
 
-    // MARK: - Fetch Likes
-
-    func fetchNewsLikes(for postIds: [UUID]) async {
-        guard !postIds.isEmpty else {
-            likesCountByPost = [:]
-            likedPosts = []
-            return
-        }
-
-        do {
-            let likes: [NewsLikeRecord] = try await supabase
-                .from("news_likes")
-                .select("id,news_id,member_id")
-                .in("news_id", values: postIds.map(\.uuidString))
-                .execute()
-                .value
-
-            var counts: [UUID: Int] = [:]
-            var userLikes: Set<UUID> = []
-            let currentUserId = await authenticatedUserId()
-
-            for like in likes {
-                counts[like.news_id, default: 0] += 1
-                if let currentUserId, like.member_id == currentUserId {
-                    userLikes.insert(like.news_id)
-                }
-            }
-
-            self.likesCountByPost.merge(counts) { _, new in new }
-            self.likedPosts.formUnion(userLikes)
-        } catch {
-            if ErrorHelper.isCancellation(error) { return }
-            Log.fetchError("خطأ جلب الاعجابات", error)
-        }
-    }
+    func fetchNewsPollVotes(for postIds: [UUID]) async { await fetchNewsStats(for: postIds) }
+    func fetchNewsLikes(for postIds: [UUID]) async { await fetchNewsStats(for: postIds) }
 
     // MARK: - Fetch Comments
 

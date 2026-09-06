@@ -1,6 +1,8 @@
+import { deliveryGuard } from "../_shared/delivery-guard.ts";
+import { canSendEvent, withVerifiedRecipient } from "../_shared/event-policy.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { handleCors, validatePost, json } from "../_shared/cors.ts";
-import { authenticateRequest, parseBody } from "../_shared/auth.ts";
+import { authenticateRequest, createServiceClient, parseBody } from "../_shared/auth.ts";
 import {
   BRAND,
   dataRow,
@@ -16,6 +18,9 @@ type EventType = "join_request" | "role_changed" | "status_changed" | "contact_r
 
 interface BasePayload {
   type: EventType;
+  member_id?: string;
+  member_phone?: string;
+  member_email?: string;
 }
 
 interface JoinRequestPayload extends BasePayload {
@@ -286,7 +291,7 @@ serve(async (req) => {
 
   try {
     // التحقق من JWT — أي مستخدم مسجّل دخول
-    const auth = await authenticateRequest(req);
+    const auth = await authenticateRequest(req, undefined, { allowInactive: true });
     if (auth instanceof Response) return auth;
 
     const resendApiKey = (Deno.env.get("RESEND_API_KEY") ?? "").trim();
@@ -300,11 +305,35 @@ serve(async (req) => {
 
     const body = await parseBody<EventPayload>(req);
     if (body instanceof Response) return body;
-    const payload = body;
+    if (!body || typeof body !== "object") return json(400, { ok: false, message: "Invalid event" });
+    if (!canSendEvent(body.type, auth.role, auth.status)) {
+      return json(403, { ok: false, message: "Event not authorized" });
+    }
+    const memberId = body.type === "join_request" ? auth.profileId : body.member_id;
+    if (typeof memberId !== "string" || !/^[0-9a-f-]{36}$/i.test(memberId)) {
+      return json(400, { ok: false, message: "member_id required" });
+    }
+    const client = createServiceClient();
+    const { data: target, error: targetError } = await client.from("profiles")
+      .select("id,full_name,email,phone_number,role,status").eq("id", memberId).maybeSingle();
+    if (targetError) return json(503, { ok: false, message: "Unable to verify recipient" });
+    if (!target) return json(404, { ok: false, message: "Member not found" });
+    if ((body.type === "role_changed" && body.new_role !== target.role) ||
+        (body.type === "status_changed" && body.new_status !== target.status)) {
+      return json(409, { ok: false, message: "Event does not match current member state" });
+    }
+    // Names, destination and phone come only from the trusted profile.
+    const payload = withVerifiedRecipient(body, target) as EventPayload;
+    if (payload.type === "contact_reply" && (typeof payload.reply_text !== "string" || payload.reply_text.length > 10000)) {
+      return json(400, { ok: false, message: "Invalid reply" });
+    }
 
     if (!payload?.type) {
       return json(400, { ok: false, message: "type is required" });
     }
+
+    const limited = await deliveryGuard("event-notify", auth.profileId, [payload.type, target.id, target.role, target.status, payload.type === "contact_reply" ? payload.reply_text : ""], 30);
+    if (limited) return limited;
 
     const adminRecipients = emailTo.split(",").map((v) => v.trim()).filter(Boolean);
     const results: Array<{ target: string; ok: boolean; status: number }> = [];

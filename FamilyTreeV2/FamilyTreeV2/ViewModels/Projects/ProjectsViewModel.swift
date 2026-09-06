@@ -5,6 +5,8 @@ import Combine
 
 @MainActor
 class ProjectsViewModel: ObservableObject {
+    private let cacheSession = CacheManager.shared.session
+
 
     let supabase = SupabaseConfig.client
     weak var authVM: AuthViewModel?
@@ -26,7 +28,7 @@ class ProjectsViewModel: ObservableObject {
     func fetchProjects() async {
         // تحميل من الكاش أولاً
         if projects.isEmpty,
-           let cached = CacheManager.shared.load([Project].self, for: .projects) {
+           let cached = CacheManager.shared.load([Project].self, for: .projects, in: cacheSession) {
             self.projects = cached
             Log.info("[Projects] تم تحميل \(cached.count) مشروع من الكاش")
         }
@@ -47,7 +49,7 @@ class ProjectsViewModel: ObservableObject {
             self.projects = response
 
             // حفظ في الكاش
-            CacheManager.shared.save(response, for: .projects)
+            CacheManager.shared.save(response, for: .projects, in: cacheSession)
         } catch {
             self.errorMessage = L10n.t("تعذر تحميل المشاريع. حاول مرة أخرى.",
                                        "Failed to load projects. Please try again.")
@@ -319,7 +321,7 @@ class ProjectsViewModel: ObservableObject {
                 .update(["is_hidden": newValue])
                 .eq("id", value: id.uuidString)
                 .execute()
-            CacheManager.shared.save(projects, for: .projects)
+            CacheManager.shared.save(projects, for: .projects, in: cacheSession)
             Log.info("[Projects] \(newValue ? "إخفاء" : "إظهار"): \(id.uuidString)")
         } catch {
             // استرجاع عند الفشل

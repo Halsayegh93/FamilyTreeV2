@@ -229,7 +229,7 @@ struct AdminMembersManagementView: View {
             case .active:  s.active += 1
             case .pending: s.pending += 1
             case .frozen:  s.frozen += 1
-            case .none:    break
+            case .deleted, .none:    break
             }
             // جودة البيانات تُحتسب على الأحياء فقط
             guard m.isDeceased != true else { continue }

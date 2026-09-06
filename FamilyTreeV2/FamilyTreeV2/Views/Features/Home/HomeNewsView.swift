@@ -111,6 +111,19 @@ struct HomeNewsView: View {
                     }
                 }
             }
+            .onChange(of: debouncedNewsSearch) { value in
+                Task { await newsVM.setNewsFilter(search: value, type: selectedNewsTypeFilter) }
+            }
+            .onChange(of: selectedNewsTypeFilter) { value in
+                Task { await newsVM.setNewsFilter(search: debouncedNewsSearch, type: value) }
+            }
+            .onChange(of: activeSubPage) { value in
+                if value != .news {
+                    newsSearchText = ""
+                    selectedNewsTypeFilter = nil
+                    Task { await newsVM.setNewsFilter(search: "", type: nil) }
+                }
+            }
             .sheet(isPresented: $showingAddNews) {
                 AddNewsView()
                     .presentationDetents([.medium, .large])
@@ -667,12 +680,21 @@ struct HomeNewsView: View {
     // MARK: - News Feed Section
     private var newsFeedSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // البحث صار داخل كبسولة الفلتر أعلى الصفحة — بلا حقل مكرّر هنا
-            if newsVM.isLoading && newsVM.allNews.isEmpty {
+            if let error = newsVM.newsLoadError {
+                VStack(spacing: DS.Spacing.sm) {
+                    Text(error).font(DS.Font.callout).foregroundStyle(DS.Color.textSecondary)
+                    Button(L10n.t("إعادة المحاولة", "Try again")) {
+                        Task { await newsVM.fetchNews(force: true) }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+            }
+            if newsVM.isLoadingNews && newsVM.allNews.isEmpty {
                 newsLoadingSkeleton(count: 3)
                     .padding(.horizontal, DS.Spacing.lg)
                     .transition(.opacity)
-            } else if newsVM.allNews.isEmpty {
+            } else if newsVM.allNews.isEmpty && newsVM.newsLoadError == nil {
                 emptyNewsView
             } else if filteredNews.isEmpty && debouncedNewsSearch.isEmpty {
                 // فلتر نوع بلا نتائج (نادر — النوع اختفى بعد حذف)
@@ -703,7 +725,21 @@ struct HomeNewsView: View {
                     .transition(.opacity)
             }
         }
-        .animation(DS.Anim.medium, value: newsVM.isLoading)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if newsVM.hasMoreNews && !newsVM.allNews.isEmpty {
+                Button {
+                    Task { await newsVM.loadMoreNews() }
+                } label: {
+                    HStack {
+                        if newsVM.isLoadingMoreNews { ProgressView() }
+                        Text(L10n.t("تحميل أخبار أقدم", "Load older news"))
+                    }.padding(.vertical, DS.Spacing.sm).frame(maxWidth: .infinity)
+                }
+                .disabled(newsVM.isLoadingMoreNews || newsVM.isLoadingNews)
+                .background(DS.Color.background)
+            }
+        }
+        .animation(DS.Anim.medium, value: newsVM.isLoadingNews)
         .animation(DS.Anim.smooth, value: filteredNews.isEmpty)
     }
 
@@ -734,24 +770,12 @@ struct HomeNewsView: View {
         }
     }
 
-    private var filteredNews: [NewsPost] {
-        var list = newsVM.allNews
-        if let t = selectedNewsTypeFilter {
-            list = list.filter { $0.type == t }
-        }
-        guard !debouncedNewsSearch.isEmpty else { return list }
-        let query = debouncedNewsSearch.lowercased()
-        return list.filter {
-            $0.content.lowercased().contains(query) ||
-            $0.author_name.lowercased().contains(query)
-        }
-    }
+    private var filteredNews: [NewsPost] { newsVM.allNews }
+
 
     // MARK: - شريط فلترة الأنواع — «الكل» + الأنواع الموجودة فعلاً في السيل
     private var newsTypeFilterBar: some View {
-        let presentTypes = NewsTypeHelper.mainTypes.filter { t in
-            newsVM.allNews.contains { $0.type == t }
-        }
+        let presentTypes = NewsTypeHelper.mainTypes
         return Group {
             if presentTypes.count > 1 || showNewsSearch {
                 HStack {

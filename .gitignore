@@ -45,3 +45,6 @@ worldcup-supabase/backups/
 build/
 build-device/
 build-sim/
+
+# Isolated security-test dependencies
+tests/security/node_modules/

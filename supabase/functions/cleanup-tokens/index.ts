@@ -1,3 +1,4 @@
+import { requireSystem } from "../_shared/system-auth.ts";
 // ============================================================================
 // cleanup-tokens — مهمة دورية لتنظيف توكنات الأجهزة القديمة/غير الصالحة
 // ============================================================================
@@ -17,6 +18,8 @@ serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  const denied = requireSystem(req);
+  if (denied) return denied;
   const supabase = createServiceClient();
 
   try {
@@ -25,9 +28,11 @@ serve(async (req) => {
     const staleISO = staleThreshold.toISOString();
 
     // 1. إحصائيات قبل الحذف (للتقرير)
-    const { count: totalBefore } = await supabase
+    const { count: totalBefore, error: beforeError } = await supabase
       .from("device_tokens")
       .select("*", { count: "exact", head: true });
+
+    if (beforeError) throw beforeError;
 
     // 2-3. جلب كل الصفوف لتحديد null/empty/short tokens بالـ JS (PostgREST filter limited for length)
     const { data: allRows, error: fetchErr } = await supabase
@@ -55,7 +60,7 @@ serve(async (req) => {
         .select("id");
 
       if (error) {
-        console.error("[cleanup-tokens] invalid delete error:", error);
+        throw error;
       } else {
         invalidDeleted = data ?? [];
       }
@@ -74,10 +79,11 @@ serve(async (req) => {
     }
 
     // 5. إحصائيات بعد الحذف
-    const { count: totalAfter } = await supabase
+    const { count: totalAfter, error: afterError } = await supabase
       .from("device_tokens")
       .select("*", { count: "exact", head: true });
 
+    if (afterError) throw afterError;
     const report = {
       ok: true,
       before: totalBefore ?? 0,

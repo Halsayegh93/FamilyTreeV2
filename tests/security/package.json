@@ -1,0 +1,6 @@
+{
+  "name": "familytree-security-tests",
+  "private": true,
+  "type": "module",
+  "devDependencies": { "@electric-sql/pglite": "0.5.8" }
+}

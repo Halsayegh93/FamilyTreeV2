@@ -182,7 +182,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     }
 
     enum MemberStatus: String, Codable, Sendable {
-        case pending, active, frozen
+        case pending, active, frozen, deleted
     }
 
     struct BioStation: Codable, Identifiable, Sendable, Equatable {

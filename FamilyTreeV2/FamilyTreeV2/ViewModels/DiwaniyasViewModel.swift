@@ -5,6 +5,8 @@ import Combine
 
 @MainActor
 class DiwaniyasViewModel: ObservableObject {
+    private let cacheSession = CacheManager.shared.session
+
     @Published var diwaniyas: [Diwaniya] = []
     @Published var pendingDiwaniyas: [Diwaniya] = []
     @Published var isLoading = false
@@ -58,7 +60,7 @@ class DiwaniyasViewModel: ObservableObject {
     func fetchDiwaniyas() async {
         // تحميل من الكاش أولاً
         if diwaniyas.isEmpty,
-           let cached = CacheManager.shared.load([Diwaniya].self, for: .diwaniyas) {
+           let cached = CacheManager.shared.load([Diwaniya].self, for: .diwaniyas, in: cacheSession) {
             self.diwaniyas = cached
             Log.info("[Diwaniyas] تم تحميل \(cached.count) ديوانية من الكاش")
         }
@@ -78,7 +80,7 @@ class DiwaniyasViewModel: ObservableObject {
             self.diwaniyas = response
 
             // حفظ في الكاش
-            CacheManager.shared.save(response, for: .diwaniyas)
+            CacheManager.shared.save(response, for: .diwaniyas, in: cacheSession)
         } catch is CancellationError {
             Log.info("جلب الديوانيات تم إلغاؤه")
         } catch let urlError as URLError where urlError.code == .cancelled {

@@ -48,6 +48,7 @@ struct FamilyTreeV2App: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .id(appState.sessionRevision)
                 .environmentObject(appState.authVM)
                 .environmentObject(appState.memberVM)
                 .environmentObject(appState.newsVM)

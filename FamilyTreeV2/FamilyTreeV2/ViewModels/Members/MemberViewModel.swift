@@ -10,6 +10,8 @@ import Combine
 
 @MainActor
 class MemberViewModel: ObservableObject {
+    private let cacheSession = CacheManager.shared.session
+
     
     // MARK: - Supabase Client
     let supabase = SupabaseConfig.client
@@ -61,7 +63,7 @@ class MemberViewModel: ObservableObject {
         cacheMembersSaveTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 ثانية
             guard !Task.isCancelled, let self else { return }
-            CacheManager.shared.save(self.allMembers, for: .members)
+            CacheManager.shared.save(self.allMembers, for: .members, in: self.cacheSession)
         }
     }
     
@@ -161,7 +163,6 @@ class MemberViewModel: ObservableObject {
     /// يمسح رقم الهاتف من عضو معين (profiles + auth.users)
     func clearPhoneNumber(for memberId: UUID) async -> Bool {
         await clearMemberPhone(memberId: memberId)
-        return true
     }
     
     private func storagePath(fromPublicURL urlString: String, bucket: String) -> String? {
@@ -223,7 +224,7 @@ class MemberViewModel: ObservableObject {
     func fetchAllMembers(force: Bool = false) async {
         // تحميل من الكاش أولاً إذا لا توجد بيانات (في background لتجنب تجميد الواجهة)
         if allMembers.isEmpty,
-           let cached = await CacheManager.shared.loadAsync([FamilyMember].self, for: .members) {
+           let cached = await CacheManager.shared.loadAsync([FamilyMember].self, for: .members, in: cacheSession) {
             self.allMembers = cached
             self.membersVersion += 1
             Log.info("[Members] تم تحميل \(cached.count) عضو من الكاش")
@@ -252,6 +253,7 @@ class MemberViewModel: ObservableObject {
 
             let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
 
+            guard CacheManager.shared.isCurrent(cacheSession), !Task.isCancelled else { return }
             self.allMembers = members
             self.membersLoadFailed = false
             self.throttler.didFetch(key: "members")
@@ -1851,6 +1853,7 @@ class MemberViewModel: ObservableObject {
             let memberEmail = _memberById[memberId]?.email
             var emailPayload: [String: AnyEncodable] = [
                 "type": AnyEncodable("role_changed"),
+                "member_id": AnyEncodable(memberId.uuidString),
                 "member_name": AnyEncodable(memberName),
                 "old_role": AnyEncodable(currentRole?.rawValue ?? "member"),
                 "new_role": AnyEncodable(newRole.rawValue)
@@ -1897,6 +1900,7 @@ class MemberViewModel: ObservableObject {
             if oldStatus != status {
                 var emailPayload: [String: AnyEncodable] = [
                     "type": AnyEncodable("status_changed"),
+                    "member_id": AnyEncodable(memberId.uuidString),
                     "member_name": AnyEncodable(memberName),
                     "old_status": AnyEncodable(oldStatus?.rawValue ?? "active"),
                     "new_status": AnyEncodable(status.rawValue)
@@ -2041,47 +2045,23 @@ class MemberViewModel: ObservableObject {
 
     // MARK: - Clear Member Phone
 
-    func clearMemberPhone(memberId: UUID) async {
-        self.isLoading = true
+    @discardableResult
+    func clearMemberPhone(memberId: UUID) async -> Bool {
+        guard authVM?.isAdmin == true else { return false }
+        isLoading = true
+        defer { isLoading = false }
         do {
-            // استدعاء edge function لحذف الرقم + auth user بالكامل
-            // هذا يضمن فك ارتباط الرقم نهائياً من العضو
-            try await supabase.functions.invoke(
-                "admin-unlink-phone",
-                options: .init(body: ["memberId": memberId.uuidString.lowercased()])
+            struct UnlinkResponse: Decodable { let ok: Bool }
+            let response: UnlinkResponse = try await supabase.functions.invoke(
+                "admin-unlink-phone", options: .init(body: ["memberId": memberId.uuidString.lowercased()])
             )
-
+            guard response.ok else { throw NSError(domain: "PhoneUnlink", code: 1) }
             await fetchSingleMember(id: memberId)
-            Log.info("تم حذف رقم الهاتف وفك ارتباط حساب المصادقة بالكامل")
+            return true
         } catch {
-            Log.error("خطأ حذف الهاتف: \(error.localizedDescription)")
-            // fallback: محاولة التنظيف المحلي في حالة فشل الـ edge function
-            do {
-                var fallbackUpdate: [String: AnyEncodable] = [
-                    "phone_number": AnyEncodable(String?.none),
-                    "status": AnyEncodable("pending")
-                ]
-                fallbackUpdate.merge(adminAuditFields(for: memberId)) { _, new in new }
-
-                try await supabase
-                    .from("profiles")
-                    .update(fallbackUpdate)
-                    .eq("id", value: memberId.uuidString)
-                    .execute()
-                
-                _ = try? await supabase
-                    .from("device_tokens")
-                    .delete()
-                    .eq("user_id", value: memberId.uuidString)
-                    .execute()
-
-                await fetchSingleMember(id: memberId)
-                Log.info("تم حذف رقم الهاتف محلياً (بدون حذف auth user)")
-            } catch {
-                Log.error("فشل التنظيف المحلي أيضاً: \(error.localizedDescription)")
-            }
+            errorMessage = L10n.t("لم يكتمل فصل الهاتف. حاول مرة أخرى.", "Phone unlink is incomplete. Please retry.")
+            return false
         }
-        self.isLoading = false
     }
 
     // MARK: - Update Member Gender

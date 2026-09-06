@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 // MARK: - Admin System Health
 // تصميم احترافي بتابين: الأجهزة + الإشعارات
@@ -9,6 +10,14 @@ struct AdminSystemHealthView: View {
 
     @State private var selectedTab: HealthTab = .activity
     @Namespace private var tabNamespace
+    @State private var operations: OperationsHealth?
+    @State private var operationsError: String?
+    @State private var loadingOperations = false
+    private struct OperationsHealth: Decodable {
+        let cron_failures: Int
+        let http_failures: Int
+        let pending_deletions: Int
+    }
 
     enum HealthTab: Int, CaseIterable {
         case activity = 0
@@ -50,6 +59,23 @@ struct AdminSystemHealthView: View {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                if authVM.isAdmin {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        HStack {
+                            Text(L10n.t("حالة التشغيل — آخر ٢٤ ساعة", "Operations — last 24 hours"))
+                                .font(DS.Font.calloutBold)
+                            Spacer()
+                            Button { Task { await loadOperations() } } label: {
+                                if loadingOperations { ProgressView() } else { Image(systemName: "arrow.clockwise") }
+                            }.disabled(loadingOperations)
+                        }
+                        if let operations {
+                            Text(L10n.t("مهام فاشلة: \(operations.cron_failures) • اتصالات فاشلة: \(operations.http_failures) • حذف يحتاج متابعة: \(operations.pending_deletions)", "Failed jobs: \(operations.cron_failures) • Failed HTTP: \(operations.http_failures) • Pending deletions: \(operations.pending_deletions)"))
+                                .font(DS.Font.caption1)
+                        }
+                        if let operationsError { Text(operationsError).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary) }
+                    }.padding(DS.Spacing.md)
+                }
                 // ── Premium segmented tab picker ──
                 tabPicker
                     .padding(.horizontal, DS.Spacing.lg)
@@ -76,9 +102,22 @@ struct AdminSystemHealthView: View {
                 .animation(DS.Anim.snappy, value: selectedTab)
             }
         }
+        .task { if authVM.isAdmin { await loadOperations() } }
         .navigationTitle(L10n.t("صحة النظام", "System Health"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    @MainActor private func loadOperations() async {
+        guard !loadingOperations else { return }
+        loadingOperations = true
+        defer { loadingOperations = false }
+        do {
+            operations = try await SupabaseConfig.client.rpc("operational_health").execute().value
+            operationsError = nil
+        } catch {
+            operationsError = L10n.t("تعذر تحديث حالة التشغيل. أعد المحاولة.", "Couldn't refresh operations. Please try again.")
+        }
     }
 
     // MARK: - Tab Picker (premium glass + animated indicator)

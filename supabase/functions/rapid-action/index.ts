@@ -19,8 +19,9 @@ serve(async (req) => {
   if (notPost) return notPost;
 
   // أمان: يتطلّب تسجيل دخول (يمنع البريد العشوائي من غير المسجّلين).
-  const auth = await authenticateRequest(req);
+  const auth = await authenticateRequest(req, undefined, { allowInactive: true });
   if (auth instanceof Response) return auth;
+  if (!["active", "pending"].includes(auth.status ?? "")) return json(403, { ok: false, message: "Account not authorized" });
 
   const resendApiKey = (Deno.env.get("RESEND_API_KEY") ?? "").trim();
   const sendgridApiKey = (Deno.env.get("SENDGRID_API_KEY") ?? "").trim();
