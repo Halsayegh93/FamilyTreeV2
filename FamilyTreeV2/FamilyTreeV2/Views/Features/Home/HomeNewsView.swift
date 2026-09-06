@@ -694,32 +694,24 @@ struct HomeNewsView: View {
                 newsLoadingSkeleton(count: 3)
                     .padding(.horizontal, DS.Spacing.lg)
                     .transition(.opacity)
-            } else if newsVM.allNews.isEmpty && newsVM.newsLoadError == nil {
-                emptyNewsView
-            } else if filteredNews.isEmpty && debouncedNewsSearch.isEmpty {
-                // فلتر نوع بلا نتائج (نادر — النوع اختفى بعد حذف)
-                VStack(spacing: DS.Spacing.md) {
-                    Spacer().frame(height: DS.Spacing.xxxl)
-                    Image(systemName: "tray")
-                        .font(DS.Font.scaled(36))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(L10n.t("لا منشورات من هذا النوع", "No posts of this type"))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textSecondary)
+            } else if newsVM.allNews.isEmpty {
+                if newsVM.newsLoadError == nil {
+                    if !debouncedNewsSearch.isEmpty {
+                        Text(L10n.t("لا توجد نتائج لهذا البحث", "No results for this search"))
+                            .font(DS.Font.callout)
+                            .foregroundStyle(DS.Color.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DS.Spacing.xxxl)
+                    } else if selectedNewsTypeFilter != nil {
+                        Text(L10n.t("لا منشورات من هذا النوع", "No posts of this type"))
+                            .font(DS.Font.callout)
+                            .foregroundStyle(DS.Color.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, DS.Spacing.xxxl)
+                    } else {
+                        emptyNewsView
+                    }
                 }
-                .transition(.opacity)
-            } else if !debouncedNewsSearch.isEmpty && filteredNews.isEmpty {
-                VStack(spacing: DS.Spacing.md) {
-                    Spacer().frame(height: DS.Spacing.xxxl)
-                    Image(systemName: "magnifyingglass")
-                        .font(DS.Font.scaled(36))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(L10n.t("لا توجد نتائج لـ \"\(debouncedNewsSearch)\"", "No results for \"\(debouncedNewsSearch)\""))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-                .transition(.opacity)
             } else {
                 newsListView
                     .transition(.opacity)
