@@ -14,15 +14,6 @@ struct AdminSystemHealthView: View {
                 SystemHealthOverviewContent(snapshot: snapshot, loading: loading, failure: failure, updatedAt: updatedAt) {
                     await refresh()
                 }
-                .navigationDestination(for: SystemHealthDestination.self) { destination in
-                    switch destination {
-                    case .errors: AdminAppErrorsView()
-                    case .activity: AdminActiveMembersView()
-                    case .devices: AdminDevicesView()
-                    case .push: AdminPushHealthView()
-                    case .server: AdminAppErrorsView(serverOnly: true)
-                    }
-                }
                 .task { await refresh() }
             } else {
                 Text(L10n.t("هذه الصفحة مخصصة للمالك والمدير", "This page is available to owners and admins"))
@@ -85,42 +76,57 @@ struct SystemHealthSnapshot {
     }
 }
 
-enum SystemHealthDestination: Hashable, CaseIterable {
-    case errors, activity, devices, push, server
+enum SystemHealthDestination: String, Hashable {
+    case errors, allErrors, activity, devices, push, server, successfulJobs, failedJobs, operations
+    static let sections: [Self] = [.errors, .server, .activity, .devices, .push]
+
+    @ViewBuilder var screen: some View {
+        switch self {
+        case .errors: AdminAppErrorsView(showAll: false)
+        case .allErrors: AdminAppErrorsView(showAll: true)
+        case .activity: AdminActiveMembersView()
+        case .devices: AdminDevicesView()
+        case .push: AdminPushHealthView()
+        case .server: AdminServerHealthView()
+        case .operations: AdminServerHealthView(operationsFirst: true)
+        case .successfulJobs: AdminServerHealthView(initialFilter: .succeeded)
+        case .failedJobs: AdminServerHealthView(initialFilter: .failed)
+        }
+    }
     var title: String {
         switch self {
-        case .errors: return L10n.t("أخطاء التطبيق", "App errors")
+        case .errors, .allErrors: return L10n.t("أخطاء التطبيق", "App errors")
         case .activity: return L10n.t("نشاط الأعضاء", "Member activity")
         case .devices: return L10n.t("الأجهزة", "Devices")
         case .push: return L10n.t("الإشعارات", "Notifications")
-        case .server: return L10n.t("مهام السيرفر", "Server jobs")
+        case .server, .successfulJobs, .failedJobs, .operations: return L10n.t("مهام السيرفر", "Server jobs")
         }
     }
     var subtitle: String {
         switch self {
-        case .errors: return L10n.t("البلاغات ومتابعة تكرارها", "Reports & recurring issues")
+        case .errors, .allErrors: return L10n.t("البلاغات ومتابعة تكرارها", "Reports & recurring issues")
         case .activity: return L10n.t("الدخول والحضور وآخر نشاط", "Sign-ins & recent activity")
         case .devices: return L10n.t("الأجهزة المرتبطة بالحسابات", "Devices linked to accounts")
         case .push: return L10n.t("جاهزية الإرسال واختبار الوصول", "Delivery readiness & testing")
-        case .server: return L10n.t("نتائج التشغيل وآخر تنفيذ", "Run results & latest execution")
+        case .server, .successfulJobs, .failedJobs, .operations: return L10n.t("نتائج التشغيل وآخر تنفيذ", "Run results & latest execution")
         }
     }
     var icon: String {
         switch self {
-        case .errors: return "exclamationmark.bubble.fill"
+        case .errors, .allErrors: return "exclamationmark.bubble.fill"
         case .activity: return "person.2.fill"
         case .devices: return "iphone.gen3"
         case .push: return "bell.badge.fill"
-        case .server: return "server.rack"
+        case .server, .successfulJobs, .failedJobs, .operations: return "server.rack"
         }
     }
     var color: Color {
         switch self {
-        case .errors: return DS.Color.warning
+        case .errors, .allErrors: return DS.Color.warning
         case .activity: return DS.Color.secondary
         case .devices: return DS.Color.primary
         case .push: return DS.Color.accent
-        case .server: return DS.Color.info
+        case .server, .successfulJobs, .failedJobs, .operations: return DS.Color.info
         }
     }
 }
@@ -153,28 +159,29 @@ struct SystemHealthOverviewContent: View {
                         .background(DS.Color.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.lg))
                 }
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    sectionTitle("ملخص سريع", "At a glance", subtitle: L10n.t("أرقام من النظام مباشرة", "Directly from the system"))
-                    LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                        metric(title: L10n.t("داخل المنظومة", "In the system"), value: snapshot.map { $0.membership.in_system.formatted() }, detail: snapshot.map { L10n.t("من \($0.membership.total_members.formatted()) عضو معتمد", "of \($0.membership.total_members.formatted()) approved members") } ?? L10n.t("سجّلوا الدخول فعلياً", "Have actually signed in"), icon: "person.badge.shield.checkmark.fill", color: DS.Color.secondary, destination: .activity)
-                        metric(title: L10n.t("تحتاج مراجعة", "Needs review"), value: snapshot.map { $0.diagnostics.open_groups.formatted() }, detail: L10n.t("مجموعات أخطاء · ٧ أيام", "Error groups · 7 days"), icon: "exclamationmark.bubble.fill", color: DS.Color.warning, destination: .errors)
-                        metric(title: L10n.t("بلاغات التطبيق", "App reports"), value: snapshot.map { $0.diagnostics.total_occurrences.formatted() }, detail: L10n.t("آخر ٧ أيام", "Last 7 days"), icon: "waveform.path", color: DS.Color.primary, destination: .errors)
-                        metric(title: L10n.t("مهام ناجحة", "Successful jobs"), value: snapshot.map { "\($0.successfulJobs) / \($0.diagnostics.jobs.count)" }, detail: L10n.t("حسب آخر تشغيل مكتمل", "Latest completed run"), icon: "checkmark.seal.fill", color: DS.Color.accent, destination: .server)
-                    }
-                }
-                if let snapshot { attention(snapshot) }
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
                     sectionTitle("أقسام المتابعة", "Explore", subtitle: L10n.t("التفاصيل والإجراءات", "Details & actions"))
                     VStack(spacing: 0) {
-                        ForEach(SystemHealthDestination.allCases, id: \.self) { destination in
-                            NavigationLink(value: destination) { destinationRow(destination) }
+                        ForEach(SystemHealthDestination.sections, id: \.self) { destination in
+                            NavigationLink(destination: destination.screen) { destinationRow(destination) }
                                 .buttonStyle(.plain)
-                            if destination != .server {
+                                .accessibilityIdentifier("health.section.\(destination.rawValue)")
+                            if destination != SystemHealthDestination.sections.last {
                                 Divider().padding(.leading, DS.Icon.size + DS.Spacing.xxl)
                             }
                         }
                     }.background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
                         .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
                 }
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    sectionTitle("ملخص سريع", "At a glance", subtitle: L10n.t("أرقام من النظام مباشرة", "Directly from the system"))
+                    LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
+                        metric(title: L10n.t("داخل المنظومة", "In the system"), value: snapshot.map { $0.membership.in_system.formatted() }, detail: snapshot.map { L10n.t("من \($0.membership.total_members.formatted()) عضو معتمد", "of \($0.membership.total_members.formatted()) approved members") } ?? L10n.t("سجّلوا الدخول فعلياً", "Have actually signed in"), icon: "person.badge.shield.checkmark.fill", color: DS.Color.secondary, destination: .activity)
+                        metric(title: L10n.t("تحتاج مراجعة", "Needs review"), value: snapshot.map { $0.diagnostics.open_groups.formatted() }, detail: L10n.t("مجموعات أخطاء · ٧ أيام", "Error groups · 7 days"), icon: "exclamationmark.bubble.fill", color: DS.Color.warning, destination: .errors)
+                        metric(title: L10n.t("بلاغات التطبيق", "App reports"), value: snapshot.map { $0.diagnostics.total_occurrences.formatted() }, detail: L10n.t("آخر ٧ أيام", "Last 7 days"), icon: "waveform.path", color: DS.Color.primary, destination: .allErrors)
+                        metric(title: L10n.t("مهام ناجحة", "Successful jobs"), value: snapshot.map { "\($0.successfulJobs) / \($0.diagnostics.jobs.count)" }, detail: L10n.t("حسب آخر تشغيل مكتمل", "Latest completed run"), icon: "checkmark.seal.fill", color: DS.Color.accent, destination: .successfulJobs)
+                    }
+                }
+                if let snapshot { attention(snapshot) }
                 Label(L10n.t("يتحدث الملخص عند فتح الصفحة أو السحب للتحديث", "Updated when you open this page or pull to refresh"), systemImage: "arrow.down.circle")
                     .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
                     .frame(maxWidth: .infinity)
@@ -232,7 +239,7 @@ struct SystemHealthOverviewContent: View {
         }
     }
     private func metric(title: String, value: String?, detail: String, icon: String, color: Color, destination: SystemHealthDestination) -> some View {
-        NavigationLink(value: destination) {
+        NavigationLink(destination: destination.screen) {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 HStack {
                     Image(systemName: icon).font(DS.Font.calloutBold).foregroundStyle(color)
@@ -247,7 +254,9 @@ struct SystemHealthOverviewContent: View {
                 .padding(DS.Spacing.lg)
                 .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
+                .contentShape(Rectangle())
         }.buttonStyle(.plain)
+            .accessibilityIdentifier("health.metric.\(destination.rawValue)")
     }
     @ViewBuilder private func attention(_ data: SystemHealthSnapshot) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -257,10 +266,10 @@ struct SystemHealthOverviewContent: View {
                     attentionRow(title: L10n.t("\(data.diagnostics.open_groups) مجموعات أخطاء تحتاج مراجعة", "\(data.diagnostics.open_groups) error groups need review"), detail: L10n.t("راجع البلاغات وآخر ظهور لها", "Review reports and their latest occurrence"), destination: .errors)
                 }
                 if data.failedJobs > 0 || !data.diagnostics.dispatch_healthy {
-                    attentionRow(title: L10n.t("راجع تشغيل مهام السيرفر", "Review server job execution"), detail: L10n.t("\(data.failedJobs) مهام آخر تشغيل لها فشل", "\(data.failedJobs) jobs last completed with a failure"), destination: .server)
+                    attentionRow(title: L10n.t("راجع تشغيل مهام السيرفر", "Review server job execution"), detail: L10n.t("\(data.failedJobs) مهام آخر تشغيل لها فشل", "\(data.failedJobs) jobs last completed with a failure"), destination: data.failedJobs > 0 ? .failedJobs : .server)
                 }
                 if data.operations.http_failures > 0 || data.operations.pending_deletions > 0 {
-                    attentionRow(title: L10n.t("عمليات تحتاج متابعة", "Operations need attention"), detail: L10n.t("\(data.operations.http_failures) اتصالات فاشلة خلال ٢٤ ساعة · \(data.operations.pending_deletions) حذف متأخر", "\(data.operations.http_failures) failed HTTP calls in 24h · \(data.operations.pending_deletions) delayed deletions"), destination: .server)
+                    attentionRow(title: L10n.t("عمليات تحتاج متابعة", "Operations need attention"), detail: L10n.t("\(data.operations.http_failures) اتصالات فاشلة خلال ٢٤ ساعة · \(data.operations.pending_deletions) حذف متأخر", "\(data.operations.http_failures) failed HTTP calls in 24h · \(data.operations.pending_deletions) delayed deletions"), destination: .operations)
                 }
                 if !data.needsAttention {
                     Label(L10n.t("لا توجد تنبيهات مسجلة حالياً", "No alerts currently recorded"), systemImage: "checkmark.circle.fill")
@@ -271,7 +280,7 @@ struct SystemHealthOverviewContent: View {
         }
     }
     private func attentionRow(title: String, detail: String, destination: SystemHealthDestination) -> some View {
-        NavigationLink(value: destination) {
+        NavigationLink(destination: destination.screen) {
             HStack(alignment: .top, spacing: DS.Spacing.md) {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(DS.Color.warning)
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -280,7 +289,7 @@ struct SystemHealthOverviewContent: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.forward").font(DS.Font.caption1).foregroundStyle(DS.Color.textTertiary)
-            }.padding(DS.Spacing.lg)
+            }.padding(DS.Spacing.lg).contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
     private func destinationRow(_ destination: SystemHealthDestination) -> some View {
@@ -294,7 +303,7 @@ struct SystemHealthOverviewContent: View {
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.forward").font(DS.Font.caption1).foregroundStyle(DS.Color.textTertiary)
-        }.padding(DS.Spacing.lg)
+        }.padding(DS.Spacing.lg).contentShape(Rectangle())
     }
 }
 

@@ -31,4 +31,5 @@ jobs:
       - run: node tests/security/membership-counts.mjs
       - run: deno test tests/security/functions_test.ts
       - run: tests/security/run-cache-tests.sh
+      - run: tests/security/run-server-health-tests.sh
       - run: python3 -m unittest discover -s tests/security -p '*_test.py'
