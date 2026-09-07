@@ -8,7 +8,7 @@ struct AdminSystemHealthView: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var memberVM: MemberViewModel
 
-    @State private var selectedTab: HealthTab = .activity
+    @State private var selectedTab: HealthTab = .errors
     @Namespace private var tabNamespace
     @State private var operations: OperationsHealth?
     @State private var operationsError: String?
@@ -20,12 +20,14 @@ struct AdminSystemHealthView: View {
     }
 
     enum HealthTab: Int, CaseIterable {
+        case errors = 3
         case activity = 0
         case devices = 1
         case push = 2
 
         var titleAr: String {
             switch self {
+            case .errors: return "الأخطاء"
             case .activity: return "النشاط"
             case .devices:  return "الأجهزة"
             case .push:     return "الإشعارات"
@@ -33,6 +35,7 @@ struct AdminSystemHealthView: View {
         }
         var titleEn: String {
             switch self {
+            case .errors: return "Errors"
             case .activity: return "Activity"
             case .devices:  return "Devices"
             case .push:     return "Push"
@@ -40,6 +43,7 @@ struct AdminSystemHealthView: View {
         }
         var icon: String {
             switch self {
+            case .errors: return "exclamationmark.bubble.fill"
             case .activity: return "bolt.heart.fill"
             case .devices:  return "iphone.gen3"
             case .push:     return "waveform.path.ecg"
@@ -47,6 +51,7 @@ struct AdminSystemHealthView: View {
         }
         var color: Color {
             switch self {
+            case .errors: return DS.Color.warning
             case .activity: return DS.Color.success
             case .devices:  return DS.Color.primary
             case .push:     return DS.Color.info
@@ -85,6 +90,8 @@ struct AdminSystemHealthView: View {
                 // ── Content ──
                 ZStack {
                     switch selectedTab {
+                    case .errors:
+                        if authVM.isAdmin { AdminAppErrorsView() }
                     case .activity:
                         AdminActiveMembersView()
                             .environmentObject(authVM)
@@ -102,7 +109,10 @@ struct AdminSystemHealthView: View {
                 .animation(DS.Anim.snappy, value: selectedTab)
             }
         }
-        .task { if authVM.isAdmin { await loadOperations() } }
+        .task {
+            if authVM.isAdmin { await loadOperations() }
+            else { selectedTab = .activity }
+        }
         .navigationTitle(L10n.t("صحة النظام", "System Health"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -123,7 +133,7 @@ struct AdminSystemHealthView: View {
     // MARK: - Tab Picker (premium glass + animated indicator)
     private var tabPicker: some View {
         HStack(spacing: 4) {
-            ForEach(HealthTab.allCases, id: \.rawValue) { tab in
+            ForEach(HealthTab.allCases.filter { authVM.isAdmin || $0 != .errors }, id: \.rawValue) { tab in
                 tabButton(tab)
             }
         }

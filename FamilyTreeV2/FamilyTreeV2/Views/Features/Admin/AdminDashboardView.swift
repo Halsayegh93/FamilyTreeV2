@@ -397,6 +397,14 @@ struct AdminDashboardView: View {
             }
 
             if authVM.canViewSystemSettings {
+                if authVM.isAdmin {
+                    AdminTile(
+                        title: L10n.t("صحة النظام", "System Health"),
+                        subtitle: L10n.t("أخطاء التطبيق ومهام السيرفر", "App errors & server jobs"),
+                        icon: "waveform.path.ecg",
+                        color: DS.Color.warning
+                    ) { AdminSystemHealthView() }
+                }
                 AdminTile(
                     title: L10n.t("إعدادات النظام", "System Settings"),
                     subtitle: L10n.t("الأمان وصحة النظام", "Security & health"),

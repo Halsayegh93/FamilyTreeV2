@@ -81,7 +81,7 @@ struct AdminSecuritySettingsView: View {
 
                         AdminTile(
                             title: L10n.t("صحة النظام", "System Health"),
-                            subtitle: L10n.t("النشاط والأجهزة والإشعارات", "Activity, devices & push"),
+                            subtitle: L10n.t("الأخطاء والنشاط والأجهزة والإشعارات", "Errors, activity, devices & push"),
                             icon: "waveform.path.ecg",
                             color: DS.Color.info
                         ) {
