@@ -44,6 +44,12 @@ struct AdminAppErrorsView: View {
                             .background(DS.Color.surface, in: Circle())
                     }.disabled(loading).accessibilityLabel(L10n.t("تحديث", "Refresh"))
                 }
+                NavigationLink(destination: AdminServerHealthView()) {
+                    Label(L10n.t("فتح أدوات الإصلاح", "Open repair tools"), systemImage: "wrench.and.screwdriver.fill")
+                        .font(DS.Font.calloutBold).frame(maxWidth: .infinity).padding(DS.Spacing.md)
+                        .foregroundStyle(DS.Color.primary)
+                        .background(DS.Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.lg))
+                }.buttonStyle(.plain)
                 if let failure {
                     Label(failure, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(DS.Color.warning).font(DS.Font.footnote)
@@ -93,7 +99,7 @@ struct AdminAppErrorsView: View {
                     .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
             }
             ForEach(visible) { diagnostic in errorCard(diagnostic) }
-            Text(L10n.t("تمت المراجعة تعني الاطلاع على البلاغ. إذا تكرر، يرجع تلقائياً لقائمة المتابعة.", "Reviewed means acknowledged. A new occurrence returns to the review queue."))
+            Text(L10n.t("تمت المراجعة تسجّل الاطلاع فقط. الإصلاح يتم من أدوات الإصلاح للحالات المدعومة؛ وإذا تكرر البلاغ يرجع لقائمة المتابعة.", "Reviewed records acknowledgment. Use repair tools for supported conditions; a recurrence returns to the review queue."))
                 .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
         }
     }

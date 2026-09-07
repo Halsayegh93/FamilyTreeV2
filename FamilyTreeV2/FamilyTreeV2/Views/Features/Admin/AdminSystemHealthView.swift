@@ -58,6 +58,8 @@ struct HealthDiagnostics: Decodable {
     struct Job: Decodable {
         let name: String
         let status: String
+        var active: Bool? = nil
+        var configuration_needs_repair: Bool? = nil
     }
     let open_groups: Int
     let total_occurrences: Int
@@ -77,6 +79,7 @@ struct SystemHealthSnapshot {
     var needsAttention: Bool {
         diagnostics.open_groups > 0 || failedJobs > 0 || !diagnostics.dispatch_healthy
             || operations.http_failures > 0 || operations.pending_deletions > 0
+            || diagnostics.jobs.contains { $0.active == false || $0.configuration_needs_repair == true }
     }
 }
 
@@ -112,7 +115,7 @@ enum SystemHealthDestination: String, Hashable {
         case .activity: return L10n.t("الدخول والحضور وآخر نشاط", "Sign-ins & recent activity")
         case .devices: return L10n.t("الأجهزة المرتبطة بالحسابات", "Devices linked to accounts")
         case .push: return L10n.t("جاهزية الإرسال واختبار الوصول", "Delivery readiness & testing")
-        case .server, .successfulJobs, .failedJobs, .operations: return L10n.t("نتائج التشغيل وآخر تنفيذ", "Run results & latest execution")
+        case .server, .successfulJobs, .failedJobs, .operations: return L10n.t("إصلاح المهام وتشغيلها ومتابعة النتائج", "Repair jobs, run them & track results")
         }
     }
     var icon: String {
@@ -271,6 +274,9 @@ struct SystemHealthOverviewContent: View {
                 }
                 if data.failedJobs > 0 || !data.diagnostics.dispatch_healthy {
                     attentionRow(title: L10n.t("راجع تشغيل مهام السيرفر", "Review server job execution"), detail: L10n.t("\(data.failedJobs) مهام آخر تشغيل لها فشل", "\(data.failedJobs) jobs last completed with a failure"), destination: data.failedJobs > 0 ? .failedJobs : .server)
+                }
+                if data.diagnostics.jobs.contains(where: { $0.active == false || $0.configuration_needs_repair == true }) {
+                    attentionRow(title: L10n.t("مهام تحتاج إصلاح إعداداتها", "Job configuration needs repair"), detail: L10n.t("افتح المهمة لمراجعة الإصلاح وتشغيله", "Open the job to review and run its repair"), destination: .server)
                 }
                 if data.operations.http_failures > 0 || data.operations.pending_deletions > 0 {
                     attentionRow(title: L10n.t("عمليات تحتاج متابعة", "Operations need attention"), detail: L10n.t("\(data.operations.http_failures) اتصالات فاشلة خلال ٢٤ ساعة · \(data.operations.pending_deletions) حذف متأخر", "\(data.operations.http_failures) failed HTTP calls in 24h · \(data.operations.pending_deletions) delayed deletions"), destination: .operations)

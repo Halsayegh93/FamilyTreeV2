@@ -5,6 +5,7 @@ struct ServerHealthDashboard: Decodable {
     let checked_at: String
     let dispatch_healthy: Bool
     let jobs: [ServerHealthJob]
+    var repairs: [SystemHealthRepairResult]? = nil
 
     func jobs(matching filter: ServerHealthFilter) -> [ServerHealthJob] {
         jobs.filter { filter.includes($0) }.sorted {
@@ -18,8 +19,15 @@ struct ServerHealthJob: Decodable, Identifiable {
     let name: String
     let status: String
     let last_run: String?
+    var active: Bool? = nil
+    var repair_available: Bool? = nil
+    var configuration_needs_repair: Bool? = nil
+    var last_run_source: String? = nil
+    var scheduled_status: String? = nil
+    var scheduled_last_run: String? = nil
     var id: String { name }
     var priority: Int {
+        if active == false || configuration_needs_repair == true { return -1 }
         switch status {
         case "failed": return 0
         case "succeeded": return 2
@@ -51,4 +59,23 @@ enum HealthTimestamp {
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: value)
     }
+}
+
+struct SystemHealthRepairPreview: Decodable {
+    let job_name: String
+    let eligible_rows: Int
+    let can_run: Bool
+    let schema_repair_needed: Bool
+    let configuration_needs_repair: Bool
+    let checked_at: String
+}
+
+struct SystemHealthRepairResult: Decodable, Identifiable {
+    let request_id: String
+    let job_name: String
+    let status: String
+    let affected_rows: Int
+    let error_code: String?
+    let completed_at: String
+    var id: String { request_id }
 }

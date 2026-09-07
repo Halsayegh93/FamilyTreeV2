@@ -66,7 +66,7 @@ struct ServerHealthContent: View {
             VStack(alignment: .leading, spacing: DS.Spacing.xl) {
                 HStack(alignment: .top) {
                     SystemHealthSectionHeader(title: L10n.t("تشغيل الخدمات", "Service operations"),
-                                              subtitle: L10n.t("المهام المجدولة وآخر نتيجة مكتملة لكل مهمة", "Scheduled jobs and their latest completed results"))
+                                              subtitle: L10n.t("إصلاح المهام وتشغيلها ومتابعة آخر نتيجة", "Repair jobs, run them and track their latest result"))
                     Spacer(minLength: DS.Spacing.sm)
                     Button { Task { await refresh() } } label: {
                         Group {
@@ -89,7 +89,10 @@ struct ServerHealthContent: View {
                 if let dashboard {
                     if operationsFirst, let operations { operationsSummary(operations) }
                     dispatcher(dashboard)
+                    Label(L10n.t("زر الإصلاح يصحّح إعداد المهمة ويشغّلها بعد مراجعة السجلات المتأثرة.", "Repair restores a job's settings and runs it after you review the affected records."), systemImage: "wrench.and.screwdriver")
+                        .font(DS.Font.footnote).foregroundStyle(DS.Color.primary)
                     jobs(dashboard)
+                    if let repairs = dashboard.repairs, !repairs.isEmpty { repairHistory(repairs) }
                     if !operationsFirst, let operations { operationsSummary(operations) }
                 } else if loading {
                     ProgressView(L10n.t("جاري تحميل المهام", "Loading jobs"))
@@ -152,8 +155,13 @@ struct ServerHealthContent: View {
     }
 
     private func jobCard(_ job: ServerHealthJob) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
         DisclosureGroup {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                if job.last_run_source == "repair", let scheduled = job.scheduled_status {
+                    Text(L10n.t("آخر نتيجة مجدولة: ", "Last scheduled result: ") + (scheduled == "succeeded" ? L10n.t("نجحت", "Succeeded") : scheduled == "failed" ? L10n.t("فشلت", "Failed") : L10n.t("بلا نتيجة", "No result")))
+                        .font(DS.Font.caption1)
+                }
                 Text(job.name).font(DS.Font.caption1).textSelection(.enabled)
                     .environment(\.layoutDirection, .leftToRight)
                 Text(job.status == "failed" ? L10n.t("آخر تشغيل مسجّل فشل. راجع إعداد المهمة وسجل التنفيذ؛ تبقى هذه النتيجة إلى أن يكتمل تشغيل جديد.", "The last recorded run failed. Check the job configuration and execution logs; this result remains until a new run completes.") : job.status == "succeeded" ? L10n.t("اكتمل آخر تشغيل بنجاح حسب سجل السيرفر.", "The latest run completed successfully according to the server log.") : L10n.t("لا توجد نتيجة مكتملة حالياً. قد تكون المهمة جديدة أو انتهت مدة الاحتفاظ بالسجل.", "No completed result is available. The job may be new or its history may have expired."))
@@ -167,12 +175,28 @@ struct ServerHealthContent: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     Text(job.title).font(DS.Font.calloutBold).foregroundStyle(DS.Color.textPrimary)
                     Text(job.statusTitle).font(DS.Font.caption1.weight(.semibold)).foregroundStyle(job.color)
+                    Text(job.last_run_source == "repair" ? L10n.t("آخر تنفيذ: إصلاح يدوي", "Latest execution: manual repair") : L10n.t("آخر تنفيذ مجدول", "Latest scheduled execution"))
+                        .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
                     if let date = HealthTimestamp.date(job.last_run) {
                         Text(date.formatted(date: .abbreviated, time: .shortened))
                             .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.contentShape(Rectangle())
+        }
+        if job.active == false || job.configuration_needs_repair == true {
+            Label(L10n.t("إعدادات المهمة تحتاج إصلاحاً", "Job configuration needs repair"), systemImage: "exclamationmark.triangle.fill")
+                .font(DS.Font.caption1).foregroundStyle(DS.Color.warning)
+        }
+        if job.repair_available == true {
+            NavigationLink(destination: AdminJobRepairView(job: job)) {
+                Label(L10n.t("إصلاح وتشغيل", "Repair and run"), systemImage: "wrench.adjustable.fill")
+                    .font(DS.Font.calloutBold).frame(maxWidth: .infinity).padding(.vertical, DS.Spacing.sm)
+                    .foregroundStyle(DS.Color.primary)
+                    .background(DS.Color.primary.opacity(0.10), in: RoundedRectangle(cornerRadius: DS.Radius.md))
+                    .contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("health.server.repair.\(job.name)")
+        }
         }.padding(DS.Spacing.lg)
             .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
             .accessibilityIdentifier("health.server.job.\(job.name)")
@@ -185,6 +209,24 @@ struct ServerHealthContent: View {
             operationRow(L10n.t("اتصالات سيرفر فاشلة · ٢٤ ساعة", "Failed server HTTP calls · 24h"), count: data.http_failures)
             operationRow(L10n.t("حذف حسابات متأخر أكثر من ١٥ دقيقة", "Account deletions delayed over 15 minutes"), count: data.pending_deletions)
         }.padding(DS.Spacing.lg).background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
+    }
+    private func repairHistory(_ repairs: [SystemHealthRepairResult]) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Text(L10n.t("آخر الإصلاحات", "Recent repairs")).font(DS.Font.title3)
+            ForEach(repairs) { repair in
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    let job = ServerHealthJob(name: repair.job_name, status: repair.status, last_run: repair.completed_at)
+                    Label(job.title, systemImage: repair.status == "succeeded" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(DS.Font.calloutBold).foregroundStyle(job.color)
+                    Text(repair.status == "succeeded" ? L10n.t("تم الإصلاح والتشغيل · تنظيف \(repair.affected_rows) سجل", "Repaired and ran · cleaned \(repair.affected_rows) records") : repairFailureTitle(repair.error_code))
+                        .font(DS.Font.footnote).foregroundStyle(DS.Color.textSecondary)
+                    if let date = HealthTimestamp.date(repair.completed_at) {
+                        Text(date.formatted(date: .abbreviated, time: .shortened)).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(DS.Spacing.lg)
+                    .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.lg))
+            }
+        }
     }
     private func operationRow(_ title: String, count: Int) -> some View {
         HStack(alignment: .top) {
@@ -205,7 +247,7 @@ private extension ServerHealthFilter {
         }
     }
 }
-private extension ServerHealthJob {
+extension ServerHealthJob {
     var color: Color { status == "succeeded" ? DS.Color.success : status == "failed" ? DS.Color.error : DS.Color.textSecondary }
     var statusTitle: String {
         status == "succeeded" ? L10n.t("نجحت", "Succeeded") : status == "failed" ? L10n.t("فشلت", "Failed") : L10n.t("بلا نتيجة مكتملة", "No completed result")
