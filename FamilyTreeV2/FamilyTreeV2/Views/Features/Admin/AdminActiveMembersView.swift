@@ -13,6 +13,13 @@ struct AdminActiveMembersView: View {
     @State private var isLoading = false
     @State private var isRefreshing = false
     @State private var refreshTimer: Timer?
+    @State private var membershipCounts: MembershipCounts?
+    @State private var membershipCountsFailed = false
+
+    private struct MembershipCounts: Decodable {
+        let in_system: Int
+        let total_members: Int
+    }
 
     var body: some View {
         ZStack {
@@ -244,27 +251,6 @@ struct AdminActiveMembersView: View {
     }
 
     // MARK: - Stats card
-    /// عدد الأعضاء داخل المنظومة (نفس منطق الدائرة الخضراء في تفاصيل العضو)
-    /// — أحياء، ليسوا pending، ليسوا frozen
-    /// نستخدم Set على الـ id لضمان عدم تكرار العضو لو ظهر مرتين
-    private var inSystemCount: Int {
-        var seenIds = Set<UUID>()
-        for member in memberVM.allMembers where member.isInSystem {
-            seenIds.insert(member.id)
-        }
-        return seenIds.count
-    }
-
-    /// إجمالي الأعضاء الأحياء فقط (باستثناء المتوفين و pending)
-    private var totalMembersCount: Int {
-        var seenIds = Set<UUID>()
-        for member in memberVM.allMembers
-            where member.role != .pending && member.isDeceased != true {
-            seenIds.insert(member.id)
-        }
-        return seenIds.count
-    }
-
     private var statsCard: some View {
         VStack(spacing: DS.Spacing.sm) {
             // الصف الأول: نشاط لحظي
@@ -295,7 +281,7 @@ struct AdminActiveMembersView: View {
                 )
             }
 
-            // الصف الثاني: إجمالي داخل المنظومة (مرتبط بالدائرة الخضراء في الشجرة)
+            // Server count: active approved living members with an actual Auth sign-in.
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "person.badge.shield.checkmark.fill")
                     .font(DS.Font.scaled(13, weight: .bold))
@@ -309,20 +295,25 @@ struct AdminActiveMembersView: View {
                         .font(DS.Font.scaled(11, weight: .bold))
                         .foregroundColor(DS.Color.textSecondary)
                     Text(L10n.t(
-                        "أعضاء نشطون (هاتف أو تسجيل دخول)",
-                        "Active members (phone or login)"
+                        "حسابات معتمدة سجّلت الدخول فعلياً",
+                        "Approved accounts that have signed in"
                     ))
                     .font(DS.Font.scaled(11, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
+                    Text(membershipCountsFailed
+                         ? L10n.t("تعذر تحديث العدد؛ أعد المحاولة", "Count update failed; please retry")
+                         : L10n.t("من إجمالي الأعضاء الأحياء المعتمدين", "Of all approved living members"))
+                        .font(DS.Font.scaled(10, weight: .medium))
+                        .foregroundColor(membershipCountsFailed ? DS.Color.warning : DS.Color.textTertiary)
                 }
 
                 Spacer()
 
                 HStack(spacing: 4) {
-                    Text("\(inSystemCount)")
+                    Text(membershipCounts.map { "\($0.in_system)" } ?? "—")
                         .font(DS.Font.scaled(20, weight: .heavy))
                         .foregroundColor(DS.Color.secondary)
-                    Text("/ \(totalMembersCount)")
+                    Text(membershipCounts.map { "/ \($0.total_members)" } ?? "/ —")
                         .font(DS.Font.scaled(12, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
@@ -513,13 +504,15 @@ struct AdminActiveMembersView: View {
 
     // MARK: - Fetching
     private func fetch() async {
+        guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
 
         async let now = fetchNow()
         async let recent = fetchRecent()
         async let actions = fetchActions24h()
-        let (n, r, a) = await (now, recent, actions)
+        async let membership: Void = fetchMembershipCounts()
+        let (n, r, a, _) = await (now, recent, actions, membership)
         // مفتاح فريد لكل جلسة: عضو + مصدر (app أو web)
         // هذا يسمح لنفس الشخص بجهازين (iPhone + Web) أن يظهر صفّين
         func deviceKey(_ id: UUID, _ source: String?) -> String { "\(id)-\(source ?? "")" }
@@ -543,6 +536,17 @@ struct AdminActiveMembersView: View {
             .sorted { $0.hoursSinceActive < $1.hoursSinceActive }
             .filter { !excludedDevices.contains(deviceKey($0.memberId, $0.source)) }
             .filter { seenRecent.insert(deviceKey($0.memberId, $0.source)).inserted }
+    }
+
+    private func fetchMembershipCounts() async {
+        do {
+            membershipCounts = try await SupabaseConfig.client.rpc("admin_membership_counts").execute().value
+            membershipCountsFailed = false
+        } catch {
+            guard !Log.isCancellation(error) else { return }
+            membershipCountsFailed = true
+            Log.fetchError("خطأ جلب عدد الأعضاء داخل المنظومة", error)
+        }
     }
 
     private func fetchActions24h() async -> [RecentActionRow] {
