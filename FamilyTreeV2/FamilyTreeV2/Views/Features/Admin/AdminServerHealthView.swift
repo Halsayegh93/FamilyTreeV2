@@ -2,6 +2,7 @@ import SwiftUI
 import Supabase
 
 struct AdminServerHealthView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var dashboard: ServerHealthDashboard?
     @State private var operations: HealthOperations?
     @State private var loading = false
@@ -19,7 +20,16 @@ struct AdminServerHealthView: View {
                             failure: failure, filter: $filter, operationsFirst: operationsFirst, refresh: load)
             .navigationTitle(L10n.t("مهام السيرفر", "Server jobs"))
             .navigationBarTitleDisplayMode(.inline)
-            .task { await load() }
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                // SwiftUI cancels this task when the screen disappears or the
+                // scene becomes inactive. No background monitoring is started.
+                while !Task.isCancelled {
+                    await load()
+                    do { try await Task.sleep(nanoseconds: 30_000_000_000) }
+                    catch { return }
+                }
+            }
     }
 
     @MainActor private func load() async {
@@ -66,6 +76,12 @@ struct ServerHealthContent: View {
                             .background(DS.Color.surface, in: Circle())
                     }.disabled(loading).accessibilityLabel(L10n.t("تحديث مهام السيرفر", "Refresh server jobs"))
                 }
+                if let checked = HealthTimestamp.date(dashboard?.checked_at) {
+                    Label(L10n.t("آخر تحديث: ", "Updated: ") + checked.formatted(date: .abbreviated, time: .shortened), systemImage: "clock")
+                        .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
+                }
+                Text(L10n.t("يتحدث كل ٣٠ ثانية أثناء فتح الصفحة، ويمكنك السحب للتحديث الآن", "Refreshes every 30 seconds while this page is active. Pull to refresh now."))
+                    .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
                 if let failure {
                     Label(failure, systemImage: "wifi.exclamationmark")
                         .font(DS.Font.footnote).foregroundStyle(DS.Color.warning)
@@ -75,10 +91,6 @@ struct ServerHealthContent: View {
                     dispatcher(dashboard)
                     jobs(dashboard)
                     if !operationsFirst, let operations { operationsSummary(operations) }
-                    if let checked = HealthTimestamp.date(dashboard.checked_at) {
-                        Label(L10n.t("آخر تحديث: ", "Updated: ") + checked.formatted(date: .abbreviated, time: .shortened), systemImage: "clock")
-                            .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
-                    }
                 } else if loading {
                     ProgressView(L10n.t("جاري تحميل المهام", "Loading jobs"))
                         .frame(maxWidth: .infinity).padding(DS.Spacing.xxl)

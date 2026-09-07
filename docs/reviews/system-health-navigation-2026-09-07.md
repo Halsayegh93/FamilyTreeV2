@@ -15,3 +15,8 @@ Validation:
 - Navigation and rendering verified separately using an isolated simulator copy. Only data loaders and the app entry are replaced with synthetic fixtures; destination mapping and destination views are the production implementation. The copy points to an unreachable loopback backend, so test taps cannot mutate production data. The actual app entry and device build retain the production configuration.
 
 Read-only production check: six jobs, including the dispatcher, had successful latest completed runs; cleanup-old-join-requests still showed its September 2 failed completion, and cleanup-app-diagnostics had no completed result yet. No cron jobs were manually executed and no scheduler configuration changed in this patch.
+
+Follow-up after the cleanup was run on demand:
+- The real cleanup job completed successfully at 2026-09-07 16:34 UTC (`DELETE 0`), and its original weekly schedule was restored. A read-only transaction invoking the actual dashboard RPC returned that successful result and zero failed jobs.
+- The isolated simulator preview was still showing its fixed failed-job fixture. It was replaced with a normal simulator build so this test data could not be mistaken for current server state.
+- The server page now refreshes every 30 seconds while visible and active, with cancellation when the page disappears or the scene becomes inactive. The last successful refresh timestamp appears above the results. The overview also refreshes when returning to the foreground. Failed refreshes continue to show the stale-data warning; no successful result is synthesized locally.

@@ -3,6 +3,7 @@ import Supabase
 
 struct AdminSystemHealthView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var snapshot: SystemHealthSnapshot?
     @State private var loading = false
     @State private var failure: String?
@@ -15,6 +16,9 @@ struct AdminSystemHealthView: View {
                     await refresh()
                 }
                 .task { await refresh() }
+                .onChange(of: scenePhase) { phase in
+                    if phase == .active { Task { await refresh() } }
+                }
             } else {
                 Text(L10n.t("هذه الصفحة مخصصة للمالك والمدير", "This page is available to owners and admins"))
                     .foregroundStyle(DS.Color.textSecondary)
@@ -182,7 +186,7 @@ struct SystemHealthOverviewContent: View {
                     }
                 }
                 if let snapshot { attention(snapshot) }
-                Label(L10n.t("يتحدث الملخص عند فتح الصفحة أو السحب للتحديث", "Updated when you open this page or pull to refresh"), systemImage: "arrow.down.circle")
+                Label(L10n.t("يتحدث الملخص عند فتح الصفحة أو الرجوع للتطبيق أو السحب للتحديث", "Updated when you open this page, return to the app, or pull to refresh"), systemImage: "arrow.down.circle")
                     .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
                     .frame(maxWidth: .infinity)
             }.padding(DS.Spacing.lg).padding(.bottom, DS.Spacing.xxl)
