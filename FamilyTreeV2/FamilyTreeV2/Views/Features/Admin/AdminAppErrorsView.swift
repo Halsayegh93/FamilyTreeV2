@@ -2,6 +2,8 @@ import SwiftUI
 import Supabase
 
 struct AdminAppErrorsView: View {
+    var serverOnly = false
+    @State private var operations: HealthOperations?
     @State private var dashboard: Dashboard?
     @State private var loading = false
     @State private var failure: String?
@@ -34,82 +36,114 @@ struct AdminAppErrorsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack {
-                    Label(L10n.t("متابعة أخطاء التطبيق", "App error tracking"), systemImage: "exclamationmark.bubble.fill")
-                        .font(DS.Font.calloutBold)
-                    Spacer()
-                    if loading { ProgressView() }
-                    else {
-                        Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
-                            .accessibilityLabel(L10n.t("تحديث الأخطاء", "Refresh errors"))
+        ScrollView(showsIndicators: false) {
+            LazyVStack(alignment: .leading, spacing: DS.Spacing.xl) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text(serverOnly ? L10n.t("تشغيل الخدمات", "Service operations") : L10n.t("قائمة المتابعة", "Review queue"))
+                            .font(DS.Font.title1).foregroundStyle(DS.Color.textPrimary)
+                        Text(serverOnly ? L10n.t("آخر تنفيذ لكل مهمة، بوضوح", "The latest result of every job") : L10n.t("راجع المشكلة وتابع تكرارها", "Review issues and track recurrence"))
+                            .font(DS.Font.footnote).foregroundStyle(DS.Color.textSecondary)
                     }
+                    Spacer()
+                    Button { Task { await load() } } label: {
+                        Group { if loading { ProgressView() } else { Image(systemName: "arrow.clockwise") } }
+                            .frame(width: DS.Icon.size, height: DS.Icon.size)
+                            .background(DS.Color.surface, in: Circle())
+                    }.disabled(loading).accessibilityLabel(L10n.t("تحديث", "Refresh"))
                 }
                 if let failure {
-                    Text(failure).foregroundStyle(DS.Color.error).font(DS.Font.caption1)
+                    Label(failure, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(DS.Color.warning).font(DS.Font.footnote)
+                        .padding(DS.Spacing.lg).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(DS.Color.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.lg))
                 }
                 if let dashboard {
-                    HStack(spacing: DS.Spacing.md) {
-                        metric("تحتاج مراجعة", "Needs review", value: dashboard.open_groups, color: DS.Color.warning)
-                        metric("بلاغات خلال ٧ أيام", "Reports in 7 days", value: dashboard.total_occurrences, color: DS.Color.info)
-                    }
-                    Text(L10n.t("آخر تحديث: ", "Updated: ") + dashboard.checked_at.formatted(date: .abbreviated, time: .shortened))
+                    if serverOnly { serverContent(dashboard) }
+                    else { reportsContent(dashboard) }
+                    Label(dashboard.checked_at.formatted(date: .abbreviated, time: .shortened), systemImage: "clock")
                         .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
-                    Toggle(L10n.t("إظهار الأخطاء التي تمت مراجعتها", "Include reviewed errors"), isOn: $showReviewed)
-                        .font(DS.Font.caption1).tint(DS.Color.primary)
-                    let visible = dashboard.errors.filter { showReviewed || $0.needs_review }
-                    if visible.isEmpty {
-                        VStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "checkmark.shield.fill").font(DS.Font.title2).foregroundStyle(DS.Color.success)
-                            Text(L10n.t("ما فيه أخطاء مسجلة تحتاج مراجعة", "No recorded errors need review"))
-                                .font(DS.Font.calloutBold)
-                        }.frame(maxWidth: .infinity).padding(DS.Spacing.lg)
-                    }
-                    ForEach(visible) { diagnostic in errorCard(diagnostic) }
-                    Text(L10n.t("آخر ١٠٠ مجموعة أخطاء خلال ٧ أيام. تمت المراجعة تعني الاطلاع على البلاغ؛ تكراره يعيده لقائمة المتابعة.", "Latest 100 error groups in 7 days. Reviewed means acknowledged; a new occurrence reopens the group."))
-                        .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
-                    Divider()
-                    Label(L10n.t("مهام السيرفر", "Server jobs"), systemImage: "server.rack")
-                        .font(DS.Font.calloutBold)
-                    Label(dashboard.dispatch_healthy
-                          ? L10n.t("موزّع الإشعارات يعمل", "Notification dispatcher is running")
-                          : L10n.t("موزّع الإشعارات يحتاج متابعة", "Notification dispatcher needs attention"),
-                          systemImage: dashboard.dispatch_healthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .font(DS.Font.caption1)
-                        .foregroundStyle(dashboard.dispatch_healthy ? DS.Color.success : DS.Color.warning)
-                    ForEach(dashboard.jobs) { job in
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            HStack(alignment: .top) {
-                                Text(jobTitle(job.name)).font(DS.Font.caption1)
-                                Spacer()
-                                Text(job.status == "succeeded" ? L10n.t("نجحت", "Succeeded") : job.status == "failed" ? L10n.t("فشلت", "Failed") : L10n.t("بانتظار أول تشغيل", "Awaiting first run"))
-                                    .font(DS.Font.caption1)
-                                    .foregroundStyle(job.status == "succeeded" ? DS.Color.success : DS.Color.warning)
-                            }
-                            if let date = job.last_run {
-                                Text(date.formatted(date: .abbreviated, time: .shortened))
-                                    .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
-                            }
-                        }.padding(DS.Spacing.md).background(DS.Color.textTertiary.opacity(0.07), in: RoundedRectangle(cornerRadius: DS.Radius.md))
-                    }
-                } else if !loading && failure == nil {
-                    Text(L10n.t("اسحب للتحديث", "Pull to refresh")).foregroundStyle(DS.Color.textSecondary)
                 }
-                Text(L10n.t("تصل بلاغات مختصرة من النسخ الداعمة عند توفر الاتصال وتسجيل الدخول. لا تشمل هذه القائمة كل الأعطال أو الانهيارات، ولا تحتوي بيانات الرسائل أو أرقام الهواتف.", "Supporting app versions send brief reports when signed in and connected. This list does not cover every failure or crash and contains no message content or phone numbers."))
-                    .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
-            }.padding(DS.Spacing.lg)
+                if !serverOnly {
+                    Text(L10n.t("آخر ١٠٠ مجموعة خلال ٧ أيام. البلاغات تصل من النسخ الداعمة عند الاتصال وتسجيل الدخول، ولا تشمل كل الأعطال أو الانهيارات.", "Latest 100 groups in 7 days. Supporting versions report while connected and signed in; coverage does not include every failure or crash."))
+                        .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
+                }
+            }.padding(DS.Spacing.lg).padding(.bottom, DS.Spacing.xxl)
         }
+        .background(DS.Color.background)
+        .navigationTitle(serverOnly ? L10n.t("مهام السيرفر", "Server jobs") : L10n.t("أخطاء التطبيق", "App errors"))
+        .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
     }
 
+    private func reportsContent(_ dashboard: Dashboard) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+            HStack(spacing: DS.Spacing.md) {
+                metric("تحتاج مراجعة", "Needs review", value: dashboard.open_groups, color: DS.Color.warning)
+                metric("بلاغات خلال ٧ أيام", "Reports in 7 days", value: dashboard.total_occurrences, color: DS.Color.primary)
+            }
+            Picker(L10n.t("حالة البلاغات", "Report status"), selection: $showReviewed) {
+                Text(L10n.t("قيد المراجعة", "Needs review")).tag(false)
+                Text(L10n.t("الكل", "All")).tag(true)
+            }.pickerStyle(.segmented)
+            let visible = dashboard.errors.filter { showReviewed || $0.needs_review }
+            if visible.isEmpty {
+                VStack(spacing: DS.Spacing.md) {
+                    Image(systemName: "checkmark.shield.fill").font(DS.Font.hero).foregroundStyle(DS.Color.success)
+                    Text(L10n.t("قائمة المتابعة خالية", "Your review queue is clear")).font(DS.Font.title3)
+                    Text(L10n.t("أي بلاغ جديد يصل بيظهر هنا", "New reports will appear here"))
+                        .font(DS.Font.footnote).foregroundStyle(DS.Color.textSecondary)
+                }.frame(maxWidth: .infinity).padding(DS.Spacing.xxxl)
+                    .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
+            }
+            ForEach(visible) { diagnostic in errorCard(diagnostic) }
+            Text(L10n.t("تمت المراجعة تعني الاطلاع على البلاغ. إذا تكرر، يرجع تلقائياً لقائمة المتابعة.", "Reviewed means acknowledged. A new occurrence returns to the review queue."))
+                .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
+        }
+    }
+
+    private func serverContent(_ dashboard: Dashboard) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+            Label(dashboard.dispatch_healthy ? L10n.t("موزّع الإشعارات يعمل", "Notification dispatcher is running") : L10n.t("موزّع الإشعارات يحتاج متابعة", "Notification dispatcher needs attention"), systemImage: dashboard.dispatch_healthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(DS.Font.calloutBold).foregroundStyle(dashboard.dispatch_healthy ? DS.Color.success : DS.Color.warning)
+                .padding(DS.Spacing.lg).frame(maxWidth: .infinity, alignment: .leading)
+                .background((dashboard.dispatch_healthy ? DS.Color.success : DS.Color.warning).opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.xl))
+            if let operations {
+                HStack(spacing: DS.Spacing.md) {
+                    metric("اتصالات فاشلة · ٢٤ س", "Failed HTTP · 24h", value: operations.http_failures, color: DS.Color.warning)
+                    metric("حذف حسابات متأخر", "Delayed deletions", value: operations.pending_deletions, color: DS.Color.accent)
+                }
+                Text(L10n.t("محاولات تشغيل فاشلة خلال ٢٤ ساعة: \(operations.cron_failures)", "Failed job attempts in 24h: \(operations.cron_failures)"))
+                    .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
+            }
+            Text(L10n.t("آخر نتائج التشغيل", "Latest run results")).font(DS.Font.title3)
+            ForEach(dashboard.jobs) { job in
+                HStack(alignment: .top, spacing: DS.Spacing.md) {
+                    Image(systemName: job.status == "succeeded" ? "checkmark.circle.fill" : job.status == "failed" ? "exclamationmark.circle.fill" : "clock.fill")
+                        .font(DS.Font.title3).foregroundStyle(job.status == "succeeded" ? DS.Color.success : DS.Color.warning)
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text(jobTitle(job.name)).font(DS.Font.calloutBold).foregroundStyle(DS.Color.textPrimary)
+                        if let date = job.last_run {
+                            Text(date.formatted(date: .abbreviated, time: .shortened)).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    Text(job.status == "succeeded" ? L10n.t("نجحت", "Succeeded") : job.status == "failed" ? L10n.t("فشلت", "Failed") : L10n.t("لم تعمل بعد", "Not run yet"))
+                        .font(DS.Font.caption1.weight(.semibold))
+                        .foregroundStyle(job.status == "succeeded" ? DS.Color.success : DS.Color.warning)
+                }.padding(DS.Spacing.lg).background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
+                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
+            }
+        }
+    }
+
     private func metric(_ ar: String, _ en: String, value: Int, color: Color) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text(value.formatted()).font(DS.Font.title2).foregroundStyle(color)
+            Text(value.formatted()).font(DS.Font.hero).monospacedDigit().foregroundStyle(color)
             Text(L10n.t(ar, en)).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(DS.Spacing.md)
-            .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.md))
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(DS.Spacing.lg)
+            .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.xl))
     }
 
     private func errorCard(_ diagnostic: Diagnostic) -> some View {
@@ -134,12 +168,13 @@ struct AdminAppErrorsView: View {
                         if reviewing == diagnostic.id { ProgressView() }
                         Text(L10n.t("تمت المراجعة", "Mark reviewed"))
                     }.font(DS.Font.calloutBold)
-                }.disabled(reviewing != nil || loading)
+                }.buttonStyle(.borderedProminent).tint(DS.Color.primary).disabled(reviewing != nil || loading)
             } else {
                 Text(L10n.t("تمت المراجعة", "Reviewed")).font(DS.Font.caption1).foregroundStyle(DS.Color.success)
             }
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(DS.Spacing.md)
-            .background(DS.Color.textTertiary.opacity(0.07), in: RoundedRectangle(cornerRadius: DS.Radius.md))
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(DS.Spacing.lg)
+            .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
     }
 
     @MainActor private func load() async {
@@ -149,6 +184,7 @@ struct AdminAppErrorsView: View {
         do {
             let data = try await SupabaseConfig.client.rpc("app_diagnostics_dashboard").execute().data
             dashboard = try decoder().decode(Dashboard.self, from: data)
+            if serverOnly { operations = try await SupabaseConfig.client.rpc("operational_health").execute().value }
             failure = nil
         } catch {
             if !Log.isCancellation(error) { failure = L10n.t("تعذر تحديث الأخطاء. البيانات المعروضة قد تكون قديمة؛ أعد المحاولة.", "Could not refresh errors. Displayed data may be stale; try again.") }

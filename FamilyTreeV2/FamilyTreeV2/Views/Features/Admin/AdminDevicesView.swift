@@ -61,6 +61,10 @@ struct AdminDevicesView: View {
                 } else if allDevices.isEmpty {
                     emptyState
                 } else {
+                    SystemHealthSectionHeader(title: t("الأجهزة المرتبطة", "Connected devices"), subtitle: t("ابحث عن العضو وتابع أجهزته", "Find a member and manage their devices"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.md)
                     // Stats
                     statsBar
                         .padding(.horizontal, DS.Spacing.lg)
@@ -82,6 +86,9 @@ struct AdminDevicesView: View {
                     // Device list
                     ScrollView(showsIndicators: false) {
                         AdaptiveLazyStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
+                            if filteredGroups.isEmpty {
+                                DSEmptyState(icon: "magnifyingglass", title: t("لا توجد نتائج مطابقة", "No matching results"))
+                            }
                             ForEach(filteredGroups, id: \.memberId) { group in
                                 memberDeviceCard(group)
                             }

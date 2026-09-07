@@ -28,6 +28,10 @@ struct AdminPushHealthView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
+                    SystemHealthSectionHeader(title: L10n.t("جاهزية الإشعارات", "Notification readiness"), subtitle: L10n.t("حالة الأجهزة والإرسال في نظرة واضحة", "A clear view of devices and delivery"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.lg)
                     // الوضع الأفقي: الأقسام على عمودين
                     AdaptiveCardStack(spacing: DS.Spacing.xxl, landscapeMinimum: 340) {
                         overviewSection

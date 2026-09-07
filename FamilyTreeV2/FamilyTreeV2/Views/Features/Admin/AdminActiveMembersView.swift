@@ -252,35 +252,8 @@ struct AdminActiveMembersView: View {
 
     // MARK: - Stats card
     private var statsCard: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // الصف الأول: نشاط لحظي
-            HStack(spacing: DS.Spacing.sm) {
-                statBox(
-                    icon: "circle.fill",
-                    title: L10n.t("الآن", "Now"),
-                    value: "\(nowRows.count)",
-                    color: DS.Color.success
-                )
-                statBox(
-                    icon: "iphone.gen3",
-                    title: L10n.t("التطبيق", "App"),
-                    value: "\(nowRows.filter { $0.source == "app" }.count + recentRows.filter { $0.source == "app" }.count)",
-                    color: DS.Color.primary
-                )
-                statBox(
-                    icon: "globe",
-                    title: L10n.t("الموقع", "Web"),
-                    value: "\(nowRows.filter { $0.source == "web" }.count + recentRows.filter { $0.source == "web" }.count)",
-                    color: DS.Color.accent
-                )
-                statBox(
-                    icon: "clock.arrow.circlepath",
-                    title: L10n.t("14 يوم", "14d"),
-                    value: "\(recentRows.count)",
-                    color: DS.Color.info
-                )
-            }
-
+        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+            SystemHealthSectionHeader(title: L10n.t("حضور العائلة", "Family presence"), subtitle: L10n.t("من داخل المنظومة إلى النشاط اليومي", "Membership and daily activity"))
             // Server count: active approved living members with an actual Auth sign-in.
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "person.badge.shield.checkmark.fill")
@@ -325,26 +298,55 @@ struct AdminActiveMembersView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .stroke(DS.Color.secondary.opacity(0.20), lineWidth: 0.5)
             )
+            // الصف الأول: نشاط لحظي
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: DS.Spacing.md)], spacing: DS.Spacing.md) {
+                statBox(
+                    icon: "circle.fill",
+                    title: L10n.t("الآن", "Now"),
+                    value: "\(nowRows.count)",
+                    color: DS.Color.success
+                )
+                statBox(
+                    icon: "iphone.gen3",
+                    title: L10n.t("التطبيق", "App"),
+                    value: "\(nowRows.filter { $0.source == "app" }.count + recentRows.filter { $0.source == "app" }.count)",
+                    color: DS.Color.primary
+                )
+                statBox(
+                    icon: "globe",
+                    title: L10n.t("الموقع", "Web"),
+                    value: "\(nowRows.filter { $0.source == "web" }.count + recentRows.filter { $0.source == "web" }.count)",
+                    color: DS.Color.accent
+                )
+                statBox(
+                    icon: "clock.arrow.circlepath",
+                    title: L10n.t("14 يوم", "14d"),
+                    value: "\(recentRows.count)",
+                    color: DS.Color.info
+                )
+            }
+
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
 
     private func statBox(icon: String, title: String, value: String, color: Color) -> some View {
-        VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Image(systemName: icon)
                 .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(color)
             Text(value)
-                .font(DS.Font.scaled(20, weight: .heavy))
+                .font(DS.Font.title1).monospacedDigit()
                 .foregroundColor(DS.Color.textPrimary)
             Text(title)
                 .font(DS.Font.scaled(11, weight: .semibold))
                 .foregroundColor(DS.Color.textSecondary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
-        .background(color.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Spacing.lg)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
     }
 
     // MARK: - Active now row (with online dot + screen)
