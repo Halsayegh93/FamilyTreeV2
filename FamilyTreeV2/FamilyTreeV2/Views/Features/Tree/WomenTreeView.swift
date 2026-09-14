@@ -629,7 +629,8 @@ private struct WomanDetailSheet: View {
     private func computeKinship() {
         guard let me else { return }
         let lookup = Dictionary(uniqueKeysWithValues: allWomen.map { ($0.id, $0) })
-        let result = KinshipCalculator.calculate(from: me, to: woman, lookup: lookup)
+        // شجرة النساء وحدها تحسب صلة القرابة من جهة الأم
+        let result = KinshipCalculator.calculate(from: me, to: woman, lookup: lookup, includeMaternal: true)
         withAnimation(DS.Anim.snappy) { kinshipText = result.relationship }
     }
 
