@@ -597,6 +597,8 @@ struct WomenClassicTreeView: View {
         let accent: Color = female
             ? (deceased ? DS.Color.femaleDeceased : rose)
             : (deceased ? DS.Color.textTertiary : DS.Color.primary)
+        // حافة الأنثى المتوفّاة بلون مختلف (ذهبي) لتتميّز عن الحيّة — طلب المالك
+        let border: Color = (female && deceased) ? DS.Color.accent : accent
         let kids = cChildrenOf[m.id] ?? []
         let isCollapsed = collapsed.contains(m.id)
         let showWives = !isCollapsed && !kids.isEmpty
@@ -652,7 +654,7 @@ struct WomenClassicTreeView: View {
                         }
                     )
                     .overlay(shape.stroke(Color.white, lineWidth: RING))
-                    .overlay(shape.stroke(accent, lineWidth: 2).padding(-RING - 0.5))   // إطار ملوّن
+                    .overlay(shape.stroke(border, lineWidth: (female && deceased) ? 2.5 : 2).padding(-RING - 0.5))   // إطار ملوّن
                     // شارة الوفاة: قلب مكسور رمادي (غير ملوّن)
                     .overlay(alignment: .bottomTrailing) {
                         if deceased {
@@ -742,7 +744,7 @@ struct WomenClassicTreeView: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(accent.opacity(0.4), lineWidth: 1))
+                    .stroke(female ? border.opacity(0.7) : accent.opacity(0.4), lineWidth: 1))
                 .onTapGesture { onSelect?(m) }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             } else {
                 Text(m.firstName)
@@ -776,7 +778,9 @@ struct WomenClassicTreeView: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(w.isDeceased == true ? DS.Color.femaleDeceased : rose)
                 .frame(width: 24, height: 24)
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(Color.white.opacity(0.9), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(w.isDeceased == true ? DS.Color.accent : Color.white.opacity(0.9),
+                            lineWidth: w.isDeceased == true ? 1.5 : 1))
                 .overlay(
                     Text(L10n.t("زوجة", "Wife"))
                         .font(.system(size: 7.5, weight: .bold))
