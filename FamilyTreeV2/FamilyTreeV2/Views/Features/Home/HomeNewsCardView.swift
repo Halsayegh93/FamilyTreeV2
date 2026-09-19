@@ -36,6 +36,8 @@ struct HomeNewsCardView: View {
     let onReportTap: () -> Void
     let onEditTap: () -> Void
     let onMemberTap: (FamilyMember) -> Void
+    /// تاريخ النشر — ما مضى عليه أكثر من شهرين يظهر بتاريخه أسفل البطاقة يساراً
+    var postDate: Date? = nil
 
     // Double-tap like animation
     @State private var showDoubleTapHeart = false
@@ -48,6 +50,19 @@ struct HomeNewsCardView: View {
     /// منشور نُشر بهوية الإدارة — الاسم المحفوظ يختلف عن اسم العضو الحقيقي
     private var isAdminIdentityPost: Bool {
         authorName == L10n.t("إدارة العائلة", "Family Admin") || authorName == "إدارة العائلة"
+    }
+
+    private var isOlderThanTwoMonths: Bool {
+        guard let postDate,
+              let limit = Calendar.current.date(byAdding: .month, value: -2, to: Date()) else { return false }
+        return postDate < limit
+    }
+
+    private static func dateFormatter(for date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
+        f.dateFormat = "d MMMM yyyy"
+        return f.string(from: date)
     }
 
     private var shortDisplayName: String {
@@ -70,14 +85,14 @@ struct HomeNewsCardView: View {
             // المحتوى — ينزل قليلاً عن الترويسة الرسمية حتى لا يلتصق بها
             if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(content)
-                    .font(DS.Font.scaled(14))
+                    .font(DS.Font.plex(13.5, weight: .regular))
                     .foregroundColor(DS.Color.textPrimary.opacity(0.95))
                     .multilineTextAlignment(.leading)
-                    .lineSpacing(3.5)
+                    .lineSpacing(2.5)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.top, isAdminIdentityPost ? DS.Spacing.md : 0)
-                    .padding(.bottom, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xs + 2)
             }
 
             // منطقة الميديا (صور) — double-tap like
@@ -102,17 +117,16 @@ struct HomeNewsCardView: View {
         .background(
             ZStack {
                 DS.Color.surface
-                if isAdminIdentityPost { DS.Color.primary.opacity(0.07) }
+                if isAdminIdentityPost { DS.Color.accent.opacity(0.05) }
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(isAdminIdentityPost ? DS.Color.primary.opacity(0.45)
-                                            : DS.Color.textTertiary.opacity(0.15),
-                        lineWidth: isAdminIdentityPost ? 1.4 : 0.75)
+                // خبر الإدارة بلا إطار (طلب المالك) — الإطار الخفيف للأخبار العادية فقط
+                .stroke(isAdminIdentityPost ? Color.clear : DS.Color.textTertiary.opacity(0.15),
+                        lineWidth: 0.75)
         )
-        .dsCardShadow()
     }
 
     // MARK: - هيدر الكرت
@@ -133,26 +147,31 @@ struct HomeNewsCardView: View {
                     Button(action: openAuthor) {
                         // اسم صاحب الخبر على سطر واحد (طلب المالك)
                         Text(shortDisplayName)
-                            .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(isAdminIdentityPost ? .white : DS.Color.textPrimary)
+                            .font(DS.Font.plex(14, weight: .semibold))
+                            .foregroundColor(DS.Color.textPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
-                    HStack(spacing: 3) {
+                    // سطر خفيف: النوع · الوقت — بدل الكبسولة والوقت أسفل البطاقة
+                    HStack(spacing: 4) {
                         Image(systemName: NewsTypeHelper.icon(for: type))
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.scaled(10, weight: .bold))
                         Text(NewsTypeHelper.displayName(for: type))
-                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .font(DS.Font.plex(11, weight: .semibold))
+                        if !isOlderThanTwoMonths {
+                            Text("·")
+                                .font(DS.Font.plex(11, weight: .regular))
+                                .foregroundColor(DS.Color.textTertiary)
+                            Text(time)
+                                .font(DS.Font.plex(11, weight: .regular))
+                                .foregroundColor(DS.Color.textTertiary)
+                                .lineLimit(1)
+                        }
                     }
-                    .foregroundColor(isAdminIdentityPost ? .white : typeColor)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1.5)
-                    .background(isAdminIdentityPost ? SwiftUI.Color.white.opacity(0.22)
-                                                    : typeColor.opacity(0.10))
-                    .clipShape(Capsule())
+                    .foregroundColor(isAdminIdentityPost ? DS.Color.accentDark : typeColor)
                     .allowsHitTesting(false)
                 }
             }
@@ -171,12 +190,14 @@ struct HomeNewsCardView: View {
                     .overlay(Capsule().stroke(DS.Color.warning.opacity(0.30), lineWidth: 1))
             }
 
-            // الإبلاغ انتقل للسحب صوب اليسار (طلب المالك)
-            // قائمة التعديل/الحذف — تظهر للإدارة وصاحب الخبر فقط
-            if canDelete || canEdit {
+            // قائمة «…»: تعديل/حذف للإدارة وصاحب الخبر، و«إبلاغ» لغير صاحبه (طلب المالك)
+            if canDelete || canEdit || canReport {
                 Menu {
                     if canEdit {
                         Button(action: onEditTap) { Label(L10n.t("تعديل", "Edit"), systemImage: "pencil") }
+                    }
+                    if canReport {
+                        Button(action: onReportTap) { Label(L10n.t("إبلاغ", "Report"), systemImage: "flag") }
                     }
                     if canDelete {
                         Button(role: .destructive, action: onDeleteTap) { Label(L10n.t("حذف", "Delete"), systemImage: "trash") }
@@ -184,24 +205,22 @@ struct HomeNewsCardView: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(DS.Font.scaled(14, weight: .semibold))
-                        .foregroundColor(isAdminIdentityPost ? SwiftUI.Color.white.opacity(0.9)
+                        .foregroundColor(isAdminIdentityPost ? DS.Color.accentDark
                                                              : DS.Color.textTertiary)
-                        .frame(width: 44, height: 44)   // هدف لمس ≥44pt
+                        .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
                 }
             }
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, isAdminIdentityPost ? DS.Spacing.sm + 2 : DS.Spacing.md)
-        .padding(.bottom, isAdminIdentityPost ? DS.Spacing.sm + 2 : DS.Spacing.sm)
+        .padding(.top, isAdminIdentityPost ? DS.Spacing.sm + 2 : DS.Spacing.sm + 2)
+        .padding(.bottom, DS.Spacing.sm)
         // ترويسة رسمية بتدرّج الهيدر — كورقة رسمية للعائلة
         .background(
             Group {
+                // منشور باسم الإدارة بلون مختلف — ذهبي فاتح هادئ لا فاقع (طلب المالك)
                 if isAdminIdentityPost {
-                    ZStack {
-                        DS.Color.gradientPrimary
-                        DS.Color.headerVeil
-                    }
+                    DS.Color.accent.opacity(0.14)
                 }
             }
         )
@@ -213,17 +232,16 @@ struct HomeNewsCardView: View {
         if isAdminIdentityPost {
             ZStack {
                 Circle()
-                    .fill(SwiftUI.Color.white.opacity(0.22))
+                    .fill(DS.Color.accent)
                 Image(systemName: "megaphone.fill")
                     .font(DS.Font.scaled(15, weight: .bold))
                     .foregroundColor(.white)
             }
-            .frame(width: 36, height: 36)
-            .overlay(Circle().strokeBorder(SwiftUI.Color.white.opacity(0.35), lineWidth: 1))
+            .frame(width: 32, height: 32)
         } else {
             DSMemberAvatar(name: authorName,
                            avatarUrl: authorMember?.avatarUrl,
-                           size: 32,
+                           size: 30,
                            roleColor: typeColor)
                 .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.30), lineWidth: 1))
         }
@@ -251,7 +269,7 @@ struct HomeNewsCardView: View {
                         }
                     }
                 }
-                .aspectRatio(4/5, contentMode: .fit)
+                .aspectRatio(2, contentMode: .fit)
                 .clipped()
                 .tabViewStyle(.page(indexDisplayMode: imageUrls.count > 1 ? .automatic : .never))
             } else if let urlStr = imageUrl,
@@ -268,7 +286,7 @@ struct HomeNewsCardView: View {
                         ProgressView().tint(DS.Color.primary)
                     }
                 }
-                .aspectRatio(4/5, contentMode: .fit)
+                .aspectRatio(2, contentMode: .fit)
                 .clipped()
             }
 
@@ -386,17 +404,6 @@ struct HomeNewsCardView: View {
         .buttonStyle(.plain)
     }
 
-    /// الوقت أسفل البطاقة — طلب المالك (كان في الهيدر)
-    private var timeStamp: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "clock")
-                .font(DS.Font.scaled(11))
-            Text(time)
-                .font(DS.Font.caption2)
-        }
-        .foregroundColor(DS.Color.textTertiary)
-    }
-
     // MARK: - شريط الإجراءات — أزرار شبحية خفيفة بلا كبسولات ثقيلة
 
     private var actionBar: some View {
@@ -425,7 +432,7 @@ struct HomeNewsCardView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.sm)
-                .frame(minWidth: 40, minHeight: 44)   // هدف لمس ≥44pt
+                .frame(minWidth: 40, minHeight: 36)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -447,7 +454,7 @@ struct HomeNewsCardView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.sm)
-                .frame(minWidth: 40, minHeight: 44)   // هدف لمس ≥44pt
+                .frame(minWidth: 40, minHeight: 36)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -456,9 +463,15 @@ struct HomeNewsCardView: View {
 
             Spacer()
 
-            // الوقت في نهاية الشريط السفلي
-            timeStamp
+            // أكثر من شهرين → التاريخ في الزاوية السفلية اليسرى (طلب المالك)
+            if isOlderThanTwoMonths, let postDate {
+                Text(Self.dateFormatter(for: postDate))
+                    .font(DS.Font.plex(11, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .environment(\.layoutDirection, .leftToRight)
+            }
         }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        // المحور فيزيائي (يسار→يمين) حتى يثبت التاريخ يساراً في اللغتين؛ الأزرار يميناً في العربية
+        .environment(\.layoutDirection, L10n.isArabic ? .rightToLeft : .leftToRight)
     }
 }

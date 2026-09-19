@@ -313,7 +313,7 @@ struct FamilyProjectsView: View {
             .foregroundColor(.white)
             .frame(width: 28, height: 28)
             .background(Circle().fill(Color.black.opacity(0.35)))
-            .background(Circle().fill(.ultraThinMaterial))
+            .dsGlass(Circle())
             .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
             .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1)
     }
@@ -442,7 +442,7 @@ struct FamilyProjectsView: View {
             }
         }
         .padding(6)
-        .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+        .dsGlass(Capsule(style: .continuous))
         .overlay(Capsule(style: .continuous).strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1))
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
         .animation(.spring(response: 0.40, dampingFraction: 0.78), value: filter)
@@ -555,7 +555,7 @@ struct FamilyProjectsView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
-        .background(.ultraThinMaterial)
+        .dsGlass(Rectangle())
         .overlay(
             Rectangle().fill(DS.Color.textTertiary.opacity(0.15)).frame(height: 0.5),
             alignment: .top

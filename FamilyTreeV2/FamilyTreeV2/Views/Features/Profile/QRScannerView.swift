@@ -44,7 +44,7 @@ struct QRScannerView: View {
                                 .foregroundColor(.white)
                         }
                         .padding(DS.Spacing.lg)
-                        .background(.ultraThinMaterial)
+                        .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg))
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                     }
                 }

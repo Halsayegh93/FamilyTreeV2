@@ -502,6 +502,17 @@ extension View {
         }
     }
 
+    /// خلفية زجاجية: زجاج iOS 26/27 السائل (Liquid Glass)، ومادة شفافة على الأقدم.
+    /// للعناصر العائمة فوق المحتوى (أشرطة أدوات، أزرار دائرية، أشرطة سفلية).
+    @ViewBuilder
+    func dsGlass<S: Shape>(_ shape: S, interactive: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            self.background(shape.fill(.ultraThinMaterial))
+        }
+    }
+
     func dsSubtleShadow() -> some View {
         self.shadow(color: DS.Shadow.subtle.color,
                     radius: DS.Shadow.subtle.radius,

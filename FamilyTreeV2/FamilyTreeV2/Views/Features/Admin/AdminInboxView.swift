@@ -279,7 +279,7 @@ struct AdminInboxView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .background(.ultraThinMaterial)
+        .dsGlass(Rectangle())
         .overlay(Divider(), alignment: .top)
     }
 

@@ -454,11 +454,7 @@ struct WomenClassicTreeView: View {
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, 3)
         // مادة مخففة (50%) — نفس بار شجرة العائلة
-        .background {
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .opacity(0.75)
-        }
+        .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
@@ -499,11 +495,7 @@ struct WomenClassicTreeView: View {
             .buttonStyle(DSScaleButtonStyle())
         }
         .padding(4)
-        .background {
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .opacity(0.75)
-        }
+        .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)

@@ -1368,7 +1368,7 @@ struct MemberDetailsView: View {
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                         .frame(width: 38, height: 38)
-                        .background(.ultraThinMaterial)
+                        .dsGlass(Circle())
                         .clipShape(Circle())
                         .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 0.5))
                         .dsSubtleShadow()

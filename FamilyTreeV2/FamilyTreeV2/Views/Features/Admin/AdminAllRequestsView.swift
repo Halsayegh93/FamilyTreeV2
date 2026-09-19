@@ -432,7 +432,7 @@ struct AdminAllRequestsView: View {
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(.ultraThinMaterial)
+                    .dsGlass(Rectangle())
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -998,10 +998,7 @@ struct AdminAllRequestsView: View {
                 }
             }
             .padding(6)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial)
-            )
+            .dsGlass(Capsule(style: .continuous))
             .overlay(
                 Capsule(style: .continuous)
                     .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
@@ -1050,9 +1047,7 @@ struct AdminAllRequestsView: View {
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
-        .background(
-            Capsule(style: .continuous).fill(.ultraThinMaterial)
-        )
+        .dsGlass(Capsule(style: .continuous))
         .overlay(
             Capsule(style: .continuous).strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1)
         )

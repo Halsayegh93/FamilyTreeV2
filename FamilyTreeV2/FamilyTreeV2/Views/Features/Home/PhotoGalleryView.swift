@@ -168,7 +168,7 @@ private struct GalleryAlbumCard: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(Capsule().fill(Color.black.opacity(0.45)))
-                .background(Capsule().fill(.ultraThinMaterial))
+                .dsGlass(Capsule())
                 .padding(6)
             }
             .overlay(alignment: .topTrailing) {
@@ -513,7 +513,7 @@ struct GalleryPhotoViewer: View {
                             .foregroundColor(.white)
                             .frame(width: 38, height: 38)
                             .background(Circle().fill(Color.black.opacity(0.4)))
-                            .background(Circle().fill(.ultraThinMaterial))
+                            .dsGlass(Circle())
                     }
                     .padding(.trailing, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)

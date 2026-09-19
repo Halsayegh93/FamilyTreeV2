@@ -512,7 +512,7 @@ struct HomeNewsView: View {
                             .font(DS.Font.scaled(15, weight: .bold))
                             .foregroundColor(.white)
                             .frame(width: 36 * layout.scale, height: 36 * layout.scale)
-                            .background(Circle().fill(.ultraThinMaterial))
+                            .dsGlass(Circle())
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
                             .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
 
@@ -524,7 +524,7 @@ struct HomeNewsView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
-                                .background(Capsule().fill(.ultraThinMaterial))
+                                .dsGlass(Capsule())
                                 .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
                         }
                     }
@@ -658,7 +658,7 @@ struct HomeNewsView: View {
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
-            .background(Capsule().fill(.ultraThinMaterial))
+            .dsGlass(Capsule())
             .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1))
             .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
             .padding(.top, 118)
@@ -808,26 +808,18 @@ struct HomeNewsView: View {
                     }
                 }
             } else {
-                // مجمّعة زمنياً: اليوم / أمس / هذا الأسبوع / هذا الشهر / أقدم
-                // العناوين تثبت أعلى الشاشة أثناء التمرير
-                LazyVStack(spacing: DS.Spacing.lg, pinnedViews: [.sectionHeaders]) {
-                    ForEach(groupedNews) { group in
-                        Section {
-                            ForEach(group.posts) { news in
-                                newsCard(for: news)
-                                    // سحب يسار = إبلاغ · سحب يمين = حذف (للإدارة وصاحب الخبر)
-                                    .newsSwipeActions(
-                                        id: news.id,
-                                        canDelete: canDelete(news),
-                                        // الإبلاغ لغير صاحب الخبر (سياسة Apple)
-                                        canReport: authVM.currentUser?.id != news.ownerId,
-                                        onDelete: { postToDelete = news },
-                                        onReport: { postToReport = news }
-                                    )
-                            }
-                        } header: {
-                            newsGroupHeader(group)
-                        }
+                // قائمة واحدة بلا عناوين «اليوم / أمس / … / أقدم» ولا عدّاد (طلب المالك)
+                LazyVStack(spacing: DS.Spacing.md) {
+                    ForEach(filteredNews) { news in
+                        newsCard(for: news)
+                            .newsSwipeActions(
+                                id: news.id,
+                                canDelete: canDelete(news),
+                                // الإبلاغ لغير صاحب الخبر (سياسة Apple)
+                                canReport: authVM.currentUser?.id != news.ownerId,
+                                onDelete: { postToDelete = news },
+                                onReport: { postToReport = news }
+                            )
                     }
                 }
             }
@@ -836,46 +828,6 @@ struct HomeNewsView: View {
         .padding(.top, DS.Spacing.sm)
     }
 
-    // MARK: - تجميع الأخبار زمنياً
-
-    private struct NewsGroup: Identifiable {
-        let id: String
-        let title: String
-        let icon: String
-        let posts: [NewsPost]
-    }
-
-    private var groupedNews: [NewsGroup] {
-        let cal = Calendar.current
-        var today: [NewsPost] = [], yesterday: [NewsPost] = [], week: [NewsPost] = []
-        var month: [NewsPost] = [], older: [NewsPost] = []
-        for n in filteredNews {
-            let d = n.timestamp
-            if cal.isDateInToday(d) { today.append(n) }
-            else if cal.isDateInYesterday(d) { yesterday.append(n) }
-            else if HomeDates.isWithinLastDays(d, days: 7) { week.append(n) }
-            else if HomeDates.isWithinLastDays(d, days: 30) { month.append(n) }
-            else { older.append(n) }
-        }
-        var out: [NewsGroup] = []
-        if !today.isEmpty     { out.append(.init(id: "today",     title: L10n.t("اليوم", "Today"),               icon: "sun.max.fill",   posts: today)) }
-        if !yesterday.isEmpty { out.append(.init(id: "yesterday", title: L10n.t("أمس", "Yesterday"),             icon: "moon.fill",      posts: yesterday)) }
-        if !week.isEmpty      { out.append(.init(id: "week",      title: L10n.t("هذا الأسبوع", "This week"),     icon: "calendar",       posts: week)) }
-        if !month.isEmpty     { out.append(.init(id: "month",     title: L10n.t("هذا الشهر", "This month"),      icon: "calendar.badge.clock", posts: month)) }
-        if !older.isEmpty     { out.append(.init(id: "older",     title: L10n.t("أقدم", "Earlier"),              icon: "clock.arrow.circlepath", posts: older)) }
-        return out
-    }
-
-    private func newsGroupHeader(_ group: NewsGroup) -> some View {
-        DSSectionHeader(
-            title: group.title,
-            icon: group.icon,
-            trailing: "\(group.posts.count)"
-        )
-        .padding(.vertical, DS.Spacing.xs)
-        // خلفية مصمتة حتى لا يظهر المحتوى من خلف العنوان المثبّت
-        .background(DS.Color.background)
-    }
 
     private func roleColorFor(_ roleColor: String?) -> Color {
         switch roleColor {
@@ -924,7 +876,8 @@ struct HomeNewsView: View {
             onDeleteTap: { postToDelete = news },
             onReportTap: { postToReport = news },
             onEditTap: { postToEdit = news },
-            onMemberTap: { member in selectedMemberForDetails = member }
+            onMemberTap: { member in selectedMemberForDetails = member },
+            postDate: news.timestamp
         )
     }
 

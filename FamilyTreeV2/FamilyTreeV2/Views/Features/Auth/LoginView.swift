@@ -258,7 +258,7 @@ struct LoginView: View {
                         }
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.sm)
-                        .background(Capsule().fill(.ultraThinMaterial))
+                        .dsGlass(Capsule())
                         .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1))
                         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
                         .padding(.top, 118)
