@@ -148,6 +148,9 @@ struct ProjectDetailView: View {
                                     if let desc = project.description, !desc.isEmpty {
                                         descriptionSection(desc)
                                     }
+                                    if !project.imageUrls.isEmpty {
+                                        ProjectPhotosGallery(urls: project.imageUrls)
+                                    }
                                     ownerSection
                                     if project.hasSocialLinks {
                                         socialLinksSection
@@ -166,6 +169,11 @@ struct ProjectDetailView: View {
                         // Description
                         if let desc = project.description, !desc.isEmpty {
                             descriptionSection(desc)
+                        }
+
+                        // صور المشروع
+                        if !project.imageUrls.isEmpty {
+                            ProjectPhotosGallery(urls: project.imageUrls)
                         }
                         
                         // Owner
@@ -216,7 +224,7 @@ struct ProjectDetailView: View {
                     .environmentObject(projectsVM)
                     .environmentObject(authVM)
             }
-            .alert(
+            .dsAlert(
                 L10n.t("حذف المشروع", "Delete Project"),
                 isPresented: $showDeleteAlert
             ) {
@@ -504,6 +512,9 @@ struct EditProjectView: View {
     @State private var phoneNumber: String
     @State private var locationUrl: String
     @State private var logoImage: UIImage? = nil
+    /// صور المشروع: الحالية (قابلة للحذف) + الجديدة
+    @State private var photoUrls: [String]
+    @State private var photoImages: [UIImage] = []
     @State private var isSaving = false
     // صاحب المشروع — يُعدَّل في التعديل للإدارة فقط.
     @State private var ownerName: String
@@ -524,6 +535,7 @@ struct EditProjectView: View {
         _locationUrl = State(initialValue: project.locationUrl ?? "")
         _ownerName = State(initialValue: project.ownerName)
         _selectedOwnerId = State(initialValue: project.ownerId)
+        _photoUrls = State(initialValue: project.imageUrls)
     }
     
     var body: some View {
@@ -654,6 +666,10 @@ struct EditProjectView: View {
                             socialTextField(platform: .location, placeholder: L10n.t("الموقع (Maps)", "Maps URL"), text: $locationUrl)
                         }
                         
+                        // صور المشروع (معرض)
+                        ProjectPhotosEditor(existingUrls: $photoUrls, newImages: $photoImages)
+                            .padding(.top, DS.Spacing.sm)
+
                         DSPrimaryButton(
                             L10n.t("حفظ التعديلات", "Save Changes"),
                             isLoading: isSaving
@@ -775,6 +791,18 @@ struct EditProjectView: View {
                     finalLogoUrl = uploaded
                 }
             }
+        }
+
+        // صور المعرض: الحالية بعد الحذف + رفع الجديدة
+        var finalPhotos = photoUrls
+        for img in photoImages {
+            if let data = ImageProcessor.process(img, for: .projectLogo),
+               let url = await projectsVM.uploadProjectPhoto(imageData: data) {
+                finalPhotos.append(url)
+            }
+        }
+        if finalPhotos != project.imageUrls {
+            await projectsVM.setProjectImages(id: project.id, urls: finalPhotos)
         }
 
         // تغيير صاحب المشروع متاح للإدارة فقط.

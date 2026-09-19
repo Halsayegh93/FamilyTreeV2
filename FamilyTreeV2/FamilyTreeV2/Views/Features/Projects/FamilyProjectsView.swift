@@ -110,7 +110,7 @@ struct FamilyProjectsView: View {
                 .environmentObject(authVM)
                 .environmentObject(memberVM)
         }
-        .alert(
+        .dsAlert(
             L10n.t("تم إرسال المشروع", "Project Submitted"),
             isPresented: $showAddedAlert
         ) {
@@ -133,7 +133,7 @@ struct FamilyProjectsView: View {
                     .environmentObject(authVM)
             }
         }
-        .alert(L10n.t("إبلاغ عن مشروع", "Report Project"), isPresented: Binding(
+        .dsAlert(L10n.t("إبلاغ عن مشروع", "Report Project"), isPresented: Binding(
             get: { projectToReport != nil },
             set: { if !$0 { projectToReport = nil } }
         )) {
@@ -160,12 +160,12 @@ struct FamilyProjectsView: View {
             Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا المشروع.",
                        "Enter a reason; it will be sent to the admins to review this project."))
         }
-        .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+        .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK"), role: .cancel) {}
         } message: {
             Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
         }
-        .alert(L10n.t("حذف المشروع", "Delete project"),
+        .dsAlert(L10n.t("حذف المشروع", "Delete project"),
                isPresented: Binding(
                 get: { projectToDelete != nil },
                 set: { if !$0 { projectToDelete = nil } })) {
@@ -180,7 +180,7 @@ struct FamilyProjectsView: View {
             Text(L10n.t("حذف هذا المشروع نهائياً؟",
                        "Permanently delete this project?"))
         }
-        .alert(L10n.t("حذف المشاريع المختارة", "Delete selected"),
+        .dsAlert(L10n.t("حذف المشاريع المختارة", "Delete selected"),
                isPresented: $showBatchDeleteAlert) {
             Button(L10n.t("حذف \(selectedIDs.count)", "Delete \(selectedIDs.count)"),
                    role: .destructive) {
@@ -631,6 +631,9 @@ struct AddProjectView: View {
     @State private var phoneNumber = ""
     @State private var locationUrl = ""
     @State private var logoImage: UIImage? = nil
+    /// صور المشروع الجديدة (تُرفع عند الإضافة)
+    @State private var photoImages: [UIImage] = []
+    @State private var noExistingPhotos: [String] = []
     @State private var isSaving = false
     @State private var selectedOwnerId: UUID?
     @State private var showMemberPicker = false
@@ -660,6 +663,9 @@ struct AddProjectView: View {
 
                         // ── البطاقة 1: الأساسيات (اسم + وصف) ──
                         basicsCard
+
+                        // ── صور المشروع (معرض) ──
+                        ProjectPhotosEditor(existingUrls: $noExistingPhotos, newImages: $photoImages)
 
                         // صاحب المشروع أُزيل من الإضافة — يُعيَّن فقط في تعديل
                         // المشروع (للإدارة). المنشئ يصبح صاحب المشروع تلقائياً.
@@ -1004,6 +1010,15 @@ struct AddProjectView: View {
             }
         }
 
+        // رفع صور المعرض
+        var photoUrls: [String] = []
+        for img in photoImages {
+            if let data = ImageProcessor.process(img, for: .projectLogo),
+               let url = await projectsVM.uploadProjectPhoto(imageData: data) {
+                photoUrls.append(url)
+            }
+        }
+
         let success = await projectsVM.addProject(
             ownerId: ownerId,
             ownerName: ownerName,
@@ -1019,7 +1034,8 @@ struct AddProjectView: View {
                 return (t.isEmpty || t == "+965") ? nil : whatsappNumber
             }(),
             phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
-            locationUrl: locationUrl.isEmpty ? nil : locationUrl
+            locationUrl: locationUrl.isEmpty ? nil : locationUrl,
+            imageUrls: photoUrls
         )
 
         if success {

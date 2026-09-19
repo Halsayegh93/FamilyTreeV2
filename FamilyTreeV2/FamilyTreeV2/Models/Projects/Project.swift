@@ -19,6 +19,8 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
     var createdAt: String?
     /// إخفاء soft من قِبَل الإدارة — العضو العادي ما يشوف، الإدارة تشوف بعلامة مميّزة.
     var isHidden: Bool
+    /// صور المشروع (معرض) — روابط عامة في bucket الأفاتار
+    var imageUrls: [String] = []
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -38,6 +40,7 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         case approvedBy = "approved_by"
         case createdAt = "created_at"
         case isHidden = "is_hidden"
+        case imageUrls = "image_urls"
     }
 
     init(from decoder: Decoder) throws {
@@ -59,6 +62,8 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         approvedBy = try container.decodeIfPresent(UUID.self, forKey: .approvedBy)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
+        // العمود قد لا يكون موجوداً بعد — يبقى فارغاً بلا فشل
+        imageUrls = (try? container.decodeIfPresent([String].self, forKey: .imageUrls)) ?? []
     }
 
     init(id: UUID = UUID(), ownerId: UUID, ownerName: String, title: String,
