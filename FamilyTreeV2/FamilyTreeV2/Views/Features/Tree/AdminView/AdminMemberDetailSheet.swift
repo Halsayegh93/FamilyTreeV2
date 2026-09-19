@@ -442,7 +442,7 @@ struct AdminMemberDetailSheet: View {
                 Button {
                     showBioEditor = true
                 } label: {
-                    Label(L10n.t("إضافة محطة حياتية", "Add Life Station"), systemImage: "plus.circle.fill")
+                    Label(L10n.t("إضافة حدث للسيرة", "Add Biography Entry"), systemImage: "plus.circle.fill")
                         .foregroundColor(DS.Color.accent)
                         .font(DS.Font.callout)
                 }
@@ -479,7 +479,7 @@ struct AdminMemberDetailSheet: View {
                     showBioEditor = true
                 } label: {
                     Label(
-                        L10n.t("تعديل المحطات (\(bioStations.count))", "Edit Stations (\(bioStations.count))"),
+                        L10n.t("تعديل السيرة (\(bioStations.count))", "Edit Biography (\(bioStations.count))"),
                         systemImage: "pencil"
                     )
                     .foregroundColor(DS.Color.accent)
@@ -487,7 +487,7 @@ struct AdminMemberDetailSheet: View {
                 }
             }
         } header: {
-            sectionHeader(L10n.t("المحطات الحياتية", "Life Stations"), icon: "book.pages.fill", color: DS.Color.accent)
+            sectionHeader(L10n.t("السيرة الذاتية", "Biography"), icon: "book.pages.fill", color: DS.Color.accent)
         }
     }
 
@@ -1050,7 +1050,7 @@ struct AdminMemberDetailSheet: View {
                 }
             }
             if childrenOrderChanged { changedFields.append(L10n.t("ترتيب الأبناء", "Children order")) }
-            if bioChanged { changedFields.append(L10n.t("المحطات الحياتية", "Life Stations")) }
+            if bioChanged { changedFields.append(L10n.t("السيرة الذاتية", "Biography")) }
 
             if !changedFields.isEmpty {
                 let fieldsList = changedFields.joined(separator: "، ")

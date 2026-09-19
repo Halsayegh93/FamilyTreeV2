@@ -45,7 +45,7 @@ struct BioStationsEditorSheet: View {
                             Image(systemName: "plus.circle.fill")
                                 .font(DS.Font.scaled(18))
                                 .foregroundColor(DS.Color.primary)
-                            Text(t("إضافة محطة", "Add Station"))
+                            Text(t("إضافة حدث", "Add Entry"))
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.primary)
                         }
@@ -57,7 +57,7 @@ struct BioStationsEditorSheet: View {
                 .scrollContentBackground(.hidden)
                 .disabled(!canEdit)
             }
-            .navigationTitle(t("المحطات الحياتية", "Life Stations"))
+            .navigationTitle(t("السيرة الذاتية", "Biography"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: DSToolbar.cancelPlacement) {

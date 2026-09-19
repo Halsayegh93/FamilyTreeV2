@@ -39,7 +39,7 @@ struct SettingsView: View {
                                 icon: "person.fill.viewfinder",
                                 color: DS.Color.primary,
                                 title: t("تعديل الملف الشخصي", "Edit Profile"),
-                                subtitle: t("الاسم، الصورة، محطات الحياة", "Name, photo, life stations")
+                                subtitle: t("الاسم، الصورة، السيرة الذاتية", "Name, photo, biography")
                             )
                         }
                         .buttonStyle(DSBoldButtonStyle())
@@ -177,7 +177,7 @@ struct SettingsView: View {
             }
         } message: {
             Text(t(
-                "سيتم حذف:\n• حسابك وبيانات تسجيل الدخول\n• صورتك الشخصية\n• محطاتك الحياتية\n\nستبقى بياناتك في شجرة العائلة. لا يمكن التراجع عن هذا الإجراء.",
+                "سيتم حذف:\n• حسابك وبيانات تسجيل الدخول\n• صورتك الشخصية\n• سيرتك الذاتية\n\nستبقى بياناتك في شجرة العائلة. لا يمكن التراجع عن هذا الإجراء.",
                 "This will permanently delete:\n• Your account & login credentials\n• Your profile photo\n• Your life stations\n\nYour family tree data will remain. This cannot be undone."
             ))
         }

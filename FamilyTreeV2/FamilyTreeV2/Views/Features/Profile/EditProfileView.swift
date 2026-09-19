@@ -145,7 +145,6 @@ struct EditProfileView: View {
                         HStack(alignment: .top, spacing: DS.Spacing.md) {
                             VStack(spacing: DS.Spacing.md) {
                                 avatarPickerBlock
-                                statusCard
                             }
                             .frame(maxWidth: .infinity)
 
@@ -194,44 +193,15 @@ struct EditProfileView: View {
                                         .onChange(of: birthDate) { _ in birthDateProvided = true }
 
                                     DSDivider()
+                                    maritalRow
+
+                                    DSDivider()
                                     emailField
                                 }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // 3. حالة الزواج والوفاة
-                        DSCard(padding: 0) {
-                            DSSectionHeader(
-                                title: L10n.t("الحالة الاجتماعية", "Status"),
-                                icon: "heart.text.square",
-                                iconColor: DS.Color.neonPink
-                            )
-
-                                    // الحالة الاجتماعية — زرّان كبيران (يعملان بعد رفع zIndex القسم)
-                                    HStack(spacing: DS.Spacing.sm) {
-                                        maritalButton(
-                                            title: L10n.t("أعزب", "Single"),
-                                            icon: "person.fill",
-                                            selected: !isMarried,
-                                            color: DS.Color.textSecondary
-                                        ) { setMarried(false) }
-
-                                        maritalButton(
-                                            title: L10n.t("متزوج", "Married"),
-                                            icon: "heart.fill",
-                                            selected: isMarried,
-                                            color: DS.Color.neonPink
-                                        ) { setMarried(true) }
-                                    }
-                                    .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.vertical, DS.Spacing.md)
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        // عنصر مجاور (زر الحفظ العائم) كان يتراكب ويبتلع النقر على النصف
-                        // الأيسر من هذا القسم — نرفع طبقته ليأخذ أولوية النقر.
-                        .zIndex(1)
-
-                        // 4. المحطات الحياتية
+                        // 3. السيرة الذاتية
                         bioStationsSection
                             .cooldownGuarded(.bio, cooldown: cooldown) { showEditLimitAlert = true }
 
@@ -393,41 +363,45 @@ struct EditProfileView: View {
                     .onChange(of: birthDate) { _ in birthDateProvided = true }
 
                 DSDivider()
+                maritalRow
+
+                DSDivider()
                 emailField
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
 
-    /// بطاقة الحالة الاجتماعية — نفس محتوى الوضع العمودي
-    private var statusCard: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("الحالة الاجتماعية", "Status"),
-                icon: "heart.text.square",
-                iconColor: DS.Color.neonPink
-            )
-
-            HStack(spacing: DS.Spacing.sm) {
-                maritalButton(
-                    title: L10n.t("أعزب", "Single"),
-                    icon: "person.fill",
-                    selected: !isMarried,
-                    color: DS.Color.textSecondary
-                ) { setMarried(false) }
-
-                maritalButton(
-                    title: L10n.t("متزوج", "Married"),
-                    icon: "heart.fill",
-                    selected: isMarried,
-                    color: DS.Color.neonPink
-                ) { setMarried(true) }
+    /// الحالة الاجتماعية — صف داخل «المعلومات الشخصية» تحت تاريخ الميلاد (طلب المالك)
+    private var maritalRow: some View {
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon("heart.fill", color: DS.Color.primary)
+            Text(L10n.t("الحالة الاجتماعية", "Marital Status"))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+            Spacer(minLength: DS.Spacing.sm)
+            HStack(spacing: 6) {
+                maritalChip(L10n.t("أعزب", "Single"), selected: !isMarried, color: DS.Color.primary) { setMarried(false) }
+                // «متزوج» بلون التطبيق الأساسي (الكحلي) — طلب المالك
+                maritalChip(L10n.t("متزوج", "Married"), selected: isMarried, color: DS.Color.primary) { setMarried(true) }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .zIndex(1)
+        .padding(.vertical, DS.Spacing.sm)
+    }
+
+    private func maritalChip(_ title: String, selected: Bool, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(DS.Font.scaled(13, weight: selected ? .bold : .medium))
+                .foregroundColor(selected ? .white : DS.Color.textSecondary)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 32)
+                .background(Capsule().fill(selected ? color : DS.Color.mutedBackground.opacity(0.6)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: - المكونات المصممة (Custom Components)
@@ -495,7 +469,7 @@ struct EditProfileView: View {
     /// فهو اختيار من قائمة معتمدة لا نصّ حر.
     private var familyPickerRow: some View {
         HStack(spacing: DS.Spacing.md) {
-            DSIcon("person.2.fill", color: DS.Color.accent)
+            DSIcon("person.2.fill", color: DS.Color.primary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("العائلة", "Family"))
@@ -526,16 +500,17 @@ struct EditProfileView: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
+                    // زر أكبر بلون التطبيق الكحلي (طلب المالك)
+                    HStack(spacing: 5) {
                         Text(L10n.t("تغيير", "Change"))
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.scaled(13, weight: .bold))
                         Image(systemName: "chevron.up.chevron.down")
-                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .font(DS.Font.scaled(12, weight: .semibold))
                     }
-                    .foregroundColor(DS.Color.accent)
-                    .padding(.horizontal, DS.Spacing.sm + 2)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(DS.Color.accent.opacity(0.10)))
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .frame(height: 32)
+                    .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
                 }
             }
         }
@@ -731,9 +706,9 @@ struct EditProfileView: View {
     private var bioStationsSection: some View {
         DSCard(padding: 0) {
             DSSectionHeader(
-                title: L10n.t("المحطات الحياتية", "Life Stations"),
+                title: L10n.t("السيرة الذاتية", "Biography"),
                 icon: "text.quote",
-                trailing: bioStations.isEmpty ? nil : "\(bioStations.count) \(L10n.t("محطة", "stations"))",
+                trailing: bioStations.isEmpty ? nil : "\(bioStations.count) \(L10n.t("حدث", "entries"))",
                 iconColor: DS.Color.accent
             )
 
@@ -745,7 +720,7 @@ struct EditProfileView: View {
                             Image(systemName: "plus.circle.fill")
                                 .font(DS.Font.scaled(18))
                                 .foregroundColor(DS.Color.primary)
-                            Text(L10n.t("أضف محطة حياتية", "Add life station"))
+                            Text(L10n.t("أضف حدثاً لسيرتك", "Add to your biography"))
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.primary)
                         }
@@ -762,7 +737,7 @@ struct EditProfileView: View {
                         }
                         if bioStations.count > 3 {
                             DSDivider()
-                            Text(L10n.t("و \(bioStations.count - 3) محطات أخرى...", "and \(bioStations.count - 3) more..."))
+                            Text(L10n.t("و \(bioStations.count - 3) أحداث أخرى...", "and \(bioStations.count - 3) more..."))
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textTertiary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -806,7 +781,7 @@ struct EditProfileView: View {
             BioStationsEditorSheet(stations: $bioStations)
         }
         .alert(
-            L10n.t("حذف المحطات", "Delete Stations"),
+            L10n.t("حذف السيرة", "Delete Biography"),
             isPresented: $showDeleteBioAlert
         ) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
@@ -817,7 +792,7 @@ struct EditProfileView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
         } message: {
-            Text(L10n.t("سيتم حذف جميع المحطات الحياتية.", "All life stations will be deleted."))
+            Text(L10n.t("سيتم حذف السيرة الذاتية كاملة.", "The whole biography will be deleted."))
         }
     }
 
@@ -914,28 +889,6 @@ struct EditProfileView: View {
         }
     }
 
-    /// زر اختيار حالة اجتماعية كبير — ثابت لا يرجّ، مع منطقة نقر كاملة.
-    private func maritalButton(title: String, icon: String, selected: Bool, color: Color, action: @escaping () -> Void) -> some View {
-        Button { action() } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold))
-                Text(title).font(DS.Font.calloutBold)
-            }
-            .foregroundColor(selected ? .white : DS.Color.textSecondary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(selected ? color : DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 
     private func setupData() {
         self.fullName = member.fullName

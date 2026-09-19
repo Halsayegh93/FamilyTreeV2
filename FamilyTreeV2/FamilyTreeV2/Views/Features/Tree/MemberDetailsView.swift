@@ -1025,7 +1025,7 @@ struct MemberDetailsView: View {
                     DSSectionHeader(
                         title: L10n.t("السيرة", "Biography"),
                         icon: "book.fill",
-                        trailing: "\(bioStations.count) " + L10n.t("محطة", "stations"),
+                        trailing: "\(bioStations.count) " + L10n.t("حدث", "entries"),
                         iconColor: DS.Color.primary
                     )
 
