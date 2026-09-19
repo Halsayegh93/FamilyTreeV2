@@ -148,7 +148,7 @@ enum DS {
         /// لون الإناث في شجرة النساء — وردي تراثي موحّد (بدل القيم المرمّزة يدوياً في WomenTreeView/WomenClassicTreeView)
         static let female           = SwiftUI.Color.adaptive(light: "#D66F92", dark: "#E48AA8") // وردي
         /// الأنثى المتوفّاة في شجرة النساء — وردي أغمق يميّزها عن الحيّة دون أن يفقد هويتها
-        static let femaleDeceased   = SwiftUI.Color.adaptive(light: "#8E3A58", dark: "#A24B6A") // وردي غامق
+        static let femaleDeceased   = SwiftUI.Color.adaptive(light: "#6E2843", dark: "#8A3A58") // وردي غامق واضح — أغمق بوضوح من الحيّة
 
         // Quick Access Grid Colors
         static let gridTree      = primary

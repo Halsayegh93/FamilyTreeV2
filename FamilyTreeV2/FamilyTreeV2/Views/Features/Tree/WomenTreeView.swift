@@ -435,7 +435,7 @@ private struct WomanDetailSheet: View {
                     List(list) { m in
                         Button { onPick(m.id) } label: {
                             HStack(spacing: DS.Spacing.md) {
-                                avatar(m, size: 36).saturation(m.isDeceased == true ? 0 : 1)
+                                avatar(m, size: 36).saturation(m.isDeceased == true && !m.isFemale ? 0 : 1)
                                 Text(m.fullName.isEmpty ? m.firstName : m.displayFullName)
                                     .font(DS.Font.callout).foregroundColor(DS.Color.textPrimary)
                                 Spacer()
@@ -487,7 +487,7 @@ private struct WomanDetailSheet: View {
             List {
                 ForEach(orderedChildren) { c in
                     HStack(spacing: DS.Spacing.md) {
-                        avatar(c, size: 34).saturation(c.isDeceased == true ? 0 : 1)
+                        avatar(c, size: 34).saturation(c.isDeceased == true && !c.isFemale ? 0 : 1)
                         Text(c.firstName.isEmpty ? c.fullName : c.firstName)
                             .font(DS.Font.callout).foregroundColor(DS.Color.textPrimary)
                         Spacer()
@@ -1065,7 +1065,7 @@ private struct WomanDetailSheet: View {
         VStack(spacing: 4) {
             ZStack {
                 avatar(c, size: 46)
-                    .saturation(c.isDeceased == true ? 0 : 1)
+                    .saturation(c.isDeceased == true && !c.isFemale ? 0 : 1)
                     .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1))
                 if c.isDeceased == true {
                     Circle().fill(DS.Color.background).frame(width: 16, height: 16)
@@ -1102,7 +1102,7 @@ private struct WomanDetailSheet: View {
         let name = fullName ? (m.fullName.isEmpty ? m.firstName : m.fullName)
                             : (m.firstName.isEmpty ? m.fullName : m.firstName)
         return HStack(spacing: DS.Spacing.md) {
-            avatar(m, size: 40).saturation(m.isDeceased == true ? 0 : 1)
+            avatar(m, size: 40).saturation(m.isDeceased == true && !m.isFemale ? 0 : 1)
             VStack(alignment: .leading, spacing: 2) {
                 if let label {
                     Text(label)
@@ -1159,13 +1159,21 @@ private struct WomanDetailSheet: View {
     private func fallback(_ m: FamilyMember) -> some View {
         GeometryReader { g in
             ZStack {
-                LinearGradient(
-                    colors: [DS.Color.primary.opacity(0.22), DS.Color.accent.opacity(0.14)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
+                // الإناث بالوردي، والمتوفّاة بوردي أغمق (طلب المالك)؛ الذكور بالكحلي
+                let tint: Color = m.isFemale
+                    ? (m.isDeceased == true ? DS.Color.femaleDeceased : DS.Color.female)
+                    : DS.Color.primary
+                if m.isFemale {
+                    tint
+                } else {
+                    LinearGradient(
+                        colors: [DS.Color.primary.opacity(0.22), DS.Color.accent.opacity(0.14)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                }
                 Text(String((m.firstName.isEmpty ? m.fullName : m.firstName).prefix(1)))
                     .font(.system(size: g.size.width * 0.42, weight: .bold, design: .rounded))
-                    .foregroundColor(DS.Color.primary.opacity(0.85))
+                    .foregroundColor(m.isFemale ? .white : tint.opacity(0.85))
             }
         }
     }
