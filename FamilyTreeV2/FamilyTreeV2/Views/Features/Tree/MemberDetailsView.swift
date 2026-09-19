@@ -289,7 +289,7 @@ struct MemberDetailsView: View {
                 }
             }
 
-            Text(member.fullName)
+            Text(member.displayFullName)
                 .font(DS.Font.title2)
                 .fontWeight(.bold)
                 .foregroundColor(DS.Color.textPrimary)

@@ -56,11 +56,7 @@ struct FamilyArchiveView: View {
                         .transition(.opacity)
                 }
 
-                // صف الفلاتر (مع زر التحديد مدمج للإدارة)
-                categoryPicker
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xs)
+                // التصنيفات أُزيلت، وزر التحديد انتقل لهيدر الصفحة (للإدارة فقط)
 
                 if archiveVM.isLoading && archiveVM.items.isEmpty {
                     Spacer()
@@ -110,6 +106,7 @@ struct FamilyArchiveView: View {
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.md)
                         .padding(.bottom, DS.Spacing.xxxxl)
                     }
                     .refreshable { await archiveVM.fetchItems() }
@@ -120,9 +117,10 @@ struct FamilyArchiveView: View {
             if !selectionMode {
                 HStack {
                     Spacer()
-                    DSFloatingButton(label: L10n.t("إضافة", "Add"), color: DS.Color.primary) {
+                    DSFloatingButton(icon: "plus", color: DS.Color.primary) {
                         showingUpload = true
                     }
+                    .accessibilityLabel(L10n.t("إضافة", "Add"))
                     .padding(.trailing, DS.Spacing.xl)
                     .padding(.bottom, DS.Spacing.lg)
                 }
@@ -138,6 +136,13 @@ struct FamilyArchiveView: View {
         .task {
             archiveVM.configure(authVM: authVM)
             await archiveVM.fetchItems()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .subPageStartSelection)) { note in
+            guard authVM.isAdmin, (note.userInfo?["page"] as? String) == "archive" else { return }
+            withAnimation(DS.Anim.snappy) {
+                selectionMode = true
+                selectedIDs = []
+            }
         }
         .sheet(isPresented: $showingUpload) {
             ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: selectedCategory ?? .documents)
@@ -935,14 +940,6 @@ struct ArchiveUploadSheet: View {
                             .padding(.top, DS.Spacing.xs)
                     }
 
-                    DSPrimaryButton(
-                        L10n.t("رفع", "Upload"),
-                        icon: "icloud.and.arrow.up.fill",
-                        isLoading: archiveVM.isUploading
-                    ) { submit() }
-                        .disabled(!canSubmit)
-                        .opacity(canSubmit ? 1 : 0.5)
-                        .padding(.top, DS.Spacing.sm)
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }
@@ -952,14 +949,14 @@ struct ArchiveUploadSheet: View {
             .background(DS.Color.background.ignoresSafeArea())
             .navigationTitle(L10n.t("إضافة للأرشيف", "Add to Archive"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
-                        .disabled(archiveVM.isUploading)
-                }
-            }
+            // الإضافة أعلى يمين، والإغلاق يسار (طلب المالك)
+            .dsSheetToolbar(
+                confirm: L10n.t("إضافة", "Add"),
+                isLoading: archiveVM.isUploading,
+                disabled: !canSubmit,
+                onConfirm: { submit() },
+                onCancel: { dismiss() }
+            )
             .fileImporter(
                 isPresented: $showFileImporter,
                 allowedContentTypes: [UTType.pdf],
@@ -1246,10 +1243,10 @@ struct ArchiveEditSheet: View {
             .navigationTitle(L10n.t("تعديل العنصر", "Edit Item"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }.disabled(isSaving)
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
+                    DSToolbarCancelButton { dismiss() }.disabled(isSaving)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     Button(L10n.t("حفظ", "Save")) { save() }
                         .fontWeight(.bold)
                         .disabled(!canSave)
@@ -1412,10 +1409,10 @@ struct ArchiveItemViewer: View {
             .navigationTitle(item.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     Button {
                         Task { await downloadAndShare() }
                     } label: {

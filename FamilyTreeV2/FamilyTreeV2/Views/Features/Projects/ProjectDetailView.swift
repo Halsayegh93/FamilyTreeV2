@@ -189,7 +189,7 @@ struct ProjectDetailView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                 }
                 if isOwnerOrAdmin {
@@ -235,6 +235,7 @@ struct ProjectDetailView: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
     
     // MARK: - Header
@@ -669,13 +670,14 @@ struct EditProjectView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                 }
             }
             .navigationTitle(L10n.t("تعديل المشروع", "Edit Project"))
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
@@ -739,7 +741,7 @@ struct EditProjectView: View {
                                 showOwnerPicker = false
                             } label: {
                                 HStack {
-                                    Text(m.fullName)
+                                    Text(m.displayFullName)
                                         .font(DS.Font.body)
                                         .foregroundColor(DS.Color.textPrimary)
                                     Spacer()

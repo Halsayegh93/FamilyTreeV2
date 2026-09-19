@@ -29,7 +29,6 @@ struct HomeNewsView: View {
     @State private var lastRefreshDate: Date? = nil
     /// فلتر نوع الخبر في صفحة الأخبار — nil يعني الكل
     @State private var selectedNewsTypeFilter: String? = nil
-    @State private var showNewsSearch = false
     @State private var newsSearchText = ""
     @State private var debouncedNewsSearch = ""
     @State private var newsSearchTask: Task<Void, Never>?
@@ -124,63 +123,10 @@ struct HomeNewsView: View {
                     Task { await newsVM.setNewsFilter(search: "", type: nil) }
                 }
             }
-            .sheet(isPresented: $showingAddNews) {
-                AddNewsView()
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-            .sheet(item: $selectedNewsForComments) { news in
-                NewsCommentsSheet(news: news)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-            .sheet(item: $postToEdit) { news in
-                EditNewsView(news: news)
-                    .presentationDetents([.fraction(0.5), .medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-            .alert(L10n.t("حذف الخبر", "Delete Post"), isPresented: Binding(
-                get: { postToDelete != nil },
-                set: { if !$0 { postToDelete = nil } }
-            )) {
-                Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                    if let post = postToDelete { Task { await newsVM.deleteNewsPost(postId: post.id) } }
-                    postToDelete = nil
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToDelete = nil }
-            } message: { Text(L10n.t("حذف هذا الخبر؟", "Delete this post?")) }
-            .alert(L10n.t("إبلاغ عن الخبر", "Report Post"), isPresented: Binding(
-                get: { postToReport != nil },
-                set: { if !$0 { postToReport = nil } }
-            )) {
-                TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $newsReportReason)
-                Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
-                    let reason = newsReportReason.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if let post = postToReport {
-                        Task {
-                            await newsVM.reportNewsPost(
-                                postId: post.id,
-                                reason: reason.isEmpty ? "بلاغ على محتوى خبر" : reason
-                            )
-                        }
-                    }
-                    postToReport = nil
-                    newsReportReason = ""
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToReport = nil; newsReportReason = "" }
-            } message: { Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا الخبر.",
-                                    "Enter a reason; it will be sent to the admins to review this post.")) }
             .alert(L10n.t("تنبيه الأخبار", "News Alert"), isPresented: $showNewNewsAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: { Text(L10n.t("تمت إضافة \(newNewsCount) خبر جديد.", "\(newNewsCount) new post(s) added.")) }
 
-            .sheet(item: $selectedMemberForDetails) { member in
-                NavigationStack {
-                    MemberDetailsView(member: member)
-                }
-                .presentationDetents([.fraction(0.42), .large])
-                .presentationDragIndicator(.visible)
-            }
         }
         .onChange(of: selectedTab) { _ in
             if selectedTab != 0, activeSubPage != nil {
@@ -236,14 +182,10 @@ struct HomeNewsView: View {
     private var newsFullPage: some View {
         ZStack {
             VStack(spacing: 0) {
-                // شريط الفلاتر والبحث مثبّت فوق القائمة — يبقى ظاهراً أثناء التمرير
-                newsTypeFilterBar
-                    .padding(.top, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xs)
-
+                // شريط التصنيفات والبحث أُزيل (طلب المالك) — القائمة مباشرة
                 ScrollView(showsIndicators: false) {
                     newsFeedSection
-                        .padding(.top, 0)
+                        .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
                 }
                 .refreshable { await refreshNews(notifyIfNew: true, force: true) }
@@ -254,14 +196,70 @@ struct HomeNewsView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        DSFloatingButton(label: L10n.t("إضافة خبر", "Add Post"), color: DS.Color.primary) {
+                        DSFloatingButton(icon: "plus", color: DS.Color.primary) {
                             showingAddNews = true
                         }
+                        .accessibilityLabel(L10n.t("إضافة خبر", "Add Post"))
                         .padding(.trailing, DS.Spacing.xl)
                         .padding(.bottom, DS.Spacing.lg)
                     }
                 }
             }
+        }
+        // الأوراق والتنبيهات مربوطة بصفحة الأخبار نفسها — كانت على الرئيسية خلف
+        // الصفحة المدفوعة فلا تظهر إلا بعد الخروج من القسم
+        .sheet(isPresented: $showingAddNews) {
+            AddNewsView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $selectedNewsForComments) { news in
+            NewsCommentsSheet(news: news)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $postToEdit) { news in
+            EditNewsView(news: news)
+                .presentationDetents([.fraction(0.5), .medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .alert(L10n.t("حذف الخبر", "Delete Post"), isPresented: Binding(
+            get: { postToDelete != nil },
+            set: { if !$0 { postToDelete = nil } }
+        )) {
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                if let post = postToDelete { Task { await newsVM.deleteNewsPost(postId: post.id) } }
+                postToDelete = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToDelete = nil }
+        } message: { Text(L10n.t("حذف هذا الخبر؟", "Delete this post?")) }
+        .alert(L10n.t("إبلاغ عن الخبر", "Report Post"), isPresented: Binding(
+            get: { postToReport != nil },
+            set: { if !$0 { postToReport = nil } }
+        )) {
+            TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $newsReportReason)
+            Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
+                let reason = newsReportReason.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let post = postToReport {
+                    Task {
+                        await newsVM.reportNewsPost(
+                            postId: post.id,
+                            reason: reason.isEmpty ? "بلاغ على محتوى خبر" : reason
+                        )
+                    }
+                }
+                postToReport = nil
+                newsReportReason = ""
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToReport = nil; newsReportReason = "" }
+        } message: { Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا الخبر.",
+                                "Enter a reason; it will be sent to the admins to review this post.")) }
+        .sheet(item: $selectedMemberForDetails) { member in
+            NavigationStack {
+                MemberDetailsView(member: member)
+            }
+            .presentationDetents([.fraction(0.42), .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -276,19 +274,10 @@ struct HomeNewsView: View {
             }
         }()
 
-        let icon: String = {
-            switch page {
-            case .archive:  return "books.vertical.fill"
-            case .projects: return "briefcase.fill"
-            case .contact:  return "envelope.fill"
-            case .news:     return "newspaper.fill"
-            }
-        }()
-
         // سطر توضيحي تحت اسم القسم
         let subtitle: String? = {
             switch page {
-            case .archive:  return L10n.t("وثائق وصور العائلة", "Family documents & photos")
+            case .archive:  return L10n.t("أرشيف ووثائق العائلة", "Family archive & documents")
             case .projects: return L10n.t("مبادرات ومشاريع الأعضاء", "Member initiatives & projects")
             case .contact:  return L10n.t("اكتب رسالتك ويصلك الرد بأقرب وقت",
                                           "Write your message — you'll get a reply soon")
@@ -298,16 +287,18 @@ struct HomeNewsView: View {
 
         return VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
-                // أيقونة القسم — بنفس مقاس أيقونة الرئيسية والشجرة تماماً (هوية فقط)
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.overlayIcon)
-                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                    Image(systemName: icon)
-                        .font(DS.Font.scaled(isLandscape ? 16 : 20, weight: .bold))
+                // الرجوع مكان أيقونة القسم (طلب المالك) — بلا علامة ×
+                Button {
+                    activeSubPage = nil
+                } label: {
+                    Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
+                        .font(DS.Font.scaled(isLandscape ? 16 : 19, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: isLandscape ? 38 : 48, height: isLandscape ? 38 : 48)
+                        .dsHeaderGlassCircle()
                 }
-                .frame(width: isLandscape ? 38 : 52, height: isLandscape ? 38 : 52)
+                .buttonStyle(BounceButtonStyle())
+                .accessibilityLabel(L10n.t("رجوع", "Back"))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -326,19 +317,22 @@ struct HomeNewsView: View {
 
                 Spacer(minLength: DS.Spacing.xs)
 
-                // الرجوع في الطرف المقابل — نفس موضع الجرس في الرئيسية
-                Button {
-                    activeSubPage = nil
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(DS.Font.scaled(isLandscape ? 15 : 17, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
-                        .background(Circle().fill(DS.Color.overlayIcon))
-                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                // التحديد المتعدّد انتقل للهيدر — للإدارة فقط (المكتبة والمشاريع)
+                if authVM.isAdmin && (page == .archive || page == .projects) {
+                    Button {
+                        NotificationCenter.default.post(name: .subPageStartSelection,
+                                                        object: nil,
+                                                        userInfo: ["page": page == .archive ? "archive" : "projects"])
+                    } label: {
+                        Image(systemName: "checkmark.circle")
+                            .font(DS.Font.scaled(isLandscape ? 15 : 18, weight: .bold))
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
+                            .dsHeaderGlassCircle()
+                    }
+                    .buttonStyle(BounceButtonStyle())
+                    .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
                 }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("رجوع", "Back"))
             }
             .padding(.horizontal, isLandscape ? DS.Spacing.xxl : DS.Spacing.lg)
             .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
@@ -361,8 +355,8 @@ struct HomeNewsView: View {
 
     // MARK: - Bento Section — الترتيب الجديد
     //
-    // 1) ترحيب مدمج     2) شريط المستجدات (الرابط مع بقية الأقسام)
-    // 3) وصول سريع: المكتبة / المشاريع / التواصل     4) آخر الأخبار (مع آخر مناسبة)
+    // 1) ترحيب     2) الشجرة + الديوانيات
+    // 3) وصول سريع: المكتبة / المشاريع / التواصل     4) الأخبار والمناسبات
     //
     // كل بطاقة بنية View مستقلة في ملفها — يبقى نوع هذه الصفحة ضحلاً
     // (تضخّمه سابقاً أسقط التطبيق بطفح مكدس عند الإقلاع).
@@ -372,7 +366,7 @@ struct HomeNewsView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingRow
-                        updatesStrip
+                        primaryTilesRow(tileHeight: max(66, layout.tileHeight - 18))
                         quickAccessGrid(tileHeight: max(66, layout.tileHeight - 18))
                         Spacer(minLength: 0)
                     }
@@ -382,9 +376,10 @@ struct HomeNewsView: View {
                         .frame(maxWidth: max(260, UIScreen.main.bounds.width * 0.36), alignment: .top)
                 }
             } else {
-                VStack(spacing: DS.Spacing.md) {
+                // فراغات أقل بين المربّعات (طلب المالك)
+                VStack(spacing: DS.Spacing.sm) {
                     greetingRow
-                    updatesStrip
+                    primaryTilesRow(tileHeight: layout.tileHeight + 12)
                     quickAccessGrid(tileHeight: layout.tileHeight + 6)
                     newsBentoCard
                 }
@@ -397,19 +392,41 @@ struct HomeNewsView: View {
         .animation(DS.Anim.smooth, value: layout)
     }
 
+    /// المسافة بين المربّعات — أضيق من شبكة التخطيط العامة
+    private var tileSpacing: CGFloat { min(layout.gridSpacing, 6) }
+
     private var greetingRow: some View {
         HomeGreetingRow(onOpenProfile: { selectedTab = 3 }, onLongPress: debugLongPress)
     }
 
-    /// شريط المستجدات — كل شريحة تفتح قسمها
-    private var updatesStrip: some View {
-        HomeUpdatesStrip(
-            onNews: { activeSubPage = .news },
-            onTree: { selectedTab = 1 },
-            onNotifications: { showingNotifications = true },
-            onAdmin: { selectedTab = 4 },
-            onDiwaniyas: { selectedTab = 2 }
-        )
+    // MARK: - Primary Tiles Row — الشجرة + الديوانيات
+    /// صف علوي: مربّع الشجرة + مربّع الديوانيات بنفس ستايل التايل الموحّد،
+    /// وأطول قليلاً ليكونا عنصري الوصول الأساسيين. الديوانيات تختفي إن عُطّلت.
+    private func primaryTilesRow(tileHeight: CGFloat) -> some View {
+        HStack(spacing: tileSpacing) {
+            unifiedTile(
+                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
+                icon: "tree.fill",
+                color: DS.Color.tileTree,
+                deep: DS.Color.tileTreeDeep,
+                imageURL: nil,
+                count: nil,
+                height: tileHeight,
+                action: { selectedTab = 1 }
+            )
+            if appSettingsVM.settings.diwaniyasEnabled ?? true {
+                unifiedTile(
+                    title: L10n.t("الديوانيات", "Diwaniyas"),
+                    icon: "map.fill",
+                    color: DS.Color.tileDiwaniya,
+                    deep: DS.Color.tileDiwaniyaDeep,
+                    imageURL: nil,
+                    count: nil,
+                    height: tileHeight,
+                    action: { selectedTab = 2 }
+                )
+            }
+        }
     }
 
     // MARK: - Quick Access — الأقسام التي لا تبويب لها
@@ -420,10 +437,10 @@ struct HomeNewsView: View {
 
         return LazyVGrid(
             columns: Array(
-                repeating: GridItem(.flexible(), spacing: layout.gridSpacing),
+                repeating: GridItem(.flexible(), spacing: tileSpacing),
                 count: projectsOn ? 3 : 2
             ),
-            spacing: layout.gridSpacing
+            spacing: tileSpacing
         ) {
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
@@ -529,10 +546,10 @@ struct HomeNewsView: View {
             .frame(maxWidth: .infinity)
             .frame(height: height ?? layout.tileHeight)
             // منطقة اللمس = حدود المربّع المرئية بالضبط
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.07), radius: 5, x: 0, y: 2)
@@ -662,7 +679,11 @@ struct HomeNewsView: View {
             backgroundGradient: DS.Color.gradientPrimary,
             hideNotificationBell: true
         ) {
-            HomeBellButton()
+            // الجرس ثم علامة «عن التطبيق» بعده (طلب المالك)
+            HStack(spacing: 0) {
+                HomeBellButton()
+                HomeInfoButton()
+            }
         }
 #if DEBUG
         return header.fullScreenCover(isPresented: $previewAuthScreens) { debugAuthPreview }
@@ -765,131 +786,6 @@ struct HomeNewsView: View {
     private var filteredNews: [NewsPost] { newsVM.allNews }
 
 
-    // MARK: - شريط فلترة الأنواع — «الكل» + الأنواع الموجودة فعلاً في السيل
-    private var newsTypeFilterBar: some View {
-        let presentTypes = NewsTypeHelper.mainTypes
-        return Group {
-            if presentTypes.count > 1 || showNewsSearch {
-                HStack {
-                    Spacer(minLength: 0)
-
-                    HStack(spacing: 6) {
-                        if showNewsSearch {
-                            // البحث يفتح داخل نفس كبسولة الفلتر — مثل شريط الشجرة
-                            Image(systemName: "magnifyingglass")
-                                .font(DS.Font.scaled(13, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
-
-                            TextField(L10n.t("ابحث في الأخبار", "Search news"), text: $newsSearchText)
-                                .font(DS.Font.subheadline)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .frame(minWidth: 140)
-
-                            Button {
-                                withAnimation(.spring(response: 0.40, dampingFraction: 0.78)) {
-                                    newsSearchText = ""
-                                    showNewsSearch = false
-                                }
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(DS.Font.scaled(12, weight: .bold))
-                                    .foregroundColor(DS.Color.textSecondary)
-                                    .frame(width: 30, height: 30)
-                                    .background(Circle().fill(DS.Color.textTertiary.opacity(0.12)))
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                            .accessibilityLabel(L10n.t("إغلاق البحث", "Close search"))
-                        } else {
-                            newsTypeChip(nil, label: L10n.t("الكل", "All"),
-                                         icon: "square.grid.2x2", color: DS.Color.primary)
-                            ForEach(presentTypes, id: \.self) { t in
-                                newsTypeChip(t,
-                                             label: NewsTypeHelper.displayName(for: t),
-                                             icon: NewsTypeHelper.icon(for: t),
-                                             color: NewsTypeHelper.color(for: t))
-                            }
-
-                            // فاصل ثم زر البحث — داخل نفس الكبسولة
-                            Capsule()
-                                .fill(DS.Color.textTertiary.opacity(0.25))
-                                .frame(width: 1, height: 22)
-                                .padding(.horizontal, 2)
-
-                            Button {
-                                withAnimation(.spring(response: 0.40, dampingFraction: 0.78)) {
-                                    showNewsSearch = true
-                                }
-                            } label: {
-                                Image(systemName: "magnifyingglass")
-                                    .font(DS.Font.scaled(13, weight: .bold))
-                                    .foregroundColor(DS.Color.primary)
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(DS.Color.primary.opacity(0.12)))
-                                    .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1))
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                            .accessibilityLabel(L10n.t("بحث", "Search"))
-                        }
-                    }
-                    .padding(6)
-                    .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
-                    .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedNewsTypeFilter)
-                    .animation(.spring(response: 0.40, dampingFraction: 0.78), value: showNewsSearch)
-
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.bottom, 2)
-            }
-        }
-    }
-
-    private func newsTypeChip(_ type: String?, label: String, icon: String, color: Color) -> some View {
-        let selected = selectedNewsTypeFilter == type
-        return Button {
-            withAnimation(.spring(response: 0.40, dampingFraction: 0.78)) { selectedNewsTypeFilter = type }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
-            // نفس نمط مكتبة العائلة: المختار كبسولة بنص، وغيره أيقونة دائرية
-            if selected {
-                HStack(spacing: 6) {
-                    Image(systemName: icon)
-                        .font(DS.Font.scaled(12, weight: .bold))
-                    Text(label)
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .lineLimit(1)
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule().fill(
-                        LinearGradient(
-                            colors: [color, color.opacity(0.85)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
-                )
-                .transition(.scale(scale: 0.85).combined(with: .opacity))
-            } else {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(color)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(color.opacity(0.12)))
-                    .overlay(Circle().strokeBorder(color.opacity(0.20), lineWidth: 1))
-                    .transition(.scale(scale: 0.85).combined(with: .opacity))
-            }
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
     private var newsListView: some View {
         Group {
             if isLandscape {
@@ -901,6 +797,14 @@ struct HomeNewsView: View {
                 ) {
                     ForEach(filteredNews) { news in
                         newsCard(for: news)
+                            .newsSwipeActions(
+                                        id: news.id,
+                                        canDelete: canDelete(news),
+                                        // الإبلاغ لغير صاحب الخبر (سياسة Apple)
+                                        canReport: authVM.currentUser?.id != news.ownerId,
+                                        onDelete: { postToDelete = news },
+                                        onReport: { postToReport = news }
+                                    )
                     }
                 }
             } else {
@@ -911,15 +815,15 @@ struct HomeNewsView: View {
                         Section {
                             ForEach(group.posts) { news in
                                 newsCard(for: news)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        if authVM.canDeleteNews {
-                                            Button(role: .destructive) {
-                                                postToDelete = news
-                                            } label: {
-                                                Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
-                                            }
-                                        }
-                                    }
+                                    // سحب يسار = إبلاغ · سحب يمين = حذف (للإدارة وصاحب الخبر)
+                                    .newsSwipeActions(
+                                        id: news.id,
+                                        canDelete: canDelete(news),
+                                        // الإبلاغ لغير صاحب الخبر (سياسة Apple)
+                                        canReport: authVM.currentUser?.id != news.ownerId,
+                                        onDelete: { postToDelete = news },
+                                        onReport: { postToReport = news }
+                                    )
                             }
                         } header: {
                             newsGroupHeader(group)
@@ -983,6 +887,11 @@ struct HomeNewsView: View {
         }
     }
 
+    /// الحذف للإدارة (مدير/مراقب) أو لصاحب الخبر فقط
+    private func canDelete(_ news: NewsPost) -> Bool {
+        authVM.canDeleteNews || (news.ownerId != nil && authVM.currentUser?.id == news.ownerId)
+    }
+
     private func newsCard(for news: NewsPost) -> some View {
         HomeNewsCardView(
             postId: news.id,
@@ -1008,7 +917,7 @@ struct HomeNewsView: View {
             onVoteTap: { optionIndex in
                 Task { await newsVM.submitNewsPollVote(postId: news.id, optionIndex: optionIndex) }
             },
-            canDelete: authVM.canDeleteNews,
+            canDelete: canDelete(news),
             // الإبلاغ متاح للجميع (أعضاء وإدارة) لغير منشوراتهم — سياسة Apple
             canReport: authVM.currentUser?.id != news.author_id,
             canEdit: authVM.canModerate || authVM.currentUser?.id == news.author_id,

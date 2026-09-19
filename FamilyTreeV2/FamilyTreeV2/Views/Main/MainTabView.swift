@@ -30,8 +30,51 @@ struct MainTabView: View {
         )
     }
     
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
+    private func tabTitle(_ ar: String, _ en: String) -> String {
+        verticalSizeClass == .compact ? "" : L10n.t(ar, en)
+    }
+
+    /// iOS 18+: واجهة Tab الحديثة — تأخذ شكل شريط iOS 26/27 الكامل (زجاج سائل عائم
+    /// بفقاعة اختيار). الأقدم: tabItem كما كان.
+    @ViewBuilder
+    private var tabs: some View {
+        if #available(iOS 18.0, *) {
+            TabView(selection: tabSelection) {
+                Tab(value: 0) {
+                    HomeNewsView(selectedTab: $selectedTab)
+                } label: {
+                    Label(tabTitle("الرئيسية", "Home"), systemImage: "house.fill")
+                }
+
+                Tab(value: 1) {
+                    TreeTabContainer(selectedTab: $selectedTab)
+                } label: {
+                    Label(tabTitle("الشجرة", "Tree"), systemImage: "tree.fill")
+                }
+
+                if appSettingsVM.settings.diwaniyasEnabled ?? true {
+                    Tab(value: 2) {
+                        DiwaniyasView(selectedTab: $selectedTab)
+                    } label: {
+                        Label(tabTitle("الديوانيات", "Diwaniyas"), systemImage: "map.fill")
+                    }
+                }
+
+                Tab(value: 3) {
+                    ProfileView(selectedTab: $selectedTab)
+                } label: {
+                    Label(tabTitle("حسابي", "Profile"), systemImage: "person.crop.circle.fill")
+                }
+
+                if authVM.canModerate {
+                    Tab(value: 4) {
+                        AdminDashboardView(selectedTab: $selectedTab)
+                    } label: {
+                        Label(tabTitle("الإدارة", "Admin"), systemImage: "gearshape.2.fill")
+                    }
+                }
+            }
+        } else {
         TabView(selection: tabSelection) {
             HomeNewsView(selectedTab: $selectedTab)
                 .tabItem {
@@ -73,8 +116,14 @@ struct MainTabView: View {
                     .tag(4)
             }
         }
+        }
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+        tabs
         .tint(DS.Color.primary)
-        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .dsTabBarBackground()
         .overlay(alignment: .top) {
             OfflineBanner()
                 .padding(.top, DS.Spacing.xs)
@@ -95,6 +144,8 @@ struct MainTabView: View {
         .task {
             // تتبع أول شاشة عند الفتح
             MemberActivityTracker.report("home")
+            // كتالوج العوائل — ليعرض كل اسم بآخره العائلة المختارة
+            await FamilyNamesViewModel().fetch()
             // أول مرة: النظام يطلب تلقائي من PushNotificationDelegate
             // ننتظر 3 ثواني عشان المستخدم يرد على طلب النظام أول
             try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -130,6 +181,8 @@ struct MainTabView: View {
 
 extension Notification.Name {
     static let didReselectTab       = Notification.Name("didReselectTab")
+    /// زر التحديد في هيدر الصفحة الفرعية — userInfo: ["page": "archive" | "projects"]
+    static let subPageStartSelection = Notification.Name("subPageStartSelection")
     static let openAdminRequests    = Notification.Name("openAdminRequests")
     /// userInfo: ["kind": String] — يفتح تاب الإدارة + يدفع شاشة المراجعة المناسبة
     static let openAdminReviewForKind = Notification.Name("openAdminReviewForKind")

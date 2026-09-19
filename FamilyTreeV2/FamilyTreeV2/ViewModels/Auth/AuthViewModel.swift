@@ -1272,7 +1272,7 @@ class AuthViewModel: ObservableObject {
         deleteAccountError = nil
         defer { isLoading = false }
         do {
-            struct DeletionResponse: Decodable { let ok: Bool }
+            nonisolated struct DeletionResponse: Decodable { let ok: Bool }
             let response: DeletionResponse = try await supabase.functions.invoke(
                 "delete-account", options: FunctionInvokeOptions(body: [:] as [String: String])
             )
@@ -1311,9 +1311,11 @@ class AuthViewModel: ObservableObject {
             }
         }
         
-        let cleanFirstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanFamilyName = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fullName = "\(cleanFirstName) \(cleanFamilyName)"
+        // الاسم الأخير = العائلة المختارة: لو كتب العضو عائلة في آخر اسمه
+        // (نفس المختارة أو غيرها من القائمة) تُحذف ثم تُضاف المختارة — بلا تكرار
+        let cleanFirstName = FamilyNameCatalog.stripTrailingFamily(firstName, chosen: cleanFamilyName)
+        let fullName = cleanFamilyName.isEmpty ? cleanFirstName : "\(cleanFirstName) \(cleanFamilyName)"
         
         // بحث تلقائي عن مطابقات في الشجرة بالاسم الكامل أو أجزاء منه
         let matchedMemberIds = await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)

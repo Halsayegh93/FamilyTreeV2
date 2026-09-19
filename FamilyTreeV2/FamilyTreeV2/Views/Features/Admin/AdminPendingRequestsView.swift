@@ -277,7 +277,7 @@ struct AdminPendingRequestsView: View {
                     }
 
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        Text(member.fullName)
+                        Text(member.displayFullName)
                             .font(DS.Font.calloutBold)
                             .foregroundColor(DS.Color.textPrimary)
 
@@ -738,7 +738,7 @@ struct LinkToExistingMemberSheet: View {
                                 Text(L10n.t("سيتم ربط حساب:", "Linking account:"))
                                     .font(DS.Font.caption2)
                                     .foregroundColor(DS.Color.textTertiary)
-                                Text(pendingMember.fullName)
+                                Text(pendingMember.displayFullName)
                                     .font(DS.Font.calloutBold)
                                     .foregroundColor(DS.Color.textPrimary)
                             }
@@ -753,7 +753,7 @@ struct LinkToExistingMemberSheet: View {
                                 Text(L10n.t("سيُربط بـ", "Will link to"))
                                     .font(DS.Font.caption1)
                                     .foregroundColor(DS.Color.textSecondary)
-                                Text(selected.fullName)
+                                Text(selected.displayFullName)
                                     .font(DS.Font.calloutBold)
                                     .foregroundColor(DS.Color.success)
                                     .lineLimit(1)
@@ -819,7 +819,7 @@ struct LinkToExistingMemberSheet: View {
                                                 .foregroundColor(DS.Color.primary)
                                         }
                                     }
-                                    Text(member.fullName)
+                                    Text(member.displayFullName)
                                         .font(DS.Font.callout)
                                         .foregroundColor(DS.Color.textPrimary)
                                         .lineLimit(2)
@@ -859,7 +859,7 @@ struct LinkToExistingMemberSheet: View {
             .navigationTitle(L10n.t("ربط بعضو موجود", "Link to Existing Member"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(DS.Font.scaled(20))
@@ -931,7 +931,7 @@ struct PendingMemberPhoneSheet: View {
                                 .foregroundColor(DS.Color.warning)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(member.fullName)
+                            Text(member.displayFullName)
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.textPrimary)
                             Text(L10n.t("الرقم الحالي: ", "Current: ") + KuwaitPhone.display(member.phoneNumber))
@@ -980,11 +980,11 @@ struct PendingMemberPhoneSheet: View {
             .navigationTitle(L10n.t("رقم العضو", "Member Number"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .disabled(adminRequestVM.isLoading)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     Button(L10n.t("حفظ", "Save")) { save() }
                         .fontWeight(.bold)
                         .disabled(!canSave)

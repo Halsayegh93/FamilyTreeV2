@@ -436,7 +436,7 @@ private struct WomanDetailSheet: View {
                         Button { onPick(m.id) } label: {
                             HStack(spacing: DS.Spacing.md) {
                                 avatar(m, size: 36).saturation(m.isDeceased == true ? 0 : 1)
-                                Text(m.fullName.isEmpty ? m.firstName : m.fullName)
+                                Text(m.fullName.isEmpty ? m.firstName : m.displayFullName)
                                     .font(DS.Font.callout).foregroundColor(DS.Color.textPrimary)
                                 Spacer()
                             }
@@ -449,11 +449,12 @@ private struct WomanDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { onCancel() }
                 }
             }
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .presentationDetents([.large])
     }
 
@@ -500,14 +501,15 @@ private struct WomanDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { showReorder = false }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     Button(L10n.t("حفظ", "Save")) { performReorder() }
                 }
             }
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .presentationDetents([.large])
     }
 
@@ -540,7 +542,7 @@ private struct WomanDetailSheet: View {
                 }
             }
 
-            Text(woman.fullName.isEmpty ? woman.firstName : woman.fullName)
+            Text(woman.fullName.isEmpty ? woman.firstName : woman.displayFullName)
                 .font(DS.Font.title2)
                 .fontWeight(.bold)
                 .foregroundColor(DS.Color.textPrimary)
@@ -862,12 +864,12 @@ private struct WomanDetailSheet: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) {
                         addKind = nil; addName = ""; showEditName = false
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     Button(confirmTitle) {
                         showEditName = false
                         onConfirm()

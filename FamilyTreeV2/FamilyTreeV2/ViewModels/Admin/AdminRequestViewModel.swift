@@ -577,14 +577,42 @@ class AdminRequestViewModel: ObservableObject {
                         }
 
                     case .other:
-                        // طلب حر — لا تعديل تلقائي؛ القبول يُعلِم العضو فقط.
-                        let target = memberName.isEmpty ? "" : " «\(memberName)»"
-                        let targetEn = memberName.isEmpty ? "" : " «\(memberName)»"
-                        notifBody = L10n.t(
-                            "تم قبول طلبك\(target)",
-                            "Your request\(targetEn) was approved"
-                        )
-                        Log.info("[TreeEdit] Other request approved: \(memberName)")
+                        // تعديلات الملف بعد تجاوز حد الـ٣ (reason = profile_*) تُطبَّق تلقائياً
+                        // بالقبول؛ غيرها طلب حر — القبول يُعلِم العضو فقط.
+                        if let targetId = payload.targetMemberId,
+                           let reason = payload.reason, reason.hasPrefix("profile_"),
+                           let value = payload.newName {
+                            switch reason {
+                            case "profile_bio":
+                                let stations = (try? JSONDecoder().decode([FamilyMember.BioStation].self,
+                                                                           from: Data(value.utf8))) ?? []
+                                try await self.supabase.from("profiles")
+                                    .update(["bio_json": AnyEncodable(stations)])
+                                    .eq("id", value: targetId).execute()
+                                notifBody = L10n.t("تم اعتماد تعديل النبذة", "Your bio edit was approved")
+                            case "profile_phone_hidden":
+                                try await self.supabase.from("profiles")
+                                    .update(["is_phone_hidden": AnyEncodable(value == "true")])
+                                    .eq("id", value: targetId).execute()
+                                notifBody = L10n.t("تم اعتماد تعديل إظهار الرقم", "Your phone visibility edit was approved")
+                            case "profile_marital":
+                                try await self.supabase.from("profiles")
+                                    .update(["is_married": AnyEncodable(value == "true")])
+                                    .eq("id", value: targetId).execute()
+                                notifBody = L10n.t("تم اعتماد تعديل الحالة الاجتماعية", "Your marital status edit was approved")
+                            default:
+                                notifBody = L10n.t("تم قبول طلبك", "Your request was approved")
+                            }
+                            Log.info("[TreeEdit] Profile edit approved: \(reason)")
+                        } else {
+                            let target = memberName.isEmpty ? "" : " «\(memberName)»"
+                            let targetEn = memberName.isEmpty ? "" : " «\(memberName)»"
+                            notifBody = L10n.t(
+                                "تم قبول طلبك\(target)",
+                                "Your request\(targetEn) was approved"
+                            )
+                            Log.info("[TreeEdit] Other request approved: \(memberName)")
+                        }
                     }
                 } else if let legacyAction = payload?.action {
                     // Backwards compat for v2 strings without resolved action
@@ -1718,7 +1746,7 @@ class AdminRequestViewModel: ObservableObject {
                 let p_new_member_id: String
                 let p_tree_member_id: String
             }
-            struct MergeResponse: Decodable {
+            nonisolated struct MergeResponse: Decodable {
                 let success: Bool
                 let message: String
                 let mergedName: String?

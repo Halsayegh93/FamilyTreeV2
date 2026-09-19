@@ -642,7 +642,7 @@ struct AdminActivateAccountsView: View {
                     .font(DS.Font.plex(18, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.scaled(11))
                     .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(2)
@@ -804,7 +804,7 @@ struct AdminActivateAccountsView: View {
             }
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
@@ -1172,7 +1172,7 @@ struct EditPhoneSheet: View {
                     .padding(.top, DS.Spacing.xl)
 
                     // Member name
-                    Text(member.fullName)
+                    Text(member.displayFullName)
                         .font(DS.Font.headline)
                         .foregroundColor(DS.Color.textPrimary)
 
@@ -1225,7 +1225,7 @@ struct EditPhoneSheet: View {
             .navigationTitle(L10n.t("تعديل رقم الجوال", "Edit Phone Number"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button {
                         dismiss()
                     } label: {
@@ -1289,7 +1289,7 @@ struct LinkFatherSheet: View {
                                 .foregroundColor(DS.Color.info)
                         }
 
-                        Text(member.fullName)
+                        Text(member.displayFullName)
                             .font(DS.Font.headline)
                             .foregroundColor(DS.Color.textPrimary)
                     }
@@ -1352,7 +1352,7 @@ struct LinkFatherSheet: View {
 
                                     // Name
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(father.fullName)
+                                        Text(father.displayFullName)
                                             .font(DS.Font.callout)
                                             .foregroundColor(DS.Color.textPrimary)
                                             .lineLimit(1)
@@ -1412,7 +1412,7 @@ struct LinkFatherSheet: View {
             .navigationTitle(L10n.t("ربط الأب", "Link Father"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button {
                         dismiss()
                     } label: {
@@ -1472,7 +1472,7 @@ struct EditBirthDateSheet: View {
                                 .font(DS.Font.scaled(15, weight: .semibold))
                                 .foregroundColor(DS.Color.accent)
                         }
-                        Text(member.fullName)
+                        Text(member.displayFullName)
                             .font(DS.Font.scaled(13, weight: .semibold))
                             .foregroundColor(DS.Color.textPrimary)
                             .lineLimit(1)
@@ -1530,7 +1530,7 @@ struct EditBirthDateSheet: View {
             .navigationTitle(L10n.t("تعديل تاريخ الميلاد", "Edit Birth Date"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button {
                         dismiss()
                     } label: {
@@ -1622,12 +1622,13 @@ private struct StationSheetShell<Content: View>: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                 }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .presentationDetents([.height(contentHeight)])
         .presentationDragIndicator(.visible)
     }

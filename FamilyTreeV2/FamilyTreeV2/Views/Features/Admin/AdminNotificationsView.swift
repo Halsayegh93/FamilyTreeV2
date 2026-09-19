@@ -495,7 +495,7 @@ struct AdminNotificationsView: View {
                 )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
@@ -658,7 +658,7 @@ private struct ScheduleComposerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -666,6 +666,7 @@ private struct ScheduleComposerSheet: View {
             }
             .task { await notificationVM.fetchScheduledNotifications() }
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .presentationDetents([.height(420)])
         .presentationDragIndicator(.visible)
     }
@@ -717,7 +718,7 @@ private struct ScheduledNotificationsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -725,6 +726,7 @@ private struct ScheduledNotificationsSheet: View {
             }
             .task { await notificationVM.fetchScheduledNotifications() }
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private func card(_ item: NotificationViewModel.ScheduledNotification) -> some View {

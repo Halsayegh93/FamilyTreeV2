@@ -156,7 +156,7 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, langManager.layoutDirection)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
+            ToolbarItem(placement: DSToolbar.cancelPlacement) {
                 Button(t("إغلاق", "Close")) { dismiss() }
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.primary)
@@ -682,7 +682,7 @@ struct AboutView: View {
             .navigationTitle(t("عن التطبيق", "About"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -819,7 +819,7 @@ struct PrivacyPolicyView: View {
             .navigationTitle(t("سياسة الخصوصية والشروط", "Privacy Policy & Terms"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -961,7 +961,7 @@ struct LinkedDevicesSettingsSheet: View {
             .navigationTitle(t("الأجهزة المرتبطة", "Linked Devices"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)

@@ -411,7 +411,7 @@ struct AdminIncompleteMembersView: View {
             }
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)

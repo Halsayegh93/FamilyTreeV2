@@ -111,12 +111,12 @@ struct AdminMemberDetailSheet: View {
             .navigationTitle(L10n.t("إدارة السجل", "Member Admin"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     Button(action: saveAction) {
                         if isSaving {
                             ProgressView().tint(DS.Color.primary)
@@ -290,7 +290,7 @@ struct AdminMemberDetailSheet: View {
                 }
 
                 VStack(spacing: 4) {
-                    Text(member.fullName)
+                    Text(member.displayFullName)
                         .font(DS.Font.callout)
                         .fontWeight(.semibold)
                         .foregroundColor(DS.Color.textPrimary)
@@ -511,7 +511,7 @@ struct AdminMemberDetailSheet: View {
                             .foregroundColor(DS.Color.textTertiary)
 
                         if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
-                            Text(father.fullName)
+                            Text(father.displayFullName)
                                 .font(DS.Font.callout)
                                 .fontWeight(.semibold)
                                 .foregroundColor(DS.Color.textPrimary)
@@ -1301,7 +1301,7 @@ struct FatherPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: L10n.t("ابحث عن اسم...", "Search name..."))
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
@@ -1347,6 +1347,7 @@ struct FatherPickerSheet: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 }
 
@@ -1374,7 +1375,7 @@ private struct FatherPickerRow: View, Equatable {
                         .foregroundColor(DS.Color.primary)
                 }
 
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)

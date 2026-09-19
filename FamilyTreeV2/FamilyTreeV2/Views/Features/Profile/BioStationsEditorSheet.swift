@@ -60,13 +60,13 @@ struct BioStationsEditorSheet: View {
             .navigationTitle(t("المحطات الحياتية", "Life Stations"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إلغاء", "Cancel")) {
                         dismiss()
                     }
                     .foregroundColor(DS.Color.error)
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     if canEdit {
                         Button(t("حفظ", "Done")) {
                             stations = localStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }

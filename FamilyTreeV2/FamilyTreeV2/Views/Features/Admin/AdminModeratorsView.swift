@@ -195,7 +195,7 @@ struct AdminModeratorsView: View {
             }
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
@@ -544,7 +544,7 @@ struct AddModeratorSheet: View {
                                         }
 
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(member.fullName)
+                                            Text(member.displayFullName)
                                                 .font(DS.Font.calloutBold)
                                                 .foregroundColor(DS.Color.textPrimary)
                                                 .lineLimit(1)
@@ -575,7 +575,7 @@ struct AddModeratorSheet: View {
             .navigationTitle(L10n.t("إضافة مدير/مشرف", "Add Admin/Supervisor"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button {
                         dismiss()
                     } label: {

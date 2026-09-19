@@ -54,10 +54,12 @@ struct FamilyProjectsView: View {
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
-                } else {
-                    filterCapsule
+                } else if hasToolbarRow {
+                    // التصنيفات أُزيلت (طلب المالك) — يبقى فقط زر الطلبات المعلّقة إن وُجدت؛
+                    // زر التحديد انتقل لهيدر الصفحة
+                    toolbarRow
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.md)
+                        .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                 }
 
@@ -68,9 +70,10 @@ struct FamilyProjectsView: View {
             if !selectionMode {
                 HStack {
                     Spacer()
-                    DSFloatingButton(label: L10n.t("إضافة مشروع", "Add Project"), color: DS.Color.primary) {
+                    DSFloatingButton(icon: "plus", color: DS.Color.primary) {
                         showingAddProject = true
                     }
+                    .accessibilityLabel(L10n.t("إضافة مشروع", "Add Project"))
                     .padding(.trailing, DS.Spacing.xl)
                     .padding(.bottom, DS.Spacing.lg)
                 }
@@ -83,6 +86,15 @@ struct FamilyProjectsView: View {
             }
         }
         .animation(DS.Anim.snappy, value: selectionMode)
+        // زر التحديد في هيدر الصفحة — للإدارة فقط
+        .onReceive(NotificationCenter.default.publisher(for: .subPageStartSelection)) { note in
+            guard authVM.isAdmin, (note.userInfo?["page"] as? String) == "projects" else { return }
+            withAnimation(DS.Anim.snappy) {
+                filter = .approved
+                selectionMode = true
+                selectedIDs = []
+            }
+        }
         .task {
             await projectsVM.fetchProjects()
             if let userId = authVM.currentUser?.id {
@@ -328,6 +340,39 @@ struct FamilyProjectsView: View {
     }
 
     // MARK: - Filter Capsule (مع زر التحديد المدمج)
+
+    private var pendingCount: Int {
+        authVM.isAdmin ? projectsVM.pendingProjects.count : projectsVM.myPendingProjects.count
+    }
+
+    private var hasToolbarRow: Bool { pendingCount > 0 || filter == .pending }
+
+    private var toolbarRow: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            if pendingCount > 0 || filter == .pending {
+                let on = filter == .pending
+                Button {
+                    withAnimation(DS.Anim.snappy) { filter = on ? .approved : .pending }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "clock.fill")
+                            .font(DS.Font.scaled(12, weight: .bold))
+                        Text(authVM.isAdmin ? L10n.t("بانتظار", "Pending") : L10n.t("طلباتي", "Mine"))
+                            .font(DS.Font.scaled(12, weight: .bold))
+                        Text("\(pendingCount)")
+                            .font(DS.Font.scaled(11, weight: .heavy))
+                    }
+                    .foregroundColor(on ? .white : DS.Color.warning)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .frame(height: 34)
+                    .background(Capsule().fill(on ? DS.Color.warning : DS.Color.warning.opacity(0.12)))
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
 
     private var filterCapsule: some View {
         let pendingCount = authVM.isAdmin
@@ -738,32 +783,26 @@ struct AddProjectView: View {
 
                         // ── البطاقة 2: روابط التواصل (اختيارية، مجموعة) ──
                         contactLinksCard
-
-                        // ── زر الإضافة ──
-                        DSPrimaryButton(
-                            L10n.t("إرسال المشروع", "Submit Project"),
-                            icon: "checkmark.circle.fill",
-                            isLoading: isSaving
-                        ) {
-                            Task { await saveProject() }
-                        }
-                        .disabled(!canSubmit)
-                        .opacity(canSubmit ? 1 : 0.5)
-                        .padding(.top, DS.Spacing.sm)
                     }
                     .padding(DS.Spacing.lg)
                     .padding(.bottom, DS.Spacing.xxxl)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                }
-            }
+            // الإضافة أعلى يمين، والإغلاق يسار (طلب المالك)
+            .dsSheetToolbar(
+                confirm: L10n.t("إضافة", "Add"),
+                isLoading: isSaving,
+                disabled: !canSubmit,
+                onConfirm: { Task { await saveProject() } },
+                onCancel: { dismiss() }
+            )
             .navigationTitle(L10n.t("مشروع جديد", "New Project"))
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        // الاتجاه على الـNavigationStack نفسه — داخله فقط يجعل شريط الأزرار LTR
+        // فتنعكس مواضع «إضافة/إلغاء» (طلب المالك)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .presentationDetents([.fraction(0.62)])
         .presentationDragIndicator(.visible)
     }
@@ -860,12 +899,12 @@ struct AddProjectView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         if let ownerId = selectedOwnerId,
                            let member = memberVM.member(byId: ownerId) {
-                            Text(member.fullName)
+                            Text(member.displayFullName)
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
                                 .lineLimit(1)
                         } else {
-                            Text((authVM.currentUser?.fullName ?? "") + L10n.t(" (أنت)", " (You)"))
+                            Text((authVM.currentUser?.displayFullName ?? "") + L10n.t(" (أنت)", " (You)"))
                                 .font(DS.Font.callout)
                                 .foregroundColor(DS.Color.textPrimary)
                                 .lineLimit(1)
@@ -1001,7 +1040,7 @@ struct AddProjectView: View {
                                         memberPlaceholderAvatar
                                     }
 
-                                    Text(member.fullName)
+                                    Text(member.displayFullName)
                                         .font(DS.Font.body)
                                         .foregroundColor(DS.Color.textPrimary)
 
@@ -1023,13 +1062,13 @@ struct AddProjectView: View {
             .navigationTitle(L10n.t("اختيار صاحب المشروع", "Select Project Owner"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) {
                         showMemberPicker = false
                         memberSearchText = ""
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     Button(L10n.t("إعادة تعيين", "Reset")) {
                         selectedOwnerId = nil
                         showMemberPicker = false
@@ -1040,6 +1079,7 @@ struct AddProjectView: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private var memberPlaceholderAvatar: some View {

@@ -49,13 +49,13 @@ struct AdminSystemHealthView: View {
     }
 }
 
-struct HealthOperations: Decodable {
+nonisolated struct HealthOperations: Decodable {
     let cron_failures: Int
     let http_failures: Int
     let pending_deletions: Int
 }
-struct HealthDiagnostics: Decodable {
-    struct Job: Decodable {
+nonisolated struct HealthDiagnostics: Decodable {
+    nonisolated struct Job: Decodable {
         let name: String
         let status: String
         var active: Bool? = nil
@@ -66,7 +66,7 @@ struct HealthDiagnostics: Decodable {
     let dispatch_healthy: Bool
     let jobs: [Job]
 }
-struct HealthMembership: Decodable {
+nonisolated struct HealthMembership: Decodable {
     let in_system: Int
     let total_members: Int
 }
@@ -77,7 +77,7 @@ struct SystemHealthSnapshot {
     var failedJobs: Int { diagnostics.jobs.filter { $0.status == "failed" }.count }
     var successfulJobs: Int { diagnostics.jobs.filter { $0.status == "succeeded" }.count }
     var needsAttention: Bool {
-        diagnostics.open_groups > 0 || failedJobs > 0 || !diagnostics.dispatch_healthy
+        failedJobs > 0 || !diagnostics.dispatch_healthy
             || operations.http_failures > 0 || operations.pending_deletions > 0
             || diagnostics.jobs.contains { $0.active == false || $0.configuration_needs_repair == true }
     }
@@ -85,7 +85,8 @@ struct SystemHealthSnapshot {
 
 enum SystemHealthDestination: String, Hashable {
     case errors, allErrors, activity, devices, push, server, successfulJobs, failedJobs, operations
-    static let sections: [Self] = [.errors, .server, .activity, .devices, .push]
+    // «أخطاء التطبيق» أُزيلت من صحة النظام (طلب المالك)
+    static let sections: [Self] = [.server, .activity, .devices, .push]
 
     @ViewBuilder var screen: some View {
         switch self {
@@ -139,16 +140,15 @@ enum SystemHealthDestination: String, Hashable {
 }
 
 /// Presentation-only overview, shared by the live screen and Xcode previews.
+/// تصميم مبسّط (طلب المالك): بطاقة حالة واحدة ← ما يحتاج إجراء (إن وُجد) ← قائمة
+/// الأقسام برقم واحد لكل قسم. بلا شبكة مؤشرات ولا عناوين فرعية.
 struct SystemHealthOverviewContent: View {
     let snapshot: SystemHealthSnapshot?
     let loading: Bool
     let failure: String?
     let updatedAt: Date?
     let refresh: () async -> Void
-    @Environment(\.dynamicTypeSize) private var typeSize
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.md), count: typeSize.isAccessibilitySize ? 1 : 2)
-    }
+
     private var statusColor: Color {
         guard snapshot != nil, failure == nil else { return DS.Color.textSecondary }
         return snapshot?.needsAttention == true ? DS.Color.warning : DS.Color.success
@@ -156,164 +156,167 @@ struct SystemHealthOverviewContent: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: DS.Spacing.xxl) {
-                hero
+            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                statusCard
                 if let failure {
                     Label(failure, systemImage: "wifi.exclamationmark")
                         .font(DS.Font.footnote).foregroundStyle(DS.Color.warning)
-                        .padding(DS.Spacing.lg)
+                        .padding(DS.Spacing.md)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(DS.Color.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.lg))
                 }
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    sectionTitle("أقسام المتابعة", "Explore", subtitle: L10n.t("التفاصيل والإجراءات", "Details & actions"))
-                    VStack(spacing: 0) {
-                        ForEach(SystemHealthDestination.sections, id: \.self) { destination in
-                            NavigationLink(destination: destination.screen) { destinationRow(destination) }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("health.section.\(destination.rawValue)")
-                            if destination != SystemHealthDestination.sections.last {
-                                Divider().padding(.leading, DS.Icon.size + DS.Spacing.xxl)
-                            }
-                        }
-                    }.background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
-                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
-                }
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    sectionTitle("ملخص سريع", "At a glance", subtitle: L10n.t("أرقام من النظام مباشرة", "Directly from the system"))
-                    LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                        metric(title: L10n.t("داخل المنظومة", "In the system"), value: snapshot.map { $0.membership.in_system.formatted() }, detail: snapshot.map { L10n.t("من \($0.membership.total_members.formatted()) عضو معتمد", "of \($0.membership.total_members.formatted()) approved members") } ?? L10n.t("سجّلوا الدخول فعلياً", "Have actually signed in"), icon: "person.badge.shield.checkmark.fill", color: DS.Color.secondary, destination: .activity)
-                        metric(title: L10n.t("تحتاج مراجعة", "Needs review"), value: snapshot.map { $0.diagnostics.open_groups.formatted() }, detail: L10n.t("مجموعات أخطاء · ٧ أيام", "Error groups · 7 days"), icon: "exclamationmark.bubble.fill", color: DS.Color.warning, destination: .errors)
-                        metric(title: L10n.t("بلاغات التطبيق", "App reports"), value: snapshot.map { $0.diagnostics.total_occurrences.formatted() }, detail: L10n.t("آخر ٧ أيام", "Last 7 days"), icon: "waveform.path", color: DS.Color.primary, destination: .allErrors)
-                        metric(title: L10n.t("مهام ناجحة", "Successful jobs"), value: snapshot.map { "\($0.successfulJobs) / \($0.diagnostics.jobs.count)" }, detail: L10n.t("حسب آخر تشغيل مكتمل", "Latest completed run"), icon: "checkmark.seal.fill", color: DS.Color.accent, destination: .successfulJobs)
-                    }
-                }
-                if let snapshot { attention(snapshot) }
-                Label(L10n.t("يتحدث الملخص عند فتح الصفحة أو الرجوع للتطبيق أو السحب للتحديث", "Updated when you open this page, return to the app, or pull to refresh"), systemImage: "arrow.down.circle")
-                    .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
-                    .frame(maxWidth: .infinity)
-            }.padding(DS.Spacing.lg).padding(.bottom, DS.Spacing.xxl)
+                if let snapshot, snapshot.needsAttention { attention(snapshot) }
+                sectionsList
+            }
+            .padding(DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.xxl)
         }
         .background(DS.Color.background)
         .refreshable { await refresh() }
     }
 
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-            HStack {
-                Label(L10n.t("مركز المتابعة", "SYSTEM OVERVIEW"), systemImage: "waveform.path.ecg")
-                    .font(DS.Font.caption1.weight(.bold)).foregroundStyle(DS.Color.primary)
-                Spacer()
-                Button { Task { await refresh() } } label: {
-                    Group {
-                        if loading { ProgressView() }
-                        else { Image(systemName: "arrow.clockwise").font(DS.Font.calloutBold) }
-                    }.frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
-                        .background(DS.Color.surface, in: Circle())
-                }.disabled(loading).accessibilityLabel(L10n.t("تحديث صحة النظام", "Refresh system health"))
-            }
-            HStack(alignment: .center, spacing: DS.Spacing.md) {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    Text(L10n.t("نظرة على نظام العائلة", "Your family system"))
-                        .font(DS.Font.title1).foregroundStyle(DS.Color.textPrimary)
-                    Label(statusTitle, systemImage: snapshot == nil || failure != nil ? "clock" : snapshot?.needsAttention == true ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
-                        .font(DS.Font.footnote.weight(.semibold)).foregroundStyle(statusColor)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(DS.Font.scaled(38, weight: .medium)).foregroundStyle(DS.Color.primary.opacity(0.8))
-                    .accessibilityHidden(true)
-            }
-            HStack(spacing: DS.Spacing.xs) {
-                Circle().fill(DS.Color.textSecondary).frame(width: 5, height: 5)
-                Text(updatedAt.map { L10n.t("آخر تحديث ", "Updated ") + $0.formatted(date: .omitted, time: .shortened) } ?? L10n.t("بانتظار تحميل المؤشرات", "Waiting for system data"))
+    // MARK: - بطاقة الحالة
+
+    private var statusIcon: String {
+        if snapshot == nil || failure != nil { return "clock.fill" }
+        return snapshot?.needsAttention == true ? "exclamationmark.triangle.fill" : "checkmark.shield.fill"
+    }
+
+    private var statusTitle: String {
+        if failure != nil { return L10n.t("تعذّر التحديث", "Couldn't refresh") }
+        guard let snapshot else { return L10n.t("جاري الفحص…", "Checking…") }
+        return snapshot.needsAttention ? L10n.t("يحتاج متابعة", "Needs attention") : L10n.t("النظام سليم", "All systems OK")
+    }
+
+    private var statusCard: some View {
+        HStack(spacing: DS.Spacing.md) {
+            Image(systemName: statusIcon)
+                .font(DS.Font.scaled(22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 50, height: 50)
+                .background(statusColor, in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(statusTitle)
+                    .font(DS.Font.title3).foregroundStyle(DS.Color.textPrimary)
+                Text(updatedAt.map { L10n.t("آخر تحديث ", "Updated ") + $0.formatted(date: .omitted, time: .shortened) } ?? " ")
                     .font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
             }
-        }.padding(DS.Spacing.xl)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(LinearGradient(colors: [DS.Color.primary.opacity(0.10), DS.Color.accent.opacity(0.04)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: DS.Radius.xxl))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.xxl).stroke(DS.Color.primary.opacity(0.12), lineWidth: DS.Border.width))
-    }
-    private var statusTitle: String {
-        if failure != nil { return L10n.t("حالة البيانات تحتاج تحديث", "Data needs refreshing") }
-        guard let snapshot else { return L10n.t("جاري قراءة حالة النظام", "Checking system status") }
-        return snapshot.needsAttention ? L10n.t("توجد مؤشرات تحتاج متابعة", "Some indicators need attention") : L10n.t("لا توجد تنبيهات في المؤشرات الحالية", "No alerts in the current indicators")
-    }
-    private func sectionTitle(_ ar: String, _ en: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text(L10n.t(ar, en)).font(DS.Font.title3).foregroundStyle(DS.Color.textPrimary)
-            Text(subtitle).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
+            Spacer(minLength: 0)
+            Button { Task { await refresh() } } label: {
+                Group {
+                    if loading { ProgressView() }
+                    else { Image(systemName: "arrow.clockwise").font(DS.Font.calloutBold).foregroundStyle(DS.Color.primary) }
+                }
+                .frame(width: 38, height: 38)
+                .background(DS.Color.primary.opacity(0.10), in: Circle())
+            }
+            .disabled(loading)
+            .accessibilityLabel(L10n.t("تحديث صحة النظام", "Refresh system health"))
         }
+        .padding(DS.Spacing.lg)
+        .background(statusColor.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous).stroke(statusColor.opacity(0.22), lineWidth: 1))
+        .animation(DS.Anim.smooth, value: snapshot?.needsAttention)
     }
-    private func metric(title: String, value: String?, detail: String, icon: String, color: Color, destination: SystemHealthDestination) -> some View {
-        NavigationLink(destination: destination.screen) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                HStack {
-                    Image(systemName: icon).font(DS.Font.calloutBold).foregroundStyle(color)
-                    Spacer()
-                    Image(systemName: "chevron.forward").font(DS.Font.caption2).foregroundStyle(DS.Color.textTertiary)
-                }
-                Text(value ?? "—").font(DS.Font.hero).monospacedDigit().foregroundStyle(DS.Color.textPrimary)
-                    .lineLimit(1).minimumScaleFactor(0.65)
-                Text(title).font(DS.Font.calloutBold).foregroundStyle(DS.Color.textPrimary)
-                Text(detail).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary).fixedSize(horizontal: false, vertical: true)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .padding(DS.Spacing.lg)
-                .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
-                .contentShape(Rectangle())
-        }.buttonStyle(.plain)
-            .accessibilityIdentifier("health.metric.\(destination.rawValue)")
-    }
+
+    // MARK: - يحتاج إجراء
+
     @ViewBuilder private func attention(_ data: SystemHealthSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            sectionTitle("قائمة المتابعة", "Attention list", subtitle: L10n.t("ابدأ بما يحتاج إجراء", "Start with what needs action"))
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("يحتاج إجراء", "Needs action"))
+                .font(DS.Font.headline).foregroundStyle(DS.Color.textPrimary)
             VStack(spacing: 0) {
-                if data.diagnostics.open_groups > 0 {
-                    attentionRow(title: L10n.t("\(data.diagnostics.open_groups) مجموعات أخطاء تحتاج مراجعة", "\(data.diagnostics.open_groups) error groups need review"), detail: L10n.t("راجع البلاغات وآخر ظهور لها", "Review reports and their latest occurrence"), destination: .errors)
-                }
                 if data.failedJobs > 0 || !data.diagnostics.dispatch_healthy {
-                    attentionRow(title: L10n.t("راجع تشغيل مهام السيرفر", "Review server job execution"), detail: L10n.t("\(data.failedJobs) مهام آخر تشغيل لها فشل", "\(data.failedJobs) jobs last completed with a failure"), destination: data.failedJobs > 0 ? .failedJobs : .server)
+                    attentionRow(L10n.t("\(data.failedJobs) مهام سيرفر فشلت", "\(data.failedJobs) server jobs failed"), destination: data.failedJobs > 0 ? .failedJobs : .server)
                 }
                 if data.diagnostics.jobs.contains(where: { $0.active == false || $0.configuration_needs_repair == true }) {
-                    attentionRow(title: L10n.t("مهام تحتاج إصلاح إعداداتها", "Job configuration needs repair"), detail: L10n.t("افتح المهمة لمراجعة الإصلاح وتشغيله", "Open the job to review and run its repair"), destination: .server)
+                    attentionRow(L10n.t("مهام تحتاج إصلاح", "Jobs need repair"), destination: .server)
                 }
                 if data.operations.http_failures > 0 || data.operations.pending_deletions > 0 {
-                    attentionRow(title: L10n.t("عمليات تحتاج متابعة", "Operations need attention"), detail: L10n.t("\(data.operations.http_failures) اتصالات فاشلة خلال ٢٤ ساعة · \(data.operations.pending_deletions) حذف متأخر", "\(data.operations.http_failures) failed HTTP calls in 24h · \(data.operations.pending_deletions) delayed deletions"), destination: .operations)
+                    attentionRow(L10n.t("عمليات متأخرة أو فاشلة", "Delayed or failed operations"), destination: .operations)
                 }
-                if !data.needsAttention {
-                    Label(L10n.t("لا توجد تنبيهات مسجلة حالياً", "No alerts currently recorded"), systemImage: "checkmark.circle.fill")
-                        .font(DS.Font.callout).foregroundStyle(DS.Color.success).padding(DS.Spacing.lg)
-                }
-            }.frame(maxWidth: .infinity, alignment: .leading)
-                .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
+            }
+            .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.warning.opacity(0.25), lineWidth: DS.Border.width))
         }
     }
-    private func attentionRow(title: String, detail: String, destination: SystemHealthDestination) -> some View {
+
+    private func attentionRow(_ title: String, destination: SystemHealthDestination) -> some View {
         NavigationLink(destination: destination.screen) {
-            HStack(alignment: .top, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.md) {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(DS.Color.warning)
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(title).font(DS.Font.calloutBold).foregroundStyle(DS.Color.textPrimary)
-                    Text(detail).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
-                }
+                Text(title).font(DS.Font.calloutBold).foregroundStyle(DS.Color.textPrimary)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.forward").font(DS.Font.caption1).foregroundStyle(DS.Color.textTertiary)
-            }.padding(DS.Spacing.lg).contentShape(Rectangle())
-        }.buttonStyle(.plain)
-    }
-    private func destinationRow(_ destination: SystemHealthDestination) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            Image(systemName: destination.icon).font(DS.Font.headline).foregroundStyle(destination.color)
-                .frame(width: DS.Icon.size, height: DS.Icon.size)
-                .background(destination.color.opacity(0.10), in: RoundedRectangle(cornerRadius: DS.Radius.md))
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text(destination.title).font(DS.Font.calloutBold).foregroundStyle(DS.Color.textPrimary)
-                Text(destination.subtitle).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
             }
+            .padding(DS.Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - الأقسام — رقم واحد لكل قسم
+
+    private var sectionsList: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("الأقسام", "Sections"))
+                .font(DS.Font.headline).foregroundStyle(DS.Color.textPrimary)
+            VStack(spacing: 0) {
+                ForEach(SystemHealthDestination.sections, id: \.self) { destination in
+                    NavigationLink(destination: destination.screen) { sectionRow(destination) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("health.section.\(destination.rawValue)")
+                    if destination != SystemHealthDestination.sections.last {
+                        Divider().padding(.leading, 36 + DS.Spacing.md * 2)
+                    }
+                }
+            }
+            .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
+        }
+    }
+
+    /// القيمة المختصرة لكل قسم ولونها (برتقالي إن كانت تستدعي انتباهاً)
+    private func summary(for destination: SystemHealthDestination) -> (String, Color)? {
+        guard let data = snapshot else { return nil }
+        switch destination {
+        case .errors, .allErrors:
+            let n = data.diagnostics.open_groups
+            return (n.formatted(), n > 0 ? DS.Color.warning : DS.Color.textSecondary)
+        case .server, .successfulJobs, .failedJobs, .operations:
+            return ("\(data.successfulJobs)/\(data.diagnostics.jobs.count)",
+                    data.failedJobs > 0 ? DS.Color.warning : DS.Color.textSecondary)
+        case .activity:
+            return ("\(data.membership.in_system.formatted())/\(data.membership.total_members.formatted())", DS.Color.textSecondary)
+        case .push:
+            return data.diagnostics.dispatch_healthy
+                ? (L10n.t("يعمل", "OK"), DS.Color.success)
+                : (L10n.t("متوقف", "Down"), DS.Color.warning)
+        case .devices:
+            return nil
+        }
+    }
+
+    private func sectionRow(_ destination: SystemHealthDestination) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            Image(systemName: destination.icon)
+                .font(DS.Font.scaled(15, weight: .semibold))
+                .foregroundStyle(destination.color)
+                .frame(width: 36, height: 36)
+                .background(destination.color.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.Radius.md))
+            Text(destination.title)
+                .font(DS.Font.calloutBold).foregroundStyle(DS.Color.textPrimary)
             Spacer(minLength: 0)
+            if let (value, color) = summary(for: destination) {
+                Text(value)
+                    .font(DS.Font.calloutBold).monospacedDigit()
+                    .foregroundStyle(color)
+            }
             Image(systemName: "chevron.forward").font(DS.Font.caption1).foregroundStyle(DS.Color.textTertiary)
-        }.padding(DS.Spacing.lg).contentShape(Rectangle())
+        }
+        .padding(DS.Spacing.md)
+        .contentShape(Rectangle())
     }
 }
 

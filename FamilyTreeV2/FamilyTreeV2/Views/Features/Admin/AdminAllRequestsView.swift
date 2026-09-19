@@ -476,7 +476,7 @@ struct AdminAllRequestsView: View {
                 AdminTreeHealthView(initialFilter: filter)
                     .environmentObject(memberVM)
                     .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
+                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
                             Button(L10n.t("إغلاق", "Close")) { openTreeHealthFilter = nil }
                                 .foregroundColor(DS.Color.primary)
                         }
@@ -1831,7 +1831,7 @@ struct AdminAllRequestsView: View {
         HStack(spacing: DS.Spacing.sm) {
             iconCircle(icon: issue.asTab.icon, color: color, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.fullName.isEmpty ? L10n.t("بدون اسم", "(no name)") : member.fullName)
+                Text(member.fullName.isEmpty ? L10n.t("بدون اسم", "(no name)") : member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
@@ -1897,7 +1897,7 @@ struct AdminAllRequestsView: View {
                     Text(L10n.t(action.arabicLabel, action.englishLabel))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
-                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                    Text(request.member?.displayFullName ?? L10n.t("عضو", "Member"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
@@ -2293,7 +2293,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textPrimary)
 
                     // اسم المنضم — سطر ثاني
-                    Text(member.fullName)
+                    Text(member.displayFullName)
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.textSecondary)
                         .lineLimit(2)
@@ -2471,7 +2471,7 @@ struct AdminAllRequestsView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(match.member.fullName)
+                Text(match.member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
@@ -2982,13 +2982,13 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    Text(L10n.t("لـ: \(request.member?.fullName ?? "عضو")",
+                    Text(L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
                                 "For: \(request.member?.fullName ?? "Member")"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textTertiary)
                     }
@@ -3027,13 +3027,13 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    Text(L10n.t("الأب: \(request.member?.fullName ?? "عضو")",
+                    Text(L10n.t("الأب: \(request.member?.displayFullName ?? "عضو")",
                                 "Father: \(request.member?.fullName ?? "Member")"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textTertiary)
                     }
@@ -3072,13 +3072,13 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    Text(L10n.t("لـ: \(request.member?.fullName ?? "عضو")",
+                    Text(L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
                                 "For: \(request.member?.fullName ?? "Member")"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textTertiary)
                     }
@@ -3146,7 +3146,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textTertiary)
                     }
@@ -3190,7 +3190,7 @@ struct AdminAllRequestsView: View {
                     Text(L10n.t("الاسم الحالي:", "Current name:"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
-                    Text(request.member?.fullName ?? "—")
+                    Text(request.member?.displayFullName ?? "—")
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                 }
@@ -3237,7 +3237,7 @@ struct AdminAllRequestsView: View {
             .navigationTitle(L10n.t("تعديل الاسم", "Edit Name"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { nameEditRequest = nil }
                         .foregroundColor(DS.Color.primary)
                 }
@@ -3315,7 +3315,7 @@ struct AdminAllRequestsView: View {
             .navigationTitle(L10n.t("تعديل الرقم", "Edit Number"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { phoneEditRequest = nil }
                         .foregroundColor(DS.Color.primary)
                 }
@@ -3484,7 +3484,7 @@ struct AdminAllRequestsView: View {
             .navigationTitle(L10n.t("تفاصيل الطلب", "Request Details"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { selectedDetail = nil }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)

@@ -85,9 +85,10 @@ struct DiwaniyasView: View {
                 // زر الإضافة السفلي (FAB) — مثل بقية الصفحات
                 HStack {
                     Spacer()
-                    DSFloatingButton(label: L10n.t("إضافة", "Add"), color: DS.Color.primary) {
+                    DSFloatingButton(icon: "plus", color: DS.Color.primary) {
                         showingAddRequest = true
                     }
+                    .accessibilityLabel(L10n.t("إضافة", "Add"))
                     .padding(.trailing, DS.Spacing.xl)
                     .padding(.bottom, DS.Spacing.lg)
                 }
@@ -720,31 +721,20 @@ private struct AddDiwaniyaRequestView: View {
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // Submit button
-                        DSPrimaryButton(
-                            isSubmitting ? L10n.t("جاري الإرسال...", "Submitting...") : L10n.t("إضافة", "Add"),
-                            icon: "paperplane.fill",
-                            isLoading: isSubmitting,
-                            useGradient: false,
-                            color: DS.Color.gridDiwaniya
-                        ) {
-                            Task { await submitDiwaniya() }
-                        }
-                        .disabled(!isFormValid || isSubmitting)
-                        .opacity(isFormValid ? 1.0 : 0.5)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.xxxl)
+                        Spacer(minLength: DS.Spacing.xxxl)
                     }
                 }
             }
             .navigationTitle(L10n.t("إضافة ديوانية", "Add Diwaniya"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .foregroundColor(DS.Color.error)
-                }
-            }
+            // الإضافة أعلى يمين، و«إلغاء» الأحمر يسار (طلب المالك)
+            .dsSheetToolbar(
+                confirm: L10n.t("إضافة", "Add"),
+                isLoading: isSubmitting,
+                disabled: !isFormValid,
+                onConfirm: { Task { await submitDiwaniya() } },
+                onCancel: { dismiss() }
+            )
             .alert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
                 Text(viewModel.errorMessage ?? L10n.t("فشل إضافة الديوانية", "Failed to add diwaniya."))
             }
@@ -1151,31 +1141,19 @@ private struct EditDiwaniyaView: View {
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // Save button
-                        DSPrimaryButton(
-                            isSubmitting ? L10n.t("جاري الحفظ...", "Saving...") : L10n.t("حفظ التعديلات", "Save Changes"),
-                            icon: "checkmark.circle.fill",
-                            isLoading: isSubmitting,
-                            useGradient: false,
-                            color: DS.Color.gridDiwaniya
-                        ) {
-                            Task { await saveChanges() }
-                        }
-                        .disabled(!isFormValid || isSubmitting)
-                        .opacity(isFormValid ? 1.0 : 0.5)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.xxxl)
+                        Spacer(minLength: DS.Spacing.xxxl)
                     }
                 }
             }
             .navigationTitle(L10n.t("تعديل الديوانية", "Edit Diwaniya"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .foregroundColor(DS.Color.error)
-                }
-            }
+            .dsSheetToolbar(
+                confirm: L10n.t("حفظ", "Save"),
+                isLoading: isSubmitting,
+                disabled: !isFormValid,
+                onConfirm: { Task { await saveChanges() } },
+                onCancel: { dismiss() }
+            )
             .alert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
                 Text(viewModel.errorMessage ?? L10n.t("فشل تحديث الديوانية", "Failed to update diwaniya."))
             }

@@ -15,7 +15,7 @@ final class CacheManager: @unchecked Sendable {
             }
         }
     }
-    struct Session: Equatable, Sendable {
+    nonisolated struct Session: Equatable, Sendable {
         fileprivate let accountId: UUID?
         fileprivate let generation: UUID
     }
@@ -123,5 +123,5 @@ final class CacheManager: @unchecked Sendable {
     func loadFromSharedContainer<T: Decodable>(_ type: T.Type, for key: CacheKey) -> T? {
         load(type, for: key)
     }
-    private struct CacheMeta: Codable { let savedAt: Date }
+    private nonisolated struct CacheMeta: Codable { let savedAt: Date }
 }

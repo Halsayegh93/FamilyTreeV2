@@ -56,7 +56,7 @@ struct FrozenAccountView: View {
                     .navigationTitle(t("تواصل مع الإدارة", "Contact Admin"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
+                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
                             Button { showContactSheet = false } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(DS.Font.scaled(22, weight: .medium))
@@ -112,7 +112,7 @@ struct FrozenAccountView: View {
                     if let user = authVM.currentUser {
                         HStack(spacing: DS.Spacing.sm) {
                             DSIcon("person.fill", color: DS.Color.warning, size: 32, iconSize: 14)
-                            Text(user.fullName)
+                            Text(user.displayFullName)
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.textPrimary)
                         }

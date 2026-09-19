@@ -345,13 +345,14 @@ struct AddBanSheet: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إلغاء", "Cancel")) { dismiss() }
                         .foregroundStyle(DS.Color.primary)
                 }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private func banAction() async {

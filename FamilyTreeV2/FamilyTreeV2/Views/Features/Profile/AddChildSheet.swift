@@ -36,8 +36,6 @@ struct AddChildSheet: View {
                         if selectedGender != "female" { heroHeader }
                         basicInfoCard
                             .padding(.horizontal, DS.Spacing.lg)
-                        submitButton
-                            .padding(.horizontal, DS.Spacing.lg)
                     }
                     .padding(.vertical, DS.Spacing.xs)
                     .background(
@@ -49,13 +47,14 @@ struct AddChildSheet: View {
             }
             .navigationTitle(L10n.t("إضافة فرد", "Add Member"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
-                }
-            }
+            // الإضافة/الحفظ أعلى يمين، والإغلاق يسار (طلب المالك)
+            .dsSheetToolbar(
+                confirm: L10n.t("إضافة", "Add"),
+                isLoading: memberVM.isLoading || isSubmitting,
+                disabled: firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading || isSubmitting,
+                onConfirm: saveChild,
+                onCancel: { dismiss() }
+            )
         }
         .onPreferenceChange(SheetContentHeightKey.self) { h in
             if h > 0 { sheetHeight = h + 72 }

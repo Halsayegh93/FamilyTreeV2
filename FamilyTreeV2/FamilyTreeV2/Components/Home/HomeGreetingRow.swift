@@ -16,31 +16,44 @@ struct HomeGreetingRow: View {
             HStack(alignment: .center, spacing: DS.Spacing.md) {
                 avatar
 
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
+                    // التحية بلون الوقت — كبسولة صغيرة واضحة فوق الاسم
+                    HStack(spacing: 5) {
                         Image(systemName: greetingSymbol)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(timeAccent)
                         Text(timeBasedGreeting)
-                            .font(DS.Font.plex(11, weight: .medium))
-                            .foregroundColor(DS.Color.textSecondary)
+                            .font(DS.Font.plex(13, weight: .semibold))
                     }
+                    .foregroundStyle(timeAccent)
+
                     Text(greetingName)
-                        .font(DS.Font.plex(17, weight: .bold))
+                        .font(DS.Font.plex(21, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.75)
                 }
 
                 Spacer(minLength: DS.Spacing.sm)
 
-                Image(systemName: "chevron.forward")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(DS.Color.textTertiary)
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(DS.Color.mutedBackground))
             }
-            .padding(.horizontal, DS.Spacing.xs)
-            .contentShape(Rectangle())
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm + 2)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .fill(DS.Color.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .strokeBorder(timeAccent.opacity(0.14), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 3)
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(L10n.t("حسابي", "My profile"))
@@ -63,9 +76,10 @@ struct HomeGreetingRow: View {
                     initial(user)
                 }
             }
-            .frame(width: 40, height: 40)
+            .frame(width: 50, height: 50)
             .clipShape(Circle())
-            .overlay(Circle().strokeBorder(timeAccent.opacity(0.5), lineWidth: 2))
+            .overlay(Circle().strokeBorder(timeAccent.opacity(0.55), lineWidth: 2))
+            .padding(2)
         }
     }
 
@@ -73,7 +87,7 @@ struct HomeGreetingRow: View {
         ZStack {
             Circle().fill(timeAccent.opacity(0.12))
             Text(String(user.firstName.prefix(1)))
-                .font(DS.Font.plex(16, weight: .bold))
+                .font(DS.Font.plex(20, weight: .bold))
                 .foregroundColor(timeAccent)
         }
     }
@@ -98,16 +112,9 @@ struct HomeGreetingRow: View {
         else { return L10n.t("مساء الخير", "Good evening") }
     }
 
-    /// الاسم الأول + اسم العائلة (الأخير) — بلا سلسلة النسب الكاملة
+    /// الاسم الأول + العائلة المختارة (الاسم الأخير) — بلا سلسلة النسب الكاملة
     private var greetingName: String {
         guard let user = authVM.currentUser else { return L10n.t("أهلاً بك", "Welcome") }
-        let parts = user.fullName
-            .trimmingCharacters(in: .whitespaces)
-            .split(whereSeparator: \.isWhitespace)
-            .map(String.init)
-        guard let first = parts.first, let last = parts.last, first != last else {
-            return user.firstName
-        }
-        return "\(first) \(last)"
+        return user.displayName
     }
 }

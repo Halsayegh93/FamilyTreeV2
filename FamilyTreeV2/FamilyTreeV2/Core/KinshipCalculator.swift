@@ -188,6 +188,12 @@ enum KinshipCalculator {
             case (_, false, true):     return L10n.t("جدته لأبيه", "His paternal grandmother")
             case (_, false, false):    return L10n.t("جدتها لأبيها", "Her paternal grandmother")
             }
+        case 3:
+            // جد/جدة أحد الوالدين: جد أبوه، جدة أمه...
+            let parentMale = route.edges[0] == .father
+            let parentAr = aMale ? (parentMale ? "أبوه" : "أمه") : (parentMale ? "أبوها" : "أمها")
+            let parentEn = (aMale ? "His " : "Her ") + (parentMale ? "father's " : "mother's ")
+            return L10n.t((bMale ? "جد " : "جدة ") + parentAr, parentEn + (bMale ? "grandfather" : "grandmother"))
         default:
             return L10n.t("من الأجداد", "Ancestor")
         }
@@ -222,11 +228,8 @@ enum KinshipCalculator {
         let distA = routeA.distance
         let distB = routeB.distance
         let isMale = b.gender != "female"
-        let sideOfA = routeA.edges[0]   // والد A على المسار
-        let parentOfB = routeB.edges[0] // والد B على المسار
 
-        switch (distA, distB) {
-        case (1, 1):
+        if distA == 1 && distB == 1 {
             // الإخوة — في شجرة النساء فقط يُميَّز: لأب، لأم
             if includeMaternal {
                 let sameFather = a.fatherId != nil && a.fatherId == b.fatherId
@@ -240,29 +243,73 @@ enum KinshipCalculator {
                 }
             }
             return isMale ? L10n.t("أخوه", "His brother") : L10n.t("أخته", "His sister")
-
-        case (2, 1) where sideOfA == .mother:
-            return isMale ? L10n.t("خاله", "His maternal uncle") : L10n.t("خالته", "His maternal aunt")
-
-        case (1, 2) where parentOfB == .mother:
-            return isMale ? L10n.t("ابن أخته", "His nephew") : L10n.t("بنت أخته", "His niece")
-
-        case (2, 2) where !(sideOfA == .father && parentOfB == .father):
-            switch (sideOfA, parentOfB) {
-            case (.father, _):
-                return isMale ? L10n.t("ابن عمته", "His cousin") : L10n.t("بنت عمته", "His cousin")
-            case (.mother, .father):
-                return isMale ? L10n.t("ابن خاله", "His cousin") : L10n.t("بنت خاله", "His cousin")
-            case (.mother, .mother):
-                return isMale ? L10n.t("ابن خالته", "His cousin") : L10n.t("بنت خالته", "His cousin")
-            }
-
-        default:
-            if routeA.isPaternal && routeB.isPaternal {
-                return cousinLabel(distA: distA, distB: distB, gender: b.gender)
-            }
-            return distantLabel(distA: distA, distB: distB)
         }
+
+        // جهة الأب خالصة: التسميات القديمة كما هي
+        if routeA.isPaternal && routeB.isPaternal {
+            return cousinLabel(distA: distA, distB: distB, gender: b.gender)
+        }
+        return composedLabel(routeA: routeA, routeB: routeB, a: a, b: b)
+            ?? distantLabel(distA: distA, distB: distB)
+    }
+
+    /// جنس العقدة رقم i على المسار: الأولى من سجلّها، والباقي من نوع الخطوة (أب = ذكر، أم = أنثى)
+    private static func isMaleNode(_ route: Route, _ i: Int, origin: FamilyMember) -> Bool {
+        i == 0 ? origin.gender != "female" : route.edges[i - 1] == .father
+    }
+
+    /// تسمية مركّبة لمسار يمرّ بالأم: B ينحدر من أخ/أخت أحد أسلاف A.
+    /// أمثلة: خاله، خال أبوه، عم أمه، خالة جدته، ابن خال أبوه، ابن بنت خالته.
+    private static func composedLabel(routeA: Route, routeB: Route, a: FamilyMember, b: FamilyMember) -> String? {
+        let distA = routeA.distance
+        let distB = routeB.distance
+        guard (1...4).contains(distA), (1...3).contains(distB) else { return nil }
+
+        // Q: ابن الجد المشترك من جهة B (أخو/أخت العقدة P من جهة A)
+        let qMale = isMaleNode(routeB, distB - 1, origin: b)
+
+        var qAr: String
+        var qEn: String
+        if distA == 1 {
+            // Q أخو/أخت A نفسه
+            qAr = qMale ? "أخوه" : "أخته"
+            qEn = qMale ? "his brother" : "his sister"
+        } else {
+            // P والد/جد A الملاصق للجد المشترك: ذكر → عم، أنثى → خال
+            let pMale = isMaleNode(routeA, distA - 1, origin: a)
+            let uncleAr = pMale ? (qMale ? "عم" : "عمة") : (qMale ? "خال" : "خالة")
+            let uncleEn = (pMale ? "paternal " : "maternal ") + (qMale ? "uncle" : "aunt")
+            if distA == 2 {
+                // التاء المربوطة تُفتح قبل الضمير: خالة → خالته
+                qAr = (uncleAr.hasSuffix("ة") ? String(uncleAr.dropLast()) + "ت" : uncleAr) + "ه"
+                qEn = "his " + uncleEn
+            } else {
+                // R: سلف A الذي يُنسب إليه العم/الخال (أبوه، أمه، جده، جدته)
+                let rMale = isMaleNode(routeA, distA - 2, origin: a)
+                switch distA - 2 {
+                case 1:
+                    qAr = "\(uncleAr) " + (rMale ? "أبوه" : "أمه")
+                    qEn = "his " + (rMale ? "father's " : "mother's ") + uncleEn
+                case 2:
+                    qAr = "\(uncleAr) " + (rMale ? "جده" : "جدته")
+                    qEn = "his " + (rMale ? "grandfather's " : "grandmother's ") + uncleEn
+                default:
+                    return nil
+                }
+            }
+        }
+
+        // النزول من Q إلى B: ابن/بنت لكل جيل
+        var downAr: [String] = []
+        var downEn: [String] = []
+        for i in 0..<(distB - 1) {
+            let male = isMaleNode(routeB, i, origin: b)
+            downAr.append(male ? "ابن" : "بنت")
+            downEn.append(male ? "son of" : "daughter of")
+        }
+        let ar = (downAr + [qAr]).joined(separator: " ")
+        let en = (downEn + [qEn]).joined(separator: " ")
+        return L10n.t(ar, en.prefix(1).uppercased() + en.dropFirst())
     }
 
     /// تسمية أبناء العمومة والأقارب الجانبيين (الجهة الأبوية)

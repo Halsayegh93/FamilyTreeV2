@@ -292,13 +292,17 @@ class NewsViewModel: ObservableObject {
 
                 // إشعار صاحب الخبر بالإعجاب (إذا مو هو نفسه) — نستخدم snapshot
                 if let postAuthorId = postAuthorIdSnapshot, postAuthorId != memberId {
-                    let likerName = currentUser?.fullName ?? ""
+                    // عضو الإدارة يظهر للعضو باسم «الإدارة» لا باسمه (طلب المالك)
+                    let fromAdmin = authVM?.canModerate == true && isRegularMember(postAuthorId)
+                    let likerName = fromAdmin ? L10n.t("الإدارة", "The admins") : (currentUser?.fullName ?? "")
                     await notificationVM?.sendPushToMembers(
                         title: L10n.t("إعجاب جديد", "New Like"),
-                        body: L10n.t(
-                            "\(likerName) أعجب بمنشورك",
-                            "\(likerName) liked your post"
-                        ),
+                        body: fromAdmin
+                            ? L10n.t("الإدارة أعجبت بمنشورك", "The admins liked your post")
+                            : L10n.t(
+                                "\(likerName) أعجب بمنشورك",
+                                "\(likerName) liked your post"
+                            ),
                         kind: NotificationKind.newsLike.rawValue,
                         targetMemberIds: [postAuthorId]
                     )
@@ -306,7 +310,9 @@ class NewsViewModel: ObservableObject {
                     let payload: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
                         "title": AnyEncodable(L10n.t("إعجاب جديد ❤️", "New Like ❤️")),
-                        "body": AnyEncodable(L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
+                        "body": AnyEncodable(fromAdmin
+                            ? L10n.t("الإدارة أعجبت بخبرك", "The admins liked your post")
+                            : L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
                         "kind": AnyEncodable(NotificationKind.newsLike.rawValue),
                         "created_by": AnyEncodable(memberId.uuidString)
                     ]
@@ -327,6 +333,12 @@ class NewsViewModel: ObservableObject {
     }
 
     // MARK: - Add Comment
+
+    /// العضو العادي (ليس من فريق الإدارة) — يرى إشعارات الإدارة باسم «الإدارة»
+    private func isRegularMember(_ id: UUID) -> Bool {
+        guard let role = memberVM?.member(byId: id)?.role else { return true }
+        return role == .member || role == .pending
+    }
 
     func addNewsComment(to postId: UUID, text: String) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
@@ -357,12 +369,16 @@ class NewsViewModel: ObservableObject {
 
             // إشعار صاحب الخبر بالتعليق الجديد (إذا مو هو نفسه) — snapshot
             if let postAuthorId = postAuthorIdSnapshot, postAuthorId != memberId {
+                // عضو الإدارة يظهر للعضو باسم «الإدارة» لا باسمه (طلب المالك)
+                let fromAdmin = authVM?.canModerate == true && isRegularMember(postAuthorId)
                 await notificationVM?.sendPushToMembers(
                     title: L10n.t("تعليق جديد", "New Comment"),
-                    body: L10n.t(
-                        "\(authorName) علّق على منشورك",
-                        "\(authorName) commented on your post"
-                    ),
+                    body: fromAdmin
+                        ? L10n.t("الإدارة علّقت على منشورك", "The admins commented on your post")
+                        : L10n.t(
+                            "\(authorName) علّق على منشورك",
+                            "\(authorName) commented on your post"
+                        ),
                     kind: NotificationKind.newsComment.rawValue,
                     targetMemberIds: [postAuthorId]
                 )
@@ -371,7 +387,9 @@ class NewsViewModel: ObservableObject {
                     let payload: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
                         "title": AnyEncodable(L10n.t("تعليق جديد 💬", "New Comment 💬")),
-                        "body": AnyEncodable(L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
+                        "body": AnyEncodable(fromAdmin
+                            ? L10n.t("الإدارة علّقت على خبرك", "The admins commented on your post")
+                            : L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
                         "kind": AnyEncodable(NotificationKind.newsComment.rawValue),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
@@ -790,12 +808,13 @@ class NewsViewModel: ObservableObject {
 
     func deleteNewsPost(postId: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
-        guard authVM?.canDeleteNews == true else { return }
-        self.isLoading = true
-
         // صاحب المنشور — نحفظه قبل الحذف لإشعاره ولربط الحركة به
         let deletedAuthorId = allNews.first(where: { $0.id == postId })?.ownerId
             ?? pendingNewsRequests.first(where: { $0.id == postId })?.ownerId
+        // الحذف للإدارة أو لصاحب الخبر نفسه (سياسة RLS تسمح بالاثنين)
+        let isOwnPost = deletedAuthorId != nil && deletedAuthorId == currentUser?.id
+        guard authVM?.canDeleteNews == true || isOwnPost else { return }
+        self.isLoading = true
 
         do {
             try await supabase

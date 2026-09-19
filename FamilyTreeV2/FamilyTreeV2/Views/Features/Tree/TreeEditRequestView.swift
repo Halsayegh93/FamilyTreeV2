@@ -100,7 +100,7 @@ struct TreeEditRequestView: View {
             .navigationTitle(screenTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.error)
@@ -128,6 +128,7 @@ struct TreeEditRequestView: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onAppear { prefillFromMember() }
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onPreferenceChange(SheetContentHeightKey.self) { h in
             if h > 0 { sheetHeight = h + 72 }
         }
@@ -153,7 +154,7 @@ struct TreeEditRequestView: View {
                     .font(DS.Font.caption1)
                     .fontWeight(.semibold)
                     .foregroundColor(actionColor)
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)

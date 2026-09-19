@@ -616,7 +616,7 @@ struct GalleryAlbumFormSheet: View {
                                        : L10n.t("ألبوم جديد", "New Album"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .foregroundColor(DS.Color.error)
                         .disabled(isSaving)
@@ -745,7 +745,7 @@ struct GalleryAddPhotosSheet: View {
             .navigationTitle(L10n.t("إضافة صور", "Add Photos"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .foregroundColor(DS.Color.error)
                         .disabled(galleryVM.isUploading)

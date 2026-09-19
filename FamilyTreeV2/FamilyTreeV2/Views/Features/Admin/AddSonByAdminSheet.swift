@@ -85,12 +85,12 @@ struct AddSonByAdminSheet: View {
             .navigationTitle(isEditMode ? L10n.t("تعديل الابن", "Edit Child") : L10n.t("إضافة ابن", "Add Child"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     Button(action: saveAction) {
                         if isSaving {
                             ProgressView().tint(DS.Color.primary)

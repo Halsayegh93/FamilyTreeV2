@@ -217,25 +217,29 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         }
     }
 
+    /// كلمات الاسم بعد جعل آخرها العائلة المختارة (طلب المالك):
+    /// إن كانت آخر كلمة اسم عائلة (المختارة نفسها أو عائلة من القائمة) تُستبدل،
+    /// وإلا تُضاف العائلة في الآخر. بلا عائلة مختارة → الاسم كما هو.
+    var nameWordsWithFamily: [String] {
+        FamilyNameCatalog.words(fullName, family: familyName)
+    }
+
+    /// الاسم الأخير = العائلة المختارة إن وُجدت، وإلا آخر كلمة في الاسم
+    var lastName: String { nameWordsWithFamily.last ?? fullName }
+
     /// الاسم الأول + الأخير
     var displayName: String {
-        let parts = fullName.split(separator: " ")
+        let parts = nameWordsWithFamily
         if parts.count >= 2, let first = parts.first, let last = parts.last {
             return "\(first) \(last)"
         }
-        return fullName
+        return parts.first ?? fullName
     }
 
-    /// الاسم مع لاحقة العائلة المختارة — تُضاف لآخره ما لم تكن موجودة أصلاً
-    /// (سلاسل النسب تنتهي غالباً باسم العائلة، فلا نكرّره).
+    /// الاسم مع العائلة المختارة كآخر كلمة — تستبدل اسم عائلة سابقاً في الآخر
+    /// أو تُضاف، ولا تتكرّر إن كانت موجودة أصلاً.
     func withFamilySuffix(_ base: String) -> String {
-        guard let fam = familyName?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !fam.isEmpty else { return base }
-        let trimmed = base.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return fam }
-        // موجودة كآخر كلمة أو ضمن السلسلة → لا تكرار
-        if trimmed == fam || trimmed.hasSuffix(" \(fam)") { return trimmed }
-        return "\(trimmed) \(fam)"
+        FamilyNameCatalog.words(base, family: familyName).joined(separator: " ")
     }
 
     /// الاسم الكامل + العائلة — يُستخدم حيث يظهر الاسم للعرض
@@ -245,10 +249,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح عبدالحميد الصايغ"
     /// أوضح من الاسم الأول، أقصر من الكامل، يحتوي اسم العائلة للتمييز.
     var fourPartName: String {
-        let parts = fullName.trimmingCharacters(in: .whitespaces)
-            .split(whereSeparator: \.isWhitespace)
-            .map(String.init)
-        guard parts.count > 4 else { return fullName }
+        let parts = nameWordsWithFamily
+        guard parts.count > 4 else { return parts.isEmpty ? fullName : parts.joined(separator: " ") }
         let firstThree = parts.prefix(3).joined(separator: " ")
         let family = parts.last ?? ""
         return "\(firstThree) \(family)"
@@ -268,8 +270,10 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     /// الاسم الثلاثي: الأول + الثاني + الأخير (العائلة)
     /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح الصايغ"
     var shortFullName: String {
-        let parts = fullName.split(separator: " ")
-        guard parts.count >= 3, let first = parts.first, let last = parts.last else { return fullName }
+        let parts = nameWordsWithFamily
+        guard parts.count >= 3, let first = parts.first, let last = parts.last else {
+            return parts.isEmpty ? fullName : parts.joined(separator: " ")
+        }
         guard let second = parts.dropFirst().first else { return fullName }
         if second == last { return "\(first) \(second)" }
         return "\(first) \(second) \(last)"

@@ -559,7 +559,7 @@ struct AdminPushHealthView: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.callout)
                     .fontWeight(.bold)
                     .foregroundColor(DS.Color.textPrimary)
@@ -763,12 +763,12 @@ struct AdminPushHealthView: View {
         cleanupResultMessage = nil
         defer { isCleaningUp = false }
 
-        struct CleanupResponse: Decodable {
+        nonisolated struct CleanupResponse: Decodable {
             let ok: Bool
             let before: Int?
             let after: Int?
             let deleted: DeletedCounts?
-            struct DeletedCounts: Decodable {
+            nonisolated struct DeletedCounts: Decodable {
                 let invalidTokens: Int?
                 let stale: Int?
                 let total: Int?

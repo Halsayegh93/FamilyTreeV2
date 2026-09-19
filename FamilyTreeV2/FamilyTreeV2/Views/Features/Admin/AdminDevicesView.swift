@@ -195,7 +195,7 @@ struct AdminDevicesView: View {
                 DSIcon("person.fill", color: DS.Color.primary)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(group.member?.fullName ?? t("عضو غير معروف", "Unknown Member"))
+                    Text(group.member?.displayFullName ?? t("عضو غير معروف", "Unknown Member"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)

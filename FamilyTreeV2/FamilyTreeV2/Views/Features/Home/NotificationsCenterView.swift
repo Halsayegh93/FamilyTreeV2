@@ -184,16 +184,16 @@ struct NotificationsCenterView: View {
     private var notificationsHeader: some View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
-                // أيقونة الصفحة — بنفس مقاس أيقونة الرئيسية والشجرة
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.overlayIcon)
-                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                    Image(systemName: "bell.fill")
-                        .font(DS.Font.scaled(20, weight: .bold))
+                // الرجوع مكان أيقونة الصفحة (طلب المالك) — بلا علامة ×
+                Button { dismiss() } label: {
+                    Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
+                        .font(DS.Font.scaled(19, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: 48, height: 48)
+                        .dsHeaderGlassCircle()
                 }
-                .frame(width: 52, height: 52)
+                .buttonStyle(BounceButtonStyle())
+                .accessibilityLabel(L10n.t("رجوع", "Back"))
 
                 Text(L10n.t("الإشعارات", "Notifications"))
                     .font(DS.Font.plex(19, weight: .bold))
@@ -203,17 +203,6 @@ struct NotificationsCenterView: View {
 
                 Spacer(minLength: 0)
 
-                // الرجوع في الطرف المقابل — نفس موضع الجرس في الرئيسية
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(DS.Font.scaled(17, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(DS.Color.overlayIcon))
-                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("رجوع", "Back"))
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.sm)

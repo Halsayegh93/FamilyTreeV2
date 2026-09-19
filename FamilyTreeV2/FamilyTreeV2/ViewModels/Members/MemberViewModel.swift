@@ -2051,7 +2051,7 @@ class MemberViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            struct UnlinkResponse: Decodable { let ok: Bool }
+            nonisolated struct UnlinkResponse: Decodable { let ok: Bool }
             let response: UnlinkResponse = try await supabase.functions.invoke(
                 "admin-unlink-phone", options: .init(body: ["memberId": memberId.uuidString.lowercased()])
             )

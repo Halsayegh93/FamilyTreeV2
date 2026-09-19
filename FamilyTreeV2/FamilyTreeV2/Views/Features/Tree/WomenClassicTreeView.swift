@@ -601,7 +601,10 @@ struct WomenClassicTreeView: View {
     private func nodeView(_ m: FamilyMember, at p: CGPoint) -> some View {
         let deceased = m.isDeceased == true
         let female = m.isFemale
-        let accent: Color = deceased ? DS.Color.textTertiary : (female ? rose : DS.Color.primary)
+        // الإناث وردي ثابت؛ المتوفّاة وردي أغمق (طلب المالك). الذكر المتوفّى يبقى رمادياً.
+        let accent: Color = female
+            ? (deceased ? DS.Color.femaleDeceased : rose)
+            : (deceased ? DS.Color.textTertiary : DS.Color.primary)
         let kids = cChildrenOf[m.id] ?? []
         let isCollapsed = collapsed.contains(m.id)
         let showWives = !isCollapsed && !kids.isEmpty
@@ -627,8 +630,8 @@ struct WomenClassicTreeView: View {
                 shape
                     .fill(DS.Color.background)
                     // مربع الابنة بنفس غمقة مربع الزوجة (طلب المالك) — رمادي أنعم قليلاً
-                    .overlay(shape.fill(deceased
-                        ? (female ? DS.Color.textTertiary.opacity(0.85) : DS.Color.textTertiary.opacity(0.5))
+                    .overlay(shape.fill(deceased && !female
+                        ? DS.Color.textTertiary.opacity(0.5)
                         : accent))
                     .frame(width: CIRCLE, height: CIRCLE)
                     .overlay(
@@ -779,7 +782,7 @@ struct WomenClassicTreeView: View {
     private func wifeCell(_ w: FamilyMember) -> some View {
         VStack(spacing: 1) {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(w.isDeceased == true ? DS.Color.textTertiary : rose)
+                .fill(w.isDeceased == true ? DS.Color.femaleDeceased : rose)
                 .frame(width: 24, height: 24)
                 .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(Color.white.opacity(0.9), lineWidth: 1))
                 .overlay(
@@ -789,7 +792,6 @@ struct WomenClassicTreeView: View {
                         .lineLimit(1)
                         .foregroundColor(.white)
                 )
-                .saturation(w.isDeceased == true ? 0 : 1)
                 // نفس شارة الإخفاء على مربّع الزوجة — بمقاس الخلية الصغيرة
                 .overlay(alignment: .topTrailing) {
                     if w.isHiddenFromTree {

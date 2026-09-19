@@ -117,40 +117,45 @@ struct HomeNewsCardView: View {
 
     // MARK: - هيدر الكرت
 
+    private func openAuthor() {
+        guard !isAdminIdentityPost, let member = authorMember else { return }
+        onMemberTap(member)
+    }
+
     private var cardHeader: some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
-            Button {
-                guard !isAdminIdentityPost, let member = authorMember else { return }
-                onMemberTap(member)
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    authorAvatar
+            // الملف الشخصي يُفتح بالضغط على الصورة أو الاسم فقط — لا على بقية الترويسة
+            HStack(spacing: DS.Spacing.sm) {
+                Button(action: openAuthor) { authorAvatar }
+                    .buttonStyle(.plain)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 4) {
-                            Text(shortDisplayName)
-                                .font(DS.Font.scaled(14, weight: .bold))
-                                .foregroundColor(isAdminIdentityPost ? .white : DS.Color.textPrimary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                        }
-
-                        HStack(spacing: 3) {
-                            Image(systemName: NewsTypeHelper.icon(for: type))
-                                .font(DS.Font.scaled(11, weight: .bold))
-                            Text(NewsTypeHelper.displayName(for: type))
-                                .font(DS.Font.scaled(11, weight: .semibold))
-                        }
-                        .foregroundColor(isAdminIdentityPost ? .white : typeColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1.5)
-                        .background(isAdminIdentityPost ? SwiftUI.Color.white.opacity(0.22)
-                                                        : typeColor.opacity(0.10))
-                        .clipShape(Capsule())
+                VStack(alignment: .leading, spacing: 2) {
+                    Button(action: openAuthor) {
+                        // اسم صاحب الخبر على سطر واحد (طلب المالك)
+                        Text(shortDisplayName)
+                            .font(DS.Font.scaled(14, weight: .bold))
+                            .foregroundColor(isAdminIdentityPost ? .white : DS.Color.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+
+                    HStack(spacing: 3) {
+                        Image(systemName: NewsTypeHelper.icon(for: type))
+                            .font(DS.Font.scaled(11, weight: .bold))
+                        Text(NewsTypeHelper.displayName(for: type))
+                            .font(DS.Font.scaled(11, weight: .semibold))
+                    }
+                    .foregroundColor(isAdminIdentityPost ? .white : typeColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1.5)
+                    .background(isAdminIdentityPost ? SwiftUI.Color.white.opacity(0.22)
+                                                    : typeColor.opacity(0.10))
+                    .clipShape(Capsule())
+                    .allowsHitTesting(false)
                 }
             }
-            .buttonStyle(.plain)
 
             Spacer()
 
@@ -166,16 +171,15 @@ struct HomeNewsCardView: View {
                     .overlay(Capsule().stroke(DS.Color.warning.opacity(0.30), lineWidth: 1))
             }
 
-            if canDelete || canReport || canEdit {
+            // الإبلاغ انتقل للسحب صوب اليسار (طلب المالك)
+            // قائمة التعديل/الحذف — تظهر للإدارة وصاحب الخبر فقط
+            if canDelete || canEdit {
                 Menu {
                     if canEdit {
                         Button(action: onEditTap) { Label(L10n.t("تعديل", "Edit"), systemImage: "pencil") }
                     }
                     if canDelete {
                         Button(role: .destructive, action: onDeleteTap) { Label(L10n.t("حذف", "Delete"), systemImage: "trash") }
-                    }
-                    if canReport {
-                        Button(action: onReportTap) { Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble") }
                     }
                 } label: {
                     Image(systemName: "ellipsis")

@@ -79,7 +79,7 @@ struct EditNewsView: View {
             .navigationTitle(L10n.t("تعديل الخبر", "Edit Post"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.error)
@@ -94,6 +94,9 @@ struct EditNewsView: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        // الاتجاه على الـNavigationStack نفسه — داخله فقط يجعل شريط الأزرار LTR
+        // فتنعكس مواضع «إضافة/إلغاء» (طلب المالك)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     // MARK: - Type Selector

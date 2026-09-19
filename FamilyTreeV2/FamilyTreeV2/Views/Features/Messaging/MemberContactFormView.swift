@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// نموذج تواصل بسيط — لا دردشة، لا تاريخ.
-/// العضو يختار تصنيف + يكتب رسالة + يرسل → شاشة تأكيد.
+/// تواصل مع الإدارة — نموذج بسيط (لا دردشة، لا تاريخ)، بتصميم مرتّب (طلب المالك):
+/// ترحيب يوضّح القسم ← بطاقات التصنيف بوصف قصير ← بطاقة الرسالة (عنوان + نص) ←
+/// بريد الرد (اختياري) ← زر إرسال بلون التصنيف ← شاشة تأكيد.
 struct MemberContactFormView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.colorScheme) private var colorScheme
@@ -35,55 +36,37 @@ struct MemberContactFormView: View {
             }
         }
         .animation(DS.Anim.smooth, value: didSend)
-        .sheet(isPresented: $showAbout) {
-            AboutFamilySheet()
-        }
     }
-
-    @State private var showAbout = false
 
     // MARK: - حالة الإدخال
     private var formState: some View {
         ScrollView(showsIndicators: false) {
             Group {
                 if isLandscape {
-                    // الوضع الأفقي: عمودان — يمين (تعريف + تصنيف) ويسار (الرسالة + الإرسال)
+                    // الوضع الأفقي: عمودان — (الترحيب + التصنيف) و(الرسالة + الإرسال)
                     HStack(alignment: .top, spacing: DS.Spacing.lg) {
-                        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                            categoryPicker
+                        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                            categorySection
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                         VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                            messageField
-                            contactField
-                            if let err = errorText {
-                                errorBanner(err)
-                            }
+                            messageSection
+                            replySection
+                            if let err = errorText { errorBanner(err) }
                             sendButton
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
-
-                        categoryPicker
-
-                        messageField
-
-                        contactField
-
-                        if let err = errorText {
-                            errorBanner(err)
-                        }
-
+                    // تصميم متوسّط (طلب المالك): تصنيف بسطر واحد · الرسالة · البريد · إرسال
+                    VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                        categorySection
+                        messageSection
+                        replySection
+                        if let err = errorText { errorBanner(err) }
                         sendButton
-                            .padding(.top, DS.Spacing.xs)
-
-                        // «من نحن» انتقل لشاشته الخاصة — غرض واحد لكل شاشة
-                        aboutLinkRow
-
-                        Spacer(minLength: DS.Spacing.xxl)
+                        Spacer(minLength: DS.Spacing.xl)
                     }
                 }
             }
@@ -91,235 +74,123 @@ struct MemberContactFormView: View {
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxxl)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
-    private var appVersion: String {
-        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
-        return b.map { "\(v) (\($0))" } ?? v
-    }
+    // MARK: - التصنيف — صف واحد مختصر
 
-    // MARK: - بطاقة «عمل هذا التطبيق» — بدل صف «عن التطبيق»
-    private var aboutLinkRow: some View {
-        VStack(spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.xs) {
-                Rectangle()
-                    .fill(DS.Color.textTertiary.opacity(0.18))
-                    .frame(height: 1)
-                Text(L10n.t("عمل هذا التطبيق", "Made by"))
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize()
-                Rectangle()
-                    .fill(DS.Color.textTertiary.opacity(0.18))
-                    .frame(height: 1)
+    private var categorySection: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            ForEach(ContactCategory.allCases, id: \.self) { cat in
+                categoryChip(cat)
             }
-
-            HStack(spacing: DS.Spacing.md) {
-                ZStack {
-                    Circle().fill(DS.Color.gradientPrimary)
-                    Image(systemName: "hammer.fill")
-                        .font(DS.Font.scaled(16, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("حسن الصايغ", "Hasan Al-Sayegh"))
-                        .font(DS.Font.plex(15, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("فكرة وتصميم وبرمجة", "Idea, design & code"))
-                        .font(DS.Font.scaled(12))
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-
-                Spacer(minLength: 0)
-
-                // تفاصيل التطبيق تبقى متاحة بضغطة
-                Button { showAbout = true } label: {
-                    Image(systemName: "info.circle.fill")
-                        .font(DS.Font.scaled(20, weight: .medium))
-                        .foregroundColor(DS.Color.primary)
-                }
-                .buttonStyle(DSScaleButtonStyle())
-                .accessibilityLabel(L10n.t("عن التطبيق", "About the app"))
-            }
-            .padding(DS.Spacing.md)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
-            )
-
-            Text(L10n.t("الإصدار \(appVersion)", "Version \(appVersion)"))
-                .font(DS.Font.scaled(11))
-                .foregroundColor(DS.Color.textTertiary)
-        }
-        .padding(.top, DS.Spacing.lg)
-    }
-
-
-    /// عنوان قسم قديم — باقٍ لحقل الإيميل فقط
-    private func legacyContactLabel(_ title: String, icon: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(12, weight: .bold))
-                .foregroundColor(DS.Color.primary.opacity(0.75))
-            Text(title)
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textSecondary)
         }
     }
 
-    // MARK: - اختيار التصنيف
-    /// التصنيف — كبسولة فلاتر عائمة، نفس شريط الأخبار والأرشيف والشجرة
-    private var categoryPicker: some View {
-        HStack {
-            Spacer(minLength: 0)
-
-            HStack(spacing: 6) {
-                ForEach(ContactCategory.allCases, id: \.self) { cat in
-                    categoryChip(cat)
-                }
-            }
-            .padding(6)
-            .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
-            .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedCategory)
-
-            Spacer(minLength: 0)
-        }
-    }
-
-    /// المختار كبسولة ملوّنة بنص، وغيره أيقونة دائرية (نفس نمط الفلاتر)
     private func categoryChip(_ cat: ContactCategory) -> some View {
         let selected = selectedCategory == cat
         return Button {
-            withAnimation(.spring(response: 0.40, dampingFraction: 0.78)) { selectedCategory = cat }
+            withAnimation(DS.Anim.quick) { selectedCategory = cat }
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
-            // كل التصنيفات تظهر بنصّها — المختار كبسولة ملوّنة والباقي خفيف
-            HStack(spacing: 5) {
+            VStack(spacing: 5) {
                 Image(systemName: cat.icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.scaled(17, weight: .semibold))
                 Text(cat.title)
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.plex(13, weight: selected ? .bold : .medium))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.8)
             }
             .foregroundColor(selected ? .white : cat.color)
-            .padding(.horizontal, DS.Spacing.sm + 2)
-            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .frame(height: 66)
             .background(
-                Group {
-                    if selected {
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [cat.color, cat.color.opacity(0.85)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                    } else {
-                        Capsule().fill(cat.color.opacity(0.12))
-                    }
-                }
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(selected ? cat.color : cat.color.opacity(0.10))
             )
             .overlay(
-                Capsule().strokeBorder(
-                    selected ? .clear : cat.color.opacity(0.20), lineWidth: 1
-                )
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(selected ? .clear : cat.color.opacity(0.20), lineWidth: 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    // MARK: - حقل الرسالة
-    /// مربّع مبسّط: عنوان الرسالة ثم نصّها — بلا ترويسة قسم
-    private var messageField: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // العنوان — سطر واحد، اختياري والتلميح داخل المربّع
-            HStack(spacing: DS.Spacing.sm) {
-                TextField(L10n.t("عنوان الرسالة", "Subject"), text: $subject)
-                    .font(DS.Font.body)
-                if subject.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Text(L10n.t("اختياري", "Optional"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-            }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm + 4)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-                )
+    // MARK: - الرسالة — بطاقة واحدة: عنوان ثم نص
 
-            ZStack(alignment: .topLeading) {
-                if message.isEmpty {
-                    Text(L10n.t("اكتب رسالتك هنا… (مطلوب)", "Type your message here… (required)"))
-                        .font(DS.Font.scaled(14))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .padding(.horizontal, DS.Spacing.md + 4)
-                        .padding(.vertical, DS.Spacing.md + 8)
-                }
-                TextEditor(text: $message)
-                    .focused($messageFocused)
-                    .font(DS.Font.body)
-                    .scrollContentBackground(.hidden)
-                    .padding(DS.Spacing.sm)
-                    .frame(minHeight: 130, maxHeight: 200)
-
-                // العدّاد داخل الحقل — لا يسرق سطراً فوقه
-                Text("\(message.count)/\(maxLength)")
-                    .font(DS.Font.scaled(12))
-                    .foregroundColor(message.count > maxLength ? DS.Color.error : DS.Color.textTertiary)
-                    .padding(.horizontal, DS.Spacing.sm + 2)
-                    .padding(.vertical, 5)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity,
-                           alignment: L10n.isArabic ? .bottomLeading : .bottomTrailing)
-                    .allowsHitTesting(false)
-            }
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .strokeBorder(
-                        messageFocused ? DS.Color.primary.opacity(0.35) : DS.Color.textTertiary.opacity(0.15),
-                        lineWidth: messageFocused ? 1.5 : 1
-                    )
-            )
-        }
-    }
-
-    // MARK: - الإيميل للرد — اختياري، بلا ملاحظات
-    private var contactField: some View {
-        DSCard(padding: 0) {
-            contactSectionHeader
-            contactFieldBody
-        }
-    }
-
-    private var contactSectionHeader: some View {
-        DSSectionHeader(
-            title: L10n.t("البريد الإلكتروني", "Email"),
-            icon: "envelope.fill",
-            iconColor: DS.Color.primary
-        )
-    }
-
-    private var contactFieldBody: some View {
+    private var messageSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            VStack(spacing: 0) {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "text.cursor")
+                        .font(DS.Font.scaled(13, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                    // العنوان بمحاذاة ثابتة: يمين في العربية، يسار في الإنجليزية (طلب المالك)
+                    TextField(L10n.t("عنوان الرسالة (اختياري)", "Subject (optional)"), text: $subject)
+                        .font(DS.Font.plex(15, weight: .semibold))
+                        .environment(\.layoutDirection, .leftToRight)
+                        .multilineTextAlignment(L10n.isArabic ? .trailing : .leading)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 48)
+
+                Rectangle()
+                    .fill(DS.Color.cardBorder)
+                    .frame(height: 0.75)
+                    .padding(.horizontal, DS.Spacing.md)
+
+                ZStack(alignment: .topLeading) {
+                    if message.isEmpty {
+                        Text(L10n.t("اكتب رسالتك هنا…", "Write your message here…"))
+                            .font(DS.Font.plex(14, weight: .regular))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .padding(.horizontal, DS.Spacing.md + 4)
+                            .padding(.vertical, DS.Spacing.md + 6)
+                    }
+                    TextEditor(text: $message)
+                        .focused($messageFocused)
+                        .font(DS.Font.plex(15, weight: .regular))
+                        .scrollContentBackground(.hidden)
+                        .padding(DS.Spacing.sm)
+                        .frame(minHeight: 180, maxHeight: 260)
+                }
+
+                HStack {
+                    Spacer()
+                    Text("\(message.count)/\(maxLength)")
+                        .font(DS.Font.plex(11, weight: .medium))
+                        .foregroundColor(message.count > maxLength ? DS.Color.error : DS.Color.textTertiary)
+                        .environment(\.layoutDirection, .leftToRight)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.sm)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(DS.Color.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(messageFocused ? selectedCategory.color.opacity(0.45) : DS.Color.cardBorder,
+                                  lineWidth: messageFocused ? 1.5 : 0.75)
+            )
+            .animation(DS.Anim.quick, value: messageFocused)
+        }
+    }
+
+    // MARK: - بريد الرد — اختياري
+
+    private var replySection: some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: DS.Spacing.sm) {
-                TextField(L10n.t("name@example.com", "name@example.com"), text: $preferredContact)
-                    .font(DS.Font.subheadline)
+                Image(systemName: "at")
+                    .font(DS.Font.scaled(14, weight: .semibold))
+                    .foregroundColor(emailIsValid ? DS.Color.success : DS.Color.textTertiary)
+                    .frame(width: 20)
+                TextField(L10n.t("بريدك للرد (اختياري)", "Your email for a reply (optional)"), text: $preferredContact)
+                    .font(DS.Font.plex(14, weight: .regular))
                     .keyboardType(.emailAddress)
                     .textContentType(.emailAddress)
                     .textInputAutocapitalization(.never)
@@ -328,30 +199,24 @@ struct MemberContactFormView: View {
                     .multilineTextAlignment(L10n.isArabic ? .trailing : .leading)
                 if emailIsValid {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.scaled(14, weight: .bold))
                         .foregroundColor(DS.Color.success)
                         .transition(.scale.combined(with: .opacity))
-                } else if preferredContact.isEmpty {
-                    // التلميح داخل الحقل — يختفي أول ما يبدأ بالكتابة
-                    Text(L10n.t("اختياري", "Optional"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm + 2)
-            .background(DS.Color.background)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .frame(height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(DS.Color.surface)
+            )
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .strokeBorder(emailIsValid ? DS.Color.primary.opacity(0.30)
-                                               : DS.Color.textTertiary.opacity(0.15),
-                                  lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(emailIsValid ? DS.Color.success.opacity(0.35) : DS.Color.cardBorder, lineWidth: 0.75)
             )
             .animation(DS.Anim.quick, value: emailIsValid)
+
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.bottom, DS.Spacing.md)
     }
 
     /// بريد يبدو صالحاً — لمجرّد التأكيد البصري، الحقل يبقى اختيارياً
@@ -368,38 +233,39 @@ struct MemberContactFormView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(DS.Color.error)
             Text(text)
-                .font(DS.Font.caption1)
+                .font(DS.Font.plex(12, weight: .regular))
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(3)
             Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.sm)
-        .background(DS.Color.error.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+        .padding(DS.Spacing.md)
+        .background(DS.Color.error.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.md))
     }
 
-    // MARK: - زر الإرسال
+    // MARK: - زر الإرسال — بلون التصنيف المختار
     private var sendButton: some View {
         Button {
             Task { await send() }
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 if isSending {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(0.9)
+                    ProgressView().tint(.white).scaleEffect(0.9)
                 } else {
                     Image(systemName: "paperplane.fill")
                         .font(DS.Font.scaled(14, weight: .bold))
                 }
                 Text(isSending ? L10n.t("جارٍ الإرسال…", "Sending…") : L10n.t("إرسال", "Send"))
-                    .font(DS.Font.calloutBold)
+                    .font(DS.Font.plex(15, weight: .bold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.md + 4)
-            .background(canSend ? DS.Color.gradientPrimary : LinearGradient(colors: [DS.Color.textTertiary.opacity(0.4)], startPoint: .leading, endPoint: .trailing))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .frame(height: 52)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(canSend ? selectedCategory.color : DS.Color.textTertiary.opacity(0.4))
+            )
+            .shadow(color: canSend ? selectedCategory.color.opacity(0.25) : .clear, radius: 10, x: 0, y: 4)
+            .animation(DS.Anim.quick, value: selectedCategory)
         }
         .disabled(!canSend || isSending)
         .buttonStyle(DSScaleButtonStyle())
@@ -411,32 +277,45 @@ struct MemberContactFormView: View {
     }
 
     // MARK: - حالة النجاح
+    @State private var sentCategory: ContactCategory = .inquiry
+
     private var successState: some View {
         VStack(spacing: DS.Spacing.lg) {
             Spacer()
 
             ZStack {
                 Circle()
-                    .fill(DS.Color.success.opacity(0.15))
-                    .frame(width: isLandscape ? 76 : 120, height: isLandscape ? 76 : 120)
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: isLandscape ? 50 : 80, weight: .bold))
+                    .fill(DS.Color.success.opacity(0.10))
+                    .frame(width: isLandscape ? 96 : 140, height: isLandscape ? 96 : 140)
+                Circle()
+                    .fill(DS.Color.success.opacity(0.16))
+                    .frame(width: isLandscape ? 70 : 104, height: isLandscape ? 70 : 104)
+                Image(systemName: "checkmark")
+                    .font(.system(size: isLandscape ? 30 : 44, weight: .bold))
                     .foregroundColor(DS.Color.success)
             }
 
             VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("تم استلام رسالتك", "Message Received"))
-                    .font(DS.Font.title2)
-                    .fontWeight(.bold)
+                Text(L10n.t("وصلت رسالتك", "Message received"))
+                    .font(DS.Font.plex(22, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t(
-                    "شكراً لتواصلك. راح ترد عليك الإدارة بأقرب وقت.",
-                    "Thank you. Admin will reach out shortly."
-                ))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, DS.Spacing.lg)
+                HStack(spacing: 5) {
+                    Image(systemName: sentCategory.icon)
+                        .font(DS.Font.scaled(11, weight: .bold))
+                    Text(sentCategory.title)
+                        .font(DS.Font.plex(12, weight: .bold))
+                }
+                .foregroundColor(sentCategory.color)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(sentCategory.color.opacity(0.12)))
+
+                Text(L10n.t("شكراً لتواصلك. سترد عليك الإدارة بأقرب وقت.",
+                            "Thank you. The admins will reply soon."))
+                    .font(DS.Font.plex(14, weight: .regular))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, DS.Spacing.xl)
             }
 
             Spacer()
@@ -444,16 +323,14 @@ struct MemberContactFormView: View {
             Button {
                 resetForm()
             } label: {
-                Text(L10n.t("إرسال رسالة جديدة", "Send Another"))
-                    .font(DS.Font.calloutBold)
+                Text(L10n.t("إرسال رسالة أخرى", "Send another"))
+                    .font(DS.Font.plex(15, weight: .bold))
                     .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.primary.opacity(0.10))
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1)
+                    .frame(maxWidth: 280)
+                    .frame(height: 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                            .fill(DS.Color.primary.opacity(0.10))
                     )
             }
             .buttonStyle(DSScaleButtonStyle())
@@ -483,6 +360,8 @@ struct MemberContactFormView: View {
         )
         isSending = false
         if ok {
+            sentCategory = selectedCategory
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
             withAnimation(DS.Anim.smooth) { didSend = true }
         } else {
             errorText = authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة. حاول مرة ثانية.", "Failed to send. Please try again.")
@@ -490,6 +369,7 @@ struct MemberContactFormView: View {
     }
 
     private func resetForm() {
+        subject = ""
         message = ""
         preferredContact = ""
         selectedCategory = .inquiry

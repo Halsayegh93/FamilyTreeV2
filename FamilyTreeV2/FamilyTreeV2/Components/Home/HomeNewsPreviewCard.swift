@@ -25,14 +25,14 @@ struct HomeNewsPreviewCard: View {
             .padding(DS.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            // بلا هذا تلتقط زخارف الخلفية المزاحة نقرات فوق حدود البطاقة
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .strokeBorder(DS.Color.cardBorder.opacity(0.8), lineWidth: 0.75)
             )
-            .shadow(color: DS.Color.primaryDark.opacity(0.12), radius: 16, x: 0, y: 6)
+            // ظل ناعم منتشر بدل الظل الأزرق الثقيل
+            .shadow(color: .black.opacity(0.05), radius: 14, x: 0, y: 6)
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -41,25 +41,23 @@ struct HomeNewsPreviewCard: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
-            ZStack {
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 40, height: 40)
-                    .shadow(color: DS.Color.primary.opacity(0.35), radius: 8, x: 0, y: 4)
-                Image(systemName: "newspaper.fill")
-                    .font(DS.Font.scaled(17, weight: .bold))
-                    .foregroundColor(.white)
-            }
+            Image(systemName: "newspaper.fill")
+                .font(DS.Font.scaled(16, weight: .semibold))
+                .foregroundColor(DS.Color.primary)
+                .frame(width: 38, height: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.primary.opacity(0.10))
+                )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(L10n.t("الأخبار والمناسبات", "News & Events"))
-                    .font(DS.Font.scaled(18, weight: .bold))
+                    .font(DS.Font.plex(17, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                 if !newsVM.allNews.isEmpty {
-                    Text("\(newsVM.allNews.count) " + L10n.t("منشور", "POSTS"))
-                        .font(DS.Font.scaled(11, weight: .heavy))
+                    Text("\(newsVM.allNews.count) " + L10n.t("منشور", "posts"))
+                        .font(DS.Font.plex(12, weight: .medium))
                         .foregroundColor(DS.Color.textSecondary)
-                        .tracking(0.6)
                 }
             }
 
@@ -77,10 +75,10 @@ struct HomeNewsPreviewCard: View {
     private var todayBadge: some View {
         Text(L10n.t("جديد اليوم", "New today"))
             .font(DS.Font.scaled(10, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.error)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 4)
-            .background(Capsule().fill(DS.Color.error))
+            .background(Capsule().fill(DS.Color.error.opacity(0.10)))
     }
 
     // MARK: - المحتوى
@@ -106,18 +104,26 @@ struct HomeNewsPreviewCard: View {
             }
             .padding(.vertical, DS.Spacing.md)
         } else {
-            VStack(spacing: DS.Spacing.md) {
+            VStack(spacing: DS.Spacing.sm) {
                 // آخر مناسبة (زواج/مولود/وفاة) أولاً — هي ما يهم العائلة أكثر
                 if let occasion = latestOccasion {
                     HomeOccasionRow(news: occasion)
                 }
-                ForEach(previewPosts) { news in
+                ForEach(Array(previewPosts.enumerated()), id: \.element.id) { idx, news in
+                    if idx > 0 {
+                        // فاصل رفيع بين الأخبار — أنعم من تكديسها بلا فواصل
+                        Rectangle()
+                            .fill(DS.Color.cardBorder.opacity(0.7))
+                            .frame(height: 0.5)
+                            .padding(.leading, 42)
+                    }
                     HomeNewsPreviewRow(
                         news: news,
                         member: news.author_id.flatMap { memberVM.member(byId: $0) },
                         likes: newsVM.likesCountByPost[news.id] ?? 0,
                         comments: newsVM.commentsCountByPost[news.id] ?? 0
                     )
+                    .padding(.vertical, 2)
                 }
             }
         }
@@ -142,37 +148,29 @@ struct HomeNewsPreviewCard: View {
     private var showAllButton: some View {
         HStack(spacing: DS.Spacing.xs + 2) {
             Text(L10n.t("عرض كل الأخبار", "Show all news"))
-                .font(DS.Font.scaled(13, weight: .bold))
+                .font(DS.Font.plex(13, weight: .semibold))
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
                 .font(DS.Font.scaled(11, weight: .bold))
         }
-        .foregroundColor(.white)
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, 9)
+        .foregroundColor(DS.Color.primary)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .background(Capsule().fill(DS.Color.gradientPrimary))
-        .shadow(color: DS.Color.primary.opacity(0.30), radius: 10, x: 0, y: 5)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(DS.Color.primary.opacity(0.08))
+        )
         .padding(.top, DS.Spacing.xs)
     }
 
+    /// سطح هادئ مع لمسة لونية خفيفة جداً في الزاوية — بلا بقع ملوّنة متعدّدة
     private var cardBackground: some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             DS.Color.surface
-            Circle()
-                .fill(DS.Color.primary.opacity(0.16))
-                .frame(width: 220, height: 220)
-                .blur(radius: 55)
-                .offset(x: 130, y: -90)
-            Circle()
-                .fill(DS.Color.secondary.opacity(0.12))
-                .frame(width: 160, height: 160)
-                .blur(radius: 45)
-                .offset(x: -80, y: 120)
-            Circle()
-                .fill(DS.Color.accent.opacity(0.12))
-                .frame(width: 130, height: 130)
-                .blur(radius: 38)
-                .offset(x: -100, y: -70)
+            LinearGradient(
+                colors: [DS.Color.primary.opacity(0.06), .clear],
+                startPoint: .top,
+                endPoint: .center
+            )
         }
     }
 }
@@ -341,12 +339,8 @@ struct HomeOccasionRow: View {
         }
         .padding(DS.Spacing.sm + 2)
         .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(color.opacity(0.07))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(color.opacity(0.18), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(color.opacity(0.06))
         )
     }
 }

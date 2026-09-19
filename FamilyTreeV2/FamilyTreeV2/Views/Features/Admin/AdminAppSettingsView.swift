@@ -291,7 +291,7 @@ struct AdminAppSettingsView: View {
                     Text(L10n.t("إيقاف العداد", "Disable Cooldown"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("السماح بالتعديل بدون حد (3 تعديلات ثم 24 ساعة)", "Allow unlimited edits (normally 3 edits then 24h lock)"))
+                    Text(L10n.t("السماح بالتعديل بدون حد (عادةً 3 تعديلات ثم موافقة الإدارة)", "Allow unlimited edits (normally 3 edits, then admin approval)"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
@@ -319,7 +319,7 @@ struct AdminAppSettingsView: View {
                         Text(L10n.t("تصفير العداد", "Reset Cooldown"))
                             .font(DS.Font.calloutBold)
                             .foregroundColor(DS.Color.warning)
-                        Text(L10n.t("إعادة تعيين جميع فترات الانتظار", "Reset cooldowns"))
+                        Text(L10n.t("إعادة عدّاد التعديلات من الصفر", "Reset edit counters"))
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
                     }

@@ -70,13 +70,11 @@ struct AddNewsView: View {
             .navigationTitle(L10n.t("خبر جديد", "New Post"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
+                    DSToolbarCancelButton { dismiss() }
                 }
                 // زر النشر — علوي بدل أسفل الصفحة
-                ToolbarItem(placement: .topBarLeading) { publishToolbarButton }
+                ToolbarItem(placement: DSToolbar.confirmPlacement) { publishToolbarButton }
             }
             .alert(L10n.t("تعذر النشر", "Post Failed"), isPresented: $showPostErrorAlert) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
@@ -87,6 +85,9 @@ struct AddNewsView: View {
                 loadImages(from: items)
             }
         }
+        // الاتجاه على الـNavigationStack نفسه — داخله فقط يجعل شريط الأزرار LTR
+        // فتنعكس مواضع «إضافة/إلغاء» (طلب المالك)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     // MARK: - هوية الناشر

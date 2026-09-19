@@ -151,7 +151,7 @@ struct NewsCommentsSheet: View {
             .navigationTitle(L10n.t("التعليقات", "Comments"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                 }
             }

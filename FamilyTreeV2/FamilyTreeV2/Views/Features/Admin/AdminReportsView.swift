@@ -671,7 +671,7 @@ struct AdminReportsView: View {
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(selectedReport.tint)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("فرع: \(m.fullName)")
+                        Text("فرع: \(m.displayFullName)")
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
                             .foregroundColor(selectedReport.tint)
@@ -789,7 +789,7 @@ struct AdminReportsView: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(member.fullName)
+                    Text(member.displayFullName)
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)

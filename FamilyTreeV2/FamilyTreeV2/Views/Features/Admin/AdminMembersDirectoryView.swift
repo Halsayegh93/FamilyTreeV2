@@ -582,7 +582,7 @@ struct AdminMembersDirectoryView: View {
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(DS.Color.accent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("فرع: \(m.fullName)", "Branch: \(m.fullName)"))
+                        Text(L10n.t("فرع: \(m.displayFullName)", "Branch: \(m.displayFullName)"))
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
                             .foregroundColor(DS.Color.accent)

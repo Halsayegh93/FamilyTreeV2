@@ -18,8 +18,6 @@ struct AdminActivityLogView: View {
     @State private var selectedIds: Set<UUID> = []
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
-    /// الصفوف المفتوحة لعرض تفاصيل التغيير (قبل ← بعد)
-    @State private var expandedIds: Set<UUID> = []
     /// السجل المفتوح في شيت التفاصيل
     @State private var detailItem: AppNotification?
 
@@ -156,78 +154,59 @@ struct AdminActivityLogView: View {
             .sorted { $0.createdDate > $1.createdDate }
     }
 
-    /// تجميع حسب اليوم — نفس تقسيم مركز الإشعارات
-    private func dateSection(for date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return L10n.t("اليوم", "Today") }
-        if cal.isDateInYesterday(date) { return L10n.t("أمس", "Yesterday") }
-        if let weekStart = cal.dateInterval(of: .weekOfYear, for: Date())?.start, date >= weekStart {
-            return L10n.t("هذا الأسبوع", "This Week")
-        }
-        return L10n.t("أقدم", "Older")
-    }
-
-    private var grouped: [(String, [AppNotification])] {
-        let dict = Dictionary(grouping: filteredItems) { dateSection(for: $0.createdDate) }
-        let order = [L10n.t("اليوم", "Today"), L10n.t("أمس", "Yesterday"),
-                     L10n.t("هذا الأسبوع", "This Week"), L10n.t("أقدم", "Older")]
-        return order.compactMap { key in
-            guard let v = dict[key], !v.isEmpty else { return nil }
-            return (key, v)
-        }
-    }
-
     // MARK: - Body
 
+    // تصميم مبسّط بنفس تنسيق «صحة النظام» (طلب المالك): بطاقة واحدة بفواصل رفيعة
+    // بلا تقسيم حسب اليوم، وصف واحد لكل حركة (أيقونة · عنوان · سطر · وقت). التصفية والبحث
+    // والتحديد في الشريط العلوي بدل صف الكبسولات.
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                filterBar
-
                 if showSearch {
                     searchField
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.sm)
                 }
 
                 if isSelecting {
                     selectionBar
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.sm)
                 }
 
                 if filteredItems.isEmpty {
                     emptyState
                         .frame(maxHeight: .infinity)
                 } else {
-                    // List — ليعمل السحب للحذف (لا يعمل داخل LazyVStack)
+                    // List مجمّعة — بطاقات بفواصل، والسحب للحذف يعمل
                     List {
-                        ForEach(grouped, id: \.0) { section, items in
+                        if filter != .all {
                             Section {
-                                ForEach(items) { item in
-                                    activityRow(item)
-                                        .listRowInsets(EdgeInsets(top: 3, leading: DS.Spacing.lg,
-                                                                  bottom: 3, trailing: DS.Spacing.lg))
-                                        .listRowBackground(Color.clear)
-                                        .listRowSeparator(.hidden)
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                            Button(role: .destructive) {
-                                                Task { await notificationVM.deleteNotification(id: item.id) }
-                                            } label: {
-                                                Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
-                                            }
-                                        }
-                                }
+                                EmptyView()
                             } header: {
-                                sectionHeader(section, count: items.count)
-                                    .listRowInsets(EdgeInsets(top: 0, leading: DS.Spacing.lg,
-                                                              bottom: 0, trailing: DS.Spacing.lg))
+                                activeFilterChip
+                            }
+                        }
+                        // قائمة واحدة بلا تقسيم «اليوم / هذا الأسبوع / أقدم» (طلب المالك)
+                        Section {
+                            ForEach(filteredItems) { item in
+                                activityRow(item)
+                                    .listRowBackground(DS.Color.surface)
+                                    .listRowInsets(EdgeInsets(top: 10, leading: DS.Spacing.md,
+                                                              bottom: 10, trailing: DS.Spacing.md))
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            Task { await notificationVM.deleteNotification(id: item.id) }
+                                        } label: {
+                                            Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                                        }
+                                    }
                             }
                         }
                     }
-                    .listStyle(.plain)
+                    .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)
                 }
             }
@@ -238,16 +217,21 @@ struct AdminActivityLogView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: DS.Spacing.md) {
-                    Button {
-                        withAnimation(DS.Anim.quick) {
-                            isSelecting.toggle()
-                            if !isSelecting { selectedIds.removeAll() }
+                    // التصفية — قائمة بدل صف الكبسولات
+                    Menu {
+                        Picker(L10n.t("تصفية", "Filter"), selection: $filter) {
+                            ForEach(ActivityFilter.allCases) { f in
+                                let count = activityItems.filter { matches($0, f) }.count
+                                Label("\(f.title) (\(count))", systemImage: f.icon).tag(f)
+                            }
                         }
                     } label: {
-                        Text(isSelecting ? L10n.t("إلغاء", "Cancel") : L10n.t("تحديد", "Select"))
-                            .font(DS.Font.calloutBold)
+                        Image(systemName: filter == .all
+                              ? "line.3.horizontal.decrease.circle"
+                              : "line.3.horizontal.decrease.circle.fill")
                             .foregroundColor(DS.Color.primary)
                     }
+                    .accessibilityLabel(L10n.t("تصفية", "Filter"))
 
                     Button {
                         withAnimation(DS.Anim.quick) { showSearch.toggle() }
@@ -257,6 +241,19 @@ struct AdminActivityLogView: View {
                             .foregroundColor(DS.Color.primary)
                     }
                     .accessibilityLabel(L10n.t("بحث", "Search"))
+
+                    Button {
+                        withAnimation(DS.Anim.quick) {
+                            isSelecting.toggle()
+                            if !isSelecting { selectedIds.removeAll() }
+                        }
+                    } label: {
+                        // التحديد علامة بدل النص (طلب المالك)
+                        Image(systemName: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
+                            .foregroundColor(DS.Color.primary)
+                    }
+                    .accessibilityLabel(isSelecting ? L10n.t("إلغاء التحديد", "Cancel selection")
+                                                    : L10n.t("تحديد", "Select"))
                 }
             }
         }
@@ -282,42 +279,28 @@ struct AdminActivityLogView: View {
         }
     }
 
-    // MARK: - شريط التصنيفات
+    // MARK: - التصفية الحالية
 
-    private var filterBar: some View {
-        // الأربعة في صف واحد بلا سحب — طلب المالك
-        HStack(spacing: 4) {
-            ForEach(ActivityFilter.allCases) { f in
-                let active = filter == f
-                // مصدر واحد للتصنيف — كان مكرّراً هنا فبقي ناقصاً عند
-                // إضافة تبويب جديد. matchesFilter هي المرجع الوحيد الآن.
-                let count = activityItems.filter { matches($0, f) }.count
-
-                Button {
-                    withAnimation(DS.Anim.quick) { filter = f }
-                } label: {
-                    HStack(spacing: 2.5) {
-                        Text(f.title)
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.65)
-                        if count > 0 {
-                            Text("\(count)")
-                                .font(DS.Font.scaled(11, weight: .heavy))
-                                .opacity(0.7)
-                        }
-                    }
-                    .foregroundColor(active ? .white : DS.Color.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 22)
-                    .background(Capsule().fill(active ? f.color : DS.Color.surface))
-                    .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: active ? 0 : 1))
-                }
-                .buttonStyle(.plain)
+    /// شارة التصفية الفعّالة — تظهر فقط عند اختيار غير «الكل»، والضغط يرجع للكل
+    private var activeFilterChip: some View {
+        Button {
+            withAnimation(DS.Anim.quick) { filter = .all }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: filter.icon)
+                    .font(DS.Font.scaled(11, weight: .bold))
+                Text(filter.title)
+                    .font(DS.Font.scaled(12, weight: .bold))
+                Image(systemName: "xmark")
+                    .font(DS.Font.scaled(9, weight: .heavy))
             }
+            .foregroundColor(.white)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(height: 28)
+            .background(Capsule().fill(filter.color))
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
+        .buttonStyle(.plain)
+        .textCase(nil)
     }
 
     private var searchField: some View {
@@ -398,121 +381,53 @@ struct AdminActivityLogView: View {
         }
     }
 
-    private func sectionHeader(_ title: String, count: Int) -> some View {
-        HStack(spacing: 6) {
-            Text(title)
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textSecondary)
-            Text("\(count)")
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textTertiary)
-            Spacer()
-        }
-        .padding(.vertical, DS.Spacing.xs)
-        .background(DS.Color.background)
-    }
-
     // MARK: - صف الحركة
 
+    /// صف واحد بسيط — التفاصيل (قبل ← بعد) في الشيت عند الضغط
     private func activityRow(_ item: AppNotification) -> some View {
         let style = rowStyle(for: item.kind)
         let isNew = !item.read
         let picked = selectedIds.contains(item.id)
-        return HStack(alignment: .top, spacing: DS.Spacing.md) {
+        return HStack(spacing: DS.Spacing.md) {
             if isSelecting {
                 Image(systemName: picked ? "checkmark.circle.fill" : "circle")
-                    .font(DS.Font.scaled(18))
+                    .font(DS.Font.scaled(20))
                     .foregroundColor(picked ? DS.Color.primary : DS.Color.textTertiary)
-                    .padding(.top, 4)
             }
 
             Image(systemName: style.icon)
-                .font(DS.Font.scaled(13, weight: .bold))
+                .font(DS.Font.scaled(15, weight: .semibold))
                 .foregroundColor(style.color)
-                .frame(width: 32, height: 32)
-                .background(style.color.opacity(0.12))
-                .clipShape(Circle())
+                .frame(width: 36, height: 36)
+                .background(style.color.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.Radius.md))
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: DS.Spacing.xs) {
-                    Text(item.title)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2)
-
-                    // شارة «جديد» — حركة لم تُقرأ بعد
-                    if isNew {
-                        Text(L10n.t("جديد", "New"))
-                            .font(DS.Font.scaled(11, weight: .heavy))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(DS.Color.primary))
-                    }
-                    Spacer(minLength: 0)
-                }
-
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(DS.Font.plex(15, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
                 if !item.body.isEmpty {
                     Text(item.body)
-                        .font(DS.Font.caption1)
+                        .font(DS.Font.plex(12.5, weight: .regular))
                         .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(3)
-                }
-
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(relativeTime(item.createdDate))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-
-                    // تفاصيل التغيير — تُفتح بالضغط (صورة، اسم، تاريخ…)
-                    if let changes = item.details?.changes, !changes.isEmpty {
-                        Button {
-                            withAnimation(DS.Anim.quick) {
-                                if expandedIds.contains(item.id) { expandedIds.remove(item.id) }
-                                else { expandedIds.insert(item.id) }
-                            }
-                        } label: {
-                            HStack(spacing: 3) {
-                                Image(systemName: expandedIds.contains(item.id)
-                                      ? "chevron.up.circle.fill" : "list.bullet.rectangle")
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                Text(L10n.t("\(changes.count) تغيير", "\(changes.count) changes"))
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                            }
-                            .foregroundColor(DS.Color.primary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1.5)
-                            .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Spacer(minLength: 0)
-                }
-
-                // قائمة «قبل ← بعد»
-                if expandedIds.contains(item.id), let changes = item.details?.changes {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(changes) { ch in
-                            changeRow(ch)
-                        }
-                    }
-                    .padding(.top, 4)
-                    .transition(.opacity)
+                        .lineLimit(1)
                 }
             }
-            Spacer(minLength: 0)
+
+            Spacer(minLength: DS.Spacing.xs)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(relativeTime(item.createdDate))
+                    .font(DS.Font.plex(11, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+                // نقطة «جديد» بدل الكبسولة
+                if isNew {
+                    Circle().fill(DS.Color.primary).frame(width: 8, height: 8)
+                }
+            }
         }
-        .padding(DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isNew ? DS.Color.primary.opacity(0.05) : DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .strokeBorder(picked ? DS.Color.primary.opacity(0.5)
-                                     : (isNew ? DS.Color.primary.opacity(0.18) : Color.clear),
-                              lineWidth: picked ? 1.5 : 1)
-        )
         .contentShape(Rectangle())
         .onTapGesture {
             if isSelecting {
@@ -534,42 +449,6 @@ struct AdminActivityLogView: View {
         if Self.contentKinds.contains(kind)  { return ActivityFilter.content.title }
         if Self.requestKinds.contains(kind)  { return ActivityFilter.requests.title }
         return ActivityFilter.system.title
-    }
-
-    /// سطر تغيير واحد: الحقل · القيمة قبل ← بعد (يفهم الصور والقيم الفارغة)
-    private func changeRow(_ ch: AppNotification.NotificationDetails.ChangeEntry) -> some View {
-        let isPhoto = ch.field == "avatar_url"
-        func display(_ v: String?) -> String {
-            let t = (v ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if t.isEmpty { return L10n.t("بلا", "None") }
-            if isPhoto { return L10n.t("صورة", "Photo") }
-            return t
-        }
-        return HStack(alignment: .top, spacing: 6) {
-            Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(DS.Color.textSecondary)
-
-            HStack(spacing: 4) {
-                Text(display(ch.before))
-                    .font(DS.Font.scaled(11))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
-                    .lineLimit(1)
-                Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(display(ch.after))
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, 4)
-        .background(DS.Color.background)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
     /// أيقونة ولون الصف حسب نوع الحركة (محلي — لا يعتمد على مركز الإشعارات)

@@ -48,7 +48,7 @@ struct ApprovalSheet: View {
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
 
-                    Text(member.fullName)
+                    Text(member.displayFullName)
                         .font(DS.Font.title3)
                         .foregroundColor(DS.Color.textPrimary)
                 }
@@ -106,7 +106,7 @@ struct ApprovalSheet: View {
                         Spacer()
 
                         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text(father.fullName)
+                            Text(father.displayFullName)
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.textPrimary)
                             Text(L10n.t("رقم الهاتف: \(KuwaitPhone.display(father.phoneNumber))", "Phone: \(KuwaitPhone.display(father.phoneNumber))"))
@@ -140,7 +140,7 @@ struct ApprovalSheet: View {
             .navigationTitle(L10n.t("إجراءات الموافقة", "Approval Actions"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.error)

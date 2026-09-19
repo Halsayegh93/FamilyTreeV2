@@ -283,18 +283,12 @@ struct MainHeaderView<TrailingContent: View>: View {
     }
 
     private func headerIconView(icon: String) -> some View {
-        ZStack {
-            Circle()
-                .fill(DS.Color.overlayIcon)
-                .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
-                .overlay(
-                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
-                )
-            Image(systemName: icon)
-                .font(DS.Font.scaled(isLandscape ? 15 : 18, weight: .bold))
-                .foregroundColor(DS.Color.textOnPrimary)
-        }
-        .contentShape(Circle())
+        Image(systemName: icon)
+            .font(DS.Font.scaled(isLandscape ? 15 : 18, weight: .bold))
+            .foregroundColor(DS.Color.textOnPrimary)
+            .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
+            .dsHeaderGlassCircle()
+            .contentShape(Circle())
     }
 }
 
