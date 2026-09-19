@@ -494,9 +494,8 @@ extension View {
     @ViewBuilder
     func dsTabBarBackground() -> some View {
         if #available(iOS 26.0, *) {
-            // شريط سفلي بنظام iOS 27: زجاج سائل عائم يصغر عند التمرير لأسفل
-            // ويرجع عند التمرير لأعلى (طلب المالك)
-            self.tabBarMinimizeBehavior(.onScrollDown)
+            // شريط سفلي بزجاج iOS 27 — ثابت لا يصغر ولا يختفي عند التمرير (طلب المالك)
+            self.tabBarMinimizeBehavior(.never)
         } else {
             self.toolbarBackground(.ultraThinMaterial, for: .tabBar)
         }
