@@ -597,8 +597,8 @@ struct WomenClassicTreeView: View {
         let accent: Color = female
             ? (deceased ? DS.Color.femaleDeceased : rose)
             : (deceased ? DS.Color.textTertiary : DS.Color.primary)
-        // حافة الأنثى المتوفّاة بلون مختلف (ذهبي) لتتميّز عن الحيّة — طلب المالك
-        let border: Color = (female && deceased) ? DS.Color.accent : accent
+        // حافة الأنثى المتوفّاة بلون متناسق مع الوردي الغامق (نبيذي) لتتميّز عن الحيّة — طلب المالك
+        let border: Color = (female && deceased) ? DS.Color.femaleDeceasedBorder : accent
         let kids = cChildrenOf[m.id] ?? []
         let isCollapsed = collapsed.contains(m.id)
         let showWives = !isCollapsed && !kids.isEmpty
@@ -779,7 +779,7 @@ struct WomenClassicTreeView: View {
                 .fill(w.isDeceased == true ? DS.Color.femaleDeceased : rose)
                 .frame(width: 24, height: 24)
                 .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(w.isDeceased == true ? DS.Color.accent : Color.white.opacity(0.9),
+                    .stroke(w.isDeceased == true ? DS.Color.femaleDeceasedBorder : Color.white.opacity(0.9),
                             lineWidth: w.isDeceased == true ? 1.5 : 1))
                 .overlay(
                     Text(L10n.t("زوجة", "Wife"))
