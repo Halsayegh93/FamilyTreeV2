@@ -653,8 +653,14 @@ struct WomenClassicTreeView: View {
                             }
                         }
                     )
-                    .overlay(shape.stroke(Color.white, lineWidth: RING))
-                    .overlay(shape.stroke(border, lineWidth: (female && deceased) ? 2.5 : 2).padding(-RING - 0.5))   // إطار ملوّن
+                    // حواف متّحدة المركز (طلب المالك): الأبيض داخل الحافة تماماً، والملوّن خارجها
+                    // بنصف قطر أكبر بمقدار المسافة نفسها — فتتطابق الزوايا ولا تتعرّج
+                    .overlay(shape.strokeBorder(Color.white, lineWidth: RING))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CORNER + 2.5, style: .continuous)
+                            .strokeBorder(border, lineWidth: 2)
+                            .padding(-2.5)
+                    )
                     // شارة الوفاة: قلب مكسور رمادي (غير ملوّن)
                     .overlay(alignment: .bottomTrailing) {
                         if deceased {
@@ -779,8 +785,8 @@ struct WomenClassicTreeView: View {
                 .fill(w.isDeceased == true ? DS.Color.femaleDeceased : rose)
                 .frame(width: 24, height: 24)
                 .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(w.isDeceased == true ? DS.Color.femaleDeceasedBorder : Color.white.opacity(0.9),
-                            lineWidth: w.isDeceased == true ? 1.5 : 1))
+                    .strokeBorder(w.isDeceased == true ? DS.Color.femaleDeceasedBorder : Color.white.opacity(0.9),
+                                  lineWidth: w.isDeceased == true ? 1.5 : 1))
                 .overlay(
                     Text(L10n.t("زوجة", "Wife"))
                         .font(.system(size: 7.5, weight: .bold))
