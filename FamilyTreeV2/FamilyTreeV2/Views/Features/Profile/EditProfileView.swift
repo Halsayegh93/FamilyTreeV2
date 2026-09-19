@@ -171,7 +171,6 @@ struct EditProfileView: View {
                             )
                             .font(DS.Font.footnote)
                             .foregroundColor(DS.Color.primary)
-                            cooldownLabel(.avatar)
                         }
 
                         DSCard(padding: 0) {
@@ -188,13 +187,11 @@ struct EditProfileView: View {
                                     DSDivider()
                                     modernPhoneField
                                         .cooldownGuarded(.phoneNumber, cooldown: cooldown) { showEditLimitAlert = true }
-                                    cooldownLabel(.phoneNumber)
 
                                     DSDivider()
                                     modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
                                         .cooldownGuarded(.birthDate, cooldown: cooldown) { showEditLimitAlert = true }
                                         .onChange(of: birthDate) { _ in birthDateProvided = true }
-                                    cooldownLabel(.birthDate)
 
                                     DSDivider()
                                     emailField
@@ -370,7 +367,6 @@ struct EditProfileView: View {
             )
             .font(DS.Font.footnote)
             .foregroundColor(DS.Color.primary)
-            cooldownLabel(.avatar)
         }
     }
 
@@ -390,13 +386,11 @@ struct EditProfileView: View {
                 DSDivider()
                 modernPhoneField
                     .cooldownGuarded(.phoneNumber, cooldown: cooldown) { showEditLimitAlert = true }
-                cooldownLabel(.phoneNumber)
 
                 DSDivider()
                 modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
                     .cooldownGuarded(.birthDate, cooldown: cooldown) { showEditLimitAlert = true }
                     .onChange(of: birthDate) { _ in birthDateProvided = true }
-                cooldownLabel(.birthDate)
 
                 DSDivider()
                 emailField
@@ -494,7 +488,6 @@ struct EditProfileView: View {
                 nameChangeRequestSheet
             }
 
-            cooldownLabel(.fullName)
         }
     }
 
@@ -807,7 +800,6 @@ struct EditProfileView: View {
             }
             .padding(.bottom, DS.Spacing.md)
 
-            cooldownLabel(.bio)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .sheet(isPresented: $showBioEditor) {
@@ -890,13 +882,6 @@ struct EditProfileView: View {
         }
     }
 
-    // MARK: - Cooldown Label
-
-    /// أُزيلت نصوص «آخر تعديل متاح» و«مقفل» تحت الحقول (طلب المالك) —
-    /// التنبيه صار مربّع رسالة عند محاولة تعديل حقل مقفل.
-    private func cooldownLabel(_ field: EditableField) -> some View {
-        EmptyView()
-    }
 
     // MARK: - Logic (الوظائف)
 
