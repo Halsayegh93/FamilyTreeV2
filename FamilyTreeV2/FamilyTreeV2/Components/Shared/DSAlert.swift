@@ -39,6 +39,8 @@ private struct DSAlertButtonStyle: PrimitiveButtonStyle {
             configuration.label
         }
         .buttonStyle(DSAlertPressStyle(role: configuration.role))
+        // التخطيط يرتّب حسب الدور: الإلغاء في مكان ثابت في كل الرسائل
+        .layoutValue(key: DSAlertIsCancelKey.self, value: configuration.role == .cancel)
     }
 }
 
@@ -68,7 +70,14 @@ private struct DSAlertPressStyle: ButtonStyle {
     }
 }
 
-/// زرّان جنب بعض بعرض متساوٍ (مثل «إلغاء» و«حذف»)، وثلاثة فأكثر فوق بعض
+/// هل الزر «إلغاء»؟ — لترتيب موحّد في كل الرسائل
+private struct DSAlertIsCancelKey: LayoutValueKey {
+    static let defaultValue = false
+}
+
+/// زرّان جنب بعض بعرض متساوٍ، وثلاثة فأكثر فوق بعض.
+/// الترتيب موحّد مهما كان ترتيب الكود (طلب المالك):
+/// «إلغاء» أولاً = يمين في العربية، والإجراء بعده = يسار؛ وفي العمودي «إلغاء» آخراً.
 private struct DSAlertButtonsLayout: Layout {
     var spacing: CGFloat = DS.Spacing.sm
 
@@ -86,7 +95,9 @@ private struct DSAlertButtonsLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         if subviews.count == 2 {
             let each = (bounds.width - spacing) / 2
-            for (i, view) in subviews.enumerated() {
+            // الإلغاء أولاً (يمين في RTL)، ثم الإجراء
+            let ordered = subviews.sorted { a, b in a[DSAlertIsCancelKey.self] && !b[DSAlertIsCancelKey.self] }
+            for (i, view) in ordered.enumerated() {
                 let x = bounds.minX + CGFloat(i) * (each + spacing)
                 view.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
                            proposal: ProposedViewSize(width: each, height: bounds.height))
@@ -94,7 +105,9 @@ private struct DSAlertButtonsLayout: Layout {
             return
         }
         var y = bounds.minY
-        for view in subviews {
+        // عمودياً: الإجراءات أولاً ثم الإلغاء في الأسفل
+        let ordered = subviews.sorted { a, b in !a[DSAlertIsCancelKey.self] && b[DSAlertIsCancelKey.self] }
+        for view in ordered {
             let h = view.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
             view.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading,
                        proposal: ProposedViewSize(width: bounds.width, height: h))
