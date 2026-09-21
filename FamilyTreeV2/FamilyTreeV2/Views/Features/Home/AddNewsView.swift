@@ -76,8 +76,8 @@ struct AddNewsView: View {
                 // زر النشر — علوي بدل أسفل الصفحة
                 ToolbarItem(placement: DSToolbar.confirmPlacement) { publishToolbarButton }
             }
-            .alert(L10n.t("تعذر النشر", "Post Failed"), isPresented: $showPostErrorAlert) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            .dsAlert(L10n.t("تعذر النشر", "Post Failed"), isPresented: $showPostErrorAlert) {
+                Button(L10n.t("حسناً", "OK")) {}
             } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء نشر الخبر.", "An error occurred.")) }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onChange(of: pickerItems) { items in

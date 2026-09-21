@@ -55,7 +55,8 @@ struct HomeNewsPreviewCard: View {
                     .font(DS.Font.plex(17, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                 if !newsVM.allNews.isEmpty {
-                    Text("\(newsVM.allNews.count) " + L10n.t("منشور", "posts"))
+                    // الإجمالي من السيرفر — لا عدد المحمَّل فقط
+                    Text("\(max(newsVM.totalNewsCount, newsVM.allNews.count)) " + L10n.t("منشور", "posts"))
                         .font(DS.Font.plex(12, weight: .medium))
                         .foregroundColor(DS.Color.textSecondary)
                 }

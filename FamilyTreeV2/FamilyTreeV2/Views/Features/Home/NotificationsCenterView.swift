@@ -306,7 +306,7 @@ struct NotificationsCenterView: View {
             NavigationStack { AdminAppUpdateView() }
                 .presentationDragIndicator(.visible)
         }
-        .alert(
+        .dsAlert(
             {
                 if case .failure = adminRequestVM.mergeResult {
                     return L10n.t("لم يتم الربط", "Link Failed")
@@ -319,7 +319,7 @@ struct NotificationsCenterView: View {
             ),
             presenting: adminRequestVM.mergeResult
         ) { _ in
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {
+            Button(L10n.t("حسناً", "OK")) {
                 adminRequestVM.mergeResult = nil
             }
         } message: { result in
@@ -1078,7 +1078,7 @@ struct NotificationsCenterView: View {
                 "\(joinMatchCandidates.count) matches found in the tree. Link to one of them or approve as a new member."
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الربط", "Confirm Link"),
             isPresented: Binding(
                 get: { linkConfirmTarget != nil },

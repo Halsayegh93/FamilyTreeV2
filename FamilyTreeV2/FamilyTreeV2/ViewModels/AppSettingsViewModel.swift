@@ -16,6 +16,8 @@ struct AppSettings: Codable {
     var diwaniyasEnabled: Bool?
     var projectsEnabled: Bool?
     var albumsEnabled: Bool?
+    /// لغة التطبيق الرسمية (ar / en) — للمستخدمين الذين لم يختاروا لغتهم
+    var defaultLanguage: String?
     var updatedAt: String?
     var updatedBy: UUID?
 
@@ -30,6 +32,7 @@ struct AppSettings: Codable {
         case diwaniyasEnabled = "diwaniyas_enabled"
         case projectsEnabled = "projects_enabled"
         case albumsEnabled = "albums_enabled"
+        case defaultLanguage = "default_language"
         case updatedAt = "updated_at"
         case updatedBy = "updated_by"
     }
@@ -72,6 +75,7 @@ class AppSettingsViewModel: ObservableObject {
 
             if let fetched = result.first {
                 self.settings = fetched
+                LanguageManager.shared.applyOfficialLanguage(fetched.defaultLanguage)
             }
         } catch {
             // إذا الجدول مو موجود، نستخدم القيم الافتراضية

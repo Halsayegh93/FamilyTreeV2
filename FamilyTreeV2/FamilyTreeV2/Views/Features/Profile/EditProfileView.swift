@@ -239,7 +239,7 @@ struct EditProfileView: View {
                     }
                 }
             }
-            .alert(
+            .dsAlert(
                 L10n.t("تجاهل التعديلات؟", "Discard Changes?"),
                 isPresented: $showDiscardAlert
             ) {
@@ -304,16 +304,16 @@ struct EditProfileView: View {
                 // بلا انزلاق من الأسفل — المربّع يظهر بنفسه في المنتصف
                 if showEditLimitAlert { t.disablesAnimations = true }
             }
-            .alert(L10n.t("خطأ", "Error"), isPresented: $showSaveError) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showSaveError) {
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t("تعذر الحفظ. حاول مرة أخرى.", "Save failed. Try again."))
             }
-            .alert(
+            .dsAlert(
                 L10n.t("تم إرسال طلب التغيير للإدارة", "Change Request Sent"),
                 isPresented: $showRequestSentAlert
             ) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) { dismiss() }
+                Button(L10n.t("حسناً", "OK")) { dismiss() }
             } message: {
                 Text(L10n.t(
                     "طلبك الآن قيد المراجعة، وستصلك النتيجة بعد موافقة الإدارة.",
@@ -780,7 +780,7 @@ struct EditProfileView: View {
         .sheet(isPresented: $showBioEditor) {
             BioStationsEditorSheet(stations: $bioStations)
         }
-        .alert(
+        .dsAlert(
             L10n.t("حذف السيرة", "Delete Biography"),
             isPresented: $showDeleteBioAlert
         ) {

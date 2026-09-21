@@ -180,7 +180,7 @@ struct MemberDetailsView: View {
         .fullScreenCover(isPresented: $showAvatarPreview) {
             avatarPreviewOverlay
         }
-        .alert(
+        .dsAlert(
             L10n.t("حذف السيرة", "Delete Biography"),
             isPresented: $showDeleteBioAlert
         ) {
@@ -192,7 +192,7 @@ struct MemberDetailsView: View {
         } message: {
             Text(L10n.t("هل تريد حذف السيرة الذاتية؟", "Delete biography?"))
         }
-        .alert(L10n.t("إبلاغ عن عضو", "Report Member"), isPresented: $showReportConfirm) {
+        .dsAlert(L10n.t("إبلاغ عن عضو", "Report Member"), isPresented: $showReportConfirm) {
             TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
             Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
                 let target = member
@@ -213,8 +213,8 @@ struct MemberDetailsView: View {
             Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة ملف هذا العضو.",
                        "Enter a reason; it will be sent to the admins to review this member's profile."))
         }
-        .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) { }
+        .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+            Button(L10n.t("حسناً", "OK")) { }
         } message: {
             Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
         }

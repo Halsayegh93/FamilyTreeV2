@@ -28,35 +28,94 @@ class AdminRequestViewModel: ObservableObject {
     @Published var mergeResult: MergeResult? = nil
     @Published var errorMessage: String? = nil
 
-    /// معرّفات رسائل التواصل التي قرأها المدير (محفوظة محلياً في UserDefaults).
-    /// تُستخدم لتحديد العدّاد "غير المقروء" المعروض في لوحة الإدارة.
+    /// معرّفات رسائل التواصل التي قرأها هذا المشرف.
+    /// مصدرها جدول `admin_message_reads` على السيرفر ليتطابق العدّاد بين الآيفون
+    /// والأندرويد لنفس الحساب (طلب المالك). نسخة محلية في UserDefaults تُستخدم
+    /// ريثما تصل بيانات السيرفر، ولحفظ ما عُلِّم بلا اتصال حتى تُرفع لاحقاً.
     @Published private(set) var readContactMessageIds: Set<UUID> = AdminRequestViewModel.loadReadIds()
 
     private static let readIdsKey = "readContactMessageIds_v1"
+    /// معرّفات عُلِّمت مقروءة ولم تُرفع للسيرفر بعد (انقطاع اتصال) — تُرفع عند أول جلب ناجح
+    private var unsyncedReadIds: Set<UUID> = AdminRequestViewModel.loadUnsyncedIds()
+    private static let unsyncedIdsKey = "unsyncedContactReadIds_v1"
 
-    private static func loadReadIds() -> Set<UUID> {
-        guard let arr = UserDefaults.standard.array(forKey: readIdsKey) as? [String] else { return [] }
+    private struct ContactMessageRead: Encodable {
+        let message_id: String
+        let member_id: String
+    }
+
+    private struct ContactMessageReadRow: Decodable {
+        let message_id: UUID
+    }
+
+    private static func loadIds(_ key: String) -> Set<UUID> {
+        guard let arr = UserDefaults.standard.array(forKey: key) as? [String] else { return [] }
         return Set(arr.compactMap(UUID.init(uuidString:)))
     }
 
+    private static func loadReadIds() -> Set<UUID> { loadIds(readIdsKey) }
+    private static func loadUnsyncedIds() -> Set<UUID> { loadIds(unsyncedIdsKey) }
+
     private func persistReadIds() {
-        let arr = readContactMessageIds.map { $0.uuidString }
-        UserDefaults.standard.set(arr, forKey: Self.readIdsKey)
+        UserDefaults.standard.set(readContactMessageIds.map { $0.uuidString }, forKey: Self.readIdsKey)
+        UserDefaults.standard.set(unsyncedReadIds.map { $0.uuidString }, forKey: Self.unsyncedIdsKey)
     }
 
-    /// تعليم رسالة كمقروءة محلياً. يرفع تحديث للـ UI تلقائياً.
+    /// جلب حالة «مقروء» من السيرفر، ورفع ما تبقّى محلياً بلا مزامنة
+    func fetchContactMessageReads() async {
+        guard let memberId = currentUser?.id else { return }
+        if !unsyncedReadIds.isEmpty { await uploadReads(Array(unsyncedReadIds), memberId: memberId) }
+        do {
+            let rows: [ContactMessageReadRow] = try await supabase
+                .from("admin_message_reads")
+                .select("message_id")
+                .eq("member_id", value: memberId.uuidString)
+                .execute()
+                .value
+            readContactMessageIds = Set(rows.map { $0.message_id }).union(unsyncedReadIds)
+            persistReadIds()
+        } catch {
+            Log.fetchError("فشل جلب حالة قراءة الرسائل", error)
+        }
+    }
+
+    /// رفع صفوف «مقروء» — ما يفشل يبقى في `unsyncedReadIds` لمحاولة لاحقة
+    private func uploadReads(_ ids: [UUID], memberId: UUID) async {
+        guard !ids.isEmpty else { return }
+        let rows = ids.map { ContactMessageRead(message_id: $0.uuidString, member_id: memberId.uuidString) }
+        do {
+            try await supabase
+                .from("admin_message_reads")
+                .upsert(rows, onConflict: "message_id,member_id")
+                .execute()
+            unsyncedReadIds.subtract(ids)
+            persistReadIds()
+        } catch {
+            unsyncedReadIds.formUnion(ids)
+            persistReadIds()
+            Log.error("فشل حفظ حالة قراءة الرسائل: \(error.localizedDescription)")
+        }
+    }
+
+    /// تعليم رسالة كمقروءة — تظهر فوراً ثم تُحفظ على السيرفر
     func markContactMessageRead(_ id: UUID) {
         guard !readContactMessageIds.contains(id) else { return }
         readContactMessageIds.insert(id)
+        unsyncedReadIds.insert(id)
         persistReadIds()
+        guard let memberId = currentUser?.id else { return }
+        Task { await uploadReads([id], memberId: memberId) }
     }
 
-    /// تعليم كل الرسائل الحالية كمقروءة.
+    /// تعليم كل الرسائل الحالية كمقروءة
     func markAllContactMessagesRead() {
-        let allIds = Set(contactMessages.map { $0.id })
-        guard !allIds.isSubset(of: readContactMessageIds) else { return }
-        readContactMessageIds.formUnion(allIds)
+        let newIds = Set(contactMessages.map { $0.id }).subtracting(readContactMessageIds)
+        guard !newIds.isEmpty else { return }
+        readContactMessageIds.formUnion(newIds)
+        unsyncedReadIds.formUnion(newIds)
         persistReadIds()
+        guard let memberId = currentUser?.id else { return }
+        Task { await uploadReads(Array(newIds), memberId: memberId) }
     }
 
     /// عدد رسائل التواصل غير المقروءة (لم يضغط عليها المدير بعد).
@@ -333,6 +392,7 @@ class AdminRequestViewModel: ObservableObject {
                 .execute()
                 .value
             self.contactMessages = requests
+            await fetchContactMessageReads()
         } catch {
             Log.fetchError("فشل جلب رسائل التواصل", error)
         }

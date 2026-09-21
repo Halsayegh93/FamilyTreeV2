@@ -308,7 +308,7 @@ struct AdminReportsView: View {
                 cleanupShareState()
             }
         }
-        .alert("خطأ", isPresented: $showErrorAlert) {
+        .dsAlert("خطأ", isPresented: $showErrorAlert) {
             Button("موافق", role: .cancel) {}
         } message: {
             Text(errorMessage)

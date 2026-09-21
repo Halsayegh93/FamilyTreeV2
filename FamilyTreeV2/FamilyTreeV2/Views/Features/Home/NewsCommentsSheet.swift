@@ -160,7 +160,7 @@ struct NewsCommentsSheet: View {
                 await newsVM.fetchNewsComments(for: [news.id])
                 isLoadingComments = false
             }
-            .alert(L10n.t("إبلاغ عن تعليق", "Report Comment"), isPresented: Binding(
+            .dsAlert(L10n.t("إبلاغ عن تعليق", "Report Comment"), isPresented: Binding(
                 get: { reportCommentId != nil },
                 set: { if !$0 { reportCommentId = nil } }
             )) {
@@ -186,8 +186,8 @@ struct NewsCommentsSheet: View {
                 Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا التعليق.",
                            "Enter a reason; it will be sent to the admins to review this comment."))
             }
-            .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
             }

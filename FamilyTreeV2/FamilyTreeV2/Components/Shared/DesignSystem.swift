@@ -616,8 +616,13 @@ struct DSCard<Content: View>: View {
                         .blur(radius: 50)
                         .offset(x: -60, y: 100)
                 }
+                // الدوائر الزخرفية تخرج عن حدود البطاقة — كانت تلتقط اللمس فوق
+                // أزرار البطاقة المجاورة (مثل «إزالة» آخر جهاز في كل عضو)
+                .allowsHitTesting(false)
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            // منطقة اللمس = حدود البطاقة فقط
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             .dsCardShadow()
     }
 }
@@ -1367,13 +1372,13 @@ struct DSApproveRejectButtons: View {
                 .dsGlowShadow()
             }
         }
-        .alert(L10n.t("تأكيد الموافقة", "Confirm Approval"), isPresented: $showApproveConfirm) {
+        .dsAlert(L10n.t("تأكيد الموافقة", "Confirm Approval"), isPresented: $showApproveConfirm) {
             Button(approveTitle) { debouncedApprove() }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
             Text(L10n.t("هل تريد المتابعة؟", "Do you want to proceed?"))
         }
-        .alert(L10n.t("تأكيد الرفض", "Confirm Rejection"), isPresented: $showRejectConfirm) {
+        .dsAlert(L10n.t("تأكيد الرفض", "Confirm Rejection"), isPresented: $showRejectConfirm) {
             Button(rejectTitle, role: .destructive) { debouncedReject() }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {

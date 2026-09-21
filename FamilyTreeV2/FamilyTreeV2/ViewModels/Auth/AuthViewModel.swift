@@ -24,9 +24,42 @@ class LanguageManager: ObservableObject {
         }
     }
 
+    /// هل اختار المستخدم لغته بنفسه؟ — إن لا، يتبع لغة التطبيق الرسمية
+    /// التي يحددها المالك من «إعدادات التطبيق» (طلب المالك)
+    @AppStorage("languageChosenByUser") var languageChosenByUser: Bool = false
+
     static let shared = LanguageManager()
 
-    init() {}
+    init() {
+        // من اختار لغته قبل إضافة «اللغة الرسمية»: القيمة محفوظة في الجهاز
+        // (AppStorage لا يكتبها إلا عند اختيار المستخدم) — نعتبرها اختياره
+        // حتى لا ترجع لغته للعربي بالغلط عند أول تشغيل
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "languageChosenByUser") == nil,
+           defaults.object(forKey: "selectedLanguage") != nil {
+            defaults.set(true, forKey: "languageChosenByUser")
+        }
+    }
+
+    /// تطبيق اللغة الرسمية على من لم يختر لغته بنفسه
+    func applyOfficialLanguage(_ language: String?) {
+        guard !languageChosenByUser,
+              let language, ["ar", "en"].contains(language),
+              language != selectedLanguage else { return }
+        selectedLanguage = language
+    }
+
+    /// اختيار المستخدم من «الإعدادات» — يثبّت لغته ولا تغيّرها اللغة الرسمية بعدها
+    func chooseLanguage(_ language: String) {
+        languageChosenByUser = true
+        selectedLanguage = language
+    }
+
+    /// الرجوع للغة التطبيق الرسمية
+    func followOfficialLanguage(_ official: String?) {
+        languageChosenByUser = false
+        applyOfficialLanguage(official)
+    }
 
     static var isArabic: Bool {
         shared.selectedLanguage == "ar"
@@ -129,11 +162,28 @@ class AuthViewModel: ObservableObject {
     }
 
     /// هل يقدر يرفض الطلبات (مالك أو مدير أو مراقب) — المشرف يقدر يوافق بس ما يرفض
-    var canRejectRequests: Bool {
-        currentUser?.role == .owner || currentUser?.role == .admin || currentUser?.role == .monitor
-    }
+    // MARK: - الصلاحيات حسب مجال الدور (تحديث 2026-09-21)
+    //
+    // كل دور له مجال واضح بدل درجات متداخلة:
+    // • المراقب  → الشجرة والأعضاء
+    // • المشرف   → المحتوى والبلاغات (المراجعة والإخفاء والحذف — لا الاعتماد)
+    // • الاعتماد النهائي للمحتوى (أخبار/مكتبة/مشاريع/ديوانيات) للإدارة فقط
 
-    /// تغيير أدوار الأعضاء (ترقية/تنزيل) — المالك فقط
+    /// مجال الشجرة والأعضاء — الإدارة + المراقب
+    var canModerateTree: Bool { isAdmin || currentUser?.role == .monitor }
+
+    /// مجال المحتوى والبلاغات — الإدارة + المشرف
+    var canModerateContent: Bool { isAdmin || currentUser?.role == .supervisor }
+
+    /// اعتماد المحتوى (أخبار، مكتبة، مشاريع، ديوانيات) — الإدارة فقط
+    var canApproveContent: Bool { isAdmin }
+
+    /// قبول طلبات الشجرة والأعضاء (انضمام، وفاة، إضافة ابن، رقم/اسم، تعديلات الشجرة)
+    var canApproveTreeRequests: Bool { canModerateTree }
+
+    /// رفض الطلبات — نفس من يقبلها في مجاله
+    var canRejectRequests: Bool { canModerateTree }
+
     var canManageRoles: Bool { isOwner }
 
     /// حذف أعضاء نهائياً — مدير + مالك
@@ -143,7 +193,6 @@ class AuthViewModel: ObservableObject {
     var canManageSettings: Bool { isOwner }
 
     /// رؤية شاشة "إعدادات النظام" (قراءة فقط للمدير، تعديل للمالك)
-    /// المدير يدخل ويتصفّح بدون تعديل.
     var canViewSystemSettings: Bool { isAdmin }
 
     /// أرقام محظورة — المالك فقط
@@ -152,38 +201,35 @@ class AuthViewModel: ObservableObject {
     /// إدارة الأجهزة — المالك فقط
     var canManageDevices: Bool { isOwner }
 
-    /// تعديل بيانات أعضاء آخرين — مدير + مراقب + مالك (المراقب محدود)
-    var canEditMembers: Bool { isAdmin || currentUser?.role == .monitor }
+    /// تعديل بيانات أعضاء آخرين — مجال الشجرة
+    var canEditMembers: Bool { canModerateTree }
 
-    /// حذف أخبار — مدير + مراقب + مالك
-    var canDeleteNews: Bool { isAdmin || currentUser?.role == .monitor }
+    /// حذف أخبار — مجال المحتوى
+    var canDeleteNews: Bool { canModerateContent }
 
     /// إرسال إشعارات يدوية — مدير + مالك
     var canSendNotifications: Bool { isAdmin }
 
-    /// تسجيل عضو جديد مباشرة — مدير + مشرف + مالك
-    var canRegisterMembers: Bool { isAdmin }   // المالك + المدير فقط (كان canModerate يشمل المراقب/المشرف)
+    /// تسجيل عضو جديد مباشرة — مدير + مالك
+    var canRegisterMembers: Bool { isAdmin }
 
-    var canAutoPublishNews: Bool {
-        canModerate
-    }
+    /// نشر أخبار فريق الإدارة بلا مراجعة
+    var canAutoPublishNews: Bool { canModerate }
 
-    // MARK: - صلاحيات المحتوى
-
-    /// حذف تعليقات الأعضاء — مدير + مراقب + مالك
-    var canDeleteComments: Bool { isAdmin || currentUser?.role == .monitor }
+    /// حذف تعليقات — مجال المحتوى
+    var canDeleteComments: Bool { canModerateContent }
 
     /// تجميد حسابات الأعضاء — مدير + مالك
     var canFreezeMembers: Bool { isAdmin }
 
-    /// حذف قصص الأعضاء — مدير + مراقب + مالك
-    var canDeleteStories: Bool { isAdmin || currentUser?.role == .monitor }
+    /// حذف قصص الأعضاء — مجال المحتوى
+    var canDeleteStories: Bool { canModerateContent }
 
     /// حذف ديوانيات — مدير + مالك
     var canDeleteDiwaniyas: Bool { isAdmin }
 
-    /// حذف صور الأعضاء — مدير + مراقب + مالك
-    var canDeletePhotos: Bool { isAdmin || currentUser?.role == .monitor }
+    /// حذف صور الأعضاء — مجال المحتوى
+    var canDeletePhotos: Bool { canModerateContent }
 
     // MARK: - Schema Error Helpers (delegated to ErrorHelper)
 

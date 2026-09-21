@@ -157,7 +157,7 @@ struct MainTabView: View {
                 showNotificationAlert = true
             }
         }
-        .alert(
+        .dsAlert(
             L10n.t("تفعيل الإشعارات", "Enable Notifications"),
             isPresented: $showNotificationAlert
         ) {

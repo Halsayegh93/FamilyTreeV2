@@ -76,7 +76,7 @@ struct AdminTreeEditRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
                 }
             }
-            .alert(
+            .dsAlert(
                 L10n.t("سبب الرفض", "Rejection Reason"),
                 isPresented: $showRejectAlert
             ) {

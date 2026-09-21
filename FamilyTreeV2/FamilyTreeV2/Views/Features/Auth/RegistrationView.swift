@@ -71,18 +71,18 @@ struct RegistrationView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(
+        .dsAlert(
             L10n.t("تعذّر التسجيل", "Registration Failed"),
             isPresented: Binding(
                 get: { authVM.registrationError != nil },
                 set: { if !$0 { authVM.registrationError = nil } }
             )
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) { authVM.registrationError = nil }
+            Button(L10n.t("حسناً", "OK")) { authVM.registrationError = nil }
         } message: {
             Text(authVM.registrationError ?? "")
         }
-        .alert(L10n.t("اسم العائلة", "Family name"), isPresented: $showManualFamily) {
+        .dsAlert(L10n.t("اسم العائلة", "Family name"), isPresented: $showManualFamily) {
             TextField(L10n.t("مثال: الصايغ", "e.g. Al-Sayegh"), text: $manualFamilyText)
             Button(L10n.t("حفظ", "Save")) {
                 let t = manualFamilyText.trimmingCharacters(in: .whitespaces)

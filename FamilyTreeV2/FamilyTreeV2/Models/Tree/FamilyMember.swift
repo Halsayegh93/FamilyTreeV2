@@ -245,6 +245,16 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     /// الاسم الكامل + العائلة — يُستخدم حيث يظهر الاسم للعرض
     var displayFullName: String { withFamilySuffix(fullName) }
 
+    /// الاسم الخماسي: الأول + الثاني + الثالث + الرابع + العائلة (الأخير)
+    /// يُستخدم في تفاصيل عناصر المكتبة (طلب المالك)
+    var fivePartName: String {
+        let parts = nameWordsWithFamily
+        guard parts.count > 5 else { return parts.isEmpty ? fullName : parts.joined(separator: " ") }
+        let firstFour = parts.prefix(4).joined(separator: " ")
+        let family = parts.last ?? ""
+        return "\(firstFour) \(family)"
+    }
+
     /// الاسم الرباعي: الأول + الثاني + الثالث + العائلة (الأخير)
     /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح عبدالحميد الصايغ"
     /// أوضح من الاسم الأول، أقصر من الكامل، يحتوي اسم العائلة للتمييز.

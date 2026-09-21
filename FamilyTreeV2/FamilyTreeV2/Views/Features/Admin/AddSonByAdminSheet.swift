@@ -106,11 +106,11 @@ struct AddSonByAdminSheet: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(
+        .dsAlert(
             L10n.t("لا يوجد اتصال بالإنترنت", "No Internet Connection"),
             isPresented: $showOfflineAlert
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(L10n.t(
                 "لا يمكن \(isEditMode ? "تعديل" : "إضافة") الابن بدون اتصال بالإنترنت. تأكّد من الاتصال ثم حاول مجدّداً.",

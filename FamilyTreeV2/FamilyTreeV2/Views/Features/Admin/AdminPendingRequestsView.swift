@@ -166,7 +166,7 @@ struct AdminPendingRequestsView: View {
             PendingMemberPhoneSheet(member: member)
                 .environmentObject(adminRequestVM)
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الدمج", "Confirm Merge"),
             isPresented: $showMergeConfirm
         ) {
@@ -203,7 +203,7 @@ struct AdminPendingRequestsView: View {
                 ))
             }
         }
-        .alert(
+        .dsAlert(
             {
                 if case .failure = adminRequestVM.mergeResult {
                     return L10n.t("خطأ في الدمج", "Merge Error")
@@ -212,7 +212,7 @@ struct AdminPendingRequestsView: View {
             }(),
             isPresented: $showMergeSuccess
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {
+            Button(L10n.t("حسناً", "OK")) {
                 adminRequestVM.mergeResult = nil
             }
         } message: {
@@ -223,14 +223,14 @@ struct AdminPendingRequestsView: View {
                 await memberVM.fetchAllMembers()
             }
         }
-        .alert(
+        .dsAlert(
             L10n.t("خطأ", "Error"),
             isPresented: Binding(
                 get: { adminRequestVM.errorMessage != nil },
                 set: { if !$0 { adminRequestVM.errorMessage = nil } }
             )
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {
+            Button(L10n.t("حسناً", "OK")) {
                 adminRequestVM.errorMessage = nil
             }
         } message: {
@@ -870,7 +870,7 @@ struct LinkToExistingMemberSheet: View {
             .animation(DS.Anim.snappy, value: selectedMember?.id)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الربط", "Confirm Link"),
             isPresented: $showConfirm
         ) {

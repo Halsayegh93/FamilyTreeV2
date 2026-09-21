@@ -84,8 +84,8 @@ struct EditNewsView: View {
                 onConfirm: { Task { await submitEdits() } },
                 onCancel: { dismiss() }
             )
-            .alert(L10n.t("تعذر التعديل", "Edit Failed"), isPresented: $showEditErrorAlert) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            .dsAlert(L10n.t("تعذر التعديل", "Edit Failed"), isPresented: $showEditErrorAlert) {
+                Button(L10n.t("حسناً", "OK")) {}
             } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء تعديل الخبر.", "An error occurred while updating.")) }
             .onChange(of: pickerItems) { items in
                 guard !items.isEmpty else { return }

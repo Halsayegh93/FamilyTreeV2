@@ -132,7 +132,7 @@ struct AdminInboxView: View {
                 }
             }
         }
-        .alert(L10n.t("حذف الرسائل", "Delete Messages"), isPresented: $showDeleteConfirm) {
+        .dsAlert(L10n.t("حذف الرسائل", "Delete Messages"), isPresented: $showDeleteConfirm) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 Task { await deleteSelected() }
             }
@@ -141,7 +141,7 @@ struct AdminInboxView: View {
             Text(L10n.t("هل تريد حذف \(selectedIDs.count) رسالة؟ لا يمكن التراجع.",
                         "Delete \(selectedIDs.count) message(s)? This can't be undone."))
         }
-        .alert(L10n.t("حذف الرسالة", "Delete Message"), isPresented: Binding(
+        .dsAlert(L10n.t("حذف الرسالة", "Delete Message"), isPresented: Binding(
             get: { messageToDelete != nil },
             set: { if !$0 { messageToDelete = nil } }
         )) {

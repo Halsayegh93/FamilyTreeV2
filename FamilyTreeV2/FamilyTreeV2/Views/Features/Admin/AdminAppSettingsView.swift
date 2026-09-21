@@ -33,28 +33,40 @@ struct AdminAppSettingsView: View {
                     systemInfoSection
                         .padding(.top, canEdit ? DS.Spacing.md : 0)
 
+                    // لغة التطبيق الرسمية
+                    languageSection
+                        .disabled(!canEdit)
+
+                    // التصنيفات — الأخبار والمكتبة
+                    categoriesSection
+
                     // التسجيل والعضوية
                     registrationSection
+                        .disabled(!canEdit)
 
                     // الأخبار والمحتوى
                     contentSection
+                        .disabled(!canEdit)
 
                     // الميزات
                     featuresSection
+                        .disabled(!canEdit)
 
                     // عداد التعديل
                     cooldownSection
+                        .disabled(!canEdit)
 
                     // الأمان
                     securitySection
+                        .disabled(!canEdit)
 
                     // إعادة تعيين — يبقى مرئيّ بس مُعطّل لغير المالك
                     resetSection
+                        .disabled(!canEdit)
                     }
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }
-                .disabled(!canEdit)
             }
         }
         .navigationTitle(L10n.t("إعدادات التطبيق", "App Settings"))
@@ -63,7 +75,7 @@ struct AdminAppSettingsView: View {
         .task {
             await appSettingsVM.fetchSettings()
         }
-        .alert(
+        .dsAlert(
             L10n.t("إعادة تعيين", "Reset Settings"),
             isPresented: $showResetConfirmation
         ) {
@@ -79,7 +91,7 @@ struct AdminAppSettingsView: View {
                 "All settings will be restored to default values"
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تصفير العداد", "Reset Cooldown"),
             isPresented: $showResetCooldownAlert
         ) {
@@ -96,6 +108,86 @@ struct AdminAppSettingsView: View {
     }
 
     // MARK: - Registration & Membership
+    // MARK: - التصنيفات (طلب المالك)
+    private var categoriesSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("التصنيفات", "Categories"),
+                icon: "tag.fill",
+                iconColor: DS.Color.accent
+            )
+            NavigationLink {
+                CategoriesManagerView()
+                    .environmentObject(authVM)
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب",
+                                    "Name, icon, colour, hide and order"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.lg)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - لغة التطبيق الرسمية (طلب المالك)
+    //
+    // تُطبَّق على كل مستخدم لم يختر لغته بنفسه. من يغيّر اللغة من «الإعدادات»
+    // تبقى لغته هو.
+    private var languageSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("لغة التطبيق الرسمية", "Official App Language"),
+                icon: "character.bubble.fill",
+                iconColor: DS.Color.secondary
+            )
+
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Picker("", selection: Binding(
+                    get: { appSettingsVM.settings.defaultLanguage ?? "ar" },
+                    set: { newValue in
+                        Task {
+                            await appSettingsVM.updateSetting(
+                                "default_language",
+                                value: newValue,
+                                updatedBy: authVM.currentUser?.id
+                            )
+                        }
+                    }
+                )) {
+                    Text("العربية").tag("ar")
+                    Text("English").tag("en")
+                }
+                .pickerStyle(.segmented)
+
+                Text(L10n.t(
+                    "لغة التطبيق لكل الأعضاء. من يغيّر لغته من «الإعدادات» تبقى لغته هو.",
+                    "The app language for all members. Anyone who picks a language in Settings keeps their own."
+                ))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.lg)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
     private var registrationSection: some View {
         DSCard(padding: 0) {
             DSSectionHeader(

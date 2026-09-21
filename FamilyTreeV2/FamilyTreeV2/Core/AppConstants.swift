@@ -96,6 +96,10 @@ enum NotificationKind: String {
     case diwaniyaPending = "diwaniya_pending"
     case diwaniyaApproved = "diwaniya_approved"
     case diwaniyaRejected = "diwaniya_rejected"
+    // مكتبة العائلة (الأرشيف)
+    case archivePending = "archive_pending"
+    case archiveApproved = "archive_approved"
+    case archiveRejected = "archive_rejected"
     // مشاريع
     case projectPending = "project_pending"
     case projectApproved = "project_approved"

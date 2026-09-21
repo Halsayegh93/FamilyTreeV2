@@ -1,12 +1,18 @@
 import SwiftUI
 
 enum NewsTypeHelper {
-    static let allTypes = ["خبر", "إعلان", "زواج", "مولود", "وفاة", "تهنئة", "دعوة", "تذكير", "تصويت"]
+    /// كل الأنواع — من «التصنيفات» في إعدادات التطبيق، وإلا القائمة المدمجة
+    static var allTypes: [String] {
+        CategoryStore.activeKeys(.news) ?? ["خبر", "إعلان", "زواج", "مولود", "وفاة", "تهنئة", "دعوة", "تذكير", "تصويت"]
+    }
 
-    /// الأنواع الأساسية المعروضة عند إضافة خبر جديد
-    static let mainTypes = ["خبر", "إعلان", "زواج", "مولود", "وفاة", "تصويت"]
+    /// الأنواع المعروضة عند إضافة خبر جديد — الظاهرة فقط (المخفية لا تُعرض)
+    static var mainTypes: [String] {
+        CategoryStore.activeKeys(.news) ?? ["خبر", "إعلان", "زواج", "مولود", "وفاة", "تصويت"]
+    }
 
     static func color(for type: String) -> Color {
+        if let custom = CategoryStore.lookup(.news, type) { return custom.color }
         switch type {
         case "وفاة": return DS.Color.newsDeath
         case "زواج": return DS.Color.newsWedding
@@ -21,6 +27,7 @@ enum NewsTypeHelper {
     }
 
     static func icon(for type: String) -> String {
+        if let custom = CategoryStore.lookup(.news, type) { return custom.iconKey }
         switch type {
         case "وفاة": return "heart.slash.fill"
         case "زواج": return "heart.fill"
@@ -35,6 +42,7 @@ enum NewsTypeHelper {
     }
 
     static func displayName(for type: String) -> String {
+        if let custom = CategoryStore.lookup(.news, type) { return custom.displayName }
         switch type {
         case "خبر": return L10n.t("خبر", "News")
         case "زواج": return L10n.t("زواج", "Wedding")

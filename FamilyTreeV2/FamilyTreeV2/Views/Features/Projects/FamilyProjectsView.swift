@@ -114,7 +114,7 @@ struct FamilyProjectsView: View {
             L10n.t("تم إرسال المشروع", "Project Submitted"),
             isPresented: $showAddedAlert
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(L10n.t(
                 "تم إرسال مشروعك للمراجعة. سيظهر بعد موافقة الإدارة.",
@@ -161,7 +161,7 @@ struct FamilyProjectsView: View {
                        "Enter a reason; it will be sent to the admins to review this project."))
         }
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
         }
@@ -233,7 +233,7 @@ struct FamilyProjectsView: View {
                         .buttonStyle(DSScaleButtonStyle())
                         // زر قائمة ظاهر — كـ overlay على الزر نفسه. الإدارة: تحكّم
                         // كامل، غيرهم: إبلاغ فقط (لغير مشاريعهم).
-                        .overlay(alignment: .topLeading) {
+                        .overlay(alignment: .topTrailing) {
                             if !selectionMode && projectMenuHasActions(for: project) {
                                 Menu {
                                     projectActionsMenu(for: project)
@@ -267,6 +267,24 @@ struct FamilyProjectsView: View {
     @ViewBuilder
     private func projectActionsMenu(for project: Project) -> some View {
         if authVM.isAdmin {
+            // الموافقة/الرفض من زر النقاط مباشرة — للإدارة فقط (طلب المالك)
+            if project.approvalStatus == "pending" {
+                Button {
+                    Task {
+                        if let approverId = authVM.currentUser?.id {
+                            await projectsVM.approveProject(id: project.id, approvedBy: approverId)
+                        }
+                    }
+                } label: {
+                    Label(L10n.t("موافقة", "Approve"), systemImage: "checkmark.circle.fill")
+                }
+                Button {
+                    Task { await projectsVM.rejectProject(id: project.id) }
+                } label: {
+                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                }
+                Divider()
+            }
             Button {
                 projectToEdit = project
             } label: {
@@ -310,12 +328,11 @@ struct FamilyProjectsView: View {
     private var cardMenuBadge: some View {
         Image(systemName: "ellipsis")
             .font(DS.Font.scaled(13, weight: .black))
-            .foregroundColor(.white)
-            .frame(width: 28, height: 28)
-            .background(Circle().fill(Color.black.opacity(0.35)))
-            .dsGlass(Circle())
-            .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-            .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 1)
+            .foregroundColor(DS.Color.textSecondary)
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(DS.Color.surface))
+            .overlay(Circle().strokeBorder(DS.Color.textTertiary.opacity(0.35), lineWidth: 1))
+            .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)
     }
 
     private var currentItems: [Project] {
@@ -445,56 +462,46 @@ struct FamilyProjectsView: View {
         )
     }
 
-    // MARK: - Project Card (التصميم الجديد)
+    // MARK: - Project Card — بطاقة بغلاف مقوّس وشعار بارز (نفس روح صفحة المشروع)
 
     private func projectCard(_ project: Project) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            // معاينة بصرية — صورة شعار أو placeholder مع gradient
-            ZStack {
-                if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
-                    CachedAsyncImage(url: url) { img in
-                        img.resizable().scaledToFill()
-                    } placeholder: {
-                        ProgressView().tint(DS.Color.primary)
-                    }
-                } else {
-                    projectPlaceholderCover
-                }
-            }
-            .frame(width: 96, height: 96)
-            .clipped()
-            .clipShape(Circle())
-            .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, DS.Spacing.xs)
+        VStack(alignment: .leading, spacing: 0) {
+            // غلاف صغير بخلفية قسم المشاريع — بحافة مقوّسة
+            ProjectSectionBackdrop(symbolSize: 16)
+            .frame(height: cardCoverHeight)
+            .frame(maxWidth: .infinity)
+            .clipShape(ProjectCoverArc(depth: 18))
 
-            // العنوان والمالك
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(project.title)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.plex(13, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 4) {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.scaled(10, weight: .bold))
                     Text(project.ownerName)
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(DS.Font.plex(11, weight: .semibold))
                         .lineLimit(1)
                 }
                 .foregroundColor(DS.Color.textSecondary)
-            }
 
-            // مؤشّر روابط التواصل (لو فيه)
-            if project.hasSocialLinks {
-                socialIndicators(project: project)
-                    .padding(.top, 2)
+                if project.hasSocialLinks {
+                    socialIndicators(project: project)
+                        .padding(.top, 3)
+                }
             }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.top, cardLogoSize / 2 + 2)
+            .padding(.bottom, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DS.Spacing.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(alignment: .top) { cardLogo(project).offset(y: cardCoverHeight - cardLogoSize / 2 + 2) }
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(project.approvalStatus == "pending"
@@ -502,29 +509,54 @@ struct FamilyProjectsView: View {
                         : DS.Color.primary.opacity(0.08),
                         lineWidth: 1)
         )
-        .overlay(alignment: .topTrailing) {
+        .overlay(alignment: .topLeading) {
             if project.approvalStatus == "pending" {
-                HStack(spacing: 3) {
-                    Image(systemName: "clock.fill").font(DS.Font.scaled(11, weight: .bold))
-                    Text(L10n.t("بانتظار", "Pending")).font(DS.Font.scaled(11, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 6).padding(.vertical, 3)
-                .background(Capsule().fill(DS.Color.warning))
-                .padding(DS.Spacing.sm)
+                statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warning)
             } else if project.isHidden {
-                HStack(spacing: 3) {
-                    Image(systemName: "eye.slash.fill").font(DS.Font.scaled(11, weight: .bold))
-                    Text(L10n.t("مخفي", "Hidden")).font(DS.Font.scaled(11, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 6).padding(.vertical, 3)
-                .background(Capsule().fill(DS.Color.textTertiary))
-                .padding(DS.Spacing.sm)
+                statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.textTertiary)
             }
         }
         .opacity(project.approvalStatus == "pending" || project.isHidden ? 0.85 : 1.0)
         .dsSubtleShadow()
+    }
+
+    private var cardCoverHeight: CGFloat { 74 }
+    private var cardLogoSize: CGFloat { 52 }
+
+    /// شعار المشروع على حافة الغلاف — مربّع بزوايا ناعمة بإطار بلون البطاقة
+    private func cardLogo(_ project: Project) -> some View {
+        Group {
+            if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
+                CachedAsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: { DS.Color.mutedBackground }
+            } else {
+                ZStack {
+                    DS.Color.primary.opacity(0.12)
+                    Image(systemName: "briefcase.fill")
+                        .font(DS.Font.scaled(18, weight: .bold))
+                        .foregroundColor(DS.Color.primary)
+                }
+            }
+        }
+        .frame(width: cardLogoSize, height: cardLogoSize)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(DS.Color.surface, lineWidth: 3)
+        )
+        .shadow(color: .black.opacity(0.15), radius: 5, x: 0, y: 2)
+    }
+
+    private func statusBadge(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon).font(DS.Font.scaled(10, weight: .bold))
+            Text(text).font(DS.Font.scaled(10, weight: .bold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 6).padding(.vertical, 3)
+        .background(Capsule().fill(color))
+        .padding(DS.Spacing.xs)
     }
 
     /// أيقونات المنصات اللي عنده روابط فيها — مؤشّر بصري سريع.

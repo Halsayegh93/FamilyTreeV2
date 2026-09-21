@@ -162,6 +162,10 @@ class ProjectsViewModel: ObservableObject {
     
     func approveProject(id: UUID, approvedBy: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true else {
+            Log.warning("اعتماد المشروع مرفوض: الصلاحية للإدارة فقط")
+            return
+        }
         // حفظ معلومات المشروع قبل الحذف المحلي للإشعار
         let projectInfo = pendingProjects.first(where: { $0.id == id })
 

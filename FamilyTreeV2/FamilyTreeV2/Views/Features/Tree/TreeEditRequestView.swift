@@ -106,7 +106,7 @@ struct TreeEditRequestView: View {
                         .foregroundColor(DS.Color.error)
                 }
             }
-            .alert(L10n.t("تم الإرسال", "Request Sent"), isPresented: $showSuccessAlert) {
+            .dsAlert(L10n.t("تم الإرسال", "Request Sent"), isPresented: $showSuccessAlert) {
                 Button(L10n.t("حسناً", "OK")) { dismiss() }
             } message: {
                 Text(L10n.t(
@@ -114,8 +114,8 @@ struct TreeEditRequestView: View {
                     "Your request has been sent to admin for review."
                 ))
             }
-            .alert(L10n.t("تعذر الإرسال", "Failed to Send"), isPresented: $showErrorAlert) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            .dsAlert(L10n.t("تعذر الإرسال", "Failed to Send"), isPresented: $showErrorAlert) {
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(errorMessage ?? L10n.t(
                     "تعذر إرسال الطلب. حاول مرة أخرى.",

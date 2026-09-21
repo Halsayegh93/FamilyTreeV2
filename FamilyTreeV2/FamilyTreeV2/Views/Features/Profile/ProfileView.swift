@@ -257,7 +257,7 @@ struct ProfileView: View {
                      ? L10n.t("لا زوجات مسجّلة للأب — أضف أمّاً جديدة", "No registered father's wives — add a new mother")
                      : L10n.t("اختر الأم من زوجات الأب، أو أضف جديدة", "Pick the mother from father's wives, or add new"))
             }
-            .alert(L10n.t("إضافة أم", "Add Mother"), isPresented: $showAddMotherName) {
+            .dsAlert(L10n.t("إضافة أم", "Add Mother"), isPresented: $showAddMotherName) {
                 TextField(L10n.t("اسم الأم", "Mother's name"), text: $newMotherName)
                 Button(L10n.t("إضافة", "Add")) {
                     let n = newMotherName
@@ -362,7 +362,9 @@ struct ProfileView: View {
                     .overlay(Capsule().stroke(user.roleColor.opacity(0.2), lineWidth: 1))
 
                     // عدد الأبناء (شجرة الرجال + شجرة النساء)
-                    let totalChildren = memberVM.currentMemberChildren.count + (isCurrentUserMarried ? memberVM.currentMemberWomenFamily.count : 0)
+                    // الأبناء الذكور لهم نسخة في شجرة النساء — نستثنيها حتى لا يُحسب
+                    // الابن مرتين عند الأعضاء المتزوجين (طلب المالك)
+                    let totalChildren = memberVM.currentMemberChildren.count + (isCurrentUserMarried ? memberVM.currentMemberWomenFamily.filter { $0.role != .child || $0.member.gender != "male" }.count : 0)
                     if totalChildren > 0 {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "person.2.fill")
@@ -1645,7 +1647,7 @@ struct WomanMemberEditSheet: View {
                 onConfirm: { save() },
                 onCancel: { dismiss() }
             )
-            .alert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
+            .dsAlert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         // كلها RPCs مقيّدة على النفس — تعمل لأي دور (الأب/الزوج نفسه).

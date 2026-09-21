@@ -152,40 +152,40 @@ struct AdminMemberDetailSheet: View {
             .onChange(of: memberVM.membersVersion) { _ in
                 setupLocalChildren()
             }
-            .alert(
+            .dsAlert(
                 L10n.t("اسم فارغ", "Empty Name"),
                 isPresented: $showEmptyNameAlert
             ) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t(
                     "لا يمكن حفظ عضو بدون اسم. اكتب الاسم أولاً.",
                     "Cannot save a member with an empty name. Please enter a name first."
                 ))
             }
-            .alert(
+            .dsAlert(
                 L10n.t("تعذر رفع الصورة", "Photo Upload Failed"),
                 isPresented: $showAvatarUploadError
             ) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t(
                     "تعذر رفع الصورة. تأكد من الاتصال ثم حاول مرة أخرى.",
                     "The photo could not be uploaded. Check your connection and try again."
                 ))
             }
-            .alert(
+            .dsAlert(
                 L10n.t("لا يوجد اتصال بالإنترنت", "No Internet Connection"),
                 isPresented: $showOfflineAlert
             ) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t(
                     "لا يمكن حفظ التعديلات بدون اتصال بالإنترنت. تأكد من الاتصال ثم حاول مجدداً.",
                     "Changes cannot be saved without an internet connection. Check your connection and try again."
                 ))
             }
-            .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
+            .dsAlert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         guard canDeleteMember else { return }
@@ -201,7 +201,7 @@ struct AdminMemberDetailSheet: View {
                     "Permanently delete \(member.fullName)? This cannot be undone."
                 ))
             }
-            .alert(L10n.t("حذف الابن", "Delete Child"), isPresented: Binding(
+            .dsAlert(L10n.t("حذف الابن", "Delete Child"), isPresented: Binding(
                 get: { childToDelete != nil },
                 set: { if !$0 { childToDelete = nil } }
             )) {
@@ -1308,7 +1308,7 @@ struct FatherPickerSheet: View {
                 }
             }
             .tint(DS.Color.primary)
-            .alert(
+            .dsAlert(
                 L10n.t("تأكيد اختيار الأب", "Confirm Father Selection"),
                 isPresented: Binding(
                     get: { pendingSelection != nil },
@@ -1330,7 +1330,7 @@ struct FatherPickerSheet: View {
                     "Link this member to \(member.fullName) as father?"
                 ))
             }
-            .alert(
+            .dsAlert(
                 L10n.t("إزالة ربط الأب", "Remove Father Link"),
                 isPresented: $showUnlinkConfirm
             ) {

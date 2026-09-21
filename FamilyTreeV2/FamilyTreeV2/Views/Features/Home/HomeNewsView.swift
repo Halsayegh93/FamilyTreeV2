@@ -123,8 +123,8 @@ struct HomeNewsView: View {
                     Task { await newsVM.setNewsFilter(search: "", type: nil) }
                 }
             }
-            .alert(L10n.t("تنبيه الأخبار", "News Alert"), isPresented: $showNewNewsAlert) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            .dsAlert(L10n.t("تنبيه الأخبار", "News Alert"), isPresented: $showNewNewsAlert) {
+                Button(L10n.t("حسناً", "OK")) {}
             } message: { Text(L10n.t("تمت إضافة \(newNewsCount) خبر جديد.", "\(newNewsCount) new post(s) added.")) }
 
         }
@@ -223,7 +223,7 @@ struct HomeNewsView: View {
                 .presentationDetents([.fraction(0.5), .medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .alert(L10n.t("حذف الخبر", "Delete Post"), isPresented: Binding(
+        .dsAlert(L10n.t("حذف الخبر", "Delete Post"), isPresented: Binding(
             get: { postToDelete != nil },
             set: { if !$0 { postToDelete = nil } }
         )) {
@@ -233,7 +233,7 @@ struct HomeNewsView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToDelete = nil }
         } message: { Text(L10n.t("حذف هذا الخبر؟", "Delete this post?")) }
-        .alert(L10n.t("إبلاغ عن الخبر", "Report Post"), isPresented: Binding(
+        .dsAlert(L10n.t("إبلاغ عن الخبر", "Report Post"), isPresented: Binding(
             get: { postToReport != nil },
             set: { if !$0 { postToReport = nil } }
         )) {

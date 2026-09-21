@@ -128,13 +128,13 @@ struct AdminRegisterMemberView: View {
         .navigationTitle(L10n.t("تسجيل عضو جديد", "Register New Member"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(L10n.t("تم التسجيل", "Registered"), isPresented: $showingSuccess) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) { dismiss() }
+        .dsAlert(L10n.t("تم التسجيل", "Registered"), isPresented: $showingSuccess) {
+            Button(L10n.t("حسناً", "OK")) { dismiss() }
         } message: {
             Text(L10n.t("تمت إضافة العضو بنجاح.", "Member added successfully."))
         }
-        .alert(L10n.t("خطأ", "Error"), isPresented: $showingError) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showingError) {
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(L10n.t("تعذر الإضافة. حاول مرة أخرى.", "Add failed. Try again."))
         }

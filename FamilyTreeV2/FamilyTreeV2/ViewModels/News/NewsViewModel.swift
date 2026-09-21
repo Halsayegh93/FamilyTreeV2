@@ -37,6 +37,8 @@ class NewsViewModel: ObservableObject {
     @Published var isLoadingNews = false
     @Published var isLoadingMoreNews = false
     @Published var hasMoreNews = true
+    /// إجمالي المنشورات التي يراها المستخدم — للعدّاد في الرئيسية (لا يقتصر على المحمَّل)
+    @Published var totalNewsCount: Int = 0
     @Published var newsLoadError: String?
     private var newsFetchRevision = UUID()
     private var feedSearch = ""
@@ -149,6 +151,27 @@ class NewsViewModel: ObservableObject {
         await fetchNewsPage(after: cursor, revision: revision)
     }
 
+    /// عدد كل المنشورات المرئية للمستخدم — العدّاد في الرئيسية كان يعدّ
+    /// المحمَّل فقط (٢٥ منشور حتى تنزل للأسفل) بدل الإجمالي (طلب المالك)
+    private func fetchTotalNewsCount() async {
+        do {
+            let query = supabase.from("news").select("id", head: true, count: .exact)
+            let response: PostgrestResponse<Void>
+            if canModerate {
+                response = try await query.execute()
+            } else if let uid = currentUser?.id {
+                response = try await query
+                    .or("approval_status.eq.approved,author_id.eq.\(uid.uuidString),posted_by.eq.\(uid.uuidString)")
+                    .execute()
+            } else {
+                response = try await query.eq("approval_status", value: "approved").execute()
+            }
+            if let count = response.count { totalNewsCount = count }
+        } catch {
+            Log.fetchError("تعذر حساب عدد المنشورات", error)
+        }
+    }
+
     private func fetchNewsPage(after cursor: NewsPost?, revision: UUID) async {
         guard NetworkMonitor.shared.isConnected else {
             newsLoadError = L10n.t("لا يوجد اتصال بالإنترنت. اسحب للتحديث أو أعد المحاولة.", "You're offline. Refresh or try again.")
@@ -175,6 +198,7 @@ class NewsViewModel: ObservableObject {
                 CacheManager.shared.save(Array(allNews.prefix(newsPageSize)), for: .news, in: cacheSession)
             }
             await fetchNewsStats(for: page.map(\.id))
+            if cursor == nil { await fetchTotalNewsCount() }
         } catch {
             guard revision == newsFetchRevision, !Task.isCancelled, !ErrorHelper.isCancellation(error) else { return }
             newsLoadError = L10n.t("تعذر تحميل الأخبار. أعد المحاولة.", "Couldn't load news. Please try again.")
@@ -740,7 +764,11 @@ class NewsViewModel: ObservableObject {
 
     func approveNewsPost(postId: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
-        guard canModerate, let approverId = currentUser?.id else { return }
+        // اعتماد الأخبار للإدارة فقط — مثل المكتبة والمشاريع (طلب المالك)
+        guard authVM?.isAdmin == true, let approverId = currentUser?.id else {
+            Log.warning("اعتماد الخبر مرفوض: الصلاحية للإدارة فقط")
+            return
+        }
         guard newsApprovalFeatureAvailable else { return }
 
         // حفظ authorId قبل الحذف المحلي

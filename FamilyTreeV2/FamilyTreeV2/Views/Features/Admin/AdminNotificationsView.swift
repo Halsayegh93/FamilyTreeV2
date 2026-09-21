@@ -101,8 +101,8 @@ struct AdminNotificationsView: View {
                 if let count { Text("\(count)").font(DS.Font.scaled(11, weight: .heavy)).opacity(0.8) }
             }
             .foregroundColor(active ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(height: 30)
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .frame(height: 26)
             .background(Capsule().fill(active ? DS.Color.primary : DS.Color.surface))
             .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: active ? 0 : 1))
         }
@@ -194,7 +194,7 @@ struct AdminNotificationsView: View {
                         }
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .frame(height: 44)
+                    .frame(height: 38)
                     .background(DS.Color.surface)
                     .cornerRadius(DS.Radius.md)
 
@@ -214,7 +214,7 @@ struct AdminNotificationsView: View {
                                 }
                                 TextEditor(text: $bodyText)
                                     .font(DS.Font.callout)
-                                    .frame(minHeight: 44, maxHeight: 72)
+                                    .frame(minHeight: 36, maxHeight: 56)
                                     .scrollContentBackground(.hidden)
                                     .background(Color.clear)
                                     .onChange(of: bodyText) { _ in
@@ -226,7 +226,8 @@ struct AdminNotificationsView: View {
                             .font(DS.Font.caption2)
                             .foregroundColor(bodyText.count > 450 ? DS.Color.error : DS.Color.textTertiary)
                     }
-                    .padding(DS.Spacing.md)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
                     .background(DS.Color.surface)
                     .cornerRadius(DS.Radius.md)
 
@@ -256,7 +257,8 @@ struct AdminNotificationsView: View {
                             }
                             .accessibilityLabel(L10n.t("إغلاق البحث", "Close search"))
                         }
-                        .padding(DS.Spacing.md)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
                         .background(DS.Color.surface)
                         .cornerRadius(DS.Radius.md)
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -465,8 +467,8 @@ struct AdminNotificationsView: View {
                  : L10n.t("سيصل إلى \(sendAudienceCount) عضو محدّد.",
                           "Will reach \(sendAudienceCount) selected members."))
         }
-        .alert(L10n.t("تعذّر الإرسال", "Send Failed"), isPresented: $showSendError) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        .dsAlert(L10n.t("تعذّر الإرسال", "Send Failed"), isPresented: $showSendError) {
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(L10n.t("حدث خطأ أثناء الإرسال. حاول مرة أخرى.", "Something went wrong. Please try again."))
         }
@@ -487,7 +489,7 @@ struct AdminNotificationsView: View {
     private func memberRow(member: FamilyMember) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: selectedMemberIds.contains(member.id) ? "checkmark.circle.fill" : "circle")
-                .font(DS.Font.scaled(20))
+                .font(DS.Font.scaled(17))
                 .foregroundStyle(
                     selectedMemberIds.contains(member.id)
                         ? AnyShapeStyle(DS.Color.gradientPrimary)
@@ -496,7 +498,7 @@ struct AdminNotificationsView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(member.displayFullName)
-                    .font(DS.Font.calloutBold)
+                    .font(DS.Font.plex(13, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
@@ -513,7 +515,8 @@ struct AdminNotificationsView: View {
 
             Spacer()
         }
-        .padding(DS.Spacing.md)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     // MARK: - Helpers

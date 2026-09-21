@@ -60,7 +60,7 @@ struct AdminBannedPhonesView: View {
         .sheet(isPresented: $showAddSheet) {
             AddBanSheet(authVM: authVM)
         }
-        .alert(
+        .dsAlert(
             t("إلغاء الحظر", "Remove Ban"),
             isPresented: Binding(
                 get: { phoneToUnban != nil },

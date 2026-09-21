@@ -61,13 +61,13 @@ struct EditChildSheet: View {
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(L10n.t("تم الحفظ", "Saved"), isPresented: $showSuccessAlert) {
+        .dsAlert(L10n.t("تم الحفظ", "Saved"), isPresented: $showSuccessAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
             Text(L10n.t("تم تحديث بيانات الابن بنجاح.", "Child info updated successfully."))
         }
-        .alert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
-            Button(L10n.t("موافق", "OK"), role: .cancel) {}
+        .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(errorMessage)
         }

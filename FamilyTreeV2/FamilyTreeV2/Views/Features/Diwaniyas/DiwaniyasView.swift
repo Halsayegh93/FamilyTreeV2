@@ -105,7 +105,7 @@ struct DiwaniyasView: View {
                     .environmentObject(viewModel)
                     .environmentObject(authVM)
             }
-            .alert(L10n.t("إبلاغ عن ديوانية", "Report Diwaniya"), isPresented: .init(
+            .dsAlert(L10n.t("إبلاغ عن ديوانية", "Report Diwaniya"), isPresented: .init(
                 get: { diwaniyaToReport != nil },
                 set: { if !$0 { diwaniyaToReport = nil } }
             )) {
@@ -132,12 +132,12 @@ struct DiwaniyasView: View {
                 Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذه الديوانية.",
                            "Enter a reason; it will be sent to the admins to review this diwaniya."))
             }
-            .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
             }
-            .alert(
+            .dsAlert(
                 L10n.t("حذف الديوانية", "Delete Diwaniya"),
                 isPresented: .init(
                     get: { diwaniyaToDelete != nil },
@@ -170,7 +170,7 @@ struct DiwaniyasView: View {
             }
             .onChange(of: viewModel.diwaniyas.count) { _ in rebuildFilteredDiwaniyas() }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .alert(L10n.t("خطأ", "Error"), isPresented: .init(
+            .dsAlert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.errorMessage = nil } }
             )) {
@@ -735,7 +735,7 @@ private struct AddDiwaniyaRequestView: View {
                 onConfirm: { Task { await submitDiwaniya() } },
                 onCancel: { dismiss() }
             )
-            .alert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
+            .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
                 Text(viewModel.errorMessage ?? L10n.t("فشل إضافة الديوانية", "Failed to add diwaniya."))
             }
         }
@@ -1154,7 +1154,7 @@ private struct EditDiwaniyaView: View {
                 onConfirm: { Task { await saveChanges() } },
                 onCancel: { dismiss() }
             )
-            .alert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
+            .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
                 Text(viewModel.errorMessage ?? L10n.t("فشل تحديث الديوانية", "Failed to update diwaniya."))
             }
         }

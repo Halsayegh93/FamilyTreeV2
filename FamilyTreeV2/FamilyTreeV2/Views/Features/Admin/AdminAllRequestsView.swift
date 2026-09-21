@@ -488,7 +488,7 @@ struct AdminAllRequestsView: View {
             diwaniyaVM.notificationVM = notificationVM
             diwaniyaVM.canModerate = authVM.canModerate
             diwaniyaVM.authVM = authVM
-            archiveVM.configure(authVM: authVM)
+            archiveVM.configure(authVM: authVM, notificationVM: notificationVM)
             // تحميل متوازي لجميع الطلبات — أسرع بكثير
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { @MainActor in await memberVM.fetchAllMembers() }
@@ -512,7 +512,7 @@ struct AdminAllRequestsView: View {
                 selectedTab = firstWithItems
             }
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الموافقة على الكل", "Confirm Approve All"),
             isPresented: $showBulkApproveChildrenConfirm
         ) {
@@ -533,15 +533,15 @@ struct AdminAllRequestsView: View {
                 "All pending child add requests (\(adminRequestVM.childAddRequests.count)) will be approved"
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تم", "Done"),
             isPresented: $showBulkApproveResult
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(bulkApproveResult ?? "")
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الموافقة الجماعية", "Confirm Bulk Approve"),
             isPresented: $showBulkApproveConfirm
         ) {
@@ -564,15 +564,15 @@ struct AdminAllRequestsView: View {
                 "This will approve \(selectedIds.count) requests."
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تم", "Done"),
             isPresented: $showBulkSelectApproveResult
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(bulkSelectApproveResult ?? "")
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الرفض الجماعي", "Confirm Bulk Reject"),
             isPresented: $showBulkRejectConfirm
         ) {
@@ -595,11 +595,11 @@ struct AdminAllRequestsView: View {
                 "This will reject \(selectedIds.count) requests."
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تم", "Done"),
             isPresented: $showBulkSelectRejectResult
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(bulkSelectRejectResult ?? "")
         }
@@ -614,7 +614,7 @@ struct AdminAllRequestsView: View {
                 )
                 .presentationDragIndicator(.visible)
                 .onDisappear { detailSheetHeight = 0 }
-                .alert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReason) {
+                .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReason) {
                     TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $rejectReasonText)
                     Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) {
                         if let d = rejectReasonDetail {
@@ -633,7 +633,7 @@ struct AdminAllRequestsView: View {
                 .environmentObject(adminRequestVM)
         }
         // رفض عبر السحب (الكل) — تأكيد + سبب الرفض
-        .alert(
+        .dsAlert(
             L10n.t("سبب الرفض", "Rejection Reason"),
             isPresented: Binding(
                 get: { swipeRejectDetail != nil },
@@ -653,7 +653,7 @@ struct AdminAllRequestsView: View {
             Text(L10n.t("سيُرفَض الطلب ويبقى في السجل.", "The request will be rejected and kept in the log."))
         }
         // حذف عبر السحب (الكل) — تأكيد نهائي بالمنتصف (Alert)
-        .alert(
+        .dsAlert(
             L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
             isPresented: Binding(
                 get: { swipeDeleteDetail != nil },
@@ -676,7 +676,7 @@ struct AdminAllRequestsView: View {
                 .environmentObject(memberVM)
                 .environmentObject(adminRequestVM)
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الدمج", "Confirm Merge"),
             isPresented: $showMergeConfirm
         ) {
@@ -713,7 +713,7 @@ struct AdminAllRequestsView: View {
                 ))
             }
         }
-        .alert(
+        .dsAlert(
             {
                 if case .failure = adminRequestVM.mergeResult {
                     return L10n.t("خطأ في الدمج", "Merge Error")
@@ -722,7 +722,7 @@ struct AdminAllRequestsView: View {
             }(),
             isPresented: $showMergeSuccess
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {
+            Button(L10n.t("حسناً", "OK")) {
                 adminRequestVM.mergeResult = nil
             }
         } message: {
@@ -784,6 +784,33 @@ struct AdminAllRequestsView: View {
     /// «مخفي» (healthHidden) أُزيل بطلب المستخدم — لا يُعتبر مشكلة صحة شجرة.
     private static let hiddenTabs: Set<RequestTab> = [.healthHidden]
 
+    // MARK: - صلاحية الإجراء حسب مجال الدور (تحديث الأدوار 2026-09-21)
+
+    /// تابات المحتوى — الاعتماد فيها للإدارة، والمراجعة والبلاغات للمشرف
+    private static let contentTabs: Set<RequestTab> = [.news, .projects, .archive, .diwaniya, .photos, .reports]
+
+    /// هل يقدر المستخدم الحالي يعتمد عناصر هذا التاب؟
+    private func canApprove(_ tab: RequestTab) -> Bool {
+        if tab == .reports { return authVM.canModerateContent }
+        return Self.contentTabs.contains(tab) ? authVM.canApproveContent : authVM.canApproveTreeRequests
+    }
+
+    /// هل يقدر يرفضها؟ (المشرف يتعامل مع البلاغات فقط)
+    private func canReject(_ tab: RequestTab) -> Bool {
+        if tab == .reports { return authVM.canModerateContent }
+        return Self.contentTabs.contains(tab) ? authVM.canApproveContent : authVM.canRejectRequests
+    }
+
+    /// التابات التي يراها هذا الدور — كل دور يشوف مجاله فقط
+    private func tabsForRole(_ tabs: [RequestTab]) -> [RequestTab] {
+        if authVM.isAdmin { return tabs }
+        if authVM.currentUser?.role == .supervisor {
+            return tabs.filter { $0 == .all || Self.contentTabs.contains($0) }
+        }
+        // المراقب: الشجرة والأعضاء
+        return tabs.filter { $0 == .all || !Self.contentTabs.contains($0) }
+    }
+
     private func recalculateCounts() {
         cachedPendingMembers = memberVM.allMembers.filter { $0.role == .pending }
         // إعادة بناء كاش صحة الشجرة كذلك (لعدّادات التابات والقوائم)
@@ -791,11 +818,12 @@ struct AdminAllRequestsView: View {
         // المجموع الكلّي عبر مصدر واحد للحقيقة — يطابق بادج «طلبات المراجعة» في لوحة الإدارة
         cachedTotalCount = Self.reviewRequestsTotal(
             memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
-            diwaniyaVM: diwaniyaVM, projectsVM: projectsVM
+            diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
+            pendingArchiveCount: pendingArchiveItems.count
         )
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
         // ما عدا التابات المخفية (مغطّاة بأقسام أخرى).
-        cachedAvailableTabs = RequestTab.allCases.filter { !Self.hiddenTabs.contains($0) }
+        cachedAvailableTabs = tabsForRole(RequestTab.allCases.filter { !Self.hiddenTabs.contains($0) })
     }
 
     /// مصدر واحد للحقيقة لعدد «طلبات المراجعة» — يستخدمه «الكل» داخل الطلبات وبادج لوحة الإدارة
@@ -806,7 +834,8 @@ struct AdminAllRequestsView: View {
         newsVM: NewsViewModel,
         adminRequestVM: AdminRequestViewModel,
         diwaniyaVM: DiwaniyasViewModel,
-        projectsVM: ProjectsViewModel
+        projectsVM: ProjectsViewModel,
+        pendingArchiveCount: Int = 0
     ) -> Int {
         let members = memberVM.allMembers
         let pending = members.filter { $0.role == .pending }.count
@@ -845,6 +874,7 @@ struct AdminAllRequestsView: View {
             + adminRequestVM.treeEditRequests.count
             + adminRequestVM.photoSuggestionRequests.count
             + projectsVM.pendingProjects.count
+            + pendingArchiveCount
             + healthTotal
     }
 
@@ -1556,7 +1586,7 @@ struct AdminAllRequestsView: View {
         .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 4, trailing: DS.Spacing.lg))
         // الموافقة/الرفض عبر السحب — خارج وضع التحديد فقط
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if !isSelectMode, let onApprove {
+            if !isSelectMode, canApprove(selectedTab), let onApprove {
                 Button(action: onApprove) {
                     Label(approveLabel ?? L10n.t("موافقة", "Approve"), systemImage: approveIcon)
                 }
@@ -1564,7 +1594,7 @@ struct AdminAllRequestsView: View {
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            if !isSelectMode, let onReject, authVM.canRejectRequests {
+            if !isSelectMode, let onReject, canReject(selectedTab) {
                 Button(action: onReject) {
                     Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                 }
@@ -2937,7 +2967,7 @@ struct AdminAllRequestsView: View {
     private func archiveRow(for item: ArchiveItem) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: item.category.iconName, color: DS.Color.warning, size: 36)
+                iconCircle(icon: item.categoryIcon, color: DS.Color.warning, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("عنصر أرشيف", "Archive Item"))
@@ -2956,8 +2986,8 @@ struct AdminAllRequestsView: View {
             }
 
             detailRow(
-                icon: item.category.iconName,
-                text: L10n.isArabic ? item.category.displayName : item.category.displayNameEn
+                icon: item.categoryIcon,
+                text: item.categoryDisplayName
             )
             if let year = item.year {
                 detailRow(icon: "calendar", text: "\(year)")
@@ -3485,7 +3515,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.primary)
                 }
             }
-            .alert(
+            .dsAlert(
                 L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
                 isPresented: Binding(
                     get: { deleteConfirmDetail != nil },
@@ -3569,7 +3599,7 @@ struct AdminAllRequestsView: View {
                          timestamp: p.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: p.logoUrl)
         case .archive(let a):
-            return .init(icon: a.category.iconName, color: DS.Color.warning,
+            return .init(icon: a.categoryIcon, color: DS.Color.warning,
                          title: L10n.t("عنصر أرشيف", "Archive Item"),
                          timestamp: nil,
                          imageUrl: a.thumbnailUrl)
@@ -3810,8 +3840,8 @@ struct AdminAllRequestsView: View {
         case .archive(let item):
             infoCard(icon: "textformat", label: L10n.t("العنوان", "Title"),
                      value: item.title, color: DS.Color.warning)
-            infoCard(icon: item.category.iconName, label: L10n.t("القسم", "Category"),
-                     value: L10n.isArabic ? item.category.displayName : item.category.displayNameEn,
+            infoCard(icon: item.categoryIcon, label: L10n.t("القسم", "Category"),
+                     value: item.categoryDisplayName,
                      color: DS.Color.info)
             if let year = item.year {
                 infoCard(icon: "calendar", label: L10n.t("السنة", "Year"),
@@ -4338,8 +4368,22 @@ struct AdminAllRequestsView: View {
         .padding(.bottom, DS.Spacing.sm)
     }
 
+    /// مجال الطلب المعروض في التفاصيل — لإخفاء الأزرار عمّن لا يملك اعتماده
+    private func detailIsContent(_ detail: RequestDetail) -> Bool {
+        switch detail {
+        case .news, .project, .archive, .diwaniya, .photo, .report: return true
+        default: return false
+        }
+    }
+
+    private func canApproveDetail(_ detail: RequestDetail) -> Bool {
+        if case .report = detail { return authVM.canModerateContent }
+        return detailIsContent(detail) ? authVM.canApproveContent : authVM.canApproveTreeRequests
+    }
+
     @ViewBuilder
     private func detailActions(for detail: RequestDetail) -> some View {
+        if canApproveDetail(detail) {
         DSApproveRejectButtons(
             approveTitle: {
                 switch detail {
@@ -4349,7 +4393,7 @@ struct AdminAllRequestsView: View {
             }(),
             rejectTitle: L10n.t("رفض", "Reject"),
             isLoading: adminRequestVM.isLoading,
-            showReject: authVM.canRejectRequests,
+            showReject: canApproveDetail(detail) && (detailIsContent(detail) || authVM.canRejectRequests),
             useCapsule: true
         ) {
             // موافقة
@@ -4447,6 +4491,7 @@ struct AdminAllRequestsView: View {
             }
         }
         .padding(.top, DS.Spacing.md)
+        }
     }
 
     private func detailField(_ label: String, _ value: String, color: Color = DS.Color.textPrimary) -> some View {

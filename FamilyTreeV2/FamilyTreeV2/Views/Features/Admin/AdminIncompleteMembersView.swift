@@ -232,7 +232,7 @@ struct AdminIncompleteMembersView: View {
                 AdminMemberDetailSheet(member: member)
             }
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد تحديث الجنس", "Confirm Gender Update"),
             isPresented: $showGenderConfirm
         ) {
@@ -265,12 +265,12 @@ struct AdminIncompleteMembersView: View {
                 "Set \(selectedMembers.count) members as \(genderText)?"
             ))
         }
-        .alert(L10n.t("تم التحديث", "Updated"), isPresented: $showGenderResult) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        .dsAlert(L10n.t("تم التحديث", "Updated"), isPresented: $showGenderResult) {
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(genderUpdateResult ?? "")
         }
-        .alert(
+        .dsAlert(
             L10n.t("حذف العضو نهائياً", "Delete Member Permanently"),
             isPresented: $showDeleteConfirm,
             presenting: memberToDelete

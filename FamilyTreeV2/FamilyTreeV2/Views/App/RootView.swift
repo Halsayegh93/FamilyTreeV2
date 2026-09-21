@@ -49,11 +49,11 @@ struct RootView: View {
         .animation(.default, value: authVM.status)
         // Alert مركزي لأي عملية كتابة بدون اتصال — ViewModels تستدعي
         // NetworkMonitor.shared.requireOnline() اللي يضبط هذا الفلاج.
-        .alert(
+        .dsAlert(
             L10n.t("لا يوجد اتصال بالإنترنت", "No Internet Connection"),
             isPresented: $network.showOfflineAlert
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(L10n.t(
                 "لا يمكن تنفيذ هذا الإجراء بدون اتصال بالإنترنت. تأكّد من الاتصال ثم حاول مجدّداً.",
@@ -99,6 +99,7 @@ struct MaintenanceModeView: View {
             ) {
                 Task {
                     await appSettingsVM.fetchSettings()
+                    await CategoryStore.shared.fetch()
                 }
             }
 

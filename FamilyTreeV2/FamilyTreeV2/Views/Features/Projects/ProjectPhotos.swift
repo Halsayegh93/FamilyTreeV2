@@ -142,6 +142,87 @@ struct ProjectPhotosGallery: View {
     }
 }
 
+/// معرض صور المشروع — فسيفساء: صورة كبيرة + مربّعات جانبية، وآخر مربّع يحمل «+N»
+struct ProjectPhotosMosaic: View {
+    let urls: [String]
+    @State private var viewerIndex: Int?
+
+    /// أقصى ما يُعرض قبل ظهور «+N» على آخر مربّع
+    private let visibleLimit = 3
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(DS.Font.scaled(12, weight: .bold))
+                Text(L10n.t("صور المشروع", "Project Photos"))
+                    .font(DS.Font.plex(13, weight: .bold))
+                Spacer()
+                Text("\(urls.count)")
+                    .font(DS.Font.plex(12, weight: .bold))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .foregroundColor(DS.Color.textSecondary)
+
+            if urls.count == 1 {
+                tile(0, height: 210)
+            } else if urls.count == 2 {
+                HStack(spacing: DS.Spacing.xs) {
+                    tile(0, height: 170)
+                    tile(1, height: 170)
+                }
+            } else {
+                HStack(spacing: DS.Spacing.xs) {
+                    tile(0, height: 210)
+                        .frame(maxWidth: .infinity)
+                    VStack(spacing: DS.Spacing.xs) {
+                        tile(1, height: 101)
+                        tile(2, height: 101, extra: urls.count - visibleLimit)
+                    }
+                    .frame(width: 104)
+                }
+            }
+        }
+        .padding(DS.Spacing.lg)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .dsSubtleShadow()
+        .fullScreenCover(item: Binding(
+            get: { viewerIndex.map { ProjectPhotoIndex(id: $0) } },
+            set: { viewerIndex = $0?.id }
+        )) { start in
+            ProjectPhotoViewer(urls: urls, startIndex: start.id)
+        }
+    }
+
+    /// مربّع صورة — `extra` أكبر من صفر يعني بقيّة الصور تحت «+N»
+    private func tile(_ index: Int, height: CGFloat, extra: Int = 0) -> some View {
+        Button { viewerIndex = index } label: {
+            CachedAsyncImage(url: URL(string: urls[index])) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                DS.Color.mutedBackground
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .clipped()
+            .overlay {
+                if extra > 0 {
+                    ZStack {
+                        Color.black.opacity(0.45)
+                        Text("+\(extra)")
+                            .font(DS.Font.plex(20, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(L10n.t("صورة \(index + 1)", "Photo \(index + 1)"))
+    }
+}
+
 private struct ProjectPhotoIndex: Identifiable { let id: Int }
 
 /// عارض بملء الشاشة بالسحب بين الصور
@@ -150,19 +231,23 @@ private struct ProjectPhotoViewer: View {
     let startIndex: Int
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
+    @State private var zoomed = false
 
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             TabView(selection: $index) {
                 ForEach(Array(urls.enumerated()), id: \.offset) { idx, url in
-                    CachedAsyncImage(url: URL(string: url)) { img in
-                        img.resizable().scaledToFit()
-                    } placeholder: { ProgressView().tint(.white) }
+                    ZoomableImage(onZoomChange: { zoomed = $0 }) {
+                        CachedAsyncImage(url: URL(string: url)) { img in
+                            img.resizable().scaledToFit()
+                        } placeholder: { ProgressView().tint(.white) }
+                    }
                     .tag(idx)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .automatic : .never))
+            .disabled(zoomed)
 
             HStack {
                 Text("\(index + 1) / \(urls.count)")
@@ -182,5 +267,6 @@ private struct ProjectPhotoViewer: View {
             .padding(.top, DS.Spacing.sm)
         }
         .onAppear { index = startIndex }
+        .onChange(of: index) { _ in zoomed = false }
     }
 }

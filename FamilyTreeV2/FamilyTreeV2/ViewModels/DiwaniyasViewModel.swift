@@ -227,6 +227,11 @@ class DiwaniyasViewModel: ObservableObject {
     
     func approveDiwaniya(id: UUID, adminId: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
+        // اعتماد المحتوى للإدارة فقط — مثل الأخبار والمكتبة والمشاريع (طلب المالك)
+        guard authVM?.isAdmin == true else {
+            Log.warning("اعتماد الديوانية مرفوض: الصلاحية للإدارة فقط")
+            return
+        }
         // حفظ بيانات الديوانية قبل الحذف المحلي (للإشعارات)
         let info = pendingDiwaniyas.first(where: { $0.id == id })
         let ownerId = info?.ownerId

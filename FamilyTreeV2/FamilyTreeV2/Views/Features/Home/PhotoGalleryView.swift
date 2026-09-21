@@ -324,7 +324,7 @@ struct GalleryAlbumDetailView: View {
         )) { box in
             GalleryPhotoViewer(photos: albumPhotos, initialIndex: box.value)
         }
-        .alert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: Binding(
+        .dsAlert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: Binding(
             get: { photoToDelete != nil },
             set: { if !$0 { photoToDelete = nil } }
         )) {
@@ -336,7 +336,7 @@ struct GalleryAlbumDetailView: View {
         } message: {
             Text(L10n.t("حذف هذه الصورة نهائياً؟", "Permanently delete this photo?"))
         }
-        .alert(L10n.t("حذف الألبوم", "Delete Album"), isPresented: $showDeleteAlbumAlert) {
+        .dsAlert(L10n.t("حذف الألبوم", "Delete Album"), isPresented: $showDeleteAlbumAlert) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 Task {
                     await galleryVM.deleteAlbum(currentAlbum)

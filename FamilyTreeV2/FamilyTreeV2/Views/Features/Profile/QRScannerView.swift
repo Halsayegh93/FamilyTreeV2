@@ -49,12 +49,12 @@ struct QRScannerView: View {
                     }
                 }
             }
-            .alert(L10n.t("تعذّر المسح", "Scan Failed"),
+            .dsAlert(L10n.t("تعذّر المسح", "Scan Failed"),
                    isPresented: Binding(
                      get: { scanErrorMessage != nil },
                      set: { if !$0 { scanErrorMessage = nil } }
                    )) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) { scanErrorMessage = nil }
+                Button(L10n.t("حسناً", "OK")) { scanErrorMessage = nil }
             } message: {
                 Text(scanErrorMessage ?? "")
             }

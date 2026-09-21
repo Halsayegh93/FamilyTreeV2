@@ -343,7 +343,7 @@ private struct WomanDetailSheet: View {
                 )
             }
             // حذف
-            .alert(L10n.t("حذف العضو؟", "Delete member?"), isPresented: $showDelete) {
+            .dsAlert(L10n.t("حذف العضو؟", "Delete member?"), isPresented: $showDelete) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) { performDelete() }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
             } message: {

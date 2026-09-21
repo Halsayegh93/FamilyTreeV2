@@ -14,6 +14,7 @@ struct AdminActiveMembersView: View {
     @State private var isRefreshing = false
     @State private var refreshTimer: Timer?
     @State private var membershipCounts: MembershipCounts?
+    @State private var usage: AppUsageStats? = AppUsageStats.cached
     @State private var membershipCountsFailed = false
 
     private struct MembershipCounts: Decodable {
@@ -264,32 +265,27 @@ struct AdminActiveMembersView: View {
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("داخل المنظومة", "In the System"))
+                    Text(L10n.t("الأعضاء الفعّالون", "Active members"))
                         .font(DS.Font.scaled(11, weight: .bold))
                         .foregroundColor(DS.Color.textSecondary)
-                    Text(L10n.t(
-                        "حسابات معتمدة سجّلت الدخول فعلياً",
-                        "Approved accounts that have signed in"
-                    ))
-                    .font(DS.Font.scaled(11, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                    Text(membershipCountsFailed
-                         ? L10n.t("تعذر تحديث العدد؛ أعد المحاولة", "Count update failed; please retry")
-                         : L10n.t("من إجمالي الأعضاء الأحياء المعتمدين", "Of all approved living members"))
-                        .font(DS.Font.scaled(10, weight: .medium))
-                        .foregroundColor(membershipCountsFailed ? DS.Color.warning : DS.Color.textTertiary)
+                    // تعريف المالك — بدل «سجّل دخولاً يوماً ما» الذي كان يضخّم الرقم
+                    Text(L10n.t("رقم + جهاز + دخل التطبيق خلال ٢١ يوماً",
+                                "Phone + device + opened the app in the last 21 days"))
+                        .font(DS.Font.scaled(11, weight: .medium))
+                        .foregroundColor(DS.Color.textTertiary)
+                    if let usage {
+                        Text(L10n.t("خامل (أكثر من ٢١ يوماً): \(usage.idle)",
+                                    "Idle (over 21 days): \(usage.idle)"))
+                            .font(DS.Font.scaled(10, weight: .semibold))
+                            .foregroundColor(DS.Color.warning)
+                    }
                 }
 
                 Spacer()
 
-                HStack(spacing: 4) {
-                    Text(membershipCounts.map { "\($0.in_system)" } ?? "—")
-                        .font(DS.Font.scaled(20, weight: .heavy))
-                        .foregroundColor(DS.Color.secondary)
-                    Text(membershipCounts.map { "/ \($0.total_members)" } ?? "/ —")
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
+                Text(usage.map { "\($0.active)" } ?? "—")
+                    .font(DS.Font.scaled(22, weight: .heavy))
+                    .foregroundColor(DS.Color.success)
             }
             .padding(DS.Spacing.md)
             .background(DS.Color.secondary.opacity(0.06))
@@ -543,6 +539,7 @@ struct AdminActiveMembersView: View {
     private func fetchMembershipCounts() async {
         do {
             membershipCounts = try await SupabaseConfig.client.rpc("admin_membership_counts").execute().value
+            usage = await AppUsageStats.fetch()
             membershipCountsFailed = false
         } catch {
             guard !Log.isCancellation(error) else { return }

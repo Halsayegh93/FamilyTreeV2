@@ -21,6 +21,10 @@ struct AdminDashboardView: View {
     @State private var pendingCount: Int = 0
     @State private var moderatorCount: Int = 0
     @State private var totalReviewRequestsCount: Int = 0
+    /// عناصر الأرشيف المنتظرة — تدخل في عدّاد «طلبات المراجعة» مثل بقية الطلبات
+    @State private var pendingArchiveCount: Int = 0
+    /// من يستخدم التطبيق فعلاً — حساب دخول / جهاز / رقم
+    @State private var usageStats: AppUsageStats? = AppUsageStats.cached
     @State private var treeIssuesCount: Int = 0
     @State private var issueMembersCount: Int = 0
     @State private var totalMembersCount: Int = 0
@@ -100,7 +104,8 @@ struct AdminDashboardView: View {
         // مصدر واحد للحقيقة — مطابق تماماً لعدّاد «الكل» داخل «طلبات المراجعة»
         let reviewTotal = AdminAllRequestsView.reviewRequestsTotal(
             memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
-            diwaniyaVM: diwaniyaVM, projectsVM: projectsVM
+            diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
+            pendingArchiveCount: pendingArchiveCount
         )
 
         withAnimation(DS.Anim.smooth) {
@@ -153,6 +158,15 @@ struct AdminDashboardView: View {
                         Color.clear.frame(height: DS.Spacing.md)
 
                         VStack(spacing: DS.Spacing.md) {
+                            // «مجالك» — يعرف كل مسؤول حدوده وقت العمل (طلب المالك).
+                            // المالك والمدير مجالهما كامل فلا حاجة للتذكير.
+                            if !authVM.isAdmin,
+                               let role = authVM.currentUser?.role,
+                               let guide = RoleGuide.forRole(role) {
+                                RoleScopeCard(guide: guide, compact: true)
+                                    .padding(.horizontal, DS.Spacing.lg)
+                            }
+
                             // تحذير التوافق
                             if !authVM.notificationsFeatureAvailable || !authVM.newsApprovalFeatureAvailable {
                                 schemaWarningCard
@@ -206,6 +220,7 @@ struct AdminDashboardView: View {
         }
         .onChange(of: memberVM.membersVersion) { _ in recalculateBadges() }
         .onChange(of: pendingRequestsSum) { _ in recalculateBadges() }
+        .onChange(of: pendingArchiveCount) { _ in recalculateBadges() }
     }
 
     /// تحميل كل بيانات لوحة الإدارة بالتوازي — يُستخدم في .task وفي السحب للتحديث
@@ -228,6 +243,8 @@ struct AdminDashboardView: View {
             group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
             group.addTask { @MainActor in await authVM.fetchBannedPhones() }
             group.addTask { @MainActor in await loadWomenStats() }
+            group.addTask { @MainActor in pendingArchiveCount = await FamilyArchiveViewModel.pendingCount() }
+            group.addTask { @MainActor in usageStats = await AppUsageStats.fetch() }
         }
         recalculateBadges()
         withAnimation(DS.Anim.smooth) { isInitialLoading = false }
@@ -318,6 +335,22 @@ struct AdminDashboardView: View {
                                 censusValue(womenDeceasedCount)
                             }
                         }
+
+                        // استخدام التطبيق — العضو الفعّال = رقم + جهاز دخل التطبيق
+                        // (تعريف المالك). أرقام الشجرة وحدها لا تعني استخدام التطبيق.
+                        if let usage = usageStats {
+                            Divider().overlay(DS.Color.textTertiary.opacity(0.22))
+                            // لوحة الإدارة: الفعّال وبلا رقم فقط — التقسيم الكامل في «إعدادات التطبيق»
+                            HStack(spacing: DS.Spacing.xs) {
+                                // كل من عنده رقم وجهاز — بدون فصل الخامل (طلب المالك)
+                                usagePill(category: .active, icon: "checkmark.seal.fill", value: usage.active + usage.idle,
+                                          label: L10n.t("فعّال (رقم + جهاز)", "Active (phone + device)"),
+                                          color: DS.Color.success)
+                                usagePill(category: .noPhone, icon: "phone.down.fill", value: usage.noPhone,
+                                          label: L10n.t("بلا رقم", "No phone"),
+                                          color: DS.Color.textTertiary)
+                            }
+                        }
                     }
                     .padding(DS.Spacing.md)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -332,6 +365,37 @@ struct AdminDashboardView: View {
                 .transition(.opacity)
             }
         }
+    }
+
+    /// رقم «استخدام التطبيق» — أيقونة + عدد + وصف قصير
+    private func usagePill(category: AppUsageCategory, icon: String, value: Int, label: String, color: Color) -> some View {
+        NavigationLink {
+            AppUsageMembersView(category: category)
+        } label: {
+            usagePillLabel(icon: icon, value: value, label: label, color: color)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    private func usagePillLabel(icon: String, value: Int, label: String, color: Color) -> some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(10, weight: .bold))
+                Text("\(value)")
+                    .font(DS.Font.plex(15, weight: .bold))
+            }
+            .foregroundColor(color)
+            Text(label)
+                .font(DS.Font.plex(10, weight: .medium))
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.07))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
     }
 
     // MARK: - شبكة الأقسام (Bento)
@@ -397,17 +461,10 @@ struct AdminDashboardView: View {
             }
 
             if authVM.canViewSystemSettings {
-                if authVM.isAdmin {
-                    AdminTile(
-                        title: L10n.t("صحة النظام", "System Health"),
-                        subtitle: L10n.t("أخطاء التطبيق ومهام السيرفر", "App errors & server jobs"),
-                        icon: "waveform.path.ecg",
-                        color: DS.Color.warning
-                    ) { AdminSystemHealthView() }
-                }
+                // «صحة النظام» صارت داخل «إعدادات النظام» — لا تكرار هنا
                 AdminTile(
                     title: L10n.t("إعدادات النظام", "System Settings"),
-                    subtitle: L10n.t("الأمان وصحة النظام", "Security & health"),
+                    subtitle: L10n.t("الإدارة وصحة النظام والاستخدام", "Management, health & usage"),
                     icon: "lock.shield.fill",
                     color: DS.Color.textSecondary
                 ) {

@@ -394,7 +394,7 @@ struct AdminActivateAccountsView: View {
                 }
             }
         }
-        .alert(
+        .dsAlert(
             L10n.t("تفعيل الحساب", "Activate Account"),
             isPresented: $showActivateConfirm,
             presenting: memberToActivate
@@ -409,7 +409,7 @@ struct AdminActivateAccountsView: View {
                 "Activate \(member.fullName)'s account?"
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد تحديث الجنس", "Confirm Gender Update"),
             isPresented: $showGenderConfirm
         ) {
@@ -442,8 +442,8 @@ struct AdminActivateAccountsView: View {
                 "Set \(selectedMembers.count) members as \(genderText)?"
             ))
         }
-        .alert(L10n.t("تم التحديث", "Updated"), isPresented: $showGenderResult) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        .dsAlert(L10n.t("تم التحديث", "Updated"), isPresented: $showGenderResult) {
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(genderUpdateResult ?? "")
         }

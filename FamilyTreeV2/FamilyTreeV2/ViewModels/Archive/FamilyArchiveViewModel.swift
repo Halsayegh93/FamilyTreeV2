@@ -13,6 +13,7 @@ final class FamilyArchiveViewModel: ObservableObject {
     private let bucketName = "family-archive"
 
     weak var authVM: AuthViewModel?
+    weak var notificationVM: NotificationViewModel?
 
     @Published var items: [ArchiveItem] = []
     @Published var isLoading = false
@@ -20,11 +21,28 @@ final class FamilyArchiveViewModel: ObservableObject {
     @Published var uploadProgress: Double = 0
     @Published var errorMessage: String?
 
-    func configure(authVM: AuthViewModel) {
+    func configure(authVM: AuthViewModel, notificationVM: NotificationViewModel? = nil) {
         self.authVM = authVM
+        if let notificationVM { self.notificationVM = notificationVM }
     }
 
     // MARK: - Fetch
+    /// عدد عناصر الأرشيف المنتظرة للاعتماد — لعدّاد «الكل» وبادج لوحة الإدارة
+    /// (كانت عناصر الأرشيف تُعرض في «الكل» بلا أن تُحسب — طلب المالك)
+    static func pendingCount() async -> Int {
+        guard NetworkMonitor.shared.isConnected else { return 0 }
+        do {
+            let response = try await SupabaseConfig.client
+                .from("family_archive")
+                .select("id", head: true, count: .exact)
+                .eq("approval_status", value: "pending")
+                .execute()
+            return response.count ?? 0
+        } catch {
+            return 0
+        }
+    }
+
 
     func fetchItems() async {
         guard NetworkMonitor.shared.isConnected else { return }
@@ -61,7 +79,7 @@ final class FamilyArchiveViewModel: ObservableObject {
     func uploadItem(
         title: String,
         description: String?,
-        category: ArchiveItem.Category,
+        categoryKey: String,
         year: Int? = nil,
         fileData: Data,
         fileName: String,
@@ -85,7 +103,8 @@ final class FamilyArchiveViewModel: ObservableObject {
         let ext = (fileName as NSString).pathExtension.lowercased()
         let safeExt = ext.isEmpty ? defaultExtension(for: mimeType) : ext
         // مسار التخزين: {category}/{uuid}.{ext} — يفصل الأقسام في Storage أيضاً
-        let storagePath = "\(category.rawValue)/\(itemId.uuidString).\(safeExt)"
+        let fields = ArchiveItem.storageFields(forKey: categoryKey)
+        let storagePath = "\(fields.category)/\(itemId.uuidString).\(safeExt)"
 
         do {
             // 1) رفع الملف إلى Storage
@@ -111,7 +130,8 @@ final class FamilyArchiveViewModel: ObservableObject {
                 "id":              AnyEncodable(itemId.uuidString),
                 "title":           AnyEncodable(trimmedTitle),
                 "description":     AnyEncodable((trimmedDescription?.isEmpty ?? true) ? Optional<String>.none : trimmedDescription),
-                "category":        AnyEncodable(category.rawValue),
+                "category":        AnyEncodable(fields.category),
+                "category_key":    AnyEncodable(fields.categoryKey),
                 "file_url":        AnyEncodable(publicURL.absoluteString),
                 "file_type":       AnyEncodable(mimeType),
                 "file_size":       AnyEncodable(Int64(fileData.count)),
@@ -136,6 +156,19 @@ final class FamilyArchiveViewModel: ObservableObject {
             if let newItem = inserted.first {
                 items.insert(newItem, at: 0)
                 Log.info("[Archive] رفع ناجح: \(newItem.title)")
+                // رفع عضو عادي ينتظر الموافقة — نُعلم الإدارة ليوافقوا من زر النقاط
+                if !isAdmin {
+                    let uploader = authVM?.currentUser?.displayName ?? L10n.t("عضو", "A member")
+                    await notificationVM?.notifyAdminsWithPush(
+                        title: L10n.t("إضافة جديدة للمكتبة تنتظر الموافقة",
+                                     "New Library Item Needs Approval"),
+                        body: L10n.t("«\(uploader)» أضاف: «\(trimmedTitle)»",
+                                    "«\(uploader)» added: «\(trimmedTitle)»"),
+                        kind: NotificationKind.archivePending.rawValue,
+                        requestId: newItem.id,
+                        requestType: "archive_pending"
+                    )
+                }
                 return newItem
             }
             return nil
@@ -155,7 +188,7 @@ final class FamilyArchiveViewModel: ObservableObject {
         _ item: ArchiveItem,
         title: String,
         description: String?,
-        category: ArchiveItem.Category,
+        categoryKey: String,
         year: Int?
     ) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
@@ -166,7 +199,8 @@ final class FamilyArchiveViewModel: ObservableObject {
         let payload: [String: AnyEncodable] = [
             "title":       AnyEncodable(trimmedTitle),
             "description": AnyEncodable((trimmedDesc?.isEmpty ?? true) ? Optional<String>.none : trimmedDesc),
-            "category":    AnyEncodable(category.rawValue),
+            "category":    AnyEncodable(ArchiveItem.storageFields(forKey: categoryKey).category),
+            "category_key": AnyEncodable(ArchiveItem.storageFields(forKey: categoryKey).categoryKey),
             "year":        AnyEncodable(year)
         ]
 
@@ -234,6 +268,26 @@ final class FamilyArchiveViewModel: ObservableObject {
                 .eq("id", value: item.id.uuidString)
                 .execute()
             Log.info("[Archive] \(status.rawValue): \(item.title)")
+            // إشعار صاحب العنصر بالنتيجة
+            if item.uploadedBy != approverId {
+                if status == .approved {
+                    await notificationVM?.sendNotification(
+                        title: L10n.t("تم اعتماد إضافتك للمكتبة", "Your Library Item Was Approved"),
+                        body: L10n.t("«\(item.title)» صار ظاهراً في مكتبة العائلة.",
+                                    "«\(item.title)» is now visible in the family library."),
+                        targetMemberIds: [item.uploadedBy],
+                        kind: NotificationKind.archiveApproved.rawValue
+                    )
+                } else if status == .rejected {
+                    await notificationVM?.sendNotification(
+                        title: L10n.t("لم يتم اعتماد إضافتك للمكتبة", "Your Library Item Was Not Approved"),
+                        body: L10n.t("«\(item.title)» لم يتم اعتماده. تواصل مع الإدارة لمعرفة السبب.",
+                                    "«\(item.title)» was not approved. Contact admin for details."),
+                        targetMemberIds: [item.uploadedBy],
+                        kind: NotificationKind.archiveRejected.rawValue
+                    )
+                }
+            }
         } catch {
             // استرجاع
             if let idx = items.firstIndex(where: { $0.id == item.id }) {

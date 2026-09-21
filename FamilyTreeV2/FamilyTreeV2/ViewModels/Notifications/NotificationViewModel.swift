@@ -14,6 +14,10 @@ class NotificationViewModel: ObservableObject {
     @Published var pushToken: String?
     @Published var isLoading: Bool = false
     @Published var linkedDevices: [LinkedDevice] = []
+    /// آخر خطأ في إدارة الأجهزة — يُعرض للإدارة بدل الفشل الصامت
+    @Published var lastDeviceError: String?
+    @Published private(set) var isLoadingLinkedDevices = false
+    @Published private(set) var linkedDevicesLoadFailed = false
 
     /// الإشعارات المجدولة المعلّقة (لم تُرسل بعد) — لعرضها في لوحة الإدارة.
     @Published var scheduledNotifications: [ScheduledNotification] = []
@@ -505,7 +509,13 @@ class NotificationViewModel: ObservableObject {
     // MARK: - Linked Devices
 
     func fetchLinkedDevices() async {
-        guard let memberId = currentUser?.id else { return }
+        guard let memberId = currentUser?.id else {
+            linkedDevicesLoadFailed = true
+            return
+        }
+        isLoadingLinkedDevices = true
+        linkedDevicesLoadFailed = false
+        defer { isLoadingLinkedDevices = false }
         do {
             let devices: [LinkedDevice] = try await supabase
                 .from("device_tokens")
@@ -516,6 +526,7 @@ class NotificationViewModel: ObservableObject {
                 .value
             self.linkedDevices = devices
         } catch {
+            linkedDevicesLoadFailed = true
             Log.fetchError("خطأ جلب الأجهزة المرتبطة", error)
         }
     }
@@ -566,8 +577,10 @@ class NotificationViewModel: ObservableObject {
     
     /// حذف جهاز عضو بواسطة المدير
     func removeDeviceByAdmin(_ device: LinkedDevice) async -> Bool {
+        lastDeviceError = nil
         guard canModerate else {
             Log.warning("[AUTH] Unauthorized removeDeviceByAdmin attempt")
+            lastDeviceError = L10n.t("لا تملك الصلاحية", "Not permitted")
             return false
         }
         do {
@@ -577,6 +590,23 @@ class NotificationViewModel: ObservableObject {
                 .eq("id", value: device.id)
                 .execute()
             Log.info("[ADMIN-DEVICE] تم حذف جهاز العضو بنجاح: \(device.displayName)")
+
+            // تسجيل الإزالة — حتى لا يعيد تطبيق العضو تسجيل الجهاز تلقائياً إذا بقي
+            // له مكان شاغر؛ تطبيقه يقرأها عند التحقق فيسجّل خروجه (طلب المالك)
+            if let deviceId = device.deviceId, device.deviceId != currentDeviceId {
+                struct Revocation: Encodable {
+                    let member_id: String
+                    let device_id: String
+                    let revoked_by: String?
+                }
+                _ = try? await supabase
+                    .from("device_revocations")
+                    .upsert(Revocation(member_id: device.memberId.uuidString,
+                                       device_id: deviceId,
+                                       revoked_by: currentUser?.id.uuidString),
+                            onConflict: "member_id,device_id")
+                    .execute()
+            }
 
             // إذا المدير حذف جهازه هو — نعيد تسجيله فوراً
             if device.deviceId == currentDeviceId {
@@ -588,6 +618,7 @@ class NotificationViewModel: ObservableObject {
             return true
         } catch {
             Log.error("[ADMIN-DEVICE] خطأ حذف جهاز العضو: \(error.localizedDescription)")
+            lastDeviceError = error.localizedDescription
             return false
         }
     }
@@ -652,6 +683,31 @@ class NotificationViewModel: ObservableObject {
     /// التحقق من أن الجهاز الحالي مسجّل
     /// - إذا حذفه المدير (توجد أجهزة أخرى) → يمنع الوصول
     /// - إذا ما في أجهزة مسجلة أصلاً → يسجله عادي
+    /// هل أزالت الإدارة هذا الجهاز؟ — تُحذف العلامة بعد قراءتها (تُستهلك مرة واحدة)
+    private func consumeRevocation(memberId: UUID, deviceId: String) async -> Bool {
+        struct Row: Decodable { let device_id: String }
+        do {
+            let rows: [Row] = try await supabase
+                .from("device_revocations")
+                .select("device_id")
+                .eq("member_id", value: memberId.uuidString)
+                .eq("device_id", value: deviceId)
+                .execute()
+                .value
+            guard !rows.isEmpty else { return false }
+            _ = try? await supabase
+                .from("device_revocations")
+                .delete()
+                .eq("member_id", value: memberId.uuidString)
+                .eq("device_id", value: deviceId)
+                .execute()
+            return true
+        } catch {
+            // الجدول غير متاح أو خطأ شبكة — لا نُخرج العضو بسبب خطأ
+            return false
+        }
+    }
+
     func verifyDeviceAuthorization() async {
         guard let memberId = currentUser?.id else {
             Log.info("[DEVICE-VERIFY] تخطي — لا يوجد مستخدم حالي")
@@ -663,6 +719,14 @@ class NotificationViewModel: ObservableObject {
         }
 
         Log.info("[DEVICE-VERIFY] التحقق من تصريح الجهاز: \(deviceId.prefix(8))… للعضو: \(memberId.uuidString.prefix(8))…")
+
+        // أزالته الإدارة؟ → تسجيل خروج بدل إعادة التسجيل الصامتة
+        if await consumeRevocation(memberId: memberId, deviceId: deviceId) {
+            Log.warning("[DEVICE-VERIFY] ❌ الإدارة أزالت هذا الجهاز — تسجيل خروج")
+            NotificationViewModel.clearDeviceRegistrationFlag(memberId: memberId.uuidString, deviceId: deviceId)
+            await authVM?.signOut()
+            return
+        }
 
         do {
             // جلب كل أجهزة العضو (مو بس الجهاز الحالي)

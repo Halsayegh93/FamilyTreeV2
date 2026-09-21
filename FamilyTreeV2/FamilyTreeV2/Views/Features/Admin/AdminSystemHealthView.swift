@@ -8,11 +8,13 @@ struct AdminSystemHealthView: View {
     @State private var loading = false
     @State private var failure: String?
     @State private var updatedAt: Date?
+    /// نشاط الأعضاء بتعريف المالك: فعّال (رقم + جهاز + ٢١ يوم) وخامل
+    @State private var usage: AppUsageStats? = AppUsageStats.cached
 
     var body: some View {
         Group {
             if authVM.isAdmin {
-                SystemHealthOverviewContent(snapshot: snapshot, loading: loading, failure: failure, updatedAt: updatedAt) {
+                SystemHealthOverviewContent(snapshot: snapshot, loading: loading, failure: failure, updatedAt: updatedAt, usage: usage) {
                     await refresh()
                 }
                 .task { await refresh() }
@@ -33,6 +35,8 @@ struct AdminSystemHealthView: View {
         guard !loading else { return }
         loading = true
         defer { loading = false }
+        // مستقل عن باقي الملخص — فشله لا يُسقط الصفحة
+        usage = await AppUsageStats.fetch()
         do {
             async let operations: HealthOperations = SupabaseConfig.client.rpc("operational_health").execute().value
             async let diagnostics: HealthDiagnostics = SupabaseConfig.client.rpc("app_diagnostics_dashboard").execute().value
@@ -86,7 +90,8 @@ struct SystemHealthSnapshot {
 enum SystemHealthDestination: String, Hashable {
     case errors, allErrors, activity, devices, push, server, successfulJobs, failedJobs, operations
     // «أخطاء التطبيق» أُزيلت من صحة النظام (طلب المالك)
-    static let sections: [Self] = [.server, .activity, .devices, .push]
+    // «الأجهزة» انتقلت إلى «إعدادات النظام» (طلب المالك)
+    static let sections: [Self] = [.activity, .push, .server]
 
     @ViewBuilder var screen: some View {
         switch self {
@@ -104,7 +109,7 @@ enum SystemHealthDestination: String, Hashable {
     var title: String {
         switch self {
         case .errors, .allErrors: return L10n.t("أخطاء التطبيق", "App errors")
-        case .activity: return L10n.t("نشاط الأعضاء", "Member activity")
+        case .activity: return L10n.t("النشاط الآن", "Live activity")
         case .devices: return L10n.t("الأجهزة", "Devices")
         case .push: return L10n.t("الإشعارات", "Notifications")
         case .server, .successfulJobs, .failedJobs, .operations: return L10n.t("مهام السيرفر", "Server jobs")
@@ -147,6 +152,7 @@ struct SystemHealthOverviewContent: View {
     let loading: Bool
     let failure: String?
     let updatedAt: Date?
+    var usage: AppUsageStats? = nil
     let refresh: () async -> Void
 
     private var statusColor: Color {
@@ -262,19 +268,42 @@ struct SystemHealthOverviewContent: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Text(L10n.t("الأقسام", "Sections"))
                 .font(DS.Font.headline).foregroundStyle(DS.Color.textPrimary)
-            VStack(spacing: 0) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3),
+                      spacing: DS.Spacing.sm) {
                 ForEach(SystemHealthDestination.sections, id: \.self) { destination in
-                    NavigationLink(destination: destination.screen) { sectionRow(destination) }
-                        .buttonStyle(.plain)
+                    NavigationLink(destination: destination.screen) { sectionTile(destination) }
+                        .buttonStyle(DSScaleButtonStyle())
                         .accessibilityIdentifier("health.section.\(destination.rawValue)")
-                    if destination != SystemHealthDestination.sections.last {
-                        Divider().padding(.leading, 36 + DS.Spacing.md * 2)
-                    }
                 }
             }
-            .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
         }
+    }
+
+    /// مربّع قسم: أيقونة، القيمة المختصرة بخط كبير، والعنوان
+    private func sectionTile(_ destination: SystemHealthDestination) -> some View {
+        let value = summary(for: destination)
+        return VStack(spacing: 6) {
+            Image(systemName: destination.icon)
+                .font(DS.Font.scaled(15, weight: .semibold))
+                .foregroundStyle(destination.color)
+                .frame(width: 34, height: 34)
+                .background(destination.color.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.Radius.md))
+            Text(value?.0 ?? "—")
+                .font(DS.Font.plex(17, weight: .bold)).monospacedDigit()
+                .foregroundStyle(value?.1 ?? DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(destination.title)
+                .font(DS.Font.plex(11, weight: .semibold))
+                .foregroundStyle(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 112)
+        .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .stroke(destination.color.opacity(0.18), lineWidth: 1))
     }
 
     /// القيمة المختصرة لكل قسم ولونها (برتقالي إن كانت تستدعي انتباهاً)
@@ -288,7 +317,8 @@ struct SystemHealthOverviewContent: View {
             return ("\(data.successfulJobs)/\(data.diagnostics.jobs.count)",
                     data.failedJobs > 0 ? DS.Color.warning : DS.Color.textSecondary)
         case .activity:
-            return ("\(data.membership.in_system.formatted())/\(data.membership.total_members.formatted())", DS.Color.textSecondary)
+            // الفعّالون بالأرقام في «استخدام التطبيق» — هنا مدخل للحضور اللحظي فقط
+            return (L10n.t("عرض", "Open"), DS.Color.secondary)
         case .push:
             return data.diagnostics.dispatch_healthy
                 ? (L10n.t("يعمل", "OK"), DS.Color.success)
@@ -298,26 +328,6 @@ struct SystemHealthOverviewContent: View {
         }
     }
 
-    private func sectionRow(_ destination: SystemHealthDestination) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            Image(systemName: destination.icon)
-                .font(DS.Font.scaled(15, weight: .semibold))
-                .foregroundStyle(destination.color)
-                .frame(width: 36, height: 36)
-                .background(destination.color.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.Radius.md))
-            Text(destination.title)
-                .font(DS.Font.calloutBold).foregroundStyle(DS.Color.textPrimary)
-            Spacer(minLength: 0)
-            if let (value, color) = summary(for: destination) {
-                Text(value)
-                    .font(DS.Font.calloutBold).monospacedDigit()
-                    .foregroundStyle(color)
-            }
-            Image(systemName: "chevron.forward").font(DS.Font.caption1).foregroundStyle(DS.Color.textTertiary)
-        }
-        .padding(DS.Spacing.md)
-        .contentShape(Rectangle())
-    }
 }
 
 struct SystemHealthSectionHeader: View {
@@ -327,6 +337,160 @@ struct SystemHealthSectionHeader: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Text(title).font(DS.Font.title1).foregroundStyle(DS.Color.textPrimary)
             Text(subtitle).font(DS.Font.footnote).foregroundStyle(DS.Color.textSecondary)
+        }
+    }
+}
+
+
+// MARK: - صحة النظام مضمّنة في «إعدادات النظام» (طلب المالك: صفحات أقل)
+//
+// بدل صفحة «صحة النظام» ثم صفحات داخلها: سطر حالة + ما يحتاج إجراء + ثلاثة
+// مربّعات تفتح مباشرة (النشاط الآن، الإشعارات، مهام السيرفر).
+
+struct SystemHealthInlineSection: View {
+    @State private var snapshot: SystemHealthSnapshot?
+    @State private var loading = false
+    @State private var failed = false
+
+    private var statusColor: Color {
+        guard let snapshot, !failed else { return DS.Color.textSecondary }
+        return snapshot.needsAttention ? DS.Color.warning : DS.Color.success
+    }
+
+    private var statusText: String {
+        if failed { return L10n.t("تعذّر الفحص", "Couldn't check") }
+        guard let snapshot else { return L10n.t("جاري الفحص…", "Checking…") }
+        return snapshot.needsAttention ? L10n.t("يحتاج متابعة", "Needs attention") : L10n.t("النظام سليم", "All systems OK")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(DS.Font.scaled(12, weight: .bold))
+                    .foregroundColor(DS.Color.info)
+                Text(L10n.t("صحة النظام", "System Health"))
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer(minLength: 0)
+                // الحالة كشارة صغيرة + تحديث
+                HStack(spacing: 4) {
+                    Circle().fill(statusColor).frame(width: 7, height: 7)
+                    Text(statusText)
+                        .font(DS.Font.plex(10.5, weight: .bold))
+                        .foregroundColor(statusColor)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(statusColor.opacity(0.12)))
+                Button { Task { await refresh() } } label: {
+                    Group {
+                        if loading { ProgressView().scaleEffect(0.7) }
+                        else { Image(systemName: "arrow.clockwise").font(DS.Font.scaled(11, weight: .bold)) }
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(DS.Color.primary.opacity(0.10)))
+                }
+                .disabled(loading)
+            }
+
+            if let snapshot, snapshot.needsAttention {
+                VStack(spacing: 0) {
+                    if snapshot.failedJobs > 0 || !snapshot.diagnostics.dispatch_healthy {
+                        attentionRow(L10n.t("\(snapshot.failedJobs) مهام سيرفر فشلت", "\(snapshot.failedJobs) server jobs failed"),
+                                     destination: snapshot.failedJobs > 0 ? .failedJobs : .server)
+                    }
+                    if snapshot.diagnostics.jobs.contains(where: { $0.active == false || $0.configuration_needs_repair == true }) {
+                        attentionRow(L10n.t("مهام تحتاج إصلاح", "Jobs need repair"), destination: .server)
+                    }
+                    if snapshot.operations.http_failures > 0 || snapshot.operations.pending_deletions > 0 {
+                        attentionRow(L10n.t("عمليات متأخرة أو فاشلة", "Delayed or failed operations"), destination: .operations)
+                    }
+                }
+                .background(DS.Color.warning.opacity(0.07), in: RoundedRectangle(cornerRadius: DS.Radius.lg))
+            }
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3),
+                      spacing: DS.Spacing.sm) {
+                ForEach(SystemHealthDestination.sections, id: \.self) { destination in
+                    NavigationLink(destination: destination.screen) { tile(destination) }
+                        .buttonStyle(DSScaleButtonStyle())
+                }
+            }
+        }
+        .task { await refresh() }
+    }
+
+    private func tile(_ destination: SystemHealthDestination) -> some View {
+        let value = summary(destination)
+        return VStack(spacing: 4) {
+            Image(systemName: destination.icon)
+                .font(DS.Font.scaled(14, weight: .semibold))
+                .foregroundStyle(destination.color)
+            Text(value.0)
+                .font(DS.Font.plex(15, weight: .bold)).monospacedDigit()
+                .foregroundStyle(value.1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(destination.title)
+                .font(DS.Font.plex(10.5, weight: .semibold))
+                .foregroundStyle(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 84)
+        .background(destination.color.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(destination.color.opacity(0.22), lineWidth: 1))
+    }
+
+    private func summary(_ destination: SystemHealthDestination) -> (String, Color) {
+        switch destination {
+        case .activity:
+            return (L10n.t("عرض", "Open"), DS.Color.secondary)
+        case .push:
+            guard let snapshot else { return ("—", DS.Color.textSecondary) }
+            return snapshot.diagnostics.dispatch_healthy
+                ? (L10n.t("يعمل", "OK"), DS.Color.success)
+                : (L10n.t("متوقف", "Down"), DS.Color.warning)
+        default:
+            guard let snapshot else { return ("—", DS.Color.textSecondary) }
+            return ("\(snapshot.successfulJobs)/\(snapshot.diagnostics.jobs.count)",
+                    snapshot.failedJobs > 0 ? DS.Color.warning : DS.Color.textPrimary)
+        }
+    }
+
+    private func attentionRow(_ title: String, destination: SystemHealthDestination) -> some View {
+        NavigationLink(destination: destination.screen) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(DS.Color.warning)
+                Text(title).font(DS.Font.plex(12, weight: .bold)).foregroundStyle(DS.Color.textPrimary)
+                Spacer(minLength: 0)
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    .font(DS.Font.scaled(10, weight: .bold)).foregroundStyle(DS.Color.textTertiary)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @MainActor private func refresh() async {
+        guard !loading else { return }
+        loading = true
+        defer { loading = false }
+        do {
+            async let operations: HealthOperations = SupabaseConfig.client.rpc("operational_health").execute().value
+            async let diagnostics: HealthDiagnostics = SupabaseConfig.client.rpc("app_diagnostics_dashboard").execute().value
+            async let membership: HealthMembership = SupabaseConfig.client.rpc("admin_membership_counts").execute().value
+            let (o, d, m) = try await (operations, diagnostics, membership)
+            snapshot = SystemHealthSnapshot(operations: o, diagnostics: d, membership: m)
+            failed = false
+        } catch {
+            if !Log.isCancellation(error) { failed = true }
         }
     }
 }

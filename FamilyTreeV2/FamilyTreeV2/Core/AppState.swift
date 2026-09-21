@@ -15,6 +15,7 @@ class AppState: ObservableObject {
     @Published private(set) var appSettingsVM: AppSettingsViewModel
     @Published private(set) var sessionRevision = UUID()
     private var activeProfileId: UUID?
+    private var sessionServicesActive = false
     private var loadTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
 
@@ -56,11 +57,26 @@ class AppState: ObservableObject {
         adminRequestVM = AdminRequestViewModel()
         projectsVM = ProjectsViewModel()
         appSettingsVM = AppSettingsViewModel()
+        sessionServicesActive = false
         wireDependencies()
         sessionRevision = UUID()
     }
 
     private func updateSession(status: AuthViewModel.AuthStatus, profileId: UUID?) {
+        // These states still belong to the same authenticated session. Keep the
+        // device list that triggered the gate so the user can remove an old
+        // device. Replacing the session models here used to empty that list.
+        switch status {
+        case .deviceLimitExceeded, .deviceRevoked, .deviceOverLimit:
+            loadTask?.cancel()
+            loadTask = nil
+            sessionServicesActive = false
+            RealtimeManager.shared.unsubscribe()
+            return
+        default:
+            break
+        }
+
         guard status == .fullyAuthenticated, let profileId,
               let accountId = authVM.supabase.auth.currentUser?.id else {
             if activeProfileId != nil || status == .unauthenticated || status == .accountFrozen {
@@ -74,7 +90,23 @@ class AppState: ObservableObject {
             }
             return
         }
-        guard activeProfileId != profileId else { return }
+
+        // Returning from a device gate does not need a fresh model bundle; the
+        // user has already removed a device and the loaded session data is valid.
+        if activeProfileId == profileId {
+            guard !sessionServicesActive else { return }
+            sessionServicesActive = true
+            RealtimeManager.shared.subscribe()
+            let revision = sessionRevision
+            let notifications = notificationVM
+            loadTask = Task { @MainActor [weak self] in
+                await notifications.reRegisterPushTokenIfNeeded()
+                guard let self, !Task.isCancelled, self.sessionRevision == revision else { return }
+                self.loadTask = nil
+            }
+            return
+        }
+
         loadTask?.cancel()
         RealtimeManager.shared.unsubscribe()
         if activeProfileId != nil { CacheManager.shared.clearAll() }
@@ -92,10 +124,14 @@ class AppState: ObservableObject {
             _ = await (m,n,notif,proj)
             guard !Task.isCancelled, let self, self.sessionRevision == revision,
                   self.activeProfileId == profileId, self.authVM.status == .fullyAuthenticated else { return }
-            RealtimeManager.shared.subscribe()
             await notifications.registerDevice()
-            guard !Task.isCancelled, self.sessionRevision == revision else { return }
+            guard !Task.isCancelled, self.sessionRevision == revision,
+                  self.authVM.status == .fullyAuthenticated else { return }
+            RealtimeManager.shared.subscribe()
+            self.sessionServicesActive = true
             await notifications.reRegisterPushTokenIfNeeded()
+            guard !Task.isCancelled, self.sessionRevision == revision else { return }
+            self.loadTask = nil
         }
     }
 }
