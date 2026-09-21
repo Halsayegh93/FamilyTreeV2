@@ -24,6 +24,7 @@ struct AdminModeratorsView: View {
         let roleOrder: [FamilyMember.UserRole] = [.owner, .admin, .monitor, .supervisor]
         return memberVM.allMembers
             .filter { $0.role == .owner || $0.role == .admin || $0.role == .monitor || $0.role == .supervisor }
+            .filter { $0.isDeceased != true } // المتوفون لا يظهرون في الفريق (طلب المالك)
             .sorted { a, b in
                 let aIdx = roleOrder.firstIndex(of: a.role) ?? 99
                 let bIdx = roleOrder.firstIndex(of: b.role) ?? 99
@@ -406,7 +407,7 @@ struct AdminModeratorsView: View {
 
     /// عدد من يحملون هذا الدور
     private func holdersCount(for title: String) -> Int? {
-        let all = memberVM.allMembers
+        let all = memberVM.allMembers.filter { $0.isDeceased != true }
         switch title {
         case L10n.t("المالك", "Owner"):      return all.filter { $0.role == .owner }.count
         case L10n.t("المدير", "Admin"):      return all.filter { $0.role == .admin }.count
@@ -522,7 +523,7 @@ struct AddModeratorSheet: View {
 
     private var regularMembers: [FamilyMember] {
         memberVM.allMembers
-            .filter { $0.role == .member }
+            .filter { $0.role == .member && $0.isDeceased != true }
             .filter { member in
                 searchText.isEmpty || member.fullName.localizedCaseInsensitiveContains(searchText)
             }

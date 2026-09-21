@@ -285,18 +285,6 @@ struct AdminAppSettingsView: View {
                 isOn: appSettingsVM.settings.pollsEnabled ?? true,
                 key: "polls_enabled"
             )
-
-            DSDivider()
-
-            // القصص
-            settingToggle(
-                icon: "book.pages.fill",
-                color: DS.Color.secondary,
-                title: L10n.t("قصص العائلة", "Family Stories"),
-                subtitle: L10n.t("السماح لأفراد العائلة بنشر القصص", "Allow family members to post stories"),
-                isOn: appSettingsVM.settings.storiesEnabled ?? true,
-                key: "stories_enabled"
-            )
         }
         .padding(.horizontal, DS.Spacing.lg)
     }

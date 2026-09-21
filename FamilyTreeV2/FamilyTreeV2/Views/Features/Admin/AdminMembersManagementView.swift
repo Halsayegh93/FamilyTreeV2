@@ -74,20 +74,17 @@ struct AdminMembersManagementView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // تسجيل عضو جديد — نُقل من اللوحة الرئيسية إلى حيث ينتمي
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button { showRegisterMember = true } label: {
-                    Image(systemName: "person.badge.plus")
-                        .font(DS.Font.scaled(15, weight: .semibold))
+            // للمالك والمدير فقط (canRegisterMembers) — كان يظهر للمراقب
+            if authVM.canRegisterMembers {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showRegisterMember = true } label: {
+                        Image(systemName: "person.badge.plus")
+                            .font(DS.Font.scaled(15, weight: .semibold))
+                    }
+                    .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register new member"))
                 }
-                .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register new member"))
             }
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button { showBannedPhones = true } label: {
-                    Image(systemName: "phone.down.fill")
-                        .font(DS.Font.scaled(14, weight: .semibold))
-                }
-                .accessibilityLabel(L10n.t("الأرقام المحظورة", "Banned numbers"))
-            }
+            // «الأرقام المحظورة» انتقلت إلى «إعدادات النظام ← الأمان والوصول»
         }
         .navigationDestination(isPresented: $showRegisterMember) {
             AdminRegisterMemberView()
@@ -104,9 +101,6 @@ struct AdminMembersManagementView: View {
         }
         .onChange(of: memberVM.allMembers.count) { _ in
             stats = computeStats()
-        }
-        .navigationDestination(isPresented: $showBannedPhones) {
-            AdminBannedPhonesView().environmentObject(authVM)
         }
     }
 
@@ -254,7 +248,6 @@ struct AdminMembersManagementView: View {
     }
 
     /// «الأرقام المحظورة» — زر في الشريط بدل تاب فرعي
-    @State private var showBannedPhones = false
 
     private func statCard(
         value: Int,

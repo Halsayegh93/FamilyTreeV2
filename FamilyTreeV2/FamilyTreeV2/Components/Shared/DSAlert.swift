@@ -228,15 +228,25 @@ final class DSPopupPresenter {
     }
 }
 
+private final class DSAlertLatest<A: View, M: View> {
+    var actions: (() -> A)?
+    var message: (() -> M)??
+}
+
 private struct DSAlertModifier<A: View, M: View>: ViewModifier {
     let title: String
     @Binding var isPresented: Bool
     let actions: () -> A
     let message: (() -> M)?
     @State private var shownID: UUID?
+    /// أحدث نسخة من الأزرار والنص — onChange يلتقط قيم الرسم السابق، فالرسالة
+    /// المبنية من بيانات (presenting) كانت تظهر بالعنوان فقط لأن البيانات nil وقتها
+    @State private var latest = DSAlertLatest<A, M>()
 
     func body(content: Content) -> some View {
-        content
+        latest.actions = actions
+        latest.message = message
+        return content
             .onChange(of: isPresented) { presented in
                 presented ? present() : dismissWindow()
             }
@@ -248,8 +258,8 @@ private struct DSAlertModifier<A: View, M: View>: ViewModifier {
         let binding = $isPresented
         let view = DSAlertBody(
             title: title,
-            actions: actions(),
-            message: message?(),
+            actions: (latest.actions ?? actions)(),
+            message: (latest.message ?? message)?(),
             onDismiss: {
                 // بعد ظهور أثر الضغط — ثم تُغلق النافذة عبر onChange
                 DispatchQueue.main.async { binding.wrappedValue = false }

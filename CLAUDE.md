@@ -125,7 +125,7 @@ unauthenticated → (OTP login) → checking → authenticatedNoProfile → (reg
 | **قبول/رفض طلبات الشجرة والأعضاء** (`canApproveTreeRequests` / `canRejectRequests` = `canModerateTree`) | ✅ | ✅ | ✅ | ❌ | ❌ |
 | تعديل بيانات الأعضاء (`canEditMembers` = `canModerateTree`) | ✅ | ✅ | ✅ | ❌ | ❌ |
 | معالجة صحة الشجرة | ✅ | ✅ | ✅ | ❌ | ❌ |
-| حذف أخبار/تعليقات/صور/قصص (`canDeleteNews` … = `canModerateContent`) | ✅ | ✅ | ❌ | ✅ | ❌ |
+| حذف أخبار/تعليقات/صور (`canDeleteNews` … = `canModerateContent`) | ✅ | ✅ | ❌ | ✅ | ❌ |
 | التعامل مع البلاغات | ✅ | ✅ | ❌ | ✅ | ❌ |
 | إخفاء/إظهار عناصر المكتبة والمشاريع | ✅ | ✅ | ❌ | ❌ | ❌ |
 | حذف ديوانيات (`canDeleteDiwaniyas`) | ✅ | ✅ | ❌ | ❌ | ❌ |

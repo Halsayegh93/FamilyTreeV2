@@ -335,7 +335,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("requester_id", value: uid.uuidString)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .in("request_type", values: Self.myTrackedRequestTypes)
@@ -385,7 +385,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: "contact_message")
                 .order("created_at", ascending: false)
                 .limit(200)
@@ -442,7 +442,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.treeEdit.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
@@ -897,7 +897,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.deceasedReport.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .execute()
@@ -987,7 +987,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.childAdd.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .execute()
@@ -1253,7 +1253,7 @@ class AdminRequestViewModel: ObservableObject {
             if activate {
                 // تفعيل العضو: status=active + role=member للمعلّق + اعتماد طلب الانضمام
                 let profiles: [FamilyMember] = (try? await supabase
-                    .from("profiles")
+                    .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                     .select()
                     .eq("id", value: memberId.uuidString)
                     .limit(1)
@@ -1320,7 +1320,7 @@ class AdminRequestViewModel: ObservableObject {
 
             // 2) Activate member directly after adding the number
             let profileResponse: [FamilyMember] = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: memberId.uuidString)
                 .limit(1)
@@ -1458,7 +1458,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.nameChange.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
@@ -1575,7 +1575,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [PhoneChangeRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.phoneChange.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
@@ -1977,6 +1977,11 @@ class AdminRequestViewModel: ObservableObject {
             self.errorMessage = L10n.t("ليس لديك صلاحية لرفض الطلبات.", "You don't have permission to reject requests.")
             return
         }
+        // لا يُحذف المالك ولا سجلك أنت (السيرفر يرفضهما أيضاً — فحص الثغرات)
+        if memberId == currentUser?.id || memberById(memberId)?.role == .owner {
+            self.errorMessage = L10n.t("لا يمكن حذف هذا السجل.", "This record can't be deleted.")
+            return
+        }
 
         // حذف فوري محلياً — ثم API بالخلفية
         let deletedName = memberById(memberId)?.fourPartName ?? "عضو"
@@ -2006,28 +2011,18 @@ class AdminRequestViewModel: ObservableObject {
             }
 
             do {
-                _ = try? await self?.supabase
+                // الحذف أولاً — السيرفر يفرّغ father_id للأبناء ويحذف طلبات العضو
+                // تلقائياً (ON DELETE). كان التفريغ يسبق الحذف فيبقى الأبناء بلا أب لو فشل.
+                try await self?.supabase
                     .from("profiles")
-                    .update(["father_id": AnyEncodable(Optional<String>.none)])
-                    .eq("father_id", value: memberId.uuidString)
-                    .execute()
-
-                _ = try? await self?.supabase
-                    .from("admin_requests")
                     .delete()
-                    .eq("member_id", value: memberId.uuidString)
+                    .eq("id", value: memberId.uuidString)
                     .execute()
 
                 _ = try? await self?.supabase
                     .from("admin_requests")
                     .delete()
                     .eq("requester_id", value: memberId.uuidString)
-                    .execute()
-
-                try await self?.supabase
-                    .from("profiles")
-                    .delete()
-                    .eq("id", value: memberId.uuidString)
                     .execute()
 
                 await self?.notificationVM?.notifyAdminsWithPush(
@@ -2041,6 +2036,7 @@ class AdminRequestViewModel: ObservableObject {
                 Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
             } catch {
                 Log.error("خطأ في الحذف: \(error.localizedDescription)")
+                await self?.memberVM?.fetchAllMembers(force: true)
                 await MainActor.run {
                     self?.errorMessage = L10n.t(
                         "فشل حذف العضو: \(error.localizedDescription)",
@@ -2105,7 +2101,7 @@ class AdminRequestViewModel: ObservableObject {
             // التعليقات/الأرشيف/المشاريع/الديوانيات/تفاصيل العضو تُدرَج بـ content_report.
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .in("request_type", values: [
                     RequestType.newsReport.rawValue,
                     RequestType.contentReport.rawValue
@@ -2122,7 +2118,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func approveNewsReport(request: AdminRequest) async {
-        guard canModerate else { return }
+        // قبول البلاغ يحذف الخبر — مجال المحتوى فقط (لا المراقب)
+        guard authVM?.canModerateContent == true else { Log.warning("قبول البلاغ مرفوض: لا صلاحية"); return }
 
         optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -2155,8 +2152,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectNewsReport(request: AdminRequest) async {
-        // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
-        guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
+        // البلاغات مجال المحتوى: المالك/المدير/المشرف (كانت canRejectRequests = مجال الشجرة، معكوسة)
+        guard authVM?.canModerateContent == true else { Log.warning("رفض البلاغ مرفوض: لا صلاحية"); return }
 
         optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -2256,7 +2253,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.photoSuggestion.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)

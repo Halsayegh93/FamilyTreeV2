@@ -26,20 +26,18 @@ struct AdminSecuritySettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
 
-                    // صفحة واحدة مرتّبة (طلب المالك): أقل صفحات، بلا تكرار.
-                    // ── الإدارة: أربعة مربّعات ٢×٢ ──
+                    // صفحة واحدة مرتّبة (طلب المالك): مجموعتان صغيرتان بثلاثة أعمدة.
+                    // ── التطبيق: الإعدادات، التحديث الإجباري، الإشعارات ──
                     sectionHeader(icon: "gearshape.2.fill", color: DS.Color.primary,
-                                  title: L10n.t("الإدارة", "Management"), note: nil)
+                                  title: L10n.t("التطبيق", "App"), note: nil)
                         .padding(.horizontal, DS.Spacing.lg)
 
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: DS.Spacing.sm),
-                                        GridItem(.flexible(), spacing: DS.Spacing.sm)],
-                              spacing: DS.Spacing.sm) {
+                    LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
                         AdminTile(
                             title: L10n.t("إعدادات التطبيق", "App Settings"),
                             subtitle: L10n.t("اللغة · التسجيل · الميزات", "Language · Sign-up · Features"),
                             icon: "gearshape.fill",
-                            color: DS.Color.primary
+                            color: DS.Color.primary, compact: true
                         ) {
                             AdminAppSettingsView()
                                 .environmentObject(authVM)
@@ -48,13 +46,48 @@ struct AdminSecuritySettingsView: View {
                                 .environmentObject(notificationVM)
                         }
 
+                        if authVM.isAdmin {
+                            AdminTile(
+                                title: L10n.t("التحديث الإجباري", "Force Update"),
+                                subtitle: L10n.t("إيقاف النسخ القديمة", "Block old versions"),
+                                icon: "arrow.down.app.fill",
+                                color: DS.Color.warning, compact: true
+                            ) {
+                                AdminForceUpdateView()
+                                    .environmentObject(authVM)
+                                    .environmentObject(appSettingsVM)
+                            }
+
+                            // «إرسال إشعارات» + «تحديثات التطبيق» صفحة واحدة
+                            AdminTile(
+                                title: L10n.t("الإشعارات والتحديثات", "Notifications & Updates"),
+                                subtitle: L10n.t("إشعار للأعضاء أو تحديث", "Notify members or announce"),
+                                icon: "bell.badge.fill",
+                                color: DS.Color.secondary, compact: true
+                            ) {
+                                AdminMessagingHubView()
+                                    .environmentObject(authVM)
+                                    .environmentObject(memberVM)
+                                    .environmentObject(notificationVM)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+
+                    // ── الأمان والوصول: الفريق، الأجهزة، الأرقام المحظورة ──
+                    sectionHeader(icon: "lock.shield.fill", color: DS.Color.neonPurple,
+                                  title: L10n.t("الأمان والوصول", "Security & Access"), note: nil)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.sm)
+
+                    LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
                         if authVM.canModerate {
                             AdminTile(
                                 title: L10n.t("فريق الإدارة", "Admin Team"),
                                 subtitle: L10n.t("الأدوار والصلاحيات", "Roles & permissions"),
                                 icon: "person.3.fill",
                                 color: DS.Color.neonPurple,
-                                badge: moderatorCount
+                                badge: moderatorCount, compact: true
                             ) {
                                 AdminModeratorsView()
                                     .environmentObject(authVM)
@@ -67,7 +100,7 @@ struct AdminSecuritySettingsView: View {
                                 title: L10n.t("الأجهزة", "Devices"),
                                 subtitle: L10n.t("المرتبطة بالحسابات", "Linked to accounts"),
                                 icon: "iphone.gen3",
-                                color: DS.Color.info
+                                color: DS.Color.info, compact: true
                             ) {
                                 AdminDevicesView()
                                     .environmentObject(authVM)
@@ -75,17 +108,15 @@ struct AdminSecuritySettingsView: View {
                                     .environmentObject(memberVM)
                             }
 
-                            // «إرسال إشعارات» + «تحديثات التطبيق» صفحة واحدة
+                            // انتقلت من «إدارة الأعضاء» — إعداد أمان (التعديل للمالك)
                             AdminTile(
-                                title: L10n.t("الإشعارات والتحديثات", "Notifications & Updates"),
-                                subtitle: L10n.t("إشعار للأعضاء أو تحديث", "Notify members or announce"),
-                                icon: "bell.badge.fill",
-                                color: DS.Color.secondary
+                                title: L10n.t("الأرقام المحظورة", "Banned Numbers"),
+                                subtitle: L10n.t("منع التسجيل برقم", "Block sign-up by number"),
+                                icon: "phone.down.fill",
+                                color: DS.Color.error, compact: true
                             ) {
-                                AdminMessagingHubView()
+                                AdminBannedPhonesView()
                                     .environmentObject(authVM)
-                                    .environmentObject(memberVM)
-                                    .environmentObject(notificationVM)
                             }
                         }
                     }
@@ -126,6 +157,10 @@ struct AdminSecuritySettingsView: View {
     // العضو الفعّال = رقم جوال + جهاز دخل التطبيق. الأحياء فقط.
 
     /// عنوان قسم موحّد — أيقونة + عنوان + ملاحظة صغيرة على الطرف
+    private var gridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3)
+    }
+
     private func sectionHeader(icon: String, color: Color, title: String, note: String?) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: icon)

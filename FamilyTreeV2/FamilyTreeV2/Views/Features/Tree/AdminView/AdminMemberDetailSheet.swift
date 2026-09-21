@@ -50,7 +50,10 @@ struct AdminMemberDetailSheet: View {
     @State private var showEmptyNameAlert = false
     @State private var showAvatarUploadError = false
 
-    private var canDeleteMember: Bool { authVM.canDeleteMembers }
+    /// لا يُعرض حذف المالك ولا حذف سجلك أنت (فحص الثغرات)
+    private var canDeleteMember: Bool {
+        authVM.canDeleteMembers && member.role != .owner && member.id != authVM.currentUser?.id
+    }
     private var isMonitorOnly: Bool { authVM.currentUser?.role == .monitor }
 
     init(member: FamilyMember) {
@@ -582,7 +585,7 @@ struct AdminMemberDetailSheet: View {
                     localChildren.move(fromOffsets: source, toOffset: destination)
                 }
                 .onDelete { offsets in
-                    guard canDeleteMember, let idx = offsets.first else { return }
+                    guard authVM.canDeleteMembers, let idx = offsets.first else { return }
                     childToDelete = localChildren[idx]
                 }
 

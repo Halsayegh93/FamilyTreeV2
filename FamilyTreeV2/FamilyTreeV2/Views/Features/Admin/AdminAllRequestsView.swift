@@ -1517,6 +1517,7 @@ struct AdminAllRequestsView: View {
     /// - `onApprove`/`onReject`: nil = الزر يختفي
     private func selectableRow<Content: View>(
         id: UUID,
+        forTab: RequestTab? = nil,
         accentColor: Color = DS.Color.primary,
         approveLabel: String? = nil,
         approveIcon: String = "checkmark",
@@ -1586,7 +1587,7 @@ struct AdminAllRequestsView: View {
         .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 4, trailing: DS.Spacing.lg))
         // الموافقة/الرفض عبر السحب — خارج وضع التحديد فقط
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if !isSelectMode, canApprove(selectedTab), let onApprove {
+            if !isSelectMode, canApprove(forTab ?? selectedTab), let onApprove {
                 Button(action: onApprove) {
                     Label(approveLabel ?? L10n.t("موافقة", "Approve"), systemImage: approveIcon)
                 }
@@ -1594,7 +1595,7 @@ struct AdminAllRequestsView: View {
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            if !isSelectMode, let onReject, canReject(selectedTab) {
+            if !isSelectMode, let onReject, canReject(forTab ?? selectedTab) {
                 Button(action: onReject) {
                     Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                 }
@@ -2033,7 +2034,30 @@ struct AdminAllRequestsView: View {
         for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .duplicatePhone] {
             items += healthMembers(for: issue).map { .health($0, issue) }
         }
-        return items.sorted { allItemDate($0) > allItemDate($1) }
+        // «الكل» يعرض لكل دور عناصر مجاله فقط — مثل التابات (فحص الثغرات)
+        let visible = Set(tabsForRole(RequestTab.allCases))
+        return items
+            .filter { visible.contains(allItemTab($0)) }
+            .sorted { allItemDate($0) > allItemDate($1) }
+    }
+
+    /// تاب كل عنصر في «الكل» — لتحديد صلاحية الموافقة/الرفض عليه
+    private func allItemTab(_ item: AllItem) -> RequestTab {
+        switch item {
+        case .join: return .joinRequests
+        case .news: return .news
+        case .report: return .reports
+        case .phone: return .phone
+        case .nameChange: return .nameChange
+        case .diwaniya: return .diwaniya
+        case .deceased: return .deceased
+        case .child: return .children
+        case .photo: return .photos
+        case .project: return .projects
+        case .archive: return .archive
+        case .treeEdit: return .treeOther
+        case .health(_, let issue): return issue.asTab
+        }
     }
 
     private func treeEditColor(_ action: TreeEditAction) -> Color {
@@ -2063,7 +2087,7 @@ struct AdminAllRequestsView: View {
         switch item {
         case .join(let member):
             selectableRow(
-                id: member.id, accentColor: RequestTab.joinRequests.color,
+                id: member.id, forTab: .joinRequests, accentColor: RequestTab.joinRequests.color,
                 approveLabel: L10n.t("ربط", "Link"), approveIcon: "link.badge.plus",
                 onApprove: { memberToLink = member },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
@@ -2071,7 +2095,7 @@ struct AdminAllRequestsView: View {
             ) { joinRequestRow(for: member) }
         case .news(let post):
             selectableRow(
-                id: post.id, accentColor: RequestTab.news.color,
+                id: post.id, forTab: .news, accentColor: RequestTab.news.color,
                 onApprove: { Task { await newsVM.approveNewsPost(postId: post.id) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .news(post) },
                 onDelete: { swipeDeleteDetail = .news(post) },
@@ -2079,7 +2103,7 @@ struct AdminAllRequestsView: View {
             ) { newsRow(for: post) }
         case .report(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.reports.color,
+                id: request.id, forTab: .reports, accentColor: RequestTab.reports.color,
                 onApprove: { Task { await adminRequestVM.approveNewsReport(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .report(request) },
                 onDelete: { swipeDeleteDetail = .report(request) },
@@ -2087,7 +2111,7 @@ struct AdminAllRequestsView: View {
             ) { reportRow(for: request) }
         case .phone(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.phone.color,
+                id: request.id, forTab: .phone, accentColor: RequestTab.phone.color,
                 onApprove: { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .phone(request) },
                 onDelete: { swipeDeleteDetail = .phone(request) },
@@ -2095,7 +2119,7 @@ struct AdminAllRequestsView: View {
             ) { phoneRow(for: request) }
         case .nameChange(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.nameChange.color,
+                id: request.id, forTab: .nameChange, accentColor: RequestTab.nameChange.color,
                 onApprove: { Task { await adminRequestVM.approveNameChangeRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .nameChange(request) },
                 onDelete: { swipeDeleteDetail = .nameChange(request) },
@@ -2103,7 +2127,7 @@ struct AdminAllRequestsView: View {
             ) { nameChangeRow(for: request) }
         case .diwaniya(let diwaniya):
             selectableRow(
-                id: diwaniya.id, accentColor: RequestTab.diwaniya.color,
+                id: diwaniya.id, forTab: .diwaniya, accentColor: RequestTab.diwaniya.color,
                 onApprove: {
                     if let adminId = authVM.currentUser?.id {
                         Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
@@ -2115,7 +2139,7 @@ struct AdminAllRequestsView: View {
             ) { diwaniyaRow(for: diwaniya) }
         case .deceased(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.deceased.color,
+                id: request.id, forTab: .deceased, accentColor: RequestTab.deceased.color,
                 onApprove: { Task { await adminRequestVM.approveDeceasedRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .deceased(request) },
                 onDelete: { swipeDeleteDetail = .deceased(request) },
@@ -2123,7 +2147,7 @@ struct AdminAllRequestsView: View {
             ) { deceasedRow(for: request) }
         case .child(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.children.color,
+                id: request.id, forTab: .children, accentColor: RequestTab.children.color,
                 approveLabel: L10n.t("تأكيد", "Confirm"),
                 onApprove: { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .child(request) },
@@ -2132,7 +2156,7 @@ struct AdminAllRequestsView: View {
             ) { childRow(for: request) }
         case .photo(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.photos.color,
+                id: request.id, forTab: .photos, accentColor: RequestTab.photos.color,
                 onApprove: { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .photo(request) },
                 onDelete: { swipeDeleteDetail = .photo(request) },
@@ -2140,7 +2164,7 @@ struct AdminAllRequestsView: View {
             ) { photoRow(for: request) }
         case .project(let project):
             selectableRow(
-                id: project.id, accentColor: RequestTab.projects.color,
+                id: project.id, forTab: .projects, accentColor: RequestTab.projects.color,
                 onApprove: {
                     if let adminId = authVM.currentUser?.id {
                         Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
@@ -2152,7 +2176,7 @@ struct AdminAllRequestsView: View {
             ) { projectRow(for: project) }
         case .archive(let item):
             selectableRow(
-                id: item.id, accentColor: RequestTab.archive.color,
+                id: item.id, forTab: .archive, accentColor: RequestTab.archive.color,
                 onApprove: { Task { await archiveVM.approveItem(item) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .archive(item) },
                 onDelete: { swipeDeleteDetail = .archive(item) },
@@ -2161,7 +2185,7 @@ struct AdminAllRequestsView: View {
         case .treeEdit(let request, let action):
             let color = treeEditColor(action)
             selectableRow(
-                id: request.id, accentColor: color,
+                id: request.id, forTab: .treeOther, accentColor: color,
                 onApprove: { Task { await adminRequestVM.approveTreeEditRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .treeEdit(request, action) },
                 onDelete: { swipeDeleteDetail = .treeEdit(request, action) },
@@ -2169,7 +2193,7 @@ struct AdminAllRequestsView: View {
             ) { treeEditRow(request: request, action: action, color: color) }
         case .health(let member, let issue):
             selectableRow(
-                id: member.id, accentColor: issue.asTab.color,
+                id: member.id, forTab: issue.asTab, accentColor: issue.asTab.color,
                 onApprove: nil, onReject: nil,
                 onTap: { selectedDetail = .healthMember(member, issue) }
             ) { treeHealthRow(member: member, issue: issue, color: issue.asTab.color) }

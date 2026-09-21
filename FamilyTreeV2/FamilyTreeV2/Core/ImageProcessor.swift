@@ -12,7 +12,6 @@ nonisolated enum ImageProcessor {
         case avatar       // صورة شخصية
         case cover        // صورة غلاف
         case news         // صورة خبر
-        case story        // ستوري
         case gallery      // معرض صور
         case projectLogo  // شعار مشروع
         case thumbnail    // صورة مصغرة
@@ -23,7 +22,6 @@ nonisolated enum ImageProcessor {
             case .avatar, .projectLogo: return 800
             case .cover:                return 1200
             case .news, .gallery:       return 1600
-            case .story:                return 1080
             case .thumbnail:            return 200
             case .contact:              return 1200
             }
@@ -34,7 +32,6 @@ nonisolated enum ImageProcessor {
             case .avatar, .projectLogo: return 800
             case .cover:                return 800
             case .news, .gallery:       return 1200
-            case .story:                return 1920
             case .thumbnail:            return 200
             case .contact:              return 1200
             }
@@ -45,7 +42,6 @@ nonisolated enum ImageProcessor {
             case .avatar:       return 0.6
             case .cover:        return 0.7
             case .news:         return 0.7
-            case .story:        return 0.7
             case .gallery:      return 0.65
             case .projectLogo:  return 0.7
             case .thumbnail:    return 0.5

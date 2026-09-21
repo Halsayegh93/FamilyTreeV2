@@ -206,7 +206,7 @@ class MemberViewModel: ObservableObject {
         guard NetworkMonitor.shared.isConnected else { return }
         do {
             let response = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: id.uuidString)
                 .single()
@@ -284,7 +284,7 @@ class MemberViewModel: ObservableObject {
     func fetchChildren(for fatherId: UUID) async {
         do {
             // فلاتر السيرفر تطابق المعيار القانوني (FamilyMember.isCountable)
-            let response: [FamilyMember] = try await supabase.from("profiles")
+            let response: [FamilyMember] = try await supabase.from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("father_id", value: fatherId)
                 .eq("is_hidden_from_tree", value: false)
@@ -863,7 +863,7 @@ class MemberViewModel: ObservableObject {
             father = localFather
         } else {
             let remoteFathers: [FamilyMember]? = try? await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: fatherId.uuidString)
                 .limit(1)
@@ -1989,7 +1989,7 @@ class MemberViewModel: ObservableObject {
             
             // 2) تفعيل العضو مباشرة بعد إضافة الرقم
             let profileResponse: [FamilyMember] = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: memberId.uuidString)
                 .limit(1)

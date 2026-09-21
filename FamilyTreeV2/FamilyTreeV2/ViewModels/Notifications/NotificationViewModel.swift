@@ -216,7 +216,7 @@ class NotificationViewModel: ObservableObject {
     private static let pendingApprovalKindsRaw: Set<String> = [
         "admin_request", "link_request", "news_report", "tree_edit",
         "deceased_report", "child_add", "phone_change", "name_change",
-        "photo_suggestion", "gallery_pending", "story_pending",
+        "photo_suggestion", "gallery_pending",
         "diwaniya_pending", "project_pending", "news_add", "contact_message",
     ]
 
@@ -227,8 +227,7 @@ class NotificationViewModel: ObservableObject {
         "admin_edit_avatar", "admin_edit_avatar_remove", "admin_edit_child_add",
         "admin_edit_child_remove", "join_approved", "account_activated",
         "role_change", "diwaniya_approved", "diwaniya_rejected",
-        "project_approved", "project_rejected", "story_approved",
-        "story_rejected", "gallery_approved", "gallery_rejected",
+        "project_approved", "project_rejected", "gallery_approved", "gallery_rejected",
         "news_published", "news_deleted",
         "member_delete",
     ]

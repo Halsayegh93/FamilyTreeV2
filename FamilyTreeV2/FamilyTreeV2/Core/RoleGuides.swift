@@ -51,8 +51,8 @@ struct RoleGuide: Identifiable {
                     L10n.t("تسجيل عضو جديد، حذف الأعضاء، تجميد الحسابات",
                           "Register, delete and freeze members"),
                     L10n.t("إرسال الإشعارات للأعضاء", "Send notifications to members"),
-                    L10n.t("حذف أي محتوى: أخبار، تعليقات، صور، قصص، ديوانيات",
-                          "Delete any content: news, comments, photos, stories, diwaniyas"),
+                    L10n.t("حذف أي محتوى: أخبار، تعليقات، صور، ديوانيات",
+                          "Delete any content: news, comments, photos, diwaniyas"),
                     L10n.t("إخفاء وإظهار عناصر المكتبة والمشاريع",
                           "Hide and show library items and projects"),
                     L10n.t("تصفّح «إعدادات النظام» للقراءة", "Browse system settings (read-only)")
@@ -82,8 +82,8 @@ struct RoleGuide: Identifiable {
                 cannot: [
                     L10n.t("اعتماد أو رفض الأخبار والمكتبة والمشاريع والديوانيات — للإدارة",
                           "Approve or reject news, library, projects, diwaniyas — admins only"),
-                    L10n.t("حذف المحتوى أو إخفاؤه (أخبار، تعليقات، صور، قصص) — مجال المشرف",
-                          "Delete or hide content (news, comments, photos, stories) — supervisor scope"),
+                    L10n.t("حذف المحتوى أو إخفاؤه (أخبار، تعليقات، صور) — مجال المشرف",
+                          "Delete or hide content (news, comments, photos) — supervisor scope"),
                     L10n.t("التعامل مع البلاغات — مجال المشرف", "Handle reports — supervisor scope"),
                     L10n.t("حذف الأعضاء أو تجميد حساباتهم", "Delete or freeze members"),
                     L10n.t("تسجيل عضو جديد مباشرة", "Register a new member directly"),
@@ -98,11 +98,11 @@ struct RoleGuide: Identifiable {
                 color: DS.Color.supervisorRole,
                 mandate: L10n.t("مجاله: المحتوى والبلاغات", "Scope: content and reports"),
                 can: [
-                    L10n.t("مراجعة المحتوى المنتظر ورفعه للإدارة",
-                          "Review pending content and raise it to admins"),
+                    L10n.t("متابعة المحتوى المنتظر (الاعتماد للإدارة)",
+                          "Follow pending content (approval is for admins)"),
                     L10n.t("التعامل مع البلاغات على المحتوى", "Handle content reports"),
-                    L10n.t("حذف المخالف: أخبار، تعليقات، صور الأعضاء، قصص",
-                          "Delete violations: news, comments, member photos, stories"),
+                    L10n.t("حذف المخالف: أخبار، تعليقات، صور الأعضاء",
+                          "Delete violations: news, comments, member photos"),
                     L10n.t("نشر أخباره مباشرة بلا مراجعة", "Publish their own news without review")
                 ],
                 cannot: [

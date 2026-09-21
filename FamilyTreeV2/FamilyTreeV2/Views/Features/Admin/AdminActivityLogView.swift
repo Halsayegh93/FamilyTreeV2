@@ -89,14 +89,12 @@ struct AdminActivityLogView: View {
         NotificationKind.roleChange.rawValue,
     ]
 
-    /// تغييرات المحتوى (أخبار، صور، قصص، ديوانيات، مشاريع)
+    /// تغييرات المحتوى (أخبار، صور، ديوانيات، مشاريع)
     private static let contentKinds: Set<String> = [
         NotificationKind.newsPublished.rawValue,
         "news_deleted",
         NotificationKind.galleryApproved.rawValue,
         NotificationKind.galleryRejected.rawValue,
-        NotificationKind.storyApproved.rawValue,
-        NotificationKind.storyRejected.rawValue,
         NotificationKind.diwaniyaApproved.rawValue,
         NotificationKind.diwaniyaRejected.rawValue,
         NotificationKind.projectApproved.rawValue,
@@ -119,7 +117,6 @@ struct AdminActivityLogView: View {
         NotificationKind.contactMessage.rawValue,
         NotificationKind.adminRequest.rawValue,
         NotificationKind.galleryPending.rawValue,
-        NotificationKind.storyPending.rawValue,
         NotificationKind.diwaniyaPending.rawValue,
         NotificationKind.projectPending.rawValue,
     ]
@@ -470,7 +467,6 @@ struct AdminActivityLogView: View {
         if Self.contentKinds.contains(kind) {
             if kind.contains("news") { return ("newspaper.fill", DS.Color.info) }
             if kind.contains("gallery") { return ("photo.stack.fill", DS.Color.info) }
-            if kind.contains("story") { return ("book.fill", DS.Color.accent) }
             if kind.contains("diwaniya") { return ("map.fill", DS.Color.primary) }
             if kind.contains("project") { return ("briefcase.fill", DS.Color.warning) }
             return ("doc.fill", DS.Color.info)

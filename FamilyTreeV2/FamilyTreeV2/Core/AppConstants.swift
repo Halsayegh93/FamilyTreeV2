@@ -8,7 +8,6 @@ enum AppConstants {
         static let members: TimeInterval = 15
         static let news: TimeInterval = 10
         static let pendingNews: TimeInterval = 20
-        static let stories: TimeInterval = 15
         static let adminRequests: TimeInterval = 20
         static let notifications: TimeInterval = 10
     }
@@ -79,15 +78,12 @@ enum NotificationKind: String {
     case phoneChange = "phone_change"
     case nameChange = "name_change"
     case photoSuggestion = "photo_suggestion"
-    // أخبار وقصص
+    // أخبار
     case newsAdd = "news_add"
     case newsPublished = "news_published"
     case newsComment = "news_comment"
     case newsLike = "news_like"
     case newsReport = "news_report"
-    case storyPending = "story_pending"
-    case storyApproved = "story_approved"
-    case storyRejected = "story_rejected"
     // معرض الصور
     case galleryPending = "gallery_pending"
     case galleryApproved = "gallery_approved"

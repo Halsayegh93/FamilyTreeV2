@@ -633,19 +633,21 @@ struct AdminTile<Destination: View>: View {
     let icon: String
     let color: Color
     var badge: Int? = nil
+    /// أصغر — لشبكة «إعدادات النظام» بثلاثة أعمدة (طلب المالك)
+    var compact: Bool = false
     @ViewBuilder let destination: () -> Destination
 
     var body: some View {
         NavigationLink(destination: destination()) {
-            VStack(spacing: DS.Spacing.sm) {
+            VStack(spacing: compact ? DS.Spacing.xs + 2 : DS.Spacing.sm) {
                 ZStack(alignment: .topTrailing) {
                     ZStack {
                         Circle().fill(color.opacity(0.14))
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(17, weight: .semibold))
+                            .font(DS.Font.scaled(compact ? 15 : 17, weight: .semibold))
                             .foregroundColor(color)
                     }
-                    .frame(width: 44, height: 44)
+                    .frame(width: compact ? 36 : 44, height: compact ? 36 : 44)
 
                     if let badge, badge > 0 {
                         Text(badge > 99 ? "99+" : "\(badge)")
@@ -668,9 +670,9 @@ struct AdminTile<Destination: View>: View {
                     .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, DS.Spacing.md)
+            .padding(.vertical, compact ? DS.Spacing.sm : DS.Spacing.md)
             .padding(.horizontal, DS.Spacing.xs)
-            .frame(maxWidth: .infinity, minHeight: 104)
+            .frame(maxWidth: .infinity, minHeight: compact ? 84 : 104)
             .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(

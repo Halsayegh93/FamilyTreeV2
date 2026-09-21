@@ -222,9 +222,6 @@ class AuthViewModel: ObservableObject {
     /// تجميد حسابات الأعضاء — مدير + مالك
     var canFreezeMembers: Bool { isAdmin }
 
-    /// حذف قصص الأعضاء — مجال المحتوى
-    var canDeleteStories: Bool { canModerateContent }
-
     /// حذف ديوانيات — مدير + مالك
     var canDeleteDiwaniyas: Bool { isAdmin }
 
@@ -447,7 +444,7 @@ class AuthViewModel: ObservableObject {
     private func loadProfile(by id: UUID) async -> FamilyMember? {
         do {
             let response: [FamilyMember] = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: id.uuidString)
                 .limit(1)
@@ -1089,7 +1086,7 @@ class AuthViewModel: ObservableObject {
         let userIdString = user.id.uuidString.lowercased()
         do {
             let response: [FamilyMember] = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: userIdString)
                 .limit(1)
@@ -1157,7 +1154,7 @@ class AuthViewModel: ObservableObject {
         try? await Task.sleep(nanoseconds: 200_000_000)
         do {
             let retryResponse: [FamilyMember] = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: userIdString)
                 .limit(1)

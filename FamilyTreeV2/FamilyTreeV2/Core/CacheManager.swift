@@ -5,11 +5,11 @@ final class CacheManager: @unchecked Sendable {
     static let shared = CacheManager()
 
     enum CacheKey: String, CaseIterable {
-        case members, news, stories, diwaniyas, projects, currentUser, notifications, widgetStats, widgetNews
+        case members, news, diwaniyas, projects, currentUser, notifications, widgetStats, widgetNews
         var ttlSeconds: TimeInterval {
             switch self {
             case .members, .diwaniyas, .projects, .currentUser: return 3600
-            case .news, .stories: return 900
+            case .news: return 900
             case .notifications: return 300
             case .widgetStats, .widgetNews: return 1800
             }

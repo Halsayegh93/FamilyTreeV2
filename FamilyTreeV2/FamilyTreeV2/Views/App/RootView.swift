@@ -39,7 +39,12 @@ struct RootView: View {
                     .environmentObject(appSettingsVM)
 
             case .fullyAuthenticated:
-                if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
+                // التحديث الإجباري — النسخة أقل من الحد الأدنى. المالك مستثنى حتى
+                // لا يقفل نفسه خارج التطبيق لو رفع الحد قبل ما يحدّث جهازه.
+                if AppBuild.current < (appSettingsVM.settings.iosMinBuild ?? 0)
+                    && authVM.currentUser?.role != .owner {
+                    ForceUpdateView()
+                } else if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
                     MaintenanceModeView()
                 } else {
                     MainTabView()
