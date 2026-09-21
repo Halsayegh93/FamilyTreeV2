@@ -208,21 +208,28 @@ struct AdminAnalyticsView: View {
                     .font(DS.Font.scaled(15, weight: .bold))
                     .foregroundColor(color)
             }
-            Text(value)
-                .font(DS.Font.title2)
-                .fontWeight(.black)
+            // رقم أوضح: خط التطبيق، أرقام متساوية العرض، وفواصل الآلاف (طلب المالك)
+            Text(Int(value).map { $0.formatted() } ?? value)
+                .font(DS.Font.plex(22, weight: .bold))
+                .monospacedDigit()
                 .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(label)
-                .font(DS.Font.caption2)
+                .font(DS.Font.plex(11.5, weight: .semibold))
                 .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(color.opacity(0.06)))
     }
 
     // MARK: - Roles Distribution
     private var rolesSection: some View {
-        let pool = countableMembers
+        // الأحياء فقط — كان «عضو» يشمل المتوفّين (٢٬٧١١ بدل ٢٬٣٤٤)
+        let pool = activeMembers
         let admins = pool.filter { $0.role == .owner || $0.role == .admin }.count
         let monitors = pool.filter { $0.role == .monitor }.count
         let supervisors = pool.filter { $0.role == .supervisor }.count
@@ -231,7 +238,7 @@ struct AdminAnalyticsView: View {
 
         return DSCard(padding: 0) {
             DSSectionHeader(
-                title: L10n.t("توزيع الأدوار", "Roles Distribution"),
+                title: L10n.t("توزيع الأدوار (الأحياء)", "Roles (alive)"),
                 icon: "shield.fill",
                 iconColor: DS.Color.warning
             )
@@ -269,14 +276,15 @@ struct AdminAnalyticsView: View {
 
     // MARK: - Gender Distribution
     private var genderSection: some View {
-        let males = activeMembers.filter { ($0.gender ?? "").lowercased() == "male" }.count
-        let females = activeMembers.filter { ($0.gender ?? "").lowercased() == "female" }.count
-        let unknown = activeMembers.count - males - females
-        let total = max(activeMembers.count, 1)
+        // الرجال: أحياء شجرة الرجال؛ النساء: أحياء شجرة النساء (منفصلة في جدول آخر)
+        let males = activeMembers.count
+        let females = womenData.filter { $0.isFemale && $0.isDeceased != true }.count
+        let unknown = 0
+        let total = max(males + females, 1)
 
         return DSCard(padding: 0) {
             DSSectionHeader(
-                title: L10n.t("توزيع الجنس", "Gender Distribution"),
+                title: L10n.t("توزيع الجنس (الأحياء)", "Gender (alive)"),
                 icon: "person.2.circle.fill",
                 iconColor: DS.Color.info
             )
@@ -324,7 +332,8 @@ struct AdminAnalyticsView: View {
             )
             VStack(spacing: DS.Spacing.md) {
                 barRow(label: L10n.t("متزوج", "Married"), count: married, total: total, color: DS.Color.success)
-                barRow(label: L10n.t("أعزب", "Single"), count: single, total: total, color: DS.Color.info)
+                // is_married افتراضياً false — فأغلبهم لم يحدّدوا حالتهم
+                barRow(label: L10n.t("أعزب / غير محدد", "Single / not set"), count: single, total: total, color: DS.Color.info)
                 if unknown > 0 {
                     barRow(label: L10n.t("غير محدد", "Unspecified"), count: unknown, total: total, color: DS.Color.textTertiary)
                 }
@@ -573,7 +582,8 @@ struct AdminAnalyticsView: View {
 
     // MARK: - News Stats
     private var newsSection: some View {
-        let totalNews = newsVM.allNews.count
+        // الإجمالي من السيرفر — المحمَّل وحده ٢٥ منشوراً فقط
+        let totalNews = max(newsVM.totalNewsCount, newsVM.allNews.count)
         let approvedNews = newsVM.allNews.filter { $0.approval_status == "approved" }.count
         let pendingNews = newsVM.pendingNewsRequests.count
         let withImages = newsVM.allNews.filter { !($0.image_urls ?? []).isEmpty }.count
@@ -604,47 +614,56 @@ struct AdminAnalyticsView: View {
     private func barRow(label: String, count: Int, total: Int, color: Color) -> some View {
         let percentage = total > 0 ? Double(count) / Double(total) : 0
 
-        return HStack(spacing: DS.Spacing.md) {
+        return HStack(spacing: DS.Spacing.sm) {
             Text(label)
-                .font(DS.Font.scaled(12, weight: .semibold))
-                .foregroundColor(DS.Color.textSecondary)
-                .frame(width: 80, alignment: .leading)
+                .font(DS.Font.plex(12.5, weight: .semibold))
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(width: 92, alignment: .leading)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(color.opacity(0.1))
-                        .frame(height: 20)
-
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(
-                            LinearGradient(
-                                colors: [color, color.opacity(0.7)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(geo.size.width * percentage, 2), height: 20)
+                    Capsule()
+                        .fill(color.opacity(0.12))
+                        .frame(height: 12)
+                    Capsule()
+                        .fill(LinearGradient(colors: [color, color.opacity(0.75)],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(geo.size.width * percentage, count > 0 ? 6 : 0), height: 12)
                 }
+                .frame(maxHeight: .infinity)
             }
             .frame(height: 20)
 
-            // عرض يكفي للآلاف (٢٬٧١١) في سطر واحد — كان الرقم ينكسر لسطرين
-            Text(count.formatted())
-                .font(DS.Font.scaled(12, weight: .black))
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(width: 46, alignment: .trailing)
+            // الرقم بخط واضح + النسبة تحته
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(count.formatted())
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.textPrimary)
+                // نسبة صغيرة غير صفرية تظهر «<1%» بدل «0%»
+                Text(count > 0 && percentage < 0.01
+                     ? "<" + (0.01).formatted(.percent.precision(.fractionLength(0)))
+                     : percentage.formatted(.percent.precision(.fractionLength(0))))
+                    .font(DS.Font.plex(10, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(width: 58, alignment: .trailing)
         }
     }
 
     private func miniStat(value: String, label: String, color: Color) -> some View {
         VStack(spacing: 2) {
-            Text(value)
-                .font(DS.Font.headline)
-                .fontWeight(.black)
+            Text(Int(value).map { $0.formatted() } ?? value)
+                .font(DS.Font.plex(18, weight: .bold))
+                .monospacedDigit()
                 .foregroundColor(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(label)
                 .font(DS.Font.caption2)
                 .foregroundColor(DS.Color.textSecondary)
