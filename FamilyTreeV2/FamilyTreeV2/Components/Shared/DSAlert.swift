@@ -42,23 +42,64 @@ private struct DSAlertButtonStyle: PrimitiveButtonStyle {
     }
 }
 
-/// شكل زر المربّع مع أثر الضغط
+/// شكل زر المربّع — كل الأزرار بنفس الخلفية الهادئة (طلب المالك)، ويُميَّز
+/// الدور بلون النص: الحذف أحمر، الإلغاء عادي، الأساسي كحلي
 private struct DSAlertPressStyle: ButtonStyle {
     let role: ButtonRole?
 
     func makeBody(configuration: Configuration) -> some View {
-        let fill: Color = role == .destructive ? DS.Color.error
-            : role == .cancel ? DS.Color.mutedBackground.opacity(0.7)
+        // الحذف: مربّع أحمر بنص أبيض (طلب المالك)؛ الباقي خلفية هادئة
+        let destructive = role == .destructive
+        let text: Color = destructive ? .white
+            : role == .cancel ? DS.Color.textPrimary
             : DS.Color.primary
         return configuration.label
             .font(DS.Font.calloutBold)
-            .foregroundColor(role == .cancel ? DS.Color.textPrimary : .white)
+            .foregroundColor(text)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 46)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(fill))
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(destructive ? DS.Color.error : DS.Color.mutedBackground.opacity(0.8)))
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+    }
+}
+
+/// زرّان جنب بعض بعرض متساوٍ (مثل «إلغاء» و«حذف»)، وثلاثة فأكثر فوق بعض
+private struct DSAlertButtonsLayout: Layout {
+    var spacing: CGFloat = DS.Spacing.sm
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 280
+        if subviews.count == 2 {
+            let each = (width - spacing) / 2
+            let h = subviews.map { $0.sizeThatFits(ProposedViewSize(width: each, height: nil)).height }.max() ?? 0
+            return CGSize(width: width, height: h)
+        }
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        return CGSize(width: width, height: heights.reduce(0, +) + spacing * CGFloat(max(0, subviews.count - 1)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        if subviews.count == 2 {
+            let each = (bounds.width - spacing) / 2
+            for (i, view) in subviews.enumerated() {
+                let x = bounds.minX + CGFloat(i) * (each + spacing)
+                view.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
+                           proposal: ProposedViewSize(width: each, height: bounds.height))
+            }
+            return
+        }
+        var y = bounds.minY
+        for view in subviews {
+            let h = view.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+            view.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading,
+                       proposal: ProposedViewSize(width: bounds.width, height: h))
+            y += h + spacing
+        }
     }
 }
 
@@ -118,7 +159,7 @@ private struct DSAlertBody<A: View, M: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(spacing: DS.Spacing.sm) {
+            DSAlertButtonsLayout {
                 if A.self == EmptyView.self {
                     Button(L10n.t("حسناً", "OK")) {}
                 } else {

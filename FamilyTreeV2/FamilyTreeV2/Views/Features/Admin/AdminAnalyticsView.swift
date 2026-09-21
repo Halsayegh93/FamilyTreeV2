@@ -629,10 +629,13 @@ struct AdminAnalyticsView: View {
             }
             .frame(height: 20)
 
-            Text("\(count)")
+            // عرض يكفي للآلاف (٢٬٧١١) في سطر واحد — كان الرقم ينكسر لسطرين
+            Text(count.formatted())
                 .font(DS.Font.scaled(12, weight: .black))
                 .foregroundColor(DS.Color.textPrimary)
-                .frame(width: 32, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(width: 46, alignment: .trailing)
         }
     }
 
