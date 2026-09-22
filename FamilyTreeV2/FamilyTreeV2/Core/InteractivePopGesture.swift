@@ -7,7 +7,7 @@ import UIKit
 /// فإخفاء الشريط يُلغي الإيماءة — والمستخدم يفقد الرجوع بالسحب في كل تلك الشاشات.
 ///
 /// الحل: نتولّى نحن مندوب الإيماءة ونسمح لها ما دام في المكدّس أكثر من شاشة.
-extension UINavigationController: UIGestureRecognizerDelegate {
+extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     open override func viewDidLoad() {
         super.viewDidLoad()
         interactivePopGestureRecognizer?.delegate = self

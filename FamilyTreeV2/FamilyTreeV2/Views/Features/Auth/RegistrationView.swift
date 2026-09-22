@@ -71,18 +71,18 @@ struct RegistrationView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(
+        .dsAlert(
             L10n.t("تعذّر التسجيل", "Registration Failed"),
             isPresented: Binding(
                 get: { authVM.registrationError != nil },
                 set: { if !$0 { authVM.registrationError = nil } }
             )
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) { authVM.registrationError = nil }
+            Button(L10n.t("حسناً", "OK")) { authVM.registrationError = nil }
         } message: {
             Text(authVM.registrationError ?? "")
         }
-        .alert(L10n.t("اسم العائلة", "Family name"), isPresented: $showManualFamily) {
+        .dsAlert(L10n.t("اسم العائلة", "Family name"), isPresented: $showManualFamily) {
             TextField(L10n.t("مثال: الصايغ", "e.g. Al-Sayegh"), text: $manualFamilyText)
             Button(L10n.t("حفظ", "Save")) {
                 let t = manualFamilyText.trimmingCharacters(in: .whitespaces)
@@ -376,11 +376,12 @@ struct RegistrationView: View {
                     .stroke(DS.Color.inactiveBorder, lineWidth: 1)
             )
 
-            // ملاحظة الربط
-            Text(L10n.t(
-                "سيتم إضافة اسم العائلة (المحمدعلي) تلقائياً كاسم أخير",
-                "The family name (Al-Mohammad Ali) will be added automatically as last name"
-            ))
+            // ملاحظة الربط — الاسم الأخير هو العائلة المختارة
+            Text(familyName.isEmpty
+                 ? L10n.t("العائلة التي تختارها تُضاف تلقائياً كاسم أخير",
+                          "The family you choose is added automatically as your last name")
+                 : L10n.t("اسمك الأخير سيكون: \(familyName)",
+                          "Your last name will be: \(familyName)"))
             .font(DS.Font.caption1)
             .foregroundColor(DS.Color.textTertiary)
             .padding(.leading, DS.Spacing.sm)
@@ -431,9 +432,10 @@ struct RegistrationView: View {
                 }
                 Button(L10n.t("مراجعة البيانات", "Review"), role: .cancel) {}
             } message: {
+                let composed = "\(FamilyNameCatalog.stripTrailingFamily(trimmedFull, chosen: trimmedFamily)) \(trimmedFamily)"
                 Text(L10n.t(
-                    "اسمك: \(trimmedFull) \(trimmedFamily)\nسيُرسل طلبك للإدارة وتنتظر الموافقة.",
-                    "Name: \(trimmedFull) \(trimmedFamily)\nYour request will be sent to admins for approval."
+                    "اسمك: \(composed)\nسيُرسل طلبك للإدارة وتنتظر الموافقة.",
+                    "Name: \(composed)\nYour request will be sent to admins for approval."
                 ))
             }
         }

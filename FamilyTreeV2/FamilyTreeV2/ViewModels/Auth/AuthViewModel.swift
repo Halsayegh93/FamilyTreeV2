@@ -24,9 +24,42 @@ class LanguageManager: ObservableObject {
         }
     }
 
+    /// هل اختار المستخدم لغته بنفسه؟ — إن لا، يتبع لغة التطبيق الرسمية
+    /// التي يحددها المالك من «إعدادات التطبيق» (طلب المالك)
+    @AppStorage("languageChosenByUser") var languageChosenByUser: Bool = false
+
     static let shared = LanguageManager()
 
-    init() {}
+    init() {
+        // من اختار لغته قبل إضافة «اللغة الرسمية»: القيمة محفوظة في الجهاز
+        // (AppStorage لا يكتبها إلا عند اختيار المستخدم) — نعتبرها اختياره
+        // حتى لا ترجع لغته للعربي بالغلط عند أول تشغيل
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "languageChosenByUser") == nil,
+           defaults.object(forKey: "selectedLanguage") != nil {
+            defaults.set(true, forKey: "languageChosenByUser")
+        }
+    }
+
+    /// تطبيق اللغة الرسمية على من لم يختر لغته بنفسه
+    func applyOfficialLanguage(_ language: String?) {
+        guard !languageChosenByUser,
+              let language, ["ar", "en"].contains(language),
+              language != selectedLanguage else { return }
+        selectedLanguage = language
+    }
+
+    /// اختيار المستخدم من «الإعدادات» — يثبّت لغته ولا تغيّرها اللغة الرسمية بعدها
+    func chooseLanguage(_ language: String) {
+        languageChosenByUser = true
+        selectedLanguage = language
+    }
+
+    /// الرجوع للغة التطبيق الرسمية
+    func followOfficialLanguage(_ official: String?) {
+        languageChosenByUser = false
+        applyOfficialLanguage(official)
+    }
 
     static var isArabic: Bool {
         shared.selectedLanguage == "ar"
@@ -69,6 +102,8 @@ class AuthViewModel: ObservableObject {
     @Published var isOtpSent: Bool = false
     @Published var isLoading: Bool = false
     @Published var isAuthenticated: Bool = false
+    private var isEndingSession = false
+    private var sessionGeneration = UUID()
     @Published var currentUser: FamilyMember? = nil
     @Published var status: AuthStatus = .checking
     @Published var notificationsFeatureAvailable: Bool = true
@@ -127,11 +162,28 @@ class AuthViewModel: ObservableObject {
     }
 
     /// هل يقدر يرفض الطلبات (مالك أو مدير أو مراقب) — المشرف يقدر يوافق بس ما يرفض
-    var canRejectRequests: Bool {
-        currentUser?.role == .owner || currentUser?.role == .admin || currentUser?.role == .monitor
-    }
+    // MARK: - الصلاحيات حسب مجال الدور (تحديث 2026-09-21)
+    //
+    // كل دور له مجال واضح بدل درجات متداخلة:
+    // • المراقب  → الشجرة والأعضاء
+    // • المشرف   → المحتوى والبلاغات (المراجعة والإخفاء والحذف — لا الاعتماد)
+    // • الاعتماد النهائي للمحتوى (أخبار/مكتبة/مشاريع/ديوانيات) للإدارة فقط
 
-    /// تغيير أدوار الأعضاء (ترقية/تنزيل) — المالك فقط
+    /// مجال الشجرة والأعضاء — الإدارة + المراقب
+    var canModerateTree: Bool { isAdmin || currentUser?.role == .monitor }
+
+    /// مجال المحتوى والبلاغات — الإدارة + المشرف
+    var canModerateContent: Bool { isAdmin || currentUser?.role == .supervisor }
+
+    /// اعتماد المحتوى (أخبار، مكتبة، مشاريع، ديوانيات) — الإدارة فقط
+    var canApproveContent: Bool { isAdmin }
+
+    /// قبول طلبات الشجرة والأعضاء (انضمام، وفاة، إضافة ابن، رقم/اسم، تعديلات الشجرة)
+    var canApproveTreeRequests: Bool { canModerateTree }
+
+    /// رفض الطلبات — نفس من يقبلها في مجاله
+    var canRejectRequests: Bool { canModerateTree }
+
     var canManageRoles: Bool { isOwner }
 
     /// حذف أعضاء نهائياً — مدير + مالك
@@ -141,7 +193,6 @@ class AuthViewModel: ObservableObject {
     var canManageSettings: Bool { isOwner }
 
     /// رؤية شاشة "إعدادات النظام" (قراءة فقط للمدير، تعديل للمالك)
-    /// المدير يدخل ويتصفّح بدون تعديل.
     var canViewSystemSettings: Bool { isAdmin }
 
     /// أرقام محظورة — المالك فقط
@@ -150,38 +201,32 @@ class AuthViewModel: ObservableObject {
     /// إدارة الأجهزة — المالك فقط
     var canManageDevices: Bool { isOwner }
 
-    /// تعديل بيانات أعضاء آخرين — مدير + مراقب + مالك (المراقب محدود)
-    var canEditMembers: Bool { isAdmin || currentUser?.role == .monitor }
+    /// تعديل بيانات أعضاء آخرين — مجال الشجرة
+    var canEditMembers: Bool { canModerateTree }
 
-    /// حذف أخبار — مدير + مراقب + مالك
-    var canDeleteNews: Bool { isAdmin || currentUser?.role == .monitor }
+    /// حذف أخبار — مجال المحتوى
+    var canDeleteNews: Bool { canModerateContent }
 
     /// إرسال إشعارات يدوية — مدير + مالك
     var canSendNotifications: Bool { isAdmin }
 
-    /// تسجيل عضو جديد مباشرة — مدير + مشرف + مالك
-    var canRegisterMembers: Bool { isAdmin }   // المالك + المدير فقط (كان canModerate يشمل المراقب/المشرف)
+    /// تسجيل عضو جديد مباشرة — مدير + مالك
+    var canRegisterMembers: Bool { isAdmin }
 
-    var canAutoPublishNews: Bool {
-        canModerate
-    }
+    /// نشر أخبار فريق الإدارة بلا مراجعة
+    var canAutoPublishNews: Bool { canModerate }
 
-    // MARK: - صلاحيات المحتوى
-
-    /// حذف تعليقات الأعضاء — مدير + مراقب + مالك
-    var canDeleteComments: Bool { isAdmin || currentUser?.role == .monitor }
+    /// حذف تعليقات — مجال المحتوى
+    var canDeleteComments: Bool { canModerateContent }
 
     /// تجميد حسابات الأعضاء — مدير + مالك
     var canFreezeMembers: Bool { isAdmin }
 
-    /// حذف قصص الأعضاء — مدير + مراقب + مالك
-    var canDeleteStories: Bool { isAdmin || currentUser?.role == .monitor }
-
     /// حذف ديوانيات — مدير + مالك
     var canDeleteDiwaniyas: Bool { isAdmin }
 
-    /// حذف صور الأعضاء — مدير + مراقب + مالك
-    var canDeletePhotos: Bool { isAdmin || currentUser?.role == .monitor }
+    /// حذف صور الأعضاء — مجال المحتوى
+    var canDeletePhotos: Bool { canModerateContent }
 
     // MARK: - Schema Error Helpers (delegated to ErrorHelper)
 
@@ -212,7 +257,7 @@ class AuthViewModel: ObservableObject {
         }
 
         // المجمد — يظهر له شاشة تجميد الحساب (نفحص قبل role لأن الأولوية للتجميد)
-        if profile.status == .frozen {
+        if profile.status == .frozen || profile.status == .deleted {
             Log.info("[AUTH] العضو \(profile.fullName) حالته frozen → شاشة الحساب المجمد")
             return .accountFrozen
         }
@@ -399,7 +444,7 @@ class AuthViewModel: ObservableObject {
     private func loadProfile(by id: UUID) async -> FamilyMember? {
         do {
             let response: [FamilyMember] = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: id.uuidString)
                 .limit(1)
@@ -613,6 +658,9 @@ class AuthViewModel: ObservableObject {
     }
     
     private func applyAuthenticatedProfile(_ profile: FamilyMember, normalizedPhone: String?) async {
+        guard !isEndingSession, !Task.isCancelled, let authUser = supabase.auth.currentUser else { return }
+        let generation = sessionGeneration
+        CacheManager.shared.beginAccount(authUser.id)
         let access = self.resolveAuthAccess(for: profile)
 
         // إذا العضو ما عنده رقم أو حالته معلقة → تسجيل خروج تلقائي
@@ -632,6 +680,8 @@ class AuthViewModel: ObservableObject {
 
         // جلب إعدادات التطبيق من السيرفر
         await appSettingsVM?.fetchSettings()
+        guard generation == sessionGeneration, !isEndingSession,
+              authUser.id == supabase.auth.currentUser?.id, !Task.isCancelled else { return }
         if let normalizedPhone, normalizedPhone.count == 8 {
             self.phoneNumber = normalizedPhone
         }
@@ -895,6 +945,11 @@ class AuthViewModel: ObservableObject {
     /// ينشر رمز الجلسة لحاوية App Group ليرفع امتداد المشاركة باسم العضو.
     /// يُستدعى عند كل تحقق أو تجديد للجلسة.
     func publishSessionToShareExtension(_ session: Session) {
+        guard !isEndingSession, status == .fullyAuthenticated,
+              session.user.id == supabase.auth.currentUser?.id, currentUser != nil else {
+            SharedSessionStore.clear()
+            return
+        }
         SharedSessionStore.save(
             accessToken: session.accessToken,
             expiresAt: TimeInterval(session.expiresAt),
@@ -932,6 +987,8 @@ class AuthViewModel: ObservableObject {
     }
 
     func checkUserProfile() async {
+        guard !isEndingSession, !Task.isCancelled else { return }
+        let generation = sessionGeneration
         // بدون نت + المستخدم مسجل — نحتفظ بالحالة الحالية ولا نتشيك
         if !NetworkMonitor.shared.isConnected && currentUser != nil {
             Log.info("[AUTH] بدون اتصال — نحتفظ بالحالة الحالية")
@@ -941,7 +998,10 @@ class AuthViewModel: ObservableObject {
         let user: Supabase.User
         do {
             user = try await supabase.auth.session.user
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
+            CacheManager.shared.beginAccount(user.id)
         } catch {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             let errorDesc = error.localizedDescription.lowercased()
             // فقط نعتبره "لا يوجد جلسة" إذا كانت الجلسة فعلاً غير موجودة
             let isReallyNoSession = errorDesc.contains("session not found")
@@ -952,14 +1012,15 @@ class AuthViewModel: ObservableObject {
 
             if isReallyNoSession {
                 Log.info("[AUTH] No session found → unauthenticated: \(error.localizedDescription)")
-                self.status = .unauthenticated
+                clearLocalSession()
             } else {
                 // خطأ شبكة أو خطأ مؤقت — لا نسجل خروج
                 // لو cold start بدون نت — نحاول نستعيد من الكاش
                 if currentUser == nil,
                    let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
                    let sessionUser = try? await supabase.auth.session.user,
-                   let profile = cached.first(where: { $0.id == sessionUser.id }) {
+                   let profile = cached.first(where: { $0.id == sessionUser.id }),
+                   generation == sessionGeneration, !isEndingSession, !Task.isCancelled {
                     Log.info("[AUTH] استعادة المستخدم من الكاش (بدون نت): \(profile.fullName)")
                     self.currentUser = profile
                     self.isAuthenticated = true
@@ -1004,8 +1065,8 @@ class AuthViewModel: ObservableObject {
         // فحص الحظر — حماية مزدوجة
         if !normalizedSessionPhone.isEmpty, await isPhoneBanned(normalizedSessionPhone) {
             Log.info("[BAN] الرقم محظور بعد التحقق — تسجيل خروج: \(Log.masked(normalizedSessionPhone))")
-            _ = try? await supabase.auth.signOut()
-            self.status = .unauthenticated
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
+            await signOut()
             self.otpErrorMessage = L10n.t(
                 "هذا الرقم محظور من استخدام التطبيق.",
                 "This phone number is banned from using the app."
@@ -1025,20 +1086,21 @@ class AuthViewModel: ObservableObject {
         let userIdString = user.id.uuidString.lowercased()
         do {
             let response: [FamilyMember] = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: userIdString)
                 .limit(1)
                 .execute()
                 .value
 
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
             if let profile = response.first {
                 Log.info("[AUTH] Found profile by UUID: \(profile.fullName), role: \(profile.role), status: \(profile.status?.rawValue ?? "nil")")
                 
                 let existingPhone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 
                 // المدير حذف الرقم من البروفايل → مباشرة لشاشة التسجيل
-                if existingPhone.isEmpty {
+                if existingPhone.isEmpty && profile.status != .frozen && profile.status != .deleted {
                     Log.info("[AUTH] البروفايل بدون رقم (المدير حذفه) — توجيه مباشر للتسجيل الجديد")
                     self.status = .authenticatedNoProfile
                     return
@@ -1050,19 +1112,23 @@ class AuthViewModel: ObservableObject {
                 Log.warning("[AUTH] UUID lookup returned 0 results for: \(userIdString)")
             }
         } catch {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             Log.error("[AUTH] خطأ في جلب البروفايل بـ UUID: \(error.localizedDescription)")
         }
 
         // المحاولة 2: البحث بالرقم
         if let phoneProfile = await findProfileByPhone(normalizedSessionPhone) {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
             Log.info("[AUTH] Found profile by phone: \(phoneProfile.fullName), profileId: \(phoneProfile.id), authUid: \(user.id)")
             // ربط البروفايل بـ auth.uid الجديد حتى يعمل تسجيل الدخول مستقبلاً بدون بحث
             await linkProfileToAuthUser(oldProfileId: phoneProfile.id, newAuthUserId: user.id)
             // إعادة تحميل البروفايل بالمعرف الجديد
             if let updatedProfile = await loadProfile(by: user.id) {
+                guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
                 await applyAuthenticatedProfile(updatedProfile, normalizedPhone: normalizedSessionPhone)
             } else {
                 // fallback: استخدام البروفايل الأصلي
+                guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
                 await applyAuthenticatedProfile(phoneProfile, normalizedPhone: normalizedSessionPhone)
             }
             return
@@ -1071,11 +1137,14 @@ class AuthViewModel: ObservableObject {
         // المحاولة 3: البحث بالرقم المحلي
         let local8 = KuwaitPhone.localEightDigits(normalizedSessionPhone)
         if local8.count == 8, let directPhoneProfile = await findProfileByPhone(local8) {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
             Log.info("[AUTH] Found profile by local phone: \(directPhoneProfile.fullName), profileId: \(directPhoneProfile.id), authUid: \(user.id)")
             await linkProfileToAuthUser(oldProfileId: directPhoneProfile.id, newAuthUserId: user.id)
             if let updatedProfile = await loadProfile(by: user.id) {
+                guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
                 await applyAuthenticatedProfile(updatedProfile, normalizedPhone: local8)
             } else {
+                guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
                 await applyAuthenticatedProfile(directPhoneProfile, normalizedPhone: local8)
             }
             return
@@ -1085,16 +1154,17 @@ class AuthViewModel: ObservableObject {
         try? await Task.sleep(nanoseconds: 200_000_000)
         do {
             let retryResponse: [FamilyMember] = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: userIdString)
                 .limit(1)
                 .execute()
                 .value
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
             if let retryProfile = retryResponse.first {
                 let retryPhone = retryProfile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 // المدير حذف الرقم → مباشرة للتسجيل
-                if retryPhone.isEmpty {
+                if retryPhone.isEmpty && retryProfile.status != .frozen && retryProfile.status != .deleted {
                     Log.info("[AUTH] بروفايل بدون رقم في المحاولة 4 — توجيه مباشر للتسجيل")
                     self.status = .authenticatedNoProfile
                     return
@@ -1105,9 +1175,11 @@ class AuthViewModel: ObservableObject {
                 }
             }
         } catch {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             Log.warning("[AUTH] Retry check failed: \(error.localizedDescription)")
         }
 
+        guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
         Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(Log.masked(normalizedSessionPhone)), UUID: \(userIdString)")
         self.status = .authenticatedNoProfile
     }
@@ -1201,54 +1273,63 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - Sign Out
     
-    func signOut() async {
-        _ = try? await supabase.auth.signOut()
-        withAnimation {
-            self.status = .unauthenticated
-            self.isAuthenticated = false
-            self.currentUser = nil
-            self.isOtpSent = false
-            self.phoneNumber = ""
-        }
-        // مسح الرقم المحفوظ
-        self.lastAuthPhone = ""
-        self.lastAuthDialingCode = ""
-        // مسح الكاش المحلي
+    private func clearLocalSession() {
+        sessionGeneration = UUID()
+        activeProfileCheckTask?.cancel()
         CacheManager.shared.clearAll()
-        // إبطال جسر امتداد المشاركة — لا يرفع أحد باسمك بعد الخروج
         SharedSessionStore.clear()
-        // إيقاف الاشتراكات الحية
         RealtimeManager.shared.unsubscribe()
+        lastAuthPhone = ""
+        lastAuthDialingCode = ""
+        bannedPhones = []
+        otpCode = ""
+        withAnimation {
+            status = .unauthenticated
+            isAuthenticated = false
+            currentUser = nil
+            isOtpSent = false
+            phoneNumber = ""
+        }
     }
 
-    // MARK: - حذف الحساب (Account Deletion — Apple Requirement)
+    func signOut() async {
+        guard !isEndingSession else { return }
+        isEndingSession = true
+        defer { isEndingSession = false }
+        await notificationVM?.unregisterPushToken()
+        clearLocalSession()
+        _ = try? await supabase.auth.signOut()
+        // Also invalidate saves queued by any work that finished during signOut.
+        CacheManager.shared.clearAll()
+        SharedSessionStore.clear()
+    }
 
     func deleteAccount() async -> Bool {
-        self.isLoading = true
+        guard !isOwner else {
+            deleteAccountError = L10n.t("حساب مالك التطبيق محمي. يلزم نقل الملكية قبل حذفه.",
+                                       "The owner account is protected. Transfer ownership before deleting it.")
+            return false
+        }
+        guard !isEndingSession else { return false }
+        isLoading = true
+        deleteAccountError = nil
+        defer { isLoading = false }
         do {
-            try await supabase.functions.invoke(
-                "delete-account",
-                options: FunctionInvokeOptions(body: [:] as [String: String])
+            nonisolated struct DeletionResponse: Decodable { let ok: Bool }
+            let response: DeletionResponse = try await supabase.functions.invoke(
+                "delete-account", options: FunctionInvokeOptions(body: [:] as [String: String])
             )
-            _ = try? await supabase.auth.signOut()
-            self.isLoading = false
-            withAnimation {
-                self.status = .unauthenticated
-                self.isAuthenticated = false
-                self.currentUser = nil
-                self.isOtpSent = false
-                self.phoneNumber = ""
-            }
-            Log.info("تم حذف الحساب بنجاح")
+            guard response.ok else { throw NSError(domain: "AccountDeletion", code: 1) }
+            await signOut()
             return true
         } catch {
-            self.isLoading = false
-            self.deleteAccountError = "تعذر حذف الحساب: \(error.localizedDescription)"
-            Log.error("خطأ في حذف الحساب: \(error.localizedDescription)")
+            deleteAccountError = L10n.t("لم يكتمل حذف الحساب. حاول مرة أخرى لإكمال التنظيف.",
+                                       "Account deletion is incomplete. Please retry to finish cleanup.")
+            Log.error("Account deletion did not complete")
             return false
         }
     }
-    
+
     // MARK: - Registration
     
     func registerNewUser(firstName: String, familyName: String, birthDate: Date, gender: String, fatherId: UUID? = nil, avatarImage: UIImage? = nil) async {
@@ -1273,9 +1354,11 @@ class AuthViewModel: ObservableObject {
             }
         }
         
-        let cleanFirstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanFamilyName = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fullName = "\(cleanFirstName) \(cleanFamilyName)"
+        // الاسم الأخير = العائلة المختارة: لو كتب العضو عائلة في آخر اسمه
+        // (نفس المختارة أو غيرها من القائمة) تُحذف ثم تُضاف المختارة — بلا تكرار
+        let cleanFirstName = FamilyNameCatalog.stripTrailingFamily(firstName, chosen: cleanFamilyName)
+        let fullName = cleanFamilyName.isEmpty ? cleanFirstName : "\(cleanFirstName) \(cleanFamilyName)"
         
         // بحث تلقائي عن مطابقات في الشجرة بالاسم الكامل أو أجزاء منه
         let matchedMemberIds = await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)

@@ -85,9 +85,10 @@ struct DiwaniyasView: View {
                 // زر الإضافة السفلي (FAB) — مثل بقية الصفحات
                 HStack {
                     Spacer()
-                    DSFloatingButton(label: L10n.t("إضافة", "Add"), color: DS.Color.primary) {
+                    DSFloatingButton(icon: "plus", color: DS.Color.primary) {
                         showingAddRequest = true
                     }
+                    .accessibilityLabel(L10n.t("إضافة", "Add"))
                     .padding(.trailing, DS.Spacing.xl)
                     .padding(.bottom, DS.Spacing.lg)
                 }
@@ -104,7 +105,7 @@ struct DiwaniyasView: View {
                     .environmentObject(viewModel)
                     .environmentObject(authVM)
             }
-            .alert(L10n.t("إبلاغ عن ديوانية", "Report Diwaniya"), isPresented: .init(
+            .dsAlert(L10n.t("إبلاغ عن ديوانية", "Report Diwaniya"), isPresented: .init(
                 get: { diwaniyaToReport != nil },
                 set: { if !$0 { diwaniyaToReport = nil } }
             )) {
@@ -131,12 +132,12 @@ struct DiwaniyasView: View {
                 Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذه الديوانية.",
                            "Enter a reason; it will be sent to the admins to review this diwaniya."))
             }
-            .alert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
             }
-            .alert(
+            .dsAlert(
                 L10n.t("حذف الديوانية", "Delete Diwaniya"),
                 isPresented: .init(
                     get: { diwaniyaToDelete != nil },
@@ -169,7 +170,7 @@ struct DiwaniyasView: View {
             }
             .onChange(of: viewModel.diwaniyas.count) { _ in rebuildFilteredDiwaniyas() }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .alert(L10n.t("خطأ", "Error"), isPresented: .init(
+            .dsAlert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.errorMessage = nil } }
             )) {
@@ -720,32 +721,21 @@ private struct AddDiwaniyaRequestView: View {
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // Submit button
-                        DSPrimaryButton(
-                            isSubmitting ? L10n.t("جاري الإرسال...", "Submitting...") : L10n.t("إضافة", "Add"),
-                            icon: "paperplane.fill",
-                            isLoading: isSubmitting,
-                            useGradient: false,
-                            color: DS.Color.gridDiwaniya
-                        ) {
-                            Task { await submitDiwaniya() }
-                        }
-                        .disabled(!isFormValid || isSubmitting)
-                        .opacity(isFormValid ? 1.0 : 0.5)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.xxxl)
+                        Spacer(minLength: DS.Spacing.xxxl)
                     }
                 }
             }
             .navigationTitle(L10n.t("إضافة ديوانية", "Add Diwaniya"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .foregroundColor(DS.Color.error)
-                }
-            }
-            .alert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
+            // الإضافة أعلى يمين، و«إلغاء» الأحمر يسار (طلب المالك)
+            .dsSheetToolbar(
+                confirm: L10n.t("إضافة", "Add"),
+                isLoading: isSubmitting,
+                disabled: !isFormValid,
+                onConfirm: { Task { await submitDiwaniya() } },
+                onCancel: { dismiss() }
+            )
+            .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
                 Text(viewModel.errorMessage ?? L10n.t("فشل إضافة الديوانية", "Failed to add diwaniya."))
             }
         }
@@ -791,12 +781,14 @@ private struct AddDiwaniyaRequestView: View {
         let composedPhone = phoneNumber.isEmpty
             ? ""
             : (KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber) ?? "")
-        let canAutoApprove = user.role == .owner || user.role == .admin || user.role == .monitor || user.role == .supervisor
+        // الاعتماد للمالك والمدير فقط (جدول الصلاحيات) — غيرهم ينتظر الموافقة
+        let canAutoApprove = user.role == .owner || user.role == .admin
         let success = await viewModel.addDiwaniya(
             ownerId: user.id,
             ownerName: ownerName,
             title: name,
             scheduleText: selectedDays.isEmpty ? nil : scheduleText,
+            scheduleDays: Array(selectedDays),
             contactPhone: composedPhone,
             mapsUrl: trimmedURL.isEmpty ? nil : trimmedURL,
             address: trimmedAddress.isEmpty ? nil : trimmedAddress,
@@ -1150,32 +1142,20 @@ private struct EditDiwaniyaView: View {
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        // Save button
-                        DSPrimaryButton(
-                            isSubmitting ? L10n.t("جاري الحفظ...", "Saving...") : L10n.t("حفظ التعديلات", "Save Changes"),
-                            icon: "checkmark.circle.fill",
-                            isLoading: isSubmitting,
-                            useGradient: false,
-                            color: DS.Color.gridDiwaniya
-                        ) {
-                            Task { await saveChanges() }
-                        }
-                        .disabled(!isFormValid || isSubmitting)
-                        .opacity(isFormValid ? 1.0 : 0.5)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.xxxl)
+                        Spacer(minLength: DS.Spacing.xxxl)
                     }
                 }
             }
             .navigationTitle(L10n.t("تعديل الديوانية", "Edit Diwaniya"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .foregroundColor(DS.Color.error)
-                }
-            }
-            .alert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
+            .dsSheetToolbar(
+                confirm: L10n.t("حفظ", "Save"),
+                isLoading: isSubmitting,
+                disabled: !isFormValid,
+                onConfirm: { Task { await saveChanges() } },
+                onCancel: { dismiss() }
+            )
+            .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showError) {} message: {
                 Text(viewModel.errorMessage ?? L10n.t("فشل تحديث الديوانية", "Failed to update diwaniya."))
             }
         }
@@ -1198,6 +1178,7 @@ private struct EditDiwaniyaView: View {
             title: name,
             ownerName: ownerName,
             scheduleText: selectedDays.isEmpty ? nil : scheduleText,
+            scheduleDays: Array(selectedDays),
             contactPhone: composedPhone,
             mapsUrl: trimmedURL.isEmpty ? nil : trimmedURL,
             address: trimmedAddress.isEmpty ? nil : trimmedAddress,

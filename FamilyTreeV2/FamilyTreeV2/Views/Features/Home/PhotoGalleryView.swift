@@ -168,7 +168,7 @@ private struct GalleryAlbumCard: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(Capsule().fill(Color.black.opacity(0.45)))
-                .background(Capsule().fill(.ultraThinMaterial))
+                .dsGlass(Capsule())
                 .padding(6)
             }
             .overlay(alignment: .topTrailing) {
@@ -324,7 +324,7 @@ struct GalleryAlbumDetailView: View {
         )) { box in
             GalleryPhotoViewer(photos: albumPhotos, initialIndex: box.value)
         }
-        .alert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: Binding(
+        .dsAlert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: Binding(
             get: { photoToDelete != nil },
             set: { if !$0 { photoToDelete = nil } }
         )) {
@@ -336,7 +336,7 @@ struct GalleryAlbumDetailView: View {
         } message: {
             Text(L10n.t("حذف هذه الصورة نهائياً؟", "Permanently delete this photo?"))
         }
-        .alert(L10n.t("حذف الألبوم", "Delete Album"), isPresented: $showDeleteAlbumAlert) {
+        .dsAlert(L10n.t("حذف الألبوم", "Delete Album"), isPresented: $showDeleteAlbumAlert) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 Task {
                     await galleryVM.deleteAlbum(currentAlbum)
@@ -513,7 +513,7 @@ struct GalleryPhotoViewer: View {
                             .foregroundColor(.white)
                             .frame(width: 38, height: 38)
                             .background(Circle().fill(Color.black.opacity(0.4)))
-                            .background(Circle().fill(.ultraThinMaterial))
+                            .dsGlass(Circle())
                     }
                     .padding(.trailing, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
@@ -616,7 +616,7 @@ struct GalleryAlbumFormSheet: View {
                                        : L10n.t("ألبوم جديد", "New Album"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .foregroundColor(DS.Color.error)
                         .disabled(isSaving)
@@ -745,7 +745,7 @@ struct GalleryAddPhotosSheet: View {
             .navigationTitle(L10n.t("إضافة صور", "Add Photos"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .foregroundColor(DS.Color.error)
                         .disabled(galleryVM.isUploading)

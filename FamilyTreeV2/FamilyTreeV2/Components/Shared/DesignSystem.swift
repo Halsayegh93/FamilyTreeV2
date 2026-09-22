@@ -1,33 +1,37 @@
 import SwiftUI
 
 // MARK: - Design Tokens — المحمدعلي Family App
-// Theme: Vivid Spectrum | Colors: Blue + Cyan + Indigo | Light & Dark Mode
+// Theme: Formal Heritage | كحلي ملكي + ذهبي + أخضر غابي + عنّابي | Light & Dark Mode
 enum DS {
 
     // MARK: Colors
     enum Color {
-        // Brand — Electric Blue (adaptive for dark mode)
-        static let primary       = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // Blue
-        static let primaryDark   = SwiftUI.Color.adaptive(light: "#2460C0", dark: "#357DED") // Deep Blue
-        static let primaryLight  = SwiftUI.Color.adaptive(light: "#6AA0F2", dark: "#8EBBF6") // Light Blue
-        static let secondary     = SwiftUI.Color.adaptive(light: "#10B981", dark: "#0D9488") // Emerald
-        static let secondaryDark = SwiftUI.Color.adaptive(light: "#059669", dark: "#10B981") // Deep Emerald
-        static let secondaryLight = SwiftUI.Color.adaptive(light: "#34D399", dark: "#6EE7B7") // Soft Emerald
-        static let accent        = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
-        static let accentDark    = SwiftUI.Color.adaptive(light: "#3E28B0", dark: "#5438DC") // Deep Indigo
-        static let accentLight   = SwiftUI.Color.adaptive(light: "#7A62E8", dark: "#A090F0") // Light Indigo
+        // Brand — كحلي ملكي رسمي (أفتح في الداكن ليبقى مقروءاً)
+        static let primary       = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#7FA8D6") // Royal Navy
+        static let primaryDark   = SwiftUI.Color.adaptive(light: "#14365A", dark: "#2B5F90") // Deep Navy
+        static let primaryLight  = SwiftUI.Color.adaptive(light: "#5B84AE", dark: "#A9C4E4") // Soft Navy
+        static let secondary     = SwiftUI.Color.adaptive(light: "#2E6B4F", dark: "#6FB394") // Forest Green
+        static let secondaryDark = SwiftUI.Color.adaptive(light: "#1F4F39", dark: "#3E8566") // Deep Forest
+        static let secondaryLight = SwiftUI.Color.adaptive(light: "#6FA88C", dark: "#9ACDB5") // Sage
+        static let accent        = SwiftUI.Color.adaptive(light: "#A07A2C", dark: "#D4B062") // Heritage Gold
+        static let accentDark    = SwiftUI.Color.adaptive(light: "#7A5B1C", dark: "#A8842F") // Deep Gold
+        static let accentLight   = SwiftUI.Color.adaptive(light: "#C9A75E", dark: "#E6CB8E") // Light Gold
 
         // Supporting Accents
-        static let neonBlue     = SwiftUI.Color.adaptive(light: "#2460C0", dark: "#6AA0F2") // Deep Blue
-        static let neonPurple   = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
-        static let neonCyan     = SwiftUI.Color.adaptive(light: "#10B981", dark: "#34D399") // Emerald
-        static let neonPink     = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
+        static let neonBlue     = SwiftUI.Color.adaptive(light: "#14365A", dark: "#A9C4E4") // Deep Navy
+        static let neonPurple   = SwiftUI.Color.adaptive(light: "#4A5D78", dark: "#9FB0C8") // Slate
+        static let neonCyan     = SwiftUI.Color.adaptive(light: "#2E6B4F", dark: "#6FB394") // Forest
+        static let neonPink     = SwiftUI.Color.adaptive(light: "#8C2F45", dark: "#C9667D") // Burgundy Rose
 
         // Gradients
-        // التدرّج الرئيسي — أزرق → نيلي (blue → indigo). الأخضر محفوظ للأدوار الثانوية/النجاح فقط،
-        // حتى لا يفقد النص الأبيض على أزرار CTA تباينه على الذيل الأخضر ولا تنقلب هوية العلامة لِتيل/فنتك.
+        // التدرّج الرئيسي — كحلي غامق → كحلي ملكي بثلاث درجات متقاربة (رسمي وهادئ).
+        // ثابت الدرجات في الوضعين حتى يبقى النص الأبيض فوقه واضحاً دائماً.
         static let gradientPrimary = LinearGradient(
-            colors: [primaryDark, primary, accent],
+            colors: [
+                SwiftUI.Color.adaptive(light: "#102B47", dark: "#0E2238"),
+                SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#173A5E"),
+                SwiftUI.Color.adaptive(light: "#2C6396", dark: "#23507D")
+            ],
             startPoint: .bottomTrailing, endPoint: .topLeading
         )
         static let gradientAccent = LinearGradient(
@@ -102,19 +106,21 @@ enum DS {
         static let actionRowOverlay = SwiftUI.Color(.tertiarySystemBackground)
         static let headerVeil       = SwiftUI.Color.white.opacity(0.08)
         static let headerBorder     = SwiftUI.Color.white.opacity(0.16)
+        /// خلفية أزرار الهيدر — بين درجتي تدرّج الهيدر الكحلي، فتبدو من لونه
+        static let headerControlFill = SwiftUI.Color.adaptive(light: "#1A4470", dark: "#16395E")
 
         // Text
         static let textPrimary   = SwiftUI.Color.adaptive(light: "#0A0E18", dark: "#F0F4FF") // Deep Navy / Cool White
         static let textSecondary = SwiftUI.Color.adaptive(light: "#5A6070", dark: "#8A90A0") // Slate
         static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // Slate — مقروء (AA)
         static let textOnPrimary = SwiftUI.Color.white
-        static let textGold      = SwiftUI.Color.adaptive(light: "#10B981", dark: "#0D9488") // Emerald
+        static let textGold      = accent // ذهبي
 
         // Semantic
         static let success = SwiftUI.Color.adaptive(light: "#157F3C", dark: "#45BC72") // Emerald — يعدّي AA (~5:1) كنص وكتعبئة
         static let warning = SwiftUI.Color.adaptive(light: "#9A6A0A", dark: "#F0B040") // Amber — يعدّي AA للنص بالوضع الفاتح
         static let error   = SwiftUI.Color.adaptive(light: "#D32F2F", dark: "#EF5350") // أحمر صافي
-        static let info    = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // Blue
+        static let info    = primary // كحلي
 
         // Role Colors — باستيل ناعم
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }
@@ -127,35 +133,46 @@ enum DS {
 
         // News Type Colors
         static let newsWedding      = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
-        static let newsBirth        = SwiftUI.Color.adaptive(light: "#32E875", dark: "#28C060") // Emerald
+        static let newsBirth        = SwiftUI.Color.adaptive(light: "#2E8B57", dark: "#5FBF8A") // Sea Green
         static let newsDeath        = SwiftUI.Color.adaptive(light: "#8A8A8E", dark: "#A8A8AC") // Muted Gray
-        static let newsVote         = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
-        static let newsAnnouncement = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // Blue
-        static let newsCongrats     = SwiftUI.Color.adaptive(light: "#10B981", dark: "#0D9488") // Emerald
+        static let newsVote         = SwiftUI.Color.adaptive(light: "#4A5D78", dark: "#9FB0C8") // Slate
+        static let newsAnnouncement = primary                                                    // Navy
+        static let newsCongrats     = accent                                                     // Gold
         static let newsReminder     = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry
-        static let newsInvitation   = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // Indigo
+        static let newsInvitation   = SwiftUI.Color.adaptive(light: "#8C2F45", dark: "#C9667D") // Burgundy
 
         // Status Colors
         static let deceased         = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#808080") // رمادي هادي
         static let currentLocation  = SwiftUI.Color.adaptive(light: "#00C853", dark: "#69F0AE") // أخضر
         static let likeAction       = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
         /// لون الإناث في شجرة النساء — وردي تراثي موحّد (بدل القيم المرمّزة يدوياً في WomenTreeView/WomenClassicTreeView)
-        static let female           = SwiftUI.Color.adaptive(light: "#C07A8C", dark: "#D493A3") // وردي تراثي
+        static let female           = SwiftUI.Color.adaptive(light: "#D66F92", dark: "#E48AA8") // وردي
+        /// الأنثى المتوفّاة في شجرة النساء — وردي أغمق يميّزها عن الحيّة دون أن يفقد هويتها
+        /// الأنثى المتوفّاة — بنفسجي خوخي مطفأ: لون مختلف عن وردي الحيّة لكنه من عائلته (طلب المالك)
+        static let femaleDeceased   = SwiftUI.Color.adaptive(light: "#7A5578", dark: "#9D7A9B")
+        /// حافة الأنثى المتوفّاة — بنفسجي داكن متناسق (وفي الداكن فاتح ليظهر)
+        static let femaleDeceasedBorder = SwiftUI.Color.adaptive(light: "#3B2440", dark: "#D3BCD1")
 
         // Quick Access Grid Colors
         static let gridTree      = primary
         static let gridAlerts    = error
         static let gridDiwaniya  = secondary
         static let gridContact   = accent
-        static let gridMessaging = SwiftUI.Color.adaptive(light: "#0EA5E9", dark: "#38BDF8") // Sky cyan — التواصل
+        static let gridMessaging = SwiftUI.Color.adaptive(light: "#3D6670", dark: "#86AEB8") // Slate Teal — التواصل
 
-        // مربّعات الرئيسية — مشتقّة من محور تدرّج الهيدر نفسه (أزرق عميق → نيلي)
-        // بدل ألوان متنافرة (أخضر/كهرماني/سماوي)، فتقرأ الشبكة كعائلة واحدة.
-        static let tileTree     = SwiftUI.Color.adaptive(light: "#1F5AB8", dark: "#3F7BD8") // أزرق عميق
-        static let tileDiwaniya = SwiftUI.Color.adaptive(light: "#357DED", dark: "#5C9AF2") // أزرق العلامة
-        static let tileLibrary  = SwiftUI.Color.adaptive(light: "#4361DB", dark: "#6A85E6") // أزرق مائل للنيلي
-        static let tileProjects = SwiftUI.Color.adaptive(light: "#5438DC", dark: "#7A62E8") // نيلي
-        static let tileContact  = SwiftUI.Color.adaptive(light: "#6A4FE0", dark: "#9080EE") // نيلي فاتح
+        // مربّعات الرئيسية — هوية رسمية: كل قسم بلون عميق هادئ من نفس العائلة اللونية
+        static let tileTree     = secondary                                                 // أخضر غابي
+        static let tileDiwaniya = primary                                                   // كحلي
+        static let tileLibrary  = SwiftUI.Color.adaptive(light: "#7A2E3A", dark: "#A8505E") // عنّابي
+        static let tileProjects = accent                                                    // ذهبي
+        static let tileContact  = SwiftUI.Color.adaptive(light: "#3D6670", dark: "#5E8A95") // رمادي مزرق
+
+        // الطرف الغامق من تدرّج كل مربّع
+        static let tileTreeDeep     = secondaryDark
+        static let tileDiwaniyaDeep = primaryDark
+        static let tileLibraryDeep  = SwiftUI.Color.adaptive(light: "#561F29", dark: "#7A2E3A")
+        static let tileProjectsDeep = accentDark
+        static let tileContactDeep  = SwiftUI.Color.adaptive(light: "#284850", dark: "#3D6670")
 
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {
@@ -358,9 +375,9 @@ enum DS {
         static let card     = ShadowStyle(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
         static let subtle   = ShadowStyle(color: .black.opacity(0.03), radius: 4, x: 0, y: 1)
         // ظلال «التوهّج» — بلمسة لون العلامة الحالية (أزرق/نيلي) بعد توحيدها مع الهوية
-        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#2460C0").opacity(0.16), radius: 14, x: 0, y: 4)
-        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#5438DC").opacity(0.16), radius: 12, x: 0, y: 4)
-        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#2460C0").opacity(0.14), radius: 12, x: 0, y: 3)
+        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#14365A").opacity(0.16), radius: 14, x: 0, y: 4)
+        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#A07A2C").opacity(0.16), radius: 12, x: 0, y: 4)
+        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#14365A").opacity(0.14), radius: 12, x: 0, y: 3)
         static let none     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
     }
 
@@ -459,6 +476,43 @@ extension View {
                     radius: DS.Shadow.card.radius,
                     x: DS.Shadow.card.x,
                     y: DS.Shadow.card.y)
+    }
+
+    /// زر دائري فوق الهيدر الملوّن — زجاج iOS 27 اللامع (طلب المالك):
+    /// زجاج «clear» تفاعلي بلون الهيدر الكحلي، فيلمع ويبقى من لون الهيدر.
+    /// الأنظمة الأقدم: دائرة بلون الهيدر وإطار أبيض خفيف.
+    @ViewBuilder
+    func dsHeaderGlassCircle() -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.clear.tint(DS.Color.headerControlFill.opacity(0.55)).interactive(), in: Circle())
+        } else {
+            self
+                .background(Circle().fill(DS.Color.headerControlFill))
+                .overlay(Circle().strokeBorder(SwiftUI.Color.white.opacity(0.18), lineWidth: 1))
+        }
+    }
+
+    /// شريط التبويبات: على iOS 26+ نترك زجاج النظام السائل كما هو
+    /// (فرض مادة يدوية يطفئه)، وعلى الأقدم مادة شفافة كما كان.
+    @ViewBuilder
+    func dsTabBarBackground() -> some View {
+        if #available(iOS 26.0, *) {
+            // شريط سفلي بزجاج iOS 27 — ثابت لا يصغر ولا يختفي عند التمرير (طلب المالك)
+            self.tabBarMinimizeBehavior(.never)
+        } else {
+            self.toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        }
+    }
+
+    /// خلفية زجاجية: زجاج iOS 26/27 السائل (Liquid Glass)، ومادة شفافة على الأقدم.
+    /// للعناصر العائمة فوق المحتوى (أشرطة أدوات، أزرار دائرية، أشرطة سفلية).
+    @ViewBuilder
+    func dsGlass<S: Shape>(_ shape: S, interactive: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            self.background(shape.fill(.ultraThinMaterial))
+        }
     }
 
     func dsSubtleShadow() -> some View {
@@ -562,8 +616,13 @@ struct DSCard<Content: View>: View {
                         .blur(radius: 50)
                         .offset(x: -60, y: 100)
                 }
+                // الدوائر الزخرفية تخرج عن حدود البطاقة — كانت تلتقط اللمس فوق
+                // أزرار البطاقة المجاورة (مثل «إزالة» آخر جهاز في كل عضو)
+                .allowsHitTesting(false)
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            // منطقة اللمس = حدود البطاقة فقط
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             .dsCardShadow()
     }
 }
@@ -1092,6 +1151,48 @@ struct DSStatCard: View {
 }
 
 /// زر عائم — Bold glass capsule مع gradient
+/// نمط زر الإضافة العائم: شفّاف في الوضع العادي (المحتوى خلفه يظهر)،
+/// ولونه الطبيعي المصمت أثناء الضغط (طلب المالك).
+private struct FloatingButtonStyle: ButtonStyle {
+    let gradient: LinearGradient
+    let color: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+        return configuration.label
+            .background {
+                // اللون الطبيعي يظهر عند الضغط فقط
+                Capsule().fill(gradient).opacity(pressed ? 1 : 0)
+            }
+            .modifier(FloatingButtonGlass(gradient: gradient, color: color, pressed: pressed))
+            .scaleEffect(pressed ? 0.95 : 1)
+            .animation(.easeOut(duration: 0.15), value: pressed)
+    }
+}
+
+private struct FloatingButtonGlass: ViewModifier {
+    let gradient: LinearGradient
+    let color: Color
+    let pressed: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            // زجاج «شفاف» (clear) بلمسة لون خفيفة — الخبر أو الصورة خلف الزر تظهر من خلاله
+            content
+                .clipShape(Capsule())
+                .glassEffect(.clear.tint(color.opacity(0.28)), in: Capsule())
+                .shadow(color: SwiftUI.Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+        } else {
+            // بلا ضبابية: لون العلامة نصف شفاف فيظهر المحتوى خلفه
+            content
+                .background(Capsule().fill(gradient).opacity(pressed ? 0 : 0.42))
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
+                .shadow(color: SwiftUI.Color.black.opacity(0.10), radius: 10, x: 0, y: 4)
+        }
+    }
+}
+
 struct DSFloatingButton: View {
     var icon: String? = nil
     var label: String? = nil
@@ -1122,23 +1223,13 @@ struct DSFloatingButton: View {
             // نص أبيض مع ظل — يبقى مقروءاً فوق ما يمرّ خلف الزر
             .foregroundColor(.white)
             .shadow(color: SwiftUI.Color.black.opacity(0.45), radius: 3, x: 0, y: 1)
-            .padding(.horizontal, label != nil ? DS.Spacing.xl : DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md + 2)
-            // كان التدرّج بشفافية ٥٠٪ فيقرأ نصّ المنشور خلف الزر ويتداخل معه.
-            // الآن: مادة ضبابية تحجب ما خلفها ثم التدرّج فوقها — يبقى الإحساس
-            // الزجاجي لكن النص مقروء ولا يختلط بما تحته.
-            .background(
-                ZStack {
-                    Capsule().fill(.ultraThinMaterial)
-                    Capsule().fill(gradient).opacity(0.92)
-                }
-            )
-            .clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
-            .shadow(color: SwiftUI.Color.black.opacity(0.10), radius: 10, x: 0, y: 4)
-            .shadow(color: color.opacity(0.16), radius: 7, x: 0, y: 3)
+            // علامة فقط (بلا نص) → دائرة ثابتة 56؛ مع نص → كبسولة كما كانت
+            .padding(.horizontal, label != nil ? DS.Spacing.xl : 0)
+            .padding(.vertical, label != nil ? DS.Spacing.md + 2 : 0)
+            .frame(width: label == nil ? 56 : nil, height: label == nil ? 56 : nil)
         }
-        .buttonStyle(DSBoldButtonStyle())
+        // شفّاف عادةً، ولونه الطبيعي عند الضغط (طلب المالك)
+        .buttonStyle(FloatingButtonStyle(gradient: gradient, color: color))
         .scaleEffect(appeared ? 1 : 0.3)
         .opacity(appeared ? 1 : 0)
         .onAppear {
@@ -1281,13 +1372,13 @@ struct DSApproveRejectButtons: View {
                 .dsGlowShadow()
             }
         }
-        .alert(L10n.t("تأكيد الموافقة", "Confirm Approval"), isPresented: $showApproveConfirm) {
+        .dsAlert(L10n.t("تأكيد الموافقة", "Confirm Approval"), isPresented: $showApproveConfirm) {
             Button(approveTitle) { debouncedApprove() }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
             Text(L10n.t("هل تريد المتابعة؟", "Do you want to proceed?"))
         }
-        .alert(L10n.t("تأكيد الرفض", "Confirm Rejection"), isPresented: $showRejectConfirm) {
+        .dsAlert(L10n.t("تأكيد الرفض", "Confirm Rejection"), isPresented: $showRejectConfirm) {
             Button(rejectTitle, role: .destructive) { debouncedReject() }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
@@ -1704,5 +1795,54 @@ struct DSSkeletonRow: View {
             Spacer()
         }
         .padding(.vertical, DS.Spacing.xs)
+    }
+}
+
+/// زر «إلغاء» الموحّد أعلى الأوراق — أحمر عريض
+struct DSToolbarCancelButton: View {
+    var title: String = L10n.t("إلغاء", "Cancel")
+    let action: () -> Void
+    var body: some View {
+        Button(title, action: action)
+            .font(DS.Font.calloutBold)
+            .foregroundColor(DS.Color.error)
+    }
+}
+
+// MARK: - شريط الورقة الموحّد — الحفظ/الإضافة يمين، الإغلاق يسار (طلب المالك)
+//
+// مواضع فيزيائية ثابتة: في الواجهة العربية (RTL) البداية = اليمين، فنعكس
+// المواضع حتى يبقى زر التأكيد يميناً والإغلاق يساراً في اللغتين.
+enum DSToolbar {
+    static var confirmPlacement: ToolbarItemPlacement { L10n.isArabic ? .topBarLeading : .topBarTrailing }
+    static var cancelPlacement: ToolbarItemPlacement { L10n.isArabic ? .topBarTrailing : .topBarLeading }
+}
+
+extension View {
+    /// أعلى الورقة: زر تأكيد (حفظ/إضافة) يميناً + زر إغلاق يساراً
+    func dsSheetToolbar(
+        confirm: String,
+        isLoading: Bool = false,
+        disabled: Bool = false,
+        onConfirm: @escaping () -> Void,
+        cancel: String = L10n.t("إلغاء", "Cancel"),
+        onCancel: @escaping () -> Void
+    ) -> some View {
+        toolbar {
+            // «إلغاء» بالأحمر — نفس شاشة تعديل الملف الشخصي (طلب المالك)
+            ToolbarItem(placement: DSToolbar.cancelPlacement) {
+                DSToolbarCancelButton(title: cancel, action: onCancel)
+            }
+            ToolbarItem(placement: DSToolbar.confirmPlacement) {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Button(confirm, action: onConfirm)
+                        .font(DS.Font.calloutBold)
+                        .foregroundColor(disabled ? DS.Color.textTertiary : DS.Color.primary)
+                        .disabled(disabled)
+                }
+            }
+        }
     }
 }

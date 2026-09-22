@@ -14,6 +14,8 @@ struct AdminInboxView: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
+    /// رسالة طُلب حذفها بالسحب — تأكيد قبل الحذف
+    @State private var messageToDelete: AdminRequest? = nil
 
     private enum InboxFilter: String, CaseIterable {
         case pending, handled
@@ -74,24 +76,28 @@ struct AdminInboxView: View {
                     ScrollView {
                         AdaptiveLazyStack(spacing: DS.Spacing.sm, landscapeMinimum: 340) {
                             ForEach(filteredMessages) { msg in
-                                Button {
+                                // ضغطة فعلية فقط تفتح التفاصيل — السحب لا يفتحها (طلب المالك).
+                                // (زر Button كان يعدّ رفع الإصبع بعد السحب ضغطة)
+                                HStack(spacing: DS.Spacing.sm) {
+                                    if isSelectMode {
+                                        Image(systemName: selectedIDs.contains(msg.id) ? "checkmark.circle.fill" : "circle")
+                                            .font(DS.Font.scaled(20, weight: .semibold))
+                                            .foregroundColor(selectedIDs.contains(msg.id) ? DS.Color.primary : DS.Color.textTertiary)
+                                    }
+                                    messageRow(msg)
+                                }
+                                .contentShape(Rectangle())
+                                .onTapGesture {
                                     if isSelectMode {
                                         toggleSelection(msg.id)
                                     } else {
                                         adminRequestVM.markContactMessageRead(msg.id)
                                         selectedMessage = msg
                                     }
-                                } label: {
-                                    HStack(spacing: DS.Spacing.sm) {
-                                        if isSelectMode {
-                                            Image(systemName: selectedIDs.contains(msg.id) ? "checkmark.circle.fill" : "circle")
-                                                .font(DS.Font.scaled(20, weight: .semibold))
-                                                .foregroundColor(selectedIDs.contains(msg.id) ? DS.Color.primary : DS.Color.textTertiary)
-                                        }
-                                        messageRow(msg)
-                                    }
                                 }
-                                .buttonStyle(.plain)
+                                .accessibilityAddTraits(.isButton)
+                                // نفس سحب الأخبار: صوب اليمين يكشف «حذف» و«تم التعامل» (طلب المالك)
+                                .dsSwipeActions(id: msg.id, actions: isSelectMode ? [] : swipeActions(for: msg))
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -113,18 +119,20 @@ struct AdminInboxView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if !filteredMessages.isEmpty {
-                    Button(isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select")) {
+                    Button {
                         withAnimation(DS.Anim.quick) {
                             isSelectMode.toggle()
                             if !isSelectMode { selectedIDs.removeAll() }
                         }
+                    } label: {
+                        Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+                            .foregroundColor(DS.Color.primary)
                     }
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.primary)
+                    .accessibilityLabel(isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select"))
                 }
             }
         }
-        .alert(L10n.t("حذف الرسائل", "Delete Messages"), isPresented: $showDeleteConfirm) {
+        .dsAlert(L10n.t("حذف الرسائل", "Delete Messages"), isPresented: $showDeleteConfirm) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 Task { await deleteSelected() }
             }
@@ -132,6 +140,20 @@ struct AdminInboxView: View {
         } message: {
             Text(L10n.t("هل تريد حذف \(selectedIDs.count) رسالة؟ لا يمكن التراجع.",
                         "Delete \(selectedIDs.count) message(s)? This can't be undone."))
+        }
+        .dsAlert(L10n.t("حذف الرسالة", "Delete Message"), isPresented: Binding(
+            get: { messageToDelete != nil },
+            set: { if !$0 { messageToDelete = nil } }
+        )) {
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                if let m = messageToDelete {
+                    Task { await adminRequestVM.deleteContactMessages(ids: [m.id]) }
+                }
+                messageToDelete = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { messageToDelete = nil }
+        } message: {
+            Text(L10n.t("هل تريد حذف هذه الرسالة؟ لا يمكن التراجع.", "Delete this message? This can't be undone."))
         }
         .navigationTitle(L10n.t("رسائل التواصل", "Contact Messages"))
         .navigationBarTitleDisplayMode(.inline)
@@ -153,9 +175,9 @@ struct AdminInboxView: View {
 
     // MARK: - Filter Bar
 
+    /// تبويبان بعرض متساوٍ داخل حاوية واحدة (نمط segmented) — مرتّب وثابت الحجم
     private var filterBar: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Spacer(minLength: 0)
+        HStack(spacing: 4) {
             ForEach(InboxFilter.allCases, id: \.self) { f in
                 let selected = filter == f
                 let count = f == .pending
@@ -164,41 +186,55 @@ struct AdminInboxView: View {
                 Button {
                     withAnimation(DS.Anim.quick) { filter = f }
                 } label: {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         Text(f.title)
-                            .font(DS.Font.scaled(13, weight: selected ? .bold : .semibold))
+                            .font(DS.Font.plex(13, weight: selected ? .bold : .medium))
                             .lineLimit(1)
                         if count > 0 {
                             Text("\(count)")
-                                .font(DS.Font.scaled(11, weight: .black))
-                                .foregroundColor(selected ? .white : .white)
-                                .frame(minWidth: 16, minHeight: 16)
+                                .font(DS.Font.scaled(11, weight: .bold))
+                                .foregroundColor(selected ? DS.Color.primary : DS.Color.textSecondary)
+                                .frame(minWidth: 18, minHeight: 18)
                                 .padding(.horizontal, 3)
-                                .background(Capsule().fill(selected ? Color.white.opacity(0.28) : DS.Color.primary))
+                                .background(Capsule().fill(selected ? DS.Color.primary.opacity(0.12) : DS.Color.mutedBackground))
                         }
                     }
-                    .foregroundColor(selected ? .white : DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, 8)
+                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 36)
                     .background(
-                        Group {
-                            if selected {
-                                Capsule(style: .continuous).fill(DS.Color.gradientPrimary)
-                            } else {
-                                Capsule(style: .continuous).fill(DS.Color.primary.opacity(0.10))
-                            }
-                        }
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(selected ? DS.Color.background : Color.clear)
+                            .shadow(color: selected ? .black.opacity(0.06) : .clear, radius: 3, x: 0, y: 1)
                     )
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .strokeBorder(selected ? Color.white.opacity(0.20) : DS.Color.primary.opacity(0.22), lineWidth: selected ? 0.5 : 1)
-                    )
-                    .shadow(color: selected ? DS.Color.primary.opacity(0.35) : .clear, radius: 8, x: 0, y: 3)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
-            Spacer(minLength: 0)
         }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(DS.Color.surface)
+        )
+    }
+
+    // MARK: - Swipe actions
+
+    private func swipeActions(for msg: AdminRequest) -> [DSSwipeAction] {
+        var actions = [
+            DSSwipeAction(icon: "trash.fill", title: L10n.t("حذف", "Delete"), color: DS.Color.error) {
+                messageToDelete = msg
+            }
+        ]
+        if msg.status == ApprovalStatus.pending.rawValue {
+            actions.append(DSSwipeAction(icon: "checkmark.circle.fill", title: L10n.t("تم التعامل", "Handled"),
+                                         color: DS.Color.success) {
+                adminRequestVM.markContactMessageRead(msg.id)
+                Task { await adminRequestVM.markContactMessageHandled(msg) }
+            })
+        }
+        return actions
     }
 
     // MARK: - Select / Delete
@@ -243,7 +279,7 @@ struct AdminInboxView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .background(.ultraThinMaterial)
+        .dsGlass(Rectangle())
         .overlay(Divider(), alignment: .top)
     }
 
@@ -266,9 +302,9 @@ struct AdminInboxView: View {
             }
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
+        .frame(height: 40)
         .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg)
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .fill(DS.Color.surface)
         )
     }
@@ -309,86 +345,75 @@ struct AdminInboxView: View {
         let isPending = msg.status == ApprovalStatus.pending.rawValue
         let isUnread = !adminRequestVM.readContactMessageIds.contains(msg.id)
 
-        return HStack(alignment: .top, spacing: DS.Spacing.md) {
-            // نقطة "غير مقروء" — تظهر فقط للرسائل اللي ما ضغط عليها المدير بعد
-            ZStack {
-                if isUnread {
-                    Circle()
-                        .fill(DS.Color.primary)
-                        .frame(width: 9, height: 9)
-                        .transition(.opacity)
-                }
-            }
-            .frame(width: 9)
-            .padding(.top, 6)
-            .animation(DS.Anim.quick, value: isUnread)
+        // صندوق موحّد الحجم: صورة · (الاسم + الوقت) · (التصنيف) · مقتطف من سطرين
+        return HStack(alignment: .top, spacing: DS.Spacing.sm + 2) {
+            avatar(for: msg.member)
 
-            // الصف معكوس مثل شاشة التفاصيل: النص أولاً والصورة في الطرف المقابل
-            VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
-                HStack(spacing: DS.Spacing.xs) {
-                    if let d = date {
-                        Text(relativeShort(d))
-                            .font(DS.Font.caption2)
-                            .fontWeight(isUnread ? .bold : .regular)
-                            .foregroundColor(isUnread ? DS.Color.primary : DS.Color.textTertiary)
-                    }
-                    Spacer(minLength: 0)
-                    Text(msg.member?.fullName ?? L10n.t("عضو", "Member"))
-                        .font(DS.Font.calloutBold)
-                        .fontWeight(isUnread ? .black : .bold)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+                    // الاسم أصغر بخط IBM Plex وعلى سطرين (طلب المالك)
+                    Text(msg.member?.displayFullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.plex(13, weight: isUnread ? .bold : .semibold))
                         .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: DS.Spacing.xs)
+                    HStack(spacing: 4) {
+                        if isUnread {
+                            Circle().fill(DS.Color.primary).frame(width: 7, height: 7)
+                        }
+                        if let d = date {
+                            Text(relativeShort(d))
+                                .font(DS.Font.plex(11, weight: isUnread ? .bold : .regular))
+                                .foregroundColor(isUnread ? DS.Color.primary : DS.Color.textTertiary)
+                        }
+                    }
                 }
 
                 HStack(spacing: DS.Spacing.xs) {
-                    Spacer(minLength: 0)
+                    categoryChip(category)
                     if isPending {
                         Image(systemName: "clock.fill")
                             .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(DS.Color.warning)
                     }
-                    categoryChip(category)
+                    Spacer(minLength: 0)
                 }
 
                 Text(preview)
-                    .font(DS.Font.subheadline)
-                    .fontWeight(isUnread ? .semibold : .regular)
+                    .font(DS.Font.plex(12, weight: .regular))
                     .foregroundColor(isUnread ? DS.Color.textPrimary : DS.Color.textSecondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.trailing)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .lineLimit(1)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            avatar(for: msg.member)
         }
-        .padding(DS.Spacing.md)
-        .background(isUnread ? DS.Color.primary.opacity(0.04) : DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .strokeBorder(
-                    isUnread
-                        ? DS.Color.primary.opacity(0.25)
-                        : (isPending ? DS.Color.warning.opacity(0.18) : Color.clear),
-                    lineWidth: isUnread ? 1.2 : 1
-                )
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm + 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .fill(DS.Color.surface)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .strokeBorder(isUnread ? DS.Color.primary.opacity(0.30) : DS.Color.cardBorder,
+                              lineWidth: isUnread ? 1.2 : 0.75)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
     }
 
     // MARK: - Mark all read bar
 
     private var markAllReadBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "envelope.badge.fill")
-                .font(DS.Font.scaled(12, weight: .bold))
-                .foregroundColor(DS.Color.primary)
             Text(L10n.t(
                 "\(adminRequestVM.unreadContactMessagesCount) رسالة جديدة",
                 "\(adminRequestVM.unreadContactMessagesCount) new messages"
             ))
-            .font(DS.Font.caption1)
-            .fontWeight(.semibold)
-            .foregroundColor(DS.Color.textPrimary)
+            .font(DS.Font.plex(12, weight: .semibold))
+            .foregroundColor(DS.Color.textSecondary)
             Spacer()
             Button {
                 withAnimation(DS.Anim.quick) {
@@ -396,31 +421,19 @@ struct AdminInboxView: View {
                 }
             } label: {
                 Text(L10n.t("تحديد الكل كمقروء", "Mark all read"))
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
+                    .font(DS.Font.plex(12, weight: .bold))
                     .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, 6)
-                    .background(DS.Color.primary.opacity(0.10))
-                    .clipShape(Capsule())
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
-        .background(DS.Color.primary.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1)
-        )
+        .padding(.horizontal, DS.Spacing.xs)
     }
 
     private func avatar(for member: FamilyMember?) -> some View {
         DSMemberAvatar(
             name: member?.firstName ?? "?",
             avatarUrl: member?.avatarUrl,
-            size: 44,
+            size: 36,
             roleColor: member?.roleColor ?? DS.Color.primary
         )
     }
@@ -472,10 +485,30 @@ private struct MessageDetailSheet: View {
         ScrollView {
             VStack(alignment: .trailing, spacing: DS.Spacing.lg) {
                 // Sender
-                // صف المرسل معكوس: التصنيف أولاً · الاسم والهاتف في الوسط ·
-                // الصورة في الطرف المقابل (طلب المالك)
+                // صف المرسل: الصورة أولاً · الاسم والهاتف بجانبها · التصنيف في الطرف المقابل (طلب المالك)
                 HStack(spacing: DS.Spacing.md) {
                     let info = ContactCategoryInfo.from(raw: category)
+                    DSMemberAvatar(
+                        name: message.member?.firstName ?? "?",
+                        avatarUrl: message.member?.avatarUrl,
+                        size: 52,
+                        roleColor: message.member?.roleColor ?? DS.Color.primary
+                    )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(message.member?.displayFullName ?? L10n.t("عضو", "Member"))
+                            .font(DS.Font.plex(15, weight: .semibold))
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if !phone.isEmpty {
+                            Text(phone)
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                     VStack(spacing: 2) {
                         Image(systemName: info.icon)
                             .font(DS.Font.scaled(13, weight: .bold))
@@ -488,25 +521,6 @@ private struct MessageDetailSheet: View {
                             .fontWeight(.semibold)
                             .foregroundColor(DS.Color.textSecondary)
                     }
-
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(message.member?.fullName ?? L10n.t("عضو", "Member"))
-                            .font(DS.Font.headline)
-                            .foregroundColor(DS.Color.textPrimary)
-                        if !phone.isEmpty {
-                            Text(phone)
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                    DSMemberAvatar(
-                        name: message.member?.firstName ?? "?",
-                        avatarUrl: message.member?.avatarUrl,
-                        size: 52,
-                        roleColor: message.member?.roleColor ?? DS.Color.primary
-                    )
                 }
 
                 Divider()
@@ -889,13 +903,14 @@ private struct OfficialReplySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
                 }
             }
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     @MainActor

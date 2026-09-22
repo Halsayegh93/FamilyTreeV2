@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import Supabase
 
 // MARK: - Main Settings View (iOS-style with semantic groups)
 struct SettingsView: View {
@@ -9,6 +10,8 @@ struct SettingsView: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
     @ObservedObject var langManager = LanguageManager.shared
+    @AppStorage("appearanceMode") private var appearanceMode: String = "system"
+    @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
 
     @State private var showEditProfile = false
     @State private var showLinkedDevices = false
@@ -22,144 +25,85 @@ struct SettingsView: View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
+            // تصميم مرتب (طلب المالك): بطاقة الحساب أعلى، ثم شبكة الإعدادات
+            // السريعة، ثم المعلومات، وحذف الحساب زر هادئ في الأسفل.
             ScrollView {
-                VStack(spacing: DS.Spacing.md) {
-                    // في الوضع الأفقي: البطاقات تتوزع على عمودين تلقائياً
-                    AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 330) {
-                    // ── الحساب ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: t("الحساب", "Account"),
-                            icon: "person.crop.circle.fill",
-                            iconColor: DS.Color.primary
-                        )
+                VStack(spacing: DS.Spacing.xl) {
+                    // تصميم جديد (طلب المالك): بطاقة هوية للعائلة، ثم مجموعات قصيرة
+                    // كل سطر فيها يعرض قيمته الحالية — تشوف إعداداتك بدون ما تفتحها.
+                    profileCard
 
-                        Button { showEditProfile = true } label: {
-                            settingsActionRow(
-                                icon: "person.fill.viewfinder",
-                                color: DS.Color.primary,
-                                title: t("تعديل الملف الشخصي", "Edit Profile"),
-                                subtitle: t("الاسم، الصورة، محطات الحياة", "Name, photo, life stations")
-                            )
+                    settingsGroup(t("حسابك", "Your account")) {
+                        NavigationLink(destination: NotificationsAndPrivacyView()) {
+                            groupRow(icon: "bell.badge.fill", color: DS.Color.warning,
+                                     title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
+                                     value: notificationsEnabled ? t("مفعّلة", "On") : t("موقوفة", "Off"))
                         }
-                        .buttonStyle(DSBoldButtonStyle())
-                    }
-
-                    // ── التفضيلات ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: t("التفضيلات", "Preferences"),
-                            icon: "slider.horizontal.3",
-                            iconColor: DS.Color.accent
-                        )
-
-                        navRow(
-                            destination: NotificationsAndPrivacyView(),
-                            icon: "bell.badge.fill",
-                            color: DS.Color.warning,
-                            title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
-                            subtitle: t("التحكم بالإشعارات وإخفاء بياناتك", "Manage notifications and data visibility")
-                        )
-                        DSDivider()
-                        navRow(
-                            destination: AppearanceSettingsView(),
-                            icon: "paintbrush.fill",
-                            color: DS.Color.accent,
-                            title: t("المظهر واللغة", "Appearance & Language"),
-                            subtitle: t("الوضع الفاتح/الداكن واللغة", "Light/dark mode & language")
-                        )
-                        DSDivider()
+                        rowDivider
                         Button { showLinkedDevices = true } label: {
-                            settingsActionRow(
-                                icon: "iphone.gen3",
-                                color: DS.Color.info,
-                                title: t("الأجهزة المرتبطة", "Linked Devices"),
-                                subtitle: t(
-                                    "\(notificationVM.linkedDevices.count) جهاز نشط",
-                                    "\(notificationVM.linkedDevices.count) active device\(notificationVM.linkedDevices.count == 1 ? "" : "s")"
-                                )
-                            )
+                            groupRow(icon: "iphone.gen3", color: DS.Color.info,
+                                     title: t("الأجهزة المرتبطة", "Linked Devices"),
+                                     value: "\(notificationVM.linkedDevices.count)")
                         }
-                        .buttonStyle(DSBoldButtonStyle())
                     }
 
-                    // ── معلومات ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: t("معلومات", "Information"),
-                            icon: "info.circle.fill",
-                            iconColor: DS.Color.info
-                        )
-
+                    settingsGroup(t("التطبيق", "App")) {
+                        NavigationLink(destination: AppearanceSettingsView()) {
+                            groupRow(icon: "paintbrush.fill", color: DS.Color.accent,
+                                     title: t("المظهر واللغة", "Appearance & Language"),
+                                     value: "\(appearanceLabel) · \(langManager.selectedLanguage == "ar" ? "العربية" : "English")")
+                        }
+                        rowDivider
                         Button { showAbout = true } label: {
-                            settingsActionRow(
-                                icon: "app.badge.fill",
-                                color: DS.Color.secondary,
-                                title: t("عن التطبيق", "About FamilyTree"),
-                                subtitle: t("تعرّف على التطبيق ومميزاته", "Learn about the app and its features")
-                            )
+                            groupRow(icon: "app.badge.fill", color: DS.Color.secondary,
+                                     title: t("عن التطبيق", "About"),
+                                     value: AppVersion.string)
                         }
-                        .buttonStyle(DSBoldButtonStyle())
+                    }
 
-                        DSDivider()
-
+                    settingsGroup(t("قانوني", "Legal")) {
                         Button { showTerms = true } label: {
-                            settingsActionRow(
-                                icon: "doc.text.fill",
-                                color: DS.Color.info,
-                                title: t("سياسة الخصوصية والشروط", "Privacy Policy & Terms"),
-                                subtitle: t("كيف نحمي بياناتك وشروط الاستخدام", "How we protect your data & usage terms")
-                            )
+                            groupRow(icon: "doc.text.fill", color: DS.Color.primary,
+                                     title: t("الخصوصية والشروط", "Privacy & Terms"),
+                                     value: nil)
                         }
-                        .buttonStyle(DSBoldButtonStyle())
                     }
-
-                    // ── إدارة الحساب ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: t("إدارة الحساب", "Account Management"),
-                            icon: "exclamationmark.triangle.fill",
-                            iconColor: DS.Color.error
-                        )
-
-                        Button { showDeleteConfirmation = true } label: {
-                            HStack(spacing: DS.Spacing.md) {
-                                DSIcon("trash.fill", color: DS.Color.error)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(t("حذف الحساب", "Delete Account"))
-                                        .font(DS.Font.calloutBold)
-                                        .foregroundColor(DS.Color.error)
-                                    Text(t("حذف حسابك وجميع بياناتك نهائياً", "Permanently delete your account and data"))
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.textSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.forward")
-                                    .font(DS.Font.scaled(13, weight: .bold))
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.md)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.xxxl)
+            }
+            // حذف الحساب — زر عريض مثبّت أسفل الشاشة (طلب المالك) + رقم الإصدار
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: DS.Spacing.xs) {
+                    Button { showDeleteConfirmation = true } label: {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "trash")
+                                .font(DS.Font.scaled(13, weight: .bold))
+                            Text(t("حذف الحساب", "Delete Account"))
+                                .font(DS.Font.plex(14, weight: .bold))
                         }
-                        .buttonStyle(DSBoldButtonStyle())
+                        .foregroundColor(DS.Color.error)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                        .background(DS.Color.error.opacity(0.08),
+                                    in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                     }
-                    }
-
+                    .buttonStyle(DSScaleButtonStyle())
                     versionLabel
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.xl)
-                .padding(.bottom, DS.Spacing.xxxl)
+                .padding(.top, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.sm)
+                .background(DS.Color.background)
             }
         }
         .navigationTitle(t("الإعدادات", "Settings"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, langManager.layoutDirection)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(t("إغلاق", "Close")) { dismiss() }
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.primary)
+            ToolbarItem(placement: DSToolbar.cancelPlacement) {
+                DSToolbarCancelButton(title: t("إغلاق", "Close")) { dismiss() }
             }
         }
         .sheet(isPresented: $showEditProfile) {
@@ -170,22 +114,22 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAbout) { AboutView() }
         .sheet(isPresented: $showTerms) { PrivacyPolicyView() }
-        .alert(t("حذف الحساب", "Delete Account"), isPresented: $showDeleteConfirmation) {
+        .dsAlert(t("حذف الحساب", "Delete Account"), isPresented: $showDeleteConfirmation) {
             Button(t("إلغاء", "Cancel"), role: .cancel) {}
             Button(t("حذف نهائي", "Delete Permanently"), role: .destructive) {
                 Task { _ = await authVM.deleteAccount() }
             }
         } message: {
             Text(t(
-                "سيتم حذف:\n• حسابك وبيانات تسجيل الدخول\n• صورتك الشخصية\n• محطاتك الحياتية\n\nستبقى بياناتك في شجرة العائلة. لا يمكن التراجع عن هذا الإجراء.",
+                "سيتم حذف:\n• حسابك وبيانات تسجيل الدخول\n• صورتك الشخصية\n• سيرتك الذاتية\n\nستبقى بياناتك في شجرة العائلة. لا يمكن التراجع عن هذا الإجراء.",
                 "This will permanently delete:\n• Your account & login credentials\n• Your profile photo\n• Your life stations\n\nYour family tree data will remain. This cannot be undone."
             ))
         }
-        .alert(t("خطأ", "Error"), isPresented: .init(
+        .dsAlert(t("خطأ", "Error"), isPresented: .init(
             get: { authVM.deleteAccountError != nil },
             set: { if !$0 { authVM.deleteAccountError = nil } }
         )) {
-            Button(t("حسناً", "OK"), role: .cancel) {}
+            Button(t("حسناً", "OK")) {}
         } message: {
             Text(authVM.deleteAccountError ?? "")
         }
@@ -206,12 +150,196 @@ struct SettingsView: View {
         .buttonStyle(DSBoldButtonStyle())
     }
 
+    /// بطاقة الحساب: الصورة والاسم والدور والرقم + زر تعديل الملف
+    /// بطاقة هوية العائلة (طلب المالك — تصميم جديد): صورة مربّعة مدوّرة، الاسم
+    /// والدور والرقم، شجرة باهتة في الخلفية، وسطر سفلي: عضو منذ + الميلاد.
+    /// التعديل أيقونة قلم صغيرة في زاوية البطاقة.
+    private var profileCard: some View {
+        let user = authVM.currentUser
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                Group {
+                    if let avatar = user?.avatarUrl, let url = URL(string: avatar) {
+                        CachedAsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: { Color.white.opacity(0.2) }
+                    } else {
+                        ZStack {
+                            Color.white.opacity(0.18)
+                            Image(systemName: "person.fill")
+                                .font(DS.Font.scaled(26, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.7), lineWidth: 2))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali Family"))
+                        .font(DS.Font.plex(10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                    Text(user?.displayName ?? "")
+                        .font(DS.Font.plex(18, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    HStack(spacing: DS.Spacing.sm) {
+                        if let user {
+                            Text(user.roleName)
+                                .font(DS.Font.plex(10.5, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.white.opacity(0.22)))
+                        }
+                        if let phone = user?.phoneNumber, !phone.isEmpty {
+                            Text(KuwaitPhone.display(phone))
+                                .font(DS.Font.plex(11.5, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.9))
+                                .monospacedDigit()
+                                .environment(\.layoutDirection, .leftToRight)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+
+                Button { showEditProfile = true } label: {
+                    Image(systemName: "pencil")
+                        .font(DS.Font.scaled(13, weight: .bold))
+                        .foregroundColor(DS.Color.primary)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(Color.white))
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(t("تعديل الملف الشخصي", "Edit Profile"))
+            }
+            .padding(DS.Spacing.lg)
+
+            // الشريط السفلي — مثل ظهر البطاقة
+            HStack(spacing: DS.Spacing.xl) {
+                cardFact(icon: "calendar", title: t("عضو منذ", "Member since"), value: shortDate(user?.createdAt))
+                cardFact(icon: "gift.fill", title: t("الميلاد", "Born"), value: shortDate(user?.birthDate))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm + 2)
+            .background(Color.black.opacity(0.12))
+        }
+        .background(
+            ZStack(alignment: .bottomLeading) {
+                DS.Color.gradientPrimary
+                Image(systemName: "tree.fill")
+                    .font(.system(size: 130, weight: .regular))
+                    .foregroundColor(.white.opacity(0.07))
+                    .offset(x: -14, y: 22)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+        .shadow(color: DS.Color.primary.opacity(0.25), radius: 12, y: 6)
+    }
+
+    private func cardFact(icon: String, title: String, value: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(.white.opacity(0.75))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(DS.Font.plex(9.5, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+                Text(value)
+                    .font(DS.Font.plex(12, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+    }
+
+    // MARK: - المجموعات (كل سطر يعرض قيمته الحالية)
+    private var appearanceLabel: String {
+        switch appearanceMode {
+        case "dark": return t("داكن", "Dark")
+        case "light": return t("فاتح", "Light")
+        default: return t("تلقائي", "Auto")
+        }
+    }
+
+    private func settingsGroup<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(title)
+                .font(DS.Font.plex(12, weight: .bold))
+                .foregroundColor(DS.Color.textSecondary)
+                .padding(.horizontal, DS.Spacing.sm)
+            VStack(spacing: 0) { content() }
+                .buttonStyle(DSBoldButtonStyle())
+                .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+                .dsSubtleShadow()
+        }
+    }
+
+    private func groupRow(icon: String, color: Color, title: String, value: String?) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(14, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.sm + 1, style: .continuous).fill(color))
+            Text(title)
+                .font(DS.Font.plex(14, weight: .semibold))
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+            Spacer(minLength: DS.Spacing.sm)
+            if let value {
+                Text(value)
+                    .font(DS.Font.plex(12.5, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+            }
+            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary.opacity(0.7))
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(height: 56)
+        .contentShape(Rectangle())
+    }
+
+    private var rowDivider: some View {
+        Rectangle()
+            .fill(DS.Color.textTertiary.opacity(0.15))
+            .frame(height: 1)
+            .padding(.leading, 60)
+    }
+
+    /// «١٩٩٣/٠٣/٢٥» → «مارس ١٩٩٣» — التاريخ مختصر بالشهر نصاً
+    private func shortDate(_ raw: String?) -> String {
+        guard let raw, raw.count >= 10 else { return "—" }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        guard let d = f.date(from: String(raw.prefix(10))) else { return "—" }
+        let out = DateFormatter()
+        out.locale = LanguageManager.shared.locale
+        out.dateFormat = "MMMM yyyy"
+        return out.string(from: d)
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(DS.Font.plex(12, weight: .bold))
+            .foregroundColor(DS.Color.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.bottom, -DS.Spacing.sm)
+    }
+
     private var versionLabel: some View {
         Text(t("إصدار التطبيق \(AppVersion.string)", "App Version \(AppVersion.string)"))
             .font(DS.Font.caption2)
             .foregroundColor(DS.Color.textTertiary)
             .frame(maxWidth: .infinity)
-            .padding(.top, DS.Spacing.md)
     }
 }
 
@@ -223,144 +351,99 @@ struct NotificationsAndPrivacyView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @ObservedObject var langManager = LanguageManager.shared
-
     @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
-    @AppStorage("notif_comments") private var notifComments: Bool = true
-    @AppStorage("notif_likes") private var notifLikes: Bool = true
-    @AppStorage("notif_profile_updates") private var notifProfileUpdates: Bool = true
-    @AppStorage("notif_admin_activity") private var notifAdminActivity: Bool = true
 
     @State private var badgeEnabled: Bool = true
     @State private var isPhoneHidden: Bool = false
     @State private var isBirthDateHidden: Bool = false
     @State private var showUpdateError: Bool = false
+    /// أنواع الإشعارات — محفوظة بالسيرفر ويقرأها مُطلِق الدفع (طلب المالك)
+    @State private var prefs: [String: Bool] = [:]
+    @State private var systemStatus: UNAuthorizationStatus = .notDetermined
+    @State private var testState: TestState = .idle
+
+    private enum TestState { case idle, sending, sent, failed }
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
+
+    /// نوع واحد من الإشعارات (مفتاحه في notification_prefs)
+    private struct Kind: Identifiable {
+        let key: String, icon: String, color: Color, title: String, subtitle: String
+        var id: String { key }
+    }
+
+    private var kinds: [Kind] {
+        var list: [Kind] = [
+            Kind(key: "news", icon: "newspaper.fill", color: DS.Color.primary,
+                 title: t("الأخبار الجديدة", "New posts"), subtitle: t("عند نشر خبر في العائلة", "When a family post is published")),
+            Kind(key: "comments", icon: "bubble.left.fill", color: DS.Color.info,
+                 title: t("التعليقات", "Comments"), subtitle: t("عند تعليق أحد على خبرك", "When someone comments on your post")),
+            Kind(key: "likes", icon: "heart.fill", color: DS.Color.error,
+                 title: t("الإعجابات", "Likes"), subtitle: t("عند إعجاب أحد بخبرك", "When someone likes your post")),
+            Kind(key: "requests", icon: "checkmark.seal.fill", color: DS.Color.success,
+                 title: t("الرد على طلباتي", "Replies to my requests"), subtitle: t("قبول أو رفض طلباتك، تفعيل حسابك", "Approvals, rejections, activation")),
+            Kind(key: "profile", icon: "person.crop.circle.badge.checkmark", color: DS.Color.accent,
+                 title: t("تحديثات ملفي", "My profile updates"), subtitle: t("عند تعديل الإدارة لبياناتك", "When admins edit your profile"))
+        ]
+        if authVM.canModerate {
+            list.append(Kind(key: "admin_activity", icon: "sparkles", color: DS.Color.warning,
+                             title: t("مستجدات الإدارة", "Admin activity"),
+                             subtitle: t("طلبات الشجرة والانضمام والتعديلات", "Tree, join and edit requests")))
+        }
+        return list
+    }
 
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
             ScrollView {
-                AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 330) {
-                    // ── Notifications: Master ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: t("الإشعارات", "Notifications"),
-                            icon: "bell.badge.fill",
-                            iconColor: DS.Color.warning
-                        )
+                VStack(spacing: DS.Spacing.xl) {
+                    statusCard
 
-                        toggleRow(
-                            icon: "bell.badge.fill",
-                            color: DS.Color.primary,
-                            title: t("تفعيل الإشعارات", "Enable Notifications"),
-                            subtitle: t("استقبال الإشعارات داخل وخارج التطبيق", "Receive push and in-app notifications"),
-                            isOn: $notificationsEnabled
-                        )
-                    }
-
-                    // ── Notifications: Sub-types ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: t("أنواع الإشعارات", "Notification Types"),
-                            icon: "slider.horizontal.3"
-                        )
-
-                        toggleRow(
-                            icon: "app.badge",
-                            color: DS.Color.primary,
-                            title: t("شارة الأيقونة", "App Badge"),
-                            subtitle: t("عدد الإشعارات غير المقروءة على الأيقونة", "Show unread count on app icon"),
-                            isOn: $badgeEnabled,
-                            disabled: !notificationsEnabled
-                        )
-                        DSDivider()
-                        toggleRow(
-                            icon: "bubble.left.fill",
-                            color: DS.Color.info,
-                            title: t("التعليقات", "Comments"),
-                            subtitle: t("عند تعليق أحد على أخبارك", "When someone comments on your post"),
-                            isOn: $notifComments,
-                            disabled: !notificationsEnabled
-                        )
-                        DSDivider()
-                        toggleRow(
-                            icon: "heart.fill",
-                            color: DS.Color.error,
-                            title: t("الإعجابات", "Likes"),
-                            subtitle: t("عند إعجاب أحد بأخبارك", "When someone likes your post"),
-                            isOn: $notifLikes,
-                            disabled: !notificationsEnabled
-                        )
-                        DSDivider()
-                        toggleRow(
-                            icon: "person.crop.circle.badge.checkmark",
-                            color: DS.Color.accent,
-                            title: t("تحديثات الملف الشخصي", "Profile Updates"),
-                            subtitle: t("عند تعديل بياناتك من قِبل الإدارة", "When admin updates your profile"),
-                            isOn: $notifProfileUpdates,
-                            disabled: !notificationsEnabled
-                        )
-
-                        if authVM.canModerate {
-                            DSDivider()
-                            toggleRow(
-                                icon: "sparkles",
-                                color: DS.Color.accent,
-                                title: t("إشعارات المستجدات", "Activity Notifications"),
-                                subtitle: t("طلبات الانضمام والتعديلات ومستجدات التطبيق", "Join requests, edits, and app activity"),
-                                isOn: $notifAdminActivity,
-                                disabled: !notificationsEnabled
-                            )
+                    group(t("أنواع الإشعارات", "Notification types"),
+                          footer: t("إعلانات الإدارة وتحديثات التطبيق تصلك دائماً. النوع المطفأ يبقى داخل التطبيق بدون تنبيه.",
+                                    "Admin announcements and app updates always arrive. Muted types stay in the app without an alert.")) {
+                        ForEach(Array(kinds.enumerated()), id: \.element.id) { idx, kind in
+                            if idx > 0 { rowDivider }
+                            switchRow(icon: kind.icon, color: kind.color, title: kind.title, subtitle: kind.subtitle,
+                                      isOn: Binding(
+                                        get: { prefs[kind.key] ?? true },
+                                        set: { newValue in
+                                            prefs[kind.key] = newValue
+                                            Task {
+                                                let ok = await memberVM.updateNotificationPrefs(prefs)
+                                                if !ok { prefs[kind.key] = !newValue; showUpdateError = true }
+                                            }
+                                        }))
                         }
                     }
-                    .opacity(notificationsEnabled ? 1.0 : 0.45)
-                    .animation(DS.Anim.snappy, value: notificationsEnabled)
+                    .disabled(!notificationsEnabled)
+                    .opacity(notificationsEnabled ? 1 : 0.45)
 
-                    // ── Privacy ──
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: t("الخصوصية", "Privacy"),
-                            icon: "lock.shield.fill",
-                            iconColor: DS.Color.gridContact
-                        )
-
-                        toggleRow(
-                            icon: "eye.slash.fill",
-                            color: DS.Color.primary,
-                            title: t("إخفاء رقم الهاتف", "Hide Phone Number"),
-                            subtitle: t("لن يظهر رقمك للأعضاء الآخرين", "Your number won't be visible to others"),
-                            isOn: $isPhoneHidden
-                        )
-                        DSDivider()
-                        toggleRow(
-                            icon: "calendar.badge.minus",
-                            color: DS.Color.primary,
-                            title: t("إخفاء تاريخ الميلاد", "Hide Birth Date"),
-                            subtitle: t("لن يظهر تاريخ ميلادك للأعضاء الآخرين", "Your birth date won't be visible to others"),
-                            isOn: $isBirthDateHidden
-                        )
+                    group(t("الأيقونة", "App icon"), footer: nil) {
+                        switchRow(icon: "app.badge.fill", color: DS.Color.primary,
+                                  title: t("شارة الأيقونة", "App badge"),
+                                  subtitle: t("عدد غير المقروء على أيقونة التطبيق", "Unread count on the app icon"),
+                                  isOn: $badgeEnabled)
                     }
 
-                    // Info note
-                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                        Image(systemName: "info.circle.fill")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(DS.Color.info)
-                        Text(t(
-                            "بياناتك تبقى محفوظة في شجرة العائلة، لكن لن تظهر للأعضاء الآخرين عند التفعيل.",
-                            "Your data remains in the family tree but won't be visible to others when enabled."
-                        ))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
+                    group(t("الخصوصية", "Privacy"),
+                          footer: t("بياناتك تبقى محفوظة في الشجرة، بس ما تظهر للأعضاء. الإدارة تشوفها.",
+                                    "Your data stays in the tree but is hidden from members. Admins can still see it.")) {
+                        switchRow(icon: "phone.down.fill", color: DS.Color.gridContact,
+                                  title: t("إخفاء رقم الهاتف", "Hide phone number"),
+                                  subtitle: t("ما يظهر رقمك للأعضاء", "Members won't see your number"),
+                                  isOn: $isPhoneHidden)
+                        rowDivider
+                        switchRow(icon: "calendar.badge.minus", color: DS.Color.gridContact,
+                                  title: t("إخفاء تاريخ الميلاد", "Hide birth date"),
+                                  subtitle: t("ما يظهر تاريخ ميلادك للأعضاء", "Members won't see your birth date"),
+                                  isOn: $isBirthDateHidden)
                     }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.info.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 }
                 .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.xl)
+                .padding(.top, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
         }
@@ -371,6 +454,13 @@ struct NotificationsAndPrivacyView: View {
             badgeEnabled = authVM.currentUser?.badgeEnabled ?? true
             isPhoneHidden = authVM.currentUser?.isPhoneHidden ?? false
             isBirthDateHidden = authVM.currentUser?.isBirthDateHidden ?? false
+        }
+        .task {
+            prefs = await memberVM.fetchNotificationPrefs()
+            await refreshSystemStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            Task { await refreshSystemStatus() }
         }
         .onChange(of: notificationsEnabled) { newValue in
             handleMasterNotificationToggle(newValue)
@@ -398,11 +488,171 @@ struct NotificationsAndPrivacyView: View {
                 if !success { isBirthDateHidden = !newValue; showUpdateError = true }
             }
         }
-        .alert(t("خطأ", "Error"), isPresented: $showUpdateError) {
-            Button(t("حسناً", "OK"), role: .cancel) {}
+        .dsAlert(t("خطأ", "Error"), isPresented: $showUpdateError) {
+            Button(t("حسناً", "OK")) {}
         } message: {
             Text(t("تعذر تحديث الإعداد. حاول مرة أخرى.", "Failed to update setting. Please try again."))
         }
+    }
+
+    // MARK: - بطاقة الحالة: الجهاز + المفتاح الرئيسي + التجربة
+    private var systemBlocked: Bool { systemStatus == .denied }
+
+    private var statusCard: some View {
+        let on = notificationsEnabled && !systemBlocked
+        let tint = on ? DS.Color.success : DS.Color.warning
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.md) {
+                ZStack {
+                    Circle().fill(tint.opacity(0.16)).frame(width: 46, height: 46)
+                    Image(systemName: on ? "bell.badge.fill" : "bell.slash.fill")
+                        .font(DS.Font.scaled(19, weight: .semibold))
+                        .foregroundColor(tint)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(on ? t("الإشعارات شغّالة", "Notifications are on")
+                            : (systemBlocked ? t("موقوفة من إعدادات الجهاز", "Blocked in device settings")
+                                             : t("الإشعارات موقوفة", "Notifications are off")))
+                        .font(DS.Font.plex(15, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(on ? t("توصلك تنبيهات العائلة على هذا الجهاز", "Family alerts reach this device")
+                            : t("ما توصلك تنبيهات على هذا الجهاز", "No alerts on this device"))
+                        .font(DS.Font.plex(11.5, weight: .medium))
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                Spacer(minLength: 0)
+                Toggle("", isOn: $notificationsEnabled)
+                    .labelsHidden()
+                    .tint(DS.Color.success)
+            }
+
+            if systemBlocked {
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                } label: {
+                    Label(t("افتح إعدادات الجهاز", "Open device settings"), systemImage: "gearshape.fill")
+                        .font(DS.Font.plex(13, weight: .bold))
+                        .foregroundColor(DS.Color.warning)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(DS.Color.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.Radius.md))
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            } else if notificationsEnabled {
+                // «جرّب الإشعار» — يمر بنفس طريق الإرسال الحقيقي حتى جهازك
+                Button { Task { await sendTest() } } label: {
+                    HStack(spacing: 6) {
+                        switch testState {
+                        case .sending: ProgressView().scaleEffect(0.8)
+                        case .sent: Image(systemName: "checkmark.circle.fill")
+                        case .failed: Image(systemName: "exclamationmark.triangle.fill")
+                        case .idle: Image(systemName: "paperplane.fill")
+                        }
+                        Text(testLabel)
+                    }
+                    .font(DS.Font.plex(13, weight: .bold))
+                    .foregroundColor(testState == .failed ? DS.Color.error : DS.Color.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .background((testState == .failed ? DS.Color.error : DS.Color.primary).opacity(0.10),
+                                in: RoundedRectangle(cornerRadius: DS.Radius.md))
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .disabled(testState == .sending)
+            }
+        }
+        .padding(DS.Spacing.lg)
+        .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+            .strokeBorder(tint.opacity(0.25), lineWidth: 1))
+        .dsSubtleShadow()
+    }
+
+    private var testLabel: String {
+        switch testState {
+        case .idle: return t("جرّب الإشعار", "Send a test notification")
+        case .sending: return t("جاري الإرسال…", "Sending…")
+        case .sent: return t("أُرسل — يوصلك خلال ثواني", "Sent — it should arrive in seconds")
+        case .failed: return t("تعذّر الإرسال، حاول مرة ثانية", "Couldn't send, try again")
+        }
+    }
+
+    private func sendTest() async {
+        guard let me = authVM.currentUser?.id else { return }
+        testState = .sending
+        do {
+            let row: [String: AnyEncodable] = [
+                "target_member_id": AnyEncodable(me.uuidString),
+                "title": AnyEncodable(t("إشعار تجربة ✓", "Test notification ✓")),
+                "body": AnyEncodable(t("إذا وصلك هذا، فالإشعارات شغّالة على جهازك.",
+                                       "If you got this, notifications work on your device.")),
+                "kind": AnyEncodable("test"),
+                "created_by": AnyEncodable(me.uuidString)
+            ]
+            try await SupabaseConfig.client.from("notifications").insert(row).execute()
+            testState = .sent
+        } catch {
+            Log.error("[NotifTest] \(error.localizedDescription)")
+            testState = .failed
+        }
+    }
+
+    private func refreshSystemStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        systemStatus = settings.authorizationStatus
+    }
+
+    // MARK: - مجموعات وصفوف بنفس أسلوب صفحة الإعدادات
+    private func group<Content: View>(_ title: String, footer: String?, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(title)
+                .font(DS.Font.plex(12, weight: .bold))
+                .foregroundColor(DS.Color.textSecondary)
+                .padding(.horizontal, DS.Spacing.sm)
+            VStack(spacing: 0) { content() }
+                .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+                .dsSubtleShadow()
+            if let footer {
+                Text(footer)
+                    .font(DS.Font.plex(10.5, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, DS.Spacing.sm)
+            }
+        }
+    }
+
+    private func switchRow(icon: String, color: Color, title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(14, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.sm + 1, style: .continuous).fill(color))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(DS.Font.plex(14, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(subtitle)
+                    .font(DS.Font.plex(10.5, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            Spacer(minLength: DS.Spacing.sm)
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(DS.Color.primary)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(minHeight: 60)
+    }
+
+    private var rowDivider: some View {
+        Rectangle()
+            .fill(DS.Color.textTertiary.opacity(0.15))
+            .frame(height: 1)
+            .padding(.leading, 60)
     }
 
     private func handleMasterNotificationToggle(_ newValue: Bool) {
@@ -434,6 +684,8 @@ struct NotificationsAndPrivacyView: View {
 // MARK: 4) Appearance & Language
 struct AppearanceSettingsView: View {
     @ObservedObject var langManager = LanguageManager.shared
+    /// للرجوع للغة التطبيق الرسمية
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @AppStorage("appearanceMode") private var appearanceMode: String = "system"
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
@@ -478,19 +730,36 @@ struct AppearanceSettingsView: View {
                         )
 
                         VStack(spacing: DS.Spacing.md) {
-                            Picker("", selection: $langManager.selectedLanguage) {
+                            // اختيار المستخدم يثبّت لغته — ولا تغيّرها اللغة الرسمية بعدها
+                            Picker("", selection: Binding(
+                                get: { langManager.selectedLanguage },
+                                set: { langManager.chooseLanguage($0) }
+                            )) {
                                 Text("العربية").tag("ar")
                                 Text("English").tag("en")
                             }
                             .pickerStyle(.segmented)
 
-                            Text(t(
-                                "تبديل لغة الواجهة فوراً.",
-                                "Switch the interface language instantly."
-                            ))
+                            Text(langManager.languageChosenByUser
+                                 ? t("اخترت لغتك بنفسك — لا تتأثر بلغة التطبيق الرسمية.",
+                                     "You chose your language — the app's official language won't change it.")
+                                 : t("تتبع لغة التطبيق الرسمية التي تحددها الإدارة.",
+                                     "Following the app's official language set by the admins."))
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
+
+                            if langManager.languageChosenByUser {
+                                Button {
+                                    langManager.followOfficialLanguage(appSettingsVM.settings.defaultLanguage)
+                                } label: {
+                                    Label(t("الرجوع للغة التطبيق الرسمية", "Use the app's official language"),
+                                          systemImage: "arrow.uturn.backward")
+                                        .font(DS.Font.calloutBold)
+                                        .foregroundColor(DS.Color.primary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.bottom, DS.Spacing.lg)
@@ -682,7 +951,7 @@ struct AboutView: View {
             .navigationTitle(t("عن التطبيق", "About"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -819,7 +1088,7 @@ struct PrivacyPolicyView: View {
             .navigationTitle(t("سياسة الخصوصية والشروط", "Privacy Policy & Terms"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -961,7 +1230,7 @@ struct LinkedDevicesSettingsSheet: View {
             .navigationTitle(t("الأجهزة المرتبطة", "Linked Devices"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)

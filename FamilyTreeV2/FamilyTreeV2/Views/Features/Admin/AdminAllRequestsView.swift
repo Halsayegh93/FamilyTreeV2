@@ -432,7 +432,7 @@ struct AdminAllRequestsView: View {
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(.ultraThinMaterial)
+                    .dsGlass(Rectangle())
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -476,7 +476,7 @@ struct AdminAllRequestsView: View {
                 AdminTreeHealthView(initialFilter: filter)
                     .environmentObject(memberVM)
                     .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
+                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
                             Button(L10n.t("إغلاق", "Close")) { openTreeHealthFilter = nil }
                                 .foregroundColor(DS.Color.primary)
                         }
@@ -488,7 +488,7 @@ struct AdminAllRequestsView: View {
             diwaniyaVM.notificationVM = notificationVM
             diwaniyaVM.canModerate = authVM.canModerate
             diwaniyaVM.authVM = authVM
-            archiveVM.configure(authVM: authVM)
+            archiveVM.configure(authVM: authVM, notificationVM: notificationVM)
             // تحميل متوازي لجميع الطلبات — أسرع بكثير
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { @MainActor in await memberVM.fetchAllMembers() }
@@ -512,7 +512,7 @@ struct AdminAllRequestsView: View {
                 selectedTab = firstWithItems
             }
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الموافقة على الكل", "Confirm Approve All"),
             isPresented: $showBulkApproveChildrenConfirm
         ) {
@@ -533,15 +533,15 @@ struct AdminAllRequestsView: View {
                 "All pending child add requests (\(adminRequestVM.childAddRequests.count)) will be approved"
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تم", "Done"),
             isPresented: $showBulkApproveResult
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(bulkApproveResult ?? "")
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الموافقة الجماعية", "Confirm Bulk Approve"),
             isPresented: $showBulkApproveConfirm
         ) {
@@ -564,15 +564,15 @@ struct AdminAllRequestsView: View {
                 "This will approve \(selectedIds.count) requests."
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تم", "Done"),
             isPresented: $showBulkSelectApproveResult
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(bulkSelectApproveResult ?? "")
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الرفض الجماعي", "Confirm Bulk Reject"),
             isPresented: $showBulkRejectConfirm
         ) {
@@ -595,11 +595,11 @@ struct AdminAllRequestsView: View {
                 "This will reject \(selectedIds.count) requests."
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تم", "Done"),
             isPresented: $showBulkSelectRejectResult
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(bulkSelectRejectResult ?? "")
         }
@@ -614,7 +614,7 @@ struct AdminAllRequestsView: View {
                 )
                 .presentationDragIndicator(.visible)
                 .onDisappear { detailSheetHeight = 0 }
-                .alert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReason) {
+                .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReason) {
                     TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $rejectReasonText)
                     Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) {
                         if let d = rejectReasonDetail {
@@ -633,7 +633,7 @@ struct AdminAllRequestsView: View {
                 .environmentObject(adminRequestVM)
         }
         // رفض عبر السحب (الكل) — تأكيد + سبب الرفض
-        .alert(
+        .dsAlert(
             L10n.t("سبب الرفض", "Rejection Reason"),
             isPresented: Binding(
                 get: { swipeRejectDetail != nil },
@@ -653,7 +653,7 @@ struct AdminAllRequestsView: View {
             Text(L10n.t("سيُرفَض الطلب ويبقى في السجل.", "The request will be rejected and kept in the log."))
         }
         // حذف عبر السحب (الكل) — تأكيد نهائي بالمنتصف (Alert)
-        .alert(
+        .dsAlert(
             L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
             isPresented: Binding(
                 get: { swipeDeleteDetail != nil },
@@ -676,7 +676,7 @@ struct AdminAllRequestsView: View {
                 .environmentObject(memberVM)
                 .environmentObject(adminRequestVM)
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الدمج", "Confirm Merge"),
             isPresented: $showMergeConfirm
         ) {
@@ -713,7 +713,7 @@ struct AdminAllRequestsView: View {
                 ))
             }
         }
-        .alert(
+        .dsAlert(
             {
                 if case .failure = adminRequestVM.mergeResult {
                     return L10n.t("خطأ في الدمج", "Merge Error")
@@ -722,7 +722,7 @@ struct AdminAllRequestsView: View {
             }(),
             isPresented: $showMergeSuccess
         ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {
+            Button(L10n.t("حسناً", "OK")) {
                 adminRequestVM.mergeResult = nil
             }
         } message: {
@@ -784,6 +784,33 @@ struct AdminAllRequestsView: View {
     /// «مخفي» (healthHidden) أُزيل بطلب المستخدم — لا يُعتبر مشكلة صحة شجرة.
     private static let hiddenTabs: Set<RequestTab> = [.healthHidden]
 
+    // MARK: - صلاحية الإجراء حسب مجال الدور (تحديث الأدوار 2026-09-21)
+
+    /// تابات المحتوى — الاعتماد فيها للإدارة، والمراجعة والبلاغات للمشرف
+    private static let contentTabs: Set<RequestTab> = [.news, .projects, .archive, .diwaniya, .photos, .reports]
+
+    /// هل يقدر المستخدم الحالي يعتمد عناصر هذا التاب؟
+    private func canApprove(_ tab: RequestTab) -> Bool {
+        if tab == .reports { return authVM.canModerateContent }
+        return Self.contentTabs.contains(tab) ? authVM.canApproveContent : authVM.canApproveTreeRequests
+    }
+
+    /// هل يقدر يرفضها؟ (المشرف يتعامل مع البلاغات فقط)
+    private func canReject(_ tab: RequestTab) -> Bool {
+        if tab == .reports { return authVM.canModerateContent }
+        return Self.contentTabs.contains(tab) ? authVM.canApproveContent : authVM.canRejectRequests
+    }
+
+    /// التابات التي يراها هذا الدور — كل دور يشوف مجاله فقط
+    private func tabsForRole(_ tabs: [RequestTab]) -> [RequestTab] {
+        if authVM.isAdmin { return tabs }
+        if authVM.currentUser?.role == .supervisor {
+            return tabs.filter { $0 == .all || Self.contentTabs.contains($0) }
+        }
+        // المراقب: الشجرة والأعضاء
+        return tabs.filter { $0 == .all || !Self.contentTabs.contains($0) }
+    }
+
     private func recalculateCounts() {
         cachedPendingMembers = memberVM.allMembers.filter { $0.role == .pending }
         // إعادة بناء كاش صحة الشجرة كذلك (لعدّادات التابات والقوائم)
@@ -791,11 +818,12 @@ struct AdminAllRequestsView: View {
         // المجموع الكلّي عبر مصدر واحد للحقيقة — يطابق بادج «طلبات المراجعة» في لوحة الإدارة
         cachedTotalCount = Self.reviewRequestsTotal(
             memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
-            diwaniyaVM: diwaniyaVM, projectsVM: projectsVM
+            diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
+            pendingArchiveCount: pendingArchiveItems.count
         )
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
         // ما عدا التابات المخفية (مغطّاة بأقسام أخرى).
-        cachedAvailableTabs = RequestTab.allCases.filter { !Self.hiddenTabs.contains($0) }
+        cachedAvailableTabs = tabsForRole(RequestTab.allCases.filter { !Self.hiddenTabs.contains($0) })
     }
 
     /// مصدر واحد للحقيقة لعدد «طلبات المراجعة» — يستخدمه «الكل» داخل الطلبات وبادج لوحة الإدارة
@@ -806,7 +834,8 @@ struct AdminAllRequestsView: View {
         newsVM: NewsViewModel,
         adminRequestVM: AdminRequestViewModel,
         diwaniyaVM: DiwaniyasViewModel,
-        projectsVM: ProjectsViewModel
+        projectsVM: ProjectsViewModel,
+        pendingArchiveCount: Int = 0
     ) -> Int {
         let members = memberVM.allMembers
         let pending = members.filter { $0.role == .pending }.count
@@ -845,6 +874,7 @@ struct AdminAllRequestsView: View {
             + adminRequestVM.treeEditRequests.count
             + adminRequestVM.photoSuggestionRequests.count
             + projectsVM.pendingProjects.count
+            + pendingArchiveCount
             + healthTotal
     }
 
@@ -998,10 +1028,7 @@ struct AdminAllRequestsView: View {
                 }
             }
             .padding(6)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial)
-            )
+            .dsGlass(Capsule(style: .continuous))
             .overlay(
                 Capsule(style: .continuous)
                     .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
@@ -1050,9 +1077,7 @@ struct AdminAllRequestsView: View {
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
-        .background(
-            Capsule(style: .continuous).fill(.ultraThinMaterial)
-        )
+        .dsGlass(Capsule(style: .continuous))
         .overlay(
             Capsule(style: .continuous).strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1)
         )
@@ -1492,6 +1517,7 @@ struct AdminAllRequestsView: View {
     /// - `onApprove`/`onReject`: nil = الزر يختفي
     private func selectableRow<Content: View>(
         id: UUID,
+        forTab: RequestTab? = nil,
         accentColor: Color = DS.Color.primary,
         approveLabel: String? = nil,
         approveIcon: String = "checkmark",
@@ -1561,7 +1587,7 @@ struct AdminAllRequestsView: View {
         .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 4, trailing: DS.Spacing.lg))
         // الموافقة/الرفض عبر السحب — خارج وضع التحديد فقط
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if !isSelectMode, let onApprove {
+            if !isSelectMode, canApprove(forTab ?? selectedTab), let onApprove {
                 Button(action: onApprove) {
                     Label(approveLabel ?? L10n.t("موافقة", "Approve"), systemImage: approveIcon)
                 }
@@ -1569,7 +1595,7 @@ struct AdminAllRequestsView: View {
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            if !isSelectMode, let onReject, authVM.canRejectRequests {
+            if !isSelectMode, let onReject, canReject(forTab ?? selectedTab) {
                 Button(action: onReject) {
                     Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                 }
@@ -1831,7 +1857,7 @@ struct AdminAllRequestsView: View {
         HStack(spacing: DS.Spacing.sm) {
             iconCircle(icon: issue.asTab.icon, color: color, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.fullName.isEmpty ? L10n.t("بدون اسم", "(no name)") : member.fullName)
+                Text(member.fullName.isEmpty ? L10n.t("بدون اسم", "(no name)") : member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
@@ -1897,7 +1923,7 @@ struct AdminAllRequestsView: View {
                     Text(L10n.t(action.arabicLabel, action.englishLabel))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
-                    Text(request.member?.fullName ?? L10n.t("عضو", "Member"))
+                    Text(request.member?.displayFullName ?? L10n.t("عضو", "Member"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
@@ -2008,7 +2034,30 @@ struct AdminAllRequestsView: View {
         for issue in [TreeHealthIssue.orphan, .noName, .brokenParent, .duplicatePhone] {
             items += healthMembers(for: issue).map { .health($0, issue) }
         }
-        return items.sorted { allItemDate($0) > allItemDate($1) }
+        // «الكل» يعرض لكل دور عناصر مجاله فقط — مثل التابات (فحص الثغرات)
+        let visible = Set(tabsForRole(RequestTab.allCases))
+        return items
+            .filter { visible.contains(allItemTab($0)) }
+            .sorted { allItemDate($0) > allItemDate($1) }
+    }
+
+    /// تاب كل عنصر في «الكل» — لتحديد صلاحية الموافقة/الرفض عليه
+    private func allItemTab(_ item: AllItem) -> RequestTab {
+        switch item {
+        case .join: return .joinRequests
+        case .news: return .news
+        case .report: return .reports
+        case .phone: return .phone
+        case .nameChange: return .nameChange
+        case .diwaniya: return .diwaniya
+        case .deceased: return .deceased
+        case .child: return .children
+        case .photo: return .photos
+        case .project: return .projects
+        case .archive: return .archive
+        case .treeEdit: return .treeOther
+        case .health(_, let issue): return issue.asTab
+        }
     }
 
     private func treeEditColor(_ action: TreeEditAction) -> Color {
@@ -2038,7 +2087,7 @@ struct AdminAllRequestsView: View {
         switch item {
         case .join(let member):
             selectableRow(
-                id: member.id, accentColor: RequestTab.joinRequests.color,
+                id: member.id, forTab: .joinRequests, accentColor: RequestTab.joinRequests.color,
                 approveLabel: L10n.t("ربط", "Link"), approveIcon: "link.badge.plus",
                 onApprove: { memberToLink = member },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
@@ -2046,7 +2095,7 @@ struct AdminAllRequestsView: View {
             ) { joinRequestRow(for: member) }
         case .news(let post):
             selectableRow(
-                id: post.id, accentColor: RequestTab.news.color,
+                id: post.id, forTab: .news, accentColor: RequestTab.news.color,
                 onApprove: { Task { await newsVM.approveNewsPost(postId: post.id) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .news(post) },
                 onDelete: { swipeDeleteDetail = .news(post) },
@@ -2054,7 +2103,7 @@ struct AdminAllRequestsView: View {
             ) { newsRow(for: post) }
         case .report(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.reports.color,
+                id: request.id, forTab: .reports, accentColor: RequestTab.reports.color,
                 onApprove: { Task { await adminRequestVM.approveNewsReport(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .report(request) },
                 onDelete: { swipeDeleteDetail = .report(request) },
@@ -2062,7 +2111,7 @@ struct AdminAllRequestsView: View {
             ) { reportRow(for: request) }
         case .phone(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.phone.color,
+                id: request.id, forTab: .phone, accentColor: RequestTab.phone.color,
                 onApprove: { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .phone(request) },
                 onDelete: { swipeDeleteDetail = .phone(request) },
@@ -2070,7 +2119,7 @@ struct AdminAllRequestsView: View {
             ) { phoneRow(for: request) }
         case .nameChange(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.nameChange.color,
+                id: request.id, forTab: .nameChange, accentColor: RequestTab.nameChange.color,
                 onApprove: { Task { await adminRequestVM.approveNameChangeRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .nameChange(request) },
                 onDelete: { swipeDeleteDetail = .nameChange(request) },
@@ -2078,7 +2127,7 @@ struct AdminAllRequestsView: View {
             ) { nameChangeRow(for: request) }
         case .diwaniya(let diwaniya):
             selectableRow(
-                id: diwaniya.id, accentColor: RequestTab.diwaniya.color,
+                id: diwaniya.id, forTab: .diwaniya, accentColor: RequestTab.diwaniya.color,
                 onApprove: {
                     if let adminId = authVM.currentUser?.id {
                         Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
@@ -2090,7 +2139,7 @@ struct AdminAllRequestsView: View {
             ) { diwaniyaRow(for: diwaniya) }
         case .deceased(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.deceased.color,
+                id: request.id, forTab: .deceased, accentColor: RequestTab.deceased.color,
                 onApprove: { Task { await adminRequestVM.approveDeceasedRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .deceased(request) },
                 onDelete: { swipeDeleteDetail = .deceased(request) },
@@ -2098,7 +2147,7 @@ struct AdminAllRequestsView: View {
             ) { deceasedRow(for: request) }
         case .child(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.children.color,
+                id: request.id, forTab: .children, accentColor: RequestTab.children.color,
                 approveLabel: L10n.t("تأكيد", "Confirm"),
                 onApprove: { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .child(request) },
@@ -2107,7 +2156,7 @@ struct AdminAllRequestsView: View {
             ) { childRow(for: request) }
         case .photo(let request):
             selectableRow(
-                id: request.id, accentColor: RequestTab.photos.color,
+                id: request.id, forTab: .photos, accentColor: RequestTab.photos.color,
                 onApprove: { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .photo(request) },
                 onDelete: { swipeDeleteDetail = .photo(request) },
@@ -2115,7 +2164,7 @@ struct AdminAllRequestsView: View {
             ) { photoRow(for: request) }
         case .project(let project):
             selectableRow(
-                id: project.id, accentColor: RequestTab.projects.color,
+                id: project.id, forTab: .projects, accentColor: RequestTab.projects.color,
                 onApprove: {
                     if let adminId = authVM.currentUser?.id {
                         Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
@@ -2127,7 +2176,7 @@ struct AdminAllRequestsView: View {
             ) { projectRow(for: project) }
         case .archive(let item):
             selectableRow(
-                id: item.id, accentColor: RequestTab.archive.color,
+                id: item.id, forTab: .archive, accentColor: RequestTab.archive.color,
                 onApprove: { Task { await archiveVM.approveItem(item) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .archive(item) },
                 onDelete: { swipeDeleteDetail = .archive(item) },
@@ -2136,7 +2185,7 @@ struct AdminAllRequestsView: View {
         case .treeEdit(let request, let action):
             let color = treeEditColor(action)
             selectableRow(
-                id: request.id, accentColor: color,
+                id: request.id, forTab: .treeOther, accentColor: color,
                 onApprove: { Task { await adminRequestVM.approveTreeEditRequest(request: request) } },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .treeEdit(request, action) },
                 onDelete: { swipeDeleteDetail = .treeEdit(request, action) },
@@ -2144,7 +2193,7 @@ struct AdminAllRequestsView: View {
             ) { treeEditRow(request: request, action: action, color: color) }
         case .health(let member, let issue):
             selectableRow(
-                id: member.id, accentColor: issue.asTab.color,
+                id: member.id, forTab: issue.asTab, accentColor: issue.asTab.color,
                 onApprove: nil, onReject: nil,
                 onTap: { selectedDetail = .healthMember(member, issue) }
             ) { treeHealthRow(member: member, issue: issue, color: issue.asTab.color) }
@@ -2293,7 +2342,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textPrimary)
 
                     // اسم المنضم — سطر ثاني
-                    Text(member.fullName)
+                    Text(member.displayFullName)
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.textSecondary)
                         .lineLimit(2)
@@ -2471,7 +2520,7 @@ struct AdminAllRequestsView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(match.member.fullName)
+                Text(match.member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
@@ -2942,7 +2991,7 @@ struct AdminAllRequestsView: View {
     private func archiveRow(for item: ArchiveItem) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: item.category.iconName, color: DS.Color.warning, size: 36)
+                iconCircle(icon: item.categoryIcon, color: DS.Color.warning, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("عنصر أرشيف", "Archive Item"))
@@ -2961,8 +3010,8 @@ struct AdminAllRequestsView: View {
             }
 
             detailRow(
-                icon: item.category.iconName,
-                text: L10n.isArabic ? item.category.displayName : item.category.displayNameEn
+                icon: item.categoryIcon,
+                text: item.categoryDisplayName
             )
             if let year = item.year {
                 detailRow(icon: "calendar", text: "\(year)")
@@ -2982,13 +3031,13 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    Text(L10n.t("لـ: \(request.member?.fullName ?? "عضو")",
+                    Text(L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
                                 "For: \(request.member?.fullName ?? "Member")"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textTertiary)
                     }
@@ -3027,13 +3076,13 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    Text(L10n.t("الأب: \(request.member?.fullName ?? "عضو")",
+                    Text(L10n.t("الأب: \(request.member?.displayFullName ?? "عضو")",
                                 "Father: \(request.member?.fullName ?? "Member")"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textTertiary)
                     }
@@ -3072,13 +3121,13 @@ struct AdminAllRequestsView: View {
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 
-                    Text(L10n.t("لـ: \(request.member?.fullName ?? "عضو")",
+                    Text(L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
                                 "For: \(request.member?.fullName ?? "Member")"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textTertiary)
                     }
@@ -3146,7 +3195,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
 
                     if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.fullName)", "By: \(requester.fullName)"))
+                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
                             .font(DS.Font.caption2)
                             .foregroundColor(DS.Color.textTertiary)
                     }
@@ -3190,7 +3239,7 @@ struct AdminAllRequestsView: View {
                     Text(L10n.t("الاسم الحالي:", "Current name:"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
-                    Text(request.member?.fullName ?? "—")
+                    Text(request.member?.displayFullName ?? "—")
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                 }
@@ -3237,7 +3286,7 @@ struct AdminAllRequestsView: View {
             .navigationTitle(L10n.t("تعديل الاسم", "Edit Name"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { nameEditRequest = nil }
                         .foregroundColor(DS.Color.primary)
                 }
@@ -3315,7 +3364,7 @@ struct AdminAllRequestsView: View {
             .navigationTitle(L10n.t("تعديل الرقم", "Edit Number"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { phoneEditRequest = nil }
                         .foregroundColor(DS.Color.primary)
                 }
@@ -3484,13 +3533,13 @@ struct AdminAllRequestsView: View {
             .navigationTitle(L10n.t("تفاصيل الطلب", "Request Details"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { selectedDetail = nil }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
                 }
             }
-            .alert(
+            .dsAlert(
                 L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
                 isPresented: Binding(
                     get: { deleteConfirmDetail != nil },
@@ -3574,7 +3623,7 @@ struct AdminAllRequestsView: View {
                          timestamp: p.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: p.logoUrl)
         case .archive(let a):
-            return .init(icon: a.category.iconName, color: DS.Color.warning,
+            return .init(icon: a.categoryIcon, color: DS.Color.warning,
                          title: L10n.t("عنصر أرشيف", "Archive Item"),
                          timestamp: nil,
                          imageUrl: a.thumbnailUrl)
@@ -3815,8 +3864,8 @@ struct AdminAllRequestsView: View {
         case .archive(let item):
             infoCard(icon: "textformat", label: L10n.t("العنوان", "Title"),
                      value: item.title, color: DS.Color.warning)
-            infoCard(icon: item.category.iconName, label: L10n.t("القسم", "Category"),
-                     value: L10n.isArabic ? item.category.displayName : item.category.displayNameEn,
+            infoCard(icon: item.categoryIcon, label: L10n.t("القسم", "Category"),
+                     value: item.categoryDisplayName,
                      color: DS.Color.info)
             if let year = item.year {
                 infoCard(icon: "calendar", label: L10n.t("السنة", "Year"),
@@ -4343,8 +4392,22 @@ struct AdminAllRequestsView: View {
         .padding(.bottom, DS.Spacing.sm)
     }
 
+    /// مجال الطلب المعروض في التفاصيل — لإخفاء الأزرار عمّن لا يملك اعتماده
+    private func detailIsContent(_ detail: RequestDetail) -> Bool {
+        switch detail {
+        case .news, .project, .archive, .diwaniya, .photo, .report: return true
+        default: return false
+        }
+    }
+
+    private func canApproveDetail(_ detail: RequestDetail) -> Bool {
+        if case .report = detail { return authVM.canModerateContent }
+        return detailIsContent(detail) ? authVM.canApproveContent : authVM.canApproveTreeRequests
+    }
+
     @ViewBuilder
     private func detailActions(for detail: RequestDetail) -> some View {
+        if canApproveDetail(detail) {
         DSApproveRejectButtons(
             approveTitle: {
                 switch detail {
@@ -4354,7 +4417,7 @@ struct AdminAllRequestsView: View {
             }(),
             rejectTitle: L10n.t("رفض", "Reject"),
             isLoading: adminRequestVM.isLoading,
-            showReject: authVM.canRejectRequests,
+            showReject: canApproveDetail(detail) && (detailIsContent(detail) || authVM.canRejectRequests),
             useCapsule: true
         ) {
             // موافقة
@@ -4452,6 +4515,7 @@ struct AdminAllRequestsView: View {
             }
         }
         .padding(.top, DS.Spacing.md)
+        }
     }
 
     private func detailField(_ label: String, _ value: String, color: Color = DS.Color.textPrimary) -> some View {

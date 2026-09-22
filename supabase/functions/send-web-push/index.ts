@@ -1,6 +1,8 @@
+import { deliveryGuard } from "../_shared/delivery-guard.ts";
 // send-web-push — Edge Function لإرسال Web Push للمتصفحات
 // يستخدم web-push protocol مع VAPID
 
+import { authenticateRequest } from "../_shared/auth.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -27,6 +29,7 @@ interface Payload {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
+  let sender = "system";
   // أمان: لا يُسمح بالإرسال إلا عبر سرّ الويب-هوك (استدعاء النظام) أو مستخدم إداري.
   // بدون ذلك كان أي عضو مسجّل يقدر يبثّ إشعارات تصيّد لكل المدراء عبر service_role.
   {
@@ -34,24 +37,17 @@ Deno.serve(async (req) => {
     const providedSecret = req.headers.get("x-webhook-secret");
     const secretOk = !!WEBHOOK_SECRET && providedSecret === WEBHOOK_SECRET;
     if (!secretOk) {
-      const token = (req.headers.get("authorization") ?? "").replace("Bearer ", "");
-      const authClient = createClient(SUPABASE_URL, SERVICE_ROLE);
-      const { data: { user } } = await authClient.auth.getUser(token);
-      let role: string | null = null;
-      if (user) {
-        const { data: prof } = await authClient.from("profiles").select("role").eq("id", user.id).single();
-        role = prof?.role ?? null;
-      }
-      if (!user || !["owner", "admin", "monitor", "supervisor"].includes(role ?? "")) {
-        return new Response(JSON.stringify({ ok: false, message: "Unauthorized" }), {
-          status: 403, headers: { "Content-Type": "application/json" },
-        });
-      }
+      const auth = await authenticateRequest(req, ["owner", "admin", "monitor", "supervisor"]);
+      if (auth instanceof Response) return auth;
+      sender = auth.profileId;
     }
   }
 
   try {
     const payload = (await req.json()) as Payload;
+    if (typeof payload.title !== "string" || typeof payload.body !== "string" || payload.title.length > 200 || payload.body.length > 2000) return new Response("Invalid notification", { status: 400 });
+    const limited = await deliveryGuard("send-web-push", sender, payload.request_id ?? [payload.title,payload.body,payload.member_ids?.slice().sort()], 60);
+    if (limited) return limited;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     // اجلب الاشتراكات

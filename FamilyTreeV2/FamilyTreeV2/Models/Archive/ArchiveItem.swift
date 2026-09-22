@@ -8,6 +8,8 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
     let title: String
     let description: String?
     let category: Category
+    /// تصنيف مخصّص من «التصنيفات» — يُقرأ قبل category (category يبقى other للنسخة القديمة)
+    var categoryKey: String? = nil
     let year: Int?                // سنة الوثيقة/الصورة — اختيارية
     let fileUrl: String           // URL عام لـ Supabase Storage
     let fileType: String          // MIME (مثلاً: application/pdf, image/jpeg)
@@ -37,6 +39,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         var id: String { rawValue }
 
         var displayName: String {
+            if let custom = CategoryStore.lookup(.archive, rawValue) { return custom.nameAr }
             switch self {
             case .documents:  return "وثائق"
             case .books:      return "كتب"
@@ -46,6 +49,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         }
 
         var displayNameEn: String {
+            if let custom = CategoryStore.lookup(.archive, rawValue) { return custom.nameEn }
             switch self {
             case .documents:  return "Documents"
             case .books:      return "Books"
@@ -56,6 +60,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
 
         /// أيقونة SF Symbol مناسبة للقسم.
         var iconName: String {
+            if let custom = CategoryStore.lookup(.archive, rawValue) { return custom.iconKey }
             switch self {
             case .documents:  return "doc.text.fill"
             case .books:      return "book.closed.fill"
@@ -66,6 +71,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
 
         /// لون مميّز لكل قسم — يفيد تصميم الفلاتر الفاخر.
         var accentColor: Color {
+            if let custom = CategoryStore.lookup(.archive, rawValue) { return custom.color }
             switch self {
             case .documents:  return DS.Color.info        // أزرق رسمي
             case .books:      return DS.Color.warning     // ذهبي دافئ
@@ -73,6 +79,44 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
             case .other:      return DS.Color.textSecondary
             }
         }
+    }
+
+    // MARK: التصنيف الفعلي (مدمج أو مخصّص)
+
+    /// المفتاح الفعلي: المخصّص إن وُجد، وإلا المدمج
+    var effectiveCategoryKey: String { categoryKey ?? category.rawValue }
+
+    var categoryDisplayName: String { Self.categoryName(effectiveCategoryKey) }
+    var categoryIcon: String { Self.categoryIcon(effectiveCategoryKey) }
+    var categoryColor: Color { Self.categoryColor(effectiveCategoryKey) }
+
+    static func categoryName(_ key: String) -> String {
+        if let c = CategoryStore.lookup(.archive, key) { return c.displayName }
+        if let builtIn = Category(rawValue: key) { return L10n.isArabic ? builtIn.displayName : builtIn.displayNameEn }
+        return key
+    }
+    static func categoryIcon(_ key: String) -> String {
+        CategoryStore.lookup(.archive, key)?.iconKey ?? Category(rawValue: key)?.iconName ?? "folder.fill"
+    }
+    static func categoryColor(_ key: String) -> Color {
+        CategoryStore.lookup(.archive, key)?.color ?? Category(rawValue: key)?.accentColor ?? DS.Color.textSecondary
+    }
+
+    /// مفاتيح التصنيفات الظاهرة للاختيار (المدمجة + المخصّصة)
+    static var selectableCategoryKeys: [String] {
+        CategoryStore.activeKeys(.archive) ?? Category.allCases.map(\.rawValue)
+    }
+
+    /// حقول الحفظ: المدمج يُحفظ في category، والمخصّص في category_key مع category = other
+    static func storageFields(forKey key: String) -> (category: String, categoryKey: String?) {
+        if let builtIn = Category(rawValue: key) { return (builtIn.rawValue, nil) }
+        return (Category.other.rawValue, key)
+    }
+
+    /// التصنيفات الظاهرة للاختيار عند الرفع/التعديل — المخفية من «التصنيفات» لا تُعرض
+    static var selectableCategories: [Category] {
+        guard let keys = CategoryStore.activeKeys(.archive) else { return Category.allCases }
+        return keys.compactMap(Category.init(rawValue:))
     }
 
     /// هل العنصر صورة (لعرضها بمعاينة في الشبكة).
@@ -111,6 +155,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         case approvalStatus = "approval_status"
         case approvedBy     = "approved_by"
         case approvedAt     = "approved_at"
+        case categoryKey = "category_key"
     }
 
     // Decoder متسامح: يفترض القيم الافتراضية للحقول الجديدة (للتوافق مع
@@ -120,7 +165,9 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         id              = try c.decode(UUID.self,    forKey: .id)
         title           = try c.decode(String.self,  forKey: .title)
         description     = try c.decodeIfPresent(String.self, forKey: .description)
-        category        = try c.decode(Category.self, forKey: .category)
+        // متسامح: قيمة غير معروفة (من نسخة أحدث) تُعرض «أخرى» بدل تعطيل القائمة
+        category        = (try? c.decode(Category.self, forKey: .category)) ?? .other
+        categoryKey     = try c.decodeIfPresent(String.self, forKey: .categoryKey)
         year            = try c.decodeIfPresent(Int.self, forKey: .year)
         fileUrl         = try c.decode(String.self,  forKey: .fileUrl)
         fileType        = try c.decode(String.self,  forKey: .fileType)

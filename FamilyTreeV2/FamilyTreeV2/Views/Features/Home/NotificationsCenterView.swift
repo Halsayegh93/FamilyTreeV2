@@ -56,9 +56,6 @@ private struct NotificationKindStyle {
         "role_change":       .init(icon: "shield.lefthalf.filled",                   gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تغيير الصلاحية",  labelEn: "Role Change"),
         "weekly_digest":     .init(icon: "list.clipboard.fill",                      gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "ملخص أسبوعي",     labelEn: "Weekly Digest"),
         "tree_edit":         .init(icon: "pencil.circle.fill",                       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل شجرة",      labelEn: "Tree Edit"),
-        "story_pending":     .init(icon: "circle.dashed",                            gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "قصة معلقة",        labelEn: "Pending Story"),
-        "story_approved":    .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "قصة معتمدة",      labelEn: "Story Approved"),
-        "story_rejected":    .init(icon: "xmark.circle.fill",                        gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "قصة مرفوضة",      labelEn: "Story Rejected"),
         "photo_suggestion":  .init(icon: "camera.badge.ellipsis",                    gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "اقتراح صورة",     labelEn: "Photo Suggestion"),
         "gallery_pending":   .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "صورة معرض",        labelEn: "Gallery Photo"),
         "gallery_approved":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "صورة معتمدة",      labelEn: "Photo Approved"),
@@ -184,16 +181,16 @@ struct NotificationsCenterView: View {
     private var notificationsHeader: some View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
-                // أيقونة الصفحة — بنفس مقاس أيقونة الرئيسية والشجرة
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.overlayIcon)
-                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                    Image(systemName: "bell.fill")
-                        .font(DS.Font.scaled(20, weight: .bold))
+                // الرجوع مكان أيقونة الصفحة (طلب المالك) — بلا علامة ×
+                Button { dismiss() } label: {
+                    Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
+                        .font(DS.Font.scaled(19, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: 48, height: 48)
+                        .dsHeaderGlassCircle()
                 }
-                .frame(width: 52, height: 52)
+                .buttonStyle(BounceButtonStyle())
+                .accessibilityLabel(L10n.t("رجوع", "Back"))
 
                 Text(L10n.t("الإشعارات", "Notifications"))
                     .font(DS.Font.plex(19, weight: .bold))
@@ -203,17 +200,6 @@ struct NotificationsCenterView: View {
 
                 Spacer(minLength: 0)
 
-                // الرجوع في الطرف المقابل — نفس موضع الجرس في الرئيسية
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(DS.Font.scaled(17, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(DS.Color.overlayIcon))
-                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("رجوع", "Back"))
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.sm)
@@ -317,7 +303,7 @@ struct NotificationsCenterView: View {
             NavigationStack { AdminAppUpdateView() }
                 .presentationDragIndicator(.visible)
         }
-        .alert(
+        .dsAlert(
             {
                 if case .failure = adminRequestVM.mergeResult {
                     return L10n.t("لم يتم الربط", "Link Failed")
@@ -330,7 +316,7 @@ struct NotificationsCenterView: View {
             ),
             presenting: adminRequestVM.mergeResult
         ) { _ in
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {
+            Button(L10n.t("حسناً", "OK")) {
                 adminRequestVM.mergeResult = nil
             }
         } message: { result in
@@ -350,7 +336,7 @@ struct NotificationsCenterView: View {
             HStack(spacing: DS.Spacing.sm) {
 
                 // «المستجدات» هي قناة تحديثات التطبيق — والإدارة تنشر منها مباشرة
-                if selectedTab == .activity, authVM.canModerate, !isSelecting {
+                if selectedTab == .activity, authVM.canSendNotifications, !isSelecting {
                     pillButton(
                         icon: "megaphone.fill",
                         label: L10n.t("نشر تحديث", "Publish Update"),
@@ -627,8 +613,6 @@ struct NotificationsCenterView: View {
         NotificationKind.diwaniyaRejected.rawValue,
         NotificationKind.projectApproved.rawValue,
         NotificationKind.projectRejected.rawValue,
-        NotificationKind.storyApproved.rawValue,
-        NotificationKind.storyRejected.rawValue,
         NotificationKind.galleryApproved.rawValue,
         NotificationKind.galleryRejected.rawValue,
         // نشر محتوى
@@ -689,7 +673,6 @@ struct NotificationsCenterView: View {
         NotificationKind.nameChange.rawValue,
         NotificationKind.photoSuggestion.rawValue,
         NotificationKind.galleryPending.rawValue,
-        NotificationKind.storyPending.rawValue,
         NotificationKind.diwaniyaPending.rawValue,
         NotificationKind.projectPending.rawValue,
         NotificationKind.newsAdd.rawValue,
@@ -1089,7 +1072,7 @@ struct NotificationsCenterView: View {
                 "\(joinMatchCandidates.count) matches found in the tree. Link to one of them or approve as a new member."
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد الربط", "Confirm Link"),
             isPresented: Binding(
                 get: { linkConfirmTarget != nil },

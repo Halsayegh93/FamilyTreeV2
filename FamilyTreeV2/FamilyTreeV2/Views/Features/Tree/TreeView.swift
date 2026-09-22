@@ -680,10 +680,16 @@ struct TreeView: View {
 
     // MARK: - صف الأدوات تحت الهيدر — مطابق للتفرّع (بحث / البداية / موقعي) أيقونات فقط
     /// خلفية البطاقة الزجاجية الموحّدة (مادة 75%)
+    @ViewBuilder
     private var glassCardBackground: some View {
-        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .opacity(0.75)
+        // iOS 26/27: زجاج سائل؛ الأقدم: مادة 75%
+        if #available(iOS 26.0, *) {
+            Color.clear.glassEffect(.regular, in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        } else {
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .opacity(0.75)
+        }
     }
     private var glassCardStroke: some View {
         RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
@@ -916,7 +922,7 @@ struct TreeView: View {
                     .disabled(isRefreshing)
                     .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
                 }
-                .background(.ultraThinMaterial)
+                .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)

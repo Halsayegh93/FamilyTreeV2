@@ -272,7 +272,7 @@ struct AdminTreeHealthView: View {
         }
         .navigationTitle(L10n.t("صحة الشجرة", "Tree Health"))
         .navigationBarTitleDisplayMode(.inline)
-        .alert(
+        .dsAlert(
             L10n.t("تأكيد", "Confirm"),
             isPresented: $showToggleHiddenConfirm,
             presenting: memberToToggleHidden
@@ -290,7 +290,7 @@ struct AdminTreeHealthView: View {
                  : L10n.t("إخفاء \(member.fullName) من الشجرة؟", "Hide \(member.fullName) from tree?")
             )
         }
-        .alert(
+        .dsAlert(
             L10n.t("حذف العضو نهائياً", "Delete Member Permanently"),
             isPresented: $showDeleteConfirm,
             presenting: memberToDelete
@@ -305,7 +305,7 @@ struct AdminTreeHealthView: View {
                 "Are you sure you want to delete \(member.fullName)? This action cannot be undone."
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("مسح رقم الهاتف", "Clear Phone Number"),
             isPresented: $showClearPhoneConfirm,
             presenting: memberToClearPhone

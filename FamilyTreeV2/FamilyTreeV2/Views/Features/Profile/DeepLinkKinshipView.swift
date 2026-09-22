@@ -97,7 +97,7 @@ struct DeepLinkKinshipView: View {
                     Text(L10n.t("صلة القرابة", "Kinship"))
                         .font(DS.Font.headline)
                 }
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(DS.Font.scaled(22))

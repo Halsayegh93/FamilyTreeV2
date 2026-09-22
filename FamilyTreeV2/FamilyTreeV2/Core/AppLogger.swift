@@ -26,6 +26,8 @@ nonisolated enum Log {
 
     static func error(_ message: String) {
         logger.error("\(message)")
+        let feature = AppDiagnostics.feature(for: message)
+        Task { await AppDiagnostics.shared.record(feature: feature, code: "operation_failed") }
     }
 
     /// True if the error is a benign task cancellation (e.g. view dismissed or a
@@ -40,6 +42,9 @@ nonisolated enum Log {
     static func fetchError(_ message: String, _ error: Error) {
         guard !isCancellation(error) else { return }
         logger.error("\(message): \(error.localizedDescription)")
+        let feature = AppDiagnostics.feature(for: message)
+        let code = AppDiagnostics.code(for: error)
+        Task { await AppDiagnostics.shared.record(feature: feature, code: code) }
     }
 
     static func warning(_ message: String) {

@@ -72,6 +72,9 @@ struct DeviceLimitView: View {
             LinkedDevicesSheet()
                 .environmentObject(appSettingsVM)
         }
+        .task {
+            await notificationVM.fetchLinkedDevices()
+        }
     }
 }
 
@@ -236,7 +239,7 @@ struct OverLimitDevicesSheet: View {
             .navigationTitle(t("إدارة الأجهزة", "Manage Devices"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -244,7 +247,7 @@ struct OverLimitDevicesSheet: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(
+        .dsAlert(
             t("إزالة الجهاز", "Remove Device"),
             isPresented: .init(
                 get: { deviceToRemove != nil },
@@ -414,11 +417,43 @@ struct LinkedDevicesSheet: View {
 
                             DSDivider()
 
-                            // Device rows
-                            VStack(spacing: 0) {
-                                ForEach(Array(notificationVM.linkedDevices.enumerated()), id: \.element.id) { index, device in
-                                    if index > 0 { DSDivider() }
-                                    deviceRow(device)
+                            if notificationVM.isLoadingLinkedDevices && notificationVM.linkedDevices.isEmpty {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(DS.Spacing.xl)
+                            } else if notificationVM.linkedDevices.isEmpty {
+                                VStack(spacing: DS.Spacing.md) {
+                                    Image(systemName: notificationVM.linkedDevicesLoadFailed
+                                          ? "wifi.exclamationmark"
+                                          : "iphone.slash")
+                                        .font(DS.Font.scaled(28, weight: .semibold))
+                                        .foregroundColor(DS.Color.textTertiary)
+
+                                    Text(notificationVM.linkedDevicesLoadFailed
+                                         ? t("تعذّر تحميل الأجهزة", "Couldn't Load Devices")
+                                         : t("لا توجد أجهزة مرتبطة", "No Linked Devices"))
+                                        .font(DS.Font.calloutBold)
+                                        .foregroundColor(DS.Color.textPrimary)
+
+                                    Button {
+                                        Task { await notificationVM.fetchLinkedDevices() }
+                                    } label: {
+                                        Label(t("إعادة المحاولة", "Try Again"), systemImage: "arrow.clockwise")
+                                            .font(DS.Font.caption1)
+                                            .fontWeight(.bold)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundColor(DS.Color.primary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(DS.Spacing.xl)
+                            } else {
+                                // Device rows
+                                VStack(spacing: 0) {
+                                    ForEach(Array(notificationVM.linkedDevices.enumerated()), id: \.element.id) { index, device in
+                                        if index > 0 { DSDivider() }
+                                        deviceRow(device)
+                                    }
                                 }
                             }
                         }
@@ -431,7 +466,7 @@ struct LinkedDevicesSheet: View {
             .navigationTitle(t("الأجهزة المرتبطة", "Linked Devices"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -439,7 +474,10 @@ struct LinkedDevicesSheet: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(
+        .task {
+            await notificationVM.fetchLinkedDevices()
+        }
+        .dsAlert(
             t("إزالة الجهاز", "Remove Device"),
             isPresented: .init(
                 get: { deviceToRemove != nil },

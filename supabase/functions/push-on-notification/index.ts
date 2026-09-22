@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { handleCors, json } from "../_shared/cors.ts";
 import { createServiceClient } from "../_shared/auth.ts";
 import { createApnsJwt, getApnsConfig, apnsHostFor } from "../_shared/apns.ts";
+import { getFcmServiceAccount, getFcmAccessToken, sendFcm } from "../_shared/fcm.ts";
 
 serve(async (req) => {
   const cors = handleCors(req);
@@ -33,6 +34,19 @@ serve(async (req) => {
       .select("token, environment")
       .in("platform", ["ios", "ipados"]);
 
+    // أجهزة الأندرويد (FCM) — كانت لا تُرسَل إطلاقاً فلا يصل للأندرويد شيء والتطبيق مغلق
+    let androidQuery = supabase
+      .from("device_tokens")
+      .select("token")
+      .eq("platform", "android");
+    if (targetMemberId) {
+      androidQuery = androidQuery.eq("member_id", targetMemberId);
+    }
+    const { data: androidRows } = await androidQuery;
+    const androidTokens = (androidRows || [])
+      .map((r: any) => (r.token as string | null)?.trim())
+      .filter((t: string | undefined): t is string => !!t && t.length > 20);
+
     if (targetMemberId) {
       query = query.eq("member_id", targetMemberId);
     }
@@ -52,13 +66,45 @@ serve(async (req) => {
       `[push-on-notification] target=${targetMemberId ?? "BROADCAST"}, tokens=${tokenEntries.length}, kind=${kind}`
     );
 
+    let sent = 0;
+    const failures: Array<{ token: string; status: number; reason: string; env: string | null }> = [];
+
+    // ── الأندرويد عبر FCM ──
+    let androidSent = 0;
+    if (androidTokens.length) {
+      const sa = getFcmServiceAccount();
+      if (!sa) {
+        console.error("[push-on-notification] FCM_SERVICE_ACCOUNT_JSON missing/invalid");
+      } else {
+        try {
+          const accessToken = await getFcmAccessToken(sa);
+          for (const token of androidTokens) {
+            const r = await sendFcm(sa, accessToken, token, title, notifBody, kind);
+            if (r.ok) {
+              androidSent++;
+            } else {
+              failures.push({ token: token.substring(0, 8) + "...", status: r.status, reason: r.reason ?? "", env: "android" });
+              if (r.unregistered) {
+                await supabase.from("device_tokens").delete().eq("token", token);
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`[push-on-notification] FCM error: ${(e as Error).message}`);
+          failures.push({ token: "fcm", status: 0, reason: (e as Error).message, env: "android" });
+        }
+      }
+    }
+
     if (!tokenEntries.length) {
-      return json(200, { ok: true, sent: 0, message: "No valid tokens" });
+      return json(200, {
+        ok: true, sent: androidSent, total: androidTokens.length,
+        android: { sent: androidSent, total: androidTokens.length },
+        failed: failures.length, failures,
+      });
     }
 
     const jwt = await createApnsJwt(teamId, keyId, privateKey);
-    let sent = 0;
-    const failures: Array<{ token: string; status: number; reason: string; env: string | null }> = [];
 
     for (const entry of tokenEntries) {
       const { token, env } = entry;
@@ -87,7 +133,15 @@ serve(async (req) => {
       }
     }
 
-    return json(200, { ok: true, sent, total: tokenEntries.length, failed: failures.length, failures });
+    return json(200, {
+      ok: true,
+      sent: sent + androidSent,
+      total: tokenEntries.length + androidTokens.length,
+      ios: { sent, total: tokenEntries.length },
+      android: { sent: androidSent, total: androidTokens.length },
+      failed: failures.length,
+      failures,
+    });
   } catch (e) {
     console.error(`[push-on-notification] Exception: ${(e as Error).message}`);
     return json(500, { ok: false, message: (e as Error).message });

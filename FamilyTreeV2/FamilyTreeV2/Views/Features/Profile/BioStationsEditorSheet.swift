@@ -45,7 +45,7 @@ struct BioStationsEditorSheet: View {
                             Image(systemName: "plus.circle.fill")
                                 .font(DS.Font.scaled(18))
                                 .foregroundColor(DS.Color.primary)
-                            Text(t("إضافة محطة", "Add Station"))
+                            Text(t("إضافة حدث", "Add Entry"))
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.primary)
                         }
@@ -57,16 +57,16 @@ struct BioStationsEditorSheet: View {
                 .scrollContentBackground(.hidden)
                 .disabled(!canEdit)
             }
-            .navigationTitle(t("المحطات الحياتية", "Life Stations"))
+            .navigationTitle(t("السيرة الذاتية", "Biography"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(t("إلغاء", "Cancel")) {
                         dismiss()
                     }
                     .foregroundColor(DS.Color.error)
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     if canEdit {
                         Button(t("حفظ", "Done")) {
                             stations = localStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }

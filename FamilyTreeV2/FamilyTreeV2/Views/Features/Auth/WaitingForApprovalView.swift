@@ -65,7 +65,7 @@ struct WaitingForApprovalView: View {
                     .navigationTitle(L10n.t("تواصل مع الإدارة", "Contact Admin"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
+                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
                             Button { showContactSheet = false } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(DS.Font.scaled(22, weight: .medium))

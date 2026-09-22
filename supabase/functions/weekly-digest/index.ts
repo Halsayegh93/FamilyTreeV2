@@ -1,3 +1,4 @@
+import { requireSystem } from "../_shared/system-auth.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { handleCors, json } from "../_shared/cors.ts";
 import { createServiceClient } from "../_shared/auth.ts";
@@ -6,8 +7,11 @@ serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  const denied = requireSystem(req);
+  if (denied) return denied;
   const supabase = createServiceClient();
 
+  try {
   // Calculate date range: last 7 days
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -37,13 +41,15 @@ serve(async (req) => {
 
     // Upcoming birthdays (next 7 days)
     (async () => {
-      const { data: allMembers } = await supabase
+      const { data: allMembers, error: birthdayError } = await supabase
         .from("profiles")
         .select("id, first_name, full_name, birth_date")
         .eq("status", "active")
         .not("birth_date", "is", null)
-        .eq("is_deceased", false);
+        .eq("is_deceased", false)
+        .or("is_birth_date_hidden.is.null,is_birth_date_hidden.eq.false");
 
+      if (birthdayError) throw birthdayError;
       if (!allMembers) return [];
 
       const upcoming: Array<{ name: string; date: string }> = [];
@@ -71,6 +77,7 @@ serve(async (req) => {
     })(),
   ]);
 
+  for (const result of [membersResult, newsResult, diwaniyasResult]) if (result.error) throw result.error;
   const newMembers = membersResult.data ?? [];
   const newNews = newsResult.data ?? [];
   const newDiwaniyas = diwaniyasResult.data ?? [];
@@ -78,6 +85,7 @@ serve(async (req) => {
 
   // Build digest
   const totalMembers = await supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "active");
+  if (totalMembers.error) throw totalMembers.error;
   const totalCount = totalMembers.count ?? 0;
 
   // Build Arabic notification text
@@ -104,37 +112,9 @@ serve(async (req) => {
   const titleAr = `📋 ملخص الأسبوع — عائلة آل محمد علي`;
   const bodyAr = lines.join("\n");
 
-  // Fetch all active member IDs
-  const { data: allActive } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("status", "active");
-
-  const allActiveIds = (allActive ?? []).map((m) => m.id as string);
-
-  try {
-    // 1. Insert notification rows
-    const notificationRows = allActiveIds.map((memberId) => ({
-      target_member_id: memberId,
-      title: titleAr,
-      body: bodyAr,
-      kind: "weekly_digest",
-      is_read: false,
-    }));
-
-    if (notificationRows.length > 0) {
-      await supabase.from("notifications").insert(notificationRows);
-    }
-
-    // 2. Send push notification
-    const pushResponse = await supabase.functions.invoke("push-notify", {
-      body: {
-        title: titleAr,
-        body: bodyAr,
-        kind: "weekly_digest",
-      },
-    });
-
+  // The notification INSERT trigger sends push. A second invoke would duplicate it.
+    const { data: publication, error: publishError } = await supabase.rpc("publish_weekly_digest", { p_title: titleAr, p_body: bodyAr });
+    if (publishError) throw publishError;
     return json(200, {
       ok: true,
       digest: {
@@ -144,10 +124,11 @@ serve(async (req) => {
         newDiwaniyas: newDiwaniyas.length,
         upcomingBirthdays: birthdays.length,
       },
-      notified: allActiveIds.length,
-      push: pushResponse.data,
+      notified: publication.notified,
+      duplicate: publication.duplicate,
     });
   } catch (e) {
-    return json(500, { ok: false, message: `Error sending digest: ${(e as Error).message}` });
+    console.error(JSON.stringify({ event: "weekly_digest_failed" }));
+    return json(500, { ok: false, message: "Weekly digest failed" });
   }
 });

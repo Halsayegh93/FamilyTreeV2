@@ -40,7 +40,7 @@ struct AdminNotificationsView: View {
     /// المتوفّى لا جهاز له ولا معنى لإرسال إشعار باسمه.
     private var activeMembers: [FamilyMember] {
         memberVM.allMembers
-            .filter { $0.role != .pending && !($0.isDeceased ?? false) }
+            .filter { $0.role != .pending && !($0.isDeceased ?? false) && $0.status != .frozen }
             .filter { m in
                 guard let iso = countryFilter else { return true }
                 // بلا رقم هاتف = بلا دولة معروفة (٩٨٪ من الأعضاء) فلا يدخل الشريحة
@@ -59,9 +59,16 @@ struct AdminNotificationsView: View {
             let iso = KuwaitPhone.detectCountryAndLocal(m.phoneNumber).country.isoCode
             counts[iso, default: 0] += 1
         }
-        return KuwaitPhone.supportedCountries
+        // الكويت والسعودية تظهران دائماً أولاً (طلب المالك) — ثم باقي الدول الموجودة
+        let pinned = ["KW", "SA"]
+        let pinnedItems = pinned.compactMap { iso in
+            KuwaitPhone.supportedCountries.first { $0.isoCode == iso }.map { ($0, counts[iso] ?? 0) }
+        }
+        let others = KuwaitPhone.supportedCountries
+            .filter { !pinned.contains($0.isoCode) }
             .compactMap { c in counts[c.isoCode].map { (c, $0) } }
-            .sorted { $0.count > $1.count }
+            .sorted { $0.1 > $1.1 }
+        return (pinnedItems + others).map { (country: $0.0, count: $0.1) }
     }
 
     private var filteredMembers: [FamilyMember] {
@@ -88,6 +95,29 @@ struct AdminNotificationsView: View {
         }
     }
 
+    /// زر إجراء مضغوط (٤٤ نقطة) بألوان التطبيق — ممتلئ أو فاتح
+    private func compactActionButton(_ title: String, icon: String, filled: Bool, loading: Bool,
+                                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if loading {
+                    ProgressView().tint(filled ? DS.Color.textOnPrimary : DS.Color.primary)
+                } else {
+                    Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold))
+                }
+                Text(title).font(DS.Font.plex(14, weight: .bold))
+            }
+            .foregroundColor(filled ? DS.Color.textOnPrimary : DS.Color.primary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(filled ? DS.Color.primary : DS.Color.primary.opacity(0.12))
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
     private func countryChip(title: String, iso: String?, count: Int?) -> some View {
         let active = countryFilter == iso
         return Button {
@@ -101,8 +131,8 @@ struct AdminNotificationsView: View {
                 if let count { Text("\(count)").font(DS.Font.scaled(11, weight: .heavy)).opacity(0.8) }
             }
             .foregroundColor(active ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(height: 30)
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .frame(height: 26)
             .background(Capsule().fill(active ? DS.Color.primary : DS.Color.surface))
             .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: active ? 0 : 1))
         }
@@ -194,7 +224,7 @@ struct AdminNotificationsView: View {
                         }
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .frame(height: 44)
+                    .frame(height: 38)
                     .background(DS.Color.surface)
                     .cornerRadius(DS.Radius.md)
 
@@ -214,7 +244,7 @@ struct AdminNotificationsView: View {
                                 }
                                 TextEditor(text: $bodyText)
                                     .font(DS.Font.callout)
-                                    .frame(minHeight: 44, maxHeight: 72)
+                                    .frame(minHeight: 36, maxHeight: 56)
                                     .scrollContentBackground(.hidden)
                                     .background(Color.clear)
                                     .onChange(of: bodyText) { _ in
@@ -226,7 +256,8 @@ struct AdminNotificationsView: View {
                             .font(DS.Font.caption2)
                             .foregroundColor(bodyText.count > 450 ? DS.Color.error : DS.Color.textTertiary)
                     }
-                    .padding(DS.Spacing.md)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.sm)
                     .background(DS.Color.surface)
                     .cornerRadius(DS.Radius.md)
 
@@ -256,7 +287,8 @@ struct AdminNotificationsView: View {
                             }
                             .accessibilityLabel(L10n.t("إغلاق البحث", "Close search"))
                         }
-                        .padding(DS.Spacing.md)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.sm)
                         .background(DS.Color.surface)
                         .cornerRadius(DS.Radius.md)
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -373,30 +405,27 @@ struct AdminNotificationsView: View {
                 VStack(spacing: DS.Spacing.xs) {
                     // زر الجدولة جنب زر الإرسال — طلب المالك
                     // زرّان متطابقان — الإرسال أولاً ثم الجدولة (معكوسان — طلب المالك)
+                    // زرّان أصغر بألوان التطبيق (طلب المالك): إرسال أزرق ممتلئ، جدولة أزرق فاتح
+                    let noTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     HStack(spacing: DS.Spacing.sm) {
-                        DSPrimaryButton(
-                            L10n.t("إرسال الآن", "Send Now"),
-                            icon: "paperplane.fill",
-                            isLoading: notificationVM.isLoading
+                        compactActionButton(
+                            L10n.t("إرسال الآن", "Send Now"), icon: "paperplane.fill",
+                            filled: true, loading: notificationVM.isLoading
                         ) {
                             scheduleEnabled = false
                             showSendConfirm = true
                         }
-                        .disabled(
-                            title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        )
+                        .disabled(noTitle)
 
-                        DSPrimaryButton(
-                            L10n.t("جدولة", "Schedule"),
-                            icon: "clock.badge",
-                            isLoading: false,
-                            useGradient: false,
-                            color: DS.Color.accent
+                        compactActionButton(
+                            L10n.t("جدولة", "Schedule"), icon: "clock.badge",
+                            filled: false, loading: false
                         ) {
                             showScheduleComposer = true
                         }
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(noTitle)
                     }
+                    .opacity(noTitle ? 0.55 : 1)
 
                     let targetText = selectedMemberIds.isEmpty
                         ? L10n.t("للجميع", "to all")
@@ -465,8 +494,8 @@ struct AdminNotificationsView: View {
                  : L10n.t("سيصل إلى \(sendAudienceCount) عضو محدّد.",
                           "Will reach \(sendAudienceCount) selected members."))
         }
-        .alert(L10n.t("تعذّر الإرسال", "Send Failed"), isPresented: $showSendError) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        .dsAlert(L10n.t("تعذّر الإرسال", "Send Failed"), isPresented: $showSendError) {
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(L10n.t("حدث خطأ أثناء الإرسال. حاول مرة أخرى.", "Something went wrong. Please try again."))
         }
@@ -487,7 +516,7 @@ struct AdminNotificationsView: View {
     private func memberRow(member: FamilyMember) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: selectedMemberIds.contains(member.id) ? "checkmark.circle.fill" : "circle")
-                .font(DS.Font.scaled(20))
+                .font(DS.Font.scaled(17))
                 .foregroundStyle(
                     selectedMemberIds.contains(member.id)
                         ? AnyShapeStyle(DS.Color.gradientPrimary)
@@ -495,8 +524,8 @@ struct AdminNotificationsView: View {
                 )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.fullName)
-                    .font(DS.Font.calloutBold)
+                Text(member.displayFullName)
+                    .font(DS.Font.plex(13, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
@@ -513,7 +542,8 @@ struct AdminNotificationsView: View {
 
             Spacer()
         }
-        .padding(DS.Spacing.md)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     // MARK: - Helpers
@@ -658,7 +688,7 @@ private struct ScheduleComposerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -666,6 +696,7 @@ private struct ScheduleComposerSheet: View {
             }
             .task { await notificationVM.fetchScheduledNotifications() }
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .presentationDetents([.height(420)])
         .presentationDragIndicator(.visible)
     }
@@ -717,7 +748,7 @@ private struct ScheduledNotificationsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.primary)
@@ -725,6 +756,7 @@ private struct ScheduledNotificationsSheet: View {
             }
             .task { await notificationVM.fetchScheduledNotifications() }
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private func card(_ item: NotificationViewModel.ScheduledNotification) -> some View {

@@ -318,7 +318,9 @@ struct AdminMembersDirectoryView: View {
                             ))
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 // التجميد/التفعيل للمدير فقط (كان canEditMembers يشمل المراقب)
-                                if authVM.canFreezeMembers && member.isDeceased != true {
+                                // لا تجميد للمالك ولا لنفسك (السيرفر يرفضهما أيضاً)
+                                if authVM.canFreezeMembers && member.isDeceased != true
+                                    && member.role != .owner && member.id != authVM.currentUser?.id {
                                     if member.status == .frozen {
                                         Button {
                                             memberToActivate = member
@@ -582,7 +584,7 @@ struct AdminMembersDirectoryView: View {
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(DS.Color.accent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("فرع: \(m.fullName)", "Branch: \(m.fullName)"))
+                        Text(L10n.t("فرع: \(m.displayFullName)", "Branch: \(m.displayFullName)"))
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
                             .foregroundColor(DS.Color.accent)

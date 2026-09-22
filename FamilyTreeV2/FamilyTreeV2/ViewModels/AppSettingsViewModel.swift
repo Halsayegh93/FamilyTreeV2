@@ -12,10 +12,20 @@ struct AppSettings: Codable {
     var maintenanceMode: Bool
     var maxDevicesPerUser: Int
     var pollsEnabled: Bool?
-    var storiesEnabled: Bool?
     var diwaniyasEnabled: Bool?
     var projectsEnabled: Bool?
     var albumsEnabled: Bool?
+    /// لغة التطبيق الرسمية (ar / en) — للمستخدمين الذين لم يختاروا لغتهم
+    var defaultLanguage: String?
+    /// التحديث الإجباري — أقل رقم بناء مسموح لكل منصة (0 = بلا إجبار) + رابط المتجر
+    var iosMinBuild: Int?
+    /// الطريقة القديمة — تقرأها نسخ الأندرويد المثبّتة قبل الحد لكل منصة
+    var forceUpdate: Bool?
+    var latestBuild: Int?
+    var updateMessage: String?
+    var androidMinBuild: Int?
+    var iosUpdateUrl: String?
+    var androidUpdateUrl: String?
     var updatedAt: String?
     var updatedBy: UUID?
 
@@ -26,10 +36,17 @@ struct AppSettings: Codable {
         case maintenanceMode = "maintenance_mode"
         case maxDevicesPerUser = "max_devices_per_user"
         case pollsEnabled = "polls_enabled"
-        case storiesEnabled = "stories_enabled"
         case diwaniyasEnabled = "diwaniyas_enabled"
         case projectsEnabled = "projects_enabled"
         case albumsEnabled = "albums_enabled"
+        case defaultLanguage = "default_language"
+        case iosMinBuild = "ios_min_build"
+        case forceUpdate = "force_update"
+        case latestBuild = "latest_build"
+        case updateMessage = "update_message"
+        case androidMinBuild = "android_min_build"
+        case iosUpdateUrl = "ios_update_url"
+        case androidUpdateUrl = "android_update_url"
         case updatedAt = "updated_at"
         case updatedBy = "updated_by"
     }
@@ -51,7 +68,6 @@ class AppSettingsViewModel: ObservableObject {
         maintenanceMode: false,
         maxDevicesPerUser: 3,
         pollsEnabled: true,
-        storiesEnabled: true,
         diwaniyasEnabled: true,
         projectsEnabled: true,
         albumsEnabled: true
@@ -72,6 +88,7 @@ class AppSettingsViewModel: ObservableObject {
 
             if let fetched = result.first {
                 self.settings = fetched
+                LanguageManager.shared.applyOfficialLanguage(fetched.defaultLanguage)
             }
         } catch {
             // إذا الجدول مو موجود، نستخدم القيم الافتراضية
@@ -128,7 +145,6 @@ class AppSettingsViewModel: ObservableObject {
                 "maintenance_mode": AnyEncodable(false),
                 "max_devices_per_user": AnyEncodable(3),
                 "polls_enabled": AnyEncodable(true),
-                "stories_enabled": AnyEncodable(true),
                 "diwaniyas_enabled": AnyEncodable(true),
                 "projects_enabled": AnyEncodable(true),
                 "albums_enabled": AnyEncodable(true),

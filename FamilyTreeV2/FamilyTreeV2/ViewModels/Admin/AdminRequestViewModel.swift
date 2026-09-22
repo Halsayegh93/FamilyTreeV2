@@ -28,35 +28,94 @@ class AdminRequestViewModel: ObservableObject {
     @Published var mergeResult: MergeResult? = nil
     @Published var errorMessage: String? = nil
 
-    /// معرّفات رسائل التواصل التي قرأها المدير (محفوظة محلياً في UserDefaults).
-    /// تُستخدم لتحديد العدّاد "غير المقروء" المعروض في لوحة الإدارة.
+    /// معرّفات رسائل التواصل التي قرأها هذا المشرف.
+    /// مصدرها جدول `admin_message_reads` على السيرفر ليتطابق العدّاد بين الآيفون
+    /// والأندرويد لنفس الحساب (طلب المالك). نسخة محلية في UserDefaults تُستخدم
+    /// ريثما تصل بيانات السيرفر، ولحفظ ما عُلِّم بلا اتصال حتى تُرفع لاحقاً.
     @Published private(set) var readContactMessageIds: Set<UUID> = AdminRequestViewModel.loadReadIds()
 
     private static let readIdsKey = "readContactMessageIds_v1"
+    /// معرّفات عُلِّمت مقروءة ولم تُرفع للسيرفر بعد (انقطاع اتصال) — تُرفع عند أول جلب ناجح
+    private var unsyncedReadIds: Set<UUID> = AdminRequestViewModel.loadUnsyncedIds()
+    private static let unsyncedIdsKey = "unsyncedContactReadIds_v1"
 
-    private static func loadReadIds() -> Set<UUID> {
-        guard let arr = UserDefaults.standard.array(forKey: readIdsKey) as? [String] else { return [] }
+    private struct ContactMessageRead: Encodable {
+        let message_id: String
+        let member_id: String
+    }
+
+    private struct ContactMessageReadRow: Decodable {
+        let message_id: UUID
+    }
+
+    private static func loadIds(_ key: String) -> Set<UUID> {
+        guard let arr = UserDefaults.standard.array(forKey: key) as? [String] else { return [] }
         return Set(arr.compactMap(UUID.init(uuidString:)))
     }
 
+    private static func loadReadIds() -> Set<UUID> { loadIds(readIdsKey) }
+    private static func loadUnsyncedIds() -> Set<UUID> { loadIds(unsyncedIdsKey) }
+
     private func persistReadIds() {
-        let arr = readContactMessageIds.map { $0.uuidString }
-        UserDefaults.standard.set(arr, forKey: Self.readIdsKey)
+        UserDefaults.standard.set(readContactMessageIds.map { $0.uuidString }, forKey: Self.readIdsKey)
+        UserDefaults.standard.set(unsyncedReadIds.map { $0.uuidString }, forKey: Self.unsyncedIdsKey)
     }
 
-    /// تعليم رسالة كمقروءة محلياً. يرفع تحديث للـ UI تلقائياً.
+    /// جلب حالة «مقروء» من السيرفر، ورفع ما تبقّى محلياً بلا مزامنة
+    func fetchContactMessageReads() async {
+        guard let memberId = currentUser?.id else { return }
+        if !unsyncedReadIds.isEmpty { await uploadReads(Array(unsyncedReadIds), memberId: memberId) }
+        do {
+            let rows: [ContactMessageReadRow] = try await supabase
+                .from("admin_message_reads")
+                .select("message_id")
+                .eq("member_id", value: memberId.uuidString)
+                .execute()
+                .value
+            readContactMessageIds = Set(rows.map { $0.message_id }).union(unsyncedReadIds)
+            persistReadIds()
+        } catch {
+            Log.fetchError("فشل جلب حالة قراءة الرسائل", error)
+        }
+    }
+
+    /// رفع صفوف «مقروء» — ما يفشل يبقى في `unsyncedReadIds` لمحاولة لاحقة
+    private func uploadReads(_ ids: [UUID], memberId: UUID) async {
+        guard !ids.isEmpty else { return }
+        let rows = ids.map { ContactMessageRead(message_id: $0.uuidString, member_id: memberId.uuidString) }
+        do {
+            try await supabase
+                .from("admin_message_reads")
+                .upsert(rows, onConflict: "message_id,member_id")
+                .execute()
+            unsyncedReadIds.subtract(ids)
+            persistReadIds()
+        } catch {
+            unsyncedReadIds.formUnion(ids)
+            persistReadIds()
+            Log.error("فشل حفظ حالة قراءة الرسائل: \(error.localizedDescription)")
+        }
+    }
+
+    /// تعليم رسالة كمقروءة — تظهر فوراً ثم تُحفظ على السيرفر
     func markContactMessageRead(_ id: UUID) {
         guard !readContactMessageIds.contains(id) else { return }
         readContactMessageIds.insert(id)
+        unsyncedReadIds.insert(id)
         persistReadIds()
+        guard let memberId = currentUser?.id else { return }
+        Task { await uploadReads([id], memberId: memberId) }
     }
 
-    /// تعليم كل الرسائل الحالية كمقروءة.
+    /// تعليم كل الرسائل الحالية كمقروءة
     func markAllContactMessagesRead() {
-        let allIds = Set(contactMessages.map { $0.id })
-        guard !allIds.isSubset(of: readContactMessageIds) else { return }
-        readContactMessageIds.formUnion(allIds)
+        let newIds = Set(contactMessages.map { $0.id }).subtracting(readContactMessageIds)
+        guard !newIds.isEmpty else { return }
+        readContactMessageIds.formUnion(newIds)
+        unsyncedReadIds.formUnion(newIds)
         persistReadIds()
+        guard let memberId = currentUser?.id else { return }
+        Task { await uploadReads(Array(newIds), memberId: memberId) }
     }
 
     /// عدد رسائل التواصل غير المقروءة (لم يضغط عليها المدير بعد).
@@ -103,6 +162,16 @@ class AdminRequestViewModel: ObservableObject {
     /// قبول/رفض الطلبات: owner+admin+monitor (المشرف يقدر يقبل بس لا يرفض).
     /// نطابق `AuthViewModel.canRejectRequests` (راجع CLAUDE.md).
     private var canRejectRequests: Bool { authVM?.canRejectRequests ?? false }
+
+    /// طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر يرفضه أيضاً (فحص الثغرات)
+    private func isOwnRequest(requesterId: UUID?, memberId: UUID?) -> Bool {
+        guard let me = currentUser?.id, authVM?.currentUser?.role != .owner else { return false }
+        if requesterId == me || memberId == me {
+            errorMessage = L10n.t("طلبك يوافق عليه مسؤول آخر.", "Another admin must approve your own request.")
+            return true
+        }
+        return false
+    }
 
     /// حذف العنصر محلياً فوراً مع أنيميشن ثم تحديث من السيرفر بعد تأخير
     private func removeLocallyThenRefresh<T: Identifiable>(
@@ -276,7 +345,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("requester_id", value: uid.uuidString)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .in("request_type", values: Self.myTrackedRequestTypes)
@@ -326,13 +395,14 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: "contact_message")
                 .order("created_at", ascending: false)
                 .limit(200)
                 .execute()
                 .value
             self.contactMessages = requests
+            await fetchContactMessageReads()
         } catch {
             Log.fetchError("فشل جلب رسائل التواصل", error)
         }
@@ -382,7 +452,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.treeEdit.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
@@ -577,14 +647,42 @@ class AdminRequestViewModel: ObservableObject {
                         }
 
                     case .other:
-                        // طلب حر — لا تعديل تلقائي؛ القبول يُعلِم العضو فقط.
-                        let target = memberName.isEmpty ? "" : " «\(memberName)»"
-                        let targetEn = memberName.isEmpty ? "" : " «\(memberName)»"
-                        notifBody = L10n.t(
-                            "تم قبول طلبك\(target)",
-                            "Your request\(targetEn) was approved"
-                        )
-                        Log.info("[TreeEdit] Other request approved: \(memberName)")
+                        // تعديلات الملف بعد تجاوز حد الـ٣ (reason = profile_*) تُطبَّق تلقائياً
+                        // بالقبول؛ غيرها طلب حر — القبول يُعلِم العضو فقط.
+                        if let targetId = payload.targetMemberId,
+                           let reason = payload.reason, reason.hasPrefix("profile_"),
+                           let value = payload.newName {
+                            switch reason {
+                            case "profile_bio":
+                                let stations = (try? JSONDecoder().decode([FamilyMember.BioStation].self,
+                                                                           from: Data(value.utf8))) ?? []
+                                try await self.supabase.from("profiles")
+                                    .update(["bio_json": AnyEncodable(stations)])
+                                    .eq("id", value: targetId).execute()
+                                notifBody = L10n.t("تم اعتماد تعديل النبذة", "Your bio edit was approved")
+                            case "profile_phone_hidden":
+                                try await self.supabase.from("profiles")
+                                    .update(["is_phone_hidden": AnyEncodable(value == "true")])
+                                    .eq("id", value: targetId).execute()
+                                notifBody = L10n.t("تم اعتماد تعديل إظهار الرقم", "Your phone visibility edit was approved")
+                            case "profile_marital":
+                                try await self.supabase.from("profiles")
+                                    .update(["is_married": AnyEncodable(value == "true")])
+                                    .eq("id", value: targetId).execute()
+                                notifBody = L10n.t("تم اعتماد تعديل الحالة الاجتماعية", "Your marital status edit was approved")
+                            default:
+                                notifBody = L10n.t("تم قبول طلبك", "Your request was approved")
+                            }
+                            Log.info("[TreeEdit] Profile edit approved: \(reason)")
+                        } else {
+                            let target = memberName.isEmpty ? "" : " «\(memberName)»"
+                            let targetEn = memberName.isEmpty ? "" : " «\(memberName)»"
+                            notifBody = L10n.t(
+                                "تم قبول طلبك\(target)",
+                                "Your request\(targetEn) was approved"
+                            )
+                            Log.info("[TreeEdit] Other request approved: \(memberName)")
+                        }
                     }
                 } else if let legacyAction = payload?.action {
                     // Backwards compat for v2 strings without resolved action
@@ -809,7 +907,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.deceasedReport.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .execute()
@@ -899,7 +997,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.childAdd.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .execute()
@@ -1165,7 +1263,7 @@ class AdminRequestViewModel: ObservableObject {
             if activate {
                 // تفعيل العضو: status=active + role=member للمعلّق + اعتماد طلب الانضمام
                 let profiles: [FamilyMember] = (try? await supabase
-                    .from("profiles")
+                    .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                     .select()
                     .eq("id", value: memberId.uuidString)
                     .limit(1)
@@ -1232,7 +1330,7 @@ class AdminRequestViewModel: ObservableObject {
 
             // 2) Activate member directly after adding the number
             let profileResponse: [FamilyMember] = try await supabase
-                .from("profiles")
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
                 .eq("id", value: memberId.uuidString)
                 .limit(1)
@@ -1370,7 +1468,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.nameChange.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
@@ -1385,6 +1483,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func approveNameChangeRequest(request: AdminRequest) async {
         guard canModerate else { Log.warning("قبول طلب الاسم مرفوض: لا صلاحية"); return }
+        guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
         guard let newName = request.newValue, !newName.isEmpty else {
             Log.error("[NameChange] الاسم الجديد غير موجود في الطلب")
             return
@@ -1487,7 +1586,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [PhoneChangeRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.phoneChange.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
@@ -1502,6 +1601,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func approvePhoneChangeRequest(request: PhoneChangeRequest) async {
         guard canModerate, let rawPhone = request.newValue, !rawPhone.isEmpty else { return }
+        guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
         guard let newPhone = KuwaitPhone.normalizeForStorageFromInput(rawPhone) else { return }
         // التحقق من تكرار الرقم قبل الموافقة
         if let memberVM = memberVM {
@@ -1718,7 +1818,7 @@ class AdminRequestViewModel: ObservableObject {
                 let p_new_member_id: String
                 let p_tree_member_id: String
             }
-            struct MergeResponse: Decodable {
+            nonisolated struct MergeResponse: Decodable {
                 let success: Bool
                 let message: String
                 let mergedName: String?
@@ -1889,6 +1989,11 @@ class AdminRequestViewModel: ObservableObject {
             self.errorMessage = L10n.t("ليس لديك صلاحية لرفض الطلبات.", "You don't have permission to reject requests.")
             return
         }
+        // لا يُحذف المالك ولا سجلك أنت (السيرفر يرفضهما أيضاً — فحص الثغرات)
+        if memberId == currentUser?.id || memberById(memberId)?.role == .owner {
+            self.errorMessage = L10n.t("لا يمكن حذف هذا السجل.", "This record can't be deleted.")
+            return
+        }
 
         // حذف فوري محلياً — ثم API بالخلفية
         let deletedName = memberById(memberId)?.fourPartName ?? "عضو"
@@ -1918,28 +2023,18 @@ class AdminRequestViewModel: ObservableObject {
             }
 
             do {
-                _ = try? await self?.supabase
+                // الحذف أولاً — السيرفر يفرّغ father_id للأبناء ويحذف طلبات العضو
+                // تلقائياً (ON DELETE). كان التفريغ يسبق الحذف فيبقى الأبناء بلا أب لو فشل.
+                try await self?.supabase
                     .from("profiles")
-                    .update(["father_id": AnyEncodable(Optional<String>.none)])
-                    .eq("father_id", value: memberId.uuidString)
-                    .execute()
-
-                _ = try? await self?.supabase
-                    .from("admin_requests")
                     .delete()
-                    .eq("member_id", value: memberId.uuidString)
+                    .eq("id", value: memberId.uuidString)
                     .execute()
 
                 _ = try? await self?.supabase
                     .from("admin_requests")
                     .delete()
                     .eq("requester_id", value: memberId.uuidString)
-                    .execute()
-
-                try await self?.supabase
-                    .from("profiles")
-                    .delete()
-                    .eq("id", value: memberId.uuidString)
                     .execute()
 
                 await self?.notificationVM?.notifyAdminsWithPush(
@@ -1953,6 +2048,7 @@ class AdminRequestViewModel: ObservableObject {
                 Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
             } catch {
                 Log.error("خطأ في الحذف: \(error.localizedDescription)")
+                await self?.memberVM?.fetchAllMembers(force: true)
                 await MainActor.run {
                     self?.errorMessage = L10n.t(
                         "فشل حذف العضو: \(error.localizedDescription)",
@@ -2017,7 +2113,7 @@ class AdminRequestViewModel: ObservableObject {
             // التعليقات/الأرشيف/المشاريع/الديوانيات/تفاصيل العضو تُدرَج بـ content_report.
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .in("request_type", values: [
                     RequestType.newsReport.rawValue,
                     RequestType.contentReport.rawValue
@@ -2034,7 +2130,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func approveNewsReport(request: AdminRequest) async {
-        guard canModerate else { return }
+        // قبول البلاغ يحذف الخبر — مجال المحتوى فقط (لا المراقب)
+        guard authVM?.canModerateContent == true else { Log.warning("قبول البلاغ مرفوض: لا صلاحية"); return }
 
         optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -2067,8 +2164,8 @@ class AdminRequestViewModel: ObservableObject {
     }
 
     func rejectNewsReport(request: AdminRequest) async {
-        // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
-        guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
+        // البلاغات مجال المحتوى: المالك/المدير/المشرف (كانت canRejectRequests = مجال الشجرة، معكوسة)
+        guard authVM?.canModerateContent == true else { Log.warning("رفض البلاغ مرفوض: لا صلاحية"); return }
 
         optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
             do {
@@ -2168,7 +2265,7 @@ class AdminRequestViewModel: ObservableObject {
         do {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
-                .select("*, member:profiles!member_id(*)")
+                .select("*, member:members_masked!member_id(*)")
                 .eq("request_type", value: RequestType.photoSuggestion.rawValue)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)

@@ -34,8 +34,6 @@ struct EditChildSheet: View {
                         if selectedGender != "female" { heroHeader }
                         basicInfoCard
                             .padding(.horizontal, DS.Spacing.lg)
-                        submitButton
-                            .padding(.horizontal, DS.Spacing.lg)
                     }
                     .padding(.vertical, DS.Spacing.xs)
                     .background(
@@ -47,13 +45,14 @@ struct EditChildSheet: View {
             }
             .navigationTitle(L10n.t("تعديل بيانات الابن", "Edit Child Info"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
-                }
-            }
+            // الإضافة/الحفظ أعلى يمين، والإغلاق يسار (طلب المالك)
+            .dsSheetToolbar(
+                confirm: L10n.t("حفظ", "Save"),
+                isLoading: isSaving,
+                disabled: firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving,
+                onConfirm: saveChanges,
+                onCancel: { dismiss() }
+            )
             .onAppear(perform: setupData)
         }
         .onPreferenceChange(SheetContentHeightKey.self) { h in
@@ -62,13 +61,13 @@ struct EditChildSheet: View {
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(L10n.t("تم الحفظ", "Saved"), isPresented: $showSuccessAlert) {
+        .dsAlert(L10n.t("تم الحفظ", "Saved"), isPresented: $showSuccessAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
             Text(L10n.t("تم تحديث بيانات الابن بنجاح.", "Child info updated successfully."))
         }
-        .alert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
-            Button(L10n.t("موافق", "OK"), role: .cancel) {}
+        .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
+            Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(errorMessage)
         }

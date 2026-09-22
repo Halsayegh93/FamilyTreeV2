@@ -9,6 +9,12 @@ struct AdminModeratorsView: View {
     @State private var showRoleConfirm = false
     @State private var pendingRole: FamilyMember.UserRole = .member
     @State private var showRemoveConfirm = false
+    /// الدور المعروضة تفاصيله في ورقة «يقدر / ما يقدر»
+    @State private var selectedRoleGuide: RoleGuide? = nil
+    /// المسؤول المطلوب تغيير دوره — يفتح ورقة اختيار المجال
+    @State private var roleChangeTarget: FamilyMember? = nil
+    /// من يستخدم التطبيق فعلاً — يظهر تحت صف «العضو»
+    @State private var usageStats: AppUsageStats? = AppUsageStats.cached
 
     private var isOwner: Bool {
         authVM.isOwner
@@ -18,6 +24,7 @@ struct AdminModeratorsView: View {
         let roleOrder: [FamilyMember.UserRole] = [.owner, .admin, .monitor, .supervisor]
         return memberVM.allMembers
             .filter { $0.role == .owner || $0.role == .admin || $0.role == .monitor || $0.role == .supervisor }
+            .filter { $0.isDeceased != true } // المتوفون لا يظهرون في الفريق (طلب المالك)
             .sorted { a, b in
                 let aIdx = roleOrder.firstIndex(of: a.role) ?? 99
                 let bIdx = roleOrder.firstIndex(of: b.role) ?? 99
@@ -72,11 +79,14 @@ struct AdminModeratorsView: View {
                     Section {
                         permissionsGuide
                     } header: {
-                        sectionHeader(title: L10n.t("صلاحيات الأدوار", "Role Permissions"), icon: "lock.fill", color: DS.Color.info, count: nil)
+                        sectionHeader(title: L10n.t("الأدوار وما يقدر عليه كل دور", "Roles and what each can do"), icon: "person.badge.key.fill", color: DS.Color.info, count: nil)
                     }
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
+                .sheet(item: $selectedRoleGuide) { guide in
+                    roleDetailSheet(guide)
+                }
             }
         }
         .navigationTitle(L10n.t("فريق الإدارة", "Admin Team"))
@@ -102,7 +112,7 @@ struct AdminModeratorsView: View {
                 .environmentObject(authVM)
                 .environmentObject(memberVM)
         }
-        .alert(
+        .dsAlert(
             L10n.t("تغيير مستوى الحساب", "Change Account Level"),
             isPresented: $showRoleConfirm,
             presenting: memberToChange
@@ -127,7 +137,7 @@ struct AdminModeratorsView: View {
                 "Change \(member.firstName)'s account level to \(roleName)?"
             ))
         }
-        .alert(
+        .dsAlert(
             L10n.t("إزالة الصلاحية", "Remove Permission"),
             isPresented: $showRemoveConfirm,
             presenting: memberToChange
@@ -144,6 +154,14 @@ struct AdminModeratorsView: View {
                 "Remove \(member.firstName)'s permission and set as regular member?"
             ))
         }
+        .sheet(item: $roleChangeTarget) { member in
+            ChangeRoleSheet(member: member) { newRole in
+                Task { await memberVM.updateMemberRole(memberId: member.id, newRole: newRole) }
+            }
+            .environmentObject(authVM)
+            .environmentObject(memberVM)
+        }
+        .task { usageStats = await AppUsageStats.fetch() }
         .onAppear {
             Task { await memberVM.fetchAllMembers(force: true) }
             withAnimation(DS.Anim.smooth.delay(0.15)) {
@@ -195,7 +213,7 @@ struct AdminModeratorsView: View {
             }
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
@@ -238,6 +256,12 @@ struct AdminModeratorsView: View {
             Spacer()
         }
         .padding(.vertical, DS.Spacing.xs)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // تغيير الدور: اختيار مجال من ورقة واحدة — بدل ترقية/تنزيل بالسحب
+            guard isOwner, member.id != authVM.currentUser?.id, member.role != .owner else { return }
+            roleChangeTarget = member
+        }
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 15)
         .animation(DS.Anim.smooth.delay(Double(index) * 0.05), value: appeared)
@@ -253,206 +277,228 @@ struct AdminModeratorsView: View {
                     Label(L10n.t("إزالة", "Remove"), systemImage: "minus.circle.fill")
                 }
 
-                // تبديل مستوى الحساب
-                if member.role == .supervisor {
-                    Button {
-                        memberToChange = member
-                        pendingRole = .monitor
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مراقب", "Monitor"), systemImage: "arrow.up.circle.fill")
-                    }
-                    .tint(DS.Color.monitorRole)
-                    Button {
-                        memberToChange = member
-                        pendingRole = .admin
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مدير", "Admin"), systemImage: "arrow.up.circle.fill")
-                    }
-                    .tint(DS.Color.neonPurple)
-                } else if member.role == .monitor {
-                    Button {
-                        memberToChange = member
-                        pendingRole = .admin
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مدير", "Admin"), systemImage: "arrow.up.circle.fill")
-                    }
-                    .tint(DS.Color.neonPurple)
-                    Button {
-                        memberToChange = member
-                        pendingRole = .supervisor
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مشرف", "Supervisor"), systemImage: "arrow.down.circle.fill")
-                    }
-                    .tint(DS.Color.warning)
-                } else if member.role == .admin {
-                    Button {
-                        memberToChange = member
-                        pendingRole = .monitor
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مراقب", "Monitor"), systemImage: "arrow.down.circle.fill")
-                    }
-                    .tint(DS.Color.monitorRole)
-                    Button {
-                        memberToChange = member
-                        pendingRole = .supervisor
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مشرف", "Supervisor"), systemImage: "arrow.down.circle.fill")
-                    }
-                    .tint(DS.Color.warning)
-                }
+                // تغيير الدور صار من ورقة «تغيير الدور» بالضغط على الصف
             }
         }
         .contextMenu {
             if isOwner && member.id != authVM.currentUser?.id && member.role != .owner {
-                if member.role == .supervisor {
-                    Button {
-                        memberToChange = member
-                        pendingRole = .monitor
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مراقب", "Monitor"), systemImage: "eye.fill")
-                    }
-                    Button {
-                        memberToChange = member
-                        pendingRole = .admin
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مدير", "Admin"), systemImage: "shield.fill")
-                    }
-                } else if member.role == .monitor {
-                    Button {
-                        memberToChange = member
-                        pendingRole = .admin
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مدير", "Admin"), systemImage: "shield.fill")
-                    }
-                    Button {
-                        memberToChange = member
-                        pendingRole = .supervisor
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مشرف", "Supervisor"), systemImage: "star.fill")
-                    }
-                } else if member.role == .admin {
-                    Button {
-                        memberToChange = member
-                        pendingRole = .monitor
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مراقب", "Monitor"), systemImage: "eye.fill")
-                    }
-                    Button {
-                        memberToChange = member
-                        pendingRole = .supervisor
-                        showRoleConfirm = true
-                    } label: {
-                        Label(L10n.t("مشرف", "Supervisor"), systemImage: "star.fill")
-                    }
+                Button {
+                    roleChangeTarget = member
+                } label: {
+                    Label(L10n.t("تغيير الدور", "Change role"), systemImage: "person.badge.key.fill")
                 }
-
-                Divider()
-
                 Button(role: .destructive) {
                     memberToChange = member
                     showRemoveConfirm = true
                 } label: {
-                    Label(L10n.t("إزالة الصلاحية", "Remove Permission"), systemImage: "minus.circle.fill")
+                    Label(L10n.t("إزالة الصلاحية", "Remove role"), systemImage: "minus.circle.fill")
                 }
             }
         }
     }
 
-    // MARK: - جدول الصلاحيات
+
+    // MARK: - دليل الأدوار — بطاقة لكل دور (تحديث الأدوار 2026-09-21)
+    //
+    // بدل جدول ✓/✕ طويل: لكل دور بطاقة فيها رمزه ولونه ومجاله، وقائمة
+    // «يقدر» و«ما يقدر» بكلام واضح — ليعرف المالك ما الذي يمنحه بالضبط.
+
     private var permissionsGuide: some View {
-        // الأعمدة الأربعة: المالك ⊇ المدير ⊇ (المراقب / المشرف). المالك يملك كل الصلاحيات.
-        let roles: [(String, Color)] = [
-            (L10n.t("المالك", "Owner"), DS.Color.ownerRole),
-            (L10n.t("مدير", "Admin"), DS.Color.adminRole),
-            (L10n.t("مراقب", "Monitor"), DS.Color.monitorRole),
-            (L10n.t("مشرف", "Supervisor"), DS.Color.supervisorRole)
-        ]
-
-        // ترتيب القيم لكل صف: [المالك، المدير، المراقب، المشرف]
-        let permissions: [(String, [Bool])] = [
-            // الكل ✅✅✅✅
-            (L10n.t("دخول لوحة الإدارة", "Access admin panel"), [true, true, true, true]),
-            (L10n.t("قبول الطلبات", "Approve requests"), [true, true, true, true]),
-            // المالك + المدير + المراقب ✅✅✅❌
-            (L10n.t("رفض الطلبات", "Reject requests"), [true, true, true, false]),
-            (L10n.t("تعديل الأعضاء", "Edit members"), [true, true, true, false]),
-            (L10n.t("حذف أخبار", "Delete news"), [true, true, true, false]),
-            (L10n.t("حذف تعليقات", "Delete comments"), [true, true, true, false]),
-            (L10n.t("حذف قصص", "Delete stories"), [true, true, true, false]),
-            (L10n.t("حذف صور", "Delete photos"), [true, true, true, false]),
-            // المالك + المدير ✅✅❌❌
-            (L10n.t("تسجيل عضو جديد", "Register members"), [true, true, false, false]),
-            (L10n.t("حذف أعضاء", "Delete members"), [true, true, false, false]),
-            (L10n.t("تجميد حسابات", "Freeze accounts"), [true, true, false, false]),
-            (L10n.t("حذف ديوانيات", "Delete diwaniyas"), [true, true, false, false]),
-            (L10n.t("حذف مشاريع", "Delete projects"), [true, true, false, false]),
-            (L10n.t("إرسال إشعارات", "Send notifications"), [true, true, false, false]),
-            (L10n.t("إحصائيات", "Statistics"), [true, true, false, false]),
-            // المالك فقط ✅❌❌❌
-            (L10n.t("إدارة الأدوار", "Manage roles"), [true, false, false, false]),
-            (L10n.t("إعدادات النظام", "System Settings"), [true, false, false, false]),
-        ]
-
-        return VStack(spacing: 0) {
-            // رأس الجدول — أسماء الأدوار
-            HStack(spacing: 0) {
-                Text(L10n.t("الصلاحية", "Permission"))
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-                ForEach(0..<roles.count, id: \.self) { i in
-                    Text(roles[i].0)
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(roles[i].1)
-                        .frame(width: 44)
-                        .multilineTextAlignment(.center)
+        VStack(spacing: DS.Spacing.sm) {
+            // ١) خريطة المجالات
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(Array(RoleDomain.all.enumerated()), id: \.offset) { _, domain in
+                    domainTile(domain)
                 }
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(DS.Color.surface.opacity(0.5))
 
-            Divider()
+            // ٢) صف مضغوط لكل دور — الضغط يفتح تفاصيله
+            VStack(spacing: 0) {
+                ForEach(Array(RoleGuide.all.enumerated()), id: \.offset) { index, guide in
+                    Button { selectedRoleGuide = guide } label: {
+                        roleCompactRow(guide)
+                    }
+                    .buttonStyle(.plain)
 
-            // صفوف الصلاحيات
-            ForEach(0..<permissions.count, id: \.self) { row in
-                HStack(spacing: 0) {
-                    Text(permissions[row].0)
-                        .font(DS.Font.scaled(13, weight: .medium))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                    Spacer()
-                    ForEach(0..<permissions[row].1.count, id: \.self) { col in
-                        Image(systemName: permissions[row].1[col] ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .font(DS.Font.scaled(16))
-                            .foregroundColor(permissions[row].1[col] ? DS.Color.success : DS.Color.textTertiary.opacity(0.4))
-                            .frame(width: 44)
+                    if index < RoleGuide.all.count - 1 {
+                        Divider().padding(.leading, 58)
                     }
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
+            }
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .dsSubtleShadow()
+        }
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        .listRowBackground(Color.clear)
+    }
 
-                if row < permissions.count - 1 {
-                    Divider().padding(.leading, DS.Spacing.md)
+    private func domainTile(_ domain: RoleDomain) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: domain.icon)
+                .font(DS.Font.scaled(16, weight: .bold))
+                .foregroundColor(domain.color)
+            Text(domain.title)
+                .font(DS.Font.plex(11, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+            Text(domain.roles.joined(separator: " · "))
+                .font(DS.Font.plex(10, weight: .medium))
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.md)
+        .padding(.horizontal, 4)
+        .background(domain.color.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .strokeBorder(domain.color.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    /// صف الدور: شارة + اسم + مجاله + عدد من يحملونه
+    private func roleCompactRow(_ guide: RoleGuide) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            ZStack {
+                Circle().fill(guide.color.opacity(0.18)).frame(width: 34, height: 34)
+                Image(systemName: guide.icon)
+                    .font(DS.Font.scaled(14, weight: .bold))
+                    .foregroundColor(guide.color)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(guide.title)
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(guide.mandate)
+                    .font(DS.Font.plex(11, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                // العضو: عدد الأحياء في الشجرة لا يعني أنهم يستخدمون التطبيق
+                if guide.title == L10n.t("العضو", "Member"), let usage = usageStats {
+                    Text(L10n.t("فعّالون (رقم + جهاز): \(usage.active)",
+                                "Active (phone + device): \(usage.active)"))
+                        .font(DS.Font.plex(10, weight: .semibold))
+                        .foregroundColor(DS.Color.success)
+                }
+            }
+            Spacer(minLength: 0)
+            if let count = holdersCount(for: guide.title), count > 0 {
+                Text("\(count)")
+                    .font(DS.Font.plex(11, weight: .bold))
+                    .foregroundColor(guide.color)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(guide.color.opacity(0.14)))
+            }
+            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .contentShape(Rectangle())
+    }
+
+    /// عدد من يحملون هذا الدور
+    private func holdersCount(for title: String) -> Int? {
+        let all = memberVM.allMembers.filter { $0.isDeceased != true }
+        switch title {
+        case L10n.t("المالك", "Owner"):      return all.filter { $0.role == .owner }.count
+        case L10n.t("المدير", "Admin"):      return all.filter { $0.role == .admin }.count
+        case L10n.t("المراقب", "Monitor"):   return all.filter { $0.role == .monitor }.count
+        case L10n.t("المشرف", "Supervisor"): return all.filter { $0.role == .supervisor }.count
+        // الأعضاء العاديون الأحياء فقط (طلب المالك) — كل من في الشجرة،
+        // سواء فعّل حسابه أو لا. الأحياء كلهم = هذا العدد + فريق الإدارة.
+        case L10n.t("العضو", "Member"):      return all.filter { $0.role == .member && $0.isDeceased != true }.count
+        default: return nil
+        }
+    }
+
+    /// ورقة تفاصيل الدور — عمودان قصيران: يقدر / ما يقدر
+    private func roleDetailSheet(_ guide: RoleGuide) -> some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                    HStack(spacing: DS.Spacing.md) {
+                        ZStack {
+                            Circle().fill(guide.color.opacity(0.18)).frame(width: 52, height: 52)
+                            Image(systemName: guide.icon)
+                                .font(DS.Font.scaled(22, weight: .bold))
+                                .foregroundColor(guide.color)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(guide.title)
+                                .font(DS.Font.plex(19, weight: .bold))
+                                .foregroundColor(DS.Color.textPrimary)
+                            Text(guide.mandate)
+                                .font(DS.Font.plex(12, weight: .medium))
+                                .foregroundColor(DS.Color.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+
+                    guideGroup(title: L10n.t("يقدر", "Can"), lines: guide.can,
+                               icon: "checkmark.circle.fill", color: DS.Color.success)
+
+                    if !guide.cannot.isEmpty {
+                        guideGroup(title: L10n.t("ما يقدر", "Cannot"), lines: guide.cannot,
+                                   icon: "xmark.circle.fill", color: DS.Color.textTertiary)
+                    }
+                }
+                .padding(DS.Spacing.lg)
+            }
+            .background(DS.Color.background.ignoresSafeArea())
+            .navigationTitle(guide.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
+                    DSToolbarCancelButton(title: L10n.t("إغلاق", "Close")) { selectedRoleGuide = nil }
+                }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func guideGroup(title: String, lines: [String], icon: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(title)
+                .font(DS.Font.plex(13, weight: .bold))
+                .foregroundColor(color)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(lines, id: \.self) { line in
+                    guideLine(line, icon: icon, color: color)
                 }
             }
         }
+        .padding(DS.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(DS.Color.surface)
-        .cornerRadius(DS.Radius.md)
-        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-        .listRowBackground(Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .dsSubtleShadow()
+    }
+
+    private func guideLine(_ text: String, icon: String, color: Color) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(12, weight: .bold))
+                .foregroundColor(color)
+                .padding(.top, 1)
+            Text(text)
+                .font(DS.Font.plex(12, weight: .medium))
+                .foregroundColor(DS.Color.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
     }
 
     // MARK: - Empty State
@@ -477,7 +523,7 @@ struct AddModeratorSheet: View {
 
     private var regularMembers: [FamilyMember] {
         memberVM.allMembers
-            .filter { $0.role == .member }
+            .filter { $0.role == .member && $0.isDeceased != true && $0.status != .frozen }
             .filter { member in
                 searchText.isEmpty || member.fullName.localizedCaseInsensitiveContains(searchText)
             }
@@ -499,6 +545,13 @@ struct AddModeratorSheet: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.xs)
+
+                    // مجال الدور المختار — ليعرف من يمنح الدور ما الذي يمنحه بالضبط
+                    if let guide = RoleGuide.forRole(selectedRole) {
+                        RoleScopeCard(guide: guide, compact: true)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.bottom, DS.Spacing.sm)
+                    }
 
                     // البحث
                     HStack(spacing: DS.Spacing.sm) {
@@ -544,7 +597,7 @@ struct AddModeratorSheet: View {
                                         }
 
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(member.fullName)
+                                            Text(member.displayFullName)
                                                 .font(DS.Font.calloutBold)
                                                 .foregroundColor(DS.Color.textPrimary)
                                                 .lineLimit(1)
@@ -575,7 +628,7 @@ struct AddModeratorSheet: View {
             .navigationTitle(L10n.t("إضافة مدير/مشرف", "Add Admin/Supervisor"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button {
                         dismiss()
                     } label: {
@@ -589,5 +642,189 @@ struct AddModeratorSheet: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+}
+
+// MARK: - ورقة تغيير الدور (طلب المالك)
+//
+// الدور صار مجال عمل لا درجة، فالتغيير صار اختيار مجال من بطاقات واضحة
+// بدل أسهم «ترقية/تنزيل». كل خيار يعرض مجاله وأهم ما يقدر عليه.
+
+struct ChangeRoleSheet: View {
+    let member: FamilyMember
+    /// يُستدعى عند التأكيد بالدور الجديد
+    let onSelect: (FamilyMember.UserRole) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: FamilyMember.UserRole
+    @State private var showConfirm = false
+
+    private let options: [FamilyMember.UserRole] = [.admin, .monitor, .supervisor, .member]
+
+    init(member: FamilyMember, onSelect: @escaping (FamilyMember.UserRole) -> Void) {
+        self.member = member
+        self.onSelect = onSelect
+        _selected = State(initialValue: member.role)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DS.Color.background.ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: DS.Spacing.md) {
+                        memberHeader
+
+                        ForEach(options, id: \.self) { role in
+                            if let guide = RoleGuide.forRole(role) {
+                                Button { selected = role } label: {
+                                    roleOption(role: role, guide: guide)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(DS.Spacing.lg)
+                    .padding(.bottom, DS.Spacing.xxxl)
+                }
+            }
+            .navigationTitle(L10n.t("تغيير الدور", "Change Role"))
+            .navigationBarTitleDisplayMode(.inline)
+            .dsSheetToolbar(
+                confirm: L10n.t("حفظ", "Save"),
+                disabled: selected == member.role,
+                onConfirm: { showConfirm = true },
+                onCancel: { dismiss() }
+            )
+            .dsAlert(L10n.t("تأكيد تغيير الدور", "Confirm Role Change"), isPresented: $showConfirm) {
+                Button(L10n.t("تأكيد", "Confirm")) {
+                    onSelect(selected)
+                    dismiss()
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t(
+                    "\(member.firstName) يصير «\(roleTitle(selected))» — \(RoleGuide.forRole(selected)?.mandate ?? "")",
+                    "\(member.firstName) becomes «\(roleTitle(selected))» — \(RoleGuide.forRole(selected)?.mandate ?? "")"
+                ))
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .presentationDragIndicator(.visible)
+    }
+
+    private var memberHeader: some View {
+        HStack(spacing: DS.Spacing.md) {
+            Group {
+                if let avatar = member.avatarUrl, let url = URL(string: avatar) {
+                    CachedAsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: { DS.Color.mutedBackground }
+                } else {
+                    ZStack {
+                        DS.Color.primary.opacity(0.14)
+                        Image(systemName: "person.fill")
+                            .font(DS.Font.scaled(18, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                    }
+                }
+            }
+            .frame(width: 46, height: 46)
+            .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(member.displayFullName)
+                    .font(DS.Font.plex(15, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2)
+                Text(L10n.t("دوره الحالي: ", "Current role: ") + roleTitle(member.role))
+                    .font(DS.Font.plex(11, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(DS.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .dsSubtleShadow()
+    }
+
+    private func roleOption(role: FamilyMember.UserRole, guide: RoleGuide) -> some View {
+        let isSelected = selected == role
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                ZStack {
+                    Circle().fill(guide.color.opacity(0.18)).frame(width: 34, height: 34)
+                    Image(systemName: guide.icon)
+                        .font(DS.Font.scaled(14, weight: .bold))
+                        .foregroundColor(guide.color)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(guide.title)
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(guide.mandate)
+                        .font(DS.Font.plex(11, weight: .medium))
+                        .foregroundColor(DS.Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(DS.Font.scaled(18, weight: .bold))
+                    .foregroundColor(isSelected ? guide.color : DS.Color.textTertiary.opacity(0.5))
+            }
+
+            if isSelected {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(L10n.t("يقدر", "Can"))
+                        .font(DS.Font.plex(11, weight: .bold))
+                        .foregroundColor(DS.Color.success)
+                    ForEach(guide.can, id: \.self) { text in
+                        optionLine(text, icon: "checkmark.circle.fill", color: DS.Color.success)
+                    }
+                    if !guide.cannot.isEmpty {
+                        Text(L10n.t("ما يقدر", "Cannot"))
+                            .font(DS.Font.plex(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .padding(.top, 2)
+                        ForEach(guide.cannot, id: \.self) { text in
+                            optionLine(text, icon: "xmark.circle.fill", color: DS.Color.textTertiary.opacity(0.8))
+                        }
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+        .padding(DS.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isSelected ? guide.color.opacity(0.08) : DS.Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .strokeBorder(isSelected ? guide.color.opacity(0.45) : DS.Color.textTertiary.opacity(0.15),
+                              lineWidth: isSelected ? 1.5 : 1)
+        )
+        .animation(DS.Anim.snappy, value: selected)
+    }
+
+    private func optionLine(_ text: String, icon: String, color: Color) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(11, weight: .bold))
+                .foregroundColor(color)
+                .padding(.top, 1)
+            Text(text)
+                .font(DS.Font.plex(11.5, weight: .medium))
+                .foregroundColor(DS.Color.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func roleTitle(_ role: FamilyMember.UserRole) -> String {
+        RoleGuide.forRole(role)?.title ?? L10n.t("عضو", "Member")
     }
 }

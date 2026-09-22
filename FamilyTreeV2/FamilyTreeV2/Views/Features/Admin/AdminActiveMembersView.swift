@@ -2,7 +2,7 @@ import SwiftUI
 import Supabase
 import PostgREST
 
-// MARK: - Admin Active Members — النشاط (الآن + آخر 14 يوم)
+// MARK: - Admin Active Members — النشاط (الآن + آخر 24 ساعة + آخر 30 يوم)
 struct AdminActiveMembersView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -13,6 +13,14 @@ struct AdminActiveMembersView: View {
     @State private var isLoading = false
     @State private var isRefreshing = false
     @State private var refreshTimer: Timer?
+    @State private var membershipCounts: MembershipCounts?
+    @State private var usage: AppUsageStats? = AppUsageStats.cached
+    @State private var membershipCountsFailed = false
+
+    private struct MembershipCounts: Decodable {
+        let in_system: Int
+        let total_members: Int
+    }
 
     var body: some View {
         ZStack {
@@ -25,9 +33,6 @@ struct AdminActiveMembersView: View {
                     statsCard
                         .padding(.top, DS.Spacing.md)
 
-                    // ── زر تحديث الآن ──
-                    refreshButton
-                        .padding(.horizontal, DS.Spacing.lg)
 
                     // الوضع الأفقي: بطاقات النشاط على عمودين
                     AdaptiveCardStack(spacing: DS.Spacing.lg, landscapeMinimum: 340) {
@@ -82,10 +87,10 @@ struct AdminActiveMembersView: View {
                     }
                     .padding(.horizontal, DS.Spacing.lg)
 
-                    // ── آخر 14 يوم ──
+                    // ── آخر 30 يوم (كانت 14 — طلب المالك) ──
                     DSCard(padding: 0) {
                         DSSectionHeader(
-                            title: L10n.t("نشطون آخر 14 يوم", "Last 14 Days"),
+                            title: L10n.t("نشطون آخر 30 يوم", "Last 30 Days"),
                             icon: "calendar",
                             trailing: "\(recentRows.count)",
                             iconColor: DS.Color.info
@@ -93,7 +98,7 @@ struct AdminActiveMembersView: View {
 
                         if recentRows.isEmpty {
                             inlineEmpty(
-                                text: L10n.t("لا يوجد نشاط في آخر 14 يوم", "No activity in last 14 days")
+                                text: L10n.t("لا يوجد نشاط في آخر 30 يوم", "No activity in last 30 days")
                             )
                         } else {
                             ForEach(Array(recentRows.enumerated()), id: \.element.memberId) { idx, row in
@@ -112,8 +117,11 @@ struct AdminActiveMembersView: View {
             }
             .refreshable { await fetch() }
         }
-        .navigationTitle(L10n.t("النشاط", "Activity"))
+        .navigationTitle(L10n.t("النشاط الآن", "Live Activity"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) { refreshButton }
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             // أبلغ إن المدير الحالي شاف "النشاط" — يبقيه ضمن النشطين
@@ -124,7 +132,7 @@ struct AdminActiveMembersView: View {
         .onDisappear { refreshTimer?.invalidate() }
     }
 
-    // MARK: - Refresh button
+    // MARK: - Refresh button (أيقونة صغيرة في الشريط العلوي — طلب المالك)
     private var refreshButton: some View {
         Button {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -135,24 +143,15 @@ struct AdminActiveMembersView: View {
                 isRefreshing = false
             }
         } label: {
-            HStack(spacing: 8) {
-                if isRefreshing {
-                    ProgressView().tint(.white).scaleEffect(0.85)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(DS.Font.scaled(14, weight: .bold))
-                }
-                Text(L10n.t("تحديث الآن", "Refresh Now"))
+            if isRefreshing {
+                ProgressView().scaleEffect(0.8)
+            } else {
+                Image(systemName: "arrow.clockwise")
                     .font(DS.Font.scaled(14, weight: .bold))
             }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .background(DS.Color.primary)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         }
-        .buttonStyle(DSScaleButtonStyle())
         .disabled(isRefreshing)
+        .accessibilityLabel(L10n.t("تحديث الآن", "Refresh Now"))
     }
 
     // MARK: - Action row (24h)
@@ -244,116 +243,38 @@ struct AdminActiveMembersView: View {
     }
 
     // MARK: - Stats card
-    /// عدد الأعضاء داخل المنظومة (نفس منطق الدائرة الخضراء في تفاصيل العضو)
-    /// — أحياء، ليسوا pending، ليسوا frozen
-    /// نستخدم Set على الـ id لضمان عدم تكرار العضو لو ظهر مرتين
-    private var inSystemCount: Int {
-        var seenIds = Set<UUID>()
-        for member in memberVM.allMembers where member.isInSystem {
-            seenIds.insert(member.id)
-        }
-        return seenIds.count
-    }
-
-    /// إجمالي الأعضاء الأحياء فقط (باستثناء المتوفين و pending)
-    private var totalMembersCount: Int {
-        var seenIds = Set<UUID>()
-        for member in memberVM.allMembers
-            where member.role != .pending && member.isDeceased != true {
-            seenIds.insert(member.id)
-        }
-        return seenIds.count
-    }
-
+    /// صف واحد من أربعة مربّعات صغيرة (طلب المالك: أصغر وأرتب). «الأعضاء
+    /// الفعّالون» موجودة أصلاً في «استخدام التطبيق» بإعدادات النظام، فلا تتكرر هنا.
     private var statsCard: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // الصف الأول: نشاط لحظي
-            HStack(spacing: DS.Spacing.sm) {
-                statBox(
-                    icon: "circle.fill",
-                    title: L10n.t("الآن", "Now"),
-                    value: "\(nowRows.count)",
-                    color: DS.Color.success
-                )
-                statBox(
-                    icon: "iphone.gen3",
-                    title: L10n.t("التطبيق", "App"),
+        HStack(spacing: DS.Spacing.sm) {
+            statBox(icon: "circle.fill", title: L10n.t("الآن", "Now"),
+                    value: "\(nowRows.count)", color: DS.Color.success)
+            statBox(icon: "iphone.gen3", title: L10n.t("التطبيق", "App"),
                     value: "\(nowRows.filter { $0.source == "app" }.count + recentRows.filter { $0.source == "app" }.count)",
-                    color: DS.Color.primary
-                )
-                statBox(
-                    icon: "globe",
-                    title: L10n.t("الموقع", "Web"),
+                    color: DS.Color.primary)
+            statBox(icon: "globe", title: L10n.t("الموقع", "Web"),
                     value: "\(nowRows.filter { $0.source == "web" }.count + recentRows.filter { $0.source == "web" }.count)",
-                    color: DS.Color.accent
-                )
-                statBox(
-                    icon: "clock.arrow.circlepath",
-                    title: L10n.t("14 يوم", "14d"),
-                    value: "\(recentRows.count)",
-                    color: DS.Color.info
-                )
-            }
-
-            // الصف الثاني: إجمالي داخل المنظومة (مرتبط بالدائرة الخضراء في الشجرة)
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "person.badge.shield.checkmark.fill")
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(DS.Color.secondary.opacity(0.12))
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("داخل المنظومة", "In the System"))
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(L10n.t(
-                        "أعضاء نشطون (هاتف أو تسجيل دخول)",
-                        "Active members (phone or login)"
-                    ))
-                    .font(DS.Font.scaled(11, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                }
-
-                Spacer()
-
-                HStack(spacing: 4) {
-                    Text("\(inSystemCount)")
-                        .font(DS.Font.scaled(20, weight: .heavy))
-                        .foregroundColor(DS.Color.secondary)
-                    Text("/ \(totalMembersCount)")
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-            }
-            .padding(DS.Spacing.md)
-            .background(DS.Color.secondary.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(DS.Color.secondary.opacity(0.20), lineWidth: 0.5)
-            )
+                    color: DS.Color.accent)
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
 
     private func statBox(icon: String, title: String, value: String, color: Color) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 3) {
             Image(systemName: icon)
                 .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(color)
             Text(value)
-                .font(DS.Font.scaled(20, weight: .heavy))
+                .font(DS.Font.plex(18, weight: .bold)).monospacedDigit()
                 .foregroundColor(DS.Color.textPrimary)
             Text(title)
-                .font(DS.Font.scaled(11, weight: .semibold))
+                .font(DS.Font.plex(10.5, weight: .semibold))
                 .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
-        .background(color.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .frame(height: 72)
+        .background(color.opacity(0.07), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
     }
 
     // MARK: - Active now row (with online dot + screen)
@@ -513,13 +434,15 @@ struct AdminActiveMembersView: View {
 
     // MARK: - Fetching
     private func fetch() async {
+        guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
 
         async let now = fetchNow()
         async let recent = fetchRecent()
         async let actions = fetchActions24h()
-        let (n, r, a) = await (now, recent, actions)
+        async let membership: Void = fetchMembershipCounts()
+        let (n, r, a, _) = await (now, recent, actions, membership)
         // مفتاح فريد لكل جلسة: عضو + مصدر (app أو web)
         // هذا يسمح لنفس الشخص بجهازين (iPhone + Web) أن يظهر صفّين
         func deviceKey(_ id: UUID, _ source: String?) -> String { "\(id)-\(source ?? "")" }
@@ -543,6 +466,18 @@ struct AdminActiveMembersView: View {
             .sorted { $0.hoursSinceActive < $1.hoursSinceActive }
             .filter { !excludedDevices.contains(deviceKey($0.memberId, $0.source)) }
             .filter { seenRecent.insert(deviceKey($0.memberId, $0.source)).inserted }
+    }
+
+    private func fetchMembershipCounts() async {
+        do {
+            membershipCounts = try await SupabaseConfig.client.rpc("admin_membership_counts").execute().value
+            usage = await AppUsageStats.fetch()
+            membershipCountsFailed = false
+        } catch {
+            guard !Log.isCancellation(error) else { return }
+            membershipCountsFailed = true
+            Log.fetchError("خطأ جلب عدد الأعضاء داخل المنظومة", error)
+        }
     }
 
     private func fetchActions24h() async -> [RecentActionRow] {
@@ -644,7 +579,7 @@ struct AdminActiveMembersView: View {
             }
         }
         do {
-            let payload: [String: AnyEncodable] = ["days_back": AnyEncodable(14)]
+            let payload: [String: AnyEncodable] = ["days_back": AnyEncodable(30)]
             let response = try await SupabaseConfig.client.rpc(
                 "get_recently_active_members", params: payload
             ).execute()

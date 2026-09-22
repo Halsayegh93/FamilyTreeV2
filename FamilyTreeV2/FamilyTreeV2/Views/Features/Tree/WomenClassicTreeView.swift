@@ -454,11 +454,7 @@ struct WomenClassicTreeView: View {
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, 3)
         // مادة مخففة (50%) — نفس بار شجرة العائلة
-        .background {
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .opacity(0.75)
-        }
+        .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
@@ -499,11 +495,7 @@ struct WomenClassicTreeView: View {
             .buttonStyle(DSScaleButtonStyle())
         }
         .padding(4)
-        .background {
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .opacity(0.75)
-        }
+        .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
@@ -601,7 +593,12 @@ struct WomenClassicTreeView: View {
     private func nodeView(_ m: FamilyMember, at p: CGPoint) -> some View {
         let deceased = m.isDeceased == true
         let female = m.isFemale
-        let accent: Color = deceased ? DS.Color.textTertiary : (female ? rose : DS.Color.primary)
+        // الإناث وردي ثابت؛ المتوفّاة وردي أغمق (طلب المالك). الذكر المتوفّى يبقى رمادياً.
+        let accent: Color = female
+            ? (deceased ? DS.Color.femaleDeceased : rose)
+            : (deceased ? DS.Color.textTertiary : DS.Color.primary)
+        // حافة الأنثى المتوفّاة بلون متناسق مع الوردي الغامق (نبيذي) لتتميّز عن الحيّة — طلب المالك
+        let border: Color = (female && deceased) ? DS.Color.femaleDeceasedBorder : accent
         let kids = cChildrenOf[m.id] ?? []
         let isCollapsed = collapsed.contains(m.id)
         let showWives = !isCollapsed && !kids.isEmpty
@@ -627,8 +624,8 @@ struct WomenClassicTreeView: View {
                 shape
                     .fill(DS.Color.background)
                     // مربع الابنة بنفس غمقة مربع الزوجة (طلب المالك) — رمادي أنعم قليلاً
-                    .overlay(shape.fill(deceased
-                        ? (female ? DS.Color.textTertiary.opacity(0.85) : DS.Color.textTertiary.opacity(0.5))
+                    .overlay(shape.fill(deceased && !female
+                        ? DS.Color.textTertiary.opacity(0.5)
                         : accent))
                     .frame(width: CIRCLE, height: CIRCLE)
                     .overlay(
@@ -656,8 +653,14 @@ struct WomenClassicTreeView: View {
                             }
                         }
                     )
-                    .overlay(shape.stroke(Color.white, lineWidth: RING))
-                    .overlay(shape.stroke(accent, lineWidth: 2).padding(-RING - 0.5))   // إطار ملوّن
+                    // حواف متّحدة المركز (طلب المالك): الأبيض داخل الحافة تماماً، والملوّن خارجها
+                    // بنصف قطر أكبر بمقدار المسافة نفسها — فتتطابق الزوايا ولا تتعرّج
+                    .overlay(shape.strokeBorder(Color.white, lineWidth: RING))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CORNER + 2.5, style: .continuous)
+                            .strokeBorder(border, lineWidth: 2)
+                            .padding(-2.5)
+                    )
                     // شارة الوفاة: قلب مكسور رمادي (غير ملوّن)
                     .overlay(alignment: .bottomTrailing) {
                         if deceased {
@@ -747,7 +750,7 @@ struct WomenClassicTreeView: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(accent.opacity(0.4), lineWidth: 1))
+                    .stroke(female ? border.opacity(0.7) : accent.opacity(0.4), lineWidth: 1))
                 .onTapGesture { onSelect?(m) }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             } else {
                 Text(m.firstName)
@@ -779,9 +782,11 @@ struct WomenClassicTreeView: View {
     private func wifeCell(_ w: FamilyMember) -> some View {
         VStack(spacing: 1) {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(w.isDeceased == true ? DS.Color.textTertiary : rose)
+                .fill(w.isDeceased == true ? DS.Color.femaleDeceased : rose)
                 .frame(width: 24, height: 24)
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(Color.white.opacity(0.9), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(w.isDeceased == true ? DS.Color.femaleDeceasedBorder : Color.white.opacity(0.9),
+                                  lineWidth: w.isDeceased == true ? 1.5 : 1))
                 .overlay(
                     Text(L10n.t("زوجة", "Wife"))
                         .font(.system(size: 7.5, weight: .bold))
@@ -789,7 +794,6 @@ struct WomenClassicTreeView: View {
                         .lineLimit(1)
                         .foregroundColor(.white)
                 )
-                .saturation(w.isDeceased == true ? 0 : 1)
                 // نفس شارة الإخفاء على مربّع الزوجة — بمقاس الخلية الصغيرة
                 .overlay(alignment: .topTrailing) {
                     if w.isHiddenFromTree {

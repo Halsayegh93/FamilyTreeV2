@@ -52,7 +52,7 @@ struct BranchPickerSheet: View {
             .background(DS.Color.background)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                 }
                 // شريط البحث داخل الـ navigation bar — أعلى نقطة ممكنة

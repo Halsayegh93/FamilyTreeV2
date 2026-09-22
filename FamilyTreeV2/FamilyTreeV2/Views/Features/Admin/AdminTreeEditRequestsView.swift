@@ -70,13 +70,13 @@ struct AdminTreeEditRequestsView: View {
             .navigationTitle(L10n.t("طلبات الشجرة", "Tree Requests"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textSecondary)
                 }
             }
-            .alert(
+            .dsAlert(
                 L10n.t("سبب الرفض", "Rejection Reason"),
                 isPresented: $showRejectAlert
             ) {
@@ -100,6 +100,7 @@ struct AdminTreeEditRequestsView: View {
             .task { await adminRequestVM.fetchTreeEditRequests(force: true) }
             .refreshable { await adminRequestVM.fetchTreeEditRequests(force: true) }
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     // MARK: - Tabs
@@ -205,7 +206,7 @@ struct AdminTreeEditRequestsView: View {
                         .font(DS.Font.caption1)
                         .fontWeight(.semibold)
                         .foregroundColor(tint)
-                    Text(payload?.targetMemberName ?? request.member?.fullName ?? "—")
+                    Text(payload?.targetMemberName ?? request.member?.displayFullName ?? "—")
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)

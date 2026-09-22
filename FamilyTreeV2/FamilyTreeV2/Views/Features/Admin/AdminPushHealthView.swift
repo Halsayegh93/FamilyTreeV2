@@ -28,6 +28,10 @@ struct AdminPushHealthView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
+                    SystemHealthSectionHeader(title: L10n.t("جاهزية الإشعارات", "Notification readiness"), subtitle: L10n.t("حالة الأجهزة والإرسال في نظرة واضحة", "A clear view of devices and delivery"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.lg)
                     // الوضع الأفقي: الأقسام على عمودين
                     AdaptiveCardStack(spacing: DS.Spacing.xxl, landscapeMinimum: 340) {
                         overviewSection
@@ -286,8 +290,8 @@ struct AdminPushHealthView: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 Text(L10n.t(
-                    "يحذف التوكنات الفاضية وغير الصالحة والأجهزة اللي ما تحدثت منذ 60 يوم. شغّله وقت الحاجة.",
-                    "Removes empty, invalid, and stale (60+ days) tokens. Run when needed."
+                    "يحذف رموز التسجيل التالفة فقط (الفاضية أو الناقصة). أجهزة الأعضاء الخاملين تبقى حتى تصلهم الإشعارات.",
+                    "Removes broken (empty or truncated) tokens only. Idle members' devices are kept so they still get notifications."
                 ))
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textSecondary)
@@ -555,7 +559,7 @@ struct AdminPushHealthView: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.callout)
                     .fontWeight(.bold)
                     .foregroundColor(DS.Color.textPrimary)
@@ -752,6 +756,11 @@ struct AdminPushHealthView: View {
 
     // MARK: - Manual cleanup
 
+    /// تنظيف الرموز التالفة فقط (فاضية أو أقصر من ٢٠ حرفاً).
+    /// كانت تستدعي وظيفة cleanup-tokens على السيرفر، لكنها صارت للنظام فقط
+    /// فكان الزر يفشل دائماً. وكانت تحذف أيضاً أجهزة من لم يفتح التطبيق ٦٠ يوماً —
+    /// وهم الخاملون الذين نحتاج جهازهم لنوصل لهم إشعاراً (طلب المالك).
+    /// الحذف هنا مباشر بصلاحية المالك/المدير على device_tokens.
     private func runCleanup() async {
         guard !isCleaningUp else { return }
 
@@ -759,36 +768,35 @@ struct AdminPushHealthView: View {
         cleanupResultMessage = nil
         defer { isCleaningUp = false }
 
-        struct CleanupResponse: Decodable {
-            let ok: Bool
-            let before: Int?
-            let after: Int?
-            let deleted: DeletedCounts?
-            struct DeletedCounts: Decodable {
-                let invalidTokens: Int?
-                let stale: Int?
-                let total: Int?
-            }
-        }
+        struct Row: Decodable { let id: Int; let token: String? }
 
         do {
-            let response: CleanupResponse = try await SupabaseConfig.client.functions
-                .invoke("cleanup-tokens", options: FunctionInvokeOptions(body: [String: String]()))
+            let rows: [Row] = try await SupabaseConfig.client
+                .from("device_tokens")
+                .select("id, token")
+                .execute()
+                .value
+            let invalidIds = rows
+                .filter { ($0.token ?? "").trimmingCharacters(in: .whitespacesAndNewlines).count < 20 }
+                .map(\.id)
 
-            let deleted = response.deleted?.total ?? 0
-            let before = response.before ?? 0
-            let after = response.after ?? 0
+            if !invalidIds.isEmpty {
+                try await SupabaseConfig.client
+                    .from("device_tokens")
+                    .delete()
+                    .in("id", values: invalidIds)
+                    .execute()
+            }
 
             withAnimation {
-                cleanupResultMessage = L10n.t(
-                    "تم التنظيف ✓ حُذف \(deleted) رمز تسجيل. قبل: \(before) → بعد: \(after)",
-                    "Cleanup done ✓ Deleted \(deleted) tokens. Before: \(before) → After: \(after)"
-                )
+                cleanupResultMessage = invalidIds.isEmpty
+                    ? L10n.t("لا توجد رموز تالفة ✓ (\(rows.count) جهاز سليم)",
+                             "No broken tokens ✓ (\(rows.count) devices OK)")
+                    : L10n.t("تم التنظيف ✓ حُذف \(invalidIds.count) رمز تالف. قبل: \(rows.count) → بعد: \(rows.count - invalidIds.count)",
+                             "Cleanup done ✓ Removed \(invalidIds.count) broken tokens. Before: \(rows.count) → After: \(rows.count - invalidIds.count)")
                 cleanupResultIsSuccess = true
             }
-            Log.info("[PushHealth] cleanup: deleted=\(deleted), before=\(before), after=\(after)")
-
-            // إعادة تحميل الإحصائيات عشان الأرقام تتحدّث
+            Log.info("[PushHealth] cleanup: removed \(invalidIds.count) broken tokens of \(rows.count)")
             await loadStats()
         } catch {
             Log.error("[PushHealth] cleanup failed: \(error.localizedDescription)")

@@ -5,6 +5,8 @@ import Combine
 
 @MainActor
 class DiwaniyasViewModel: ObservableObject {
+    private let cacheSession = CacheManager.shared.session
+
     @Published var diwaniyas: [Diwaniya] = []
     @Published var pendingDiwaniyas: [Diwaniya] = []
     @Published var isLoading = false
@@ -58,7 +60,7 @@ class DiwaniyasViewModel: ObservableObject {
     func fetchDiwaniyas() async {
         // تحميل من الكاش أولاً
         if diwaniyas.isEmpty,
-           let cached = CacheManager.shared.load([Diwaniya].self, for: .diwaniyas) {
+           let cached = CacheManager.shared.load([Diwaniya].self, for: .diwaniyas, in: cacheSession) {
             self.diwaniyas = cached
             Log.info("[Diwaniyas] تم تحميل \(cached.count) ديوانية من الكاش")
         }
@@ -78,7 +80,7 @@ class DiwaniyasViewModel: ObservableObject {
             self.diwaniyas = response
 
             // حفظ في الكاش
-            CacheManager.shared.save(response, for: .diwaniyas)
+            CacheManager.shared.save(response, for: .diwaniyas, in: cacheSession)
         } catch is CancellationError {
             Log.info("جلب الديوانيات تم إلغاؤه")
         } catch let urlError as URLError where urlError.code == .cancelled {
@@ -113,7 +115,7 @@ class DiwaniyasViewModel: ObservableObject {
         isLoading = false
     }
     
-    func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String? = nil, autoApprove: Bool = false) async -> Bool {
+    func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, address: String? = nil, autoApprove: Bool = false) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -162,6 +164,14 @@ class DiwaniyasViewModel: ObservableObject {
                     struct AddrUpdate: Codable { let address: String }
                     try await supabase.from("diwaniyas").update(AddrUpdate(address: address)).eq("id", value: newId.uuidString).execute()
                 } catch { Log.warning("address column not available: \(error.localizedDescription)") }
+            }
+
+            // أيام الانعقاد المهيكلة — عمود قد لا يكون مطبّقاً بعد، فيُحدَّث على حدة
+            if let scheduleDays {
+                do {
+                    struct DaysUpdate: Codable { let schedule_days: [Int] }
+                    try await supabase.from("diwaniyas").update(DaysUpdate(schedule_days: scheduleDays.sorted())).eq("id", value: newId.uuidString).execute()
+                } catch { Log.warning("schedule_days column not available: \(error.localizedDescription)") }
             }
 
             // Refresh the list so the new diwaniya appears
@@ -217,6 +227,11 @@ class DiwaniyasViewModel: ObservableObject {
     
     func approveDiwaniya(id: UUID, adminId: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
+        // اعتماد المحتوى للإدارة فقط — مثل الأخبار والمكتبة والمشاريع (طلب المالك)
+        guard authVM?.isAdmin == true else {
+            Log.warning("اعتماد الديوانية مرفوض: الصلاحية للإدارة فقط")
+            return
+        }
         // حفظ بيانات الديوانية قبل الحذف المحلي (للإشعارات)
         let info = pendingDiwaniyas.first(where: { $0.id == id })
         let ownerId = info?.ownerId
@@ -266,7 +281,7 @@ class DiwaniyasViewModel: ObservableObject {
         })
     }
     
-    func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool) async -> Bool {
+    func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -299,6 +314,15 @@ class DiwaniyasViewModel: ObservableObject {
                 ))
                 .eq("id", value: id.uuidString)
                 .execute()
+
+            // أيام الانعقاد المهيكلة — عمود قد لا يكون مطبّقاً بعد، فيُحدَّث على حدة
+            if let scheduleDays {
+                do {
+                    struct DaysUpdate: Codable { let schedule_days: [Int] }
+                    try await supabase.from("diwaniyas").update(DaysUpdate(schedule_days: scheduleDays.sorted())).eq("id", value: id.uuidString).execute()
+                } catch { Log.warning("schedule_days column not available: \(error.localizedDescription)") }
+            }
+
             
             // Update optional columns that may not exist yet
             do {

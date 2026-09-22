@@ -1,3 +1,4 @@
+import { requireSystem } from "../_shared/system-auth.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { handleCors, json } from "../_shared/cors.ts";
 import { createServiceClient } from "../_shared/auth.ts";
@@ -6,6 +7,8 @@ serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  const denied = requireSystem(req);
+  if (denied) return denied;
   const supabase = createServiceClient();
 
   try {
@@ -33,12 +36,17 @@ serve(async (req) => {
     for (const story of expiredStories) {
       // استخراج المسار من URL
       // URL format: .../storage/v1/object/public/stories/story_{memberId}/{storyId}.jpg
-      const url = story.image_url as string;
-      const storiesIndex = url.indexOf("/stories/");
-      if (storiesIndex !== -1) {
-        const path = url.substring(storiesIndex + "/stories/".length);
-        storagePaths.push(path);
-      }
+      if (!story.image_url) continue;
+      const url = new URL(story.image_url);
+      const origin = new URL(Deno.env.get("SUPABASE_URL")!).origin;
+      const prefix = "/storage/v1/object/public/stories/";
+      if (url.origin !== origin || !url.pathname.startsWith(prefix)) throw new Error("Unexpected story storage URL");
+      const path = decodeURIComponent(url.pathname.slice(prefix.length));
+      // Require storage ownership; a user-controlled URL cannot delete someone else's file.
+      const { data: owned, error: ownershipError } = await supabase.rpc("owns_story_storage_file", { p_name: path, p_member: story.member_id });
+      if (ownershipError) throw ownershipError;
+      if (owned) storagePaths.push(path);
+
     }
 
     let storageDeleted = 0;
@@ -52,10 +60,7 @@ serve(async (req) => {
           .remove(batch);
 
         if (removeError) {
-          console.error(
-            `Storage delete error (batch ${i / batchSize + 1}):`,
-            removeError
-          );
+          throw removeError;
         } else {
           storageDeleted += removeData?.length ?? 0;
         }

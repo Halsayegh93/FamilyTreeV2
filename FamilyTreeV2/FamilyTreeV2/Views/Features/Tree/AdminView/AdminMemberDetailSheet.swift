@@ -50,7 +50,10 @@ struct AdminMemberDetailSheet: View {
     @State private var showEmptyNameAlert = false
     @State private var showAvatarUploadError = false
 
-    private var canDeleteMember: Bool { authVM.canDeleteMembers }
+    /// لا يُعرض حذف المالك ولا حذف سجلك أنت (فحص الثغرات)
+    private var canDeleteMember: Bool {
+        authVM.canDeleteMembers && member.role != .owner && member.id != authVM.currentUser?.id
+    }
     private var isMonitorOnly: Bool { authVM.currentUser?.role == .monitor }
 
     init(member: FamilyMember) {
@@ -111,12 +114,12 @@ struct AdminMemberDetailSheet: View {
             .navigationTitle(L10n.t("إدارة السجل", "Member Admin"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     Button(action: saveAction) {
                         if isSaving {
                             ProgressView().tint(DS.Color.primary)
@@ -152,40 +155,40 @@ struct AdminMemberDetailSheet: View {
             .onChange(of: memberVM.membersVersion) { _ in
                 setupLocalChildren()
             }
-            .alert(
+            .dsAlert(
                 L10n.t("اسم فارغ", "Empty Name"),
                 isPresented: $showEmptyNameAlert
             ) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t(
                     "لا يمكن حفظ عضو بدون اسم. اكتب الاسم أولاً.",
                     "Cannot save a member with an empty name. Please enter a name first."
                 ))
             }
-            .alert(
+            .dsAlert(
                 L10n.t("تعذر رفع الصورة", "Photo Upload Failed"),
                 isPresented: $showAvatarUploadError
             ) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t(
                     "تعذر رفع الصورة. تأكد من الاتصال ثم حاول مرة أخرى.",
                     "The photo could not be uploaded. Check your connection and try again."
                 ))
             }
-            .alert(
+            .dsAlert(
                 L10n.t("لا يوجد اتصال بالإنترنت", "No Internet Connection"),
                 isPresented: $showOfflineAlert
             ) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+                Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t(
                     "لا يمكن حفظ التعديلات بدون اتصال بالإنترنت. تأكد من الاتصال ثم حاول مجدداً.",
                     "Changes cannot be saved without an internet connection. Check your connection and try again."
                 ))
             }
-            .alert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
+            .dsAlert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         guard canDeleteMember else { return }
@@ -201,7 +204,7 @@ struct AdminMemberDetailSheet: View {
                     "Permanently delete \(member.fullName)? This cannot be undone."
                 ))
             }
-            .alert(L10n.t("حذف الابن", "Delete Child"), isPresented: Binding(
+            .dsAlert(L10n.t("حذف الابن", "Delete Child"), isPresented: Binding(
                 get: { childToDelete != nil },
                 set: { if !$0 { childToDelete = nil } }
             )) {
@@ -290,7 +293,7 @@ struct AdminMemberDetailSheet: View {
                 }
 
                 VStack(spacing: 4) {
-                    Text(member.fullName)
+                    Text(member.displayFullName)
                         .font(DS.Font.callout)
                         .fontWeight(.semibold)
                         .foregroundColor(DS.Color.textPrimary)
@@ -442,7 +445,7 @@ struct AdminMemberDetailSheet: View {
                 Button {
                     showBioEditor = true
                 } label: {
-                    Label(L10n.t("إضافة محطة حياتية", "Add Life Station"), systemImage: "plus.circle.fill")
+                    Label(L10n.t("إضافة حدث للسيرة", "Add Biography Entry"), systemImage: "plus.circle.fill")
                         .foregroundColor(DS.Color.accent)
                         .font(DS.Font.callout)
                 }
@@ -479,7 +482,7 @@ struct AdminMemberDetailSheet: View {
                     showBioEditor = true
                 } label: {
                     Label(
-                        L10n.t("تعديل المحطات (\(bioStations.count))", "Edit Stations (\(bioStations.count))"),
+                        L10n.t("تعديل السيرة (\(bioStations.count))", "Edit Biography (\(bioStations.count))"),
                         systemImage: "pencil"
                     )
                     .foregroundColor(DS.Color.accent)
@@ -487,7 +490,7 @@ struct AdminMemberDetailSheet: View {
                 }
             }
         } header: {
-            sectionHeader(L10n.t("المحطات الحياتية", "Life Stations"), icon: "book.pages.fill", color: DS.Color.accent)
+            sectionHeader(L10n.t("السيرة الذاتية", "Biography"), icon: "book.pages.fill", color: DS.Color.accent)
         }
     }
 
@@ -511,7 +514,7 @@ struct AdminMemberDetailSheet: View {
                             .foregroundColor(DS.Color.textTertiary)
 
                         if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
-                            Text(father.fullName)
+                            Text(father.displayFullName)
                                 .font(DS.Font.callout)
                                 .fontWeight(.semibold)
                                 .foregroundColor(DS.Color.textPrimary)
@@ -582,7 +585,7 @@ struct AdminMemberDetailSheet: View {
                     localChildren.move(fromOffsets: source, toOffset: destination)
                 }
                 .onDelete { offsets in
-                    guard canDeleteMember, let idx = offsets.first else { return }
+                    guard authVM.canDeleteMembers, let idx = offsets.first else { return }
                     childToDelete = localChildren[idx]
                 }
 
@@ -1050,7 +1053,7 @@ struct AdminMemberDetailSheet: View {
                 }
             }
             if childrenOrderChanged { changedFields.append(L10n.t("ترتيب الأبناء", "Children order")) }
-            if bioChanged { changedFields.append(L10n.t("المحطات الحياتية", "Life Stations")) }
+            if bioChanged { changedFields.append(L10n.t("السيرة الذاتية", "Biography")) }
 
             if !changedFields.isEmpty {
                 let fieldsList = changedFields.joined(separator: "، ")
@@ -1301,14 +1304,14 @@ struct FatherPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: L10n.t("ابحث عن اسم...", "Search name..."))
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إغلاق", "Close")) { dismiss() }
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
             }
             .tint(DS.Color.primary)
-            .alert(
+            .dsAlert(
                 L10n.t("تأكيد اختيار الأب", "Confirm Father Selection"),
                 isPresented: Binding(
                     get: { pendingSelection != nil },
@@ -1330,7 +1333,7 @@ struct FatherPickerSheet: View {
                     "Link this member to \(member.fullName) as father?"
                 ))
             }
-            .alert(
+            .dsAlert(
                 L10n.t("إزالة ربط الأب", "Remove Father Link"),
                 isPresented: $showUnlinkConfirm
             ) {
@@ -1347,6 +1350,7 @@ struct FatherPickerSheet: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 }
 
@@ -1374,7 +1378,7 @@ private struct FatherPickerRow: View, Equatable {
                         .foregroundColor(DS.Color.primary)
                 }
 
-                Text(member.fullName)
+                Text(member.displayFullName)
                     .font(DS.Font.callout)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)

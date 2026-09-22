@@ -44,24 +44,24 @@ struct QRScannerView: View {
                                 .foregroundColor(.white)
                         }
                         .padding(DS.Spacing.lg)
-                        .background(.ultraThinMaterial)
+                        .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg))
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                     }
                 }
             }
-            .alert(L10n.t("تعذّر المسح", "Scan Failed"),
+            .dsAlert(L10n.t("تعذّر المسح", "Scan Failed"),
                    isPresented: Binding(
                      get: { scanErrorMessage != nil },
                      set: { if !$0 { scanErrorMessage = nil } }
                    )) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) { scanErrorMessage = nil }
+                Button(L10n.t("حسناً", "OK")) { scanErrorMessage = nil }
             } message: {
                 Text(scanErrorMessage ?? "")
             }
             .background(DS.Color.background)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(DS.Font.scaled(24))

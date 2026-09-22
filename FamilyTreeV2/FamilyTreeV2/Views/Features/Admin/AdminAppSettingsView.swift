@@ -14,7 +14,17 @@ struct AdminAppSettingsView: View {
     /// المالك يعدّل، باقي المدراء يتصفّحون فقط.
     private var canEdit: Bool { authVM.canManageSettings }
 
-    var body: some View {
+    var body: some View { page }
+
+    private var alerts: AppSettingsAlerts {
+        AppSettingsAlerts(
+            showReset: $showResetConfirmation,
+            showResetCooldown: $showResetCooldownAlert,
+            onReset: { Task { await appSettingsVM.resetToDefaults(updatedBy: authVM.currentUser?.id) } }
+        )
+    }
+
+    private var page: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
@@ -22,6 +32,23 @@ struct AdminAppSettingsView: View {
                 VStack(spacing: DS.Spacing.xxl) {
                     // الوضع الأفقي: الأقسام على عمودين
                     AdaptiveCardStack(spacing: DS.Spacing.xxl, landscapeMinimum: 340) {
+                        sections
+                    }
+
+                    Spacer(minLength: DS.Spacing.xxxl)
+                }
+            }
+        }
+        .navigationTitle(L10n.t("إعدادات التطبيق", "App Settings"))
+        .navigationBarTitleDisplayMode(.inline)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .task {
+            await appSettingsVM.fetchSettings()
+        }
+        .modifier(alerts)
+    }
+
+    @ViewBuilder private var sections: some View {
 
                     // إشعار وضع القراءة فقط (لغير المالك)
                     if !canEdit {
@@ -33,69 +60,119 @@ struct AdminAppSettingsView: View {
                     systemInfoSection
                         .padding(.top, canEdit ? DS.Spacing.md : 0)
 
+                    // لغة التطبيق الرسمية
+                    languageSection
+                        .disabled(!canEdit)
+
+                    // التصنيفات — الأخبار والمكتبة
+                    categoriesSection
+
                     // التسجيل والعضوية
                     registrationSection
+                        .disabled(!canEdit)
 
                     // الأخبار والمحتوى
                     contentSection
+                        .disabled(!canEdit)
 
                     // الميزات
                     featuresSection
+                        .disabled(!canEdit)
 
                     // عداد التعديل
                     cooldownSection
+                        .disabled(!canEdit)
 
                     // الأمان
                     securitySection
+                        .disabled(!canEdit)
 
                     // إعادة تعيين — يبقى مرئيّ بس مُعطّل لغير المالك
                     resetSection
-                    }
-
-                    Spacer(minLength: DS.Spacing.xxxl)
-                }
-                .disabled(!canEdit)
-            }
-        }
-        .navigationTitle(L10n.t("إعدادات التطبيق", "App Settings"))
-        .navigationBarTitleDisplayMode(.inline)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task {
-            await appSettingsVM.fetchSettings()
-        }
-        .alert(
-            L10n.t("إعادة تعيين", "Reset Settings"),
-            isPresented: $showResetConfirmation
-        ) {
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            Button(L10n.t("إعادة تعيين", "Reset"), role: .destructive) {
-                Task {
-                    await appSettingsVM.resetToDefaults(updatedBy: authVM.currentUser?.id)
-                }
-            }
-        } message: {
-            Text(L10n.t(
-                "سيتم إرجاع جميع الإعدادات إلى القيم الافتراضية",
-                "All settings will be restored to default values"
-            ))
-        }
-        .alert(
-            L10n.t("تصفير العداد", "Reset Cooldown"),
-            isPresented: $showResetCooldownAlert
-        ) {
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            Button(L10n.t("تصفير", "Reset"), role: .destructive) {
-                ProfileEditCooldown.shared.resetAllCooldowns()
-            }
-        } message: {
-            Text(L10n.t(
-                "سيتم إعادة تعيين جميع فترات الانتظار وسيصبح بإمكانك التعديل فوراً",
-                "All cooldown timers will be reset and you can edit immediately"
-            ))
-        }
+                        .disabled(!canEdit)
     }
 
     // MARK: - Registration & Membership
+    // MARK: - التصنيفات (طلب المالك)
+    private var categoriesSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("التصنيفات", "Categories"),
+                icon: "tag.fill",
+                iconColor: DS.Color.accent
+            )
+            NavigationLink {
+                CategoriesManagerView()
+                    .environmentObject(authVM)
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"))
+                            .font(DS.Font.calloutBold)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب",
+                                    "Name, icon, colour, hide and order"))
+                            .font(DS.Font.caption1)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .font(DS.Font.scaled(12, weight: .bold))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.lg)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - لغة التطبيق الرسمية (طلب المالك)
+    //
+    // تُطبَّق على كل مستخدم لم يختر لغته بنفسه. من يغيّر اللغة من «الإعدادات»
+    // تبقى لغته هو.
+    private var languageSection: some View {
+        DSCard(padding: 0) {
+            DSSectionHeader(
+                title: L10n.t("لغة التطبيق الرسمية", "Official App Language"),
+                icon: "character.bubble.fill",
+                iconColor: DS.Color.secondary
+            )
+
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Picker("", selection: Binding(
+                    get: { appSettingsVM.settings.defaultLanguage ?? "ar" },
+                    set: { newValue in
+                        Task {
+                            await appSettingsVM.updateSetting(
+                                "default_language",
+                                value: newValue,
+                                updatedBy: authVM.currentUser?.id
+                            )
+                        }
+                    }
+                )) {
+                    Text("العربية").tag("ar")
+                    Text("English").tag("en")
+                }
+                .pickerStyle(.segmented)
+
+                Text(L10n.t(
+                    "لغة التطبيق لكل الأعضاء. من يغيّر لغته من «الإعدادات» تبقى لغته هو.",
+                    "The app language for all members. Anyone who picks a language in Settings keeps their own."
+                ))
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.lg)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
     private var registrationSection: some View {
         DSCard(padding: 0) {
             DSSectionHeader(
@@ -193,18 +270,6 @@ struct AdminAppSettingsView: View {
                 isOn: appSettingsVM.settings.pollsEnabled ?? true,
                 key: "polls_enabled"
             )
-
-            DSDivider()
-
-            // القصص
-            settingToggle(
-                icon: "book.pages.fill",
-                color: DS.Color.secondary,
-                title: L10n.t("قصص العائلة", "Family Stories"),
-                subtitle: L10n.t("السماح لأفراد العائلة بنشر القصص", "Allow family members to post stories"),
-                isOn: appSettingsVM.settings.storiesEnabled ?? true,
-                key: "stories_enabled"
-            )
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -291,7 +356,7 @@ struct AdminAppSettingsView: View {
                     Text(L10n.t("إيقاف العداد", "Disable Cooldown"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("السماح بالتعديل بدون حد (3 تعديلات ثم 24 ساعة)", "Allow unlimited edits (normally 3 edits then 24h lock)"))
+                    Text(L10n.t("السماح بالتعديل بدون حد (عادةً 3 تعديلات ثم موافقة الإدارة)", "Allow unlimited edits (normally 3 edits, then admin approval)"))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
                 }
@@ -319,7 +384,7 @@ struct AdminAppSettingsView: View {
                         Text(L10n.t("تصفير العداد", "Reset Cooldown"))
                             .font(DS.Font.calloutBold)
                             .foregroundColor(DS.Color.warning)
-                        Text(L10n.t("إعادة تعيين جميع فترات الانتظار", "Reset cooldowns"))
+                        Text(L10n.t("إعادة عدّاد التعديلات من الصفر", "Reset edit counters"))
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
                     }
@@ -515,5 +580,43 @@ struct AdminAppSettingsView: View {
         df.dateStyle = .medium
         df.timeStyle = .short
         return df.string(from: date)
+    }
+}
+
+
+/// تنبيها «إعادة التعيين» و«تصفير العداد» — مشتركة بين الصفحة والنسخة المضمّنة
+private struct AppSettingsAlerts: ViewModifier {
+    @Binding var showReset: Bool
+    @Binding var showResetCooldown: Bool
+    let onReset: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .dsAlert(
+                L10n.t("إعادة تعيين", "Reset Settings"),
+                isPresented: $showReset
+            ) {
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                Button(L10n.t("إعادة تعيين", "Reset"), role: .destructive) { onReset() }
+            } message: {
+                Text(L10n.t(
+                    "سيتم إرجاع جميع الإعدادات إلى القيم الافتراضية",
+                    "All settings will be restored to default values"
+                ))
+            }
+            .dsAlert(
+                L10n.t("تصفير العداد", "Reset Cooldown"),
+                isPresented: $showResetCooldown
+            ) {
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                Button(L10n.t("تصفير", "Reset"), role: .destructive) {
+                    ProfileEditCooldown.shared.resetAllCooldowns()
+                }
+            } message: {
+                Text(L10n.t(
+                    "سيتم إعادة تعيين جميع فترات الانتظار وسيصبح بإمكانك التعديل فوراً",
+                    "All cooldown timers will be reset and you can edit immediately"
+                ))
+            }
     }
 }

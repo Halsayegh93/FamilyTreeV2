@@ -67,8 +67,6 @@ struct EditNewsView: View {
                     } else {
                         editContentSection
                     }
-
-                    editSubmitSection
                 }
                 .animation(DS.Anim.snappy, value: isPoll)
                 .padding(.horizontal, DS.Spacing.lg)
@@ -78,15 +76,16 @@ struct EditNewsView: View {
             .background(DS.Color.surfaceElevated)
             .navigationTitle(L10n.t("تعديل الخبر", "Edit Post"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
-                }
-            }
-            .alert(L10n.t("تعذر التعديل", "Edit Failed"), isPresented: $showEditErrorAlert) {
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            // «حفظ» أعلى يمين و«إلغاء» الأحمر يسار — مثل بقية الأوراق (طلب المالك)
+            .dsSheetToolbar(
+                confirm: L10n.t("حفظ", "Save"),
+                isLoading: isSubmitting,
+                disabled: !canSubmit,
+                onConfirm: { Task { await submitEdits() } },
+                onCancel: { dismiss() }
+            )
+            .dsAlert(L10n.t("تعذر التعديل", "Edit Failed"), isPresented: $showEditErrorAlert) {
+                Button(L10n.t("حسناً", "OK")) {}
             } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء تعديل الخبر.", "An error occurred while updating.")) }
             .onChange(of: pickerItems) { items in
                 guard !items.isEmpty else { return }
@@ -94,6 +93,9 @@ struct EditNewsView: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        // الاتجاه على الـNavigationStack نفسه — داخله فقط يجعل شريط الأزرار LTR
+        // فتنعكس مواضع «إضافة/إلغاء» (طلب المالك)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     // MARK: - Type Selector
@@ -309,21 +311,6 @@ struct EditNewsView: View {
         }
     }
 
-    // MARK: - Submit Section
-    private var editSubmitSection: some View {
-        DSPrimaryButton(
-            L10n.t("حفظ التعديلات", "Save Changes"),
-            icon: "checkmark.circle.fill",
-            isLoading: isSubmitting,
-            useGradient: canSubmit,
-            color: canSubmit ? DS.Color.primary : .gray
-        ) {
-            Task { await submitEdits() }
-        }
-        .disabled(!canSubmit)
-        .opacity(canSubmit ? 1.0 : 0.6)
-    }
-
     private func pollField(placeholder: String, text: Binding<String>, icon: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
@@ -368,7 +355,7 @@ struct EditNewsView: View {
     // MARK: - Submit
     private func submitEdits() async {
         // تحقق من الصلاحية — صاحب الخبر أو المدير
-        guard authVM.currentUser?.id == news.ownerId || authVM.canModerate else { return }
+        guard authVM.currentUser?.id == news.ownerId || authVM.canDeleteNews else { return }
         guard canSubmit, !isSubmitting else { return }
         isSubmitting = true
         defer { isSubmitting = false }

@@ -5,6 +5,8 @@ import Combine
 
 @MainActor
 class ProjectsViewModel: ObservableObject {
+    private let cacheSession = CacheManager.shared.session
+
 
     let supabase = SupabaseConfig.client
     weak var authVM: AuthViewModel?
@@ -26,7 +28,7 @@ class ProjectsViewModel: ObservableObject {
     func fetchProjects() async {
         // تحميل من الكاش أولاً
         if projects.isEmpty,
-           let cached = CacheManager.shared.load([Project].self, for: .projects) {
+           let cached = CacheManager.shared.load([Project].self, for: .projects, in: cacheSession) {
             self.projects = cached
             Log.info("[Projects] تم تحميل \(cached.count) مشروع من الكاش")
         }
@@ -47,7 +49,7 @@ class ProjectsViewModel: ObservableObject {
             self.projects = response
 
             // حفظ في الكاش
-            CacheManager.shared.save(response, for: .projects)
+            CacheManager.shared.save(response, for: .projects, in: cacheSession)
         } catch {
             self.errorMessage = L10n.t("تعذر تحميل المشاريع. حاول مرة أخرى.",
                                        "Failed to load projects. Please try again.")
@@ -63,7 +65,8 @@ class ProjectsViewModel: ObservableObject {
                     websiteUrl: String?, instagramUrl: String?,
                     twitterUrl: String?,
                     snapchatUrl: String?, whatsappNumber: String?,
-                    phoneNumber: String?, locationUrl: String? = nil) async -> Bool {
+                    phoneNumber: String?, locationUrl: String? = nil,
+                    imageUrls: [String] = []) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         isLoading = true
         errorMessage = nil
@@ -85,6 +88,8 @@ class ProjectsViewModel: ObservableObject {
             if let whatsappNumber, !whatsappNumber.isEmpty { payload["whatsapp_number"] = AnyEncodable(whatsappNumber) }
             if let phoneNumber, !phoneNumber.isEmpty { payload["phone_number"] = AnyEncodable(phoneNumber) }
             if let locationUrl, !locationUrl.isEmpty { payload["location_url"] = AnyEncodable(locationUrl) }
+            // صور المشروع — تُرسل فقط إن وُجدت (فلا يتأثر الإدراج لو العمود غير موجود)
+            if !imageUrls.isEmpty { payload["image_urls"] = AnyEncodable(imageUrls) }
 
             try await supabase
                 .from("projects")
@@ -157,6 +162,10 @@ class ProjectsViewModel: ObservableObject {
     
     func approveProject(id: UUID, approvedBy: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true else {
+            Log.warning("اعتماد المشروع مرفوض: الصلاحية للإدارة فقط")
+            return
+        }
         // حفظ معلومات المشروع قبل الحذف المحلي للإشعار
         let projectInfo = pendingProjects.first(where: { $0.id == id })
 
@@ -319,7 +328,7 @@ class ProjectsViewModel: ObservableObject {
                 .update(["is_hidden": newValue])
                 .eq("id", value: id.uuidString)
                 .execute()
-            CacheManager.shared.save(projects, for: .projects)
+            CacheManager.shared.save(projects, for: .projects, in: cacheSession)
             Log.info("[Projects] \(newValue ? "إخفاء" : "إظهار"): \(id.uuidString)")
         } catch {
             // استرجاع عند الفشل
@@ -351,16 +360,53 @@ class ProjectsViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Project Photos (معرض صور المشروع)
+
+    /// رفع صورة للمعرض — الاسم project_photo_<uid>_<uuid>.jpg يطابق سياسة التخزين للأعضاء
+    func uploadProjectPhoto(imageData: Data) async -> String? {
+        guard let uid = authVM?.currentUser?.id.uuidString.lowercased() else { return nil }
+        let path = "project_photo_\(uid)_\(UUID().uuidString.lowercased()).jpg"
+        do {
+            try await supabase.storage
+                .from("avatars")
+                .upload(path, data: imageData, options: .init(contentType: "image/jpeg", upsert: false))
+            return try supabase.storage.from("avatars").getPublicURL(path: path).absoluteString
+        } catch {
+            Log.error("[Projects] خطأ رفع صورة المشروع: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// حفظ قائمة صور المشروع — تحديث مستقل حتى لا يُفشل بقية التعديل
+    @discardableResult
+    func setProjectImages(id: UUID, urls: [String]) async -> Bool {
+        do {
+            try await supabase.from("projects")
+                .update(["image_urls": AnyEncodable(urls)])
+                .eq("id", value: id.uuidString)
+                .execute()
+            await fetchProjects()
+            return true
+        } catch {
+            self.errorMessage = L10n.t("تعذّر حفظ صور المشروع.", "Failed to save project photos.")
+            Log.error("[Projects] خطأ حفظ صور المشروع: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // MARK: - Logo Upload
     
     func uploadLogo(imageData: Data, projectId: UUID) async -> String? {
-        let path = "project-logos/\(projectId.uuidString).jpg"
+        // اسم فريد يحمل معرّف العضو — يطابق سياسة التخزين فيستطيع العضو العادي رفع الشعار
+        // (المسار القديم project-logos/ كان مسموحاً للإدارة فقط). الشعارات القديمة تبقى تعمل.
+        guard let uid = authVM?.currentUser?.id.uuidString.lowercased() else { return nil }
+        let path = "project_logo_\(uid)_\(projectId.uuidString.lowercased())_\(Int(Date().timeIntervalSince1970)).jpg"
         do {
             try await supabase.storage
                 .from("avatars")
                 .upload(path, data: imageData, options: .init(
                     contentType: "image/jpeg",
-                    upsert: true
+                    upsert: false
                 ))
             
             let publicURL = try supabase.storage

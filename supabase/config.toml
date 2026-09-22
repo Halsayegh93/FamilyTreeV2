@@ -383,6 +383,12 @@ verify_jwt = false
 [functions.push-admins]
 verify_jwt = false
 
+[functions.send-web-push]
+verify_jwt = false
+
+[functions.claude-ai]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
@@ -401,3 +407,12 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+[functions.weekly-digest]
+verify_jwt = false
+
+[functions.cleanup-stories]
+verify_jwt = false
+
+[functions.cleanup-tokens]
+verify_jwt = false

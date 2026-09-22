@@ -1,3 +1,4 @@
+import { deliveryGuard } from "../_shared/delivery-guard.ts";
 import { handleCors, validatePost, json } from "../_shared/cors.ts";
 import { createServiceClient, parseBody, authenticateRequest } from "../_shared/auth.ts";
 import { createApnsJwt, getApnsConfig, apnsHostFor } from "../_shared/apns.ts";
@@ -35,6 +36,10 @@ Deno.serve(async (req) => {
   if (!title || !body) {
     return json(400, { ok: false, message: "title/body required" });
   }
+
+  if (title.length > 200 || body.length > 2000) return json(400, { ok: false, message: "Notification too long" });
+  const limited = await deliveryGuard("push-notify", auth.profileId, [title,body,payload.member_ids?.slice().sort()], 60);
+  if (limited) return limited;
 
   // APNs config
   let apnsConfig;

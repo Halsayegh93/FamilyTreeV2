@@ -18,7 +18,7 @@ struct AdminAppUpdateView: View {
     @State private var errorText: String?
     @FocusState private var summaryFocused: Bool
 
-    private let maxLength = 500
+    private let maxLength = 1000
 
     // MARK: - نوع الرسالة
 
@@ -80,6 +80,7 @@ struct AdminAppUpdateView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DS.Spacing.lg) {
                     introCard
+                    if AppReleaseNotes.current != nil { fillReleaseNotesButton }
                     kindPicker
                     versionField
                     summaryField
@@ -119,6 +120,33 @@ struct AdminAppUpdateView: View {
     }
 
     // MARK: - الأقسام
+
+    /// تعبئة ملاحظات هذا الإصدار تلقائياً (النوع + الرقم + ما الجديد) — تُراجَع ثم تُنشر
+    private var fillReleaseNotesButton: some View {
+        Button {
+            withAnimation(DS.Anim.quick) {
+                kind = .feature
+                version = AppReleaseNotes.currentVersionLabel
+                summary = AppReleaseNotes.current ?? summary
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "doc.text.fill")
+                    .font(DS.Font.scaled(13, weight: .bold))
+                Text(L10n.t("تعبئة ملاحظات هذا الإصدار \(AppReleaseNotes.currentVersionLabel)",
+                            "Fill this release's notes \(AppReleaseNotes.currentVersionLabel)"))
+                    .font(DS.Font.calloutBold)
+                Spacer(minLength: 0)
+                Image(systemName: "wand.and.stars")
+                    .font(DS.Font.scaled(13, weight: .bold))
+            }
+            .foregroundColor(DS.Color.primary)
+            .padding(DS.Spacing.md)
+            .background(DS.Color.primary.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
 
     private var introCard: some View {
         HStack(alignment: .center, spacing: DS.Spacing.md) {
@@ -198,7 +226,7 @@ struct AdminAppUpdateView: View {
                     .foregroundColor(DS.Color.textTertiary)
                 TextField(L10n.t("مثال: 2.1", "e.g. 2.1"), text: $version)
                     .font(DS.Font.callout)
-                    .keyboardType(.decimalPad)
+                    .keyboardType(.numbersAndPunctuation)
                     .environment(\.layoutDirection, .leftToRight)
                     .multilineTextAlignment(L10n.isArabic ? .trailing : .leading)
             }
@@ -230,7 +258,7 @@ struct AdminAppUpdateView: View {
                     .font(DS.Font.body)
                     .scrollContentBackground(.hidden)
                     .padding(DS.Spacing.sm)
-                    .frame(minHeight: 130, maxHeight: 200)
+                    .frame(minHeight: 160, maxHeight: 320)
                     .onChange(of: summary) { _ in
                         if summary.count > maxLength { summary = String(summary.prefix(maxLength)) }
                     }
@@ -258,7 +286,7 @@ struct AdminAppUpdateView: View {
                     Text(summary.isEmpty ? L10n.t("نص التحديث…", "Update text…") : summary)
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(3)
+                        .lineLimit(6)
                 }
                 Spacer(minLength: 0)
             }

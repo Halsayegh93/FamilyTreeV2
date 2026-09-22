@@ -31,7 +31,7 @@ struct AdminFamilyNamesView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task { await vm.fetch(force: true) }
         .refreshable { await vm.fetch(force: true) }
-        .alert(L10n.t("تعديل الاسم", "Rename"), isPresented: Binding(
+        .dsAlert(L10n.t("تعديل الاسم", "Rename"), isPresented: Binding(
             get: { renaming != nil }, set: { if !$0 { renaming = nil } }
         )) {
             TextField(L10n.t("اسم العائلة", "Family name"), text: $renameText)
@@ -41,7 +41,7 @@ struct AdminFamilyNamesView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { renaming = nil }
         }
-        .alert(L10n.t("حذف العائلة", "Delete Family"), isPresented: Binding(
+        .dsAlert(L10n.t("حذف العائلة", "Delete Family"), isPresented: Binding(
             get: { deleting != nil }, set: { if !$0 { deleting = nil } }
         )) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {

@@ -5,6 +5,8 @@ import Combine
 
 @MainActor
 class NewsViewModel: ObservableObject {
+    private let cacheSession = CacheManager.shared.session
+
 
     // MARK: - Private Types
 
@@ -32,6 +34,17 @@ class NewsViewModel: ObservableObject {
     @Published var newsPollFeatureAvailable: Bool = true
     @Published var newsPostErrorMessage: String?
     @Published var isLoading: Bool = false
+    @Published var isLoadingNews = false
+    @Published var isLoadingMoreNews = false
+    @Published var hasMoreNews = true
+    /// إجمالي المنشورات التي يراها المستخدم — للعدّاد في الرئيسية (لا يقتصر على المحمَّل)
+    @Published var totalNewsCount: Int = 0
+    @Published var newsLoadError: String?
+    private var newsFetchRevision = UUID()
+    private var feedSearch = ""
+    private var feedType: String?
+    private var nextNewsCursor: NewsPost?
+    private let newsPageSize = 25
 
     // MARK: - Fetch Throttle
 
@@ -105,134 +118,128 @@ class NewsViewModel: ObservableObject {
 
     // MARK: - Fetch News
 
+    func setNewsFilter(search: String, type: String?) async {
+        let trimmed = String(search.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        guard trimmed != feedSearch || type != feedType else { return }
+        feedSearch = trimmed
+        feedType = type
+        allNews = []
+        await fetchNews(force: true)
+    }
+
     func fetchNews(force: Bool = false) async {
-        // تحميل من الكاش أولاً
-        if allNews.isEmpty,
-           let cached = CacheManager.shared.load([NewsPost].self, for: .news) {
-            self.allNews = cached
-            Log.info("[News] تم تحميل \(cached.count) خبر من الكاش")
+        if allNews.isEmpty, feedSearch.isEmpty, feedType == nil,
+           let cached = CacheManager.shared.load([NewsPost].self, for: .news, in: cacheSession) {
+            allNews = Array(cached.prefix(newsPageSize))
         }
+        guard force || (!isLoadingNews && throttler.canFetch(key: "news", interval: 10)) || allNews.isEmpty else { return }
+        let revision = UUID()
+        newsFetchRevision = revision
+        isLoadingNews = true
+        isLoadingMoreNews = false
+        newsLoadError = nil
+        defer { if newsFetchRevision == revision { isLoadingNews = false } }
+        await fetchNewsPage(after: nil, revision: revision)
+    }
 
-        guard throttler.canFetch(key: "news", interval: 10, force: force) || allNews.isEmpty else { return }
+    func loadMoreNews() async {
+        guard hasMoreNews, !isLoadingNews, !isLoadingMoreNews, let cursor = nextNewsCursor else { return }
+        let revision = newsFetchRevision
+        isLoadingMoreNews = true
+        newsLoadError = nil
+        defer { if newsFetchRevision == revision { isLoadingMoreNews = false } }
+        await fetchNewsPage(after: cursor, revision: revision)
+    }
 
-        guard NetworkMonitor.shared.isConnected else { return }
-
-        throttler.didFetch(key: "news")
+    /// عدد كل المنشورات المرئية للمستخدم — العدّاد في الرئيسية كان يعدّ
+    /// المحمَّل فقط (٢٥ منشور حتى تنزل للأسفل) بدل الإجمالي (طلب المالك)
+    private func fetchTotalNewsCount() async {
         do {
-            let response: [NewsPost] = try await supabase.from("news")
-                .select()
-                .order("created_at", ascending: false)
-                .limit(10000)
-                .execute()
-                .value
-
-            let userId = currentUser?.id
+            let query = supabase.from("news").select("id", head: true, count: .exact)
+            let response: PostgrestResponse<Void>
             if canModerate {
-                self.allNews = response
+                response = try await query.execute()
+            } else if let uid = currentUser?.id {
+                response = try await query
+                    .or("approval_status.eq.approved,author_id.eq.\(uid.uuidString),posted_by.eq.\(uid.uuidString)")
+                    .execute()
             } else {
-                self.allNews = response.filter { post in
-                    post.isApproved || post.ownerId == userId
-                }
+                response = try await query.eq("approval_status", value: "approved").execute()
             }
-
-            // حفظ في الكاش
-            CacheManager.shared.save(self.allNews, for: .news)
-
-            // تجنب إطلاق طلبات فرعية إذا تم إلغاء المهمة
-            guard !Task.isCancelled else { return }
-
-            let pollPostIds = allNews.filter { $0.hasPoll }.map(\.id)
-            let allPostIds = allNews.map(\.id)
-            await fetchNewsPollVotes(for: pollPostIds)
-            await fetchNewsLikes(for: allPostIds)
-            await fetchNewsComments(for: allPostIds)
+            if let count = response.count { totalNewsCount = count }
         } catch {
+            Log.fetchError("تعذر حساب عدد المنشورات", error)
+        }
+    }
+
+    private func fetchNewsPage(after cursor: NewsPost?, revision: UUID) async {
+        guard NetworkMonitor.shared.isConnected else {
+            newsLoadError = L10n.t("لا يوجد اتصال بالإنترنت. اسحب للتحديث أو أعد المحاولة.", "You're offline. Refresh or try again.")
+            return
+        }
+        do {
+            let params: [String: AnyEncodable] = [
+                "p_before_time": AnyEncodable(cursor?.created_at),
+                "p_before_id": AnyEncodable(cursor?.id.uuidString),
+                "p_search": AnyEncodable(feedSearch),
+                "p_type": AnyEncodable(feedType),
+                "p_limit": AnyEncodable(newsPageSize)
+            ]
+            let page: [NewsPost] = try await supabase.rpc("news_feed_page", params: params).execute().value
+            guard revision == newsFetchRevision, !Task.isCancelled, CacheManager.shared.isCurrent(cacheSession) else { return }
+            if cursor == nil { allNews = page } else {
+                let existing = Set(allNews.map(\.id))
+                allNews.append(contentsOf: page.filter { !existing.contains($0.id) })
+            }
+            nextNewsCursor = page.last
+            hasMoreNews = page.count == newsPageSize
+            throttler.didFetch(key: "news")
+            if feedSearch.isEmpty, feedType == nil {
+                CacheManager.shared.save(Array(allNews.prefix(newsPageSize)), for: .news, in: cacheSession)
+            }
+            await fetchNewsStats(for: page.map(\.id))
+            if cursor == nil { await fetchTotalNewsCount() }
+        } catch {
+            guard revision == newsFetchRevision, !Task.isCancelled, !ErrorHelper.isCancellation(error) else { return }
+            newsLoadError = L10n.t("تعذر تحميل الأخبار. أعد المحاولة.", "Couldn't load news. Please try again.")
             Log.fetchError("خطأ جلب الأخبار", error)
         }
     }
 
-    // MARK: - Fetch Poll Votes
+    private struct NewsStats: Decodable {
+        let news_id: UUID
+        let likes_count: Int
+        let comments_count: Int
+        let is_liked: Bool
+        let poll_counts: [String: Int]
+        let my_vote: Int?
+    }
 
-    func fetchNewsPollVotes(for postIds: [UUID]) async {
-        guard newsPollFeatureAvailable else {
-            pollVotesByPost = [:]
-            userVoteByPost = [:]
-            return
-        }
-        guard !postIds.isEmpty else {
-            pollVotesByPost = [:]
-            userVoteByPost = [:]
-            return
-        }
-
+    private func fetchNewsStats(for ids: [UUID]) async {
+        guard !ids.isEmpty else { return }
+        let revision = newsFetchRevision
         do {
-            let votes: [NewsPollVoteRecord] = try await supabase
-                .from("news_poll_votes")
-                .select("news_id,member_id,option_index")
-                .in("news_id", values: postIds.map(\.uuidString))
-                .execute()
-                .value
-
-            var aggregated: [UUID: [Int: Int]] = [:]
-            var userSelection: [UUID: Int] = [:]
-            let currentUserId = currentUser?.id
-
-            for vote in votes {
-                aggregated[vote.news_id, default: [:]][vote.option_index, default: 0] += 1
-                if let currentUserId, vote.member_id == currentUserId {
-                    userSelection[vote.news_id] = vote.option_index
+            for start in stride(from: 0, to: ids.count, by: 50) {
+                let chunk = Array(ids[start..<min(start + 50, ids.count)])
+                let rows: [NewsStats] = try await supabase.rpc("news_page_stats", params: ["p_ids": chunk.map(\.uuidString)]).execute().value
+                guard revision == newsFetchRevision, !Task.isCancelled, CacheManager.shared.isCurrent(cacheSession) else { return }
+                for row in rows {
+                    likesCountByPost[row.news_id] = row.likes_count
+                    commentsCountByPost[row.news_id] = row.comments_count
+                    if row.is_liked { likedPosts.insert(row.news_id) } else { likedPosts.remove(row.news_id) }
+                    pollVotesByPost[row.news_id] = Dictionary(uniqueKeysWithValues: row.poll_counts.compactMap { key, value in Int(key).map { ($0,value) } })
+                    userVoteByPost[row.news_id] = row.my_vote
                 }
             }
-
-            pollVotesByPost.merge(aggregated) { _, new in new }
-            userVoteByPost.merge(userSelection) { _, new in new }
-            newsPollFeatureAvailable = true
         } catch {
-            if ErrorHelper.isMissingTable(error, table: "news_poll_votes") {
-                newsPollFeatureAvailable = false
-                pollVotesByPost = [:]
-                userVoteByPost = [:]
-            } else {
-                Log.fetchError("خطأ جلب أصوات التصويت", error)
-            }
+            guard revision == newsFetchRevision, !Task.isCancelled else { return }
+            newsLoadError = L10n.t("الأخبار متاحة، لكن تعذر تحديث التفاعلات. أعد المحاولة.", "News loaded, but reactions couldn't refresh. Please try again.")
+            Log.fetchError("خطأ جلب تفاعلات الأخبار", error)
         }
     }
 
-    // MARK: - Fetch Likes
-
-    func fetchNewsLikes(for postIds: [UUID]) async {
-        guard !postIds.isEmpty else {
-            likesCountByPost = [:]
-            likedPosts = []
-            return
-        }
-
-        do {
-            let likes: [NewsLikeRecord] = try await supabase
-                .from("news_likes")
-                .select("id,news_id,member_id")
-                .in("news_id", values: postIds.map(\.uuidString))
-                .execute()
-                .value
-
-            var counts: [UUID: Int] = [:]
-            var userLikes: Set<UUID> = []
-            let currentUserId = await authenticatedUserId()
-
-            for like in likes {
-                counts[like.news_id, default: 0] += 1
-                if let currentUserId, like.member_id == currentUserId {
-                    userLikes.insert(like.news_id)
-                }
-            }
-
-            self.likesCountByPost.merge(counts) { _, new in new }
-            self.likedPosts.formUnion(userLikes)
-        } catch {
-            if ErrorHelper.isCancellation(error) { return }
-            Log.fetchError("خطأ جلب الاعجابات", error)
-        }
-    }
+    func fetchNewsPollVotes(for postIds: [UUID]) async { await fetchNewsStats(for: postIds) }
+    func fetchNewsLikes(for postIds: [UUID]) async { await fetchNewsStats(for: postIds) }
 
     // MARK: - Fetch Comments
 
@@ -309,13 +316,17 @@ class NewsViewModel: ObservableObject {
 
                 // إشعار صاحب الخبر بالإعجاب (إذا مو هو نفسه) — نستخدم snapshot
                 if let postAuthorId = postAuthorIdSnapshot, postAuthorId != memberId {
-                    let likerName = currentUser?.fullName ?? ""
+                    // عضو الإدارة يظهر للعضو باسم «الإدارة» لا باسمه (طلب المالك)
+                    let fromAdmin = authVM?.canModerate == true && isRegularMember(postAuthorId)
+                    let likerName = fromAdmin ? L10n.t("الإدارة", "The admins") : (currentUser?.fullName ?? "")
                     await notificationVM?.sendPushToMembers(
                         title: L10n.t("إعجاب جديد", "New Like"),
-                        body: L10n.t(
-                            "\(likerName) أعجب بمنشورك",
-                            "\(likerName) liked your post"
-                        ),
+                        body: fromAdmin
+                            ? L10n.t("الإدارة أعجبت بمنشورك", "The admins liked your post")
+                            : L10n.t(
+                                "\(likerName) أعجب بمنشورك",
+                                "\(likerName) liked your post"
+                            ),
                         kind: NotificationKind.newsLike.rawValue,
                         targetMemberIds: [postAuthorId]
                     )
@@ -323,7 +334,9 @@ class NewsViewModel: ObservableObject {
                     let payload: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
                         "title": AnyEncodable(L10n.t("إعجاب جديد ❤️", "New Like ❤️")),
-                        "body": AnyEncodable(L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
+                        "body": AnyEncodable(fromAdmin
+                            ? L10n.t("الإدارة أعجبت بخبرك", "The admins liked your post")
+                            : L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
                         "kind": AnyEncodable(NotificationKind.newsLike.rawValue),
                         "created_by": AnyEncodable(memberId.uuidString)
                     ]
@@ -344,6 +357,12 @@ class NewsViewModel: ObservableObject {
     }
 
     // MARK: - Add Comment
+
+    /// العضو العادي (ليس من فريق الإدارة) — يرى إشعارات الإدارة باسم «الإدارة»
+    private func isRegularMember(_ id: UUID) -> Bool {
+        guard let role = memberVM?.member(byId: id)?.role else { return true }
+        return role == .member || role == .pending
+    }
 
     func addNewsComment(to postId: UUID, text: String) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
@@ -374,12 +393,16 @@ class NewsViewModel: ObservableObject {
 
             // إشعار صاحب الخبر بالتعليق الجديد (إذا مو هو نفسه) — snapshot
             if let postAuthorId = postAuthorIdSnapshot, postAuthorId != memberId {
+                // عضو الإدارة يظهر للعضو باسم «الإدارة» لا باسمه (طلب المالك)
+                let fromAdmin = authVM?.canModerate == true && isRegularMember(postAuthorId)
                 await notificationVM?.sendPushToMembers(
                     title: L10n.t("تعليق جديد", "New Comment"),
-                    body: L10n.t(
-                        "\(authorName) علّق على منشورك",
-                        "\(authorName) commented on your post"
-                    ),
+                    body: fromAdmin
+                        ? L10n.t("الإدارة علّقت على منشورك", "The admins commented on your post")
+                        : L10n.t(
+                            "\(authorName) علّق على منشورك",
+                            "\(authorName) commented on your post"
+                        ),
                     kind: NotificationKind.newsComment.rawValue,
                     targetMemberIds: [postAuthorId]
                 )
@@ -388,7 +411,9 @@ class NewsViewModel: ObservableObject {
                     let payload: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
                         "title": AnyEncodable(L10n.t("تعليق جديد 💬", "New Comment 💬")),
-                        "body": AnyEncodable(L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
+                        "body": AnyEncodable(fromAdmin
+                            ? L10n.t("الإدارة علّقت على خبرك", "The admins commented on your post")
+                            : L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
                         "kind": AnyEncodable(NotificationKind.newsComment.rawValue),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
@@ -465,8 +490,8 @@ class NewsViewModel: ObservableObject {
         guard let imageData = ImageProcessor.process(image, for: .news) else { return nil }
 
         let imageId = UUID()
-        let safeAuthorName = memberVM?.getSafeMemberName(for: authorId) ?? authorId.uuidString
-        let filePath = "news/\(safeAuthorName)/\(imageId.uuidString).jpg"
+        // Stable ASCII keys work with Storage and remain attributable after renaming.
+        let filePath = "news/\(authorId.uuidString.lowercased())/\(imageId.uuidString.lowercased()).jpg"
 
         do {
             try await supabase.storage
@@ -474,7 +499,7 @@ class NewsViewModel: ObservableObject {
                 .upload(
                     filePath,
                     data: imageData,
-                    options: FileOptions(contentType: "image/jpeg", upsert: true)
+                    options: FileOptions(contentType: "image/jpeg", upsert: false)
                 )
 
             let publicURL = try supabase.storage
@@ -739,7 +764,11 @@ class NewsViewModel: ObservableObject {
 
     func approveNewsPost(postId: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
-        guard canModerate, let approverId = currentUser?.id else { return }
+        // اعتماد الأخبار للإدارة فقط — مثل المكتبة والمشاريع (طلب المالك)
+        guard authVM?.isAdmin == true, let approverId = currentUser?.id else {
+            Log.warning("اعتماد الخبر مرفوض: الصلاحية للإدارة فقط")
+            return
+        }
         guard newsApprovalFeatureAvailable else { return }
 
         // حفظ authorId قبل الحذف المحلي
@@ -807,12 +836,13 @@ class NewsViewModel: ObservableObject {
 
     func deleteNewsPost(postId: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
-        guard authVM?.canDeleteNews == true else { return }
-        self.isLoading = true
-
         // صاحب المنشور — نحفظه قبل الحذف لإشعاره ولربط الحركة به
         let deletedAuthorId = allNews.first(where: { $0.id == postId })?.ownerId
             ?? pendingNewsRequests.first(where: { $0.id == postId })?.ownerId
+        // الحذف للإدارة أو لصاحب الخبر نفسه (سياسة RLS تسمح بالاثنين)
+        let isOwnPost = deletedAuthorId != nil && deletedAuthorId == currentUser?.id
+        guard authVM?.canDeleteNews == true || isOwnPost else { return }
+        self.isLoading = true
 
         do {
             try await supabase

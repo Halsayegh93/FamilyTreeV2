@@ -18,7 +18,8 @@ struct ApprovalSheet: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard query.count >= 2 else { return [] }
         return memberVM.allMembers
-            .filter { $0.status == .active && $0.id != member.id }
+            // الأب: ذكر ومن ضمن الشجرة (لا نساء، لا مجمّد، لا مخفي، لا معلّق) — فحص الثغرات
+            .filter { $0.isCountable && !$0.isFemale && $0.id != member.id }
             .filter { $0.fullName.lowercased().contains(query) }
             .prefix(10)
             .map { $0 }
@@ -48,7 +49,7 @@ struct ApprovalSheet: View {
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textSecondary)
 
-                    Text(member.fullName)
+                    Text(member.displayFullName)
                         .font(DS.Font.title3)
                         .foregroundColor(DS.Color.textPrimary)
                 }
@@ -106,7 +107,7 @@ struct ApprovalSheet: View {
                         Spacer()
 
                         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text(father.fullName)
+                            Text(father.displayFullName)
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.textPrimary)
                             Text(L10n.t("رقم الهاتف: \(KuwaitPhone.display(father.phoneNumber))", "Phone: \(KuwaitPhone.display(father.phoneNumber))"))
@@ -140,7 +141,7 @@ struct ApprovalSheet: View {
             .navigationTitle(L10n.t("إجراءات الموافقة", "Approval Actions"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.error)

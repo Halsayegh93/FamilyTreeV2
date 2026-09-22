@@ -11,6 +11,9 @@ struct AdminDevicesView: View {
     @State private var searchText = ""
     @State private var deviceToRemove: NotificationViewModel.LinkedDevice?
     @State private var isRemoving = false
+    /// نتيجة آخر إزالة — تظهر أسفل الشاشة (نجاح أو سبب الفشل)
+    @State private var removalMessage: String?
+    @State private var removalFailed = false
     @State private var isLoading = true
 
     /// تجميع الأجهزة حسب العضو — مرتبة بأحدث نشاط أولاً
@@ -61,6 +64,10 @@ struct AdminDevicesView: View {
                 } else if allDevices.isEmpty {
                     emptyState
                 } else {
+                    SystemHealthSectionHeader(title: t("الأجهزة المرتبطة", "Connected devices"), subtitle: t("ابحث عن العضو وتابع أجهزته", "Find a member and manage their devices"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.md)
                     // Stats
                     statsBar
                         .padding(.horizontal, DS.Spacing.lg)
@@ -82,6 +89,9 @@ struct AdminDevicesView: View {
                     // Device list
                     ScrollView(showsIndicators: false) {
                         AdaptiveLazyStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
+                            if filteredGroups.isEmpty {
+                                DSEmptyState(icon: "magnifyingglass", title: t("لا توجد نتائج مطابقة", "No matching results"))
+                            }
                             ForEach(filteredGroups, id: \.memberId) { group in
                                 memberDeviceCard(group)
                             }
@@ -92,10 +102,31 @@ struct AdminDevicesView: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if let removalMessage {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: removalFailed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    Text(removalMessage)
+                        .font(DS.Font.plex(12, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button { self.removalMessage = nil } label: {
+                        Image(systemName: "xmark").font(DS.Font.scaled(11, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .padding(DS.Spacing.md)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(removalFailed ? DS.Color.error : DS.Color.success))
+                .padding(DS.Spacing.lg)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(DS.Anim.snappy, value: removalMessage)
         .navigationTitle(t("إدارة الأجهزة", "Device Management"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .alert(
+        .dsAlert(
             t("إزالة الجهاز", "Remove Device"),
             isPresented: .init(
                 get: { deviceToRemove != nil },
@@ -104,14 +135,19 @@ struct AdminDevicesView: View {
         ) {
             Button(t("إلغاء", "Cancel"), role: .cancel) { deviceToRemove = nil }
             Button(t("إزالة", "Remove"), role: .destructive) {
-                if let device = deviceToRemove {
+                // نلتقط الجهاز فوراً — قبل أي إغلاق للمربّع يصفّر الاختيار
+                let device = deviceToRemove
+                if let device {
                     Task {
                         isRemoving = true
                         let success = await notificationVM.removeDeviceByAdmin(device)
-                        if success {
-                            // إعادة جلب القائمة — لأن الجهاز الحالي قد يكون تسجل تلقائي
-                            allDevices = await notificationVM.fetchAllDevices()
-                        }
+                        allDevices = await notificationVM.fetchAllDevices()
+                        let stillThere = allDevices.contains { $0.id == device.id }
+                        removalFailed = !success || stillThere
+                        removalMessage = removalFailed
+                            ? t("تعذّرت إزالة الجهاز — \(notificationVM.lastDeviceError ?? "لم يُحذف من السيرفر")",
+                                "Couldn't remove the device — \(notificationVM.lastDeviceError ?? "not deleted on the server")")
+                            : t("تمت إزالة الجهاز", "Device removed")
                         isRemoving = false
                     }
                 }
@@ -188,7 +224,7 @@ struct AdminDevicesView: View {
                 DSIcon("person.fill", color: DS.Color.primary)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(group.member?.fullName ?? t("عضو غير معروف", "Unknown Member"))
+                    Text(group.member?.displayFullName ?? t("عضو غير معروف", "Unknown Member"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)

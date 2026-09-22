@@ -9,6 +9,8 @@ struct FrozenAccountView: View {
     @State private var iconOpacity: Double = 0
     @State private var textOpacity: Double = 0
     @State private var showContactSheet = false
+    @State private var confirmDeletion = false
+    @State private var deletingAccount = false
 
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — نلف المحتوى بـScrollView حتى لا يُقتص
@@ -39,13 +41,22 @@ struct FrozenAccountView: View {
                 textOpacity = 1.0
             }
         }
+        .confirmationDialog(t("حذف الحساب وبياناته نهائياً؟", "Permanently delete your account and personal data?"), isPresented: $confirmDeletion, titleVisibility: .visible) {
+            Button(t("حذف الحساب", "Delete account"), role: .destructive) {
+                Task {
+                    deletingAccount = true
+                    _ = await authVM.deleteAccount()
+                    deletingAccount = false
+                }
+            }
+        }
         .sheet(isPresented: $showContactSheet) {
             NavigationStack {
                 MemberContactFormView()
                     .navigationTitle(t("تواصل مع الإدارة", "Contact Admin"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
+                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
                             Button { showContactSheet = false } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(DS.Font.scaled(22, weight: .medium))
@@ -101,7 +112,7 @@ struct FrozenAccountView: View {
                     if let user = authVM.currentUser {
                         HStack(spacing: DS.Spacing.sm) {
                             DSIcon("person.fill", color: DS.Color.warning, size: 32, iconSize: 14)
-                            Text(user.fullName)
+                            Text(user.displayFullName)
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.textPrimary)
                         }
@@ -131,6 +142,19 @@ struct FrozenAccountView: View {
                     showContactSheet = true
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+
+                if !authVM.isOwner {
+                    Button(role: .destructive) { confirmDeletion = true } label: {
+                        HStack {
+                            if deletingAccount { ProgressView() }
+                            Text(t("حذف الحساب / استكمال الحذف", "Delete account / resume deletion"))
+                        }
+                    }
+                    .disabled(deletingAccount)
+                    if let error = authVM.deleteAccountError {
+                        Text(error).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
+                    }
+                }
 
                 // زر تسجيل الخروج
                 DSSecondaryButton(
