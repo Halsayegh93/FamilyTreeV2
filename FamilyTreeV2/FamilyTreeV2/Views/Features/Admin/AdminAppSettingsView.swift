@@ -14,7 +14,17 @@ struct AdminAppSettingsView: View {
     /// المالك يعدّل، باقي المدراء يتصفّحون فقط.
     private var canEdit: Bool { authVM.canManageSettings }
 
-    var body: some View {
+    var body: some View { page }
+
+    private var alerts: AppSettingsAlerts {
+        AppSettingsAlerts(
+            showReset: $showResetConfirmation,
+            showResetCooldown: $showResetCooldownAlert,
+            onReset: { Task { await appSettingsVM.resetToDefaults(updatedBy: authVM.currentUser?.id) } }
+        )
+    }
+
+    private var page: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
@@ -22,6 +32,23 @@ struct AdminAppSettingsView: View {
                 VStack(spacing: DS.Spacing.xxl) {
                     // الوضع الأفقي: الأقسام على عمودين
                     AdaptiveCardStack(spacing: DS.Spacing.xxl, landscapeMinimum: 340) {
+                        sections
+                    }
+
+                    Spacer(minLength: DS.Spacing.xxxl)
+                }
+            }
+        }
+        .navigationTitle(L10n.t("إعدادات التطبيق", "App Settings"))
+        .navigationBarTitleDisplayMode(.inline)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .task {
+            await appSettingsVM.fetchSettings()
+        }
+        .modifier(alerts)
+    }
+
+    @ViewBuilder private var sections: some View {
 
                     // إشعار وضع القراءة فقط (لغير المالك)
                     if !canEdit {
@@ -63,48 +90,6 @@ struct AdminAppSettingsView: View {
                     // إعادة تعيين — يبقى مرئيّ بس مُعطّل لغير المالك
                     resetSection
                         .disabled(!canEdit)
-                    }
-
-                    Spacer(minLength: DS.Spacing.xxxl)
-                }
-            }
-        }
-        .navigationTitle(L10n.t("إعدادات التطبيق", "App Settings"))
-        .navigationBarTitleDisplayMode(.inline)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task {
-            await appSettingsVM.fetchSettings()
-        }
-        .dsAlert(
-            L10n.t("إعادة تعيين", "Reset Settings"),
-            isPresented: $showResetConfirmation
-        ) {
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            Button(L10n.t("إعادة تعيين", "Reset"), role: .destructive) {
-                Task {
-                    await appSettingsVM.resetToDefaults(updatedBy: authVM.currentUser?.id)
-                }
-            }
-        } message: {
-            Text(L10n.t(
-                "سيتم إرجاع جميع الإعدادات إلى القيم الافتراضية",
-                "All settings will be restored to default values"
-            ))
-        }
-        .dsAlert(
-            L10n.t("تصفير العداد", "Reset Cooldown"),
-            isPresented: $showResetCooldownAlert
-        ) {
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            Button(L10n.t("تصفير", "Reset"), role: .destructive) {
-                ProfileEditCooldown.shared.resetAllCooldowns()
-            }
-        } message: {
-            Text(L10n.t(
-                "سيتم إعادة تعيين جميع فترات الانتظار وسيصبح بإمكانك التعديل فوراً",
-                "All cooldown timers will be reset and you can edit immediately"
-            ))
-        }
     }
 
     // MARK: - Registration & Membership
@@ -595,5 +580,43 @@ struct AdminAppSettingsView: View {
         df.dateStyle = .medium
         df.timeStyle = .short
         return df.string(from: date)
+    }
+}
+
+
+/// تنبيها «إعادة التعيين» و«تصفير العداد» — مشتركة بين الصفحة والنسخة المضمّنة
+private struct AppSettingsAlerts: ViewModifier {
+    @Binding var showReset: Bool
+    @Binding var showResetCooldown: Bool
+    let onReset: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .dsAlert(
+                L10n.t("إعادة تعيين", "Reset Settings"),
+                isPresented: $showReset
+            ) {
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                Button(L10n.t("إعادة تعيين", "Reset"), role: .destructive) { onReset() }
+            } message: {
+                Text(L10n.t(
+                    "سيتم إرجاع جميع الإعدادات إلى القيم الافتراضية",
+                    "All settings will be restored to default values"
+                ))
+            }
+            .dsAlert(
+                L10n.t("تصفير العداد", "Reset Cooldown"),
+                isPresented: $showResetCooldown
+            ) {
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                Button(L10n.t("تصفير", "Reset"), role: .destructive) {
+                    ProfileEditCooldown.shared.resetAllCooldowns()
+                }
+            } message: {
+                Text(L10n.t(
+                    "سيتم إعادة تعيين جميع فترات الانتظار وسيصبح بإمكانك التعديل فوراً",
+                    "All cooldown timers will be reset and you can edit immediately"
+                ))
+            }
     }
 }

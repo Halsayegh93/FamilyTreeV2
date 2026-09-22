@@ -26,13 +26,24 @@ struct AdminSecuritySettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
 
-                    // صفحة واحدة مرتّبة (طلب المالك): مجموعتان صغيرتان بثلاثة أعمدة.
-                    // ── التطبيق: الإعدادات، التحديث الإجباري، الإشعارات ──
+                    // صفحة واحدة بقسم واحد (طلب المالك): «الإدارة» — استخدام التطبيق
+                    // أولاً، ثم المربّعات (الإعدادات، الفريق، الأجهزة، … النشاط، الإشعارات).
                     sectionHeader(icon: "gearshape.2.fill", color: DS.Color.primary,
-                                  title: L10n.t("التطبيق", "App"), note: nil)
+                                  title: L10n.t("الإدارة", "Management"), note: nil)
                         .padding(.horizontal, DS.Spacing.lg)
 
-                    LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
+                    // استخدام التطبيق — كل مربّع يفتح أعضاء فئته
+                    usageGrid
+                        .padding(.horizontal, DS.Spacing.lg)
+
+                    // خط فاصل بين الاستخدام والمربّعات (طلب المالك)
+                    Rectangle()
+                        .fill(DS.Color.textTertiary.opacity(0.18))
+                        .frame(height: 1)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+
+                    LazyVGrid(columns: gridColumns, spacing: DS.Spacing.md) {
                         AdminTile(
                             title: L10n.t("إعدادات التطبيق", "App Settings"),
                             subtitle: L10n.t("اللغة · التسجيل · الميزات", "Language · Sign-up · Features"),
@@ -46,7 +57,47 @@ struct AdminSecuritySettingsView: View {
                                 .environmentObject(notificationVM)
                         }
 
+                        // الترتيب (طلب المالك): الإعدادات، الفريق، الأجهزة — ثم الباقي
+                        if authVM.canModerate {
+                            AdminTile(
+                                title: L10n.t("فريق الإدارة", "Admin Team"),
+                                subtitle: L10n.t("الأدوار والصلاحيات", "Roles & permissions"),
+                                icon: "person.3.fill",
+                                color: DS.Color.neonPurple,
+                                badge: moderatorCount, compact: true
+                            ) {
+                                AdminModeratorsView()
+                                    .environmentObject(authVM)
+                                    .environmentObject(memberVM)
+                            }
+                        }
+
                         if authVM.isAdmin {
+                            // «النشاط الآن» جنب «فريق الإدارة» (طلب المالك)
+                            AdminTile(
+                                title: L10n.t("النشاط الآن", "Live Activity"),
+                                subtitle: L10n.t("الدخول والحضور وآخر نشاط", "Sign-ins & recent activity"),
+                                icon: "person.2.fill",
+                                color: DS.Color.success, compact: true
+                            ) {
+                                AdminActiveMembersView()
+                                    .environmentObject(authVM)
+                                    .environmentObject(memberVM)
+                                    .environmentObject(notificationVM)
+                            }
+
+                            AdminTile(
+                                title: L10n.t("الأجهزة", "Devices"),
+                                subtitle: L10n.t("المرتبطة بالحسابات", "Linked to accounts"),
+                                icon: "iphone.gen3",
+                                color: DS.Color.info, compact: true
+                            ) {
+                                AdminDevicesView()
+                                    .environmentObject(authVM)
+                                    .environmentObject(notificationVM)
+                                    .environmentObject(memberVM)
+                            }
+
                             AdminTile(
                                 title: L10n.t("التحديث الإجباري", "Force Update"),
                                 subtitle: L10n.t("إيقاف النسخ القديمة", "Block old versions"),
@@ -70,43 +121,6 @@ struct AdminSecuritySettingsView: View {
                                     .environmentObject(memberVM)
                                     .environmentObject(notificationVM)
                             }
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                    // ── الأمان والوصول: الفريق، الأجهزة، الأرقام المحظورة ──
-                    sectionHeader(icon: "lock.shield.fill", color: DS.Color.neonPurple,
-                                  title: L10n.t("الأمان والوصول", "Security & Access"), note: nil)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.sm)
-
-                    LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
-                        if authVM.canModerate {
-                            AdminTile(
-                                title: L10n.t("فريق الإدارة", "Admin Team"),
-                                subtitle: L10n.t("الأدوار والصلاحيات", "Roles & permissions"),
-                                icon: "person.3.fill",
-                                color: DS.Color.neonPurple,
-                                badge: moderatorCount, compact: true
-                            ) {
-                                AdminModeratorsView()
-                                    .environmentObject(authVM)
-                                    .environmentObject(memberVM)
-                            }
-                        }
-
-                        if authVM.isAdmin {
-                            AdminTile(
-                                title: L10n.t("الأجهزة", "Devices"),
-                                subtitle: L10n.t("المرتبطة بالحسابات", "Linked to accounts"),
-                                icon: "iphone.gen3",
-                                color: DS.Color.info, compact: true
-                            ) {
-                                AdminDevicesView()
-                                    .environmentObject(authVM)
-                                    .environmentObject(notificationVM)
-                                    .environmentObject(memberVM)
-                            }
 
                             // انتقلت من «إدارة الأعضاء» — إعداد أمان (التعديل للمالك)
                             AdminTile(
@@ -118,24 +132,21 @@ struct AdminSecuritySettingsView: View {
                                 AdminBannedPhonesView()
                                     .environmentObject(authVM)
                             }
+
+                            AdminTile(
+                                title: L10n.t("حالة الإشعارات", "Push Status"),
+                                subtitle: L10n.t("جاهزية الإرسال واختبار الوصول", "Delivery readiness & testing"),
+                                icon: "bell.and.waves.left.and.right.fill",
+                                color: DS.Color.accent, compact: true
+                            ) {
+                                AdminPushHealthView()
+                                    .environmentObject(authVM)
+                                    .environmentObject(memberVM)
+                                    .environmentObject(notificationVM)
+                            }
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
-
-                    // ── صحة النظام — مضمّنة هنا بدل صفحة مستقلة ──
-                    if authVM.isAdmin {
-                        SystemHealthInlineSection()
-                            .environmentObject(authVM)
-                            .environmentObject(notificationVM)
-                            .environmentObject(memberVM)
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.top, DS.Spacing.lg)
-                    }
-
-                    // استخدام التطبيق — شبكة مباشرة، كل مربّع يفتح أعضاء فئته
-                    usageGrid
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.lg)
 
                     Spacer(minLength: DS.Spacing.xxxl)
                 }
@@ -158,7 +169,7 @@ struct AdminSecuritySettingsView: View {
 
     /// عنوان قسم موحّد — أيقونة + عنوان + ملاحظة صغيرة على الطرف
     private var gridColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3)
+        Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.md), count: 3)
     }
 
     private func sectionHeader(icon: String, color: Color, title: String, note: String?) -> some View {
@@ -179,18 +190,47 @@ struct AdminSecuritySettingsView: View {
     }
 
     /// استخدام التطبيق: صفّ علوي أبرز (فعّال · خامل) ثم صفّ ثلاثي للبقية
+    /// إجمالي المستخدمين = كل من سجّل دخول للتطبيق (فعّال + خامل + دخل بلا جهاز)
+    private var totalUsers: Int? {
+        guard let u = usageStats else { return nil }
+        return u.active + u.idle + u.loginNoDevice
+    }
+
     private var usageGrid: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionHeader(icon: "iphone.gen3", color: DS.Color.success,
-                          title: L10n.t("استخدام التطبيق", "App Usage"),
-                          note: L10n.t("الأحياء · فعّال = دخل خلال ٢١ يوم", "Alive · active = in the last 21 days"))
+            // العنوان + إجمالي المستخدمين (كل من دخل التطبيق: فعّال + خامل + بلا جهاز)
+            HStack(spacing: DS.Spacing.xs) {
+                Text(L10n.t("استخدام التطبيق", "App usage"))
+                    .font(DS.Font.plex(12, weight: .bold))
+                    .foregroundColor(DS.Color.textSecondary)
+                Text(L10n.t("· الأحياء · فعّال = دخل خلال ٢١ يوم", "· alive · active = last 21 days"))
+                    .font(DS.Font.plex(10, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 4)
+                if let total = totalUsers {
+                    HStack(spacing: 4) {
+                        Text(L10n.t("إجمالي المستخدمين", "Total users"))
+                            .font(DS.Font.plex(10.5, weight: .semibold))
+                        Text(total.formatted())
+                            .font(DS.Font.plex(13, weight: .bold))
+                            .monospacedDigit()
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
+                }
+            }
 
+            // الصف الأول: من دخل التطبيق (فعّال، خامل، بلا جهاز) — الثاني: من لم يدخل
             HStack(spacing: DS.Spacing.sm) {
-                usageLink(.active, large: true)
-                usageLink(.idle, large: true)
+                usageLink(.active, large: false)
+                usageLink(.idle, large: false)
+                usageLink(.loginNoDevice, large: false)
             }
             HStack(spacing: DS.Spacing.sm) {
-                usageLink(.loginNoDevice, large: false)
                 usageLink(.neverLogged, large: false)
                 usageLink(.noPhone, large: false)
             }

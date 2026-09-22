@@ -523,7 +523,7 @@ struct AddModeratorSheet: View {
 
     private var regularMembers: [FamilyMember] {
         memberVM.allMembers
-            .filter { $0.role == .member && $0.isDeceased != true }
+            .filter { $0.role == .member && $0.isDeceased != true && $0.status != .frozen }
             .filter { member in
                 searchText.isEmpty || member.fullName.localizedCaseInsensitiveContains(searchText)
             }

@@ -436,13 +436,16 @@ struct AdminDashboardView: View {
                 ) { AdminMembersManagementView() }
             }
 
-            AdminTile(
-                title: L10n.t("سجل النشاط", "Activity Log"),
-                subtitle: L10n.t("كل حركة وتغيير", "Every change"),
-                icon: "clock.arrow.circlepath",
-                color: DS.Color.accent,
-                badge: notificationVM.unreadActivityLogCount
-            ) { AdminActivityLogView() }
+            // سجل النشاط: المالك/المدير/المراقب فقط (جدول الصلاحيات — ليس المشرف)
+            if authVM.isAdmin || authVM.currentUser?.role == .monitor {
+                AdminTile(
+                    title: L10n.t("سجل النشاط", "Activity Log"),
+                    subtitle: L10n.t("كل حركة وتغيير", "Every change"),
+                    icon: "clock.arrow.circlepath",
+                    color: DS.Color.accent,
+                    badge: notificationVM.unreadActivityLogCount
+                ) { AdminActivityLogView() }
+            }
 
             if authVM.isAdmin {
                 AdminTile(
@@ -672,13 +675,15 @@ struct AdminTile<Destination: View>: View {
             }
             .padding(.vertical, compact ? DS.Spacing.sm : DS.Spacing.md)
             .padding(.horizontal, DS.Spacing.xs)
-            .frame(maxWidth: .infinity, minHeight: compact ? 84 : 104)
-            .background(DS.Color.surface)
+            .frame(maxWidth: .infinity, minHeight: compact ? 76 : 104)
+            // المضغوط (إعدادات النظام): خلفية خفيفة بلون المربّع وبلا إطار (طلب المالك)
+            .background(compact ? color.opacity(0.07) : DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(color.opacity(0.14), lineWidth: 1)
+                    .strokeBorder(color.opacity(compact ? 0 : 0.14), lineWidth: 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
     }

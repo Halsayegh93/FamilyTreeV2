@@ -872,7 +872,7 @@ struct HomeNewsView: View {
             canDelete: canDelete(news),
             // الإبلاغ متاح للجميع (أعضاء وإدارة) لغير منشوراتهم — سياسة Apple
             canReport: authVM.currentUser?.id != news.author_id,
-            canEdit: authVM.canModerate || authVM.currentUser?.id == news.author_id,
+            canEdit: authVM.canDeleteNews || authVM.currentUser?.id == news.author_id,
             onDeleteTap: { postToDelete = news },
             onReportTap: { postToReport = news },
             onEditTap: { postToEdit = news },

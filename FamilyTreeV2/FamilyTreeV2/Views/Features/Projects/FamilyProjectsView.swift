@@ -1015,7 +1015,7 @@ struct AddProjectView: View {
     }
 
     private var filteredMembers: [FamilyMember] {
-        let active = memberVM.allMembers.filter { $0.status == .active }
+        let active = memberVM.allMembers.filter { $0.status == .active && $0.isDeceased != true }
         let query = memberSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if query.isEmpty {
             return Array(active.prefix(20))

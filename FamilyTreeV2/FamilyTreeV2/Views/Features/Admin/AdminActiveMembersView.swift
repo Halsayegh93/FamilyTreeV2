@@ -2,7 +2,7 @@ import SwiftUI
 import Supabase
 import PostgREST
 
-// MARK: - Admin Active Members — النشاط (الآن + آخر 14 يوم)
+// MARK: - Admin Active Members — النشاط (الآن + آخر 24 ساعة + آخر 30 يوم)
 struct AdminActiveMembersView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -33,9 +33,6 @@ struct AdminActiveMembersView: View {
                     statsCard
                         .padding(.top, DS.Spacing.md)
 
-                    // ── زر تحديث الآن ──
-                    refreshButton
-                        .padding(.horizontal, DS.Spacing.lg)
 
                     // الوضع الأفقي: بطاقات النشاط على عمودين
                     AdaptiveCardStack(spacing: DS.Spacing.lg, landscapeMinimum: 340) {
@@ -90,10 +87,10 @@ struct AdminActiveMembersView: View {
                     }
                     .padding(.horizontal, DS.Spacing.lg)
 
-                    // ── آخر 14 يوم ──
+                    // ── آخر 30 يوم (كانت 14 — طلب المالك) ──
                     DSCard(padding: 0) {
                         DSSectionHeader(
-                            title: L10n.t("نشطون آخر 14 يوم", "Last 14 Days"),
+                            title: L10n.t("نشطون آخر 30 يوم", "Last 30 Days"),
                             icon: "calendar",
                             trailing: "\(recentRows.count)",
                             iconColor: DS.Color.info
@@ -101,7 +98,7 @@ struct AdminActiveMembersView: View {
 
                         if recentRows.isEmpty {
                             inlineEmpty(
-                                text: L10n.t("لا يوجد نشاط في آخر 14 يوم", "No activity in last 14 days")
+                                text: L10n.t("لا يوجد نشاط في آخر 30 يوم", "No activity in last 30 days")
                             )
                         } else {
                             ForEach(Array(recentRows.enumerated()), id: \.element.memberId) { idx, row in
@@ -120,8 +117,11 @@ struct AdminActiveMembersView: View {
             }
             .refreshable { await fetch() }
         }
-        .navigationTitle(L10n.t("النشاط", "Activity"))
+        .navigationTitle(L10n.t("النشاط الآن", "Live Activity"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) { refreshButton }
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             // أبلغ إن المدير الحالي شاف "النشاط" — يبقيه ضمن النشطين
@@ -132,7 +132,7 @@ struct AdminActiveMembersView: View {
         .onDisappear { refreshTimer?.invalidate() }
     }
 
-    // MARK: - Refresh button
+    // MARK: - Refresh button (أيقونة صغيرة في الشريط العلوي — طلب المالك)
     private var refreshButton: some View {
         Button {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -143,24 +143,15 @@ struct AdminActiveMembersView: View {
                 isRefreshing = false
             }
         } label: {
-            HStack(spacing: 8) {
-                if isRefreshing {
-                    ProgressView().tint(.white).scaleEffect(0.85)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(DS.Font.scaled(14, weight: .bold))
-                }
-                Text(L10n.t("تحديث الآن", "Refresh Now"))
+            if isRefreshing {
+                ProgressView().scaleEffect(0.8)
+            } else {
+                Image(systemName: "arrow.clockwise")
                     .font(DS.Font.scaled(14, weight: .bold))
             }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .background(DS.Color.primary)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         }
-        .buttonStyle(DSScaleButtonStyle())
         .disabled(isRefreshing)
+        .accessibilityLabel(L10n.t("تحديث الآن", "Refresh Now"))
     }
 
     // MARK: - Action row (24h)
@@ -252,97 +243,38 @@ struct AdminActiveMembersView: View {
     }
 
     // MARK: - Stats card
+    /// صف واحد من أربعة مربّعات صغيرة (طلب المالك: أصغر وأرتب). «الأعضاء
+    /// الفعّالون» موجودة أصلاً في «استخدام التطبيق» بإعدادات النظام، فلا تتكرر هنا.
     private var statsCard: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-            SystemHealthSectionHeader(title: L10n.t("حضور العائلة", "Family presence"), subtitle: L10n.t("من داخل المنظومة إلى النشاط اليومي", "Membership and daily activity"))
-            // Server count: active approved living members with an actual Auth sign-in.
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "person.badge.shield.checkmark.fill")
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(DS.Color.secondary.opacity(0.12))
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("الأعضاء الفعّالون", "Active members"))
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    // تعريف المالك — بدل «سجّل دخولاً يوماً ما» الذي كان يضخّم الرقم
-                    Text(L10n.t("رقم + جهاز + دخل التطبيق خلال ٢١ يوماً",
-                                "Phone + device + opened the app in the last 21 days"))
-                        .font(DS.Font.scaled(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    if let usage {
-                        Text(L10n.t("خامل (أكثر من ٢١ يوماً): \(usage.idle)",
-                                    "Idle (over 21 days): \(usage.idle)"))
-                            .font(DS.Font.scaled(10, weight: .semibold))
-                            .foregroundColor(DS.Color.warning)
-                    }
-                }
-
-                Spacer()
-
-                Text(usage.map { "\($0.active)" } ?? "—")
-                    .font(DS.Font.scaled(22, weight: .heavy))
-                    .foregroundColor(DS.Color.success)
-            }
-            .padding(DS.Spacing.md)
-            .background(DS.Color.secondary.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(DS.Color.secondary.opacity(0.20), lineWidth: 0.5)
-            )
-            // الصف الأول: نشاط لحظي
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: DS.Spacing.md)], spacing: DS.Spacing.md) {
-                statBox(
-                    icon: "circle.fill",
-                    title: L10n.t("الآن", "Now"),
-                    value: "\(nowRows.count)",
-                    color: DS.Color.success
-                )
-                statBox(
-                    icon: "iphone.gen3",
-                    title: L10n.t("التطبيق", "App"),
+        HStack(spacing: DS.Spacing.sm) {
+            statBox(icon: "circle.fill", title: L10n.t("الآن", "Now"),
+                    value: "\(nowRows.count)", color: DS.Color.success)
+            statBox(icon: "iphone.gen3", title: L10n.t("التطبيق", "App"),
                     value: "\(nowRows.filter { $0.source == "app" }.count + recentRows.filter { $0.source == "app" }.count)",
-                    color: DS.Color.primary
-                )
-                statBox(
-                    icon: "globe",
-                    title: L10n.t("الموقع", "Web"),
+                    color: DS.Color.primary)
+            statBox(icon: "globe", title: L10n.t("الموقع", "Web"),
                     value: "\(nowRows.filter { $0.source == "web" }.count + recentRows.filter { $0.source == "web" }.count)",
-                    color: DS.Color.accent
-                )
-                statBox(
-                    icon: "clock.arrow.circlepath",
-                    title: L10n.t("14 يوم", "14d"),
-                    value: "\(recentRows.count)",
-                    color: DS.Color.info
-                )
-            }
-
+                    color: DS.Color.accent)
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
 
     private func statBox(icon: String, title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(spacing: 3) {
             Image(systemName: icon)
                 .font(DS.Font.scaled(11, weight: .bold))
                 .foregroundColor(color)
             Text(value)
-                .font(DS.Font.title1).monospacedDigit()
+                .font(DS.Font.plex(18, weight: .bold)).monospacedDigit()
                 .foregroundColor(DS.Color.textPrimary)
             Text(title)
-                .font(DS.Font.scaled(11, weight: .semibold))
+                .font(DS.Font.plex(10.5, weight: .semibold))
                 .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(DS.Color.cardBorder, lineWidth: DS.Border.width))
+        .frame(maxWidth: .infinity)
+        .frame(height: 72)
+        .background(color.opacity(0.07), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
     }
 
     // MARK: - Active now row (with online dot + screen)
@@ -647,7 +579,7 @@ struct AdminActiveMembersView: View {
             }
         }
         do {
-            let payload: [String: AnyEncodable] = ["days_back": AnyEncodable(14)]
+            let payload: [String: AnyEncodable] = ["days_back": AnyEncodable(30)]
             let response = try await SupabaseConfig.client.rpc(
                 "get_recently_active_members", params: payload
             ).execute()

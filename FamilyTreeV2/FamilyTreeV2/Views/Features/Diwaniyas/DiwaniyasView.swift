@@ -781,7 +781,8 @@ private struct AddDiwaniyaRequestView: View {
         let composedPhone = phoneNumber.isEmpty
             ? ""
             : (KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber) ?? "")
-        let canAutoApprove = user.role == .owner || user.role == .admin || user.role == .monitor || user.role == .supervisor
+        // الاعتماد للمالك والمدير فقط (جدول الصلاحيات) — غيرهم ينتظر الموافقة
+        let canAutoApprove = user.role == .owner || user.role == .admin
         let success = await viewModel.addDiwaniya(
             ownerId: user.id,
             ownerName: ownerName,

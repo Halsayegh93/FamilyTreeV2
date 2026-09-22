@@ -40,7 +40,7 @@ struct AdminNotificationsView: View {
     /// المتوفّى لا جهاز له ولا معنى لإرسال إشعار باسمه.
     private var activeMembers: [FamilyMember] {
         memberVM.allMembers
-            .filter { $0.role != .pending && !($0.isDeceased ?? false) }
+            .filter { $0.role != .pending && !($0.isDeceased ?? false) && $0.status != .frozen }
             .filter { m in
                 guard let iso = countryFilter else { return true }
                 // بلا رقم هاتف = بلا دولة معروفة (٩٨٪ من الأعضاء) فلا يدخل الشريحة
@@ -59,9 +59,16 @@ struct AdminNotificationsView: View {
             let iso = KuwaitPhone.detectCountryAndLocal(m.phoneNumber).country.isoCode
             counts[iso, default: 0] += 1
         }
-        return KuwaitPhone.supportedCountries
+        // الكويت والسعودية تظهران دائماً أولاً (طلب المالك) — ثم باقي الدول الموجودة
+        let pinned = ["KW", "SA"]
+        let pinnedItems = pinned.compactMap { iso in
+            KuwaitPhone.supportedCountries.first { $0.isoCode == iso }.map { ($0, counts[iso] ?? 0) }
+        }
+        let others = KuwaitPhone.supportedCountries
+            .filter { !pinned.contains($0.isoCode) }
             .compactMap { c in counts[c.isoCode].map { (c, $0) } }
-            .sorted { $0.count > $1.count }
+            .sorted { $0.1 > $1.1 }
+        return (pinnedItems + others).map { (country: $0.0, count: $0.1) }
     }
 
     private var filteredMembers: [FamilyMember] {
@@ -86,6 +93,29 @@ struct AdminNotificationsView: View {
             }
             .padding(.horizontal, DS.Spacing.lg)
         }
+    }
+
+    /// زر إجراء مضغوط (٤٤ نقطة) بألوان التطبيق — ممتلئ أو فاتح
+    private func compactActionButton(_ title: String, icon: String, filled: Bool, loading: Bool,
+                                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if loading {
+                    ProgressView().tint(filled ? DS.Color.textOnPrimary : DS.Color.primary)
+                } else {
+                    Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold))
+                }
+                Text(title).font(DS.Font.plex(14, weight: .bold))
+            }
+            .foregroundColor(filled ? DS.Color.textOnPrimary : DS.Color.primary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(filled ? DS.Color.primary : DS.Color.primary.opacity(0.12))
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     private func countryChip(title: String, iso: String?, count: Int?) -> some View {
@@ -375,30 +405,27 @@ struct AdminNotificationsView: View {
                 VStack(spacing: DS.Spacing.xs) {
                     // زر الجدولة جنب زر الإرسال — طلب المالك
                     // زرّان متطابقان — الإرسال أولاً ثم الجدولة (معكوسان — طلب المالك)
+                    // زرّان أصغر بألوان التطبيق (طلب المالك): إرسال أزرق ممتلئ، جدولة أزرق فاتح
+                    let noTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     HStack(spacing: DS.Spacing.sm) {
-                        DSPrimaryButton(
-                            L10n.t("إرسال الآن", "Send Now"),
-                            icon: "paperplane.fill",
-                            isLoading: notificationVM.isLoading
+                        compactActionButton(
+                            L10n.t("إرسال الآن", "Send Now"), icon: "paperplane.fill",
+                            filled: true, loading: notificationVM.isLoading
                         ) {
                             scheduleEnabled = false
                             showSendConfirm = true
                         }
-                        .disabled(
-                            title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        )
+                        .disabled(noTitle)
 
-                        DSPrimaryButton(
-                            L10n.t("جدولة", "Schedule"),
-                            icon: "clock.badge",
-                            isLoading: false,
-                            useGradient: false,
-                            color: DS.Color.accent
+                        compactActionButton(
+                            L10n.t("جدولة", "Schedule"), icon: "clock.badge",
+                            filled: false, loading: false
                         ) {
                             showScheduleComposer = true
                         }
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(noTitle)
                     }
+                    .opacity(noTitle ? 0.55 : 1)
 
                     let targetText = selectedMemberIds.isEmpty
                         ? L10n.t("للجميع", "to all")

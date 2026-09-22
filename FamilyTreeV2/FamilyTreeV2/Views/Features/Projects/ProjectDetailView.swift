@@ -893,7 +893,7 @@ struct EditProjectView: View {
     private var ownerPickerSheet: some View {
         let q = ownerSearch.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidates = memberVM.allMembers
-            .filter { $0.isCountable }
+            .filter { $0.isCountable && $0.isDeceased != true }
             .filter { q.isEmpty || $0.fullName.localizedCaseInsensitiveContains(q) }
             .sorted { $0.fullName < $1.fullName }
         return NavigationStack {

@@ -336,7 +336,7 @@ struct NotificationsCenterView: View {
             HStack(spacing: DS.Spacing.sm) {
 
                 // «المستجدات» هي قناة تحديثات التطبيق — والإدارة تنشر منها مباشرة
-                if selectedTab == .activity, authVM.canModerate, !isSelecting {
+                if selectedTab == .activity, authVM.canSendNotifications, !isSelecting {
                     pillButton(
                         icon: "megaphone.fill",
                         label: L10n.t("نشر تحديث", "Publish Update"),
