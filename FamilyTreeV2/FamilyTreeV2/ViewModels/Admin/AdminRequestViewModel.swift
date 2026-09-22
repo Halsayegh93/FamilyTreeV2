@@ -1415,6 +1415,39 @@ class AdminRequestViewModel: ObservableObject {
         self.isLoading = false
     }
 
+    // MARK: - Family Change Requests (العائلة بطلب فقط — طلب المالك)
+
+    @discardableResult
+    func requestFamilyChange(memberId: UUID, newFamily: String) async -> Bool {
+        let requestId = UUID()
+        do {
+            let requestData: [String: AnyEncodable] = [
+                "id": AnyEncodable(requestId.uuidString),
+                "member_id": AnyEncodable(memberId.uuidString),
+                "requester_id": AnyEncodable(currentUser?.id.uuidString),
+                "request_type": AnyEncodable(RequestType.familyChange.rawValue),
+                "new_value": AnyEncodable(newFamily),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
+                "details": AnyEncodable("طلب تغيير العائلة إلى: \(newFamily)")
+            ]
+            try await supabase.from("admin_requests").insert(requestData).execute()
+
+            let requesterFullName = currentUser?.fullName ?? "عضو"
+            await notificationVM?.notifyAdminsWithPush(
+                title: L10n.t("طلب تغيير العائلة", "Family Change Request"),
+                body: L10n.t("طلب تغيير عائلة: \(requesterFullName) إلى \(newFamily)",
+                             "Family change request: \(requesterFullName) to \(newFamily)"),
+                kind: RequestType.familyChange.rawValue,
+                requestId: requestId,
+                requestType: RequestType.familyChange.rawValue
+            )
+            return true
+        } catch {
+            Log.error("خطأ في إرسال طلب تغيير العائلة: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // MARK: - Name Change Requests
 
     func requestNameChange(memberId: UUID, newName: String) async {
@@ -1469,7 +1502,8 @@ class AdminRequestViewModel: ObservableObject {
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:members_masked!member_id(*)")
-                .eq("request_type", value: RequestType.nameChange.rawValue)
+                // «أسماء» تشمل طلبات تغيير العائلة
+                .in("request_type", values: [RequestType.nameChange.rawValue, RequestType.familyChange.rawValue])
                 .eq("status", value: ApprovalStatus.pending.rawValue)
                 .order("created_at", ascending: false)
                 .execute()
@@ -1486,6 +1520,11 @@ class AdminRequestViewModel: ObservableObject {
         guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
         guard let newName = request.newValue, !newName.isEmpty else {
             Log.error("[NameChange] الاسم الجديد غير موجود في الطلب")
+            return
+        }
+
+        if request.requestType == RequestType.familyChange.rawValue {
+            await approveFamilyChange(request: request, newFamily: newName)
             return
         }
 
@@ -1537,6 +1576,35 @@ class AdminRequestViewModel: ObservableObject {
         })
     }
 
+    /// اعتماد «تغيير العائلة»: يُطبَّق على العضو وأبنائه (set_family_name_cascade)
+    private func approveFamilyChange(request: AdminRequest, newFamily: String) async {
+        optimisticRemove(from: &nameChangeRequests, id: request.id, apiWork: { [weak self] in
+            do {
+                try await self?.supabase
+                    .rpc("set_family_name_cascade",
+                         params: ["p_member_id": AnyEncodable(request.memberId.uuidString),
+                                  "p_family": AnyEncodable(newFamily)])
+                    .execute()
+                try await self?.supabase
+                    .from("admin_requests")
+                    .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
+                    .eq("id", value: request.id.uuidString)
+                    .execute()
+                await self?.notificationVM?.sendNotification(
+                    title: L10n.t("تم تغيير عائلتك", "Your Family Was Changed"),
+                    body: L10n.t("تم اعتماد عائلتك الجديدة: \(newFamily)", "Your new family has been approved: \(newFamily)"),
+                    targetMemberIds: [request.requesterId]
+                )
+                Log.info("[FamilyChange] تم قبول طلب تغيير العائلة → \(newFamily)")
+            } catch {
+                Log.error("[FamilyChange] فشل قبول طلب تغيير العائلة: \(error)")
+            }
+        }, refresh: { [weak self] in
+            await self?.fetchNameChangeRequests(force: true)
+            await self?.memberVM?.fetchAllMembers(force: true)
+        })
+    }
+
     func rejectNameChangeRequest(request: AdminRequest, reason: String? = nil) async {
         // كان isAdmin (يستبعد المراقب). حسب CLAUDE.md المراقب يقدر يرفض.
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
@@ -1551,8 +1619,12 @@ class AdminRequestViewModel: ObservableObject {
                 await self?.notificationVM?.sendNotification(
                     title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
                     body: L10n.t(
-                        "طلب تغيير الاسم لم تتم الموافقة عليه" + Self.rejectReasonSuffix(reason, arabic: true),
-                        "Your name change request was not approved" + Self.rejectReasonSuffix(reason, arabic: false)
+                        (request.requestType == RequestType.familyChange.rawValue
+                            ? "طلب تغيير العائلة لم تتم الموافقة عليه" : "طلب تغيير الاسم لم تتم الموافقة عليه")
+                            + Self.rejectReasonSuffix(reason, arabic: true),
+                        (request.requestType == RequestType.familyChange.rawValue
+                            ? "Your family change request was not approved" : "Your name change request was not approved")
+                            + Self.rejectReasonSuffix(reason, arabic: false)
                     ),
                     targetMemberIds: [request.requesterId],
                     kind: "request_rejected"

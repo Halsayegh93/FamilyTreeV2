@@ -84,6 +84,9 @@ struct EditProfileView: View {
     @State private var fullName: String = ""
     /// عائلة العضو المختارة من قائمة الإدارة
     @State private var familyName: String = ""
+    /// العائلة ثابتة — تتغيّر بطلب للإدارة فقط (طلب المالك)
+    @State private var pendingFamilyRequest: String?
+    @State private var familyPopupID: UUID?
     @State private var isSavingFamily = false
     @StateObject private var familyNamesVM = FamilyNamesViewModel()
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
@@ -440,17 +443,16 @@ struct EditProfileView: View {
                             .font(DS.Font.caption1)
                             .foregroundColor(DS.Color.textSecondary)
                         // آخر الاسم = العائلة المختارة — يتحدّث فوراً عند تغيير العائلة
+                        // الاسم الكامل كله يظهر بلا قصّ (طلب المالك)
                         Text(FamilyNameCatalog.words(fullName, family: familyName).joined(separator: " "))
                             .font(DS.Font.callout)
                             .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Image(systemName: "pencil.circle.fill")
-                        .font(DS.Font.scaled(16, weight: .medium))
-                        .foregroundColor(DS.Color.primary)
+                    // نفس زر العائلة (طلب المالك) — الاسم والعائلة يتغيّران بطلب
+                    requestChip
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.vertical, DS.Spacing.xs)
@@ -465,8 +467,7 @@ struct EditProfileView: View {
         }
     }
 
-    /// اختيار العائلة من قائمة الإدارة — يُحفظ فوراً بلا طلب موافقة،
-    /// فهو اختيار من قائمة معتمدة لا نصّ حر.
+    /// العائلة ثابتة في الملف (طلب المالك): تتغيّر فقط بطلب يعتمده المالك/المدير/المراقب.
     private var familyPickerRow: some View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon("person.2.fill", color: DS.Color.primary)
@@ -479,51 +480,55 @@ struct EditProfileView: View {
                     .font(DS.Font.callout)
                     .foregroundColor(familyName.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
                     .lineLimit(1)
+                if let pending = pendingFamilyRequest {
+                    // سطر واحد (طلب المالك)
+                    Text(L10n.t("طلب «\(pending)» بانتظار موافقة الإدارة", "«\(pending)» awaiting approval"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.warning)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if isSavingFamily {
-                ProgressView().scaleEffect(0.7)
-            } else {
-                Menu {
-                    ForEach(familyNamesVM.activeNames, id: \.self) { option in
-                        Button {
-                            guard option != familyName else { return }
-                            familyName = option
-                            Task { await saveFamilyName(option) }
-                        } label: {
-                            if familyName == option {
-                                Label(option, systemImage: "checkmark")
-                            } else {
-                                Text(option)
-                            }
-                        }
-                    }
-                } label: {
-                    // زر أكبر بلون التطبيق الكحلي (طلب المالك)
-                    HStack(spacing: 5) {
-                        Text(L10n.t("تغيير", "Change"))
-                            .font(DS.Font.scaled(13, weight: .bold))
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                    }
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(height: 32)
-                    .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
-                }
-            }
+            // قائمة العوائل في مربّع بمنتصف الشاشة (طلب المالك)
+            Button { openFamilyPicker() } label: { requestChip }
+                .buttonStyle(DSScaleButtonStyle())
+            .disabled(pendingFamilyRequest != nil)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
     }
 
-    @MainActor
-    private func saveFamilyName(_ name: String) async {
-        isSavingFamily = true
-        defer { isSavingFamily = false }
-        let ok = await memberVM.updateFamilyName(memberId: member.id, familyName: name)
-        if !ok { familyName = member.familyName ?? "" }
+    /// زر «طلب تغيير» الموحّد للاسم والعائلة
+    private var requestChip: some View {
+        HStack(spacing: 5) {
+            Text(L10n.t("تعديل", "Edit"))
+                .font(DS.Font.scaled(13, weight: .bold))
+            Image(systemName: "pencil")
+                .font(DS.Font.scaled(11, weight: .bold))
+        }
+        .foregroundColor(DS.Color.primary)
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(height: 32)
+        .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
+    }
+
+    private func openFamilyPicker() {
+        let options = familyNamesVM.activeNames.filter { $0 != familyName }
+        let close: () -> Void = {
+            if let id = familyPopupID { DSPopupPresenter.shared.hide(id); familyPopupID = nil }
+        }
+        familyPopupID = DSPopupPresenter.shared.show(
+            FamilyRequestCard(options: options, current: familyName, onCancel: close) { chosen in
+                close()
+                Task {
+                    if await adminRequestVM.requestFamilyChange(memberId: member.id, newFamily: chosen) {
+                        pendingFamilyRequest = chosen
+                    }
+                }
+            }
+        )
     }
 
     private var nameChangeRequestSheet: some View {
@@ -1097,4 +1102,75 @@ struct EditProfileView: View {
         if changes.bioChanged { cooldown.recordEdit(.bio) }
     }
 
+}
+
+
+/// مربّع «طلب تغيير العائلة» بمنتصف الشاشة (طلب المالك): العوائل المعتمدة، اختيار
+/// واحدة، ثم «إرسال» — الطلب يعتمده المالك/المدير/المراقب.
+private struct FamilyRequestCard: View {
+    let options: [String]
+    let current: String
+    let onCancel: () -> Void
+    let onSend: (String) -> Void
+    @State private var selected: String?
+
+    var body: some View {
+        DSCenterCard(onBackgroundTap: onCancel) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.t("طلب تغيير العائلة", "Request family change"))
+                    .font(DS.Font.plex(17, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(current.isEmpty
+                     ? L10n.t("اختر عائلتك — يتغيّر بعد موافقة الإدارة", "Pick your family — applied after approval")
+                     : L10n.t("الحالية: \(current) — يتغيّر بعد موافقة الإدارة", "Current: \(current) — applied after approval"))
+                    .font(DS.Font.plex(12, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(options, id: \.self) { name in
+                        Button { selected = name } label: {
+                            HStack {
+                                Text(name)
+                                    .font(DS.Font.plex(14, weight: .semibold))
+                                    .foregroundColor(DS.Color.textPrimary)
+                                Spacer()
+                                Image(systemName: selected == name ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(selected == name ? DS.Color.primary : DS.Color.textTertiary)
+                            }
+                            .padding(.horizontal, DS.Spacing.md)
+                            .frame(height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                    .fill(selected == name ? DS.Color.primary.opacity(0.10) : DS.Color.mutedBackground.opacity(0.6))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: 280)
+
+            HStack(spacing: DS.Spacing.sm) {
+                Button(action: onCancel) {
+                    Text(L10n.t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
+                }
+                Button { if let s = selected { onSend(s) } } label: {
+                    Text(L10n.t("إرسال", "Send"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md)
+                            .fill(selected == nil ? DS.Color.primary.opacity(0.4) : DS.Color.primary))
+                }
+                .disabled(selected == nil)
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+    }
 }

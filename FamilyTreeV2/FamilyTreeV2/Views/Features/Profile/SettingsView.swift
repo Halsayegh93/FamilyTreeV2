@@ -33,41 +33,39 @@ struct SettingsView: View {
                     // كل سطر فيها يعرض قيمته الحالية — تشوف إعداداتك بدون ما تفتحها.
                     profileCard
 
-                    settingsGroup(t("حسابك", "Your account")) {
+                    // مربّعات بدل القائمة (طلب المالك) — كل مربّع يعرض قيمته الحالية
+                    HStack(spacing: DS.Spacing.md) {
                         NavigationLink(destination: NotificationsAndPrivacyView()) {
-                            groupRow(icon: "bell.badge.fill", color: DS.Color.warning,
-                                     title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
-                                     value: notificationsEnabled ? t("مفعّلة", "On") : t("موقوفة", "Off"))
+                            valueTile(icon: "bell.badge.fill", color: DS.Color.warning,
+                                      title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
+                                      value: notificationsEnabled ? t("مفعّلة", "On") : t("موقوفة", "Off"))
                         }
-                        rowDivider
-                        Button { showLinkedDevices = true } label: {
-                            groupRow(icon: "iphone.gen3", color: DS.Color.info,
-                                     title: t("الأجهزة المرتبطة", "Linked Devices"),
-                                     value: "\(notificationVM.linkedDevices.count)")
-                        }
-                    }
-
-                    settingsGroup(t("التطبيق", "App")) {
                         NavigationLink(destination: AppearanceSettingsView()) {
-                            groupRow(icon: "paintbrush.fill", color: DS.Color.accent,
-                                     title: t("المظهر واللغة", "Appearance & Language"),
-                                     value: "\(appearanceLabel) · \(langManager.selectedLanguage == "ar" ? "العربية" : "English")")
+                            valueTile(icon: "paintbrush.fill", color: DS.Color.accent,
+                                      title: t("المظهر واللغة", "Appearance & Language"),
+                                      value: "\(appearanceLabel) · \(langManager.selectedLanguage == "ar" ? "العربية" : "English")")
                         }
-                        rowDivider
-                        Button { showAbout = true } label: {
-                            groupRow(icon: "app.badge.fill", color: DS.Color.secondary,
-                                     title: t("عن التطبيق", "About"),
-                                     value: AppVersion.string)
+                        Button { showLinkedDevices = true } label: {
+                            valueTile(icon: "iphone.gen3", color: DS.Color.info,
+                                      title: t("الأجهزة المرتبطة", "Linked Devices"),
+                                      value: t("\(notificationVM.linkedDevices.count) جهاز", "\(notificationVM.linkedDevices.count) devices"))
                         }
                     }
+                    .buttonStyle(DSScaleButtonStyle())
 
-                    settingsGroup(t("قانوني", "Legal")) {
+                    HStack(spacing: DS.Spacing.md) {
+                        Button { showAbout = true } label: {
+                            valueTile(icon: "app.badge.fill", color: DS.Color.secondary,
+                                      title: t("عن التطبيق", "About"),
+                                      value: AppVersion.string)
+                        }
                         Button { showTerms = true } label: {
-                            groupRow(icon: "doc.text.fill", color: DS.Color.primary,
-                                     title: t("الخصوصية والشروط", "Privacy & Terms"),
-                                     value: nil)
+                            valueTile(icon: "doc.text.fill", color: DS.Color.primary,
+                                      title: t("الخصوصية والشروط", "Privacy & Terms"),
+                                      value: t("كيف نحمي بياناتك", "How we protect you"))
                         }
                     }
+                    .buttonStyle(DSScaleButtonStyle())
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.lg)
@@ -255,6 +253,36 @@ struct SettingsView: View {
                     .foregroundColor(.white)
             }
         }
+    }
+
+    /// مربّع إعداد (طلب المالك): أيقونة ملوّنة، العنوان، والقيمة الحالية تحته
+    private func valueTile(icon: String, color: Color, title: String, value: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(16, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 38, height: 38)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(color))
+            Text(title)
+                .font(DS.Font.plex(11.5, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(value)
+                .font(DS.Font.plex(10.5, weight: .semibold))
+                .foregroundColor(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(.horizontal, DS.Spacing.xs)
+        .frame(maxWidth: .infinity)
+        .frame(height: 118)
+        .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+            .strokeBorder(color.opacity(0.15), lineWidth: 1))
+        .dsSubtleShadow()
     }
 
     // MARK: - المجموعات (كل سطر يعرض قيمته الحالية)

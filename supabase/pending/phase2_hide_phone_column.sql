@@ -1,0 +1,21 @@
+-- المرحلة الثانية لحماية الأرقام المخفية — لا تُطبَّق قبل الشروط أدناه (2026-09-22)
+--
+-- الهدف: العضو لا يقرأ عمود phone_number من profiles مباشرة؛ القراءة من
+-- members_masked فقط (يفرّغ الرقم المخفي لغير الفريق).
+--
+-- الشروط قبل التطبيق (وإلا تتعطّل النسخ):
+--  1) كل الأعضاء على نسخ تقرأ من members_masked (آيفون ≥ 44، أندرويد ≥ 2) —
+--     فعّل «التحديث الإجباري» أولاً بعد النشر.
+--  2) الآيفون: كل .update()/.insert()/.upsert() على profiles بـ returning: .minimal
+--     (افتراضي supabase-swift = .representation → يقرأ كل الأعمدة → permission denied).
+--  3) الآيفون: AuthViewModel.linkProfileToAuthUser يقرأ profiles.select() للسجل القديم
+--     (الرقم يُؤخذ من رقم الجلسة user.phone بدل القراءة).
+--  4) الموقع: /register و /reset-password يبحثان في profiles قبل الدخول — تحتاج دالة
+--     سيرفر (security definer) بدل القراءة المباشرة.
+--  5) الأندرويد/الموقع: لا select('*') على profiles (المرحلة الأولى نقلتها لـ members_masked).
+--
+-- + ملفات المكتبة: جعل family-archive خاصاً بروابط موقّعة (createSignedUrl) بعد تعديل
+--   عرض الملفات في التطبيقين — نفس شرط (1).
+
+revoke select (phone_number) on public.profiles from authenticated, anon;
+-- members_masked مملوك لـ postgres فيبقى يقرأ الرقم ويفرّغه حسب المشاهد.
