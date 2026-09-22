@@ -1510,6 +1510,42 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    // MARK: - تفضيلات الإشعارات (profiles.notification_prefs — يقرأها مُطلِق الدفع)
+    /// المفاتيح: likes, comments, news, profile, requests, admin_activity — false = مطفأ
+    func fetchNotificationPrefs() async -> [String: Bool] {
+        guard let userId = currentUser?.id else { return [:] }
+        struct Row: Decodable { let notification_prefs: [String: Bool]? }
+        do {
+            let rows: [Row] = try await supabase
+                .from("profiles")
+                .select("notification_prefs")
+                .eq("id", value: userId.uuidString)
+                .limit(1)
+                .execute()
+                .value
+            return rows.first?.notification_prefs ?? [:]
+        } catch {
+            Log.fetchError("تعذر جلب تفضيلات الإشعارات", error)
+            return [:]
+        }
+    }
+
+    @discardableResult
+    func updateNotificationPrefs(_ prefs: [String: Bool]) async -> Bool {
+        guard let userId = currentUser?.id else { return false }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["notification_prefs": AnyEncodable(prefs)])
+                .eq("id", value: userId.uuidString)
+                .execute()
+            return true
+        } catch {
+            Log.error("خطأ حفظ تفضيلات الإشعارات: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // تحديث ترتيب الأبناء بالسحب والإفلات
     func moveChild(from source: IndexSet, to destination: Int) {
         currentMemberChildren.move(fromOffsets: source, toOffset: destination)
