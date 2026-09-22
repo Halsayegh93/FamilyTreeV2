@@ -3177,7 +3177,10 @@ struct AdminAllRequestsView: View {
     // MARK: - Name Change Row
 
     private func nameChangeRow(for request: AdminRequest) -> some View {
-        let currentName = request.member?.fullName ?? L10n.t("عضو", "Member")
+        let isFamily = request.requestType == RequestType.familyChange.rawValue
+        let currentName = isFamily
+            ? "\(request.member?.fullName ?? L10n.t("عضو", "Member")) — \(L10n.t("العائلة الحالية", "current family")): \(request.member?.familyName ?? "—")"
+            : (request.member?.fullName ?? L10n.t("عضو", "Member"))
         let newName = request.newValue ?? "—"
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -3186,7 +3189,7 @@ struct AdminAllRequestsView: View {
                 iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("تغيير اسم", "Name Change"))
+                    Text(isFamily ? L10n.t("تغيير العائلة", "Family Change") : L10n.t("تغيير اسم", "Name Change"))
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
 

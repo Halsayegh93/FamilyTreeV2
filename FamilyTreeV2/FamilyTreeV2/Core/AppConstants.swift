@@ -38,6 +38,8 @@ enum RequestType: String {
     case newsReport = "news_report"
     case phoneChange = "phone_change"
     case nameChange = "name_change"
+    /// تغيير العائلة — بطلب فقط، يعتمده المالك/المدير/المراقب
+    case familyChange = "family_change"
     case childAdd = "child_add"
     case deceasedReport = "deceased_report"
     case photoSuggestion = "photo_suggestion"

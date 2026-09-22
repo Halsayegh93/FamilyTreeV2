@@ -84,6 +84,10 @@ struct EditProfileView: View {
     @State private var fullName: String = ""
     /// عائلة العضو المختارة من قائمة الإدارة
     @State private var familyName: String = ""
+    /// العائلة ثابتة — تتغيّر بطلب للإدارة فقط (طلب المالك)
+    @State private var familyRequestTarget: String?
+    @State private var pendingFamilyRequest: String?
+    @State private var showFamilyRequestConfirm = false
     @State private var isSavingFamily = false
     @StateObject private var familyNamesVM = FamilyNamesViewModel()
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
@@ -465,8 +469,7 @@ struct EditProfileView: View {
         }
     }
 
-    /// اختيار العائلة من قائمة الإدارة — يُحفظ فوراً بلا طلب موافقة،
-    /// فهو اختيار من قائمة معتمدة لا نصّ حر.
+    /// العائلة ثابتة في الملف (طلب المالك): تتغيّر فقط بطلب يعتمده المالك/المدير/المراقب.
     private var familyPickerRow: some View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon("person.2.fill", color: DS.Color.primary)
@@ -479,51 +482,52 @@ struct EditProfileView: View {
                     .font(DS.Font.callout)
                     .foregroundColor(familyName.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
                     .lineLimit(1)
+                if let pending = pendingFamilyRequest {
+                    Text(L10n.t("طلب «\(pending)» بانتظار موافقة الإدارة", "«\(pending)» awaiting approval"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.warning)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if isSavingFamily {
-                ProgressView().scaleEffect(0.7)
-            } else {
-                Menu {
-                    ForEach(familyNamesVM.activeNames, id: \.self) { option in
-                        Button {
-                            guard option != familyName else { return }
-                            familyName = option
-                            Task { await saveFamilyName(option) }
-                        } label: {
-                            if familyName == option {
-                                Label(option, systemImage: "checkmark")
-                            } else {
-                                Text(option)
-                            }
-                        }
+            Menu {
+                ForEach(familyNamesVM.activeNames.filter { $0 != familyName }, id: \.self) { option in
+                    Button(option) {
+                        familyRequestTarget = option
+                        showFamilyRequestConfirm = true
                     }
-                } label: {
-                    // زر أكبر بلون التطبيق الكحلي (طلب المالك)
-                    HStack(spacing: 5) {
-                        Text(L10n.t("تغيير", "Change"))
-                            .font(DS.Font.scaled(13, weight: .bold))
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                    }
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(height: 32)
-                    .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
                 }
+            } label: {
+                HStack(spacing: 5) {
+                    Text(L10n.t("طلب تغيير", "Request change"))
+                        .font(DS.Font.scaled(13, weight: .bold))
+                    Image(systemName: "paperplane.fill")
+                        .font(DS.Font.scaled(11, weight: .semibold))
+                }
+                .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 32)
+                .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
             }
+            .disabled(pendingFamilyRequest != nil)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.xs)
-    }
-
-    @MainActor
-    private func saveFamilyName(_ name: String) async {
-        isSavingFamily = true
-        defer { isSavingFamily = false }
-        let ok = await memberVM.updateFamilyName(memberId: member.id, familyName: name)
-        if !ok { familyName = member.familyName ?? "" }
+        .dsAlert(L10n.t("طلب تغيير العائلة", "Request family change"),
+                 isPresented: $showFamilyRequestConfirm,
+                 presenting: familyRequestTarget) { target in
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            Button(L10n.t("إرسال", "Send")) {
+                Task {
+                    if await adminRequestVM.requestFamilyChange(memberId: member.id, newFamily: target) {
+                        pendingFamilyRequest = target
+                    }
+                }
+            }
+        } message: { target in
+            Text(L10n.t("يُرسل طلب تغيير عائلتك إلى «\(target)» للإدارة، ويتغيّر بعد موافقتها.",
+                        "A request to change your family to «\(target)» will be sent for approval."))
+        }
     }
 
     private var nameChangeRequestSheet: some View {
