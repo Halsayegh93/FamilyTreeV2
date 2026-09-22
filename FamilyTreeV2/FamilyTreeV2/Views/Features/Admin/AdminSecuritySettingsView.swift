@@ -15,7 +15,8 @@ struct AdminSecuritySettingsView: View {
     /// عدد فريق الإدارة — شارة على مربّع الفريق، كما كانت في اللوحة.
     private var moderatorCount: Int {
         memberVM.allMembers.filter {
-            $0.role == .owner || $0.role == .admin || $0.role == .monitor || $0.role == .supervisor
+            ($0.role == .owner || $0.role == .admin || $0.role == .monitor || $0.role == .supervisor)
+                && $0.isDeceased != true && $0.status != .frozen
         }.count
     }
 

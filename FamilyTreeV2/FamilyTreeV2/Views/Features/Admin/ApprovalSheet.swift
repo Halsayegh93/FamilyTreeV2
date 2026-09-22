@@ -18,7 +18,8 @@ struct ApprovalSheet: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard query.count >= 2 else { return [] }
         return memberVM.allMembers
-            .filter { $0.status == .active && $0.id != member.id }
+            // الأب: ذكر ومن ضمن الشجرة (لا نساء، لا مجمّد، لا مخفي، لا معلّق) — فحص الثغرات
+            .filter { $0.isCountable && !$0.isFemale && $0.id != member.id }
             .filter { $0.fullName.lowercased().contains(query) }
             .prefix(10)
             .map { $0 }

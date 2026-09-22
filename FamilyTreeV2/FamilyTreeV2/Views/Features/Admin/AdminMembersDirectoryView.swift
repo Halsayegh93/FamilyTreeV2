@@ -318,7 +318,9 @@ struct AdminMembersDirectoryView: View {
                             ))
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 // التجميد/التفعيل للمدير فقط (كان canEditMembers يشمل المراقب)
-                                if authVM.canFreezeMembers && member.isDeceased != true {
+                                // لا تجميد للمالك ولا لنفسك (السيرفر يرفضهما أيضاً)
+                                if authVM.canFreezeMembers && member.isDeceased != true
+                                    && member.role != .owner && member.id != authVM.currentUser?.id {
                                     if member.status == .frozen {
                                         Button {
                                             memberToActivate = member

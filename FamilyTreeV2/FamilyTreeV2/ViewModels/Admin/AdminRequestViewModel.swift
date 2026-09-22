@@ -163,6 +163,16 @@ class AdminRequestViewModel: ObservableObject {
     /// نطابق `AuthViewModel.canRejectRequests` (راجع CLAUDE.md).
     private var canRejectRequests: Bool { authVM?.canRejectRequests ?? false }
 
+    /// طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر يرفضه أيضاً (فحص الثغرات)
+    private func isOwnRequest(requesterId: UUID?, memberId: UUID?) -> Bool {
+        guard let me = currentUser?.id, authVM?.currentUser?.role != .owner else { return false }
+        if requesterId == me || memberId == me {
+            errorMessage = L10n.t("طلبك يوافق عليه مسؤول آخر.", "Another admin must approve your own request.")
+            return true
+        }
+        return false
+    }
+
     /// حذف العنصر محلياً فوراً مع أنيميشن ثم تحديث من السيرفر بعد تأخير
     private func removeLocallyThenRefresh<T: Identifiable>(
         from array: inout [T],
@@ -1473,6 +1483,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func approveNameChangeRequest(request: AdminRequest) async {
         guard canModerate else { Log.warning("قبول طلب الاسم مرفوض: لا صلاحية"); return }
+        guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
         guard let newName = request.newValue, !newName.isEmpty else {
             Log.error("[NameChange] الاسم الجديد غير موجود في الطلب")
             return
@@ -1590,6 +1601,7 @@ class AdminRequestViewModel: ObservableObject {
 
     func approvePhoneChangeRequest(request: PhoneChangeRequest) async {
         guard canModerate, let rawPhone = request.newValue, !rawPhone.isEmpty else { return }
+        guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
         guard let newPhone = KuwaitPhone.normalizeForStorageFromInput(rawPhone) else { return }
         // التحقق من تكرار الرقم قبل الموافقة
         if let memberVM = memberVM {

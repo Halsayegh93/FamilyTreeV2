@@ -711,7 +711,7 @@ struct LinkToExistingMemberSheet: View {
         let all = memberVM.allMembers.filter {
             $0.role != .pending &&
             $0.id != pendingMember.id &&
-            $0.isDeceased == false
+            $0.isDeceased != true
         }
         if searchText.isEmpty { return all }
         return all.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }

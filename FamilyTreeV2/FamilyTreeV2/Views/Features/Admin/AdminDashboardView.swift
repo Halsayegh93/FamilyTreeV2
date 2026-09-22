@@ -73,7 +73,8 @@ struct AdminDashboardView: View {
         for m in all {
             if m.role == .pending { pending += 1; continue }
             total += 1
-            if moderatorRoles.contains(m.role) { moderator += 1 }
+            // الفريق: الأحياء غير المجمّدين فقط
+            if moderatorRoles.contains(m.role) && m.isDeceased != true && m.status != .frozen { moderator += 1 }
 
             if m.isDeceased == true {
                 deceased += 1
