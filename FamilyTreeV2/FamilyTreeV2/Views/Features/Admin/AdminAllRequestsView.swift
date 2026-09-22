@@ -3178,10 +3178,14 @@ struct AdminAllRequestsView: View {
 
     private func nameChangeRow(for request: AdminRequest) -> some View {
         let isFamily = request.requestType == RequestType.familyChange.rawValue
+        // تغيير العائلة: الاسم الكامل نفسه، والذي يتغيّر آخره فقط (طلب المالك)
+        let baseName = request.member?.fullName ?? L10n.t("عضو", "Member")
         let currentName = isFamily
-            ? "\(request.member?.fullName ?? L10n.t("عضو", "Member")) — \(L10n.t("العائلة الحالية", "current family")): \(request.member?.familyName ?? "—")"
-            : (request.member?.fullName ?? L10n.t("عضو", "Member"))
-        let newName = request.newValue ?? "—"
+            ? FamilyNameCatalog.words(baseName, family: request.member?.familyName).joined(separator: " ")
+            : baseName
+        let newName = isFamily
+            ? FamilyNameCatalog.words(baseName, family: request.newValue).joined(separator: " ")
+            : (request.newValue ?? "—")
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // الصف الأول: الأيقونة + الاسم + البادج
@@ -3601,7 +3605,8 @@ struct AdminAllRequestsView: View {
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
         case .nameChange(let r):
             return .init(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple,
-                         title: L10n.t("تغيير اسم", "Name Change"),
+                         title: r.requestType == RequestType.familyChange.rawValue
+                            ? L10n.t("تغيير العائلة", "Family Change") : L10n.t("تغيير اسم", "Name Change"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
         case .diwaniya:
             return .init(icon: "tent.fill", color: DS.Color.gridDiwaniya,
@@ -3774,13 +3779,25 @@ struct AdminAllRequestsView: View {
             )
 
         case .nameChange(let request):
-            comparisonCard(
-                oldLabel: L10n.t("الاسم الحالي", "Current Name"),
-                oldValue: request.member?.fullName ?? "—",
-                newLabel: L10n.t("الاسم الجديد", "New Name"),
-                newValue: request.newValue ?? "—",
-                icon: "person.fill"
-            )
+            if request.requestType == RequestType.familyChange.rawValue {
+                // تغيير العائلة: الاسم الكامل قبل/بعد — يتغيّر الاسم الأخير فقط
+                let base = request.member?.fullName ?? "—"
+                comparisonCard(
+                    oldLabel: L10n.t("الاسم الحالي", "Current Name"),
+                    oldValue: FamilyNameCatalog.words(base, family: request.member?.familyName).joined(separator: " "),
+                    newLabel: L10n.t("بعد تغيير العائلة", "After family change"),
+                    newValue: FamilyNameCatalog.words(base, family: request.newValue).joined(separator: " "),
+                    icon: "person.2.fill"
+                )
+            } else {
+                comparisonCard(
+                    oldLabel: L10n.t("الاسم الحالي", "Current Name"),
+                    oldValue: request.member?.fullName ?? "—",
+                    newLabel: L10n.t("الاسم الجديد", "New Name"),
+                    newValue: request.newValue ?? "—",
+                    icon: "person.fill"
+                )
+            }
 
         case .diwaniya(let diwaniya):
             infoCard(icon: "tent.fill", label: L10n.t("اسم الديوانية", "Name"),
