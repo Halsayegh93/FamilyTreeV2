@@ -406,7 +406,8 @@ struct TreeSearchOverlay: View {
                     }
                 }
             } else {
-                let normalizedFull = ArabicTextNormalizer.normalizeForSearch(member.fullName)
+                // البحث يشمل العائلة المختارة كآخر اسم
+                let normalizedFull = ArabicTextNormalizer.normalizeForSearch(member.nameWordsWithFamily.joined(separator: " "))
                 let fullWords = normalizedFull.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
                 // تطابق بالبادئة (أولوية عالية) أو تطابق جزئي substring (طبقة احتياطية)
                 let allMatchPrefix = searchWords.allSatisfy { sw in fullWords.contains { $0.hasPrefix(sw) } }
@@ -518,13 +519,10 @@ struct TreeSearchOverlay: View {
             current = father
             visited.insert(father.id)
         }
-        // إضافة اسم العائلة (آخر كلمة من الاسم الكامل)
-        let fullParts = member.fullName.split(whereSeparator: \.isWhitespace)
-        if fullParts.count > 1, let lastName = fullParts.last {
-            let lastNameStr = String(lastName)
-            if lastNameStr != parts.last {
-                parts.append(lastNameStr)
-            }
+        // الاسم الأخير = العائلة المختارة (طلب المالك)، وإلا آخر كلمة من الاسم الكامل
+        let lastNameStr = member.lastName
+        if !lastNameStr.isEmpty, lastNameStr != parts.last, lastNameStr != member.firstName || parts.count > 1 {
+            parts.append(lastNameStr)
         }
         return parts.joined(separator: " ")
     }
