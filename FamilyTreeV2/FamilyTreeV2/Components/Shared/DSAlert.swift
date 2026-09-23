@@ -196,8 +196,9 @@ struct DSCenterCard<Content: View>: View {
             // إطار للمربّع في الوضع الداكن (طلب المالك) — يفصله عن الخلفية
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                    .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.16 : 0),
-                                  lineWidth: colorScheme == .dark ? 1 : 0)
+                    .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
+                                                          : Color.black.opacity(0.06),
+                                  lineWidth: colorScheme == .dark ? 1.25 : 1)
             )
             .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 10)
             .padding(.horizontal, DS.Spacing.xl)
@@ -247,8 +248,9 @@ struct DSCenterPanel<Content: View>: View {
                     // إطار في الوضع الداكن يفصل اللوح عن الخلفية (طلب المالك)
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                            .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.16 : 0),
-                                          lineWidth: colorScheme == .dark ? 1 : 0)
+                            .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
+                                                        : Color.black.opacity(0.06),
+                                          lineWidth: colorScheme == .dark ? 1.25 : 1)
                     )
                     .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
                     .scaleEffect(appeared ? 1 : 0.94)
@@ -327,13 +329,14 @@ struct DSExpandableCenterPanel<Content: View>: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                        .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.16 : 0),
-                                      lineWidth: colorScheme == .dark ? 1 : 0)
+                        .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
+                                                              : Color.black.opacity(0.06),
+                                      lineWidth: colorScheme == .dark ? 1.25 : 1)
                 )
                 .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
                 // فتح/إغلاق بحركة: يكبر من أصغر وأسفل قليلاً مع تلاشٍ (طلب المالك)
-                .scaleEffect(appeared ? 1 : (closing ? 0.97 : 0.9))
-                .offset(y: appeared ? 0 : (closing ? 6 : 20))
+                .scaleEffect(appeared ? 1 : (closing ? 0.9 : 0.9))
+                .offset(y: appeared ? 0 : (closing ? 18 : 20))
                 .opacity(appeared ? 1 : 0)
                 // الارتفاع الفعلي يتحرّك بسلاسة — يصل بعد قياس المحتوى الجديد
                 .animation(DS.Anim.smooth, value: height)
@@ -352,9 +355,9 @@ struct DSExpandableCenterPanel<Content: View>: View {
     private func animatedClose() {
         guard appeared else { return }
         closing = true
-        // بطيئة وخفيفة (طلب المالك): تلاشٍ هادئ نصف ثانية مع تصغير بسيط جداً
-        withAnimation(.easeInOut(duration: 0.5)) { appeared = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // هادئة وأوضح (طلب المالك): تلاشٍ مع تصغير ونزول ملحوظين
+        withAnimation(.easeInOut(duration: 0.42)) { appeared = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
             var t = Transaction()
             t.disablesAnimations = true
             withTransaction(t) { onClose() }

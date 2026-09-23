@@ -7,8 +7,6 @@ struct MemberDetailsView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @Environment(\.dismiss) var dismiss
-    /// في المربّع: إغلاق بحركة
-    @Environment(\.dsPanelClose) private var panelClose
 
     private let initialMember: FamilyMember
     @State private var currentMemberId: UUID
@@ -331,19 +329,7 @@ struct MemberDetailsView: View {
         VStack {
             HStack {
                 Spacer()
-                Button {
-                    if let panelClose { panelClose() } else { dismiss() }
-                } label: {
-                    Text(L10n.t("إلغاء", "Cancel"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(DS.Color.error)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .frame(height: 36)
-                        .background(DS.Color.background, in: Capsule())
-                        .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 0.5))
-                        .dsSubtleShadow()
-                }
-                .buttonStyle(DSScaleButtonStyle())
+                PanelCancelButton()
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.top, DS.Spacing.md)
@@ -1656,5 +1642,28 @@ private struct SheetDetents: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// «إلغاء» الأحمر أعلى المربّع — عرض مستقل حتى يقرأ إغلاق المربّع المتحرّك من
+/// داخله (قراءته من MemberDetailsView كانت فارغة فيُغلق بلا حركة)
+private struct PanelCancelButton: View {
+    @Environment(\.dsPanelClose) private var panelClose
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Button {
+            if let panelClose { panelClose() } else { dismiss() }
+        } label: {
+            Text(L10n.t("إلغاء", "Cancel"))
+                .font(DS.Font.plex(14, weight: .bold))
+                .foregroundColor(DS.Color.error)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(height: 36)
+                .background(DS.Color.background, in: Capsule())
+                .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 0.5))
+                .dsSubtleShadow()
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 }

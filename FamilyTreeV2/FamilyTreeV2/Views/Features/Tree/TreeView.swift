@@ -896,8 +896,14 @@ struct TreeView: View {
                 .padding(.horizontal, 2)
                 .padding(.vertical, 1)
             }
-            .onAppear { scrollBreadcrumbToEnd(proxy, animated: false) }
-            .onChange(of: breadcrumbChain.map(\.id)) { _ in scrollBreadcrumbToEnd(proxy, animated: true) }
+            // يُعاد التمرير كلما تغيّر آخر اسم (وعند الظهور) بعد رسم العناصر —
+            // مع مسار طويل (أكثر من ٧) كان التمرير يسبق الرسم فلا يصل للنهاية
+            .task(id: breadcrumbChain.last?.id) {
+                try? await Task.sleep(nanoseconds: 80_000_000)
+                scrollBreadcrumbToEnd(proxy, animated: true)
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                scrollBreadcrumbToEnd(proxy, animated: true)
+            }
         }
         .transition(.move(edge: .top).combined(with: .opacity))
     }
@@ -905,13 +911,10 @@ struct TreeView: View {
     /// يمرّر شريط المسار حتى يظهر آخر اسم (الموقع الحالي)
     private func scrollBreadcrumbToEnd(_ proxy: ScrollViewProxy, animated: Bool) {
         guard let last = breadcrumbChain.last?.id else { return }
-        // بعد رسم العناصر الجديدة
-        DispatchQueue.main.async {
-            if animated {
-                withAnimation(DS.Anim.snappy) { proxy.scrollTo(last, anchor: .trailing) }
-            } else {
-                proxy.scrollTo(last, anchor: .trailing)
-            }
+        if animated {
+            withAnimation(DS.Anim.snappy) { proxy.scrollTo(last, anchor: .trailing) }
+        } else {
+            proxy.scrollTo(last, anchor: .trailing)
         }
     }
 
