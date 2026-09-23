@@ -97,7 +97,7 @@ struct ImageCropperView: View {
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
-                                .background(DS.Color.primary,
+                                .background(DSActionFill.style(),
                                             in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                         }
                         .disabled(displayImage == nil)

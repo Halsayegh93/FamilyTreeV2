@@ -202,7 +202,7 @@ struct DSDateCard: View {
                         .font(DS.Font.plex(14, weight: .bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.primary))
+                        .background(DSActionFill.style(), in: RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
                 Button(action: onCancel) {
                     Text(L10n.t("إلغاء", "Cancel"))
@@ -410,5 +410,15 @@ struct DSGenderPicker: View {
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+// MARK: - تعبئة أزرار الإجراء (طلب المالك)
+
+/// نفس تدرّج زر «طلب تعديل» — كحلي عميق في الوضع الداكن بدل الأزرق الفاتح.
+/// `enabled: false` يخفّته للزر المعطّل.
+enum DSActionFill {
+    static func style(enabled: Bool = true) -> some ShapeStyle {
+        DS.Color.gradientPrimary.opacity(enabled ? 1 : 0.45)
     }
 }

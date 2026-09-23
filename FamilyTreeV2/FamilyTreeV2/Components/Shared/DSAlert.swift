@@ -253,6 +253,74 @@ struct DSCenterPanel<Content: View>: View {
     }
 }
 
+/// ارتفاع الجزء الظاهر في المربّع المصغّر (يُبلِّغه المحتوى)
+struct DSPanelCollapsedHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// لوح بمنتصف الشاشة قابل للتوسّع مثل الشيت (طلب المالك): يبدأ مضغوطاً،
+/// ويتوسّع ويتصغّر عبر `isExpanded` (زر داخل المحتوى)، ويُغلق بالضغط خارجه.
+struct DSExpandableCenterPanel<Content: View>: View {
+    @Binding var isExpanded: Bool
+    let onClose: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    @State private var appeared = false
+    /// ارتفاع المحتوى كاملاً (`SheetContentHeightKey`) — للموسّع
+    @State private var contentHeight: CGFloat = 0
+    /// ارتفاع الرأس فقط (`DSPanelCollapsedHeightKey`) — للمصغّر؛ المحتوى يبقى ويُقصّ
+    @State private var collapsedHeight: CGFloat = 0
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        GeometryReader { geo in
+            // المصغّر والموسّع كلاهما على قدر المحتوى بلا فراغ زائد (طلب المالك)،
+            // وبحد أقصى 90% من الشاشة — والباقي يتمرّر داخل المربّع
+            let cap = geo.size.height * 0.9
+            let fallback = isExpanded ? cap : min(geo.size.height * 0.52, 470)
+            let measured = isExpanded ? contentHeight
+                                      : (collapsedHeight > 0 ? collapsedHeight : contentHeight)
+            let height = measured > 0 ? min(measured, cap) : fallback
+
+            ZStack {
+                Color.black.opacity(appeared ? 0.45 : 0)
+                    .ignoresSafeArea()
+                    .onTapGesture(perform: onClose)
+
+                VStack(spacing: 0) {
+                    // بلا مقبض ولا ×: التوسيع بزر داخل المحتوى، والإغلاق بالضغط خارجه (طلب المالك)
+                    content()
+                        .onPreferenceChange(SheetContentHeightKey.self) { h in
+                            if h > 0 { contentHeight = h }
+                        }
+                        .onPreferenceChange(DSPanelCollapsedHeightKey.self) { h in
+                            if h > 0 { collapsedHeight = h }
+                        }
+                }
+                .frame(width: min(geo.size.width - DS.Spacing.lg * 2, 520), height: height)
+                .background(DS.Color.background)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+                        .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.16 : 0),
+                                      lineWidth: colorScheme == .dark ? 1 : 0)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
+                .scaleEffect(appeared ? 1 : 0.94)
+                .opacity(appeared ? 1 : 0)
+                // الارتفاع الفعلي يتحرّك بسلاسة — يصل بعد قياس المحتوى الجديد
+                .animation(DS.Anim.smooth, value: height)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onAppear { withAnimation(DS.Anim.snappy) { appeared = true } }
+    }
+}
+
 /// محتوى رسالة: عنوان + نص + أزرار (أو «حسناً» إن لم تُمرَّر أزرار)
 private struct DSAlertBody<A: View, M: View>: View {
     let title: String

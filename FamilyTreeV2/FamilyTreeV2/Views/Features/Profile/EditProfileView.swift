@@ -47,8 +47,7 @@ private struct EditLimitPopup: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.primary))
+                        .background(DSActionFill.style(), in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 }
                 .buttonStyle(DSScaleButtonStyle())
                 .padding(.top, DS.Spacing.xs)
@@ -1244,8 +1243,7 @@ private struct FamilyRequestCard: View {
                         .font(DS.Font.plex(14, weight: .bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .fill(selected == nil ? DS.Color.primary.opacity(0.4) : DS.Color.primary))
+                        .background(DSActionFill.style(enabled: selected != nil), in: RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
                 .disabled(selected == nil)
                 Button(action: onCancel) {
@@ -1305,7 +1303,7 @@ private struct NameRequestCard: View {
                         .font(DS.Font.plex(14, weight: .bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(canSend ? DS.Color.primary : DS.Color.primary.opacity(0.4)))
+                        .background(DSActionFill.style(enabled: canSend), in: RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
                 .disabled(!canSend)
                 Button(action: onCancel) {
@@ -1508,8 +1506,7 @@ private struct PhoneRequestCard: View {
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity).frame(height: 44)
-                .background(RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .fill(enabled ? DS.Color.primary : DS.Color.primary.opacity(0.4)))
+                .background(DSActionFill.style(enabled: enabled), in: RoundedRectangle(cornerRadius: DS.Radius.md))
             }
             .disabled(!enabled)
 
@@ -1683,7 +1680,7 @@ struct BioEditCard: View {
                         .font(DS.Font.plex(14, weight: .bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.primary))
+                        .background(DSActionFill.style(), in: RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
                 Button(action: onCancel) {
                     Text(t("إلغاء", "Cancel"))

@@ -1853,7 +1853,7 @@ private struct AvatarPreview: View {
                                 .font(DS.Font.plex(15, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity).frame(height: 48)
-                                .background(DS.Color.primary,
+                                .background(DSActionFill.style(),
                                             in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                         }
                         .disabled(isUploading)

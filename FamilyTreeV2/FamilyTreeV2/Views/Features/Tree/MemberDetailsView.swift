@@ -16,8 +16,12 @@ struct MemberDetailsView: View {
         memberVM.member(byId: currentMemberId) ?? initialMember
     }
 
-    init(member: FamilyMember) {
+    /// true = مربّع بمنتصف الشاشة قابل للتوسّع بدل الشيت (طلب المالك)
+    private let centered: Bool
+
+    init(member: FamilyMember, centered: Bool = false) {
         self.initialMember = member
+        self.centered = centered
         _currentMemberId = State(initialValue: member.id)
     }
 
@@ -33,8 +37,9 @@ struct MemberDetailsView: View {
     @State private var showReportConfirm = false
     @State private var reportReason = ""
     @State private var reportSent = false
-    @State private var childrenExpanded = false
     @State private var showChildrenSheet = false
+    /// شريط العائلة (الأب والأبناء) مخفي بالبداية (طلب المالك)
+    @State private var familyOpen = false
     /// حجم الشيت: متوسط = صورة+اسم+قرابة+عمر فقط، كبير = كل المعلومات.
     @State private var detent: PresentationDetent = .fraction(0.46)
     @Environment(\.verticalSizeClass) private var vSizeClass
@@ -52,8 +57,6 @@ struct MemberDetailsView: View {
         member.id == authVM.currentUser?.id
     }
 
-    /// العضو نشط داخل المنظومة — يستخدم helper مشترك في FamilyMember+UI
-    private var isMemberActive: Bool { member.isInSystem }
 
     private var canSeePendingRequests: Bool {
         authVM.canModerate ||
@@ -71,6 +74,22 @@ struct MemberDetailsView: View {
     }
 
     var body: some View {
+        if centered {
+            DSExpandableCenterPanel(
+                isExpanded: Binding(
+                    get: { detent == .large },
+                    set: { detent = $0 ? .large : .fraction(0.46) }
+                ),
+                onClose: { dismiss() }
+            ) {
+                detailsStack
+            }
+        } else {
+            detailsStack
+        }
+    }
+
+    private var detailsStack: some View {
         NavigationStack {
             ZStack(alignment: .top) {
                 DS.Color.background.ignoresSafeArea()
@@ -78,6 +97,7 @@ struct MemberDetailsView: View {
                 if member.isDeleted {
                     deletedMemberView
                 } else {
+                    ScrollViewReader { scrollProxy in
                     ScrollView(showsIndicators: false) {
                         if isLandscape {
                             // الوضع الأفقي: الشيت يملأ الشاشة — نعرض كل التفاصيل على عمودين
@@ -88,13 +108,11 @@ struct MemberDetailsView: View {
 
                                     quickActionsRow
                                         .padding(.horizontal, DS.Spacing.lg)
-
-                                    fatherCell
                                 }
                                 .frame(maxWidth: .infinity)
 
                                 VStack(spacing: DS.Spacing.md) {
-                                    basicInfoCard
+                                    infoGrid
                                         .padding(.horizontal, DS.Spacing.lg)
 
                                     bioCard
@@ -112,29 +130,34 @@ struct MemberDetailsView: View {
                             .padding(.bottom, DS.Spacing.xxxl)
                         } else {
                         VStack(spacing: DS.Spacing.md) {
-                            compactHeroSection
-                                .padding(.top, DS.Spacing.lg)
+                            // الرأس: الصورة والاسم والقرابة وزر التفاصيل — ارتفاعه = المربّع المصغّر
+                            VStack(spacing: DS.Spacing.md) {
+                                compactHeroSection
+                                    .padding(.top, DS.Spacing.lg)
 
-                            quickActionsRow
-                                .padding(.horizontal, DS.Spacing.lg)
-
-                            // المعلومات تظهر فقط عند توسيع الشيت (الحجم الكبير)
-                            if detent == .large {
-                                // مسار لأعلى — الأب (يظهر فقط عند وجود أب)
-                                fatherCell
-
-                                basicInfoCard
+                                quickActionsRow
                                     .padding(.horizontal, DS.Spacing.lg)
 
-                                bioCard
-                                    .padding(.horizontal, DS.Spacing.lg)
+                                if centered {
+                                    detailsToggleButton
+                                }
+                            }
+                            .id("detailsTop")
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.preference(key: DSPanelCollapsedHeightKey.self,
+                                                           value: geo.size.height + DS.Spacing.lg)
+                                }
+                            )
 
-                                pendingRequestsCard
-                                    .padding(.horizontal, DS.Spacing.lg)
-
-                                actionButtonsSection
-                                    .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.top, DS.Spacing.md)
+                            if centered {
+                                // التفاصيل تبقى في مكانها ويُقصّ المربّع فوقها عند الإخفاء —
+                                // فلا تختفي فجأة (طلب المالك): يتحرّك الارتفاع وحده
+                                detailsBody
+                                    .opacity(detent == .large ? 1 : 0)
+                                    .allowsHitTesting(detent == .large)
+                            } else if detent == .large {
+                                detailsBody
                             } else {
                                 // تلميح: اسحب لأعلى لعرض المزيد
                                 Text(L10n.t("اسحب لأعلى لعرض التفاصيل", "Swipe up for details"))
@@ -143,13 +166,27 @@ struct MemberDetailsView: View {
                                     .padding(.top, DS.Spacing.md)
                             }
 
-                            Spacer(minLength: 60)
+                            Spacer(minLength: centered ? DS.Spacing.lg : 60)
                         }
+                        // المربّع بحجم محتواه (طلب المالك)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(key: SheetContentHeightKey.self,
+                                                       value: geo.size.height)
+                            }
+                        )
                         }
+                    }
+                    .scrollDisabled(centered && detent != .large)
+                    .onChange(of: detent) { newValue in
+                        if centered, newValue != .large {
+                            withAnimation(DS.Anim.smooth) { scrollProxy.scrollTo("detailsTop", anchor: .top) }
+                        }
+                    }
                     }
                 }
 
-                floatingCloseButton
+                if centered { topCancelButton } else { floatingCloseButton }
             }
             .onAppear { recomputeCache() }
             .onChange(of: currentMemberId) { _ in recomputeCache() }
@@ -157,8 +194,8 @@ struct MemberDetailsView: View {
             .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
             .toolbar(.hidden, for: .navigationBar)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .presentationDetents([.fraction(0.46), .large], selection: $detent)
-            .presentationDragIndicator(.visible)
+            // ارتفاعات الشيت فقط في وضع الشيت — داخل المربّع تدفع الاختيار إلى «large»
+            .modifier(SheetDetents(enabled: !centered, detent: $detent))
             // التعديل المباشر: لوح بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
             .fullScreenCover(isPresented: $showAdminControl) {
                 if authVM.canEditMembers {
@@ -268,20 +305,60 @@ struct MemberDetailsView: View {
 
     // MARK: - Hero Section (Compact circular)
 
+    /// «عرض التفاصيل» / «إخفاء التفاصيل» — يوسّع المربّع أو يصغّره
+    private var detailsToggleButton: some View {
+        let expanded = detent == .large
+        return Button {
+            withAnimation(DS.Anim.snappy) { detent = expanded ? .fraction(0.46) : .large }
+        } label: {
+            Label(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
+                           : L10n.t("عرض التفاصيل", "Show details"),
+                  systemImage: expanded ? "chevron.down" : "chevron.up")
+                .font(DS.Font.plex(13, weight: .bold))
+                // لون ممتلئ مختلف عن شارة العمر (طلب المالك)
+                .foregroundColor(.white)
+                .padding(.horizontal, DS.Spacing.lg)
+                .frame(height: 38)
+                .background(DSActionFill.style(), in: Capsule())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    /// «إلغاء» أحمر أعلى المربّع — في الجهة اليسرى مثل بقية المربّعات (طلب المالك)
+    private var topCancelButton: some View {
+        VStack {
+            HStack {
+                Spacer()
+                Button { dismiss() } label: {
+                    Text(L10n.t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.error)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .frame(height: 36)
+                        .background(DS.Color.background, in: Capsule())
+                        .overlay(Capsule().stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 0.5))
+                        .dsSubtleShadow()
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.top, DS.Spacing.md)
+            Spacer()
+        }
+    }
+
     private var compactHeroSection: some View {
         VStack(spacing: DS.Spacing.md) {
             ZStack {
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 170, height: 170)
-                    .blur(radius: 28)
-                    .opacity(0.35)
-
+                // (أُزيل التوهّج المموّه خلف الصورة — كان يُقصّ بإطار مربّع، طلب المالك)
                 ZStack {
                     avatarContent
                         .frame(width: 130, height: 130)
                         .clipShape(Circle())
-                        .dsGlowShadow()
+                        // المتوفّى بالأبيض والأسود (طلب المالك)
+                        .grayscale(member.isDeceased == true ? 1 : 0)
+                        // إطار دائري خفيف جداً بلا توهّج (طلب المالك)
+                        .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
                         .onTapGesture { showAvatarPreview = true }
 
                     // علامة وفاة (نفس نمط الأبناء)
@@ -294,26 +371,16 @@ struct MemberDetailsView: View {
                                     .font(DS.Font.scaled(18, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
                             )
-                            .offset(x: 48, y: 48)
-                    } else if isMemberActive {
-                        // دائرة خضراء للأعضاء النشطين (داخل المنظومة)
-                        Circle()
-                            .fill(DS.Color.background)
-                            .frame(width: 26, height: 26)
-                            .overlay(
-                                Circle()
-                                    .fill(DS.Color.secondary)
-                                    .frame(width: 16, height: 16)
-                                    .shadow(color: DS.Color.secondary.opacity(0.5), radius: 4, x: 0, y: 1)
-                            )
+                            // إطار خفيف لعلامة الوفاة (طلب المالك)
+                            .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
                             .offset(x: 48, y: 48)
                     }
                 }
             }
 
             Text(member.displayFullName)
-                .font(DS.Font.title2)
-                .fontWeight(.bold)
+                // أصغر حبّتين (طلب المالك)
+                .font(DS.Font.plex(18, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -398,44 +465,233 @@ struct MemberDetailsView: View {
     /// خلية الأب القابلة للضغط — تنقل الشيت والشجرة للأب (مسار لأعلى في الشجرة).
     /// تظهر فقط عند وجود أب، وتحاكي خلايا الأم/الزوج في شيت النساء (relationCell).
     @ViewBuilder
-    private var fatherCell: some View {
-        if let father = cachedFather {
-            Button {
-                openMemberInTree(father.id)
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.primary.opacity(0.12))
-                            .frame(width: 34, height: 34)
-                        Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(14, weight: .semibold))
-                            .foregroundColor(DS.Color.primary)
-                    }
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(L10n.t("الأب", "Father"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
-                        Text(father.firstName.isEmpty ? father.fullName : father.firstName)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(DS.Spacing.sm)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .dsSubtleShadow()
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .padding(.horizontal, DS.Spacing.lg)
+    /// جسم التفاصيل: شبكة أيقونات (المعلومات + الأب + الأبناء) ← السيرة ← الطلبات ← الأزرار
+    private var detailsBody: some View {
+        VStack(spacing: DS.Spacing.md) {
+            infoGrid
+                .padding(.horizontal, DS.Spacing.lg)
+
+            familyStrip
+                .padding(.horizontal, DS.Spacing.lg)
+
+            bioCard
+                .padding(.horizontal, DS.Spacing.lg)
+
+            pendingRequestsCard
+                .padding(.horizontal, DS.Spacing.lg)
+
+            actionButtonsSection
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.sm)
         }
+    }
+
+    // MARK: شريط العائلة — الأب والأبناء بشكل جديد (طلب المالك)
+
+    /// الأب بصورته وحلقة ذهبية، ثم فاصل، ثم الأبناء بصور صغيرة تتمرّر أفقياً.
+    /// الضغط على أي صورة يفتح صاحبها.
+    @ViewBuilder
+    private var familyStrip: some View {
+        let father = cachedFather
+        let children = cachedChildren
+        if father != nil || !children.isEmpty {
+            VStack(spacing: 0) {
+                // الرأس: يفتح/يخفي الأب والأبناء — مخفيّون بالبداية
+                Button {
+                    withAnimation(DS.Anim.snappy) { familyOpen.toggle() }
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "person.2.fill")
+                            .font(DS.Font.plex(12, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(DS.Color.accent))
+                        Text(L10n.t("العائلة", "Family"))
+                            .font(DS.Font.plex(13, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(familySummary(hasFather: father != nil, children: children.count))
+                            .font(DS.Font.plex(11.5, weight: .semibold))
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.down")
+                            .font(DS.Font.plex(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .rotationEffect(.degrees(familyOpen ? 180 : 0))
+                    }
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if familyOpen {
+                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                        if let father {
+                            Button { openMemberInTree(father.id) } label: {
+                                familyBubble(father, size: 50, ring: DS.Color.warning,
+                                             caption: L10n.t("الأب", "Father"))
+                            }
+                            .buttonStyle(DSScaleButtonStyle())
+                        }
+
+                        if father != nil && !children.isEmpty {
+                            Rectangle()
+                                .fill(DS.Color.textTertiary.opacity(0.2))
+                                .frame(width: 1, height: 64)
+                                .padding(.top, 4)
+                        }
+
+                        if !children.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(L10n.t("الأبناء", "Children") + " · \(children.count)")
+                                    .font(DS.Font.plex(11.5, weight: .bold))
+                                    .foregroundColor(DS.Color.textSecondary)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                                        ForEach(children) { child in
+                                            Button { openMemberInTree(child.id) } label: {
+                                                familyBubble(child, size: 40, ring: DS.Color.primary.opacity(0.35),
+                                                             caption: nil)
+                                            }
+                                            .buttonStyle(DSScaleButtonStyle())
+                                        }
+                                    }
+                                    .padding(.vertical, 2)
+                                }
+                            }
+                        }
+
+                        if children.isEmpty { Spacer(minLength: 0) }
+                    }
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.md)
+                    .padding(.top, DS.Spacing.xs)
+                    .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DS.Color.surface.opacity(0.6),
+                        in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(DS.Color.textTertiary.opacity(0.12), lineWidth: 1)
+            )
+        }
+    }
+
+    /// «الأب · ٣ أبناء» — ملخّص تحت العنوان والشريط مقفول
+    private func familySummary(hasFather: Bool, children: Int) -> String {
+        var parts: [String] = []
+        if hasFather { parts.append(L10n.t("الأب", "Father")) }
+        if children > 0 { parts.append(L10n.t("\(children) أبناء", "\(children) children")) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// صورة دائرية بحلقة + الاسم الأول تحتها (+ وصف فوق الاسم للأب)
+    private func familyBubble(_ m: FamilyMember, size: CGFloat, ring: Color, caption: String?) -> some View {
+        VStack(spacing: 4) {
+            ZStack {
+                if let url = m.avatarUrl, let imgUrl = URL(string: url) {
+                    CachedAsyncImage(url: imgUrl) { img in img.resizable().scaledToFill() }
+                    placeholder: { Circle().fill(DS.Color.primary.opacity(0.10)) }
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.10))
+                        .frame(width: size, height: size)
+                        .overlay(
+                            Text(String(m.firstName.prefix(1)))
+                                .font(DS.Font.plex(size * 0.36, weight: .bold))
+                                .foregroundColor(DS.Color.primary)
+                        )
+                }
+            }
+            .overlay(Circle().stroke(ring, lineWidth: 1.5).padding(-2))
+            // المتوفّى بالأبيض والأسود (طلب المالك)
+            .grayscale(m.isDeceased == true ? 1 : 0)
+
+            if let caption {
+                Text(caption)
+                    .font(DS.Font.plex(10.5, weight: .bold))
+                    .foregroundColor(DS.Color.warning)
+            }
+            Text(m.firstName)
+                .font(DS.Font.plex(11.5, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: size + 18)
+        }
+    }
+
+    // MARK: شبكة المعلومات الأيقونية (طلب المالك)
+
+    private struct InfoTileData: Identifiable {
+        let id: String
+        let icon: String
+        let label: String
+        let value: String
+        let color: Color
+        var ltr = false
+    }
+
+    /// المعلومات في بلاطات أيقونية: الميلاد، الهاتف، الوفاة (بلا الأب والأبناء — طلب المالك)
+    private var infoTiles: [InfoTileData] {
+        cachedBasicInfoRows.enumerated().map { idx, row in
+            InfoTileData(id: "info-\(idx)", icon: row.icon, label: row.label, value: row.value,
+                         color: row.color, ltr: row.icon == "phone.fill")
+        }
+    }
+
+    @ViewBuilder
+    private var infoGrid: some View {
+        let tiles = infoTiles
+        if !tiles.isEmpty {
+            // بلاطتان في كل صف (طلب المالك)
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 2),
+                spacing: DS.Spacing.sm
+            ) {
+                ForEach(tiles) { infoTileView($0) }
+            }
+        }
+    }
+
+    /// بلاطة: دائرة أيقونة ملوّنة، ثم القيمة بارزة والعنوان تحتها — على خلفية
+    /// بتدرّج خفيف من لون الأيقونة
+    private func infoTileView(_ tile: InfoTileData) -> some View {
+        // بلاطة مدمجة: الأيقونة جنب القيمة والعنوان، وخلفية خفيفة جداً (طلب المالك)
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: tile.icon)
+                .font(DS.Font.plex(12, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(tile.color))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(tile.label)
+                    .font(DS.Font.plex(11, weight: .bold))
+                    .foregroundColor(DS.Color.textSecondary)
+                Text(tile.value)
+                    .font(DS.Font.plex(13, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .environment(\.layoutDirection, tile.ltr ? .leftToRight : LanguageManager.shared.layoutDirection)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(maxWidth: .infinity)
+        .background(tile.color.opacity(0.05),
+                    in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(tile.color.opacity(0.12), lineWidth: 1)
+        )
     }
 
     // MARK: - Basic Info Card
@@ -463,70 +719,6 @@ struct MemberDetailsView: View {
             s.append(.init(value: L10n.t("نشِط", "Active"), label: L10n.t("الحالة", "Status"), color: DS.Color.success))
         }
         return s
-    }
-
-    /// بطاقة موحّدة: المعلومات الأساسية (الميلاد/الهاتف/الوفاة) + الأبناء داخل نفس
-    /// المربّع. بلا العمر (انتقل لحبّة القرابة) وبلا الأب (فقط الأبناء)، ويتوسّع داخليًا.
-    @ViewBuilder
-    private var basicInfoCard: some View {
-        let rows = cachedBasicInfoRows          // الميلاد · الهاتف · الوفاة (صفوف عريضة مقروءة)
-        let hasChildren = !cachedChildren.isEmpty
-
-        if !rows.isEmpty || hasChildren {
-            DSCard(padding: 0) {
-                VStack(spacing: 0) {
-                    DSSectionHeader(
-                        title: L10n.t("المعلومات", "Info"),
-                        icon: "person.text.rectangle.fill",
-                        iconColor: DS.Color.primary
-                    )
-
-                    // أيقونات (ميلاد · هاتف · وفاة) والمعلومة تحت كل أيقونة.
-                    if !rows.isEmpty {
-                        HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                                infoTile(row: row)
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.md)
-                    }
-
-                    // الأبناء فقط (بلا الأب) — الكلمة والسهم بالنص، ويتوسّع داخل المربّع.
-                    if hasChildren {
-                        if !rows.isEmpty {
-                            Divider().overlay(DS.Color.textTertiary.opacity(0.15))
-                                .padding(.horizontal, DS.Spacing.lg)
-                        }
-                        Button {
-                            withAnimation(DS.Anim.snappy) { childrenExpanded.toggle() }
-                        } label: {
-                            HStack(spacing: DS.Spacing.sm) {
-                                Image(systemName: "person.3.fill")
-                                    .font(DS.Font.scaled(13, weight: .semibold))
-                                    .foregroundColor(DS.Color.primary)
-                                Text(L10n.t("الأبناء", "Children") + " (\(cachedChildren.count))")
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                Image(systemName: "chevron.down")
-                                    .font(DS.Font.scaled(11, weight: .semibold))
-                                    .foregroundColor(DS.Color.textTertiary)
-                                    .rotationEffect(.degrees(childrenExpanded ? 180 : 0))
-                            }
-                            .frame(maxWidth: .infinity)      // بالنص
-                            .padding(.vertical, DS.Spacing.sm + 2)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-
-                        if childrenExpanded {
-                            childrenInlineGrid
-                                .padding(.horizontal, DS.Spacing.lg)
-                        }
-                    }
-                }
-                .padding(.bottom, DS.Spacing.md)
-            }
-        }
     }
 
     private struct ChipData: Identifiable {
@@ -631,31 +823,6 @@ struct MemberDetailsView: View {
                 .environment(\.layoutDirection, ltrValue ? .leftToRight : LanguageManager.shared.layoutDirection)
         }
         .padding(.vertical, DS.Spacing.sm + 2)
-    }
-
-    /// خانة إيقونة + قيمة + label عمودياً — للتخطيط الأفقي ثنائي الأعمدة
-    private func infoTile(row: InfoRowData) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            ZStack {
-                Circle()
-                    .fill(row.color.opacity(0.12))
-                    .frame(width: 38, height: 38)
-                Image(systemName: row.icon)
-                    .font(DS.Font.scaled(15, weight: .semibold))
-                    .foregroundColor(row.color)
-            }
-            Text(row.label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-            Text(row.value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .environment(\.layoutDirection, row.icon == "phone.fill" ? .leftToRight : LanguageManager.shared.layoutDirection)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
     }
 
     private struct InfoRowData {
@@ -874,56 +1041,6 @@ struct MemberDetailsView: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-    }
-
-    private func childButton(_ child: FamilyMember) -> some View {
-        Button {
-            // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
-            let childId = child.id
-            currentMemberId = childId
-            NotificationCenter.default.post(
-                name: .openMemberInTree,
-                object: nil,
-                userInfo: ["memberId": childId]
-            )
-        } label: {
-            childTileFirstName(child)
-                .frame(width: 52)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    /// صور الأبناء — صف واحد حتى ٥، وسطران إذا أكثر من ٥.
-    private var childrenInlineGrid: some View {
-        Group {
-            if cachedChildren.count > 5 {
-                let mid = (cachedChildren.count + 1) / 2
-                let row1 = Array(cachedChildren.prefix(mid))
-                let row2 = Array(cachedChildren.dropFirst(mid))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                        HStack(alignment: .top, spacing: DS.Spacing.md) {
-                            ForEach(row1) { childButton($0) }
-                        }
-                        HStack(alignment: .top, spacing: DS.Spacing.md) {
-                            ForEach(row2) { childButton($0) }
-                        }
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: DS.Spacing.md) {
-                        ForEach(cachedChildren) { childButton($0) }
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-            }
-        }
-        .padding(.top, DS.Spacing.sm)
-        .padding(.bottom, DS.Spacing.xs)
     }
 
     private func childTileFirstName(_ child: FamilyMember) -> some View {
@@ -1513,6 +1630,22 @@ struct MemberDetailsView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.t("إغلاق", "Close"))
+        }
+    }
+}
+
+/// ارتفاعات الشيت (0.46 / كامل) — تُطبَّق فقط عند العرض كشيت
+private struct SheetDetents: ViewModifier {
+    let enabled: Bool
+    @Binding var detent: PresentationDetent
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .presentationDetents([.fraction(0.46), .large], selection: $detent)
+                .presentationDragIndicator(.visible)
+        } else {
+            content
         }
     }
 }
