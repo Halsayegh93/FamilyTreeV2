@@ -526,47 +526,56 @@ struct MemberDetailsView: View {
                 .buttonStyle(.plain)
 
                 if familyOpen {
-                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        // الأب في سطر خاص
                         if let father {
                             Button { openMemberInTree(father.id) } label: {
-                                familyBubble(father, size: 50, ring: DS.Color.warning,
-                                             caption: L10n.t("الأب", "Father"))
+                                HStack(spacing: DS.Spacing.sm) {
+                                    familyAvatar(father, size: 38, ring: DS.Color.warning)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(L10n.t("الأب", "Father"))
+                                            .font(DS.Font.plex(10.5, weight: .bold))
+                                            .foregroundColor(DS.Color.warning)
+                                        Text(father.firstName.isEmpty ? father.fullName : father.firstName)
+                                            .font(DS.Font.plex(13.5, weight: .bold))
+                                            .foregroundColor(DS.Color.textPrimary)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                        .font(DS.Font.plex(11, weight: .bold))
+                                        .foregroundColor(DS.Color.textTertiary)
+                                }
+                                .padding(DS.Spacing.sm)
+                                .background(DS.Color.warning.opacity(0.06),
+                                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(DSScaleButtonStyle())
                         }
 
-                        if father != nil && !children.isEmpty {
-                            Rectangle()
-                                .fill(DS.Color.textTertiary.opacity(0.2))
-                                .frame(width: 1, height: 64)
-                                .padding(.top, 4)
-                        }
-
+                        // الأبناء: شبكة أربعة في كل صف (بدل الصف المتمرّر — طلب المالك)
                         if !children.isEmpty {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(L10n.t("الأبناء", "Children") + " · \(children.count)")
-                                    .font(DS.Font.plex(11.5, weight: .bold))
-                                    .foregroundColor(DS.Color.textSecondary)
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                        ForEach(children) { child in
-                                            Button { openMemberInTree(child.id) } label: {
-                                                familyBubble(child, size: 40, ring: DS.Color.primary.opacity(0.35),
-                                                             caption: nil)
-                                            }
-                                            .buttonStyle(DSScaleButtonStyle())
-                                        }
+                            Text(L10n.t("الأبناء", "Children") + " · \(children.count)")
+                                .font(DS.Font.plex(11.5, weight: .bold))
+                                .foregroundColor(DS.Color.textSecondary)
+                                .padding(.top, 2)
+                            LazyVGrid(
+                                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.xs), count: 4),
+                                spacing: DS.Spacing.sm
+                            ) {
+                                ForEach(children) { child in
+                                    Button { openMemberInTree(child.id) } label: {
+                                        familyBubble(child, size: 42, ring: DS.Color.primary.opacity(0.35),
+                                                     caption: nil)
                                     }
-                                    .padding(.vertical, 2)
+                                    .buttonStyle(DSScaleButtonStyle())
                                 }
                             }
                         }
-
-                        if children.isEmpty { Spacer(minLength: 0) }
                     }
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.bottom, DS.Spacing.md)
-                    .padding(.top, DS.Spacing.xs)
                     .transition(.opacity)
                 }
             }
@@ -586,6 +595,29 @@ struct MemberDetailsView: View {
         if hasFather { parts.append(L10n.t("الأب", "Father")) }
         if children > 0 { parts.append(L10n.t("\(children) أبناء", "\(children) children")) }
         return parts.joined(separator: " · ")
+    }
+
+    /// صورة دائرية بحلقة فقط — لسطر الأب
+    private func familyAvatar(_ m: FamilyMember, size: CGFloat, ring: Color) -> some View {
+        ZStack {
+            if let url = m.avatarUrl, let imgUrl = URL(string: url) {
+                CachedAsyncImage(url: imgUrl) { img in img.resizable().scaledToFill() }
+                placeholder: { Circle().fill(DS.Color.primary.opacity(0.10)) }
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(DS.Color.primary.opacity(0.10))
+                    .frame(width: size, height: size)
+                    .overlay(
+                        Text(String(m.firstName.prefix(1)))
+                            .font(DS.Font.plex(size * 0.36, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
+                    )
+            }
+        }
+        .overlay(Circle().stroke(ring, lineWidth: 1.5).padding(-2))
+        .grayscale(m.isDeceased == true ? 1 : 0)
     }
 
     /// صورة دائرية بحلقة + الاسم الأول تحتها (+ وصف فوق الاسم للأب)
