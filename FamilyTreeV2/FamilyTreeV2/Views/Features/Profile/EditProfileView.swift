@@ -871,32 +871,12 @@ struct EditProfileView: View {
     // MARK: - Logic (الوظائف)
 
     /// تغيير حالة الزواج + حفظ فوري في القاعدة (لا يعتمد على زر الحفظ العام).
+    /// الحالة الاجتماعية: الضغط يغيّر الزر فقط — تُحفظ عند «حفظ» ويُحسب الحد
+    /// عندها (طلب المالك)، مثل بقية الحقول
     private func setMarried(_ value: Bool) {
         guard value != isMarried else { return }
         UISelectionFeedbackGenerator().selectionChanged()
-        // تجاوز حد الـ٣ تعديلات → طلب للإدارة، والحالة تبقى كما هي حتى الموافقة
-        guard cooldown.canEdit(.isMarried) else {
-            Task {
-                let ok = await adminRequestVM.submitTreeEditRequest(payload: .make(
-                    action: .other,
-                    targetMemberId: member.id.uuidString,
-                    targetMemberName: member.fullName,
-                    newName: value ? "true" : "false",
-                    reason: "profile_marital",
-                    notes: L10n.t("طلب تغيير الحالة الاجتماعية إلى: \(value ? "متزوج" : "غير متزوج")",
-                                  "Marital status change to: \(value ? "Married" : "Single")")
-                ))
-                if ok { dismissAfterLimitAlert = false; showEditLimitAlert = true } else { showSaveError = true }
-            }
-            return
-        }
         withAnimation(DS.Anim.quick) { isMarried = value }
-        // حفظ فوري في القاعدة (is_married فقط — آمن، خارج مراقبة trigger النساء)
-        Task {
-            if await memberVM.setMaritalStatus(memberId: member.id, isMarried: value) {
-                cooldown.recordEdit(.isMarried)
-            }
-        }
     }
 
 
@@ -1047,6 +1027,8 @@ struct EditProfileView: View {
         /// تاريخ الميلاد تغيّر بعد تجاوز حد الـ٣ تعديلات → يُرسل للإدارة بدل الحفظ
         let birthNeedsApproval: Bool
         let marriedChanged: Bool
+        /// الحالة الاجتماعية تغيّرت بعد تجاوز حد الـ٣ → تُرسل للإدارة عند الحفظ
+        let marriedNeedsApproval: Bool
         let phoneHiddenChanged: Bool
         let phoneHiddenNeedsApproval: Bool
         let phoneChanged: Bool
@@ -1055,7 +1037,9 @@ struct EditProfileView: View {
         let deceasedChanged: Bool
 
         /// أي حقل تجاوز حد الـ٣ وأُرسل للإدارة
-        var anyNeedsApproval: Bool { birthNeedsApproval || phoneHiddenNeedsApproval || bioNeedsApproval }
+        var anyNeedsApproval: Bool {
+            birthNeedsApproval || phoneHiddenNeedsApproval || bioNeedsApproval || marriedNeedsApproval
+        }
     }
 
     /// «تعديلات غير محفوظة» يشمل فقط الحقول التي تُحفظ عبر زر «حفظ التغييرات» أو
@@ -1066,7 +1050,7 @@ struct EditProfileView: View {
             || pendingNameRequest != nil || pendingFamilyRequest != nil
             || pendingAvatarDelete { return true }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        // ملاحظة: الحالة الاجتماعية (isMarried) تُحفظ فوراً في setMarried — لا تُحتسب هنا.
+        if isMarried != (member.isMarried ?? false) { return true }
         if isPhoneHidden != (member.isPhoneHidden ?? false) { return true }
         if isDeceased && !(member.isDeceased ?? false) { return true }
         let oldBirthStr = member.birthDate ?? ""
@@ -1097,10 +1081,12 @@ struct EditProfileView: View {
         let birthDiffers = birthDateProvided && newBirthStr != oldBirthStr
         let phoneHiddenDiffers = isPhoneHidden != (member.isPhoneHidden ?? false)
         let bioDiffers = oldBioKey != newBioKey
+        let marriedDiffers = isMarried != (member.isMarried ?? false)
         return ChangedFields(
             birthChanged: birthDiffers && cooldown.canEdit(.birthDate),
             birthNeedsApproval: birthDiffers && !cooldown.canEdit(.birthDate),
-            marriedChanged: isMarried != (member.isMarried ?? false),
+            marriedChanged: marriedDiffers && cooldown.canEdit(.isMarried),
+            marriedNeedsApproval: marriedDiffers && !cooldown.canEdit(.isMarried),
             // الرقم يُرسل للإدارة دائماً؛ إخفاء الرقم والنبذة: ٣ تعديلات ثم موافقة الإدارة
             phoneHiddenChanged: phoneHiddenDiffers && cooldown.canEdit(.isPhoneHidden),
             phoneHiddenNeedsApproval: phoneHiddenDiffers && !cooldown.canEdit(.isPhoneHidden),
@@ -1113,6 +1099,17 @@ struct EditProfileView: View {
     }
 
     private func submitAdminRequests(changes: ChangedFields, normalizedPhone: String) async {
+        if changes.marriedNeedsApproval {
+            _ = await adminRequestVM.submitTreeEditRequest(payload: .make(
+                action: .other,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                newName: isMarried ? "true" : "false",
+                reason: "profile_marital",
+                notes: L10n.t("طلب تغيير الحالة الاجتماعية إلى: \(isMarried ? "متزوج" : "غير متزوج")",
+                              "Marital status change to: \(isMarried ? "Married" : "Single")")
+            ))
+        }
         if changes.bioNeedsApproval {
             let stations = bioStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
             let json = (try? String(data: JSONEncoder().encode(stations), encoding: .utf8)) ?? "[]"
@@ -1170,7 +1167,8 @@ struct EditProfileView: View {
             phoneNumber: member.phoneNumber ?? "",
             // تجاوز الحد → لا يُكتب التاريخ الآن (أُرسل للإدارة)
             birthDate: birthDateProvided && !changes.birthNeedsApproval ? birthDate : nil,
-            isMarried: isMarried,
+            // تجاوز الحد → تبقى القيمة القديمة حتى موافقة الإدارة
+            isMarried: changes.marriedNeedsApproval ? (member.isMarried ?? false) : isMarried,
             isDeceased: member.isDeceased ?? false,
             deathDate: member.isDeceased ?? false ? deathDate : nil,
             // تجاوز الحد → تبقى القيمة القديمة حتى موافقة الإدارة
@@ -1183,6 +1181,7 @@ struct EditProfileView: View {
         if changes.birthChanged { cooldown.recordEdit(.birthDate) }
         if changes.phoneHiddenChanged { cooldown.recordEdit(.isPhoneHidden) }
         if changes.bioChanged { cooldown.recordEdit(.bio) }
+        if changes.marriedChanged { cooldown.recordEdit(.isMarried) }
     }
 
 }
