@@ -332,8 +332,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
                 )
                 .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
                 // فتح/إغلاق بحركة: يكبر من أصغر وأسفل قليلاً مع تلاشٍ (طلب المالك)
-                .scaleEffect(appeared ? 1 : (closing ? 0.96 : 0.9))
-                .offset(y: appeared ? 0 : (closing ? 8 : 20))
+                .scaleEffect(appeared ? 1 : (closing ? 0.97 : 0.9))
+                .offset(y: appeared ? 0 : (closing ? 6 : 20))
                 .opacity(appeared ? 1 : 0)
                 // الارتفاع الفعلي يتحرّك بسلاسة — يصل بعد قياس المحتوى الجديد
                 .animation(DS.Anim.smooth, value: height)
@@ -352,9 +352,9 @@ struct DSExpandableCenterPanel<Content: View>: View {
     private func animatedClose() {
         guard appeared else { return }
         closing = true
-        // بطيئة وخفيفة (طلب المالك): تلاشٍ هادئ مع تصغير بسيط
-        withAnimation(.easeOut(duration: 0.38)) { appeared = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
+        // بطيئة وخفيفة (طلب المالك): تلاشٍ هادئ نصف ثانية مع تصغير بسيط جداً
+        withAnimation(.easeInOut(duration: 0.5)) { appeared = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             var t = Transaction()
             t.disablesAnimations = true
             withTransaction(t) { onClose() }
