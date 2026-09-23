@@ -7,6 +7,8 @@ struct MemberDetailsView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @Environment(\.dismiss) var dismiss
+    /// في المربّع: إغلاق بحركة
+    @Environment(\.dsPanelClose) private var panelClose
 
     private let initialMember: FamilyMember
     @State private var currentMemberId: UUID
@@ -329,7 +331,9 @@ struct MemberDetailsView: View {
         VStack {
             HStack {
                 Spacer()
-                Button { dismiss() } label: {
+                Button {
+                    if let panelClose { panelClose() } else { dismiss() }
+                } label: {
                     Text(L10n.t("إلغاء", "Cancel"))
                         .font(DS.Font.plex(14, weight: .bold))
                         .foregroundColor(DS.Color.error)

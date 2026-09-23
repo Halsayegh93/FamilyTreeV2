@@ -253,6 +253,18 @@ struct DSCenterPanel<Content: View>: View {
     }
 }
 
+/// إغلاق المربّع بحركة — يستدعيه المحتوى بدل dismiss() المباشر
+private struct DSPanelCloseKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var dsPanelClose: (() -> Void)? {
+        get { self[DSPanelCloseKey.self] }
+        set { self[DSPanelCloseKey.self] = newValue }
+    }
+}
+
 /// ارتفاع الجزء الظاهر في المربّع المصغّر (يُبلِّغه المحتوى)
 struct DSPanelCollapsedHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
@@ -288,7 +300,7 @@ struct DSExpandableCenterPanel<Content: View>: View {
             ZStack {
                 Color.black.opacity(appeared ? 0.45 : 0)
                     .ignoresSafeArea()
-                    .onTapGesture(perform: onClose)
+                    .onTapGesture(perform: animatedClose)
 
                 VStack(spacing: 0) {
                     // بلا مقبض ولا ×: التوسيع بزر داخل المحتوى، والإغلاق بالضغط خارجه (طلب المالك)
@@ -309,7 +321,9 @@ struct DSExpandableCenterPanel<Content: View>: View {
                                       lineWidth: colorScheme == .dark ? 1 : 0)
                 )
                 .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
-                .scaleEffect(appeared ? 1 : 0.94)
+                // فتح/إغلاق بحركة: يكبر من أصغر وأسفل قليلاً مع تلاشٍ (طلب المالك)
+                .scaleEffect(appeared ? 1 : 0.86)
+                .offset(y: appeared ? 0 : 28)
                 .opacity(appeared ? 1 : 0)
                 // الارتفاع الفعلي يتحرّك بسلاسة — يصل بعد قياس المحتوى الجديد
                 .animation(DS.Anim.smooth, value: height)
@@ -317,7 +331,17 @@ struct DSExpandableCenterPanel<Content: View>: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear { withAnimation(DS.Anim.snappy) { appeared = true } }
+        .environment(\.dsPanelClose, animatedClose)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { appeared = true }
+        }
+    }
+
+    /// يصغّر المربّع ويخفيه ثم يغلقه
+    private func animatedClose() {
+        guard appeared else { return }
+        withAnimation(.easeIn(duration: 0.2)) { appeared = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onClose() }
     }
 }
 
