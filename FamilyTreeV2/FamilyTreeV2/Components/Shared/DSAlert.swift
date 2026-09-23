@@ -123,6 +123,7 @@ struct DSCenterCard<Content: View>: View {
     let onBackgroundTap: (() -> Void)?
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
@@ -137,6 +138,12 @@ struct DSCenterCard<Content: View>: View {
             .frame(maxWidth: 340)
             .background(DS.Color.background)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+            // إطار للمربّع في الوضع الداكن (طلب المالك) — يفصله عن الخلفية
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+                    .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.16 : 0),
+                                  lineWidth: colorScheme == .dark ? 1 : 0)
+            )
             .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 10)
             .padding(.horizontal, DS.Spacing.xl)
             .scaleEffect(appeared ? 1 : 0.9)

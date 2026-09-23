@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 import PhotosUI
 
 // MARK: - Cooldown Guard Modifier
@@ -86,7 +87,17 @@ struct EditProfileView: View {
     @State private var familyName: String = ""
     /// العائلة ثابتة — تتغيّر بطلب للإدارة فقط (طلب المالك)
     @State private var pendingFamilyRequest: String?
+    /// الرقم ثابت — يتغيّر بطلب مع إثبات الرقم برمز تحقق (طلب المالك)
+    @State private var pendingPhoneRequest: String?
+    @State private var appliedPhoneDisplay: String?
+    /// لا شيء يُطبَّق قبل «حفظ» (طلب المالك) — الإلغاء يرجّع كل شيء
+    @State private var pendingAvatarDelete = false
+    @State private var showAvatarDeleteConfirm = false
+    @State private var pendingNameRequest: String?
+    @State private var pendingPhoneVerified: (e164: String, country: KuwaitPhone.Country, digits: String, display: String)?
+    @State private var showPhoneChangeSheet = false
     @State private var familyPopupID: UUID?
+    @State private var bioPopupID: UUID?
     @State private var isSavingFamily = false
     @StateObject private var familyNamesVM = FamilyNamesViewModel()
     @State private var selectedPhoneCountry: KuwaitPhone.Country = KuwaitPhone.defaultCountry
@@ -106,7 +117,6 @@ struct EditProfileView: View {
     @State private var localPreviewImage: UIImage? = nil
     // Bio
     @State private var bioStations: [FamilyMember.BioStation] = []
-    @State private var showBioEditor = false
     @State private var showDeleteBioAlert = false
     @State private var showSaveError = false
     @State private var showNameChangeSheet = false
@@ -188,7 +198,6 @@ struct EditProfileView: View {
                                     familyPickerRow
                                     DSDivider()
                                     modernPhoneField
-                                        .cooldownGuarded(.phoneNumber, cooldown: cooldown) { showEditLimitAlert = true }
 
                                     DSDivider()
                                     modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
@@ -258,40 +267,6 @@ struct EditProfileView: View {
             .onAppear {
                 setupData()
             }
-            .onChange(of: localPreviewImage) { newImage in
-                guard let newImage else { return }
-                if cooldown.canEdit(.avatar) {
-                    Task {
-                        let uploaded = await memberVM.uploadAvatar(image: newImage, for: member.id)
-                        if uploaded {
-                            cooldown.recordEdit(.avatar)
-                        } else {
-                            // فشل الرفع: رجّع المعاينة للصورة الحالية وأظهر الخطأ
-                            localPreviewImage = nil
-                            showSaveError = true
-                        }
-                    }
-                } else {
-                    // تجاوز حد الـ٣ تعديلات: الصورة تُرفع كاقتراح وتُرسل للإدارة،
-                    // ولا تتغيّر صورة العضو إلا بعد الموافقة
-                    localPreviewImage = nil
-                    Task {
-                        guard let url = await adminRequestVM.uploadPhotoSuggestion(newImage) else {
-                            showSaveError = true
-                            return
-                        }
-                        let ok = await adminRequestVM.submitTreeEditRequest(payload: .make(
-                            action: .addPhoto,
-                            targetMemberId: member.id.uuidString,
-                            targetMemberName: member.fullName,
-                            newPhotoUrl: url,
-                            notes: L10n.t("تعديل صورة بعد تجاوز حد التعديلات", "Photo edit after reaching the edit limit")
-                        ))
-                        if ok { showEditLimitAlert = true } else { showSaveError = true }
-                    }
-                }
-            }
-            // مربّع في منتصف الشاشة، نصّه كله باتجاه اليمين (طلب المالك)
             .fullScreenCover(isPresented: $showEditLimitAlert) {
                 EditLimitPopup {
                     var t = Transaction()
@@ -335,8 +310,10 @@ struct EditProfileView: View {
             imagePickerHeader
                 .cooldownGuarded(.avatar, cooldown: cooldown) { showEditLimitAlert = true }
             Label(
-                L10n.t("اضغط على الصورة لتغييرها", "Tap the photo to change it"),
-                systemImage: "camera.fill"
+                pendingAvatarDelete
+                    ? L10n.t("ستُحذف الصورة عند الحفظ", "Photo will be removed on save")
+                    : L10n.t("اضغط على الكاميرا لخيارات الصورة", "Tap the camera for photo options"),
+                systemImage: pendingAvatarDelete ? "trash.fill" : "camera.fill"
             )
             .font(DS.Font.footnote)
             .foregroundColor(DS.Color.primary)
@@ -358,7 +335,6 @@ struct EditProfileView: View {
                 familyPickerRow
                 DSDivider()
                 modernPhoneField
-                    .cooldownGuarded(.phoneNumber, cooldown: cooldown) { showEditLimitAlert = true }
 
                 DSDivider()
                 modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
@@ -410,21 +386,29 @@ struct EditProfileView: View {
     // MARK: - المكونات المصممة (Custom Components)
 
     private var imagePickerHeader: some View {
+        // أيقونة الكاميرا وحدها تحمل الأوامر (بلا أزرار مكرّرة تحت الصورة — طلب المالك)
         DSProfilePhotoPicker(
             selectedImage: $localPreviewImage,
-            existingURL: member.avatarUrl,
+            existingURL: pendingAvatarDelete ? nil : member.avatarUrl,
             enableCrop: true,
             cropShape: .circle,
             trailing: nil,
-            showDeleteForExisting: member.avatarUrl != nil,
-            onDeleteExisting: {
-                Task {
-                    await memberVM.deleteAvatar(for: member.id)
-                }
-            },
-            compactEmptyState: true
+            showDeleteForExisting: member.avatarUrl != nil && !pendingAvatarDelete,
+            onDeleteExisting: { showAvatarDeleteConfirm = true },
+            compactEmptyState: true,
+            useOverlayActionsOnly: true
         )
         .padding(.horizontal, DS.Spacing.lg)
+        .dsAlert(L10n.t("حذف الصورة", "Delete photo"), isPresented: $showAvatarDeleteConfirm) {
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                pendingAvatarDelete = true
+                localPreviewImage = nil
+            }
+        } message: {
+            Text(L10n.t("تُحذف صورتك عند الحفظ. تقدر تتراجع بالضغط على «إلغاء».",
+                        "Your photo is removed when you save. Cancel to keep it."))
+        }
     }
 
     // MARK: - Name with Change Request
@@ -432,8 +416,7 @@ struct EditProfileView: View {
         VStack(spacing: 0) {
             Button {
                 // تغيير الاسم يُرسل للإدارة دائماً — بلا عدّاد
-                newNameRequest = fullName
-                showNameChangeSheet = true
+                openNamePopup()
             } label: {
                 HStack(spacing: DS.Spacing.md) {
                     DSIcon("person.fill", color: DS.Color.primary)
@@ -448,6 +431,13 @@ struct EditProfileView: View {
                             .font(DS.Font.callout)
                             .foregroundColor(DS.Color.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
+                        if let pending = pendingNameRequest {
+                            Text(L10n.t("طلب «\(pending)» يُرسل عند الحفظ", "«\(pending)» will be sent on save"))
+                                .font(DS.Font.caption2)
+                                .foregroundColor(DS.Color.warning)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -460,9 +450,6 @@ struct EditProfileView: View {
                 .cooldownGuarded(.fullName, cooldown: cooldown) { showEditLimitAlert = true }
             }
             .buttonStyle(.plain)
-            .sheet(isPresented: $showNameChangeSheet) {
-                nameChangeRequestSheet
-            }
 
         }
     }
@@ -514,6 +501,33 @@ struct EditProfileView: View {
         .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
     }
 
+    private func openNamePopup() {
+        var id: UUID?
+        let close: () -> Void = { if let i = id { DSPopupPresenter.shared.hide(i) } }
+        id = DSPopupPresenter.shared.show(
+            NameRequestCard(current: fullName, onCancel: close) { newName in
+                close()
+                pendingNameRequest = newName   // يُرسل عند الحفظ
+            }
+        )
+    }
+
+    private func openPhonePopup() {
+        var id: UUID?
+        let close: () -> Void = { if let i = id { DSPopupPresenter.shared.hide(i) } }
+        id = DSPopupPresenter.shared.show(
+            PhoneRequestCard(
+                member: member,
+                // التحقق يتم الآن، والحفظ/الطلب عند الضغط على «حفظ»
+                onVerified: { e164, country, digits, display in
+                    close()
+                    pendingPhoneVerified = (e164, country, digits, display)
+                },
+                onCancel: close
+            )
+        )
+    }
+
     private func openFamilyPicker() {
         let options = familyNamesVM.activeNames.filter { $0 != familyName }
         let close: () -> Void = {
@@ -522,84 +536,27 @@ struct EditProfileView: View {
         familyPopupID = DSPopupPresenter.shared.show(
             FamilyRequestCard(options: options, current: familyName, onCancel: close) { chosen in
                 close()
-                Task {
-                    if await adminRequestVM.requestFamilyChange(memberId: member.id, newFamily: chosen) {
-                        pendingFamilyRequest = chosen
-                    }
-                }
+                pendingFamilyRequest = chosen   // يُرسل عند الحفظ
             }
         )
     }
 
-    private var nameChangeRequestSheet: some View {
-        NavigationStack {
-            VStack(spacing: DS.Spacing.lg) {
-                // خانة الاسم قابلة للتعديل — سطر كبير يعرض الاسم كامل
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
-                        Text(L10n.t("الاسم", "Name"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    TextField(L10n.t("اسمك الرباعي", "Your full name"), text: $newNameRequest, axis: .vertical)
-                        .font(DS.Font.body)
-                        .lineLimit(1...2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(DS.Spacing.md)
-                        .background(DS.Color.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1)
-                        )
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Text(L10n.t(
-                    "سيتم إرسال طلب تغيير الاسم للإدارة للموافقة عليه.",
-                    "A name change request will be sent to admin for approval."
-                ))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textTertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, DS.Spacing.xxl)
-
-                DSPrimaryButton(
-                    L10n.t("إرسال الطلب", "Send Request"),
-                    icon: "paperplane.fill",
-                    isLoading: isSubmittingName
-                ) {
-                    guard !isSubmittingName else { return }
-                    let trimmed = newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty, trimmed != fullName else { return }
-                    isSubmittingName = true
-                    Task {
-                        await adminRequestVM.requestNameChange(memberId: member.id, newName: trimmed)
-                        isSubmittingName = false
-                        showNameChangeSheet = false
-                    }
-                }
-                .disabled(isSubmittingName ||
-                          newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                          newNameRequest.trimmingCharacters(in: .whitespacesAndNewlines) == fullName)
-                .padding(.horizontal, DS.Spacing.lg)
-            }
-            .padding(.top, DS.Spacing.lg)
-            .navigationTitle(L10n.t("طلب تغيير الاسم", "Request Name Change"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { showNameChangeSheet = false }
-                        .foregroundColor(DS.Color.primary)
-                }
-            }
+    private func openBioPopup() {
+        let close: () -> Void = {
+            if let id = bioPopupID { DSPopupPresenter.shared.hide(id); bioPopupID = nil }
         }
-        .presentationDetents([.height(320)])
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        bioPopupID = DSPopupPresenter.shared.show(
+            BioEditCard(
+                initial: bioStations,
+                goesToAdmins: !cooldown.canEdit(.bio),
+                remaining: cooldown.remainingEdits(.bio),
+                onCancel: close,
+                onDone: { updated in
+                    close()
+                    bioStations = updated   // يُحفظ عند الضغط على «حفظ»
+                }
+            )
+        )
     }
 
     private func modernReadOnlyField(label: String, value: String, icon: String) -> some View {
@@ -685,17 +642,36 @@ struct EditProfileView: View {
         return s.range(of: pattern, options: .regularExpression) != nil
     }
 
+    /// الرقم ثابت في الملف (طلب المالك): يتغيّر بطلب بعد إثبات الرقم الجديد برمز تحقق
     private var modernPhoneField: some View {
-        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
-                          label: L10n.t("رقم الهاتف", "Phone Number")) {
-            DSPhoneField(
-                country: $selectedPhoneCountry,
-                digits: $phoneNumber,
-                placeholder: "9xxxxxxx",
-                compact: true,
-                bordered: false
-            )
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon("phone.fill", color: DS.Color.success)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("رقم الهاتف", "Phone Number"))
+                    .font(DS.Font.caption1)
+                    .foregroundColor(DS.Color.textSecondary)
+                Text(appliedPhoneDisplay ?? KuwaitPhone.display(member.phoneNumber))
+                    .font(DS.Font.callout)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .monospacedDigit()
+                    .environment(\.layoutDirection, .leftToRight)
+                if let pending = pendingPhoneRequest {
+                    Text(L10n.t("طلب «\(pending)» بانتظار موافقة الإدارة", "«\(pending)» awaiting approval"))
+                        .font(DS.Font.caption2)
+                        .foregroundColor(DS.Color.warning)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button { openPhonePopup() } label: { requestChip }
+                .buttonStyle(DSScaleButtonStyle())
+                .disabled(pendingPhoneRequest != nil)
         }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func modernDatePicker(label: String, selection: Binding<Date>, icon: String) -> some View {
@@ -720,7 +696,7 @@ struct EditProfileView: View {
             VStack(spacing: DS.Spacing.sm) {
                 if bioStations.isEmpty {
                     // Empty state
-                    Button { showBioEditor = true } label: {
+                    Button { openBioPopup() } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "plus.circle.fill")
                                 .font(DS.Font.scaled(18))
@@ -753,7 +729,7 @@ struct EditProfileView: View {
 
                     // أزرار التعديل والحذف
                     HStack(spacing: DS.Spacing.sm) {
-                        Button { showBioEditor = true } label: {
+                        Button { openBioPopup() } label: {
                             Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
                                 .font(DS.Font.calloutBold)
                                 .foregroundColor(DS.Color.primary)
@@ -782,22 +758,18 @@ struct EditProfileView: View {
 
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .sheet(isPresented: $showBioEditor) {
-            BioStationsEditorSheet(stations: $bioStations)
-        }
         .dsAlert(
             L10n.t("حذف السيرة", "Delete Biography"),
             isPresented: $showDeleteBioAlert
         ) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                // لا يُحفظ إلا عند «حفظ» — «إلغاء» يرجّع السيرة كما كانت
                 bioStations = []
-                let memberId = member.id
-                member.bio = nil
-                Task { await memberVM.updateMemberBio(memberId: memberId, bio: []) }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
         } message: {
-            Text(L10n.t("سيتم حذف السيرة الذاتية كاملة.", "The whole biography will be deleted."))
+            Text(L10n.t("ستُحذف السيرة الذاتية كاملة عند الحفظ.",
+                        "The whole biography will be deleted when you save."))
         }
     }
 
@@ -925,6 +897,7 @@ struct EditProfileView: View {
             guard phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !normalizedPhone.isEmpty else { return }
 
             let changes = detectChangedFields(normalizedPhone: normalizedPhone)
+            await applyPendingChanges()          // الصورة والاسم والعائلة والرقم — عند الحفظ فقط
             await submitAdminRequests(changes: changes, normalizedPhone: normalizedPhone)
             await saveBioIfChanged(changes: changes)
             await saveEmailIfChanged()
@@ -948,6 +921,71 @@ struct EditProfileView: View {
             } else {
                 showSaveError = true
             }
+        }
+    }
+
+    /// ما يُجمَع في الشاشة يُنفَّذ هنا فقط (طلب المالك): حذف/رفع الصورة، وطلبات
+    /// الاسم والعائلة، وتغيير الرقم بعد إثباته برمز تحقق.
+    @MainActor private func applyPendingChanges() async {
+        // 1) الصورة
+        if pendingAvatarDelete {
+            await memberVM.deleteAvatar(for: member.id)
+            pendingAvatarDelete = false
+        }
+        if let newImage = localPreviewImage {
+            if cooldown.canEdit(.avatar) {
+                let uploaded = await memberVM.uploadAvatar(image: newImage, for: member.id)
+                if uploaded {
+                    cooldown.recordEdit(.avatar)
+                } else {
+                    localPreviewImage = nil
+                    showSaveError = true
+                }
+            } else {
+                // تجاوز حد الـ٣ تعديلات: تُرفع كاقتراح وتُرسل للإدارة
+                localPreviewImage = nil
+                if let url = await adminRequestVM.uploadPhotoSuggestion(newImage) {
+                    let ok = await adminRequestVM.submitTreeEditRequest(payload: .make(
+                        action: .addPhoto,
+                        targetMemberId: member.id.uuidString,
+                        targetMemberName: member.fullName,
+                        newPhotoUrl: url,
+                        notes: L10n.t("تعديل صورة بعد تجاوز حد التعديلات", "Photo edit after reaching the edit limit")
+                    ))
+                    if !ok { showSaveError = true }
+                } else {
+                    showSaveError = true
+                }
+            }
+        }
+
+        // 2) الاسم — طلب دائماً
+        if let newName = pendingNameRequest {
+            await adminRequestVM.requestNameChange(memberId: member.id, newName: newName)
+            pendingNameRequest = nil
+        }
+
+        // 3) العائلة — طلب دائماً
+        if let newFamily = pendingFamilyRequest {
+            if await adminRequestVM.requestFamilyChange(memberId: member.id, newFamily: newFamily) {
+                // تبقى معروضة كـ«بانتظار الموافقة»
+            }
+        }
+
+        // 4) الرقم — أول ٣ مرات يُحفظ مباشرة بعد رمز التحقق، وبعدها طلب للإدارة
+        if let verified = pendingPhoneVerified {
+            if cooldown.canEdit(.phoneNumber) {
+                await memberVM.updateMemberPhone(memberId: member.id,
+                                                 country: verified.country,
+                                                 localPhone: verified.digits)
+                cooldown.recordEdit(.phoneNumber)
+                appliedPhoneDisplay = verified.display
+            } else {
+                await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
+                                                              newPhoneNumber: verified.e164)
+                pendingPhoneRequest = verified.display
+            }
+            pendingPhoneVerified = nil
         }
     }
 
@@ -1022,7 +1060,8 @@ struct EditProfileView: View {
             // الرقم يُرسل للإدارة دائماً؛ إخفاء الرقم والنبذة: ٣ تعديلات ثم موافقة الإدارة
             phoneHiddenChanged: phoneHiddenDiffers && cooldown.canEdit(.isPhoneHidden),
             phoneHiddenNeedsApproval: phoneHiddenDiffers && !cooldown.canEdit(.isPhoneHidden),
-            phoneChanged: !normalizedPhone.isEmpty && (normalizedPhone != oldStoredPhone),
+            // الرقم لا يُعدّل من النموذج — يتغيّر بطلب مستقل مع رمز تحقق
+            phoneChanged: false,
             bioChanged: bioDiffers && cooldown.canEdit(.bio),
             bioNeedsApproval: bioDiffers && !cooldown.canEdit(.bio),
             deceasedChanged: isDeceased && !(member.isDeceased ?? false)
@@ -1172,5 +1211,351 @@ private struct FamilyRequestCard: View {
             }
             .buttonStyle(DSScaleButtonStyle())
         }
+    }
+}
+
+
+/// طلب تغيير رقم الهاتف (طلب المالك): الرقم ثابت في الملف — يُدخل الرقم الجديد،
+/// يُثبته برمز تحقق يصله عليه، ثم يذهب الطلب للإدارة للموافقة.
+
+/// مربّع «طلب تغيير الاسم» بمنتصف الشاشة (طلب المالك) — نفس شكل مربّع العائلة
+private struct NameRequestCard: View {
+    let current: String
+    let onCancel: () -> Void
+    let onSend: (String) -> Void
+    @State private var name: String = ""
+    @State private var sending = false
+
+    var body: some View {
+        DSCenterCard(onBackgroundTap: onCancel) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.t("طلب تغيير الاسم", "Request name change"))
+                    .font(DS.Font.plex(17, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(L10n.t("يُرسل للإدارة، ويتغيّر بعد موافقتها.",
+                            "Sent to the admins; applied after approval."))
+                    .font(DS.Font.plex(12, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+
+            TextField(L10n.t("اسمك الرباعي", "Your full name"), text: $name, axis: .vertical)
+                .font(DS.Font.body)
+                .lineLimit(1...3)
+                .padding(DS.Spacing.md)
+                .background(DS.Color.mutedBackground.opacity(0.6),
+                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+
+            HStack(spacing: DS.Spacing.sm) {
+                Button(action: onCancel) {
+                    Text(L10n.t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
+                }
+                Button {
+                    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty, trimmed != current, !sending else { return }
+                    sending = true
+                    onSend(trimmed)
+                } label: {
+                    Text(L10n.t("إرسال", "Send"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(canSend ? DS.Color.primary : DS.Color.primary.opacity(0.4)))
+                }
+                .disabled(!canSend)
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+        .onAppear { if name.isEmpty { name = current } }
+    }
+
+    private var canSend: Bool {
+        let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !t.isEmpty && t != current && !sending
+    }
+}
+
+/// مربّع «طلب تغيير الرقم» بمنتصف الشاشة (طلب المالك): الرقم الجديد ثم رمز التحقق.
+/// أول ٣ تغييرات تُحفظ مباشرة بعد الرمز، وبعدها يُرسل الطلب للإدارة.
+private struct PhoneRequestCard: View {
+    let member: FamilyMember
+    /// التحقق فقط — الحفظ أو الطلب يتم عند الضغط على «حفظ» في الشاشة
+    let onVerified: (String, KuwaitPhone.Country, String, String) -> Void
+    let onCancel: () -> Void
+
+    private let cooldown = ProfileEditCooldown.shared
+
+    @State private var country: KuwaitPhone.Country = KuwaitPhone.defaultCountry
+    @State private var digits: String = ""
+    @State private var code: String = ""
+    @State private var codeSent = false
+    @State private var isBusy = false
+    @State private var error: String?
+    @State private var info: String?
+
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
+    private var newE164: String? { KuwaitPhone.normalizedForStorage(country: country, rawLocalDigits: digits) }
+    private var goesToAdmins: Bool { !cooldown.canEdit(.phoneNumber) }
+
+    var body: some View {
+        DSCenterCard(onBackgroundTap: isBusy ? nil : onCancel) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(t("طلب تغيير الرقم", "Request number change"))
+                    .font(DS.Font.plex(17, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(t("الحالي: \(KuwaitPhone.display(member.phoneNumber))",
+                       "Current: \(KuwaitPhone.display(member.phoneNumber))"))
+                    .font(DS.Font.plex(12, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .environment(\.layoutDirection, .leftToRight)
+            }
+
+            if codeSent {
+                Text(t("أدخل الرمز الذي وصلك على \(KuwaitPhone.display(newE164))",
+                       "Enter the code sent to \(KuwaitPhone.display(newE164))"))
+                    .font(DS.Font.plex(11.5, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                TextField("------", text: $code)
+                    .keyboardType(.numberPad)
+                    .font(DS.Font.plex(20, weight: .bold))
+                    .monospacedDigit()
+                    .multilineTextAlignment(.center)
+                    .environment(\.layoutDirection, .leftToRight)
+                    .padding(DS.Spacing.md)
+                    .background(DS.Color.mutedBackground.opacity(0.6),
+                                in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                    .onChange(of: code) { v in code = String(v.filter(\.isNumber).prefix(6)) }
+            } else {
+                DSPhoneField(country: $country, digits: $digits,
+                             placeholder: "9xxxxxxx", compact: true, bordered: true)
+            }
+
+            if let info {
+                Label(info, systemImage: "checkmark.circle.fill")
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.success)
+            }
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(DS.Font.caption2)
+                    .foregroundColor(DS.Color.error)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text(goesToAdmins
+                 ? t("تجاوزت ٣ تغييرات — بعد التأكيد يُرسل الطلب للإدارة عند الحفظ.",
+                     "You've used 3 direct changes — after confirming, the request is sent on save.")
+                 : t("بعد التأكيد يُحفظ الرقم عند الضغط على «حفظ». باقي لك \(cooldown.remainingEdits(.phoneNumber)) من ٣.",
+                     "After confirming, the number is saved when you press Save. \(cooldown.remainingEdits(.phoneNumber)) of 3 left."))
+                .font(DS.Font.plex(10.5, weight: .medium))
+                .foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: DS.Spacing.sm) {
+                Button(action: onCancel) {
+                    Text(t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
+                }
+                .disabled(isBusy)
+
+                Button { Task { codeSent ? await confirm() : await sendCode() } } label: {
+                    Group {
+                        if isBusy {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text(codeSent ? t("تأكيد", "Confirm") : t("إرسال الرمز", "Send code"))
+                                .font(DS.Font.plex(14, weight: .bold))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(canProceed ? DS.Color.primary : DS.Color.primary.opacity(0.4)))
+                }
+                .disabled(!canProceed)
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+    }
+
+    private var canProceed: Bool {
+        !isBusy && (codeSent ? code.count == 6 : digits.count >= 6)
+    }
+
+    /// يرسل رمزاً للرقم الجديد (تغيير رقم الحساب في المصادقة — الجلسة تبقى كما هي)
+    @MainActor private func sendCode() async {
+        guard let phone = newE164 else { error = t("رقم غير صالح.", "Invalid number."); return }
+        if phone == (member.phoneNumber ?? "") {
+            error = t("هذا رقمك الحالي.", "That's your current number."); return
+        }
+        isBusy = true; error = nil; info = nil
+        defer { isBusy = false }
+        do {
+            struct Row: Decodable { let id: UUID }
+            let rows: [Row] = try await SupabaseConfig.client
+                .rpc("find_profiles_by_phone", params: ["p_phone": phone])
+                .execute().value
+            if rows.contains(where: { $0.id != member.id }) {
+                error = t("هذا الرقم مسجّل لعضو آخر.", "This number belongs to another member.")
+                return
+            }
+            try await SupabaseConfig.client.auth.update(user: UserAttributes(phone: phone))
+            codeSent = true
+            info = t("أُرسل الرمز", "Code sent")
+        } catch {
+            Log.error("[PhoneChange] إرسال الرمز: \(error.localizedDescription)")
+            self.error = t("تعذّر إرسال الرمز. تأكد من الرقم وحاول مرة ثانية.",
+                           "Couldn't send the code. Check the number and try again.")
+        }
+    }
+
+    @MainActor private func confirm() async {
+        guard let phone = newE164 else { return }
+        isBusy = true; error = nil
+        defer { isBusy = false }
+        do {
+            try await SupabaseConfig.client.auth.verifyOTP(
+                phone: phone,
+                token: code.trimmingCharacters(in: .whitespacesAndNewlines),
+                type: .phoneChange
+            )
+            onVerified(phone, country, digits, KuwaitPhone.display(phone))
+        } catch {
+            Log.error("[PhoneChange] تأكيد الرمز: \(error.localizedDescription)")
+            self.error = t("الرمز غير صحيح أو انتهت صلاحيته.", "The code is wrong or expired.")
+        }
+    }
+}
+
+/// مربّع «السيرة الذاتية» بمنتصف الشاشة (طلب المالك) — نفس شكل بقية المربّعات.
+/// التعديل هنا محلي فقط: لا شيء يُحفظ إلا بالضغط على «حفظ» في شاشة التعديل.
+private struct BioEditCard: View {
+    let initial: [FamilyMember.BioStation]
+    let goesToAdmins: Bool
+    let remaining: Int
+    let onCancel: () -> Void
+    let onDone: ([FamilyMember.BioStation]) -> Void
+
+    @State private var stations: [FamilyMember.BioStation] = []
+
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
+
+    var body: some View {
+        DSCenterCard(onBackgroundTap: onCancel) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(t("السيرة الذاتية", "Biography"))
+                    .font(DS.Font.plex(17, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(goesToAdmins
+                     ? t("تجاوزت ٣ تعديلات — يُرسل للإدارة بعد الحفظ.",
+                         "You've used 3 edits — it goes to the admins after saving.")
+                     : t("لا يُحفظ إلا بالضغط على «حفظ». باقي لك \(remaining) من ٣.",
+                         "Applied only when you press Save. \(remaining) of 3 left."))
+                    .font(DS.Font.plex(12, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if stations.isEmpty {
+                Text(t("لا توجد أحداث بعد.", "No entries yet."))
+                    .font(DS.Font.plex(12.5, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, DS.Spacing.md)
+            } else {
+                ScrollView {
+                    VStack(spacing: DS.Spacing.sm) {
+                        ForEach($stations) { $station in
+                            stationCard($station)
+                        }
+                    }
+                }
+                .frame(maxHeight: 280)
+            }
+
+            Button {
+                withAnimation(DS.Anim.snappy) {
+                    stations.append(FamilyMember.BioStation(title: "", details: ""))
+                }
+            } label: {
+                Label(t("إضافة حدث", "Add entry"), systemImage: "plus.circle.fill")
+                    .font(DS.Font.plex(13, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+                    .frame(maxWidth: .infinity).frame(height: 38)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.primary.opacity(0.10)))
+            }
+            .buttonStyle(DSScaleButtonStyle())
+
+            HStack(spacing: DS.Spacing.sm) {
+                Button(action: onCancel) {
+                    Text(t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
+                }
+                Button {
+                    onDone(stations.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty
+                                          || !$0.details.trimmingCharacters(in: .whitespaces).isEmpty })
+                } label: {
+                    Text(t("تم", "Done"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.primary))
+                }
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+        .onAppear { stations = initial }
+    }
+
+    /// حدث واحد: السنة والعنوان والتفاصيل مع زر حذف
+    private func stationCard(_ station: Binding<FamilyMember.BioStation>) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                TextField(t("السنة", "Year"), text: Binding(
+                    get: { station.wrappedValue.year ?? "" },
+                    set: { station.wrappedValue.year = $0.isEmpty ? nil : String($0.filter(\.isNumber).prefix(4)) }
+                ))
+                .font(DS.Font.plex(12, weight: .bold))
+                .foregroundColor(DS.Color.textSecondary)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.center)
+                .frame(width: 58, height: 30)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.sm).fill(DS.Color.mutedBackground.opacity(0.7)))
+
+                TextField(t("العنوان", "Title"), text: station.title)
+                    .font(DS.Font.plex(13.5, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+
+                Button {
+                    withAnimation(DS.Anim.snappy) {
+                        stations.removeAll { $0.id == station.wrappedValue.id }
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(DS.Font.plex(12, weight: .bold))
+                        .foregroundColor(DS.Color.error)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(DS.Color.error.opacity(0.10)))
+                }
+                .buttonStyle(.plain)
+            }
+
+            TextField(t("التفاصيل (اختياري)", "Details (optional)"), text: station.details, axis: .vertical)
+                .font(DS.Font.plex(12.5, weight: .regular))
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1...3)
+        }
+        .padding(DS.Spacing.md)
+        .background(DS.Color.mutedBackground.opacity(0.45),
+                    in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
     }
 }
