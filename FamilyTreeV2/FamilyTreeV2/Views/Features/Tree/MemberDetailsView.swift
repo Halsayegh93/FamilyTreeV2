@@ -159,17 +159,38 @@ struct MemberDetailsView: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .presentationDetents([.fraction(0.46), .large], selection: $detent)
             .presentationDragIndicator(.visible)
-            .sheet(isPresented: $showAdminControl) {
+            // التعديل المباشر: لوح بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
+            .fullScreenCover(isPresented: $showAdminControl) {
                 if authVM.canEditMembers {
                     // ملاحظة: لا نضع .id(membersVersion) هنا — كان يُعيد بناء
-                    // الـsheet بالكامل عند كل upsertMemberLocally (مثلاً
+                    // اللوح بالكامل عند كل upsertMemberLocally (مثلاً
                     // عند إضافة ابن)، فيُفقد scroll position ويرجع للأعلى.
-                    // الـsheet يتحدث طبيعياً عبر @EnvironmentObject memberVM.
-                    AdminMemberDetailSheet(member: member)
+                    // المحتوى يتحدث طبيعياً عبر @EnvironmentObject memberVM.
+                    DSCenterPanel(onBackgroundTap: nil) {
+                        AdminMemberDetailSheet(member: member)
+                    }
+                    .background(ClearPresentationBackground())
                 }
             }
-            .sheet(item: $pendingEditAction) { action in
-                TreeEditRequestView(member: member, action: action)
+            .transaction { t in
+                // بلا انزلاق من الأسفل — اللوح يظهر بنفسه في المنتصف
+                if showAdminControl || pendingEditAction != nil || showEditActions {
+                    t.disablesAnimations = true
+                }
+            }
+            // اختيار نوع الطلب — مربّع بمنتصف الشاشة (طلب المالك)
+            .fullScreenCover(isPresented: $showEditActions) {
+                DSCenterCard(onBackgroundTap: { showEditActions = false }) {
+                    editActionsGrid
+                }
+                .background(ClearPresentationBackground())
+            }
+            // «طلب تعديل» كذلك لوح بمنتصف الشاشة (طلب المالك)
+            .fullScreenCover(item: $pendingEditAction) { action in
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                    TreeEditRequestView(member: member, action: action)
+                }
+                .background(ClearPresentationBackground())
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .memberDeleted)) { notification in
@@ -194,6 +215,7 @@ struct MemberDetailsView: View {
         }
         .dsAlert(L10n.t("إبلاغ عن عضو", "Report Member"), isPresented: $showReportConfirm) {
             TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+                .dsAlertField()
             Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
                 let target = member
                 let reason = reportReason
@@ -1202,7 +1224,7 @@ struct MemberDetailsView: View {
                             label: L10n.t("طلب تعديل", "Request Edit"),
                             tint: DS.Color.primary,
                             filled: true
-                        ) { withAnimation(DS.Anim.snappy) { showEditActions.toggle() } }
+                        ) { showEditActions = true }
 
                         // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
                         circleActionButton(
@@ -1222,23 +1244,18 @@ struct MemberDetailsView: View {
                 }
                 .frame(maxWidth: .infinity)
 
-                // شبكة أنواع الطلبات مدمجة داخل التفاصيل — تدفق واحد:
-                // كان المسار 3 شيتات متتالية (تفاصيل ← اختيار نوع ← نموذج) مع تأخير 0.3 ثانية؛
-                // الآن النوع يُختار هنا والنموذج يفتح مباشرة فوق التفاصيل.
-                if showEditActions && !isViewingSelf {
-                    editActionsGrid
-                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
-                }
+                // اختيار نوع الطلب صار مربّعاً بمنتصف الشاشة (طلب المالك) —
+                // يُعرض في fullScreenCover أدناه، لا داخل التفاصيل.
             }
         }
     }
 
-    /// شبكة أنواع طلبات التعديل — مدمجة داخل شيت التفاصيل (بدل الشيت الوسيط السابق).
+    /// شبكة أنواع طلبات التعديل — مربّع بمنتصف الشاشة (طلب المالك).
     private var editActionsGrid: some View {
         VStack(spacing: DS.Spacing.md) {
             Text(L10n.t("اختر نوع الطلب", "Choose Request Type"))
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textSecondary)
+                .font(DS.Font.plex(17, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             LazyVGrid(
@@ -1249,10 +1266,20 @@ struct MemberDetailsView: View {
                     editActionCircle(for: action)
                 }
             }
+
+            Button {
+                showEditActions = false
+            } label: {
+                Text(L10n.t("إلغاء", "Cancel"))
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .fill(DS.Color.mutedBackground.opacity(0.8)))
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .padding(.top, DS.Spacing.xs)
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
     }
 
     private var availableEditActions: [TreeEditAction] {
@@ -1294,7 +1321,11 @@ struct MemberDetailsView: View {
         let tint = editActionColor(for: action)
         return Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            pendingEditAction = action
+            // نُغلق مربّع الاختيار أولاً ثم نفتح نموذج الطلب (عرضان متتاليان)
+            showEditActions = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                pendingEditAction = action
+            }
         } label: {
             VStack(spacing: DS.Spacing.xs) {
                 ZStack {
@@ -1307,8 +1338,7 @@ struct MemberDetailsView: View {
                         .foregroundColor(tint)
                 }
                 Text(editActionLabel(for: action))
-                    .font(DS.Font.caption1)
-                    .fontWeight(.semibold)
+                    .font(DS.Font.plex(12, weight: .semibold))
                     .foregroundColor(DS.Color.textSecondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)

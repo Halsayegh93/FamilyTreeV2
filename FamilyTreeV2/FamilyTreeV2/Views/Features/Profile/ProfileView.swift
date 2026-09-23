@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct ProfileView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -9,6 +10,8 @@ struct ProfileView: View {
     @ObservedObject private var langManager = LanguageManager.shared
 
     @State private var showEditProfile = false
+    /// معاينة الصورة مكبّرة (طلب المالك)
+    @State private var showAvatarPreview = false
     @State private var showQRCode = false
     @State private var showQRScanner = false
     @State private var showSignOutConfirm = false
@@ -170,6 +173,20 @@ struct ProfileView: View {
                     .environment(\.layoutDirection, langManager.layoutDirection)
             }
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c).presentationDragIndicator(.visible) } }
+            .fullScreenCover(isPresented: $showAvatarPreview) {
+                if let c = user {
+                    AvatarPreview(member: c) {
+                        showAvatarPreview = false
+                    } onChangePhoto: { image in
+                        await changeAvatar(image, for: c)
+                    }
+                    .background(ClearPresentationBackground())
+                }
+            }
+            .transaction { t in
+                // تظهر في مكانها بلا انزلاق من الأسفل
+                if showAvatarPreview { t.disablesAnimations = true }
+            }
             .sheet(isPresented: $showQRCode) {
                 if let c = user {
                     QRCodeSheet(member: c, selectedTab: $selectedTab)
@@ -259,6 +276,7 @@ struct ProfileView: View {
             }
             .dsAlert(L10n.t("إضافة أم", "Add Mother"), isPresented: $showAddMotherName) {
                 TextField(L10n.t("اسم الأم", "Mother's name"), text: $newMotherName)
+                    .dsAlertField()
                 Button(L10n.t("إضافة", "Add")) {
                     let n = newMotherName
                     Task { await memberVM.addSelfMother(name: n) }
@@ -285,6 +303,35 @@ struct ProfileView: View {
 
         }
         .environment(\.layoutDirection, langManager.layoutDirection)
+    }
+
+    /// تغيير الصورة من المعاينة (طلب المالك): أول ٣ تغييرات تُرفع مباشرة،
+    /// وبعدها تُرسل اقتراحاً للإدارة — نفس قاعدة شاشة تعديل البيانات.
+    /// يرجّع رسالة النتيجة لتُعرض داخل المعاينة.
+    @MainActor
+    private func changeAvatar(_ image: UIImage, for member: FamilyMember) async -> String {
+        let cooldown = ProfileEditCooldown.shared
+        if cooldown.canEdit(.avatar) {
+            let uploaded = await memberVM.uploadAvatar(image: image, for: member.id)
+            guard uploaded else {
+                return L10n.t("تعذّر رفع الصورة. حاول مرة ثانية.", "Couldn't upload the photo. Try again.")
+            }
+            cooldown.recordEdit(.avatar)
+            return L10n.t("تم تغيير الصورة", "Photo changed")
+        }
+        guard let url = await adminRequestVM.uploadPhotoSuggestion(image) else {
+            return L10n.t("تعذّر رفع الصورة. حاول مرة ثانية.", "Couldn't upload the photo. Try again.")
+        }
+        let ok = await adminRequestVM.submitTreeEditRequest(payload: .make(
+            action: .addPhoto,
+            targetMemberId: member.id.uuidString,
+            targetMemberName: member.fullName,
+            newPhotoUrl: url,
+            notes: L10n.t("تعديل صورة بعد تجاوز حد التعديلات", "Photo edit after reaching the edit limit")
+        ))
+        return ok
+            ? L10n.t("تجاوزت ٣ تغييرات — أُرسلت الصورة للإدارة للموافقة", "Over 3 changes — sent to the admins for approval")
+            : L10n.t("تعذّر إرسال الطلب. حاول مرة ثانية.", "Couldn't send the request. Try again.")
     }
 
     // MARK: - Profile Header — Avatar & Info
@@ -324,6 +371,10 @@ struct ProfileView: View {
                         )
                 }
             }
+            .contentShape(Circle())
+            .onTapGesture { showAvatarPreview = true }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(L10n.t("معاينة الصورة", "Preview photo"))
             .padding(.top, DS.Spacing.xl)
             
             // User Info
@@ -1734,5 +1785,134 @@ struct WomanMemberEditSheet: View {
             isSaving = false
             if ok { dismiss() } else { errorBanner = memberVM.errorMessage }
         }
+    }
+}
+
+/// معاينة الصورة الشخصية مكبّرة (طلب المالك) — «تغيير» يفتح معرض الصور مباشرة،
+/// ثم قصّ دائري، ثم الرفع (بحدّ الـ٣ تغييرات).
+private struct AvatarPreview: View {
+    let member: FamilyMember
+    let onClose: () -> Void
+    let onChangePhoto: (UIImage) async -> String
+
+    @State private var appeared = false
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var cropItem: CropItem?
+    @State private var newImage: UIImage?
+    @State private var isUploading = false
+    @State private var resultMessage: String?
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width - DS.Spacing.xxl * 2, 420)
+            ZStack {
+                Color.black.opacity(appeared ? 0.88 : 0)
+                    .ignoresSafeArea()
+                    .onTapGesture { if !isUploading { onClose() } }
+
+                VStack(spacing: DS.Spacing.lg) {
+                    ZStack {
+                        if let newImage {
+                            Image(uiImage: newImage).resizable().scaledToFill()
+                        } else if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
+                            CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                            placeholder: { ProgressView().tint(.white) }
+                        } else {
+                            DS.Color.surface
+                            Text(String(member.firstName.first ?? "?"))
+                                .font(DS.Font.plex(96, weight: .bold))
+                                .foregroundColor(DS.Color.primary)
+                        }
+                        if isUploading {
+                            Color.black.opacity(0.35)
+                            ProgressView().tint(.white).scaleEffect(1.3)
+                        }
+                    }
+                    .frame(width: side, height: side)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+                    .shadow(color: .black.opacity(0.4), radius: 24, y: 10)
+
+                    Text(member.displayFullName)
+                        .font(DS.Font.plex(17, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, DS.Spacing.xl)
+
+                    if let resultMessage {
+                        Text(resultMessage)
+                            .font(DS.Font.plex(13, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DS.Spacing.xl)
+                    }
+
+                    // «إغلاق» يسار والإجراء في الجهة الأخرى (قاعدة التطبيق)
+                    HStack(spacing: DS.Spacing.sm) {
+                        PhotosPicker(selection: $pickerItem, matching: .images) {
+                            Label(L10n.t("تغيير", "Change"), systemImage: "photo.on.rectangle")
+                                .font(DS.Font.plex(15, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity).frame(height: 48)
+                                .background(DS.Color.primary,
+                                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        }
+                        .disabled(isUploading)
+
+                        Button(action: onClose) {
+                            Text(L10n.t("إغلاق", "Close"))
+                                .font(DS.Font.plex(15, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity).frame(height: 48)
+                                .background(Color.white.opacity(0.16),
+                                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        }
+                        .disabled(isUploading)
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .frame(width: side)
+                }
+                .scaleEffect(appeared ? 1 : 0.92)
+                .opacity(appeared ? 1 : 0)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onAppear { withAnimation(DS.Anim.snappy) { appeared = true } }
+        .onChange(of: pickerItem) { item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let img = UIImage(data: data) {
+                    await MainActor.run { cropItem = CropItem(image: img) }
+                }
+                await MainActor.run { pickerItem = nil }
+            }
+        }
+        .fullScreenCover(item: $cropItem) { item in
+            ImageCropperView(image: item.image, cropShape: .circle) { cropped in
+                cropItem = nil
+                upload(cropped)
+            } onCancel: {
+                cropItem = nil
+            }
+        }
+    }
+
+    private func upload(_ image: UIImage) {
+        newImage = image
+        isUploading = true
+        resultMessage = nil
+        Task {
+            let message = await onChangePhoto(image)
+            await MainActor.run {
+                isUploading = false
+                resultMessage = message
+            }
+        }
+    }
+
+    private struct CropItem: Identifiable {
+        let id = UUID()
+        let image: UIImage
     }
 }

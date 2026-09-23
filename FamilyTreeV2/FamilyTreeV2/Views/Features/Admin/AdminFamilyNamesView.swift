@@ -35,6 +35,7 @@ struct AdminFamilyNamesView: View {
             get: { renaming != nil }, set: { if !$0 { renaming = nil } }
         )) {
             TextField(L10n.t("اسم العائلة", "Family name"), text: $renameText)
+                .dsAlertField()
             Button(L10n.t("حفظ", "Save")) {
                 if let r = renaming { Task { await vm.rename(id: r.id, to: renameText) } }
                 renaming = nil

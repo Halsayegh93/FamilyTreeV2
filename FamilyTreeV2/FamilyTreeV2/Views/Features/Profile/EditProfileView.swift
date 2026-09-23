@@ -43,7 +43,7 @@ private struct EditLimitPopup: View {
 
                 Button(action: close) {
                     Text(L10n.t("حسناً", "OK"))
-                        .font(DS.Font.calloutBold)
+                        .font(DS.Font.plex(14.5, weight: .bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -95,6 +95,8 @@ struct EditProfileView: View {
     @State private var showAvatarDeleteConfirm = false
     @State private var pendingNameRequest: String?
     @State private var pendingPhoneVerified: (e164: String, country: KuwaitPhone.Country, digits: String, display: String)?
+    /// رقم لم يُتحقق منه ذاتياً (عليه حساب آخر) — يُرسل للإدارة عند «حفظ»
+    @State private var pendingPhoneForAdmins: (storage: String, display: String)?
     @State private var showPhoneChangeSheet = false
     @State private var familyPopupID: UUID?
     @State private var bioPopupID: UUID?
@@ -181,7 +183,7 @@ struct EditProfileView: View {
                                 L10n.t("اضغط على الصورة لتغييرها", "Tap the photo to change it"),
                                 systemImage: "camera.fill"
                             )
-                            .font(DS.Font.footnote)
+                            .font(DS.Font.plex(12.5))
                             .foregroundColor(DS.Color.primary)
                         }
 
@@ -200,15 +202,11 @@ struct EditProfileView: View {
                                     modernPhoneField
 
                                     DSDivider()
-                                    modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
-                                        .cooldownGuarded(.birthDate, cooldown: cooldown) { showEditLimitAlert = true }
-                                        .onChange(of: birthDate) { _ in birthDateProvided = true }
+                                    birthDateRow
 
                                     DSDivider()
                                     maritalRow
 
-                                    DSDivider()
-                                    emailField
                                 }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -236,7 +234,7 @@ struct EditProfileView: View {
                             dismiss()
                         }
                     }
-                    .font(DS.Font.calloutBold)
+                    .font(DS.Font.plex(14.5, weight: .bold))
                     .foregroundColor(DS.Color.error)
                 }
                 // زر الحفظ أعلى الشاشة (طلب المالك)
@@ -245,7 +243,7 @@ struct EditProfileView: View {
                         ProgressView()
                     } else {
                         Button(L10n.t("حفظ", "Save"), action: saveChangesAction)
-                            .font(DS.Font.calloutBold)
+                            .font(DS.Font.plex(14.5, weight: .bold))
                             .foregroundColor(isSaveDisabled ? DS.Color.textTertiary : DS.Color.primary)
                             .disabled(isSaveDisabled)
                     }
@@ -315,7 +313,7 @@ struct EditProfileView: View {
                     : L10n.t("اضغط على الكاميرا لخيارات الصورة", "Tap the camera for photo options"),
                 systemImage: pendingAvatarDelete ? "trash.fill" : "camera.fill"
             )
-            .font(DS.Font.footnote)
+            .font(DS.Font.plex(12.5))
             .foregroundColor(DS.Color.primary)
         }
     }
@@ -337,15 +335,11 @@ struct EditProfileView: View {
                 modernPhoneField
 
                 DSDivider()
-                modernDatePicker(label: L10n.t("تاريخ الميلاد", "Birth Date"), selection: $birthDate, icon: "calendar")
-                    .cooldownGuarded(.birthDate, cooldown: cooldown) { showEditLimitAlert = true }
-                    .onChange(of: birthDate) { _ in birthDateProvided = true }
+                birthDateRow
 
                 DSDivider()
                 maritalRow
 
-                DSDivider()
-                emailField
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -356,8 +350,8 @@ struct EditProfileView: View {
         HStack(spacing: DS.Spacing.md) {
             DSIcon("heart.fill", color: DS.Color.primary)
             Text(L10n.t("الحالة الاجتماعية", "Marital Status"))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
+                .font(DS.Font.plex(12.5, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
             Spacer(minLength: DS.Spacing.sm)
             HStack(spacing: 6) {
                 maritalChip(L10n.t("أعزب", "Single"), selected: !isMarried, color: DS.Color.primary) { setMarried(false) }
@@ -423,17 +417,17 @@ struct EditProfileView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("الاسم الكامل", "Full Name"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+                            .font(DS.Font.plex(12.5, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
                         // آخر الاسم = العائلة المختارة — يتحدّث فوراً عند تغيير العائلة
                         // الاسم الكامل كله يظهر بلا قصّ (طلب المالك)
                         Text(FamilyNameCatalog.words(fullName, family: familyName).joined(separator: " "))
-                            .font(DS.Font.callout)
+                            .font(DS.Font.plex(14.5))
                             .foregroundColor(DS.Color.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                         if let pending = pendingNameRequest {
                             Text(L10n.t("طلب «\(pending)» يُرسل عند الحفظ", "«\(pending)» will be sent on save"))
-                                .font(DS.Font.caption2)
+                                .font(DS.Font.plex(11))
                                 .foregroundColor(DS.Color.warning)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
@@ -461,16 +455,16 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("العائلة", "Family"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
                 Text(familyName.isEmpty ? L10n.t("لم تُحدَّد", "Not set") : familyName)
-                    .font(DS.Font.callout)
+                    .font(DS.Font.plex(14.5))
                     .foregroundColor(familyName.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
                     .lineLimit(1)
                 if let pending = pendingFamilyRequest {
                     // سطر واحد (طلب المالك)
                     Text(L10n.t("طلب «\(pending)» بانتظار موافقة الإدارة", "«\(pending)» awaiting approval"))
-                        .font(DS.Font.caption2)
+                        .font(DS.Font.plex(11))
                         .foregroundColor(DS.Color.warning)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -487,18 +481,14 @@ struct EditProfileView: View {
         .padding(.vertical, DS.Spacing.xs)
     }
 
-    /// زر «طلب تغيير» الموحّد للاسم والعائلة
+    /// زر التعديل الموحّد — أيقونة فقط بلا كلمة (طلب المالك)
     private var requestChip: some View {
-        HStack(spacing: 5) {
-            Text(L10n.t("تعديل", "Edit"))
-                .font(DS.Font.scaled(13, weight: .bold))
-            Image(systemName: "pencil")
-                .font(DS.Font.scaled(11, weight: .bold))
-        }
-        .foregroundColor(DS.Color.primary)
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(height: 32)
-        .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
+        Image(systemName: "pencil")
+            .font(DS.Font.scaled(13, weight: .bold))
+            .foregroundColor(DS.Color.primary)
+            .frame(width: 32, height: 32)
+            .background(Circle().fill(DS.Color.primary.opacity(0.10)))
+            .accessibilityLabel(L10n.t("تعديل", "Edit"))
     }
 
     private func openNamePopup() {
@@ -521,7 +511,13 @@ struct EditProfileView: View {
                 // التحقق يتم الآن، والحفظ/الطلب عند الضغط على «حفظ»
                 onVerified: { e164, country, digits, display in
                     close()
+                    pendingPhoneForAdmins = nil
                     pendingPhoneVerified = (e164, country, digits, display)
+                },
+                onNeedsAdmins: { storage, display in
+                    close()
+                    pendingPhoneVerified = nil
+                    pendingPhoneForAdmins = (storage, display)
                 },
                 onCancel: close
             )
@@ -565,10 +561,10 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
                 Text(value)
-                    .font(DS.Font.callout)
+                    .font(DS.Font.plex(14.5))
                     .foregroundColor(DS.Color.textTertiary)
             }
             Spacer()
@@ -587,10 +583,10 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
                 TextField(placeholder, text: text)
-                    .font(DS.Font.callout)
+                    .font(DS.Font.plex(14.5))
                     .foregroundColor(DS.Color.textPrimary)
             }
             Spacer()
@@ -606,7 +602,7 @@ struct EditProfileView: View {
             DSLabeledFieldRow(icon: "envelope.fill", iconColor: DS.Color.info,
                               label: L10n.t("البريد الإلكتروني", "Email")) {
                 TextField("name@example.com", text: $email)
-                    .font(DS.Font.callout)
+                    .font(DS.Font.plex(14.5))
                     .foregroundColor(DS.Color.textPrimary)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
@@ -619,16 +615,16 @@ struct EditProfileView: View {
             if isInvalid {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(DS.Font.caption2)
+                        .font(DS.Font.plex(11))
                     Text(L10n.t("صيغة البريد الإلكتروني غير صحيحة", "Invalid email format"))
-                        .font(DS.Font.caption2)
+                        .font(DS.Font.plex(11))
                 }
                 .foregroundColor(DS.Color.error)
                 .padding(.horizontal, DS.Spacing.xl + DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xs)
             } else if !trimmed.isEmpty {
                 Text(L10n.t("يُستخدم لإشعارات الإدارة فقط — لا يظهر للآخرين", "Used for admin notifications only — not visible to others"))
-                    .font(DS.Font.caption2)
+                    .font(DS.Font.plex(11))
                     .foregroundColor(DS.Color.textTertiary)
                     .padding(.horizontal, DS.Spacing.xl + DS.Spacing.lg)
                     .padding(.bottom, DS.Spacing.xs)
@@ -649,16 +645,30 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("رقم الهاتف", "Phone Number"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
                 Text(appliedPhoneDisplay ?? KuwaitPhone.display(member.phoneNumber))
-                    .font(DS.Font.callout)
+                    .font(DS.Font.plex(14.5))
                     .foregroundColor(DS.Color.textPrimary)
                     .monospacedDigit()
                     .environment(\.layoutDirection, .leftToRight)
                 if let pending = pendingPhoneRequest {
                     Text(L10n.t("طلب «\(pending)» بانتظار موافقة الإدارة", "«\(pending)» awaiting approval"))
-                        .font(DS.Font.caption2)
+                        .font(DS.Font.plex(11, weight: .medium))
+                        .foregroundColor(DS.Color.warning)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                } else if let pending = pendingPhoneForAdmins {
+                    Text(L10n.t("طلب «\(pending.display)» يُرسل للإدارة عند الحفظ",
+                                "«\(pending.display)» will be sent to the admins on save"))
+                        .font(DS.Font.plex(11, weight: .medium))
+                        .foregroundColor(DS.Color.warning)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                } else if let verified = pendingPhoneVerified {
+                    Text(L10n.t("الرقم «\(verified.display)» يُطبَّق عند الحفظ",
+                                "«\(verified.display)» applies on save"))
+                        .font(DS.Font.plex(11, weight: .medium))
                         .foregroundColor(DS.Color.warning)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -674,14 +684,38 @@ struct EditProfileView: View {
         .padding(.vertical, DS.Spacing.xs)
     }
 
-    private func modernDatePicker(label: String, selection: Binding<Date>, icon: String) -> some View {
-        DSDateField(
-            label: label,
-            date: selection,
-            icon: icon,
-            range: ...Date(),
-            labelAbove: true
-        )
+    /// تاريخ الميلاد — صف للقراءة يفتح مربّعاً بمنتصف الشاشة (طلب المالك)
+    private var birthDateRow: some View {
+        HStack(spacing: DS.Spacing.md) {
+            DSIcon("calendar", color: DS.Color.warning)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("تاريخ الميلاد", "Birth Date"))
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(birthDateProvided ? birthDateText(birthDate) : L10n.t("لم يُحدَّد", "Not set"))
+                    .font(DS.Font.plex(14.5))
+                    .foregroundColor(birthDateProvided ? DS.Color.textPrimary : DS.Color.textTertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button { openBirthDatePopup() } label: { requestChip }
+                .buttonStyle(DSScaleButtonStyle())
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
+    private func birthDateText(_ date: Date) -> String { DSDateText.display(date) }
+
+    private func openBirthDatePopup() {
+        dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                            initial: birthDateProvided ? birthDate : nil,
+                            allowClear: false) { picked in
+            guard let picked else { return }
+            birthDate = picked
+            birthDateProvided = true   // يُحفظ عند الضغط على «حفظ»
+        }
     }
 
     private var bioStationsSection: some View {
@@ -702,7 +736,7 @@ struct EditProfileView: View {
                                 .font(DS.Font.scaled(18))
                                 .foregroundColor(DS.Color.primary)
                             Text(L10n.t("أضف حدثاً لسيرتك", "Add to your biography"))
-                                .font(DS.Font.callout)
+                                .font(DS.Font.plex(14.5))
                                 .foregroundColor(DS.Color.primary)
                         }
                         .frame(maxWidth: .infinity)
@@ -719,7 +753,7 @@ struct EditProfileView: View {
                         if bioStations.count > 3 {
                             DSDivider()
                             Text(L10n.t("و \(bioStations.count - 3) أحداث أخرى...", "and \(bioStations.count - 3) more..."))
-                                .font(DS.Font.caption1)
+                                .font(DS.Font.plex(12))
                                 .foregroundColor(DS.Color.textTertiary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, DS.Spacing.lg)
@@ -731,7 +765,7 @@ struct EditProfileView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         Button { openBioPopup() } label: {
                             Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
-                                .font(DS.Font.calloutBold)
+                                .font(DS.Font.plex(14.5, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, DS.Spacing.sm)
@@ -742,7 +776,7 @@ struct EditProfileView: View {
 
                         Button { showDeleteBioAlert = true } label: {
                             Label(L10n.t("حذف", "Delete"), systemImage: "trash")
-                                .font(DS.Font.calloutBold)
+                                .font(DS.Font.plex(14.5, weight: .bold))
                                 .foregroundColor(DS.Color.error)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, DS.Spacing.sm)
@@ -777,7 +811,7 @@ struct EditProfileView: View {
         HStack(spacing: DS.Spacing.md) {
             if let year = station.year, !year.isEmpty {
                 Text(year)
-                    .font(DS.Font.caption2)
+                    .font(DS.Font.plex(11))
                     .fontWeight(.bold)
                     .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.sm)
@@ -794,14 +828,14 @@ struct EditProfileView: View {
             VStack(alignment: .leading, spacing: 2) {
                 if !station.title.isEmpty {
                     Text(station.title)
-                        .font(DS.Font.calloutBold)
+                        .font(DS.Font.plex(14.5, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                 }
                 if !station.details.isEmpty {
                     Text(station.details)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
+                        .font(DS.Font.plex(12.5, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                 }
             }
@@ -825,9 +859,9 @@ struct EditProfileView: View {
         if !network.isConnected {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "wifi.slash")
-                    .font(DS.Font.caption2)
+                    .font(DS.Font.plex(11))
                 Text(L10n.t("لا يمكن الحفظ بدون اتصال", "Can't save while offline"))
-                    .font(DS.Font.caption1)
+                    .font(DS.Font.plex(12))
             }
             .foregroundColor(DS.Color.error)
             .padding(.horizontal, DS.Spacing.lg)
@@ -987,6 +1021,14 @@ struct EditProfileView: View {
             }
             pendingPhoneVerified = nil
         }
+
+        // 5) رقم عليه حساب آخر — لا يُحفظ ذاتياً، يُرسل للإدارة دائماً
+        if let pending = pendingPhoneForAdmins {
+            await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
+                                                          newPhoneNumber: pending.storage)
+            pendingPhoneRequest = pending.display
+            pendingPhoneForAdmins = nil
+        }
     }
 
     private func saveEmailIfChanged() async {
@@ -1021,6 +1063,9 @@ struct EditProfileView: View {
     /// تُرسل كطلب موافقة عند الإغلاق. يُستثنى منها ما يُحفظ فوراً (الصورة + الحالة
     /// الاجتماعية) حتى لا يظهر تنبيه «تجاهل التعديلات؟» لتغييرات ثبتت أصلاً.
     private var hasUnsavedChanges: Bool {
+        if pendingPhoneVerified != nil || pendingPhoneForAdmins != nil
+            || pendingNameRequest != nil || pendingFamilyRequest != nil
+            || pendingAvatarDelete { return true }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         // ملاحظة: الحالة الاجتماعية (isMarried) تُحفظ فوراً في setMarried — لا تُحتسب هنا.
         if isPhoneHidden != (member.isPhoneHidden ?? false) { return true }
@@ -1155,7 +1200,7 @@ private struct FamilyRequestCard: View {
 
     var body: some View {
         DSCenterCard(onBackgroundTap: onCancel) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(spacing: 4) {
                 Text(L10n.t("طلب تغيير العائلة", "Request family change"))
                     .font(DS.Font.plex(17, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
@@ -1165,6 +1210,8 @@ private struct FamilyRequestCard: View {
                     .font(DS.Font.plex(12, weight: .medium))
                     .foregroundColor(DS.Color.textSecondary)
             }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.sm) {
@@ -1192,13 +1239,6 @@ private struct FamilyRequestCard: View {
             .frame(maxHeight: 280)
 
             HStack(spacing: DS.Spacing.sm) {
-                Button(action: onCancel) {
-                    Text(L10n.t("إلغاء", "Cancel"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
-                }
                 Button { if let s = selected { onSend(s) } } label: {
                     Text(L10n.t("إرسال", "Send"))
                         .font(DS.Font.plex(14, weight: .bold))
@@ -1208,6 +1248,13 @@ private struct FamilyRequestCard: View {
                             .fill(selected == nil ? DS.Color.primary.opacity(0.4) : DS.Color.primary))
                 }
                 .disabled(selected == nil)
+                Button(action: onCancel) {
+                    Text(L10n.t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
+                }
             }
             .buttonStyle(DSScaleButtonStyle())
         }
@@ -1228,7 +1275,7 @@ private struct NameRequestCard: View {
 
     var body: some View {
         DSCenterCard(onBackgroundTap: onCancel) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(spacing: 4) {
                 Text(L10n.t("طلب تغيير الاسم", "Request name change"))
                     .font(DS.Font.plex(17, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
@@ -1237,22 +1284,17 @@ private struct NameRequestCard: View {
                     .font(DS.Font.plex(12, weight: .medium))
                     .foregroundColor(DS.Color.textSecondary)
             }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
 
             TextField(L10n.t("اسمك الرباعي", "Your full name"), text: $name, axis: .vertical)
-                .font(DS.Font.body)
+                .font(DS.Font.plex(15))
                 .lineLimit(1...3)
                 .padding(DS.Spacing.md)
                 .background(DS.Color.mutedBackground.opacity(0.6),
                             in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
 
             HStack(spacing: DS.Spacing.sm) {
-                Button(action: onCancel) {
-                    Text(L10n.t("إلغاء", "Cancel"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
-                }
                 Button {
                     let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty, trimmed != current, !sending else { return }
@@ -1266,6 +1308,13 @@ private struct NameRequestCard: View {
                         .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(canSend ? DS.Color.primary : DS.Color.primary.opacity(0.4)))
                 }
                 .disabled(!canSend)
+                Button(action: onCancel) {
+                    Text(L10n.t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
+                }
             }
             .buttonStyle(DSScaleButtonStyle())
         }
@@ -1284,6 +1333,8 @@ private struct PhoneRequestCard: View {
     let member: FamilyMember
     /// التحقق فقط — الحفظ أو الطلب يتم عند الضغط على «حفظ» في الشاشة
     let onVerified: (String, KuwaitPhone.Country, String, String) -> Void
+    /// الرقم عليه حساب آخر — يُرسل للإدارة بلا رمز (عند «حفظ»)
+    let onNeedsAdmins: (String, String) -> Void
     let onCancel: () -> Void
 
     private let cooldown = ProfileEditCooldown.shared
@@ -1292,18 +1343,48 @@ private struct PhoneRequestCard: View {
     @State private var digits: String = ""
     @State private var code: String = ""
     @State private var codeSent = false
+    /// مؤقّت صلاحية الرمز / إعادة الإرسال (ثوانٍ)
+    @State private var secondsLeft = 0
+    /// الرقم مرتبط بحساب آخر في المصادقة — لا يمكن التحقق ذاتياً، يُرسل للإدارة
+    @State private var needsAdmins = false
     @State private var isBusy = false
     @State private var error: String?
     @State private var info: String?
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
-    private var newE164: String? { KuwaitPhone.normalizedForStorage(country: country, rawLocalDigits: digits) }
+    /// صيغة التخزين في قاعدة البيانات (الكويت: ٨ أرقام، ويكمّلها مُطبِّع السيرفر)
+    private var storagePhone: String? { KuwaitPhone.normalizedForStorage(country: country, rawLocalDigits: digits) }
+    /// الصيغة الدولية الكاملة للمصادقة (لازم رمز الدولة وإلا رفضها مزوّد الرسائل)
+    private var authPhone: String? {
+        let local = KuwaitPhone.normalizeDigits(digits).filter(\.isNumber)
+        guard local.count >= 6 else { return nil }
+        return "\(country.dialingCode)\(local)"
+    }
     private var goesToAdmins: Bool { !cooldown.canEdit(.phoneNumber) }
 
     var body: some View {
         DSCenterCard(onBackgroundTap: isBusy ? nil : onCancel) {
+            if codeSent {
+                otpPage
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                numberPage
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .animation(DS.Anim.snappy, value: codeSent)
+        .task(id: secondsLeft) {
+            guard secondsLeft > 0 else { return }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if !Task.isCancelled { secondsLeft -= 1 }
+        }
+    }
+
+    // MARK: الصفحة ١ — الرقم الجديد
+    private var numberPage: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(t("طلب تغيير الرقم", "Request number change"))
+                Text(t("تغيير رقم الهاتف", "Change phone number"))
                     .font(DS.Font.plex(17, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                 Text(t("الحالي: \(KuwaitPhone.display(member.phoneNumber))",
@@ -1313,85 +1394,150 @@ private struct PhoneRequestCard: View {
                     .environment(\.layoutDirection, .leftToRight)
             }
 
-            if codeSent {
-                Text(t("أدخل الرمز الذي وصلك على \(KuwaitPhone.display(newE164))",
-                       "Enter the code sent to \(KuwaitPhone.display(newE164))"))
-                    .font(DS.Font.plex(11.5, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                TextField("------", text: $code)
-                    .keyboardType(.numberPad)
-                    .font(DS.Font.plex(20, weight: .bold))
-                    .monospacedDigit()
-                    .multilineTextAlignment(.center)
-                    .environment(\.layoutDirection, .leftToRight)
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.mutedBackground.opacity(0.6),
-                                in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    .onChange(of: code) { v in code = String(v.filter(\.isNumber).prefix(6)) }
-            } else {
-                DSPhoneField(country: $country, digits: $digits,
-                             placeholder: "9xxxxxxx", compact: true, bordered: true)
-            }
-
-            if let info {
-                Label(info, systemImage: "checkmark.circle.fill")
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.success)
-            }
-            if let error {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.error)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Text(goesToAdmins
-                 ? t("تجاوزت ٣ تغييرات — بعد التأكيد يُرسل الطلب للإدارة عند الحفظ.",
-                     "You've used 3 direct changes — after confirming, the request is sent on save.")
-                 : t("بعد التأكيد يُحفظ الرقم عند الضغط على «حفظ». باقي لك \(cooldown.remainingEdits(.phoneNumber)) من ٣.",
-                     "After confirming, the number is saved when you press Save. \(cooldown.remainingEdits(.phoneNumber)) of 3 left."))
-                .font(DS.Font.plex(10.5, weight: .medium))
-                .foregroundColor(DS.Color.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: DS.Spacing.sm) {
-                Button(action: onCancel) {
-                    Text(t("إلغاء", "Cancel"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
+            DSPhoneField(country: $country, digits: $digits,
+                         placeholder: "9xxxxxxx", compact: true, bordered: true)
+                .onChange(of: digits) { _ in
+                    if needsAdmins { needsAdmins = false; error = nil }
                 }
-                .disabled(isBusy)
 
-                Button { Task { codeSent ? await confirm() : await sendCode() } } label: {
-                    Group {
-                        if isBusy {
-                            ProgressView().tint(.white)
-                        } else {
-                            Text(codeSent ? t("تأكيد", "Confirm") : t("إرسال الرمز", "Send code"))
-                                .font(DS.Font.plex(14, weight: .bold))
-                        }
+            messages
+
+            buttons(primary: needsAdmins ? t("إرسال للإدارة", "Send to admins") : t("إرسال الرمز", "Send code"),
+                    enabled: canProceed,
+                    secondary: t("إلغاء", "Cancel"),
+                    secondaryAction: onCancel) {
+                if needsAdmins {
+                    if let phone = storagePhone, let authNumber = authPhone {
+                        onNeedsAdmins(phone, KuwaitPhone.display(authNumber))
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).frame(height: 44)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(canProceed ? DS.Color.primary : DS.Color.primary.opacity(0.4)))
+                } else {
+                    Task { await sendCode() }
                 }
-                .disabled(!canProceed)
             }
-            .buttonStyle(DSScaleButtonStyle())
         }
     }
 
+    // MARK: الصفحة ٢ — إدخال رمز التحقق
+    private var otpPage: some View {
+        VStack(spacing: DS.Spacing.md) {
+            Image(systemName: "lock.shield.fill")
+                .font(DS.Font.plex(24, weight: .bold))
+                .foregroundColor(DS.Color.primary)
+                .frame(width: 56, height: 56)
+                .background(DS.Color.primary.opacity(0.12), in: Circle())
+
+            VStack(spacing: 4) {
+                Text(t("رمز التحقق", "Verification Code"))
+                    .font(DS.Font.plex(17, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(t("أرسلنا رمزاً من ٦ أرقام إلى", "We sent a 6-digit code to"))
+                    .font(DS.Font.plex(12.5, weight: .medium))
+                    .foregroundColor(DS.Color.textSecondary)
+                Text(KuwaitPhone.display(authPhone))
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .environment(\.layoutDirection, .leftToRight)
+            }
+            .multilineTextAlignment(.center)
+
+            DSOTPField(code: $code) { _ in
+                Task { await confirm() }
+            }
+            .disabled(isBusy)
+
+            // المؤقّت / إعادة الإرسال
+            if secondsLeft > 0 {
+                Text(t("إعادة الإرسال بعد \(secondsLeft / 60):\(String(format: "%02d", secondsLeft % 60))",
+                       "Resend in \(secondsLeft / 60):\(String(format: "%02d", secondsLeft % 60))"))
+                    .font(DS.Font.plex(12, weight: .medium))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .monospacedDigit()
+            } else {
+                Button {
+                    code = ""
+                    Task { await sendCode() }
+                } label: {
+                    Text(t("إعادة إرسال الرمز", "Resend code"))
+                        .font(DS.Font.plex(12.5, weight: .bold))
+                        .foregroundColor(DS.Color.primary)
+                }
+                .disabled(isBusy)
+            }
+
+            messages
+
+            buttons(primary: t("تأكيد", "Confirm"),
+                    enabled: !isBusy && code.count == 6,
+                    secondary: t("تغيير الرقم", "Change number"),
+                    secondaryAction: {
+                        code = ""; error = nil; info = nil
+                        codeSent = false
+                    }) {
+                Task { await confirm() }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder private var messages: some View {
+        if let info {
+            Label(info, systemImage: "checkmark.circle.fill")
+                .font(DS.Font.plex(11.5, weight: .medium))
+                .foregroundColor(DS.Color.success)
+        }
+        if let error {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .font(DS.Font.plex(11.5, weight: .medium))
+                .foregroundColor(DS.Color.error)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// الزرّان: الإجراء في جهة و«إلغاء/رجوع» يسار (قاعدة التطبيق)
+    private func buttons(primary: String, enabled: Bool,
+                         secondary: String, secondaryAction: @escaping () -> Void,
+                         action: @escaping () -> Void) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Button(action: action) {
+                Group {
+                    if isBusy {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text(primary).font(DS.Font.plex(14, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity).frame(height: 44)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.md)
+                    .fill(enabled ? DS.Color.primary : DS.Color.primary.opacity(0.4)))
+            }
+            .disabled(!enabled)
+
+            Button(action: secondaryAction) {
+                Text(secondary)
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .fill(DS.Color.mutedBackground.opacity(0.8)))
+            }
+            .disabled(isBusy)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
     private var canProceed: Bool {
-        !isBusy && (codeSent ? code.count == 6 : digits.count >= 6)
+        if needsAdmins { return !isBusy }
+        return !isBusy && (codeSent ? code.count == 6 : digits.count >= 6)
     }
 
     /// يرسل رمزاً للرقم الجديد (تغيير رقم الحساب في المصادقة — الجلسة تبقى كما هي)
     @MainActor private func sendCode() async {
-        guard let phone = newE164 else { error = t("رقم غير صالح.", "Invalid number."); return }
-        if phone == (member.phoneNumber ?? "") {
+        guard let phone = storagePhone, let authNumber = authPhone else {
+            error = t("رقم غير صالح.", "Invalid number."); return
+        }
+        if KuwaitPhone.e164(phone) == KuwaitPhone.e164(member.phoneNumber)
+            || phone == (member.phoneNumber ?? "") {
             error = t("هذا رقمك الحالي.", "That's your current number."); return
         }
         isBusy = true; error = nil; info = nil
@@ -1405,37 +1551,83 @@ private struct PhoneRequestCard: View {
                 error = t("هذا الرقم مسجّل لعضو آخر.", "This number belongs to another member.")
                 return
             }
-            try await SupabaseConfig.client.auth.update(user: UserAttributes(phone: phone))
-            codeSent = true
-            info = t("أُرسل الرمز", "Code sent")
+            try await SupabaseConfig.client.auth.update(user: UserAttributes(phone: authNumber))
+            code = ""
+            info = nil
+            secondsLeft = 60
+            codeSent = true   // يتحوّل المربّع لصفحة «رمز التحقق»
         } catch {
             Log.error("[PhoneChange] إرسال الرمز: \(error.localizedDescription)")
-            self.error = t("تعذّر إرسال الرمز. تأكد من الرقم وحاول مرة ثانية.",
-                           "Couldn't send the code. Check the number and try again.")
+            let reason = error.localizedDescription.lowercased()
+            if reason.contains("already been registered") || reason.contains("already registered")
+                || reason.contains("phone_exists") {
+                // الرقم على حساب دخول آخر: السيرفر يحرّره إن كان حساباً يتيماً (بلا عضو)،
+                // ثم نطلب الرمز من جديد — الرقم لا ينتقل إلا بعد التحقق (طلب المالك)
+                await releaseAndRetry(authNumber: authNumber)
+            } else if reason.contains("security purposes") || reason.contains("rate limit")
+                        || reason.contains("too many") {
+                self.error = t("محاولات كثيرة — انتظر دقيقة ثم أعد المحاولة.",
+                               "Too many attempts — wait a minute and try again.")
+            } else {
+                self.error = t("تعذّر إرسال الرمز: ", "Couldn't send the code: ")
+                    + error.localizedDescription
+            }
+        }
+    }
+
+    /// يحرّر الرقم من حساب دخول يتيم ثم يعيد طلب الرمز. حساب عضو حقيقي → للإدارة.
+    @MainActor private func releaseAndRetry(authNumber: String) async {
+        do {
+            let result: String = try await SupabaseConfig.client
+                .rpc("release_orphan_auth_phone", params: ["p_phone": authNumber])
+                .execute().value
+            switch result {
+            case "released", "free":
+                try await SupabaseConfig.client.auth.update(user: UserAttributes(phone: authNumber))
+                code = ""
+                info = nil
+                error = nil
+                secondsLeft = 60
+                codeSent = true
+            case "linked":
+                needsAdmins = true
+                error = t("هذا الرقم لعضو آخر في التطبيق. أرسل الطلب للإدارة لتتحقق منه.",
+                          "This number belongs to another member. Send the request to the admins.")
+            default:
+                error = t("رقم غير صالح.", "Invalid number.")
+            }
+        } catch {
+            Log.error("[PhoneChange] تحرير الرقم: \(error.localizedDescription)")
+            needsAdmins = true
+            self.error = t("تعذّر تحرير الرقم. أرسل الطلب للإدارة.",
+                           "Couldn't free the number. Send the request to the admins.")
         }
     }
 
     @MainActor private func confirm() async {
-        guard let phone = newE164 else { return }
+        guard let phone = storagePhone, let authNumber = authPhone else { return }
         isBusy = true; error = nil
         defer { isBusy = false }
         do {
             try await SupabaseConfig.client.auth.verifyOTP(
-                phone: phone,
+                phone: authNumber,
                 token: code.trimmingCharacters(in: .whitespacesAndNewlines),
                 type: .phoneChange
             )
-            onVerified(phone, country, digits, KuwaitPhone.display(phone))
+            // يُخزَّن بصيغة القاعدة، ويُعرض بالصيغة الدولية الكاملة
+            onVerified(phone, country, digits, KuwaitPhone.display(authNumber))
         } catch {
             Log.error("[PhoneChange] تأكيد الرمز: \(error.localizedDescription)")
             self.error = t("الرمز غير صحيح أو انتهت صلاحيته.", "The code is wrong or expired.")
+            code = ""   // يفرّغ المربّعات لإعادة الكتابة
         }
     }
 }
 
 /// مربّع «السيرة الذاتية» بمنتصف الشاشة (طلب المالك) — نفس شكل بقية المربّعات.
 /// التعديل هنا محلي فقط: لا شيء يُحفظ إلا بالضغط على «حفظ» في شاشة التعديل.
-private struct BioEditCard: View {
+/// مشترك: تعديل البيانات + التعديل المباشر (طلب المالك)
+struct BioEditCard: View {
     let initial: [FamilyMember.BioStation]
     let goesToAdmins: Bool
     let remaining: Int
@@ -1448,19 +1640,9 @@ private struct BioEditCard: View {
 
     var body: some View {
         DSCenterCard(onBackgroundTap: onCancel) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(t("السيرة الذاتية", "Biography"))
-                    .font(DS.Font.plex(17, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(goesToAdmins
-                     ? t("تجاوزت ٣ تعديلات — يُرسل للإدارة بعد الحفظ.",
-                         "You've used 3 edits — it goes to the admins after saving.")
-                     : t("لا يُحفظ إلا بالضغط على «حفظ». باقي لك \(remaining) من ٣.",
-                         "Applied only when you press Save. \(remaining) of 3 left."))
-                    .font(DS.Font.plex(12, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(t("السيرة الذاتية", "Biography"))
+                .font(DS.Font.plex(17, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
 
             if stations.isEmpty {
                 Text(t("لا توجد أحداث بعد.", "No entries yet."))
@@ -1493,22 +1675,22 @@ private struct BioEditCard: View {
             .buttonStyle(DSScaleButtonStyle())
 
             HStack(spacing: DS.Spacing.sm) {
+                Button {
+                    onDone(stations.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty
+                                          || !$0.details.trimmingCharacters(in: .whitespaces).isEmpty })
+                } label: {
+                    Text(t("حفظ", "Save"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.primary))
+                }
                 Button(action: onCancel) {
                     Text(t("إلغاء", "Cancel"))
                         .font(DS.Font.plex(14, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                         .frame(maxWidth: .infinity).frame(height: 44)
                         .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
-                }
-                Button {
-                    onDone(stations.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty
-                                          || !$0.details.trimmingCharacters(in: .whitespaces).isEmpty })
-                } label: {
-                    Text(t("تم", "Done"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.primary))
                 }
             }
             .buttonStyle(DSScaleButtonStyle())
@@ -1559,3 +1741,4 @@ private struct BioEditCard: View {
                     in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
     }
 }
+

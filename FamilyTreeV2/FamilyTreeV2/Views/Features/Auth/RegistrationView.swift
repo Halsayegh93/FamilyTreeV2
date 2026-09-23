@@ -84,6 +84,7 @@ struct RegistrationView: View {
         }
         .dsAlert(L10n.t("اسم العائلة", "Family name"), isPresented: $showManualFamily) {
             TextField(L10n.t("مثال: الصايغ", "e.g. Al-Sayegh"), text: $manualFamilyText)
+                .dsAlertField()
             Button(L10n.t("حفظ", "Save")) {
                 let t = manualFamilyText.trimmingCharacters(in: .whitespaces)
                 if !t.isEmpty { familyName = t }

@@ -78,7 +78,13 @@ struct TreeEditRequestView: View {
                 DS.Color.background.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxl) {
+                    VStack(spacing: DS.Spacing.lg) {
+                        // عنوان المربّع بخط التطبيق (شريط التنقل يستخدم خط النظام)
+                        Text(screenTitle)
+                            .font(DS.Font.plex(17, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+
                         memberCard
                         primaryFieldSection
                         notesSection
@@ -97,15 +103,7 @@ struct TreeEditRequestView: View {
                     )
                 }
             }
-            .navigationTitle(screenTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .dsAlert(L10n.t("تم الإرسال", "Request Sent"), isPresented: $showSuccessAlert) {
                 Button(L10n.t("حسناً", "OK")) { dismiss() }
             } message: {
@@ -145,17 +143,17 @@ struct TreeEditRequestView: View {
                     .fill(actionColor.opacity(0.12))
                     .frame(width: 56, height: 56)
                 Image(systemName: action.iconName)
-                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .font(DS.Font.plex(20, weight: .semibold))
                     .foregroundColor(actionColor)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t(action.arabicLabel, action.englishLabel))
-                    .font(DS.Font.caption1)
+                    .font(DS.Font.plex(12))
                     .fontWeight(.semibold)
                     .foregroundColor(actionColor)
                 Text(member.displayFullName)
-                    .font(DS.Font.calloutBold)
+                    .font(DS.Font.plex(14, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
             }
@@ -218,7 +216,7 @@ struct TreeEditRequestView: View {
     private func dateSection(title: String, label: String, date: Binding<Date>, iconColor: Color) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(title)
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             DSDateField(
@@ -243,7 +241,7 @@ struct TreeEditRequestView: View {
     private var photoPickerSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(L10n.t("الصورة المقترحة", "Suggested Photo"))
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             DSProfilePhotoPicker(
@@ -259,24 +257,24 @@ struct TreeEditRequestView: View {
     private func textInputSection(label: String, placeholder: String, icon: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(label)
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .medium))
+                    .font(DS.Font.plex(14, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                     .frame(width: 24)
 
                 TextField(placeholder, text: text)
-                    .font(DS.Font.body)
+                    .font(DS.Font.plex(15))
                     .foregroundColor(DS.Color.textPrimary)
                     .focused($isPrimaryFieldFocused)
 
                 if !text.wrappedValue.isEmpty {
                     Button { text.wrappedValue = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(14, weight: .medium))
+                            .font(DS.Font.plex(14, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }
@@ -298,7 +296,7 @@ struct TreeEditRequestView: View {
     private var phoneInputSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(L10n.t("الرقم الجديد", "New Phone Number"))
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             DSPhoneField(
@@ -320,10 +318,10 @@ struct TreeEditRequestView: View {
                         Text(country.flag).font(DS.Font.scaled(20))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.t(country.nameArabic, country.isoCode))
-                                .font(DS.Font.calloutBold)
+                                .font(DS.Font.plex(14, weight: .bold))
                                 .foregroundColor(DS.Color.textPrimary)
                             Text(country.dialingCode)
-                                .font(DS.Font.caption1)
+                                .font(DS.Font.plex(12))
                                 .foregroundColor(DS.Color.textTertiary)
                         }
                         Spacer()
@@ -343,7 +341,7 @@ struct TreeEditRequestView: View {
     private var deceasedDateSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(L10n.t("تاريخ الوفاة", "Date of Death"))
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             DSDateField(
@@ -367,28 +365,31 @@ struct TreeEditRequestView: View {
     // MARK: - Notes / Reason Section
 
     private var notesSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        // مربّع الملاحظات صغير (طلب المالك) — يكبر بالكتابة لا أكثر
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Text(notesLabel)
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(13, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $notes)
-                    .frame(minHeight: action == .delete ? 100 : 80)
+                    .frame(minHeight: notesRequired ? 56 : 38)
                     .focused($isDetailsFocused)
                     .scrollContentBackground(.hidden)
-                    .font(DS.Font.body)
+                    .font(DS.Font.plex(14))
 
                 if notes.isEmpty {
                     Text(notesPlaceholder)
-                        .font(DS.Font.body)
+                        .font(DS.Font.plex(14))
                         .foregroundColor(DS.Color.textTertiary)
                         .padding(.top, DS.Spacing.sm)
                         .padding(.leading, DS.Spacing.xs)
+                        .lineLimit(1)
                         .allowsHitTesting(false)
                 }
             }
-            .padding(DS.Spacing.md)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
             .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
             .overlay(
@@ -400,6 +401,9 @@ struct TreeEditRequestView: View {
             )
         }
     }
+
+    /// الملاحظات مطلوبة في الحذف و«أخرى» — تأخذ ارتفاعاً أكبر قليلاً
+    private var notesRequired: Bool { action == .delete || action == .other }
 
     private var notesLabel: String {
         switch action {
@@ -425,18 +429,35 @@ struct TreeEditRequestView: View {
 
     // MARK: - Submit
 
+    /// «إرسال الطلب» و«إلغاء» جنب بعض، والإلغاء في الجهة اليسرى (طلب المالك)
     private var submitButton: some View {
-        DSPrimaryButton(
-            L10n.t("إرسال الطلب", "Submit Request"),
-            icon: "paperplane.fill",
-            isLoading: adminRequestVM.isLoading,
-            useGradient: canSubmit,
-            color: canSubmit ? actionColor : .gray
-        ) {
-            submit()
+        HStack(spacing: DS.Spacing.sm) {
+            Button { submit() } label: {
+                Group {
+                    if adminRequestVM.isLoading {
+                        ProgressView().tint(.white)
+                    } else {
+                        Label(L10n.t("إرسال الطلب", "Submit Request"), systemImage: "paperplane.fill")
+                            .font(DS.Font.plex(14, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity).frame(height: 48)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(canSubmit ? actionColor : actionColor.opacity(0.4)))
+            }
+            .disabled(!canSubmit)
+
+            Button { dismiss() } label: {
+                Text(L10n.t("إلغاء", "Cancel"))
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.mutedBackground.opacity(0.8)))
+            }
         }
-        .disabled(!canSubmit)
-        .opacity(canSubmit ? 1.0 : DS.Opacity.disabled)
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Helpers
