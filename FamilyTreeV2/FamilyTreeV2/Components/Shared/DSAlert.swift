@@ -50,11 +50,12 @@ private struct DSAlertPressStyle: ButtonStyle {
     let role: ButtonRole?
 
     func makeBody(configuration: Configuration) -> some View {
-        // الحذف: مربّع أحمر بنص أبيض (طلب المالك)؛ الباقي خلفية هادئة
+        // أزرار موحّدة في كل المربّعات (طلب المالك): الإجراء كحلي ممتلئ بنص
+        // أبيض (نفس «طلب تعديل»)، الحذف أحمر ممتلئ، و«إلغاء» رمادي هادئ.
         let destructive = role == .destructive
-        let text: Color = destructive ? .white
-            : role == .cancel ? DS.Color.textPrimary
-            : DS.Color.primary
+        let cancel = role == .cancel
+        let text: Color = cancel ? DS.Color.textPrimary : .white
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
         return configuration.label
             .font(DS.Font.plex(14, weight: .bold))
             .foregroundColor(text)
@@ -62,8 +63,15 @@ private struct DSAlertPressStyle: ButtonStyle {
             .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 46)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(destructive ? DS.Color.error : DS.Color.mutedBackground.opacity(0.8)))
+            .background {
+                if destructive {
+                    shape.fill(DS.Color.error)
+                } else if cancel {
+                    shape.fill(DS.Color.mutedBackground.opacity(0.8))
+                } else {
+                    shape.fill(DSActionFill.style())
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
@@ -281,6 +289,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @State private var appeared = false
+    /// أثناء الإغلاق: حركة أخف (تصغير بسيط) من حركة الفتح
+    @State private var closing = false
     /// ارتفاع المحتوى كاملاً (`SheetContentHeightKey`) — للموسّع
     @State private var contentHeight: CGFloat = 0
     /// ارتفاع الرأس فقط (`DSPanelCollapsedHeightKey`) — للمصغّر؛ المحتوى يبقى ويُقصّ
@@ -322,8 +332,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
                 )
                 .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
                 // فتح/إغلاق بحركة: يكبر من أصغر وأسفل قليلاً مع تلاشٍ (طلب المالك)
-                .scaleEffect(appeared ? 1 : 0.86)
-                .offset(y: appeared ? 0 : 28)
+                .scaleEffect(appeared ? 1 : (closing ? 0.96 : 0.9))
+                .offset(y: appeared ? 0 : (closing ? 8 : 20))
                 .opacity(appeared ? 1 : 0)
                 // الارتفاع الفعلي يتحرّك بسلاسة — يصل بعد قياس المحتوى الجديد
                 .animation(DS.Anim.smooth, value: height)
@@ -337,11 +347,18 @@ struct DSExpandableCenterPanel<Content: View>: View {
         }
     }
 
-    /// يصغّر المربّع ويخفيه ثم يغلقه
+    /// يصغّر المربّع ويخفيه ثم يغلقه — والإغلاق نفسه بلا انزلاق النظام من
+    /// الأسفل (كانت الطبقة الفارغة تنزلق بعد اختفاء المربّع فيبدو الإغلاق مكسوراً)
     private func animatedClose() {
         guard appeared else { return }
-        withAnimation(.easeIn(duration: 0.2)) { appeared = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onClose() }
+        closing = true
+        // بطيئة وخفيفة (طلب المالك): تلاشٍ هادئ مع تصغير بسيط
+        withAnimation(.easeOut(duration: 0.38)) { appeared = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { onClose() }
+        }
     }
 }
 

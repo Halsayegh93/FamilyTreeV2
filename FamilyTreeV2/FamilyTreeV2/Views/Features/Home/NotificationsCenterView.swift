@@ -1204,6 +1204,7 @@ struct NotificationsCenterView: View {
                 .background(ClearPresentationBackground())
         }
         .transaction { t in
+            // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
             if selectedMember != nil { t.disablesAnimations = true }
         }
     }
