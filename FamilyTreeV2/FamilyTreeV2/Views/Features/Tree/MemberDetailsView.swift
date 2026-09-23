@@ -526,46 +526,52 @@ struct MemberDetailsView: View {
                 .buttonStyle(.plain)
 
                 if familyOpen {
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        // الأب بالمنتصف (طلب المالك)
+                    // الأبناء ملاصقون للأب تقريباً (طلب المالك)
+                    VStack(alignment: .leading, spacing: 0) {
+                        // الأب بالمنتصف بخلفية خفيفة (طلب المالك)
                         if let father {
                             Button { openMemberInTree(father.id) } label: {
                                 familyBubble(father, size: 50, ring: DS.Color.warning,
                                              caption: L10n.t("الأب", "Father"))
+                                    .padding(.vertical, DS.Spacing.sm)
+                                    // الخلفية بعرض المربّع كامل (طلب المالك)
+                                    .frame(maxWidth: .infinity)
+                                    .background(DS.Color.warning.opacity(0.08),
+                                                in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(DSScaleButtonStyle())
                             .frame(maxWidth: .infinity)
+                            .padding(.bottom, 4)
 
-                            if !children.isEmpty {
-                                Rectangle()
-                                    .fill(DS.Color.textTertiary.opacity(0.15))
-                                    .frame(height: 1)
-                                    .padding(.horizontal, DS.Spacing.lg)
-                            }
                         }
 
                         // الأبناء: شبكة أربعة في كل صف (بدل الصف المتمرّر — طلب المالك)
                         if !children.isEmpty {
                             Text(L10n.t("الأبناء", "Children") + " · \(children.count)")
-                                .font(DS.Font.plex(11.5, weight: .bold))
+                                .font(DS.Font.plex(11, weight: .bold))
                                 .foregroundColor(DS.Color.textSecondary)
-                                .padding(.top, 2)
-                            LazyVGrid(
-                                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.xs), count: 4),
-                                spacing: DS.Spacing.sm
-                            ) {
-                                ForEach(children) { child in
-                                    Button { openMemberInTree(child.id) } label: {
-                                        familyBubble(child, size: 42, ring: DS.Color.primary.opacity(0.35),
-                                                     caption: nil)
+                                .frame(maxWidth: .infinity)
+                                .padding(.bottom, 2)
+                            // الأبناء بالمنتصف: صفوف من أربعة، كل صف متمركز (طلب المالك)
+                            VStack(spacing: 4) {
+                                ForEach(Array(stride(from: 0, to: children.count, by: 4)), id: \.self) { start in
+                                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                                        ForEach(children[start..<min(start + 4, children.count)]) { child in
+                                            Button { openMemberInTree(child.id) } label: {
+                                                familyBubble(child, size: 42, ring: DS.Color.primary.opacity(0.35),
+                                                             caption: nil)
+                                            }
+                                            .buttonStyle(DSScaleButtonStyle())
+                                        }
                                     }
-                                    .buttonStyle(DSScaleButtonStyle())
+                                    .frame(maxWidth: .infinity)
                                 }
                             }
                         }
                     }
                     .padding(.horizontal, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.sm)
                     .transition(.opacity)
                 }
             }
