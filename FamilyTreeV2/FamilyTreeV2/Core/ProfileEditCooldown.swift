@@ -30,7 +30,18 @@ final class ProfileEditCooldown {
     /// مفتاح إيقاف العداد
     private let disabledKey = "editCooldown_disabled"
 
-    private init() {}
+    private init() {
+        migrateMaritalCounterIfNeeded()
+    }
+
+    /// مرة واحدة: كان الضغط على «أعزب/متزوج» يُحسب تعديلاً قبل ربطها بـ«حفظ»
+    /// (٢٠٢٦-٠٩-٢٣)، فاستُهلك الحد بالضغطات — نصفّر عدّادها ليبدأ العدّ من الحفظ
+    private func migrateMaritalCounterIfNeeded() {
+        let flag = "editCooldown_isMarried_resetOnSaveV2"
+        guard !defaults.bool(forKey: flag) else { return }
+        resetCooldown(for: .isMarried)
+        defaults.set(true, forKey: flag)
+    }
 
     // MARK: - Admin Controls
 
