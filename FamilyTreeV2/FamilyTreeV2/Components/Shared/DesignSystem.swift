@@ -8,6 +8,15 @@ enum DS {
     enum Color {
         // Brand — كحلي ملكي رسمي (أفتح في الداكن ليبقى مقروءاً)
         static let primary       = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#7FA8D6") // Royal Navy
+        /// كحلي الأزرار الممتلئة (منتصف gradientPrimary) — لا يفتح في الداكن مثل primary
+        static let actionNavy    = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#173A5E")
+        /// الكلمة المتغيّرة في تعديل البيانات — كبسولة خضراء خفيفة جداً بلا إطار (طلب المالك)
+        static let changedBg     = SwiftUI.Color.adaptive(light: "#EEF8F1", dark: "#1C3327")
+        static let changedFg     = SwiftUI.Color.adaptive(light: "#3C9A63", dark: "#9FE3B8")
+        /// عنوان الحقل في تعديل البيانات — أغمق من القيمة ليتميّز عنها (طلب المالك)
+        static let fieldLabel    = SwiftUI.Color.adaptive(light: "#03070F", dark: "#FFFFFF")
+        /// قيمة الحقل — أهدى قليلاً من العنوان
+        static let fieldValue    = SwiftUI.Color.adaptive(light: "#414958", dark: "#C4CAD6")
         static let primaryDark   = SwiftUI.Color.adaptive(light: "#14365A", dark: "#2B5F90") // Deep Navy
         static let primaryLight  = SwiftUI.Color.adaptive(light: "#5B84AE", dark: "#A9C4E4") // Soft Navy
         static let secondary     = SwiftUI.Color.adaptive(light: "#2E6B4F", dark: "#6FB394") // Forest Green
@@ -29,7 +38,7 @@ enum DS {
         static let gradientPrimary = LinearGradient(
             colors: [
                 SwiftUI.Color.adaptive(light: "#102B47", dark: "#0E2238"),
-                SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#173A5E"),
+                actionNavy,
                 SwiftUI.Color.adaptive(light: "#2C6396", dark: "#23507D")
             ],
             startPoint: .bottomTrailing, endPoint: .topLeading

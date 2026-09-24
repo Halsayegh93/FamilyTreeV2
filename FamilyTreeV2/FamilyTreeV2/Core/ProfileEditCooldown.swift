@@ -35,9 +35,10 @@ final class ProfileEditCooldown {
     }
 
     /// مرة واحدة: كان الضغط على «أعزب/متزوج» يُحسب تعديلاً قبل ربطها بـ«حفظ»
-    /// (٢٠٢٦-٠٩-٢٣)، فاستُهلك الحد بالضغطات — نصفّر عدّادها ليبدأ العدّ من الحفظ
+    /// (٢٠٢٦-٠٩-٢٣)، ثم استُهلك الحد بتجارب الحفظ (٢٠٢٦-٠٩-٢٤) — نصفّر عدّادها
+    /// ليبدأ العدّ من جديد: أول ٣ حفظات مباشرة، والرابعة فما بعد للإدارة
     private func migrateMaritalCounterIfNeeded() {
-        let flag = "editCooldown_isMarried_resetOnSaveV2"
+        let flag = "editCooldown_isMarried_resetOnSaveV3"
         guard !defaults.bool(forKey: flag) else { return }
         resetCooldown(for: .isMarried)
         defaults.set(true, forKey: flag)
