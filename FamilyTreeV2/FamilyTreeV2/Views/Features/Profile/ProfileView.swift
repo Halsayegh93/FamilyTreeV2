@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct ProfileView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -9,6 +10,8 @@ struct ProfileView: View {
     @ObservedObject private var langManager = LanguageManager.shared
 
     @State private var showEditProfile = false
+    /// معاينة الصورة مكبّرة (طلب المالك)
+    @State private var showAvatarPreview = false
     @State private var showQRCode = false
     @State private var showQRScanner = false
     @State private var showSignOutConfirm = false
@@ -34,8 +37,6 @@ struct ProfileView: View {
     @State private var wifeSearch = ""
     @State private var isLoadingWifeCandidates = false
     @State private var showMotherOptions = false
-    @State private var showAddMotherName = false
-    @State private var newMotherName = ""
     @State private var fatherWives: [WomanMember] = []
     @State private var appeared = false
     @State private var isLoadingChildren = true
@@ -170,6 +171,20 @@ struct ProfileView: View {
                     .environment(\.layoutDirection, langManager.layoutDirection)
             }
             .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c).presentationDragIndicator(.visible) } }
+            .fullScreenCover(isPresented: $showAvatarPreview) {
+                if let c = user {
+                    AvatarPreview(member: c) {
+                        showAvatarPreview = false
+                    } onChangePhoto: { image in
+                        await changeAvatar(image, for: c)
+                    }
+                    .background(ClearPresentationBackground())
+                }
+            }
+            .transaction { t in
+                // تظهر في مكانها بلا انزلاق من الأسفل
+                if showAvatarPreview { t.disablesAnimations = true }
+            }
             .sheet(isPresented: $showQRCode) {
                 if let c = user {
                     QRCodeSheet(member: c, selectedTab: $selectedTab)
@@ -216,23 +231,6 @@ struct ProfileView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showAddWife) { addWifeSheet }
-            // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة (مثل شجرة النساء)
-            .confirmationDialog(L10n.t("إضافة زوجة", "Add Wife"),
-                                isPresented: $showWifeSource, titleVisibility: .visible) {
-                Button(L10n.t("اختيار من العائلة", "Choose from family")) {
-                    // الشيت يُفتح فوراً ويحمّل بداخله — كان يُبنى قبل وصول
-                    // القائمة فيعرض «لا توجد إناث» أول مرة
-                    wifeCandidates = []
-                    showWifePicker = true
-                }
-                Button(L10n.t("إضافة بالاسم", "Add by name")) {
-                    // تأخير بسيط لتفادي تعارض عرض التنبيه بعد إغلاق الحوار
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        newWifeName = ""; newWifeHidden = false; showAddWife = true
-                    }
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            }
             .sheet(isPresented: $showWifePicker) {
                 wifePickerSheet
                     // التحميل بعد ظهور الشيت — فتُبنى القائمة على بيانات حاضرة
@@ -241,29 +239,6 @@ struct ProfileView: View {
                         wifeCandidates = await loadWifeCandidates()
                         isLoadingWifeCandidates = false
                     }
-            }
-            .confirmationDialog(L10n.t("الأم", "Mother"), isPresented: $showMotherOptions, titleVisibility: .visible) {
-                ForEach(fatherWives) { w in
-                    Button(w.firstName.isEmpty ? L10n.t("زوجة الأب", "Father's wife") : w.firstName) {
-                        Task { await memberVM.setSelfMother(motherId: w.id) }
-                    }
-                }
-                Button(L10n.t("إضافة أم جديدة", "Add new mother")) {
-                    newMotherName = ""; showAddMotherName = true
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            } message: {
-                Text(fatherWives.isEmpty
-                     ? L10n.t("لا زوجات مسجّلة للأب — أضف أمّاً جديدة", "No registered father's wives — add a new mother")
-                     : L10n.t("اختر الأم من زوجات الأب، أو أضف جديدة", "Pick the mother from father's wives, or add new"))
-            }
-            .dsAlert(L10n.t("إضافة أم", "Add Mother"), isPresented: $showAddMotherName) {
-                TextField(L10n.t("اسم الأم", "Mother's name"), text: $newMotherName)
-                Button(L10n.t("إضافة", "Add")) {
-                    let n = newMotherName
-                    Task { await memberVM.addSelfMother(name: n) }
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             }
             .onChange(of: showAddChild) { isPresented in
                 guard !isPresented, let currentUser = user else { return }
@@ -285,6 +260,35 @@ struct ProfileView: View {
 
         }
         .environment(\.layoutDirection, langManager.layoutDirection)
+    }
+
+    /// تغيير الصورة من المعاينة (طلب المالك): أول ٣ تغييرات تُرفع مباشرة،
+    /// وبعدها تُرسل اقتراحاً للإدارة — نفس قاعدة شاشة تعديل البيانات.
+    /// يرجّع رسالة النتيجة لتُعرض داخل المعاينة.
+    @MainActor
+    private func changeAvatar(_ image: UIImage, for member: FamilyMember) async -> String {
+        let cooldown = ProfileEditCooldown.shared
+        if cooldown.canEdit(.avatar) {
+            let uploaded = await memberVM.uploadAvatar(image: image, for: member.id)
+            guard uploaded else {
+                return L10n.t("تعذّر رفع الصورة. حاول مرة ثانية.", "Couldn't upload the photo. Try again.")
+            }
+            cooldown.recordEdit(.avatar)
+            return L10n.t("تم تغيير الصورة", "Photo changed")
+        }
+        guard let url = await adminRequestVM.uploadPhotoSuggestion(image) else {
+            return L10n.t("تعذّر رفع الصورة. حاول مرة ثانية.", "Couldn't upload the photo. Try again.")
+        }
+        let ok = await adminRequestVM.submitTreeEditRequest(payload: .make(
+            action: .addPhoto,
+            targetMemberId: member.id.uuidString,
+            targetMemberName: member.fullName,
+            newPhotoUrl: url,
+            notes: L10n.t("تعديل صورة بعد تجاوز حد التعديلات", "Photo edit after reaching the edit limit")
+        ))
+        return ok
+            ? L10n.t("تجاوزت ٣ تغييرات — أُرسلت الصورة للإدارة للموافقة", "Over 3 changes — sent to the admins for approval")
+            : L10n.t("تعذّر إرسال الطلب. حاول مرة ثانية.", "Couldn't send the request. Try again.")
     }
 
     // MARK: - Profile Header — Avatar & Info
@@ -324,6 +328,10 @@ struct ProfileView: View {
                         )
                 }
             }
+            .contentShape(Circle())
+            .onTapGesture { showAvatarPreview = true }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(L10n.t("معاينة الصورة", "Preview photo"))
             .padding(.top, DS.Spacing.xl)
             
             // User Info
@@ -870,6 +878,21 @@ struct ProfileView: View {
                                             icon: "person.fill", color: DS.Color.accent) {
                             Task { fatherWives = await memberVM.fetchFatherWives(); showMotherOptions = true }
                         }
+                        // الاختيار/الإضافة في مربّع عند الخانة نفسها (طلب المالك)
+                        .anchoredPopover(isPresented: $showMotherOptions) {
+                            MotherPickCard(
+                                wives: fatherWives,
+                                onPick: { id in
+                                    showMotherOptions = false
+                                    Task { await memberVM.setSelfMother(motherId: id) }
+                                },
+                                onAdd: { name in
+                                    showMotherOptions = false
+                                    Task { await memberVM.addSelfMother(name: name) }
+                                },
+                                onCancel: { showMotherOptions = false }
+                            )
+                        }
                     }
                     // خانة الزوجة (ثابتة بعد الأم)
                     ForEach(wifeEntries) { entry in
@@ -880,6 +903,23 @@ struct ProfileView: View {
                         addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
                                             icon: "heart.fill", color: DS.Color.neonPink) {
                             showWifeSource = true
+                        }
+                        // مصدر الزوجة + الإضافة بالاسم في مربّع عند الخانة نفسها (طلب المالك)
+                        .anchoredPopover(isPresented: $showWifeSource) {
+                            WifeSourceCard(
+                                onFamily: {
+                                    showWifeSource = false
+                                    // الشيت يُفتح فوراً ويحمّل بداخله
+                                    wifeCandidates = []
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showWifePicker = true }
+                                },
+                                onAdd: { name, hidden in
+                                    let ok = await memberVM.addSelfWife(name: name, hidden: hidden)
+                                    if ok { showWifeSource = false; return nil }
+                                    return memberVM.errorMessage ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
+                                },
+                                onCancel: { showWifeSource = false }
+                            )
                         }
                     }
                 }
@@ -1734,5 +1774,362 @@ struct WomanMemberEditSheet: View {
             isSaving = false
             if ok { dismiss() } else { errorBanner = memberVM.errorMessage }
         }
+    }
+}
+
+/// معاينة الصورة الشخصية مكبّرة (طلب المالك) — «تغيير» يفتح معرض الصور مباشرة،
+/// ثم قصّ دائري، ثم الرفع (بحدّ الـ٣ تغييرات).
+private struct AvatarPreview: View {
+    let member: FamilyMember
+    let onClose: () -> Void
+    let onChangePhoto: (UIImage) async -> String
+
+    @State private var appeared = false
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var cropItem: CropItem?
+    @State private var newImage: UIImage?
+    @State private var isUploading = false
+    @State private var resultMessage: String?
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width - DS.Spacing.xxl * 2, 420)
+            ZStack {
+                Color.black.opacity(appeared ? 0.88 : 0)
+                    .ignoresSafeArea()
+                    .onTapGesture { if !isUploading { onClose() } }
+
+                VStack(spacing: DS.Spacing.lg) {
+                    ZStack {
+                        if let newImage {
+                            Image(uiImage: newImage).resizable().scaledToFill()
+                        } else if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
+                            CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                            placeholder: { ProgressView().tint(.white) }
+                        } else {
+                            DS.Color.surface
+                            Text(String(member.firstName.first ?? "?"))
+                                .font(DS.Font.plex(96, weight: .bold))
+                                .foregroundColor(DS.Color.primary)
+                        }
+                        if isUploading {
+                            Color.black.opacity(0.35)
+                            ProgressView().tint(.white).scaleEffect(1.3)
+                        }
+                    }
+                    .frame(width: side, height: side)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+                    .shadow(color: .black.opacity(0.4), radius: 24, y: 10)
+
+                    Text(member.displayFullName)
+                        .font(DS.Font.plex(17, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, DS.Spacing.xl)
+
+                    if let resultMessage {
+                        Text(resultMessage)
+                            .font(DS.Font.plex(13, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DS.Spacing.xl)
+                    }
+
+                    // «إغلاق» يسار والإجراء في الجهة الأخرى (قاعدة التطبيق)
+                    HStack(spacing: DS.Spacing.sm) {
+                        PhotosPicker(selection: $pickerItem, matching: .images) {
+                            Label(L10n.t("تغيير", "Change"), systemImage: "photo.on.rectangle")
+                                .font(DS.Font.plex(15, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity).frame(height: 48)
+                                .background(DSActionFill.style(),
+                                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        }
+                        .disabled(isUploading)
+
+                        Button(action: onClose) {
+                            Text(L10n.t("إغلاق", "Close"))
+                                .font(DS.Font.plex(15, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity).frame(height: 48)
+                                .background(Color.white.opacity(0.16),
+                                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        }
+                        .disabled(isUploading)
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                    .frame(width: side)
+                }
+                .scaleEffect(appeared ? 1 : 0.92)
+                .opacity(appeared ? 1 : 0)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onAppear { withAnimation(DS.Anim.snappy) { appeared = true } }
+        .onChange(of: pickerItem) { item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let img = UIImage(data: data) {
+                    await MainActor.run { cropItem = CropItem(image: img) }
+                }
+                await MainActor.run { pickerItem = nil }
+            }
+        }
+        .fullScreenCover(item: $cropItem) { item in
+            ImageCropperView(image: item.image, cropShape: .circle) { cropped in
+                cropItem = nil
+                upload(cropped)
+            } onCancel: {
+                cropItem = nil
+            }
+        }
+    }
+
+    private func upload(_ image: UIImage) {
+        newImage = image
+        isUploading = true
+        resultMessage = nil
+        Task {
+            let message = await onChangePhoto(image)
+            await MainActor.run {
+                isUploading = false
+                resultMessage = message
+            }
+        }
+    }
+
+    private struct CropItem: Identifiable {
+        let id = UUID()
+        let image: UIImage
+    }
+}
+
+
+// MARK: - مربّعات الأم/الزوجة عند الخانة نفسها (طلب المالك ٢٠٢٦-٠٩-٢٤)
+
+extension View {
+    /// مربّع صغير يخرج من العنصر نفسه (لا ورقة سفلية ولا وسط الشاشة) — فوقه أو
+    /// تحته حسب المساحة المتاحة
+    @ViewBuilder
+    func anchoredPopover<Content: View>(isPresented: Binding<Bool>,
+                                        @ViewBuilder content: @escaping () -> Content) -> some View {
+        if #available(iOS 18.0, *) {
+            popover(isPresented: isPresented, attachmentAnchor: .rect(.bounds), arrowEdge: nil) {
+                content().presentationCompactAdaptation(.popover)
+            }
+        } else {
+            popover(isPresented: isPresented, arrowEdge: .bottom) {
+                if #available(iOS 16.4, *) {
+                    content().presentationCompactAdaptation(.popover)
+                } else {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+/// أزرار المربّع — الإجراء كحلي ممتلئ و«إلغاء» رمادي على اليسار (قاعدة التطبيق)
+private struct AnchoredCardButtons: View {
+    let actionTitle: String
+    var actionEnabled = true
+    var busy = false
+    let onAction: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Button(action: onAction) {
+                Group {
+                    if busy { ProgressView().tint(.white) } else { Text(actionTitle) }
+                }
+                .font(DS.Font.plex(14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity).frame(height: 40)
+                .background(DSActionFill.style(enabled: actionEnabled && !busy),
+                            in: RoundedRectangle(cornerRadius: DS.Radius.md))
+            }
+            .disabled(!actionEnabled || busy)
+            Button(action: onCancel) {
+                Text(L10n.t("إلغاء", "Cancel"))
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .frame(maxWidth: .infinity).frame(height: 40)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .fill(DS.Color.mutedBackground.opacity(0.8)))
+            }
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+}
+
+/// صف اختيار داخل المربّع
+private struct AnchoredChoiceRow: View {
+    let title: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(13, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+                    .frame(width: 28, height: 28)
+                    .background(DS.Color.primary.opacity(0.10), in: Circle())
+                Text(title)
+                    .font(DS.Font.plex(14, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .frame(height: 44)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(DS.Color.mutedBackground.opacity(0.6)))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+}
+
+/// حقل الاسم داخل المربّع — نفس شكل حقول المربّعات
+private struct AnchoredNameField: View {
+    let placeholder: String
+    @Binding var text: String
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField(placeholder, text: $text)
+            .dsAlertField()
+            .focused($focused)
+            .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { focused = true } }
+    }
+}
+
+/// الأم: زوجات الأب للاختيار، أو إضافة أم جديدة بالاسم — في نفس المربّع
+private struct MotherPickCard: View {
+    let wives: [WomanMember]
+    let onPick: (UUID) -> Void
+    let onAdd: (String) -> Void
+    let onCancel: () -> Void
+    @State private var adding = false
+    @State private var name = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(adding ? L10n.t("إضافة أم", "Add Mother") : L10n.t("الأم", "Mother"))
+                .font(DS.Font.plex(15, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .frame(maxWidth: .infinity)
+            if adding {
+                AnchoredNameField(placeholder: L10n.t("اسم الأم", "Mother's name"), text: $name)
+                AnchoredCardButtons(
+                    actionTitle: L10n.t("إضافة", "Add"),
+                    actionEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty,
+                    onAction: { onAdd(name.trimmingCharacters(in: .whitespaces)) },
+                    onCancel: { withAnimation(.easeInOut(duration: 0.2)) { adding = false } })
+            } else {
+                Text(wives.isEmpty
+                     ? L10n.t("لا زوجات مسجّلة للأب — أضف أمّاً جديدة", "No registered father's wives — add a new mother")
+                     : L10n.t("اختر الأم من زوجات الأب، أو أضف جديدة", "Pick the mother from father's wives, or add new"))
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                ForEach(wives) { w in
+                    AnchoredChoiceRow(title: w.firstName.isEmpty ? L10n.t("زوجة الأب", "Father's wife") : w.firstName,
+                                      icon: "person.fill") { onPick(w.id) }
+                }
+                AnchoredChoiceRow(title: L10n.t("إضافة أم جديدة", "Add new mother"), icon: "plus") {
+                    withAnimation(.easeInOut(duration: 0.2)) { adding = true }
+                }
+                Button(action: onCancel) {
+                    Text(L10n.t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity).frame(height: 40)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md)
+                            .fill(DS.Color.mutedBackground.opacity(0.8)))
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
+        .padding(DS.Spacing.md)
+        .frame(width: 280)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+}
+
+/// الزوجة: من العائلة، أو إضافة بالاسم (مع خيار الإخفاء) — في نفس المربّع
+private struct WifeSourceCard: View {
+    let onFamily: () -> Void
+    /// يرجع رسالة الخطأ، أو nil عند النجاح
+    let onAdd: (String, Bool) async -> String?
+    let onCancel: () -> Void
+    @State private var adding = false
+    @State private var name = ""
+    @State private var hidden = false
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("إضافة زوجة", "Add Wife"))
+                .font(DS.Font.plex(15, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .frame(maxWidth: .infinity)
+            if adding {
+                AnchoredNameField(placeholder: L10n.t("اسم الزوجة", "Wife's name"), text: $name)
+                Toggle(isOn: $hidden) {
+                    Text(L10n.t("إخفاؤها من الشجرة", "Hide from the tree"))
+                        .font(DS.Font.plex(13, weight: .semibold))
+                        .foregroundColor(DS.Color.textPrimary)
+                }
+                .tint(DS.Color.primary)
+                if hidden {
+                    Text(L10n.t("المخفيّة لا تظهر لأي أحد في الشجرة — تبقى مسجّلة عندك فقط.",
+                                "A hidden wife appears to no one in the tree — she stays recorded for you only."))
+                        .font(DS.Font.plex(11))
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(DS.Font.plex(11.5))
+                        .foregroundColor(DS.Color.error)
+                }
+                AnchoredCardButtons(
+                    actionTitle: L10n.t("إضافة", "Add"),
+                    actionEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty,
+                    busy: busy,
+                    onAction: {
+                        busy = true; error = nil
+                        Task {
+                            let e = await onAdd(name.trimmingCharacters(in: .whitespaces), hidden)
+                            busy = false
+                            error = e
+                        }
+                    },
+                    onCancel: { withAnimation(.easeInOut(duration: 0.2)) { adding = false; error = nil } })
+            } else {
+                AnchoredChoiceRow(title: L10n.t("اختيار من العائلة", "Choose from family"),
+                                  icon: "magnifyingglass", action: onFamily)
+                AnchoredChoiceRow(title: L10n.t("إضافة بالاسم", "Add by name"), icon: "plus") {
+                    withAnimation(.easeInOut(duration: 0.2)) { adding = true }
+                }
+                Button(action: onCancel) {
+                    Text(L10n.t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity).frame(height: 40)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md)
+                            .fill(DS.Color.mutedBackground.opacity(0.8)))
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
+        .padding(DS.Spacing.md)
+        .frame(width: 280)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 }

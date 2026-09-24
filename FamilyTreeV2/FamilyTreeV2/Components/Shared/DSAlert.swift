@@ -50,20 +50,28 @@ private struct DSAlertPressStyle: ButtonStyle {
     let role: ButtonRole?
 
     func makeBody(configuration: Configuration) -> some View {
-        // الحذف: مربّع أحمر بنص أبيض (طلب المالك)؛ الباقي خلفية هادئة
+        // أزرار موحّدة في كل المربّعات (طلب المالك): الإجراء كحلي ممتلئ بنص
+        // أبيض (نفس «طلب تعديل»)، الحذف أحمر ممتلئ، و«إلغاء» رمادي هادئ.
         let destructive = role == .destructive
-        let text: Color = destructive ? .white
-            : role == .cancel ? DS.Color.textPrimary
-            : DS.Color.primary
+        let cancel = role == .cancel
+        let text: Color = cancel ? DS.Color.textPrimary : .white
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
         return configuration.label
-            .font(DS.Font.calloutBold)
+            .font(DS.Font.plex(14, weight: .bold))
             .foregroundColor(text)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 46)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(destructive ? DS.Color.error : DS.Color.mutedBackground.opacity(0.8)))
+            .background {
+                if destructive {
+                    shape.fill(DS.Color.error)
+                } else if cancel {
+                    shape.fill(DS.Color.mutedBackground.opacity(0.8))
+                } else {
+                    shape.fill(DSActionFill.style())
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
@@ -75,6 +83,33 @@ private struct DSAlertIsCancelKey: LayoutValueKey {
     static let defaultValue = false
 }
 
+/// عنصر ليس زراً (حقل كتابة مثلاً) — يُوضع بعرض كامل فوق الأزرار ولا يُحتسب منها
+struct DSAlertIsFieldKey: LayoutValueKey {
+    static let defaultValue = false
+}
+
+extension View {
+    /// ضعه على حقل داخل `dsAlert`: يعطيه شكل حقول المربّعات (خلفية هادئة وحواف
+    /// مستديرة وخط التطبيق)، ويمنع احتسابه زراً (فتبقى قاعدة «زرّان جنب بعض»)
+    func dsAlertField() -> some View {
+        // نفس شكل «ملاحظات إضافية» في طلبات التعديل (طلب المالك)
+        self
+            .textFieldStyle(.plain)
+            .font(DS.Font.plex(14))
+            .foregroundColor(DS.Color.textPrimary)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(minHeight: 38, alignment: .topLeading)
+            .background(DS.Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+            )
+            .layoutValue(key: DSAlertIsFieldKey.self, value: true)
+    }
+}
+
 /// زرّان جنب بعض بعرض متساوٍ، وثلاثة فأكثر فوق بعض.
 /// الترتيب موحّد مهما كان ترتيب الكود (طلب المالك):
 /// «إلغاء» أولاً = يمين في العربية، والإجراء بعده = يسار؛ وفي العمودي «إلغاء» آخراً.
@@ -83,30 +118,50 @@ private struct DSAlertButtonsLayout: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? 280
-        if subviews.count == 2 {
-            let each = (width - spacing) / 2
-            let h = subviews.map { $0.sizeThatFits(ProposedViewSize(width: each, height: nil)).height }.max() ?? 0
-            return CGSize(width: width, height: h)
+        let fields = subviews.filter { $0[DSAlertIsFieldKey.self] }
+        let buttons = subviews.filter { !$0[DSAlertIsFieldKey.self] }
+
+        var height: CGFloat = 0
+        for field in fields {
+            height += field.sizeThatFits(ProposedViewSize(width: width, height: nil)).height + spacing
         }
-        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
-        return CGSize(width: width, height: heights.reduce(0, +) + spacing * CGFloat(max(0, subviews.count - 1)))
+        if buttons.count == 2 {
+            let each = (width - spacing) / 2
+            height += buttons.map { $0.sizeThatFits(ProposedViewSize(width: each, height: nil)).height }.max() ?? 0
+        } else {
+            let heights = buttons.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+            height += heights.reduce(0, +) + spacing * CGFloat(max(0, buttons.count - 1))
+        }
+        return CGSize(width: width, height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        if subviews.count == 2 {
+        let fields = subviews.filter { $0[DSAlertIsFieldKey.self] }
+        let buttons = subviews.filter { !$0[DSAlertIsFieldKey.self] }
+
+        // الحقول أولاً بعرض كامل
+        var y = bounds.minY
+        for field in fields {
+            let h = field.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+            field.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading,
+                        proposal: ProposedViewSize(width: bounds.width, height: h))
+            y += h + spacing
+        }
+
+        if buttons.count == 2 {
             let each = (bounds.width - spacing) / 2
-            // الإلغاء أولاً (يمين في RTL)، ثم الإجراء
-            let ordered = subviews.sorted { a, b in a[DSAlertIsCancelKey.self] && !b[DSAlertIsCancelKey.self] }
+            let h = max(bounds.maxY - y, 0)
+            // «إلغاء» في الجهة اليسرى والإجراء في الجهة الأخرى (طلب المالك)
+            let ordered = buttons.sorted { a, b in !a[DSAlertIsCancelKey.self] && b[DSAlertIsCancelKey.self] }
             for (i, view) in ordered.enumerated() {
                 let x = bounds.minX + CGFloat(i) * (each + spacing)
-                view.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
-                           proposal: ProposedViewSize(width: each, height: bounds.height))
+                view.place(at: CGPoint(x: x, y: y), anchor: .topLeading,
+                           proposal: ProposedViewSize(width: each, height: h))
             }
             return
         }
-        var y = bounds.minY
         // عمودياً: الإجراءات أولاً ثم الإلغاء في الأسفل
-        let ordered = subviews.sorted { a, b in !a[DSAlertIsCancelKey.self] && b[DSAlertIsCancelKey.self] }
+        let ordered = buttons.sorted { a, b in !a[DSAlertIsCancelKey.self] && b[DSAlertIsCancelKey.self] }
         for view in ordered {
             let h = view.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
             view.place(at: CGPoint(x: bounds.minX, y: y), anchor: .topLeading,
@@ -123,6 +178,7 @@ struct DSCenterCard<Content: View>: View {
     let onBackgroundTap: (() -> Void)?
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
@@ -137,6 +193,13 @@ struct DSCenterCard<Content: View>: View {
             .frame(maxWidth: 340)
             .background(DS.Color.background)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+            // إطار للمربّع في الوضع الداكن (طلب المالك) — يفصله عن الخلفية
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+                    .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
+                                                          : Color.black.opacity(0.06),
+                                  lineWidth: colorScheme == .dark ? 1.25 : 1)
+            )
             .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 10)
             .padding(.horizontal, DS.Spacing.xl)
             .scaleEffect(appeared ? 1 : 0.9)
@@ -144,6 +207,161 @@ struct DSCenterCard<Content: View>: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear { withAnimation(DS.Anim.snappy) { appeared = true } }
+    }
+}
+
+/// لوح كبير بمنتصف الشاشة — لمحتوى طويل (نموذج) بدل الورقة السفلية.
+/// نفس روح `DSCenterCard` لكنه أوسع وأطول، ومحتواه يتمرّر داخله.
+struct DSCenterPanel<Content: View>: View {
+    let onBackgroundTap: (() -> Void)?
+    /// يجعل ارتفاع اللوح على قدر محتواه (يقرأ `SheetContentHeightKey` من الداخل)
+    /// بدل الارتفاع الكامل — طلب المالك لمربّعات «طلب تعديل».
+    var hugsContent: Bool = false
+    @ViewBuilder let content: () -> Content
+    @State private var appeared = false
+    @State private var contentHeight: CGFloat = 0
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// ارتفاع اللوح: على قدر المحتوى (+ شريط العنوان) وبحدّ أقصى 86% من الشاشة
+    private func panelHeight(_ geo: GeometryProxy) -> CGFloat {
+        let cap = min(geo.size.height * 0.86, geo.size.height - DS.Spacing.xxl)
+        guard hugsContent, contentHeight > 0 else { return cap }
+        return min(contentHeight + DS.Spacing.lg, cap)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                Color.black.opacity(appeared ? 0.45 : 0)
+                    .ignoresSafeArea()
+                    .onTapGesture { onBackgroundTap?() }
+
+                content()
+                    .onPreferenceChange(SheetContentHeightKey.self) { h in
+                        if h > 0 { contentHeight = h }
+                    }
+                    .frame(
+                        width: min(geo.size.width - DS.Spacing.lg * 2, 520),
+                        height: panelHeight(geo)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+                    // إطار في الوضع الداكن يفصل اللوح عن الخلفية (طلب المالك)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+                            .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
+                                                        : Color.black.opacity(0.06),
+                                          lineWidth: colorScheme == .dark ? 1.25 : 1)
+                    )
+                    .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
+                    .scaleEffect(appeared ? 1 : 0.94)
+                    .opacity(appeared ? 1 : 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onAppear { withAnimation(DS.Anim.snappy) { appeared = true } }
+    }
+}
+
+/// إغلاق المربّع بحركة — يستدعيه المحتوى بدل dismiss() المباشر
+private struct DSPanelCloseKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var dsPanelClose: (() -> Void)? {
+        get { self[DSPanelCloseKey.self] }
+        set { self[DSPanelCloseKey.self] = newValue }
+    }
+}
+
+/// ارتفاع الجزء الظاهر في المربّع المصغّر (يُبلِّغه المحتوى)
+struct DSPanelCollapsedHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// لوح بمنتصف الشاشة قابل للتوسّع مثل الشيت (طلب المالك): يبدأ مضغوطاً،
+/// ويتوسّع ويتصغّر عبر `isExpanded` (زر داخل المحتوى)، ويُغلق بالضغط خارجه.
+struct DSExpandableCenterPanel<Content: View>: View {
+    @Binding var isExpanded: Bool
+    let onClose: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    @State private var appeared = false
+    /// أثناء الإغلاق: حركة أخف (تصغير بسيط) من حركة الفتح
+    @State private var closing = false
+    /// ارتفاع المحتوى كاملاً (`SheetContentHeightKey`) — للموسّع
+    @State private var contentHeight: CGFloat = 0
+    /// ارتفاع الرأس فقط (`DSPanelCollapsedHeightKey`) — للمصغّر؛ المحتوى يبقى ويُقصّ
+    @State private var collapsedHeight: CGFloat = 0
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        GeometryReader { geo in
+            // المصغّر والموسّع كلاهما على قدر المحتوى بلا فراغ زائد (طلب المالك)،
+            // وبحد أقصى 90% من الشاشة — والباقي يتمرّر داخل المربّع
+            let cap = geo.size.height * 0.9
+            let fallback = isExpanded ? cap : min(geo.size.height * 0.52, 470)
+            let measured = isExpanded ? contentHeight
+                                      : (collapsedHeight > 0 ? collapsedHeight : contentHeight)
+            let height = measured > 0 ? min(measured, cap) : fallback
+
+            ZStack {
+                Color.black.opacity(appeared ? 0.45 : 0)
+                    .ignoresSafeArea()
+                    .onTapGesture(perform: animatedClose)
+
+                VStack(spacing: 0) {
+                    // بلا مقبض ولا ×: التوسيع بزر داخل المحتوى، والإغلاق بالضغط خارجه (طلب المالك)
+                    content()
+                        .onPreferenceChange(SheetContentHeightKey.self) { h in
+                            if h > 0 { contentHeight = h }
+                        }
+                        .onPreferenceChange(DSPanelCollapsedHeightKey.self) { h in
+                            if h > 0 { collapsedHeight = h }
+                        }
+                }
+                .frame(width: min(geo.size.width - DS.Spacing.lg * 2, 520), height: height)
+                .background(DS.Color.background)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+                        .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
+                                                              : Color.black.opacity(0.06),
+                                      lineWidth: colorScheme == .dark ? 1.25 : 1)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
+                // فتح/إغلاق بحركة: يكبر من أصغر وأسفل قليلاً مع تلاشٍ (طلب المالك)
+                .scaleEffect(appeared ? 1 : (closing ? 0.9 : 0.9))
+                .offset(y: appeared ? 0 : (closing ? 18 : 20))
+                .opacity(appeared ? 1 : 0)
+                // الارتفاع الفعلي يتحرّك بسلاسة — يصل بعد قياس المحتوى الجديد
+                .animation(DS.Anim.smooth, value: height)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .environment(\.dsPanelClose, animatedClose)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { appeared = true }
+        }
+    }
+
+    /// يصغّر المربّع ويخفيه ثم يغلقه — والإغلاق نفسه بلا انزلاق النظام من
+    /// الأسفل (كانت الطبقة الفارغة تنزلق بعد اختفاء المربّع فيبدو الإغلاق مكسوراً)
+    private func animatedClose() {
+        guard appeared else { return }
+        closing = true
+        // هادئة وأوضح (طلب المالك): تلاشٍ مع تصغير ونزول ملحوظين
+        withAnimation(.easeInOut(duration: 0.42)) { appeared = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { onClose() }
+        }
     }
 }
 
@@ -179,7 +397,7 @@ private struct DSAlertBody<A: View, M: View>: View {
                     actions
                 }
             }
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.plain)
             .buttonStyle(DSAlertButtonStyle())
             .environment(\.dsAlertDismiss, onDismiss)
             .padding(.top, DS.Spacing.xs)
@@ -212,10 +430,28 @@ final class DSPopupPresenter {
         w.windowLevel = .alert + 1
         w.backgroundColor = .clear
         w.rootViewController = host
-        w.overrideUserInterfaceStyle = scene.windows.first(where: \.isKeyWindow)?.overrideUserInterfaceStyle ?? .unspecified
+        // نافذة المربّع منفصلة عن نافذة التطبيق، فلازم تأخذ نفس المظهر
+        // (كانت تنسخه من النافذة «المفتاح» — وهي قد تكون نافذة شيت بلا نمط،
+        // فيظهر المربّع أبيض والتطبيق داكن)
+        w.overrideUserInterfaceStyle = DSPopupPresenter.appInterfaceStyle(in: scene)
         w.makeKeyAndVisible()
         window = w
         return id
+    }
+
+    /// مظهر التطبيق: إعداد المستخدم أولاً، وإلا نمط نافذة التطبيق الرئيسية
+    static func appInterfaceStyle(in scene: UIWindowScene) -> UIUserInterfaceStyle {
+        switch UserDefaults.standard.string(forKey: "appearanceMode") {
+        case "light": return .light
+        case "dark":  return .dark
+        default: break
+        }
+        // «تلقائي»: اتبع نافذة التطبيق (قد تكون مفروضة من مكان آخر)
+        if let main = scene.windows.first(where: { $0.rootViewController is UIHostingController<AnyView> == false }),
+           main.overrideUserInterfaceStyle != .unspecified {
+            return main.overrideUserInterfaceStyle
+        }
+        return .unspecified
     }
 
     /// يُخفي النافذة إن كانت ما زالت تعرض المربّع صاحب هذا المعرّف

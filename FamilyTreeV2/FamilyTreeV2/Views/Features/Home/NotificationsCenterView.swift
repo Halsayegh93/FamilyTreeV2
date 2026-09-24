@@ -1199,11 +1199,13 @@ struct NotificationsCenterView: View {
             detailMemberCardBody(member: member, iconInfo: iconInfo)
         }
         .buttonStyle(.plain)
-        .sheet(item: $selectedMember) { m in
-            NavigationStack { MemberDetailsView(member: m) }
-                .presentationDetents([.fraction(0.42), .large])
-                .presentationDragIndicator(.visible)
-                .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .fullScreenCover(item: $selectedMember) { m in
+            MemberDetailsView(member: m, centered: true)
+                .background(ClearPresentationBackground())
+        }
+        .transaction { t in
+            // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
+            if selectedMember != nil { t.disablesAnimations = true }
         }
     }
 

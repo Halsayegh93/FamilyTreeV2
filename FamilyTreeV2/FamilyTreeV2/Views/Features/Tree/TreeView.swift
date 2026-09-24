@@ -475,9 +475,15 @@ struct TreeView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(item: $selectedMember) { member in
-                // الارتفاعات تُدار داخل MemberDetailsView (0.46/large) — مصدر واحد بلا تعارض
-                MemberDetailsView(member: member)
+            // تفاصيل العضو: مربّع بالمنتصف قابل للتوسّع بدل الشيت (طلب المالك)
+            .fullScreenCover(item: $selectedMember) { member in
+                MemberDetailsView(member: member, centered: true)
+                    .background(ClearPresentationBackground())
+            }
+            .transaction { t in
+                // يظهر المربّع في مكانه بلا انزلاق من الأسفل
+                // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
+                if selectedMember != nil { t.disablesAnimations = true }
             }
             .task {
                 if cachedVisibleMembers.isEmpty {
@@ -850,42 +856,66 @@ struct TreeView: View {
 
     /// شريط المسار المدمّج — نسخة أصغر مدمجة داخل بطاقة الأدوات (يظهر عند التعمق فقط).
     private var breadcrumbStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                ForEach(Array(breadcrumbChain.enumerated()), id: \.element.id) { idx, m in
-                    let isLast = idx == breadcrumbChain.count - 1
-                    Button {
-                        jumpToBreadcrumb(m)
-                    } label: {
-                        HStack(spacing: 3) {
-                            if idx == 0 {
-                                Image(systemName: "house.fill")
-                                    .font(DS.Font.scaled(isLandscapeMode ? 11 : 8, weight: .bold))
+        // يتحرّك مع المسار (طلب المالك): آخر اسم يبقى ظاهراً عند التعمّق وعند «موقعي»
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(Array(breadcrumbChain.enumerated()), id: \.element.id) { idx, m in
+                        let isLast = idx == breadcrumbChain.count - 1
+                        HStack(spacing: 2) {
+                            Button {
+                                jumpToBreadcrumb(m)
+                            } label: {
+                                HStack(spacing: 3) {
+                                    if idx == 0 {
+                                        Image(systemName: "house.fill")
+                                            .font(DS.Font.scaled(isLandscapeMode ? 11 : 8, weight: .bold))
+                                    }
+                                    Text(m.firstName.isEmpty ? "—" : m.firstName)
+                                        .font(DS.Font.scaled(isLandscapeMode ? 13 : 10, weight: isLast ? .heavy : .semibold))
+                                        .lineLimit(1)
+                                }
+                                .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.textPrimary)
+                                .padding(.horizontal, isLandscapeMode ? 10 : 6)
+                                .padding(.vertical, isLandscapeMode ? 5 : 1)
+                                .background(isLast ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.surface), in: Capsule())
+                                .overlay(Capsule().stroke(DS.Color.primary.opacity(isLast ? 0 : 0.2), lineWidth: 1))
                             }
-                            Text(m.firstName.isEmpty ? "—" : m.firstName)
-                                .font(DS.Font.scaled(isLandscapeMode ? 13 : 10, weight: isLast ? .heavy : .semibold))
-                                .lineLimit(1)
-                        }
-                        .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.textPrimary)
-                        .padding(.horizontal, isLandscapeMode ? 10 : 6)
-                        .padding(.vertical, isLandscapeMode ? 5 : 1)
-                        .background(isLast ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.surface), in: Capsule())
-                        .overlay(Capsule().stroke(DS.Color.primary.opacity(isLast ? 0 : 0.2), lineWidth: 1))
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityLabel(L10n.t("الرجوع إلى \(m.firstName)", "Back to \(m.firstName)"))
+                            .buttonStyle(DSScaleButtonStyle())
+                            .accessibilityLabel(L10n.t("الرجوع إلى \(m.firstName)", "Back to \(m.firstName)"))
 
-                    if !isLast {
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(isLandscapeMode ? 9 : 7, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary)
+                            if !isLast {
+                                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                    .font(DS.Font.scaled(isLandscapeMode ? 9 : 7, weight: .bold))
+                                    .foregroundColor(DS.Color.textTertiary)
+                            }
+                        }
+                        .id(m.id)
                     }
                 }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 1)
             }
-            .padding(.horizontal, 2)
-            .padding(.vertical, 1)
+            // يُعاد التمرير كلما تغيّر آخر اسم (وعند الظهور) بعد رسم العناصر —
+            // مع مسار طويل (أكثر من ٧) كان التمرير يسبق الرسم فلا يصل للنهاية
+            .task(id: breadcrumbChain.last?.id) {
+                try? await Task.sleep(nanoseconds: 80_000_000)
+                scrollBreadcrumbToEnd(proxy, animated: true)
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                scrollBreadcrumbToEnd(proxy, animated: true)
+            }
         }
         .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    /// يمرّر شريط المسار حتى يظهر آخر اسم (الموقع الحالي)
+    private func scrollBreadcrumbToEnd(_ proxy: ScrollViewProxy, animated: Bool) {
+        guard let last = breadcrumbChain.last?.id else { return }
+        if animated {
+            withAnimation(DS.Anim.snappy) { proxy.scrollTo(last, anchor: .trailing) }
+        } else {
+            proxy.scrollTo(last, anchor: .trailing)
+        }
     }
 
     // MARK: - أداة التحديث — Glassy

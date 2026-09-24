@@ -616,6 +616,7 @@ struct AdminAllRequestsView: View {
                 .onDisappear { detailSheetHeight = 0 }
                 .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReason) {
                     TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $rejectReasonText)
+                        .dsAlertField()
                     Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) {
                         if let d = rejectReasonDetail {
                             rejectDetail(d, reason: rejectReasonText)

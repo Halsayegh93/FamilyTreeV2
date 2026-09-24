@@ -254,12 +254,13 @@ struct HomeNewsView: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToReport = nil; newsReportReason = "" }
         } message: { Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا الخبر.",
                                 "Enter a reason; it will be sent to the admins to review this post.")) }
-        .sheet(item: $selectedMemberForDetails) { member in
-            NavigationStack {
-                MemberDetailsView(member: member)
-            }
-            .presentationDetents([.fraction(0.42), .large])
-            .presentationDragIndicator(.visible)
+        .fullScreenCover(item: $selectedMemberForDetails) { member in
+            MemberDetailsView(member: member, centered: true)
+                .background(ClearPresentationBackground())
+        }
+        .transaction { t in
+            // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
+            if selectedMemberForDetails != nil { t.disablesAnimations = true }
         }
     }
 
