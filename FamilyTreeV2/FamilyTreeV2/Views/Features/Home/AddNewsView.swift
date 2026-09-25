@@ -64,7 +64,8 @@ struct AddNewsView: View {
                 .animation(DS.Anim.snappy, value: isPoll)
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xxxl)
+                .padding(.bottom, DS.Spacing.xl)
+                .dsPanelContentHeight()
             }
             .background(DS.Color.surfaceElevated)
             .navigationTitle(L10n.t("خبر جديد", "New Post"))

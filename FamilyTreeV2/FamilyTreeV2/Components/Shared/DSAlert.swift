@@ -263,6 +263,16 @@ struct DSCenterPanel<Content: View>: View {
     }
 }
 
+extension View {
+    /// يبلّغ DSCenterPanel(hugsContent:) بارتفاع المحتوى القابل للتمرير — ضعه على
+    /// الـVStack داخل ScrollView، و[extra] لشريط العنوان فوقه.
+    func dsPanelContentHeight(extra: CGFloat = 60) -> some View {
+        background(GeometryReader { geo in
+            Color.clear.preference(key: SheetContentHeightKey.self, value: geo.size.height + extra)
+        })
+    }
+}
+
 /// إغلاق المربّع بحركة — يستدعيه المحتوى بدل dismiss() المباشر
 private struct DSPanelCloseKey: EnvironmentKey {
     static let defaultValue: (() -> Void)? = nil

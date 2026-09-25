@@ -111,6 +111,181 @@ enum SocialPlatform {
     }
 }
 
+extension SocialPlatform {
+    /// اسم قصير للمربّعات
+    var shortLabel: String {
+        switch self {
+        case .website:   return L10n.t("الموقع", "Website")
+        case .instagram: return L10n.t("إنستغرام", "Instagram")
+        case .twitter:   return L10n.t("إكس", "X")
+        case .snapchat:  return L10n.t("سناب", "Snapchat")
+        case .whatsapp:  return L10n.t("واتساب", "WhatsApp")
+        case .phone:     return L10n.t("الهاتف", "Phone")
+        case .location:  return L10n.t("اللوكيشن", "Location")
+        }
+    }
+}
+
+/// «حسابات التواصل» في إضافة/تعديل المشروع — مربّعات، والضغط على أي مربّع يفتح
+/// مربّعاً بمنتصف الشاشة لإدخال الحساب (طلب المالك)
+struct ProjectContactTiles: View {
+    @Binding var phone: String
+    @Binding var whatsapp: String
+    @Binding var instagram: String
+    @Binding var twitter: String
+    @Binding var website: String
+    @Binding var location: String
+
+    private struct Item {
+        let platform: SocialPlatform
+        let placeholder: String
+        let keyboard: UIKeyboardType
+        let value: Binding<String>
+    }
+
+    private var items: [Item] {
+        [
+            Item(platform: .phone, placeholder: "+965...", keyboard: .phonePad, value: $phone),
+            Item(platform: .whatsapp, placeholder: "+965...", keyboard: .phonePad, value: $whatsapp),
+            Item(platform: .instagram, placeholder: "@username", keyboard: .URL, value: $instagram),
+            Item(platform: .twitter, placeholder: "@username", keyboard: .URL, value: $twitter),
+            Item(platform: .website, placeholder: "https://...", keyboard: .URL, value: $website),
+            Item(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), keyboard: .URL, value: $location)
+        ]
+    }
+
+    /// «+965 » المبدئي في واتساب لا يُعدّ حساباً
+    static func isFilled(_ v: String) -> Bool {
+        let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !t.isEmpty && t != "+965"
+    }
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3),
+                  spacing: DS.Spacing.sm) {
+            ForEach(items.indices, id: \.self) { i in tile(items[i]) }
+        }
+    }
+
+    private func tile(_ item: Item) -> some View {
+        let filled = Self.isFilled(item.value.wrappedValue)
+        return Button { open(item) } label: {
+            VStack(spacing: 5) {
+                item.platform.iconView(size: 32)
+                    .overlay(alignment: .topTrailing) {
+                        if filled {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white, DS.Color.success)
+                                .offset(x: 5, y: -4)
+                        }
+                    }
+                Text(item.platform.shortLabel)
+                    .font(DS.Font.plex(11.5, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                Text(filled ? item.value.wrappedValue.trimmingCharacters(in: .whitespaces)
+                            : L10n.t("إضافة", "Add"))
+                    .font(DS.Font.plex(10))
+                    .foregroundColor(filled ? DS.Color.textSecondary : DS.Color.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .environment(\.layoutDirection, filled ? .leftToRight : LanguageManager.shared.layoutDirection)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.sm)
+            .padding(.horizontal, 4)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(filled ? item.platform.brandColor.opacity(0.07) : DS.Color.background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(filled ? item.platform.brandColor.opacity(0.35)
+                                         : DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    private func open(_ item: Item) {
+        var id: UUID?
+        let close: () -> Void = { if let i = id { DSPopupPresenter.shared.hide(i) } }
+        id = DSPopupPresenter.shared.show(
+            ContactLinkCard(platform: item.platform,
+                            placeholder: item.placeholder,
+                            keyboard: item.keyboard,
+                            initial: Self.isFilled(item.value.wrappedValue) ? item.value.wrappedValue : "",
+                            onSave: { v in item.value.wrappedValue = v; close() },
+                            onCancel: close)
+        )
+    }
+}
+
+/// مربّع إدخال حساب واحد بمنتصف الشاشة
+private struct ContactLinkCard: View {
+    let platform: SocialPlatform
+    let placeholder: String
+    let keyboard: UIKeyboardType
+    let initial: String
+    let onSave: (String) -> Void
+    let onCancel: () -> Void
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        DSCenterCard(onBackgroundTap: onCancel) {
+            VStack(spacing: DS.Spacing.sm) {
+                platform.iconView(size: 46)
+                Text(platform.shortLabel)
+                    .font(DS.Font.plex(17, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+            }
+            .frame(maxWidth: .infinity)
+
+            TextField(placeholder, text: $text)
+                .keyboardType(keyboard)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .environment(\.layoutDirection, .leftToRight)
+                .dsAlertField()
+                .focused($focused)
+
+            if !initial.isEmpty {
+                Button { onSave("") } label: {
+                    Label(L10n.t("حذف الحساب", "Remove"), systemImage: "trash")
+                        .font(DS.Font.plex(12.5, weight: .semibold))
+                        .foregroundColor(DS.Color.error)
+                }
+                .frame(maxWidth: .infinity)
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: DS.Spacing.sm) {
+                Button { onSave(text.trimmingCharacters(in: .whitespacesAndNewlines)) } label: {
+                    Text(L10n.t("حفظ", "Save"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(DSActionFill.style(), in: RoundedRectangle(cornerRadius: DS.Radius.md))
+                }
+                Button(action: onCancel) {
+                    Text(L10n.t("إلغاء", "Cancel"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
+                }
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+        .onAppear {
+            text = initial
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }
+        }
+    }
+}
+
 /// حافة سفلية مقوّسة للغلاف — تنزل في المنتصف كقوس ناعم (طلب المالك)
 struct ProjectCoverArc: Shape {
     var depth: CGFloat = 26
@@ -819,20 +994,10 @@ struct EditProjectView: View {
 
                         DSSectionHeader(title: L10n.t("حسابات التواصل", "Social Accounts"), icon: "link")
 
-                        LazyVGrid(
-                            columns: [
-                                GridItem(.flexible(), spacing: DS.Spacing.sm),
-                                GridItem(.flexible(), spacing: DS.Spacing.sm)
-                            ],
-                            spacing: DS.Spacing.sm
-                        ) {
-                            socialTextField(platform: .phone, placeholder: "+965...", text: $phoneNumber)
-                            socialTextField(platform: .whatsapp, placeholder: "+965...", text: $whatsappNumber)
-                            socialTextField(platform: .instagram, placeholder: "@username", text: $instagramUrl)
-                            socialTextField(platform: .twitter, placeholder: "@username", text: $twitterUrl)
-                            socialTextField(platform: .website, placeholder: "https://...", text: $websiteUrl)
-                            socialTextField(platform: .location, placeholder: L10n.t("الموقع (Maps)", "Maps URL"), text: $locationUrl)
-                        }
+                        // مربّعات — كل حساب يفتح مربّعاً بالمنتصف (طلب المالك)
+                        ProjectContactTiles(phone: $phoneNumber, whatsapp: $whatsappNumber,
+                                            instagram: $instagramUrl, twitter: $twitterUrl,
+                                            website: $websiteUrl, location: $locationUrl)
                         
                         // صور المشروع (معرض)
                         ProjectPhotosEditor(existingUrls: $photoUrls, newImages: $photoImages)

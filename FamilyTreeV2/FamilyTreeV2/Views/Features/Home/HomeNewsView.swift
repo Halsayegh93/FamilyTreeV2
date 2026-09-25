@@ -208,10 +208,15 @@ struct HomeNewsView: View {
         }
         // الأوراق والتنبيهات مربوطة بصفحة الأخبار نفسها — كانت على الرئيسية خلف
         // الصفحة المدفوعة فلا تظهر إلا بعد الخروج من القسم
-        .sheet(isPresented: $showingAddNews) {
-            AddNewsView()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+        // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
+        .fullScreenCover(isPresented: $showingAddNews) {
+            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                AddNewsView()
+            }
+            .background(ClearPresentationBackground())
+        }
+        .transaction { t in
+            if showingAddNews { t.disablesAnimations = true }
         }
         .sheet(item: $selectedNewsForComments) { news in
             NewsCommentsSheet(news: news)

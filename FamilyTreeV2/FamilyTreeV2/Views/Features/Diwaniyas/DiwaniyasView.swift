@@ -95,10 +95,17 @@ struct DiwaniyasView: View {
                 .frame(maxHeight: .infinity, alignment: .bottom)
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showingAddRequest) {
-                AddDiwaniyaRequestView()
-                    .environmentObject(viewModel)
-                    .environmentObject(authVM)
+            // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
+            .fullScreenCover(isPresented: $showingAddRequest) {
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                    AddDiwaniyaRequestView()
+                        .environmentObject(viewModel)
+                        .environmentObject(authVM)
+                }
+                .background(ClearPresentationBackground())
+            }
+            .transaction { t in
+                if showingAddRequest { t.disablesAnimations = true }
             }
             .sheet(item: $diwaniyaToEdit) { diwaniya in
                 EditDiwaniyaView(diwaniya: diwaniya)
@@ -721,8 +728,9 @@ private struct AddDiwaniyaRequestView: View {
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
-                        Spacer(minLength: DS.Spacing.xxxl)
+                        Spacer(minLength: DS.Spacing.lg)
                     }
+                    .dsPanelContentHeight()
                 }
             }
             .navigationTitle(L10n.t("إضافة ديوانية", "Add Diwaniya"))

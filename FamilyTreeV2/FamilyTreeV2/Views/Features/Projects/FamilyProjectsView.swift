@@ -104,11 +104,18 @@ struct FamilyProjectsView: View {
                 await projectsVM.fetchPendingProjects()
             }
         }
-        .sheet(isPresented: $showingAddProject) {
-            AddProjectView(showAddedAlert: $showAddedAlert)
-                .environmentObject(projectsVM)
-                .environmentObject(authVM)
-                .environmentObject(memberVM)
+        // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
+        .fullScreenCover(isPresented: $showingAddProject) {
+            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                AddProjectView(showAddedAlert: $showAddedAlert)
+                    .environmentObject(projectsVM)
+                    .environmentObject(authVM)
+                    .environmentObject(memberVM)
+            }
+            .background(ClearPresentationBackground())
+        }
+        .transaction { t in
+            if showingAddProject { t.disablesAnimations = true }
         }
         .dsAlert(
             L10n.t("تم إرسال المشروع", "Project Submitted"),
@@ -671,7 +678,7 @@ struct AddProjectView: View {
     @State private var showMemberPicker = false
     @State private var memberSearchText = ""
     // طي/فتح قسم روابط التواصل (محتوى كبير) لإبقاء الشيت مضغوطاً.
-    @State private var contactsOpen = false
+    @State private var contactsOpen = true
 
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
@@ -706,7 +713,7 @@ struct AddProjectView: View {
                         contactLinksCard
                     }
                     .padding(DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.xxxl)
+                    .dsPanelContentHeight()
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -846,7 +853,7 @@ struct AddProjectView: View {
 
     private var contactLinksCard: some View {
         let filled = [phoneNumber, whatsappNumber, instagramUrl, twitterUrl, websiteUrl, locationUrl]
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0 != "+965 " }.count
+            .filter(ProjectContactTiles.isFilled).count
         return DSCard(padding: 0) {
             // رأس قابل للطي.
             Button {
@@ -856,7 +863,7 @@ struct AddProjectView: View {
                     Image(systemName: "link")
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.success)
-                    Text(L10n.t("روابط التواصل", "Contact Links"))
+                    Text(L10n.t("حسابات التواصل", "Contact Accounts"))
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                     Spacer()
@@ -873,22 +880,11 @@ struct AddProjectView: View {
             .buttonStyle(.plain)
 
             if contactsOpen {
-                // شبكة مدمجة بعمودين لتقليص الارتفاع (تتسع داخل الشيت).
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: DS.Spacing.sm),
-                        GridItem(.flexible(), spacing: DS.Spacing.sm)
-                    ],
-                    spacing: DS.Spacing.sm
-                ) {
-                    compactLink(icon: "phone.fill", color: DS.Color.success, placeholder: "+965...", text: $phoneNumber)
-                    compactLink(icon: "message.fill", color: DS.Color.success, placeholder: L10n.t("واتساب", "WhatsApp"), text: $whatsappNumber)
-                    compactLink(icon: "camera.fill", color: DS.Color.accent, placeholder: L10n.t("إنستغرام", "Instagram"), text: $instagramUrl)
-                    compactLink(icon: "at", color: DS.Color.info, placeholder: L10n.t("إكس", "X"), text: $twitterUrl)
-                    compactLink(icon: "globe", color: DS.Color.primary, placeholder: L10n.t("موقع", "Website"), text: $websiteUrl)
-                    compactLink(icon: "mappin.and.ellipse", color: DS.Color.error, placeholder: L10n.t("الموقع", "Maps"), text: $locationUrl)
-                }
-                .padding([.horizontal, .bottom], DS.Spacing.md)
+                // مربّعات — كل حساب يفتح مربّعاً بالمنتصف (طلب المالك)
+                ProjectContactTiles(phone: $phoneNumber, whatsapp: $whatsappNumber,
+                                    instagram: $instagramUrl, twitter: $twitterUrl,
+                                    website: $websiteUrl, location: $locationUrl)
+                    .padding([.horizontal, .bottom], DS.Spacing.md)
             }
         }
     }
