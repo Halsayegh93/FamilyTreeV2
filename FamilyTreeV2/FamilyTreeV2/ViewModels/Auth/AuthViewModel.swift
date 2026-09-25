@@ -1298,7 +1298,9 @@ class AuthViewModel: ObservableObject {
         defer { isEndingSession = false }
         await notificationVM?.unregisterPushToken()
         clearLocalSession()
-        _ = try? await supabase.auth.signOut()
+        // هذا الجهاز فقط — الافتراضي .global كان يُخرج العضو من كل أجهزته
+        // (الأندرويد والآيباد…) عند خروج واحد أو إزالة جهاز واحد من الإدارة.
+        _ = try? await supabase.auth.signOut(scope: .local)
         // Also invalidate saves queued by any work that finished during signOut.
         CacheManager.shared.clearAll()
         SharedSessionStore.clear()
