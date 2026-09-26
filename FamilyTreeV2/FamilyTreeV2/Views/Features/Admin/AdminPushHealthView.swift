@@ -2,6 +2,10 @@ import SwiftUI
 import Supabase
 
 // MARK: - Admin Push Health — فحص حالة الإشعارات
+//
+// التصميم الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بأرقام حيّة ← «صحة رموز التسجيل»
+// بحلقة نسبة ← التوزيع حسب البيئة بشريط ← النشاط الأخير ← الأجهزة المسجلة / بدون تسجيل
+// (قسمان قابلان للطي) ← اختبار الإرسال ← التنظيف. البيانات والإجراءات كما هي.
 
 struct AdminPushHealthView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -22,43 +26,55 @@ struct AdminPushHealthView: View {
     @State private var cleanupResultMessage: String?
     @State private var cleanupResultIsSuccess = false
 
+    private let tint = DS.Color.composerDiwaniya
+
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.xxl) {
-                    SystemHealthSectionHeader(title: L10n.t("جاهزية الإشعارات", "Notification readiness"), subtitle: L10n.t("حالة الأجهزة والإرسال في نظرة واضحة", "A clear view of devices and delivery"))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.lg)
-                    // الوضع الأفقي: الأقسام على عمودين
-                    AdaptiveCardStack(spacing: DS.Spacing.xxl, landscapeMinimum: 340) {
-                        overviewSection
-                            .padding(.top, DS.Spacing.md)
+                VStack(spacing: DS.Spacing.lg) {
+                    hero
 
-                        tokenHealthSection
+                    if let stats {
+                        // الوضع الأفقي: الأقسام على عمودين
+                        AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340, alignment: .leading) {
+                            tokenHealthSection(stats)
+                            environmentBreakdownSection(stats)
+                            lastActivitySection
+                            tokenOwnersSection
+                            missingMembersSection
+                            testPushSection
+                            cleanupSection
+                        }
+                    } else {
+                        if isLoading {
+                            SysStateCard(icon: "bell.and.waves.left.and.right.fill",
+                                         title: L10n.t("جارٍ فحص الإشعارات…", "Checking notifications…"),
+                                         hint: L10n.t("نجمع حالة الأجهزة وآخر إرسال", "Gathering devices and last delivery"),
+                                         tint: tint,
+                                         isLoading: true)
+                        } else {
+                            SysStateCard(icon: "exclamationmark.triangle.fill",
+                                         title: L10n.t("تعذّر تحميل البيانات", "Couldn't load data"),
+                                         hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                                         tint: DS.Color.error,
+                                         actionTitle: L10n.t("إعادة المحاولة", "Retry"),
+                                         action: { Task { await loadStats() } })
+                        }
 
-                        tokenOwnersSection
-
-                        environmentBreakdownSection
-
-                        lastActivitySection
-
-                        testPushSection
-
-                        cleanupSection
+                        // الإجراءات متاحة دائماً — حتى قبل اكتمال الفحص
+                        AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340, alignment: .leading) {
+                            testPushSection
+                            cleanupSection
+                        }
                     }
-
-                    Spacer(minLength: DS.Spacing.xxxl)
                 }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xxxl)
             }
             .refreshable { await loadStats() }
-
-            if isLoading && stats == nil {
-                ProgressView()
-                    .tint(DS.Color.primary)
-            }
         }
         .navigationTitle(L10n.t("فحص الإشعارات", "Push Health"))
         .navigationBarTitleDisplayMode(.inline)
@@ -66,581 +82,372 @@ struct AdminPushHealthView: View {
         .task { await loadStats() }
     }
 
-    // MARK: - Overview
-    private var overviewSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("نظرة عامة", "Overview"),
-                icon: "chart.bar.fill",
-                iconColor: DS.Color.primary
-            )
+    // MARK: - بطاقة الرأس
 
+    private var hero: some View {
+        DSPageHero(
+            title: L10n.t("جاهزية الإشعارات", "Notification readiness"),
+            subtitle: L10n.t("حالة الأجهزة والإرسال في نظرة واضحة", "A clear view of devices and delivery"),
+            icon: "bell.and.waves.left.and.right.fill",
+            tint: tint,
+            stats: [
+                DSHeroStat(value: stats.map { "\($0.totalDevices)" } ?? "—",
+                           label: L10n.t("أجهزة", "Devices"), icon: "iphone"),
+                DSHeroStat(value: stats.map { "\($0.validTokens)" } ?? "—",
+                           label: L10n.t("رمز صالح", "Valid"), icon: "checkmark.seal.fill"),
+                DSHeroStat(value: stats == nil ? "—" : "\(missingMembers.count)",
+                           label: L10n.t("بدون تسجيل", "Unregistered"), icon: "bell.slash.fill")
+            ]
+        )
+    }
+
+    // MARK: - صحة رموز التسجيل (النظرة العامة + الصحة)
+
+    private func rateColor(_ rate: Int) -> Color {
+        rate >= 90 ? DS.Color.success : (rate >= 70 ? DS.Color.warning : DS.Color.error)
+    }
+
+    private func tokenHealthSection(_ stats: PushHealthStats) -> some View {
+        let rate = stats.healthPercentage
+        let color = rateColor(rate)
+        return DSComposerSection(title: L10n.t("صحة رموز التسجيل", "Token Health"),
+                                 icon: "heart.text.square.fill",
+                                 tint: tint,
+                                 trailing: L10n.t("نظرة عامة", "Overview"),
+                                 index: 0) {
             HStack(spacing: DS.Spacing.md) {
-                miniStat(
-                    value: "\(stats?.totalDevices ?? 0)",
-                    label: L10n.t("أجهزة", "Devices"),
-                    icon: "iphone",
-                    color: DS.Color.primary
-                )
+                SysRing(progress: Double(rate) / 100, tint: color, lineWidth: 8, size: 92) {
+                    VStack(spacing: 0) {
+                        Text("\(rate)%")
+                            .font(DS.Font.plex(20, weight: .bold))
+                            .foregroundColor(DS.Color.fieldLabel)
+                            .monospacedDigit()
+                        Text(L10n.t("معدل الصحة", "Health Rate"))
+                            .font(DS.Font.plex(9.5, weight: .semibold))
+                            .foregroundColor(DS.Color.fieldValue)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .padding(.horizontal, 6)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(L10n.t("معدل الصحة", "Health Rate")): \(rate)%")
 
-                miniStat(
-                    value: "\(stats?.validTokens ?? 0)",
-                    label: L10n.t("رمز صالح", "Valid"),
-                    icon: "checkmark.seal.fill",
-                    color: DS.Color.success
-                )
-
-                miniStat(
-                    value: "\(stats?.invalidTokens ?? 0)",
-                    label: L10n.t("رمز غير صالح", "Invalid"),
-                    icon: "xmark.seal.fill",
-                    color: stats?.invalidTokens == 0 ? DS.Color.textTertiary : DS.Color.error
-                )
+                VStack(spacing: 6) {
+                    healthLine(icon: "iphone", tint: DS.Color.primary,
+                               label: L10n.t("أجهزة", "Devices"), value: stats.totalDevices)
+                    healthLine(icon: "checkmark.seal.fill", tint: DS.Color.success,
+                               label: L10n.t("رمز صالح", "Valid"), value: stats.validTokens)
+                    healthLine(icon: "xmark.seal.fill",
+                               tint: stats.invalidTokens == 0 ? DS.Color.textTertiary : DS.Color.error,
+                               label: L10n.t("رمز غير صالح", "Invalid"), value: stats.invalidTokens)
+                }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
+            .dsRowBox()
+
+            SysRow(icon: "doc.text.fill", tint: DS.Color.info,
+                   title: L10n.t("رموز تسجيل فارغة", "Empty Tokens")) {
+                countValue(stats.emptyTokens, warnWhenPositive: true)
+            }
+
+            SysRow(icon: "clock.badge.exclamationmark.fill", tint: DS.Color.warning,
+                   title: L10n.t("رموز قديمة (أكثر من 30 يوم)", "Stale (>30 days)")) {
+                countValue(stats.staleTokens, warnWhenPositive: true)
+            }
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
-    // MARK: - Environment Breakdown
-    private var environmentBreakdownSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("التوزيع حسب البيئة", "Environment Breakdown"),
-                icon: "arrow.triangle.branch",
-                iconColor: DS.Color.accent
-            )
-
-            VStack(spacing: 0) {
-                infoRow(
-                    icon: "hammer.fill",
-                    iconColor: DS.Color.warning,
-                    label: L10n.t("Sandbox (تطوير)", "Sandbox (Debug)"),
-                    value: "\(stats?.sandboxCount ?? 0)"
-                )
-
-                DSDivider()
-
-                infoRow(
-                    icon: "checkmark.shield.fill",
-                    iconColor: DS.Color.success,
-                    label: L10n.t("Production (إنتاج)", "Production (Release)"),
-                    value: "\(stats?.productionCount ?? 0)"
-                )
-            }
+    private func healthLine(icon: String, tint: Color, label: String, value: Int) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(tint)
+                .frame(width: 18)
+                .accessibilityHidden(true)
+            Text(label)
+                .font(DS.Font.plex(12, weight: .semibold))
+                .foregroundColor(DS.Color.fieldValue)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 4)
+            Text("\(value)")
+                .font(DS.Font.plex(15, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
+                .monospacedDigit()
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Token Health
-    private var tokenHealthSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("صحة رموز التسجيل", "Token Health"),
-                icon: "heart.text.square.fill",
-                iconColor: DS.Color.error
-            )
+    private func countValue(_ value: Int, warnWhenPositive: Bool) -> some View {
+        Text("\(value)")
+            .font(DS.Font.plex(15, weight: .bold))
+            .foregroundColor(warnWhenPositive && value > 0 ? DS.Color.warning : DS.Color.fieldLabel)
+            .monospacedDigit()
+    }
 
-            VStack(spacing: 0) {
-                infoRow(
-                    icon: "doc.text.fill",
-                    iconColor: DS.Color.info,
-                    label: L10n.t("رموز تسجيل فارغة", "Empty Tokens"),
-                    value: "\(stats?.emptyTokens ?? 0)",
-                    valueColor: (stats?.emptyTokens ?? 0) > 0 ? DS.Color.warning : DS.Color.textPrimary
-                )
+    // MARK: - التوزيع حسب البيئة
 
-                DSDivider()
+    private func environmentBreakdownSection(_ stats: PushHealthStats) -> some View {
+        DSComposerSection(title: L10n.t("التوزيع حسب البيئة", "Environment Breakdown"),
+                          icon: "arrow.triangle.branch",
+                          tint: tint,
+                          index: 1) {
+            SysDistributionBar(segments: [
+                .init(id: "production", value: stats.productionCount, tint: DS.Color.success),
+                .init(id: "sandbox", value: stats.sandboxCount, tint: DS.Color.warning)
+            ])
 
-                infoRow(
-                    icon: "clock.badge.exclamationmark.fill",
-                    iconColor: DS.Color.warning,
-                    label: L10n.t("رموز قديمة (أكثر من 30 يوم)", "Stale (>30 days)"),
-                    value: "\(stats?.staleTokens ?? 0)",
-                    valueColor: (stats?.staleTokens ?? 0) > 0 ? DS.Color.warning : DS.Color.textPrimary
-                )
-
-                DSDivider()
-
-                let rate = stats?.healthPercentage ?? 0
-                let rateColor: Color = rate >= 90 ? DS.Color.success : (rate >= 70 ? DS.Color.warning : DS.Color.error)
-                infoRow(
-                    icon: "percent",
-                    iconColor: rateColor,
-                    label: L10n.t("معدل الصحة", "Health Rate"),
-                    value: "\(rate)%",
-                    valueColor: rateColor
-                )
+            SysRow(icon: "checkmark.shield.fill", tint: DS.Color.success,
+                   title: L10n.t("Production (إنتاج)", "Production (Release)")) {
+                countValue(stats.productionCount, warnWhenPositive: false)
+            }
+            SysRow(icon: "hammer.fill", tint: DS.Color.warning,
+                   title: L10n.t("Sandbox (تطوير)", "Sandbox (Debug)")) {
+                countValue(stats.sandboxCount, warnWhenPositive: false)
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Last Activity
+
     private var lastActivitySection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("النشاط الأخير", "Recent Activity"),
-                icon: "clock.fill",
-                iconColor: DS.Color.secondary
-            )
-
-            VStack(spacing: 0) {
-                infoRow(
-                    icon: "arrow.up.circle.fill",
-                    iconColor: DS.Color.success,
-                    label: L10n.t("آخر تسجيل جهاز", "Last device registered"),
-                    value: formatRelative(stats?.lastDeviceRegisteredAt)
-                )
-
-                DSDivider()
-
-                infoRow(
-                    icon: "bell.badge.fill",
-                    iconColor: DS.Color.primary,
-                    label: L10n.t("آخر إشعار مرسل", "Last notification sent"),
-                    value: formatRelative(stats?.lastNotificationSentAt)
-                )
-
-                if let refresh = lastRefresh {
-                    DSDivider()
-                    infoRow(
-                        icon: "arrow.clockwise",
-                        iconColor: DS.Color.textTertiary,
-                        label: L10n.t("آخر فحص", "Last refreshed"),
-                        value: formatRelative(refresh)
-                    )
+        DSComposerSection(title: L10n.t("النشاط الأخير", "Recent Activity"),
+                          icon: "clock.fill",
+                          tint: tint,
+                          index: 2) {
+            SysRow(icon: "arrow.up.circle.fill", tint: DS.Color.success,
+                   title: L10n.t("آخر تسجيل جهاز", "Last device registered")) {
+                relativeValue(stats?.lastDeviceRegisteredAt)
+            }
+            SysRow(icon: "bell.badge.fill", tint: DS.Color.primary,
+                   title: L10n.t("آخر إشعار مرسل", "Last notification sent")) {
+                relativeValue(stats?.lastNotificationSentAt)
+            }
+            if let refresh = lastRefresh {
+                SysRow(icon: "arrow.clockwise", tint: DS.Color.textTertiary,
+                       title: L10n.t("آخر فحص", "Last refreshed")) {
+                    relativeValue(refresh)
                 }
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
-    // MARK: - Test Push
-    private var testPushSection: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            DSCard(padding: 0) {
-                DSSectionHeader(
-                    title: L10n.t("اختبار الإرسال", "Test Delivery"),
-                    icon: "paperplane.fill",
-                    iconColor: DS.Color.neonBlue
-                )
-
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    Text(L10n.t(
-                        "اختبر استلام إشعار على جهازك الحالي. النتيجة تظهر فوراً.",
-                        "Test push delivery to your current device. Result shows instantly."
-                    ))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                    Button {
-                        Task { await sendTestPush() }
-                    } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            if isSendingTest {
-                                ProgressView().tint(DS.Color.textOnPrimary)
-                            } else {
-                                Image(systemName: "paperplane.fill")
-                                    .font(DS.Font.scaled(14, weight: .bold))
-                            }
-                            Text(L10n.t("أرسل إشعار تجريبي", "Send Test Push"))
-                                .font(DS.Font.calloutBold)
-                        }
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
-                        .background(DS.Color.gradientPrimary)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    }
-                    .disabled(isSendingTest)
-                    .buttonStyle(DSScaleButtonStyle())
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.md)
-
-                    if let msg = testResultMessage {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: testResultIsSuccess ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                                .font(DS.Font.scaled(14, weight: .bold))
-                            Text(msg)
-                                .font(DS.Font.caption1)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundColor(testResultIsSuccess ? DS.Color.success : DS.Color.error)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.sm)
-                        .transition(.opacity)
-                    }
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-        }
+    private func relativeValue(_ date: Date?) -> some View {
+        Text(formatRelative(date))
+            .font(DS.Font.plex(12.5, weight: .bold))
+            .foregroundColor(DS.Color.fieldLabel)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
     }
 
-    // MARK: - Manual Cleanup
-    private var cleanupSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("تنظيف رموز التسجيل", "Cleanup Tokens"),
-                icon: "trash.fill",
-                iconColor: DS.Color.warning
-            )
+    // MARK: - الأجهزة المسجلة (قابل للطي)
 
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Text(L10n.t(
-                    "يحذف رموز التسجيل التالفة فقط (الفاضية أو الناقصة). أجهزة الأعضاء الخاملين تبقى حتى تصلهم الإشعارات.",
-                    "Removes broken (empty or truncated) tokens only. Idle members' devices are kept so they still get notifications."
-                ))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Button {
-                    Task { await runCleanup() }
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        if isCleaningUp {
-                            ProgressView().tint(DS.Color.textOnPrimary)
-                        } else {
-                            Image(systemName: "trash.fill")
-                                .font(DS.Font.scaled(14, weight: .bold))
-                        }
-                        Text(L10n.t("تنظيف الآن", "Clean Now"))
-                            .font(DS.Font.calloutBold)
-                    }
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.warning)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                }
-                .disabled(isCleaningUp)
-                .buttonStyle(DSScaleButtonStyle())
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.bottom, DS.Spacing.md)
-
-                if let msg = cleanupResultMessage {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: cleanupResultIsSuccess ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                            .font(DS.Font.scaled(14, weight: .bold))
-                        Text(msg)
-                            .font(DS.Font.caption1)
-                            .fontWeight(.medium)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .foregroundColor(cleanupResultIsSuccess ? DS.Color.success : DS.Color.error)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.sm)
-                    .transition(.opacity)
-                }
-            }
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-    }
-
-    // MARK: - Token Owners (+ Missing Members as collapsible subsections)
     private var tokenOwnersSection: some View {
-        DSCard(padding: 0) {
-            // ـــــــــــــــــــــــــــــــ
-            // أصحاب التوكنات — Collapsible
-            // ـــــــــــــــــــــــــــــــ
-            Button {
-                withAnimation(DS.Anim.snappy) { tokenOwnersExpanded.toggle() }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("person.2.badge.gearshape", color: DS.Color.primary, size: 30, iconSize: 13)
-
-                    Text(L10n.t("الأجهزة المسجلة", "Token Owners"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Spacer()
-
-                    Text("\(tokenOwners.count)")
-                        .font(DS.Font.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.primary)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 2)
-                        .background(DS.Color.primary.opacity(0.12))
-                        .clipShape(Capsule())
-
-                    Image(systemName: "chevron.down")
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .rotationEffect(.degrees(tokenOwnersExpanded ? 180 : 0))
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(DSBoldButtonStyle())
-
-            if tokenOwnersExpanded {
-                DSDivider()
-
-                if tokenOwners.isEmpty {
-                    VStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "person.crop.circle.badge.xmark")
-                            .font(DS.Font.scaled(24))
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(L10n.t("لا يوجد أجهزة مسجلة", "No registered devices"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
+        DSComposerSection(title: L10n.t("الأجهزة المسجلة", "Token Owners"),
+                          icon: "person.2.badge.gearshape",
+                          tint: tint,
+                          trailing: "\(tokenOwners.count)",
+                          index: 3,
+                          isOpen: $tokenOwnersExpanded) {
+            if tokenOwners.isEmpty {
+                SysRow(icon: "person.crop.circle.badge.xmark", tint: DS.Color.textTertiary,
+                       title: L10n.t("لا يوجد أجهزة مسجلة", "No registered devices"))
+            } else {
+                LazyVStack(spacing: 6) {
+                    ForEach(tokenOwners) { owner in
+                        tokenOwnerRow(owner: owner)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(DS.Spacing.xl)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(tokenOwners.enumerated()), id: \.element.id) { idx, owner in
-                            tokenOwnerRow(owner: owner)
-                            if idx < tokenOwners.count - 1 {
-                                DSDivider()
-                            }
-                        }
-                    }
-                    .transition(.opacity)
-                }
-            }
-
-            DSDivider()
-
-            // ـــــــــــــــــــــــــــــــ
-            // بدون تسجيل إشعارات — Collapsible
-            // ـــــــــــــــــــــــــــــــ
-            Button {
-                withAnimation(DS.Anim.snappy) { missingMembersExpanded.toggle() }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSIcon("bell.slash.fill", color: DS.Color.warning, size: 30, iconSize: 13)
-
-                    Text(L10n.t("بدون تسجيل إشعارات", "No Push Registration"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Spacer()
-
-                    Text("\(missingMembers.count)")
-                        .font(DS.Font.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(missingMembers.isEmpty ? DS.Color.success : DS.Color.warning)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 2)
-                        .background((missingMembers.isEmpty ? DS.Color.success : DS.Color.warning).opacity(0.12))
-                        .clipShape(Capsule())
-
-                    Image(systemName: "chevron.down")
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .rotationEffect(.degrees(missingMembersExpanded ? 180 : 0))
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(DSBoldButtonStyle())
-
-            if missingMembersExpanded {
-                DSDivider()
-
-                if missingMembers.isEmpty {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(DS.Color.success)
-                        Text(L10n.t("جميع الأعضاء النشطين مسجلون ✓", "All active members registered ✓"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.medium)
-                            .foregroundColor(DS.Color.success)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(missingMembers.enumerated()), id: \.element.id) { idx, member in
-                            missingMemberRow(member: member)
-                            if idx < missingMembers.count - 1 {
-                                DSDivider()
-                            }
-                        }
-                    }
-                    .transition(.opacity)
                 }
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - بدون تسجيل إشعارات (قابل للطي)
+
+    private var missingMembersSection: some View {
+        DSComposerSection(title: L10n.t("بدون تسجيل إشعارات", "No Push Registration"),
+                          icon: "bell.slash.fill",
+                          tint: missingMembers.isEmpty ? DS.Color.success : DS.Color.warning,
+                          trailing: "\(missingMembers.count)",
+                          index: 4,
+                          isOpen: $missingMembersExpanded) {
+            if missingMembers.isEmpty {
+                SysRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
+                       title: L10n.t("جميع الأعضاء النشطين مسجلون ✓", "All active members registered ✓"))
+            } else {
+                LazyVStack(spacing: 6) {
+                    ForEach(missingMembers) { member in
+                        missingMemberRow(member: member)
+                    }
+                }
+            }
+        }
+    }
+
+    private func avatar(url: String?, initial: String, tint: Color) -> some View {
+        ZStack {
+            Circle().fill(tint.opacity(0.12))
+            if let urlStr = url, let u = URL(string: urlStr) {
+                CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() }
+                placeholder: { ProgressView() }
+                .frame(width: 32, height: 32)
+                .clipShape(Circle())
+            } else {
+                Text(initial)
+                    .font(DS.Font.plex(13, weight: .bold))
+                    .foregroundColor(tint)
+            }
+        }
+        .frame(width: 32, height: 32)
+        .accessibilityHidden(true)
     }
 
     private func tokenOwnerRow(owner: TokenOwnerEntry) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            // Avatar
-            ZStack {
-                Circle()
-                    .fill(DS.Color.surface)
-                    .frame(width: 34, height: 34)
-
-                if let urlStr = owner.avatarUrl, let url = URL(string: urlStr) {
-                    CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
-                    placeholder: { ProgressView() }
-                    .frame(width: 30, height: 30).clipShape(Circle())
-                } else {
-                    Text(String(owner.fullName.prefix(1)))
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
-                }
-            }
+        let sandbox = owner.environment == "sandbox"
+        return HStack(spacing: DS.Spacing.sm) {
+            avatar(url: owner.avatarUrl, initial: String(owner.fullName.prefix(1)), tint: DS.Color.primary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(owner.fullName)
-                    .font(DS.Font.callout)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
-
-                HStack(spacing: DS.Spacing.xs) {
-                    Text(owner.deviceName)
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-
-                    Text("·")
-                        .foregroundColor(DS.Color.textTertiary)
-
-                    Text(formatRelative(owner.updatedAt))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                }
+                Text("\(owner.deviceName) · \(formatRelative(owner.updatedAt))")
+                    .font(DS.Font.plex(11.5))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(1)
             }
 
-            Spacer()
+            Spacer(minLength: 4)
 
-            // Environment pill
-            HStack(spacing: 3) {
-                Image(systemName: owner.environment == "sandbox" ? "hammer.fill" : "checkmark.shield.fill")
-                    .font(DS.Font.scaled(11, weight: .bold))
-                Text(owner.environment == "sandbox" ? L10n.t("تطوير", "Sandbox") : L10n.t("إنتاج", "Prod"))
-                    .font(DS.Font.caption2)
-                    .fontWeight(.bold)
-            }
-            .foregroundColor(owner.environment == "sandbox" ? DS.Color.warning : DS.Color.success)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 3)
-            .background((owner.environment == "sandbox" ? DS.Color.warning : DS.Color.success).opacity(0.12))
-            .clipShape(Capsule())
+            // البيئة
+            SysStatusChip(text: sandbox ? L10n.t("تطوير", "Sandbox") : L10n.t("إنتاج", "Prod"),
+                          icon: sandbox ? "hammer.fill" : "checkmark.shield.fill",
+                          tint: sandbox ? DS.Color.warning : DS.Color.success)
 
-            // Validity dot
+            // صلاحية الرمز
             Circle()
                 .fill(owner.isValid ? DS.Color.success : DS.Color.error)
                 .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.xs)
+        .dsRowBox()
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(owner.isValid ? L10n.t("رمز صالح", "Valid") : L10n.t("رمز غير صالح", "Invalid"))
     }
 
     private func missingMemberRow(member: FamilyMember) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.warning.opacity(0.1))
-                    .frame(width: 34, height: 34)
-
-                if let urlStr = member.avatarUrl, let url = URL(string: urlStr) {
-                    CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
-                    placeholder: { ProgressView() }
-                    .frame(width: 30, height: 30).clipShape(Circle())
-                } else {
-                    Text(String(member.fullName.prefix(1)))
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.warning)
-                }
-            }
+            avatar(url: member.avatarUrl, initial: String(member.fullName.prefix(1)), tint: DS.Color.warning)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(member.displayFullName)
-                    .font(DS.Font.callout)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
-
                 HStack(spacing: DS.Spacing.xs) {
                     Text(member.roleName)
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textSecondary)
-
+                        .font(DS.Font.plex(11.5))
+                        .foregroundColor(DS.Color.fieldValue)
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         Text("·")
                             .foregroundColor(DS.Color.textTertiary)
                         Text(KuwaitPhone.display(phone))
-                            .font(DS.Font.caption2)
+                            .font(DS.Font.plex(11.5))
                             .foregroundColor(DS.Color.textTertiary)
                             .lineLimit(1)
+                            .environment(\.layoutDirection, .leftToRight)
                     }
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 4)
 
             Image(systemName: "bell.slash")
-                .font(DS.Font.scaled(12, weight: .bold))
+                .font(.system(size: 11.5, weight: .bold))
                 .foregroundColor(DS.Color.warning)
-                .frame(width: 24, height: 24)
-                .background(DS.Color.warning.opacity(0.12))
-                .clipShape(Circle())
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(DS.Color.warning.opacity(0.12)))
+                .accessibilityHidden(true)
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.xs)
+        .dsRowBox()
+        .accessibilityElement(children: .combine)
     }
 
-    // MARK: - UI helpers
+    // MARK: - Test Push
 
-    private func miniStat(value: String, label: String, icon: String, color: Color) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(18, weight: .bold))
+    private var testPushSection: some View {
+        DSComposerSection(title: L10n.t("اختبار الإرسال", "Test Delivery"),
+                          icon: "paperplane.fill",
+                          tint: tint,
+                          index: 5) {
+            Text(L10n.t(
+                "اختبر استلام إشعار على جهازك الحالي. النتيجة تظهر فوراً.",
+                "Test push delivery to your current device. Result shows instantly."
+            ))
+            .font(DS.Font.plex(12))
+            .foregroundColor(DS.Color.fieldValue)
+            .fixedSize(horizontal: false, vertical: true)
+
+            SysActionButton(title: L10n.t("أرسل إشعار تجريبي", "Send Test Push"),
+                            icon: "paperplane.fill",
+                            isBusy: isSendingTest) {
+                Task { await sendTestPush() }
+            }
+
+            if let msg = testResultMessage {
+                resultRow(msg, success: testResultIsSuccess)
+            }
+        }
+    }
+
+    // MARK: - Manual Cleanup
+
+    private var cleanupSection: some View {
+        DSComposerSection(title: L10n.t("تنظيف رموز التسجيل", "Cleanup Tokens"),
+                          icon: "trash.fill",
+                          tint: DS.Color.warning,
+                          index: 6) {
+            Text(L10n.t(
+                "يحذف رموز التسجيل التالفة فقط (الفاضية أو الناقصة). أجهزة الأعضاء الخاملين تبقى حتى تصلهم الإشعارات.",
+                "Removes broken (empty or truncated) tokens only. Idle members' devices are kept so they still get notifications."
+            ))
+            .font(DS.Font.plex(12))
+            .foregroundColor(DS.Color.fieldValue)
+            .fixedSize(horizontal: false, vertical: true)
+
+            SysActionButton(title: L10n.t("تنظيف الآن", "Clean Now"),
+                            icon: "trash.fill",
+                            tint: DS.Color.warning,
+                            isBusy: isCleaningUp) {
+                Task { await runCleanup() }
+            }
+
+            if let msg = cleanupResultMessage {
+                resultRow(msg, success: cleanupResultIsSuccess)
+            }
+        }
+    }
+
+    private func resultRow(_ message: String, success: Bool) -> some View {
+        let color = success ? DS.Color.success : DS.Color.error
+        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            Image(systemName: success ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                .font(.system(size: 14, weight: .bold))
                 .foregroundColor(color)
-                .frame(width: 40, height: 40)
-                .background(color.opacity(0.12))
-                .clipShape(Circle())
-
-            Text(value)
-                .font(DS.Font.title3)
-                .fontWeight(.black)
-                .foregroundColor(DS.Color.textPrimary)
-
-            Text(label)
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(DS.Font.plex(12, weight: .semibold))
+                .foregroundColor(DS.Color.fieldLabel)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func infoRow(
-        icon: String,
-        iconColor: Color,
-        label: String,
-        value: String,
-        valueColor: Color = DS.Color.textPrimary
-    ) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: iconColor)
-
-            Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-
-            Spacer()
-
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(valueColor)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(DS.Spacing.sm + 2)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(color.opacity(0.10)))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .strokeBorder(color.opacity(0.25), lineWidth: 1))
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
     }
 
     private func formatRelative(_ date: Date?) -> String {

@@ -5,10 +5,15 @@ import Supabase
 /// «المستجدات» بمركز الإشعارات (طلب المالك).
 /// الفرق عن «إرسال إشعارات»: هذه إعلانات عامة عن التطبيق نفسه (إصدار جديد،
 /// ميزة، صيانة)، لا رسائل موجّهة لأعضاء بعينهم.
+/// التصميم الموحّد (٢٠٢٦-٠٩-٢٧): بطاقة رأس، ثم أقسام: النوع ← الرسالة ← المعاينة ← زر النشر.
+/// داخل «الإشعارات والتحديثات» (`embedded`) الصفحة الأم تحمل بطاقة الرأس فلا تتكرّر.
 struct AdminAppUpdateView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @Environment(\.dismiss) private var dismiss
+
+    /// مضمّنة في صفحة أخرى لها رأسها — بلا بطاقة رأس
+    private let embedded: Bool
 
     @State private var kind: UpdateKind = .feature
     @State private var version = ""
@@ -19,6 +24,11 @@ struct AdminAppUpdateView: View {
     @FocusState private var summaryFocused: Bool
 
     private let maxLength = 1000
+    private let tint = DS.Color.composerDiwaniya
+
+    init(embedded: Bool = false) {
+        self.embedded = embedded
+    }
 
     // MARK: - نوع الرسالة
 
@@ -78,45 +88,74 @@ struct AdminAppUpdateView: View {
             DS.Color.background.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    introCard
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    if embedded {
+                        introRow
+                    } else {
+                        hero
+                            .padding(.bottom, DS.Spacing.xs)
+                    }
                     if AppReleaseNotes.current != nil { fillReleaseNotesButton }
-                    kindPicker
-                    versionField
-                    summaryField
-                    previewCard
+                    kindSection
+                    messageSection
+                    previewSection
 
                     if let errorText {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundColor(DS.Color.error)
+                                .accessibilityHidden(true)
                             Text(errorText)
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textPrimary)
+                                .font(DS.Font.plex(12, weight: .semibold))
+                                .foregroundColor(DS.Color.fieldLabel)
+                                .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 0)
                         }
-                        .padding(DS.Spacing.sm)
-                        .background(DS.Color.error.opacity(0.10))
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                        .padding(DS.Spacing.md)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(DS.Color.error.opacity(0.10)))
+                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
+                        .accessibilityElement(children: .combine)
                     }
 
-                    DSPrimaryButton(
-                        didSend ? L10n.t("تم النشر", "Published")
-                                : L10n.t("نشر للجميع", "Publish to everyone"),
-                        icon: didSend ? "checkmark.circle.fill" : "megaphone.fill",
-                        isLoading: isSending
-                    ) {
-                        Task { await publish() }
-                    }
-                    .disabled(!canSend)
+                    publishButton
                 }
-                .padding(DS.Spacing.lg)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxxxl)
             }
         }
         .navigationTitle(L10n.t("تحديثات التطبيق", "App Updates"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: - الرأس
+
+    private var hero: some View {
+        DSPageHero(
+            title: L10n.t("تحديثات التطبيق", "App Updates"),
+            subtitle: L10n.t("رسالة نظام لكل الأعضاء — تظهر في «المستجدات» ويصل معها إشعار.",
+                             "A system message to everyone — shows in Updates with a push."),
+            icon: "megaphone.fill",
+            tint: tint,
+            stats: [
+                DSHeroStat(value: "\(AppBuild.current)", label: L10n.t("رقم البناء", "Build"), icon: "app.badge.fill"),
+                DSHeroStat(value: "\(summary.count)", label: L10n.t("حرف من \(maxLength)", "of \(maxLength) chars"),
+                           icon: "text.alignright")
+            ]
+        )
+    }
+
+    /// داخل الصفحة الأم: سطر يشرح أين تظهر الرسالة (كان بطاقة المقدّمة)
+    private var introRow: some View {
+        SysRow(icon: "megaphone.fill", tint: tint,
+               title: L10n.t("رسالة نظام لكل الأعضاء", "System message to everyone"),
+               subtitle: L10n.t("تظهر في تبويب «المستجدات» ويصل معها إشعار.",
+                                "Appears in the Updates tab with a push notification."))
+            .accessibilityElement(children: .combine)
+            .dsStaggerIn(0)
     }
 
     // MARK: - الأقسام
@@ -130,186 +169,204 @@ struct AdminAppUpdateView: View {
                 summary = AppReleaseNotes.current ?? summary
             }
         } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "doc.text.fill")
-                    .font(DS.Font.scaled(13, weight: .bold))
-                Text(L10n.t("تعبئة ملاحظات هذا الإصدار \(AppReleaseNotes.currentVersionLabel)",
-                            "Fill this release's notes \(AppReleaseNotes.currentVersionLabel)"))
-                    .font(DS.Font.calloutBold)
-                Spacer(minLength: 0)
+            SysRow(icon: "doc.text.fill", tint: DS.Color.primary,
+                   title: L10n.t("تعبئة ملاحظات هذا الإصدار \(AppReleaseNotes.currentVersionLabel)",
+                                 "Fill this release's notes \(AppReleaseNotes.currentVersionLabel)"),
+                   subtitle: L10n.t("النوع والرقم وما الجديد — راجعها ثم انشر",
+                                    "Type, version and what's new — review, then publish")) {
                 Image(systemName: "wand.and.stars")
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+                    .accessibilityHidden(true)
             }
-            .foregroundColor(DS.Color.primary)
-            .padding(DS.Spacing.md)
-            .background(DS.Color.primary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
+        .dsStaggerIn(0)
     }
 
-    private var introCard: some View {
-        HStack(alignment: .center, spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.12))
-                    .frame(width: 42, height: 42)
-                Image(systemName: "megaphone.fill")
-                    .font(DS.Font.scaled(17, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(L10n.t("رسالة نظام لكل الأعضاء", "System message to everyone"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("تظهر في تبويب «المستجدات» ويصل معها إشعار.",
-                            "Appears in the Updates tab with a push notification."))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
-        )
-    }
-
-    private var kindPicker: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionLabel(L10n.t("النوع", "Type"), icon: "square.grid.2x2.fill")
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 2), spacing: 6) {
+    private var kindSection: some View {
+        DSComposerSection(title: L10n.t("النوع", "Type"),
+                          icon: "square.grid.2x2.fill",
+                          tint: tint,
+                          trailing: kind.title,
+                          index: 1) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 2),
+                      spacing: DS.Spacing.sm) {
                 ForEach(UpdateKind.allCases) { k in
-                    let selected = kind == k
-                    Button {
-                        withAnimation(DS.Anim.quick) { kind = k }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: k.icon)
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(selected ? .white : k.color)
-                                .frame(width: 22, height: 22)
-                                .background(selected ? k.color : k.color.opacity(0.12))
-                                .clipShape(Circle())
-                            Text(k.title)
-                                .font(DS.Font.scaled(11, weight: selected ? .bold : .semibold))
-                                .foregroundColor(selected ? k.color : DS.Color.textSecondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(selected ? k.color.opacity(0.08) : DS.Color.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md)
-                                .strokeBorder(selected ? k.color.opacity(0.40) : DS.Color.textTertiary.opacity(0.12),
-                                              lineWidth: selected ? 1.3 : 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    kindOption(k)
                 }
             }
         }
     }
 
-    private var versionField: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionLabel(L10n.t("رقم الإصدار (اختياري)", "Version (optional)"), icon: "number")
+    private func kindOption(_ k: UpdateKind) -> some View {
+        let selected = kind == k
+        return Button {
+            withAnimation(DS.Anim.quick) { kind = k }
+        } label: {
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "app.badge.fill")
-                    .font(DS.Font.scaled(13, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                TextField(L10n.t("مثال: 2.1", "e.g. 2.1"), text: $version)
-                    .font(DS.Font.callout)
-                    .keyboardType(.numbersAndPunctuation)
-                    .environment(\.layoutDirection, .leftToRight)
-                    .multilineTextAlignment(L10n.isArabic ? .trailing : .leading)
+                Image(systemName: k.icon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(selected ? .white : k.color)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(selected ? k.color : k.color.opacity(0.13)))
+                    .accessibilityHidden(true)
+                Text(k.title)
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .foregroundColor(selected ? DS.Color.fieldLabel : DS.Color.fieldValue)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Spacer(minLength: 0)
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(k.color)
+                        .transition(.opacity)
+                        .accessibilityHidden(true)
+                }
             }
-            .padding(DS.Spacing.md)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(selected ? k.color.opacity(0.10) : DS.Color.background))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(selected ? k.color.opacity(0.55) : DS.Color.textTertiary.opacity(0.15),
+                              lineWidth: selected ? 1.5 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(k.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var messageSection: some View {
+        DSComposerSection(title: L10n.t("الرسالة", "Message"),
+                          icon: "text.bubble.fill",
+                          tint: tint,
+                          index: 2) {
+            DSComposerField(icon: "number",
+                            label: L10n.t("رقم الإصدار (اختياري)", "Version (optional)"),
+                            placeholder: L10n.t("مثال: 2.1", "e.g. 2.1"),
+                            text: $version,
+                            tint: tint,
+                            keyboard: .numbersAndPunctuation,
+                            ltr: true)
+
+            summaryEditor
         }
     }
 
-    private var summaryField: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack {
-                sectionLabel(L10n.t("ما الجديد", "What's new"), icon: "text.alignright")
-                Spacer()
+    /// «ما الجديد» — محرّر متعدد الأسطر بإطار حقول المربّعات (يتلوّن عند الكتابة) + عدّاد
+    private var summaryEditor: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "text.alignright")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(summaryFocused ? .white : tint)
+                    .frame(width: 32, height: 32)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(summaryFocused ? tint : tint.opacity(0.12)))
+                    .accessibilityHidden(true)
+                Text(L10n.t("ما الجديد", "What's new"))
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(summaryFocused ? tint : DS.Color.fieldLabel)
+                Spacer(minLength: 0)
                 Text("\(summary.count)/\(maxLength)")
-                    .font(DS.Font.caption2)
+                    .font(DS.Font.plex(10.5, weight: .semibold))
                     .foregroundColor(summary.count > maxLength ? DS.Color.error : DS.Color.textTertiary)
+                    .monospacedDigit()
             }
+
             ZStack(alignment: .topLeading) {
                 if summary.isEmpty {
                     Text(L10n.t("اكتب ما تغيّر في التطبيق…", "Describe what changed…"))
-                        .font(DS.Font.body)
+                        .font(DS.Font.plex(14.5))
                         .foregroundColor(DS.Color.textTertiary)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.md + 4)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 8)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
                 TextEditor(text: $summary)
                     .focused($summaryFocused)
-                    .font(DS.Font.body)
+                    .font(DS.Font.plex(14.5))
+                    .foregroundColor(DS.Color.textPrimary)
                     .scrollContentBackground(.hidden)
-                    .padding(DS.Spacing.sm)
                     .frame(minHeight: 160, maxHeight: 320)
+                    .accessibilityLabel(L10n.t("ما الجديد", "What's new"))
                     .onChange(of: summary) { _ in
                         if summary.count > maxLength { summary = String(summary.prefix(maxLength)) }
                     }
             }
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
         }
+        .padding(.horizontal, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .strokeBorder(summaryFocused ? tint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
+                          lineWidth: summaryFocused ? 1.5 : 1))
+        .animation(.easeInOut(duration: 0.2), value: summaryFocused)
     }
 
     /// معاينة الشكل كما يصل العضو
-    private var previewCard: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            sectionLabel(L10n.t("المعاينة", "Preview"), icon: "eye.fill")
-            HStack(alignment: .top, spacing: DS.Spacing.md) {
+    private var previewSection: some View {
+        DSComposerSection(title: L10n.t("المعاينة", "Preview"),
+                          icon: "eye.fill",
+                          tint: tint,
+                          trailing: L10n.t("كما يصل العضو", "As members see it"),
+                          index: 3) {
+            HStack(alignment: .top, spacing: DS.Spacing.sm) {
                 Image(systemName: kind.icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(kind.color)
                     .frame(width: 32, height: 32)
-                    .background(kind.color.opacity(0.12))
-                    .clipShape(Circle())
+                    .background(Circle().fill(kind.color.opacity(0.13)))
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(finalTitle)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
+                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .foregroundColor(DS.Color.fieldLabel)
                     Text(summary.isEmpty ? L10n.t("نص التحديث…", "Update text…") : summary)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
+                        .font(DS.Font.plex(12))
+                        .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(6)
                 }
                 Spacer(minLength: 0)
             }
-            .padding(DS.Spacing.md)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .strokeBorder(DS.Color.mutedBackground, lineWidth: 1)
-            )
+            .dsRowBox()
+            .accessibilityElement(children: .combine)
         }
     }
 
-    private func sectionLabel(_ title: String, icon: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(DS.Color.primary.opacity(0.75))
-            Text(title)
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textSecondary)
+    private var publishButton: some View {
+        Button {
+            Task { await publish() }
+        } label: {
+            HStack(spacing: 7) {
+                if isSending {
+                    ProgressView().tint(.white).scaleEffect(0.85)
+                } else {
+                    Image(systemName: didSend ? "checkmark.circle.fill" : "megaphone.fill")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                Text(didSend ? L10n.t("تم النشر", "Published")
+                             : L10n.t("نشر للجميع", "Publish to everyone"))
+                    .font(DS.Font.plex(15, weight: .bold))
+            }
+            .foregroundColor(didSend ? .white : DSActionFill.label(enabled: canSend))
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(publishFill, in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         }
+        .buttonStyle(DSScaleButtonStyle())
+        .disabled(!canSend)
+        .padding(.top, DS.Spacing.xs)
+        .animation(.easeInOut(duration: 0.2), value: didSend)
+    }
+
+    private var publishFill: AnyShapeStyle {
+        didSend ? AnyShapeStyle(DS.Color.success) : AnyShapeStyle(DSActionFill.style(enabled: canSend))
     }
 
     // MARK: - النشر

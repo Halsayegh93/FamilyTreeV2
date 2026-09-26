@@ -6,6 +6,13 @@ enum AdminReviewDestination: Hashable {
     case allRequests
 }
 
+// MARK: - لوحة الإدارة (تصميم المربّعات الموحّد — طلب المالك ٢٠٢٦-٠٩-٢٧)
+//
+// من الأعلى: بطاقة رأس «لوحة الإدارة» بدور المشاهد ومجاله (من RoleGuides) و٣ أرقام حيّة ←
+// «يحتاج انتباهك» (بطاقات قابلة للضغط لما ينتظر إجراءً) ← «مجالك» للمراقب والمشرف ←
+// «أفراد العائلة» (لمن يرى الإحصائيات) ← شبكة الأقسام بعمودين بأيقونات متدرّجة بلون المجال.
+// كل بلاطة تحفظ صلاحيتها ووجهتها كما كانت تماماً.
+
 struct AdminDashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -17,7 +24,6 @@ struct AdminDashboardView: View {
     @Binding var selectedTab: Int
     @State private var navigationPath = NavigationPath()
     @State private var showingNotifications = false
-    @State private var appeared = false
     @State private var pendingCount: Int = 0
     @State private var moderatorCount: Int = 0
     @State private var totalReviewRequestsCount: Int = 0
@@ -35,13 +41,13 @@ struct AdminDashboardView: View {
     @State private var womenAliveCount: Int = 0
     @State private var womenDeceasedCount: Int = 0
     @State private var isInitialLoading = true
+    /// «مجالك»: السطور المختصرة أو كل ما يقدر وما لا يقدر عليه
+    @State private var showFullScope = false
     @Environment(\.dismiss) var dismiss
     @Environment(\.verticalSizeClass) private var vSizeClass
-    /// الوضع الأفقي — إحصائيات بصف واحد وبطاقات على عمودين
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// الوضع الأفقي — بلاطات الأقسام على ثلاثة أعمدة
     private var isLandscape: Bool { vSizeClass == .compact }
-
-    // Admin theme accent (purple #6C5CE7)
-    private let adminAccent = DS.Color.gridTree
 
     /// مجموع كل الطلبات المعلّقة من مصادر مختلفة — يُستخدم لتشغيل إعادة الحساب لحظياً عند أي تغيير
     private var pendingRequestsSum: Int {
@@ -139,9 +145,6 @@ struct AdminDashboardView: View {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
 
-                // Decorative background circles
-                EmptyView()
-
                 VStack(spacing: 0) {
                     MainHeaderView(
                         selectedTab: $selectedTab,
@@ -154,45 +157,12 @@ struct AdminDashboardView: View {
                     )
 
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                        // مسافة بين الهيدر وأول بطاقة — نفس بقية الواجهات
-                        Color.clear.frame(height: DS.Spacing.md)
-
-                        VStack(spacing: DS.Spacing.md) {
-                            // «مجالك» — يعرف كل مسؤول حدوده وقت العمل (طلب المالك).
-                            // المالك والمدير مجالهما كامل فلا حاجة للتذكير.
-                            if !authVM.isAdmin,
-                               let role = authVM.currentUser?.role,
-                               let guide = RoleGuide.forRole(role) {
-                                RoleScopeCard(guide: guide, compact: true)
-                                    .padding(.horizontal, DS.Spacing.lg)
-                            }
-
-                            // تحذير التوافق
-                            if !authVM.notificationsFeatureAvailable || !authVM.newsApprovalFeatureAvailable {
-                                schemaWarningCard
-                                    .padding(.horizontal, DS.Spacing.lg)
-                            }
-
-                            // إحصائيات — مدير + مراقب + مالك (المشرف لا)
-                            if authVM.isAdmin || authVM.currentUser?.role == .monitor {
-                                adminStatsGrid
-                                    .opacity(appeared ? 1 : 0)
-                                    .offset(y: appeared ? 0 : 20)
-                            }
-
-                            // شبكة بلاطات — نفس لغة الرئيسية: كل قسم بلاطة متساوية
-                            // بدل بطاقات مكدّسة متفاوتة الطول تبدو عشوائية.
-                            adminBentoGrid
-                                .padding(.horizontal, DS.Spacing.lg)
-
-                            Spacer(minLength: DS.Spacing.xxxl)
-                        }
-                        .onAppear {
-                            guard !appeared else { return }
-                            withAnimation(DS.Anim.smooth.delay(0.15)) { appeared = true }
-                        }
+                        dashboardContent
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.top, DS.Spacing.md)
+                            .padding(.bottom, DS.Spacing.xxxl)
                     }
+                    // السحب للتحديث على الـ ScrollView نفسه (كان على المحتوى الداخلي فلا يعمل)
                     .refreshable { await loadAllAdminData(force: true) }
                 }
             }
@@ -202,8 +172,7 @@ struct AdminDashboardView: View {
                 case .allRequests:      AdminAllRequestsView()
                 }
             }
-        }
-        .toolbar(.hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onReceive(NotificationCenter.default.publisher(for: .openAdminReviewForKind)) { note in
@@ -251,286 +220,411 @@ struct AdminDashboardView: View {
         withAnimation(DS.Anim.smooth) { isInitialLoading = false }
     }
 
+    // MARK: - هيكل الصفحة
 
-    private var adminStatsGrid: some View {
-        Group {
-            if isInitialLoading {
-                adminStatsSkeleton
-            } else {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    // ═══ يحتاج إجراءك — الأولوية أولاً ═══
-                    if actionableTotal > 0 {
-                        HStack(spacing: DS.Spacing.sm) {
-                            actionStat(
-                                title: L10n.t("طلبات", "Requests"),
-                                value: totalReviewRequestsCount,
-                                icon: "tray.full.fill",
-                                color: DS.Color.warning
-                            )
-                            actionStat(
-                                title: L10n.t("رسائل", "Messages"),
-                                value: adminRequestVM.unreadContactMessagesCount,
-                                icon: "bubble.left.fill",
-                                color: DS.Color.info
-                            )
-                            actionStat(
-                                title: L10n.t("بانتظار", "Pending"),
-                                value: pendingCount,
-                                icon: "clock.fill",
-                                color: DS.Color.error
-                            )
-                        }
-                    } else {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(DS.Font.scaled(14, weight: .semibold))
-                                .foregroundColor(DS.Color.success)
-                            Text(L10n.t("ما فيه شي ينتظر مراجعتك", "Nothing awaiting your review"))
-                                .font(DS.Font.scaled(12, weight: .medium))
-                                .foregroundColor(DS.Color.textSecondary)
-                            Spacer()
-                        }
-                        .padding(DS.Spacing.md)
-                        .frame(maxWidth: .infinity)
-                        .background(DS.Color.success.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    }
+    private var dashboardContent: some View {
+        VStack(spacing: DS.Spacing.lg) {
+            dashboardHero
 
-                    // ═══ أفراد العائلة — جدول واحد: صفّ لكل جنس، عمود لكل حالة ═══
-                    // شريطان منفصلان كانا يجعلان المقارنة بينهما عمليةً ذهنية؛
-                    // الجدول يجعلها نظرة واحدة.
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        Text(L10n.t("أفراد العائلة", "Family members"))
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.textSecondary)
-
-                        // أعمدة ثابتة العرض: الاسم يسار، والأرقام الثلاثة
-                        // تتقاسم الباقي بالتساوي — فتتراصّ الخانات تحت عناوينها.
-                        Grid(alignment: .center,
-                             horizontalSpacing: DS.Spacing.xs,
-                             verticalSpacing: 10) {
-                            GridRow {
-                                Text("")
-                                    .frame(width: 58, alignment: .leading)
-                                censusHeader(L10n.t("الكل", "Total"))
-                                censusHeader(L10n.t("الأحياء", "Alive"))
-                                censusHeader(L10n.t("المتوفون", "Deceased"))
-                            }
-
-                            GridRow {
-                                censusLabel(L10n.t("الرجال", "Men"), DS.Color.primary)
-                                censusValue(totalMembersCount)
-                                censusValue(aliveMembersCount)
-                                censusValue(deceasedMembersCount)
-                            }
-
-                            // خطّ يفصل الجنسين — يمتدّ على الأعمدة الأربعة
-                            Divider()
-                                .overlay(DS.Color.textTertiary.opacity(0.22))
-                                .gridCellColumns(4)
-
-                            GridRow {
-                                censusLabel(L10n.t("النساء", "Women"), DS.Color.female)
-                                censusValue(womenTotalCount)
-                                censusValue(womenAliveCount)
-                                censusValue(womenDeceasedCount)
-                            }
-                        }
-
-                        // استخدام التطبيق — العضو الفعّال = رقم + جهاز دخل التطبيق
-                        // (تعريف المالك). أرقام الشجرة وحدها لا تعني استخدام التطبيق.
-                        if let usage = usageStats {
-                            Divider().overlay(DS.Color.textTertiary.opacity(0.22))
-                            // لوحة الإدارة: الفعّال وبلا رقم فقط — التقسيم الكامل في «إعدادات التطبيق»
-                            HStack(spacing: DS.Spacing.xs) {
-                                // كل من عنده رقم وجهاز — بدون فصل الخامل (طلب المالك)
-                                usagePill(category: .active, icon: "checkmark.seal.fill", value: usage.active + usage.idle,
-                                          label: L10n.t("فعّال (رقم + جهاز)", "Active (phone + device)"),
-                                          color: DS.Color.success)
-                                usagePill(category: .noPhone, icon: "phone.down.fill", value: usage.noPhone,
-                                          label: L10n.t("بلا رقم", "No phone"),
-                                          color: DS.Color.textTertiary)
-                            }
-                        }
-                    }
-                    .padding(DS.Spacing.md)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(DS.Color.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
-                    )
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .transition(.opacity)
+            // تحذير التوافق
+            if !authVM.notificationsFeatureAvailable || !authVM.newsApprovalFeatureAvailable {
+                schemaWarningCard
             }
+
+            attentionSection
+                .dsStaggerIn(1)
+
+            // «مجالك» — يعرف كل مسؤول حدوده وقت العمل (طلب المالك).
+            // المالك والمدير مجالهما كامل فلا حاجة للتذكير.
+            if let guide = scopeGuide {
+                scopeSection(guide)
+            }
+
+            // إحصائيات — مدير + مراقب + مالك (المشرف لا)
+            if canSeeStats {
+                censusSection
+            }
+
+            sectionsGrid
+                .dsStaggerIn(4)
         }
     }
 
-    /// رقم «استخدام التطبيق» — أيقونة + عدد + وصف قصير
-    private func usagePill(category: AppUsageCategory, icon: String, value: Int, label: String, color: Color) -> some View {
-        NavigationLink {
-            AppUsageMembersView(category: category)
-        } label: {
-            usagePillLabel(icon: icon, value: value, label: label, color: color)
-        }
-        .buttonStyle(DSScaleButtonStyle())
+    // MARK: - المشاهد ودوره
+
+    /// من يرى الإحصائيات (جدول الصلاحيات): المالك والمدير والمراقب
+    private var canSeeStats: Bool { authVM.isAdmin || authVM.currentUser?.role == .monitor }
+
+    private var viewerGuide: RoleGuide? {
+        guard let role = authVM.currentUser?.role else { return nil }
+        return RoleGuide.forRole(role)
     }
 
-    private func usagePillLabel(icon: String, value: Int, label: String, color: Color) -> some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(10, weight: .bold))
-                Text("\(value)")
-                    .font(DS.Font.plex(15, weight: .bold))
-            }
-            .foregroundColor(color)
-            Text(label)
-                .font(DS.Font.plex(10, weight: .medium))
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.07))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+    /// «مجالك» للمراقب والمشرف فقط
+    private var scopeGuide: RoleGuide? {
+        guard !authVM.isAdmin else { return nil }
+        return viewerGuide
     }
 
-    // MARK: - شبكة الأقسام (Bento)
-
-    /// بلاطة قسم — أيقونة في قرص ملوّن، عنوان، وشارة عدد اختيارية
-
-    private var adminBentoGrid: some View {
-        LazyVGrid(
-            columns: Array(
-                repeating: GridItem(.flexible(), spacing: DS.Spacing.sm),
-                count: 3
-            ),
-            spacing: DS.Spacing.sm
-        ) {
-            AdminTile(
-                title: L10n.t("طلبات المراجعة", "Review Requests"),
-                subtitle: L10n.t("انضمام، أخبار، بلاغات", "Join, news, reports"),
-                icon: "tray.full.fill",
-                color: DS.Color.warning,
-                badge: totalReviewRequestsCount
-            ) { AdminAllRequestsView() }
-
-            AdminTile(
-                title: L10n.t("الرسائل", "Messages"),
-                subtitle: L10n.t("محادثاتك مع الأعضاء", "Conversations with members"),
-                icon: "bubble.left.and.bubble.right.fill",
-                color: DS.Color.info,
-                badge: adminRequestVM.unreadContactMessagesCount
-            ) { AdminInboxView() }
-
-            if authVM.canEditMembers {
-                AdminTile(
-                    title: L10n.t("إدارة الأعضاء", "Members"),
-                    subtitle: L10n.t("الحسابات والسجل والعوائل", "Accounts, registry, families"),
-                    icon: "person.2.badge.gearshape",
-                    color: DS.Color.primary,
-                    badge: issueMembersCount + treeIssuesCount
-                ) { AdminMembersManagementView() }
-            }
-
-            // سجل النشاط: المالك/المدير/المراقب فقط (جدول الصلاحيات — ليس المشرف)
-            if authVM.isAdmin || authVM.currentUser?.role == .monitor {
-                AdminTile(
-                    title: L10n.t("سجل النشاط", "Activity Log"),
-                    subtitle: L10n.t("كل حركة وتغيير", "Every change"),
-                    icon: "clock.arrow.circlepath",
-                    color: DS.Color.accent,
-                    badge: notificationVM.unreadActivityLogCount
-                ) { AdminActivityLogView() }
-            }
-
-            if authVM.isAdmin {
-                AdminTile(
-                    title: L10n.t("إحصائيات متقدمة", "Analytics"),
-                    subtitle: L10n.t("الأدوار والأعمار والنمو", "Roles, ages, growth"),
-                    icon: "chart.bar.xaxis",
-                    color: DS.Color.accent
-                ) { AdminAnalyticsView() }
-
-                AdminTile(
-                    title: L10n.t("تقارير PDF", "PDF Reports"),
-                    subtitle: L10n.t("تصدير ملف للطباعة", "Export printable file"),
-                    icon: "doc.text.fill",
-                    color: DS.Color.info
-                ) { AdminReportsView() }
-            }
-
-            if authVM.canViewSystemSettings {
-                // «صحة النظام» صارت داخل «إعدادات النظام» — لا تكرار هنا
-                AdminTile(
-                    title: L10n.t("إعدادات النظام", "System Settings"),
-                    subtitle: L10n.t("الإدارة وصحة النظام والاستخدام", "Management, health & usage"),
-                    icon: "lock.shield.fill",
-                    color: DS.Color.textSecondary
-                ) {
-                    // الفريق والإشعارات وتحديثات التطبيق انتقلت إلى الداخل
-                    AdminSecuritySettingsView()
-                }
-            }
+    /// لون مجال المشاهد: المراقب = الشجرة والأعضاء، المشرف = المحتوى والبلاغات، والإدارة = النظام
+    private var domainTint: Color {
+        switch authVM.currentUser?.role {
+        case .monitor:    return DS.Color.composerProject
+        case .supervisor: return DS.Color.composerLibrary
+        default:          return DS.Color.actionNavy
         }
     }
 
-    /// هيكل تحميل مطابق للتخطيط الجديد: صف أولويات + شريط أرقام مرجعية
-    private var adminStatsSkeleton: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                ForEach(0..<3, id: \.self) { _ in
-                    DSSkeleton(height: 64, cornerRadius: DS.Radius.lg)
-                }
-            }
-            DSSkeleton(height: 46, cornerRadius: DS.Radius.lg)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .transition(.opacity)
-    }
+    // MARK: - بطاقة الرأس
 
-    /// مجموع ما ينتظر إجراءً — يقرّر إظهار صف الأولويات أو رسالة «كل شي تمام»
-    private var actionableTotal: Int {
-        totalReviewRequestsCount + adminRequestVM.unreadContactMessagesCount + pendingCount
-    }
-
-    /// بطاقة أولوية — رقم بارز بلون التنبيه
-    private func actionStat(title: String, value: Int, icon: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(color)
-                Text(title)
-                    .font(DS.Font.scaled(11, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            Text("\(value)")
-                .font(DS.Font.plex(22, weight: .bold))
-                .foregroundColor(value > 0 ? color : DS.Color.textTertiary)
-                .contentTransition(.numericText())
-        }
-        .padding(DS.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(color.opacity(value > 0 ? 0.10 : 0.04))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(color.opacity(value > 0 ? 0.20 : 0.08), lineWidth: 1)
+    private var dashboardHero: some View {
+        DSPageHero(
+            title: L10n.t("لوحة الإدارة", "Admin Dashboard"),
+            subtitle: heroSubtitle,
+            icon: viewerGuide?.icon ?? "shield.lefthalf.filled",
+            tint: domainTint,
+            stats: heroStats
         )
     }
 
-    /// رقم مرجعي — بلا لون ولا بطاقة، مجرّد معلومة
+    /// «المالك · صاحب النظام — كل الصلاحيات» — الدور ومجاله من RoleGuides
+    private var heroSubtitle: String {
+        guard let guide = viewerGuide else {
+            return L10n.t("المراجعة والإعدادات والتقارير", "Review, settings and reports")
+        }
+        return "\(guide.title) · \(guide.mandate)"
+    }
+
+    private func heroValue(_ n: Int) -> String { isInitialLoading ? "—" : "\(n)" }
+
+    /// ٣ أرقام حيّة من بيانات اللوحة نفسها — ومن لا يرى الإحصائيات (المشرف) يرى أرقام مجاله
+    private var heroStats: [DSHeroStat] {
+        if canSeeStats {
+            // الفعّال = رقم + جهاز (فعّال + خامل) — نفس تعريف «أفراد العائلة» أدناه
+            let active = usageStats.map { "\($0.active + $0.idle)" } ?? "—"
+            return [
+                DSHeroStat(value: heroValue(totalMembersCount),
+                           label: L10n.t("الأعضاء", "Members"), icon: "person.3.fill"),
+                DSHeroStat(value: active,
+                           label: L10n.t("فعّال", "Active"), icon: "checkmark.seal.fill"),
+                DSHeroStat(value: heroValue(moderatorCount),
+                           label: L10n.t("فريق الإدارة", "Admin team"), icon: "person.badge.shield.checkmark.fill")
+            ]
+        }
+        // المشرف: مجاله المحتوى — المحتوى المنتظر بدل إحصائيات الأعضاء
+        return [
+            DSHeroStat(value: heroValue(newsVM.pendingNewsRequests.count),
+                       label: L10n.t("أخبار منتظرة", "Pending news"), icon: "newspaper.fill"),
+            DSHeroStat(value: heroValue(diwaniyaVM.pendingDiwaniyas.count),
+                       label: L10n.t("ديوانيات", "Diwaniyas"), icon: "tent.fill"),
+            DSHeroStat(value: heroValue(projectsVM.pendingProjects.count),
+                       label: L10n.t("مشاريع", "Projects"), icon: "briefcase.fill")
+        ]
+    }
+
+    // MARK: - يحتاج انتباهك
+
+    private enum AttentionTarget { case requests, inbox }
+
+    private struct AttentionItem: Identifiable {
+        let id: String
+        let title: String
+        let hint: String
+        let icon: String
+        let tint: Color
+        let count: Int
+        let target: AttentionTarget
+    }
+
+    /// ما ينتظر إجراءً، بالأولوية — يظهر فقط ما عدده أكبر من صفر وما يدخل في مجال المشاهد
+    private var attentionItems: [AttentionItem] {
+        var items: [AttentionItem] = []
+        if totalReviewRequestsCount > 0 {
+            items.append(AttentionItem(
+                id: "requests",
+                title: L10n.t("طلبات المراجعة", "Review requests"),
+                hint: L10n.t("بانتظار قرارك", "Awaiting your decision"),
+                icon: "tray.full.fill", tint: DS.Color.warning,
+                count: totalReviewRequestsCount, target: .requests))
+        }
+        let unread = adminRequestVM.unreadContactMessagesCount
+        if unread > 0 {
+            items.append(AttentionItem(
+                id: "messages",
+                title: L10n.t("رسائل جديدة", "New messages"),
+                hint: L10n.t("لم تُقرأ بعد", "Not read yet"),
+                icon: "bubble.left.and.bubble.right.fill", tint: DS.Color.composerDiwaniya,
+                count: unread, target: .inbox))
+        }
+        // طلبات الانضمام — مجال الشجرة والأعضاء
+        if authVM.canModerateTree && pendingCount > 0 {
+            items.append(AttentionItem(
+                id: "join",
+                title: L10n.t("طلبات انضمام", "Join requests"),
+                hint: L10n.t("بانتظار القبول", "Awaiting approval"),
+                icon: "person.badge.clock.fill", tint: DS.Color.composerProject,
+                count: pendingCount, target: .requests))
+        }
+        // البلاغات — مجال المحتوى والبلاغات
+        let reports = adminRequestVM.newsReportRequests.count
+        if authVM.canModerateContent && reports > 0 {
+            items.append(AttentionItem(
+                id: "reports",
+                title: L10n.t("بلاغات", "Reports"),
+                hint: L10n.t("على المحتوى", "On content"),
+                icon: "exclamationmark.bubble.fill", tint: DS.Color.error,
+                count: reports, target: .requests))
+        }
+        return items
+    }
+
+    @ViewBuilder
+    private func attentionDestination(_ target: AttentionTarget) -> some View {
+        switch target {
+        case .requests: AdminAllRequestsView()
+        case .inbox:    AdminInboxView()
+        }
+    }
+
+    private var attentionSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            SysSectionTitle(title: L10n.t("يحتاج انتباهك", "Needs your attention"),
+                            icon: "bell.badge.fill", tint: DS.Color.warning)
+
+            let items = attentionItems
+            if isInitialLoading {
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        DSSkeleton(height: 112, cornerRadius: DS.Radius.lg)
+                    }
+                }
+                .transition(.opacity)
+            } else if items.isEmpty {
+                allClearCard
+                    .transition(.opacity)
+            } else if items.count <= 3 {
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(items) { attentionCard($0) }
+                }
+                .transition(.opacity)
+            } else {
+                // أكثر من ثلاث: شريط أفقي يمتد لحافة الشاشة
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        ForEach(items) { attentionCard($0).frame(width: 138) }
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, 2)
+                }
+                .padding(.horizontal, -DS.Spacing.lg)
+                .transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : DS.Anim.smooth, value: isInitialLoading)
+    }
+
+    private func attentionCard(_ item: AttentionItem) -> some View {
+        NavigationLink {
+            attentionDestination(item.target)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 0) {
+                    SysGradientIcon(name: item.icon, tint: item.tint, size: 30)
+                    Spacer(minLength: 0)
+                    SysChevron()
+                }
+                Text("\(item.count)")
+                    .font(DS.Font.plex(22, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(DS.Font.plex(12, weight: .bold))
+                        .foregroundColor(DS.Color.fieldLabel)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Text(item.hint)
+                        .font(DS.Font.plex(10.5))
+                        .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+            }
+            .padding(DS.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(item.tint.opacity(0.09)))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .strokeBorder(item.tint.opacity(0.24), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel("\(item.title): \(item.count)، \(item.hint)")
+    }
+
+    /// لا شيء ينتظر — بطاقة هادئة بدل الأرقام الصفرية
+    private var allClearCard: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: "checkmark.seal.fill", tint: DS.Color.success)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("ما فيه شي ينتظر مراجعتك", "Nothing awaiting your review"))
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                Text(L10n.t("الطلبات والرسائل كلها متابَعة", "Requests and messages are all handled"))
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.fieldValue)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(DS.Spacing.md)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .fill(DS.Color.success.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(DS.Color.success.opacity(0.20), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - مجالك
+
+    private func scopeSection(_ guide: RoleGuide) -> some View {
+        DSComposerSection(title: L10n.t("مجالك", "Your scope"),
+                          icon: guide.icon,
+                          tint: domainTint,
+                          trailing: guide.title,
+                          index: 2) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(showFullScope ? guide.can : Array(guide.can.prefix(2)), id: \.self) { text in
+                    scopeLine(text, allowed: true)
+                }
+                ForEach(showFullScope ? guide.cannot : Array(guide.cannot.prefix(1)), id: \.self) { text in
+                    scopeLine(text, allowed: false)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dsRowBox()
+
+            if guide.can.count > 2 || guide.cannot.count > 1 {
+                Button {
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
+                        showFullScope.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(showFullScope
+                             ? L10n.t("عرض أقل", "Show less")
+                             : L10n.t("كل ما تقدر عليه وما لا تقدر", "Everything you can and can't do"))
+                            .font(DS.Font.plex(12, weight: .bold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10.5, weight: .bold))
+                            .rotationEffect(.degrees(showFullScope ? 180 : 0))
+                            .accessibilityHidden(true)
+                    }
+                    .foregroundColor(domainTint)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, -6)
+            }
+        }
+    }
+
+    private func scopeLine(_ text: String, allowed: Bool) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: allowed ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.system(size: 11.5, weight: .bold))
+                .foregroundColor(allowed ? DS.Color.success : DS.Color.textTertiary)
+                .padding(.top, 2)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(DS.Font.plex(12, weight: .medium))
+                .foregroundColor(allowed ? DS.Color.fieldLabel : DS.Color.fieldValue)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(allowed ? text : L10n.t("لا: \(text)", "Can't: \(text)"))
+    }
+
+    // MARK: - أفراد العائلة
+
+    @ViewBuilder
+    private var censusSection: some View {
+        if isInitialLoading {
+            DSSkeleton(height: 190, cornerRadius: DS.Radius.lg)
+                .transition(.opacity)
+        } else {
+            DSComposerSection(title: L10n.t("أفراد العائلة", "Family members"),
+                              icon: "person.3.fill",
+                              tint: DS.Color.composerProject,
+                              trailing: L10n.t("الرجال والنساء", "Men & women"),
+                              index: 3) {
+                censusTable
+                    .dsRowBox()
+
+                // استخدام التطبيق — العضو الفعّال = رقم + جهاز دخل التطبيق
+                // (تعريف المالك). أرقام الشجرة وحدها لا تعني استخدام التطبيق.
+                if let usage = usageStats {
+                    // لوحة الإدارة: الفعّال وبلا رقم فقط — التقسيم الكامل في «إعدادات النظام»
+                    HStack(spacing: DS.Spacing.sm) {
+                        // كل من عنده رقم وجهاز — بدون فصل الخامل (طلب المالك)
+                        usagePill(category: .active, icon: "checkmark.seal.fill", value: usage.active + usage.idle,
+                                  label: L10n.t("فعّال (رقم + جهاز)", "Active (phone + device)"),
+                                  color: DS.Color.success)
+                        usagePill(category: .noPhone, icon: "phone.down.fill", value: usage.noPhone,
+                                  label: L10n.t("بلا رقم", "No phone"),
+                                  color: DS.Color.textTertiary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// جدول واحد: صفّ لكل جنس، عمود لكل حالة — المقارنة نظرة واحدة
+    private var censusTable: some View {
+        // أعمدة ثابتة العرض: الاسم يسار، والأرقام الثلاثة
+        // تتقاسم الباقي بالتساوي — فتتراصّ الخانات تحت عناوينها.
+        Grid(alignment: .center,
+             horizontalSpacing: DS.Spacing.xs,
+             verticalSpacing: 10) {
+            GridRow {
+                Text("")
+                    .frame(width: 58, alignment: .leading)
+                censusHeader(L10n.t("الكل", "Total"))
+                censusHeader(L10n.t("الأحياء", "Alive"))
+                censusHeader(L10n.t("المتوفون", "Deceased"))
+            }
+
+            GridRow {
+                censusLabel(L10n.t("الرجال", "Men"), DS.Color.primary)
+                censusValue(totalMembersCount)
+                censusValue(aliveMembersCount)
+                censusValue(deceasedMembersCount)
+            }
+
+            // خطّ يفصل الجنسين — يمتدّ على الأعمدة الأربعة
+            Divider()
+                .overlay(DS.Color.textTertiary.opacity(0.22))
+                .gridCellColumns(4)
+
+            GridRow {
+                censusLabel(L10n.t("النساء", "Women"), DS.Color.female)
+                censusValue(womenTotalCount)
+                censusValue(womenAliveCount)
+                censusValue(womenDeceasedCount)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
     /// عنوان عمود في جدول الأفراد
     private func censusHeader(_ t: String) -> some View {
         Text(t)
-            .font(DS.Font.scaled(9.5, weight: .semibold))
+            .font(DS.Font.plex(10.5, weight: .semibold))
             .foregroundColor(DS.Color.textTertiary)
             .lineLimit(1)
             .minimumScaleFactor(0.75)   // «المتوفون» لا يلتفّ ولا يزيح العمود
@@ -540,10 +634,11 @@ struct AdminDashboardView: View {
     /// اسم الصفّ — نقطة ملوّنة تميّز الجنس بلا كلمة زائدة
     private func censusLabel(_ t: String, _ c: Color) -> some View {
         HStack(spacing: 5) {
-            Circle().fill(c).frame(width: 6, height: 6)
+            Circle().fill(c).frame(width: 7, height: 7)
+                .accessibilityHidden(true)
             Text(t)
-                .font(DS.Font.scaled(11, weight: .semibold))
-                .foregroundColor(DS.Color.textPrimary)
+                .font(DS.Font.plex(12, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
         }
         .frame(width: 58, alignment: .leading)
@@ -552,140 +647,302 @@ struct AdminDashboardView: View {
     /// رقم في الجدول — أرقام جدولية فتتراصّ الخانات عمودياً
     private func censusValue(_ v: Int) -> some View {
         Text("\(v)")
-            .font(DS.Font.plex(15, weight: .bold))
+            .font(DS.Font.plex(16, weight: .bold))
             .monospacedDigit()
-            .foregroundColor(DS.Color.textPrimary)
+            .foregroundColor(DS.Color.fieldLabel)
             .contentTransition(.numericText())
             .frame(maxWidth: .infinity)
     }
 
-    private func refStat(_ title: String, _ value: Int) -> some View {
-        VStack(spacing: 1) {
-            Text("\(value)")
-                .font(DS.Font.plex(17, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-                .contentTransition(.numericText())
-            Text(title)
-                .font(DS.Font.scaled(11, weight: .medium))
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
+    /// رقم «استخدام التطبيق» — يفتح أعضاء الفئة
+    private func usagePill(category: AppUsageCategory, icon: String, value: Int, label: String, color: Color) -> some View {
+        NavigationLink {
+            AppUsageMembersView(category: category)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: icon, tint: color)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("\(value)")
+                        .font(DS.Font.plex(16, weight: .bold))
+                        .foregroundColor(DS.Color.fieldLabel)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text(label)
+                        .font(DS.Font.plex(10.5, weight: .semibold))
+                        .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                Spacer(minLength: 0)
+                SysChevron()
+            }
+            .dsRowBox()
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel("\(label): \(value)")
     }
 
-    private var refDivider: some View {
-        Rectangle()
-            .fill(DS.Color.textTertiary.opacity(0.15))
-            .frame(width: 1, height: 26)
+    // MARK: - شبكة الأقسام
+
+    private var tileColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm, alignment: .top),
+              count: isLandscape ? 3 : 2)
     }
 
-    // MARK: - تحذير التوافق (Prominent Warning Card)
-    private var schemaWarningCard: some View {
-        HStack(spacing: 0) {
-            // Prominent yellow/orange left accent bar
-            RoundedRectangle(cornerRadius: DS.Radius.sm)
-                .fill(
-                    LinearGradient(
-                        colors: [DS.Color.warning, DS.Color.error],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(width: DS.Spacing.xs)
+    private var sectionsGrid: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            SysSectionTitle(title: L10n.t("الأقسام", "Sections"),
+                            icon: "square.grid.2x2.fill",
+                            tint: DS.Color.actionNavy)
 
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(DS.Font.scaled(15, weight: .bold))
-                        .foregroundColor(DS.Color.error)
-                    Text(L10n.t("تنبيه توافق قاعدة البيانات", "Database Compatibility Warning"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Spacer()
+            LazyVGrid(columns: tileColumns, spacing: DS.Spacing.sm) {
+                AdminTile(
+                    title: L10n.t("طلبات المراجعة", "Review Requests"),
+                    subtitle: L10n.t("انضمام، أخبار، بلاغات", "Join, news, reports"),
+                    icon: "tray.full.fill",
+                    color: DS.Color.composerLibrary,
+                    badge: totalReviewRequestsCount,
+                    detail: requestsDetail
+                ) { AdminAllRequestsView() }
+
+                AdminTile(
+                    title: L10n.t("الرسائل", "Messages"),
+                    subtitle: L10n.t("محادثاتك مع الأعضاء", "Conversations with members"),
+                    icon: "bubble.left.and.bubble.right.fill",
+                    color: DS.Color.composerDiwaniya,
+                    badge: adminRequestVM.unreadContactMessagesCount,
+                    detail: messagesDetail
+                ) { AdminInboxView() }
+
+                if authVM.canEditMembers {
+                    AdminTile(
+                        title: L10n.t("إدارة الأعضاء", "Members"),
+                        subtitle: L10n.t("الحسابات والسجل والعوائل", "Accounts, registry, families"),
+                        icon: "person.2.badge.gearshape",
+                        color: DS.Color.composerProject,
+                        badge: issueMembersCount + treeIssuesCount,
+                        detail: membersDetail
+                    ) { AdminMembersManagementView() }
                 }
 
-                if !authVM.notificationsFeatureAvailable {
-                    Text("• \(L10n.t("جدول notifications غير موجود، الإشعارات معطلة.", "Notifications table missing, feature disabled."))")
-                        .font(DS.Font.footnote)
-                        .foregroundColor(DS.Color.textSecondary)
+                // سجل النشاط: المالك/المدير/المراقب فقط (جدول الصلاحيات — ليس المشرف)
+                if authVM.isAdmin || authVM.currentUser?.role == .monitor {
+                    AdminTile(
+                        title: L10n.t("سجل النشاط", "Activity Log"),
+                        subtitle: L10n.t("كل حركة وتغيير", "Every change"),
+                        icon: "clock.arrow.circlepath",
+                        color: DS.Color.actionNavy,
+                        badge: notificationVM.unreadActivityLogCount,
+                        detail: activityDetail
+                    ) { AdminActivityLogView() }
                 }
-                if !authVM.newsApprovalFeatureAvailable {
-                    Text("• \(L10n.t("عمود news.approval_status غير موجود، موافقات الأخبار معطلة.", "News approval_status column missing, approvals disabled."))")
-                        .font(DS.Font.footnote)
-                        .foregroundColor(DS.Color.textSecondary)
+
+                if authVM.isAdmin {
+                    AdminTile(
+                        title: L10n.t("إحصائيات متقدمة", "Analytics"),
+                        subtitle: L10n.t("الأدوار والأعمار والنمو", "Roles, ages, growth"),
+                        icon: "chart.bar.xaxis",
+                        color: DS.Color.composerProject,
+                        detail: analyticsDetail
+                    ) { AdminAnalyticsView() }
+
+                    AdminTile(
+                        title: L10n.t("تقارير PDF", "PDF Reports"),
+                        subtitle: L10n.t("تصدير ملف للطباعة", "Export printable file"),
+                        icon: "doc.text.fill",
+                        color: DS.Color.composerLibrary
+                    ) { AdminReportsView() }
+                }
+
+                if authVM.canViewSystemSettings {
+                    // «صحة النظام» صارت داخل «إعدادات النظام» — لا تكرار هنا
+                    AdminTile(
+                        title: L10n.t("إعدادات النظام", "System Settings"),
+                        subtitle: L10n.t("الإدارة وصحة النظام والاستخدام", "Management, health & usage"),
+                        icon: "lock.shield.fill",
+                        color: DS.Color.actionNavy,
+                        detail: systemDetail
+                    ) {
+                        // الفريق والإشعارات وتحديثات التطبيق انتقلت إلى الداخل
+                        AdminSecuritySettingsView()
+                    }
                 }
             }
-            .padding(DS.Spacing.lg)
         }
-        .background(
-            DS.Color.warning.opacity(0.08)
-        )
-        .cornerRadius(DS.Radius.lg)
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .stroke(DS.Color.warning.opacity(0.2), lineWidth: 1)
-        )
-        .dsCardShadow()
+    }
+
+    // أرقام حيّة صغيرة أسفل البلاطات — «—» لا يظهر أثناء التحميل الأول
+    private var requestsDetail: String? {
+        guard !isInitialLoading else { return nil }
+        return totalReviewRequestsCount > 0
+            ? L10n.t("\(totalReviewRequestsCount) بانتظار القرار", "\(totalReviewRequestsCount) awaiting")
+            : L10n.t("لا شيء معلّق", "Nothing pending")
+    }
+
+    private var messagesDetail: String? {
+        guard !isInitialLoading else { return nil }
+        let pending = adminRequestVM.pendingContactMessagesCount
+        if pending > 0 { return L10n.t("\(pending) بانتظار الرد", "\(pending) awaiting reply") }
+        let n = adminRequestVM.contactMessages.count
+        return L10n.t("\(n) رسالة", "\(n) messages")
+    }
+
+    private var analyticsDetail: String? {
+        guard !isInitialLoading else { return nil }
+        return L10n.t("\(aliveMembersCount) حي · \(deceasedMembersCount) متوفى",
+                      "\(aliveMembersCount) alive · \(deceasedMembersCount) deceased")
+    }
+
+    private var membersDetail: String? {
+        guard !isInitialLoading else { return nil }
+        return L10n.t("\(totalMembersCount) عضو", "\(totalMembersCount) members")
+    }
+
+    private var activityDetail: String? {
+        let n = notificationVM.unreadActivityLogCount
+        guard n > 0 else { return nil }
+        return L10n.t("\(n) جديد", "\(n) new")
+    }
+
+    private var systemDetail: String? {
+        guard !isInitialLoading else { return nil }
+        return L10n.t("الفريق \(moderatorCount)", "Team \(moderatorCount)")
+    }
+
+    // MARK: - تحذير التوافق
+
+    private var schemaWarningCard: some View {
+        DSComposerSection(title: L10n.t("تنبيه توافق قاعدة البيانات", "Database Compatibility Warning"),
+                          icon: "exclamationmark.triangle.fill",
+                          tint: DS.Color.error,
+                          index: 1) {
+            if !authVM.notificationsFeatureAvailable {
+                SysRow(icon: "bell.slash.fill", tint: DS.Color.error,
+                       title: L10n.t("جدول notifications غير موجود، الإشعارات معطلة.",
+                                     "Notifications table missing, feature disabled."))
+            }
+            if !authVM.newsApprovalFeatureAvailable {
+                SysRow(icon: "newspaper.fill", tint: DS.Color.warning,
+                       title: L10n.t("عمود news.approval_status غير موجود، موافقات الأخبار معطلة.",
+                                     "News approval_status column missing, approvals disabled."))
+            }
+        }
     }
 }
 
+// MARK: - بلاطة قسم
+
 /// بلاطة قسم إداري — تُستعمل في لوحة الإدارة وفي إعدادات النظام.
-/// كانت خاصّة داخل اللوحة، فرُفعت لمستوى الملف بدل نسخها مرة ثانية.
+/// الكاملة (اللوحة): أيقونة متدرّجة بلون المجال + عنوان + وصف + رقم حيّ + شارة حمراء لما ينتظر.
+/// المضغوطة (إعدادات النظام، ثلاثة أعمدة — طلب المالك): أيقونة + عنوان فقط.
 struct AdminTile<Destination: View>: View {
     let title: String
     let subtitle: String  // يُستخدم كوصف وصولية فقط في العرض المضغوط
     let icon: String
     let color: Color
     var badge: Int? = nil
+    /// سطر رقم حيّ صغير أسفل البلاطة (مثل «١٢٣ عضو») — nil = بلا
+    var detail: String? = nil
     /// أصغر — لشبكة «إعدادات النظام» بثلاثة أعمدة (طلب المالك)
     var compact: Bool = false
     @ViewBuilder let destination: () -> Destination
 
+    private var hasBadge: Bool { (badge ?? 0) > 0 }
+
     var body: some View {
         NavigationLink(destination: destination()) {
-            VStack(spacing: compact ? DS.Spacing.xs + 2 : DS.Spacing.sm) {
-                ZStack(alignment: .topTrailing) {
-                    ZStack {
-                        Circle().fill(color.opacity(0.14))
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(compact ? 15 : 17, weight: .semibold))
-                            .foregroundColor(color)
-                    }
-                    .frame(width: compact ? 36 : 44, height: compact ? 36 : 44)
-
-                    if let badge, badge > 0 {
-                        Text(badge > 99 ? "99+" : "\(badge)")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            // الشارة حمراء دائماً — لون المربّع كان يجعل
-                            // بعضها باهتاً فلا يُقرأ كتنبيه يحتاج إجراءً.
-                            .background(Capsule().fill(DS.Color.error))
-                            .offset(x: 8, y: -3)
-                    }
-                }
-
-                Text(title)
-                    .font(DS.Font.plex(11, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, compact ? DS.Spacing.sm : DS.Spacing.md)
-            .padding(.horizontal, DS.Spacing.xs)
-            .frame(maxWidth: .infinity, minHeight: compact ? 76 : 104)
-            // المضغوط (إعدادات النظام): خلفية خفيفة بلون المربّع وبلا إطار (طلب المالك)
-            .background(compact ? color.opacity(0.07) : DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(color.opacity(compact ? 0 : 0.14), lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            if compact { compactLabel } else { fullLabel }
         }
         .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        var parts = [title, subtitle]
+        if let badge, badge > 0 { parts.append(L10n.t("\(badge) بانتظارك", "\(badge) pending")) }
+        if let detail, !compact { parts.append(detail) }
+        return parts.joined(separator: "، ")
+    }
+
+    private var fullLabel: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(alignment: .top, spacing: 0) {
+                SysGradientIcon(name: icon, tint: color, size: 40)
+                Spacer(minLength: 4)
+                if hasBadge { badgeView }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(subtitle)
+                    .font(DS.Font.plex(11.5))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(2, reservesSpace: true)
+                    .minimumScaleFactor(0.85)
+            }
+
+            HStack(spacing: 4) {
+                Text(detail ?? " ")
+                    .font(DS.Font.plex(11, weight: .bold))
+                    .foregroundColor(color)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .contentTransition(.numericText())
+                Spacer(minLength: 0)
+                SysChevron()
+            }
+        }
+        .padding(DS.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(hasBadge ? color.opacity(0.28) : DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+    }
+
+    private var compactLabel: some View {
+        VStack(spacing: DS.Spacing.xs + 2) {
+            SysGradientIcon(name: icon, tint: color, size: 38)
+                .overlay(alignment: .topTrailing) {
+                    if hasBadge {
+                        badgeView
+                            .fixedSize()
+                            .offset(x: L10n.isArabic ? -12 : 12, y: -7)
+                    }
+                }
+            Text(title)
+                .font(DS.Font.plex(11.5, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
+                .multilineTextAlignment(.center)
+                .lineLimit(2, reservesSpace: true)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.horizontal, DS.Spacing.xs)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+    }
+
+    /// الشارة حمراء دائماً — لون المربّع كان يجعل بعضها باهتاً فلا يُقرأ كتنبيه يحتاج إجراءً
+    private var badgeView: some View {
+        let value = badge ?? 0
+        return Text(value > 99 ? "99+" : "\(value)")
+            .font(DS.Font.plex(11, weight: .bold))
+            .monospacedDigit()
+            .foregroundColor(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(Capsule().fill(DS.Color.error))
+            .accessibilityHidden(true)
     }
 }
