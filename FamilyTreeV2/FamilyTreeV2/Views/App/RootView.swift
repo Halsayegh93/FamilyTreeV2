@@ -184,7 +184,7 @@ struct DeviceRevokedView: View {
                 .padding(.bottom, DS.Spacing.xxxxl)
             }
         }
-        .sheet(isPresented: $showDevicesSheet) {
+        .dsCenterBox(isPresented: $showDevicesSheet) {
             LinkedDevicesSheet()
                 .environmentObject(appSettingsVM)
         }

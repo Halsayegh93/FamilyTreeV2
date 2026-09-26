@@ -114,17 +114,16 @@ struct TreeSearchOverlay: View {
             resultsSection
         }
         .zIndex(100)
-        .sheet(isPresented: $branchPickerOpen) {
+        // اختيار الفرع — مربّع بمنتصف الشاشة (بحجم محتواه)
+        .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
             BranchPickerSheet(
                 allMembers: memberVM.allMembers,
+                selectedId: branchRootId,
                 onSelect: { id in
                     branchRootId = id
                     branchPickerOpen = false
                 }
             )
-            // الشيت بحجم يناسب المحتوى (متوسط) مع إمكانية التوسعة لكامل الشاشة
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
         .onAppear {
             if autoFocus {

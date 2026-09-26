@@ -383,14 +383,15 @@ struct AdminMembersDirectoryView: View {
             .onChange(of: memberVM.allMembers.count) { _ in buildDescendantCounts() }
         }
         // تعديل / إضافة رقم — واجهة «رقم العضو» الموحّدة (تحفظ على السيرفر وتعتمد وتفعّل)
-        .sheet(item: $memberToEditPhone) { member in
+        .dsCenterBox(item: $memberToEditPhone) { member in
             PendingMemberPhoneSheet(member: member, activateOnSave: true)
                 .environmentObject(adminRequestVM)
         }
         // Freeze confirm
-        .sheet(isPresented: $branchPickerOpen) {
+        .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
             BranchPickerSheet(
                 allMembers: memberVM.allMembers,
+                selectedId: branchRootId,
                 onSelect: { id in
                     branchRootId = id
                     branchPickerOpen = false

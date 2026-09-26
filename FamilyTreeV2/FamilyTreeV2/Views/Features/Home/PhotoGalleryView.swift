@@ -83,10 +83,9 @@ struct PhotoGalleryView: View {
             GalleryAlbumDetailView(galleryVM: galleryVM, album: album)
                 .environmentObject(authVM)
         }
-        .sheet(isPresented: $showingCreateAlbum) {
+        // مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
+        .dsCenterBox(isPresented: $showingCreateAlbum) {
             GalleryAlbumFormSheet(galleryVM: galleryVM, existingAlbum: nil)
-                .presentationDetents([.fraction(0.42)])
-                .presentationDragIndicator(.visible)
         }
     }
 
@@ -225,6 +224,7 @@ struct GalleryAlbumDetailView: View {
     @ObservedObject var galleryVM: GalleryViewModel
     let album: GalleryAlbum
     @EnvironmentObject private var authVM: AuthViewModel
+    @EnvironmentObject private var notificationVM: NotificationViewModel
     @Environment(\.dismiss) private var dismiss
 
     @State private var showingAddPhotos = false
@@ -232,6 +232,15 @@ struct GalleryAlbumDetailView: View {
     @State private var viewerIndex: Int? = nil
     @State private var photoToDelete: GalleryPhoto? = nil
     @State private var showDeleteAlbumAlert = false
+    /// الإبلاغ عن صورة (Guideline 1.2) — نفس رسائل «إبلاغ» الموحّدة
+    @State private var photoToReport: GalleryPhoto? = nil
+    @State private var reportReason = ""
+    @State private var reportSent = false
+
+    /// الإبلاغ لغير صاحب الصورة
+    private func canReport(_ photo: GalleryPhoto) -> Bool {
+        !AccountIdentity.isMine(photo.uploadedBy, currentUser: authVM.currentUser)
+    }
 
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — صور أكثر بالصف
@@ -279,6 +288,13 @@ struct GalleryAlbumDetailView: View {
                                 }
                                 .buttonStyle(DSScaleButtonStyle())
                                 .contextMenu {
+                                    if canReport(photo) {
+                                        Button {
+                                            photoToReport = photo
+                                        } label: {
+                                            Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+                                        }
+                                    }
                                     if authVM.isAdmin {
                                         Button(role: .destructive) {
                                             photoToDelete = photo
@@ -310,19 +326,55 @@ struct GalleryAlbumDetailView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showingAddPhotos) {
+        // مربّعات بمنتصف الشاشة بدل الأوراق السفلية (طلب المالك)
+        .dsCenterBox(isPresented: $showingAddPhotos) {
             GalleryAddPhotosSheet(galleryVM: galleryVM, albumId: album.id)
         }
-        .sheet(isPresented: $showingEditAlbum) {
+        .dsCenterBox(isPresented: $showingEditAlbum) {
             GalleryAlbumFormSheet(galleryVM: galleryVM, existingAlbum: currentAlbum)
-                .presentationDetents([.fraction(0.42)])
-                .presentationDragIndicator(.visible)
         }
         .fullScreenCover(item: Binding(
             get: { viewerIndex.map { IndexBox(value: $0) } },
             set: { viewerIndex = $0?.value }
         )) { box in
-            GalleryPhotoViewer(photos: albumPhotos, initialIndex: box.value)
+            GalleryPhotoViewer(photos: albumPhotos, initialIndex: box.value,
+                               canReport: { canReport($0) },
+                               onReport: { photoToReport = $0 })
+        }
+        .dsAlert(L10n.t("إبلاغ عن صورة", "Report Photo"), isPresented: Binding(
+            get: { photoToReport != nil },
+            set: { if !$0 { photoToReport = nil } }
+        )) {
+            TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+                .dsAlertField()
+            Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
+                let target = photoToReport
+                let reason = reportReason
+                let albumTitle = currentAlbum.title
+                photoToReport = nil
+                reportReason = ""
+                if let target {
+                    Task {
+                        let ok = await notificationVM.reportContent(
+                            contentKind: L10n.t("صورة في ألبوم", "album photo"),
+                            contentLabel: target.caption.flatMap { $0.isEmpty ? nil : $0 } ?? albumTitle,
+                            contentId: target.id,
+                            reason: reason
+                        )
+                        if ok { await MainActor.run { reportSent = true } }
+                    }
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { photoToReport = nil; reportReason = "" }
+        } message: {
+            Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذه الصورة.",
+                        "Enter a reason; it will be sent to the admins to review this photo."))
+        }
+        .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة وستتم مراجعته خلال ٢٤ ساعة.",
+                        "Thank you — your report reached the admins and will be reviewed within 24 hours."))
         }
         .dsAlert(L10n.t("حذف الصورة", "Delete Photo"), isPresented: Binding(
             get: { photoToDelete != nil },
@@ -474,13 +526,24 @@ private struct IndexBox: Identifiable {
 struct GalleryPhotoViewer: View {
     let photos: [GalleryPhoto]
     let initialIndex: Int
+    /// الإبلاغ عن الصورة المعروضة (Guideline 1.2) — لغير صاحبها
+    var canReport: (GalleryPhoto) -> Bool = { _ in false }
+    var onReport: (GalleryPhoto) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
     @State private var index: Int
 
-    init(photos: [GalleryPhoto], initialIndex: Int) {
+    init(photos: [GalleryPhoto], initialIndex: Int,
+         canReport: @escaping (GalleryPhoto) -> Bool = { _ in false },
+         onReport: @escaping (GalleryPhoto) -> Void = { _ in }) {
         self.photos = photos
         self.initialIndex = initialIndex
+        self.canReport = canReport
+        self.onReport = onReport
         _index = State(initialValue: initialIndex)
+    }
+
+    private var currentPhoto: GalleryPhoto? {
+        photos.indices.contains(index) ? photos[index] : nil
     }
 
     var body: some View {
@@ -504,6 +567,24 @@ struct GalleryPhotoViewer: View {
 
             VStack {
                 HStack {
+                    // إبلاغ عن الصورة المعروضة
+                    if let photo = currentPhoto, canReport(photo) {
+                        Button {
+                            onReport(photo)
+                        } label: {
+                            Image(systemName: "exclamationmark.bubble.fill")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 38, height: 38)
+                                .background(Circle().fill(Color.black.opacity(0.4)))
+                                .dsGlass(Circle())
+                                .frame(width: 44, height: 44)   // مساحة ضغط ٤٤ (توصية أبل)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel(L10n.t("إبلاغ عن الصورة", "Report photo"))
+                        .padding(.leading, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.sm)
+                    }
                     Spacer()
                     Button {
                         dismiss()
@@ -515,6 +596,7 @@ struct GalleryPhotoViewer: View {
                             .background(Circle().fill(Color.black.opacity(0.4)))
                             .dsGlass(Circle())
                     }
+                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
                     .padding(.trailing, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
                 }
@@ -557,6 +639,8 @@ struct GalleryAlbumFormSheet: View {
         self.existingAlbum = existingAlbum
         _title = State(initialValue: existingAlbum?.title ?? "")
         _yearText = State(initialValue: existingAlbum?.year.map(String.init) ?? "")
+        _initialTitle = State(initialValue: existingAlbum?.title ?? "")
+        _initialYear = State(initialValue: existingAlbum?.year.map(String.init) ?? "")
     }
 
     private var isEditing: Bool { existingAlbum != nil }
@@ -564,67 +648,53 @@ struct GalleryAlbumFormSheet: View {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
     }
 
+    /// القيم التي فُتح بها المربّع (فارغة للألبوم الجديد) — تُلتقط مرة واحدة، فتحديث
+    /// الألبوم من الخادم أثناء التعديل لا يغيّر المقارنة
+    @State private var initialTitle: String
+    @State private var initialYear: String
+
+    /// كتابة لم تُحفظ — «إلغاء» يسأل قبل التجاهل (توصية أبل)
+    private var hasUnsavedChanges: Bool {
+        let trim: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return trim(title) != trim(initialTitle) || trim(yearText) != trim(initialYear)
+    }
+
+    /// لون المعرض — ذهبي مربّعات المكتبة
+    private let tint = DS.Color.composerLibrary
+
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("تفاصيل الألبوم", "Album Details"),
-                            icon: "photo.stack.fill",
-                            iconColor: DS.Color.primary
-                        )
-                        VStack(spacing: 0) {
-                            DSLabeledFieldRow(icon: "textformat", iconColor: DS.Color.primary,
-                                              label: L10n.t("المسمّى *", "Title *")) {
-                                TextField(L10n.t("مثلاً: عرس فلان", "e.g. Wedding"), text: $title)
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                            }
-                            DSDivider()
-                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.success,
-                                              label: L10n.t("السنة (اختياري)", "Year (optional)")) {
-                                TextField("2024", text: $yearText)
-                                    .keyboardType(.numberPad)
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                            }
-                        }
-                    }
-
-                    if let errorBanner {
-                        Text(errorBanner)
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.error)
-                    }
-
-                    DSPrimaryButton(
-                        isEditing ? L10n.t("حفظ", "Save") : L10n.t("إنشاء الألبوم", "Create Album"),
-                        icon: isEditing ? "checkmark" : "plus",
-                        isLoading: isSaving
-                    ) { save() }
-                        .disabled(!canSave)
-                        .opacity(canSave ? 1 : 0.5)
-
-                    Spacer(minLength: DS.Spacing.xxxl)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
+        // نفس هيكل مربّعات الإضافة (طلب المالك): رأس ملوّن + قسم + «حفظ» كحلي يمين و«إلغاء» يسار
+        DSComposer(
+            title: isEditing ? L10n.t("تعديل الألبوم", "Edit Album") : L10n.t("ألبوم جديد", "New Album"),
+            subtitle: isEditing ? (existingAlbum?.title ?? "")
+                                : L10n.t("مجموعة صور تحت مسمّى وسنة اختيارية", "Photos under a title and an optional year"),
+            icon: "photo.stack.fill",
+            tint: tint,
+            actionTitle: isEditing ? L10n.t("حفظ", "Save") : L10n.t("إنشاء الألبوم", "Create Album"),
+            actionIcon: isEditing ? "checkmark" : "plus",
+            canSubmit: canSave,
+            isBusy: isSaving,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: { save() },
+            onCancel: { dismiss() }
+        ) {
+            DSComposerSection(title: L10n.t("تفاصيل الألبوم", "Album Details"),
+                              icon: "photo.stack.fill", tint: tint, index: 0) {
+                DSComposerField(icon: "textformat", label: L10n.t("المسمّى *", "Title *"),
+                                placeholder: L10n.t("مثلاً: عرس فلان", "e.g. Wedding"),
+                                text: $title, tint: tint)
+                DSComposerField(icon: "calendar", label: L10n.t("السنة (اختياري)", "Year (optional)"),
+                                placeholder: "2024", text: $yearText, tint: tint,
+                                keyboard: .numberPad, ltr: true)
             }
-            .background(DS.Color.background.ignoresSafeArea())
-            .navigationTitle(isEditing ? L10n.t("تعديل الألبوم", "Edit Album")
-                                       : L10n.t("ألبوم جديد", "New Album"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .foregroundColor(DS.Color.error)
-                        .disabled(isSaving)
-                }
+
+            if let errorBanner {
+                Label(errorBanner, systemImage: "exclamationmark.triangle.fill")
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .presentationDetents([.fraction(0.42)])
-        .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -658,106 +728,131 @@ struct GalleryAddPhotosSheet: View {
 
     private var canUpload: Bool { !images.isEmpty && !galleryVM.isUploading }
 
+    /// صور مختارة لم تُرفع — «إلغاء» يسأل قبل التجاهل (توصية أبل)
+    private var hasUnsavedChanges: Bool { !images.isEmpty || isLoadingImages }
+
+    /// لون المعرض — ذهبي مربّعات المكتبة
+    private let tint = DS.Color.composerLibrary
+    /// أعمدة المعاينة — صفوف عادية لا LazyVGrid (الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً فيُقصّ المربّع)
+    private let previewColumns = 4
+
+    /// اسم الألبوم تحت عنوان المربّع
+    private var albumTitle: String? {
+        galleryVM.albums.first(where: { $0.id == albumId })?.title
+    }
+
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    PhotosPicker(
-                        selection: $pickerItems,
-                        maxSelectionCount: 30,
-                        matching: .images
-                    ) {
-                        VStack(spacing: 8) {
-                            Image(systemName: "photo.badge.plus")
-                                .font(DS.Font.scaled(26, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
-                            Text(images.isEmpty
-                                 ? L10n.t("اختر صوراً", "Select photos")
-                                 : L10n.t("تغيير الاختيار (\(images.count))", "Change selection (\(images.count))"))
-                                .font(DS.Font.callout)
-                                .fontWeight(.semibold)
-                                .foregroundColor(DS.Color.textPrimary)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 110)
-                        .background(
-                            RoundedRectangle(cornerRadius: DS.Radius.md)
-                                .fill(DS.Color.surface)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md)
-                                .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1.5)
-                        )
-                    }
+        // نفس هيكل مربّعات الإضافة (طلب المالك): رأس ملوّن + قسم الصور + «رفع» كحلي يمين و«إلغاء» يسار،
+        // وشريط تقدّم الرفع فوق الأزرار
+        DSComposer(
+            title: L10n.t("إضافة صور", "Add Photos"),
+            subtitle: albumTitle ?? L10n.t("معرض الصور", "Photo Gallery"),
+            icon: "photo.on.rectangle.angled",
+            tint: tint,
+            actionTitle: L10n.t("رفع \(images.count) صورة", "Upload \(images.count)"),
+            actionIcon: "icloud.and.arrow.up.fill",
+            canSubmit: canUpload,
+            isBusy: galleryVM.isUploading,
+            note: galleryVM.isUploading ? L10n.t("جاري الرفع...", "Uploading...") : nil,
+            progress: galleryVM.isUploading ? galleryVM.uploadProgress : nil,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: { upload() },
+            onCancel: { dismiss() }
+        ) {
+            DSComposerSection(title: L10n.t("الصور", "Photos"), icon: "photo.fill", tint: tint,
+                              trailing: images.isEmpty ? nil : L10n.t("\(images.count) صورة", "\(images.count) photos"),
+                              index: 0) {
+                pickerCard
 
-                    if isLoadingImages {
-                        HStack(spacing: DS.Spacing.sm) {
-                            ProgressView().tint(DS.Color.primary)
-                            Text(L10n.t("جاري تحضير الصور...", "Preparing photos..."))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
+                if isLoadingImages {
+                    HStack(spacing: DS.Spacing.sm) {
+                        ProgressView().tint(tint)
+                        Text(L10n.t("جاري تحضير الصور...", "Preparing photos..."))
+                            .font(DS.Font.plex(12))
+                            .foregroundColor(DS.Color.textSecondary)
+                        Spacer(minLength: 0)
                     }
+                    .transition(.opacity)
+                }
 
-                    // معاينة مصغّرة
-                    if !images.isEmpty {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 6)], spacing: 6) {
-                            ForEach(Array(images.enumerated()), id: \.offset) { _, img in
+                // معاينة مصغّرة
+                if !images.isEmpty {
+                    previewGrid
+                        .transition(.opacity)
+                }
+            }
+
+            if let errorBanner {
+                Label(errorBanner, systemImage: "exclamationmark.triangle.fill")
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: images.count)
+        .animation(.easeInOut(duration: 0.2), value: isLoadingImages)
+        .onChange(of: pickerItems) { items in
+            loadImages(from: items)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// زر الاختيار — نفس بطاقات «المصدر» في مربّع المكتبة (إطار متقطّع بلون القسم)
+    private var pickerCard: some View {
+        PhotosPicker(
+            selection: $pickerItems,
+            maxSelectionCount: 30,
+            matching: .images
+        ) {
+            VStack(spacing: 7) {
+                ZStack {
+                    Circle().fill(tint.opacity(0.14))
+                    Circle().strokeBorder(tint.opacity(0.35), lineWidth: 1)
+                    Image(systemName: "photo.badge.plus")
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundColor(tint)
+                }
+                .frame(width: 52, height: 52)
+                .accessibilityHidden(true)   // زخرفة — نص الزر يُقرأ
+                Text(images.isEmpty
+                     ? L10n.t("اختر صوراً", "Select photos")
+                     : L10n.t("تغيير الاختيار (\(images.count))", "Change selection (\(images.count))"))
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.md)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.background))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .strokeBorder(tint.opacity(0.4), style: StrokeStyle(lineWidth: 1.2, dash: [6, 4])))
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    /// الصور المختارة في صفوف من أربعة — مربّعات متساوية بعرض القسم
+    private var previewGrid: some View {
+        let items = Array(images.enumerated())
+        return VStack(spacing: 6) {
+            ForEach(Array(stride(from: 0, to: items.count, by: previewColumns)), id: \.self) { start in
+                let row = Array(items[start..<min(start + previewColumns, items.count)])
+                HStack(spacing: 6) {
+                    ForEach(row, id: \.offset) { _, img in
+                        Color.clear
+                            .aspectRatio(1, contentMode: .fit)
+                            .overlay {
                                 Image(uiImage: img)
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(width: 72, height: 72)
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                             }
-                        }
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
                     }
-
-                    if galleryVM.isUploading {
-                        VStack(spacing: DS.Spacing.xs) {
-                            ProgressView(value: galleryVM.uploadProgress)
-                                .progressViewStyle(.linear)
-                                .tint(DS.Color.primary)
-                            Text(L10n.t("جاري الرفع...", "Uploading..."))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
+                    ForEach(0..<(previewColumns - row.count), id: \.self) { _ in
+                        Color.clear.aspectRatio(1, contentMode: .fit)
                     }
-
-                    if let errorBanner {
-                        Text(errorBanner)
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.error)
-                    }
-
-                    DSPrimaryButton(
-                        L10n.t("رفع \(images.count) صورة", "Upload \(images.count)"),
-                        icon: "icloud.and.arrow.up.fill",
-                        isLoading: galleryVM.isUploading
-                    ) { upload() }
-                        .disabled(!canUpload)
-                        .opacity(canUpload ? 1 : 0.5)
-
-                    Spacer(minLength: DS.Spacing.xxxl)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-            }
-            .background(DS.Color.background.ignoresSafeArea())
-            .navigationTitle(L10n.t("إضافة صور", "Add Photos"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .foregroundColor(DS.Color.error)
-                        .disabled(galleryVM.isUploading)
-                }
-            }
-            .onChange(of: pickerItems) { items in
-                loadImages(from: items)
             }
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private func loadImages(from items: [PhotosPickerItem]) {

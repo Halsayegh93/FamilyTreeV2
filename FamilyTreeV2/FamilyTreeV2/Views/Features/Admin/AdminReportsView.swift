@@ -283,9 +283,10 @@ struct AdminReportsView: View {
             // ⚠️ مهم: نعلّق sheet الفرع على VStack الداخلي عشان لا يتزاحم
             // مع sheet المشاركة المعلّق على الـScrollView. SwiftUI لا يدعم
             // sheet متعدد على نفس الـView — يتم تجاهل الـsheet الثاني.
-            .sheet(isPresented: $branchPickerOpen) {
+            .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
                 BranchPickerSheet(
                     allMembers: memberVM.allMembers,
+                    selectedId: branchRootId,
                     onSelect: { id in
                         branchRootId = id
                         branchPickerOpen = false

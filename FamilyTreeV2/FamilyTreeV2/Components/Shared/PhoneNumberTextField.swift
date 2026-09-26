@@ -113,7 +113,13 @@ struct DSPhoneField: View {
                         .font(DS.Font.scaled(compact ? 9 : 10, weight: .bold))
                         .foregroundStyle(DS.Color.textTertiary)
                 }
+                // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير ارتفاع الحقل
+                .frame(minHeight: 44)
+                .padding(.vertical, -((44 - (compact ? 20 : 24)) / 2))
+                .contentShape(Rectangle())
             }
+            .accessibilityLabel(L10n.t("رمز الدولة \(country.nameArabic) \(country.dialingCode)",
+                                       "Country code \(country.dialingCode)"))
 
             // فاصل رأسي
             RoundedRectangle(cornerRadius: 1)

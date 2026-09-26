@@ -324,10 +324,11 @@ struct AdminTreeHealthView: View {
                 "Clear \(KuwaitPhone.display(phone)) from \(member.fullName)?"
             ))
         }
-        .sheet(item: $memberToLinkFather) { member in
+        // مربّعات بمنتصف الشاشة بدل الأوراق السفلية (طلب المالك)
+        .dsTallBox(item: $memberToLinkFather) { member in   // قائمة أعضاء طويلة — مربّع طويل (توصية أبل)
             LinkFatherSheet(member: member, memberVM: memberVM)
         }
-        .sheet(item: $memberToEditName) { member in
+        .dsCenterBox(item: $memberToEditName) { member in
             EditNameSheet(member: member, memberVM: memberVM)
         }
         .onAppear {
@@ -520,6 +521,8 @@ struct AdminTreeHealthView: View {
 
 // MARK: - Edit Name Sheet
 
+/// تعديل الاسم — مربّع بمنتصف الشاشة بنفس تصميم مربّعات الإضافة (طلب المالك):
+/// حقل الاسم الكامل + رقم العضو للتعرّف عليه، و«حفظ» / «إلغاء» أسفله.
 struct EditNameSheet: View {
     let member: FamilyMember
     let memberVM: MemberViewModel
@@ -527,51 +530,64 @@ struct EditNameSheet: View {
     @State private var fullName: String = ""
     @State private var isSaving = false
 
+    /// الاسم الذي يُفتح عليه المربّع (نفس تعبئة onAppear) — للمقارنة بما كُتب
+    private var startName: String {
+        let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (name == "بدون اسم") ? "" : name
+    }
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: DS.Spacing.xl) {
-                DSSheetHeader(
-                    title: L10n.t("تعديل الاسم", "Edit Name"),
-                    isLoading: isSaving,
-                    onCancel: { dismiss() },
-                    onConfirm: { Task { await saveName() } }
-                )
-
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    Text(L10n.t("الاسم الكامل", "Full Name"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textSecondary)
-
-                    DSTextField(
-                        label: L10n.t("الاسم الكامل", "Full Name"),
-                        placeholder: L10n.t("أدخل الاسم الكامل...", "Enter full name..."),
-                        text: $fullName,
-                        icon: "person.fill"
-                    )
-                }
-                .padding(.horizontal, DS.Spacing.lg)
+        DSComposer(
+            title: L10n.t("تعديل الاسم", "Edit Name"),
+            subtitle: L10n.t("عدّل بياناته في الشجرة", "Update the details in the tree"),
+            icon: "pencil",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("حفظ", "Save"),
+            // الحفظ لا يعمل باسم فارغ (نفس شرط saveName)
+            canSubmit: !fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            isBusy: isSaving,
+            // اسم معدّل لم يُحفظ → «إلغاء» يسأل قبل التجاهل (توصية أبل)
+            hasUnsavedChanges: fullName.trimmingCharacters(in: .whitespacesAndNewlines) != startName,
+            onSubmit: { Task { await saveName() } },
+            onCancel: { dismiss() }
+        ) {
+            DSComposerSection(title: L10n.t("البيانات الأساسية", "Basic Info"),
+                              icon: "person.text.rectangle.fill", tint: DS.Color.primary, index: 0) {
+                DSComposerField(icon: "person.fill",
+                                label: L10n.t("الاسم الكامل", "Full Name"),
+                                placeholder: L10n.t("أدخل الاسم الكامل...", "Enter full name..."),
+                                text: $fullName)
 
                 if let phone = member.phoneNumber, !phone.isEmpty {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "phone.fill")
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(phone)
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
+                    phoneRow(phone)
                 }
-
-                Spacer()
             }
-            .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear {
-            let name = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-            fullName = (name == "بدون اسم") ? "" : name
+            fullName = startName
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .presentationDetents([.medium])
+    }
+
+    /// رقم العضو للقراءة فقط — يساعد على معرفة صاحب السجل بلا اسم
+    private func phoneRow(_ phone: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: "phone.fill", tint: DS.Color.success)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("رقم الهاتف", "Phone Number"))
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+                Text(phone)
+                    .font(DS.Font.plex(14.5))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .monospacedDigit()
+                    .environment(\.layoutDirection, .leftToRight)
+            }
+            Spacer(minLength: 0)
+        }
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «رقم الهاتف، …» عنصراً واحداً
     }
 
     private func saveName() async {

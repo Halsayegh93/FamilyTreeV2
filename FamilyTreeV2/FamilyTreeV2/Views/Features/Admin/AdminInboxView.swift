@@ -162,14 +162,10 @@ struct AdminInboxView: View {
             await adminRequestVM.fetchContactMessages()
             isLoading = false
         }
-        .sheet(item: $selectedMessage) { msg in
-            NavigationStack {
-                MessageDetailSheet(message: msg) {
-                    selectedMessage = nil
-                }
+        .dsCenterBox(item: $selectedMessage) { msg in
+            MessageDetailSheet(message: msg) {
+                selectedMessage = nil
             }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
     }
 
@@ -468,188 +464,44 @@ struct AdminInboxView: View {
 
 // MARK: - Message Detail Sheet
 
+/// تفاصيل الرسالة — مربّع عرض بنفس التصميم الموحّد (طلب المالك): المرسل، الرسالة،
+/// الرد على العضو، و«تم التعامل» (للرسالة المعلّقة) / «إغلاق» أسفل المربّع
 private struct MessageDetailSheet: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     let message: AdminRequest
     let onDismiss: () -> Void
 
     @State private var isMarking = false
-    /// شيت كتابة الرد الرسمي (يُرسل من بريد العائلة)
+    /// مربّع كتابة الرد الرسمي (يُرسل من بريد العائلة)
     @State private var showEmailComposer = false
 
+    private var isPending: Bool { message.status == ApprovalStatus.pending.rawValue }
+
     var body: some View {
-        let category = ContactParser.category(of: message)
-        let body = ContactParser.message(from: message)
-        let phone = message.member?.phoneNumber ?? ""
-
-        ScrollView {
-            VStack(alignment: .trailing, spacing: DS.Spacing.lg) {
-                // Sender
-                // صف المرسل: الصورة أولاً · الاسم والهاتف بجانبها · التصنيف في الطرف المقابل (طلب المالك)
-                HStack(spacing: DS.Spacing.md) {
-                    let info = ContactCategoryInfo.from(raw: category)
-                    DSMemberAvatar(
-                        name: message.member?.firstName ?? "?",
-                        avatarUrl: message.member?.avatarUrl,
-                        size: 52,
-                        roleColor: message.member?.roleColor ?? DS.Color.primary
-                    )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(message.member?.displayFullName ?? L10n.t("عضو", "Member"))
-                            .font(DS.Font.plex(15, weight: .semibold))
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if !phone.isEmpty {
-                            Text(phone)
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    VStack(spacing: 2) {
-                        Image(systemName: info.icon)
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(info.color)
-                            .frame(width: 34, height: 34)
-                            .background(info.color.opacity(0.14))
-                            .clipShape(Circle())
-                        Text(info.title)
-                            .font(DS.Font.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                }
-
-                Divider()
-
-                // Message body
-                VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
-                    Text(L10n.t("الرسالة", "Message"))
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    Text(body)
-                        .font(DS.Font.body)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(DS.Spacing.md)
-                        .background(DS.Color.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                }
-
-                // Reply actions — الوسيلة التي طلبها العضو أوّلاً، ثم رقمه المسجّل
-                let preferred = ContactParser.preferredContact(from: message)
-                let isEmail = (preferred ?? "").contains("@")
-                let replyPhone = isEmail ? phone : (preferred ?? phone)
-
-                if isEmail || !replyPhone.isEmpty {
-                    VStack(alignment: .trailing, spacing: DS.Spacing.sm) {
-                        Text(L10n.t("الرد على العضو", "Reply to member"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-
-                        // وسيلة التواصل التي كتبها العضو — تُعرض وتُنسخ بالضغط
-                        if let preferred {
-                            Button {
-                                UIPasteboard.general.string = preferred
-                                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: isEmail ? "envelope.fill" : "phone.fill")
-                                        .font(DS.Font.scaled(11, weight: .semibold))
-                                    Text(preferred)
-                                        .font(DS.Font.caption1)
-                                        .lineLimit(1)
-                                        .environment(\.layoutDirection, .leftToRight)
-                                    Image(systemName: "doc.on.doc")
-                                        .font(DS.Font.scaled(11, weight: .semibold))
-                                        .opacity(0.6)
-                                }
-                                .foregroundColor(DS.Color.textSecondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        HStack(spacing: DS.Spacing.sm) {
-                            if !replyPhone.isEmpty {
-                                replyButton(
-                                    title: L10n.t("واتساب", "WhatsApp"),
-                                    icon: "message.fill",
-                                    color: Color(hex: "#25D366")
-                                ) { openURL("https://wa.me/\(sanitize(replyPhone))") }
-                                replyButton(
-                                    title: L10n.t("اتصال", "Call"),
-                                    icon: "phone.fill",
-                                    color: DS.Color.success
-                                ) { openURL("tel:\(sanitize(replyPhone))") }
-                            }
-                            if isEmail {
-                                replyButton(
-                                    title: L10n.t("بريد", "Email"),
-                                    icon: "envelope.fill",
-                                    color: DS.Color.info
-                                ) { showEmailComposer = true }
-                            }
-                        }
-                    }
-                }
-
-                // Mark handled
-                if message.status == ApprovalStatus.pending.rawValue {
-                    Button {
-                        Task { await markHandled() }
-                    } label: {
-                        HStack {
-                            if isMarking {
-                                ProgressView().tint(.white).scaleEffect(0.9)
-                            } else {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(DS.Font.scaled(15, weight: .bold))
-                            }
-                            Text(isMarking ? L10n.t("جارٍ…", "Working…") : L10n.t("تم التعامل", "Mark as Handled"))
-                                .font(DS.Font.calloutBold)
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md + 2)
-                        .background(DS.Color.gradientPrimary)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-                    }
-                    .disabled(isMarking)
-                    .buttonStyle(.plain)
-                } else {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundColor(DS.Color.success)
-                        Text(L10n.t("تم التعامل مع هذه الرسالة", "This message was handled"))
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textSecondary)
-                        Spacer()
-                    }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.success.opacity(0.10))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                }
-
-                Spacer(minLength: DS.Spacing.lg)
-            }
-            .padding(DS.Spacing.lg)
+        DSComposer(
+            title: L10n.t("تفاصيل الرسالة", "Message Detail"),
+            subtitle: message.member?.displayFullName ?? L10n.t("عضو", "Member"),
+            icon: "envelope.open.fill",
+            tint: DS.Color.actionNavy,
+            actionTitle: isMarking ? L10n.t("جارٍ…", "Working…") : L10n.t("تم التعامل", "Mark as Handled"),
+            actionIcon: "checkmark.circle.fill",
+            showsAction: isPending,
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: true,
+            isBusy: isMarking,
+            isBehindExtra: showEmailComposer,
+            onSubmit: { Task { await markHandled() } },
+            onCancel: onDismiss
+        ) {
+            senderSection
+            messageSection
+            replySection
         }
-        .background(DS.Color.background)
-        .navigationTitle(L10n.t("تفاصيل الرسالة", "Message Detail"))
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             // defensive: تأكد أن الرسالة معلّمة كمقروءة حتى لو فُتحت من مسار آخر
             adminRequestVM.markContactMessageRead(message.id)
         }
-        .sheet(isPresented: $showEmailComposer) {
+        .dsCenterBox(isPresented: $showEmailComposer) {
             OfficialReplySheet(
                 to: ContactParser.preferredContact(from: message) ?? "",
                 memberName: message.member?.fullName ?? "",
@@ -659,25 +511,188 @@ private struct MessageDetailSheet: View {
         }
     }
 
+    // MARK: المرسل — الصورة · الاسم والهاتف · التصنيف في الطرف المقابل
+
+    private var senderSection: some View {
+        let info = ContactCategoryInfo.from(raw: ContactParser.category(of: message))
+        let phone = message.member?.phoneNumber ?? ""
+        return DSComposerSection(title: L10n.t("المرسل", "Sender"),
+                                 icon: "person.fill",
+                                 tint: DS.Color.primary,
+                                 index: 0) {
+            HStack(spacing: DS.Spacing.sm) {
+                DSMemberAvatar(
+                    name: message.member?.firstName ?? "?",
+                    avatarUrl: message.member?.avatarUrl,
+                    size: 44,
+                    roleColor: message.member?.roleColor ?? DS.Color.primary
+                )
+                .accessibilityHidden(true)   // الصورة زخرفة — الاسم يُقرأ بعدها
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(message.member?.displayFullName ?? L10n.t("عضو", "Member"))
+                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !phone.isEmpty {
+                        Text(phone)
+                            .font(DS.Font.plex(12))
+                            .foregroundColor(DS.Color.fieldValue)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(spacing: 2) {
+                    Image(systemName: info.icon)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(info.color)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(info.color.opacity(0.14)))
+                        .accessibilityHidden(true)   // التصنيف يُقرأ من النص تحته
+                    Text(info.title)
+                        .font(DS.Font.plex(10.5, weight: .semibold))
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+            }
+            .dsRowBox()
+            .accessibilityElement(children: .combine)   // المرسل ورقمه وتصنيف الرسالة معاً
+        }
+    }
+
+    // MARK: نص الرسالة (+ حالة التعامل)
+
+    private var messageSection: some View {
+        DSComposerSection(title: L10n.t("الرسالة", "Message"),
+                          icon: "text.bubble.fill",
+                          tint: DS.Color.info,
+                          index: 1) {
+            Text(ContactParser.message(from: message))
+                .font(DS.Font.plex(15))
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .dsRowBox()
+
+            if !isPending {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSFieldIcon(name: "checkmark.seal.fill", tint: DS.Color.success)
+                        .accessibilityHidden(true)
+                    Text(L10n.t("تم التعامل مع هذه الرسالة", "This message was handled"))
+                        .font(DS.Font.plex(13.5, weight: .semibold))
+                        .foregroundColor(DS.Color.success)
+                    Spacer(minLength: 0)
+                }
+                .dsRowBox()
+            }
+        }
+    }
+
+    // MARK: الرد على العضو — الوسيلة التي طلبها العضو أوّلاً، ثم رقمه المسجّل
+
+    @ViewBuilder
+    private var replySection: some View {
+        let phone = message.member?.phoneNumber ?? ""
+        let preferred = ContactParser.preferredContact(from: message)
+        let isEmail = (preferred ?? "").contains("@")
+        let replyPhone = isEmail ? phone : (preferred ?? phone)
+
+        if isEmail || !replyPhone.isEmpty {
+            DSComposerSection(title: L10n.t("الرد على العضو", "Reply to member"),
+                              icon: "arrowshape.turn.up.left.fill",
+                              tint: DS.Color.success,
+                              index: 2) {
+                // وسيلة التواصل التي كتبها العضو — تُعرض وتُنسخ بالضغط
+                if let preferred {
+                    preferredContactRow(preferred, isEmail: isEmail)
+                }
+
+                HStack(spacing: DS.Spacing.sm) {
+                    if !replyPhone.isEmpty {
+                        replyButton(
+                            title: L10n.t("واتساب", "WhatsApp"),
+                            icon: "message.fill",
+                            // أخضر واتساب الثابت (#25D366) كان باهتاً جداً على خلفيته في الوضع الفاتح
+                            // (~1.8:1) — لون أخضر من ألوان التطبيق يُقرأ في الوضعين
+                            color: DS.Color.secondary
+                        ) { openURL("https://wa.me/\(sanitize(replyPhone))") }
+                        replyButton(
+                            title: L10n.t("اتصال", "Call"),
+                            icon: "phone.fill",
+                            color: DS.Color.success
+                        ) { openURL("tel:\(sanitize(replyPhone))") }
+                    }
+                    if isEmail {
+                        replyButton(
+                            title: L10n.t("بريد", "Email"),
+                            icon: "envelope.fill",
+                            color: DS.Color.info
+                        ) { showEmailComposer = true }
+                    }
+                }
+            }
+        }
+    }
+
+    private func preferredContactRow(_ preferred: String, isEmail: Bool) -> some View {
+        Button {
+            UIPasteboard.general.string = preferred
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: isEmail ? "envelope.fill" : "phone.fill", tint: DS.Color.info)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("وسيلة التواصل", "Preferred contact"))
+                        .font(DS.Font.plex(12, weight: .heavy))
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Text(preferred)
+                        .font(DS.Font.plex(14.5))
+                        .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(1)
+                        .environment(\.layoutDirection, .leftToRight)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+            }
+            .dsRowBox()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        // رمز النسخ للعين فقط — القارئ الصوتي يعرف أن الضغط ينسخ
+        .accessibilityHint(L10n.t("ينسخ وسيلة التواصل", "Copies the contact"))
+    }
+
     private func replyButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
+                    .accessibilityHidden(true)
                 Text(title)
-                    .font(DS.Font.calloutBold)
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .foregroundColor(color)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.sm + 2)
-            .background(color.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .frame(height: 42)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(color.opacity(0.12)))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md)
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .strokeBorder(color.opacity(0.25), lineWidth: 1)
             )
+            // مساحة ضغط ٤٤ (توصية أبل) — الشكل والارتفاع في الصف كما هما
+            .frame(height: 44)
+            .contentShape(Rectangle())
+            .padding(.vertical, -1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     private func sanitize(_ phone: String) -> String {
@@ -820,6 +835,8 @@ struct ContactCategoryInfo {
 
 // MARK: - شيت الرد الرسمي (يُرسل من بريد العائلة عبر الخادم)
 
+/// «الرد بالبريد» — مربّع كتابة بنفس التصميم الموحّد (طلب المالك): المستلم ثم نص الرد،
+/// و«إرسال الرد» / «إغلاق» أسفل المربّع
 private struct OfficialReplySheet: View {
     let to: String
     let memberName: String
@@ -831,86 +848,79 @@ private struct OfficialReplySheet: View {
     @State private var isSending = false
     @State private var errorText: String?
     @State private var didSend = false
-    @FocusState private var focused: Bool
+
+    private var canSend: Bool {
+        !(isSending || didSend || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                        // المستلم
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "envelope.badge.fill")
-                                .foregroundColor(DS.Color.info)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(memberName.isEmpty ? L10n.t("العضو", "Member") : memberName)
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                Text(to)
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.textSecondary)
-                                    .environment(\.layoutDirection, .leftToRight)
-                            }
-                            Spacer()
-                        }
-                        .padding(DS.Spacing.md)
-                        .background(DS.Color.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-
-                        // نص الرد
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text(L10n.t("نص الرد", "Reply"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                            ZStack(alignment: .topLeading) {
-                                if replyText.isEmpty {
-                                    Text(L10n.t("اكتب ردّك هنا…", "Write your reply…"))
-                                        .font(DS.Font.body)
-                                        .foregroundColor(DS.Color.textTertiary)
-                                        .padding(.horizontal, DS.Spacing.md)
-                                        .padding(.vertical, DS.Spacing.md + 4)
-                                }
-                                TextEditor(text: $replyText)
-                                    .focused($focused)
-                                    .font(DS.Font.body)
-                                    .scrollContentBackground(.hidden)
-                                    .padding(DS.Spacing.sm)
-                                    .frame(minHeight: 150, maxHeight: 240)
-                            }
-                            .background(DS.Color.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                        }
-
-                        if let errorText {
-                            Text(errorText)
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.error)
-                        }
-
-                        DSPrimaryButton(didSend ? L10n.t("تم الإرسال", "Sent")
-                                                : L10n.t("إرسال الرد", "Send reply"),
-                                        icon: didSend ? "checkmark.circle.fill" : "paperplane.fill",
-                                        isLoading: isSending) {
-                            Task { await send() }
-                        }
-                        .disabled(isSending || didSend || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                    .padding(DS.Spacing.lg)
-                }
-            }
-            .navigationTitle(L10n.t("الرد بالبريد", "Email reply"))
-            .navigationBarTitleDisplayMode(.inline)
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                }
-            }
+        DSComposer(
+            title: L10n.t("الرد بالبريد", "Email reply"),
+            subtitle: memberName.isEmpty ? L10n.t("العضو", "Member") : memberName,
+            icon: "envelope.badge.fill",
+            tint: DS.Color.actionNavy,
+            actionTitle: didSend ? L10n.t("تم الإرسال", "Sent") : L10n.t("إرسال الرد", "Send reply"),
+            actionIcon: didSend ? "checkmark.circle.fill" : "paperplane.fill",
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: canSend,
+            isBusy: isSending,
+            // ردّ مكتوب لم يُرسل → «إغلاق» يسأل قبل التجاهل (توصية أبل)؛ بعد الإرسال لا سؤال
+            hasUnsavedChanges: !didSend && !replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            onSubmit: { Task { await send() } },
+            onCancel: { dismiss() }
+        ) {
+            recipientSection
+            replySection
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: المستلم
+
+    private var recipientSection: some View {
+        DSComposerSection(title: L10n.t("المستلم", "Recipient"),
+                          icon: "person.fill",
+                          tint: DS.Color.info,
+                          index: 0) {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "envelope.badge.fill", tint: DS.Color.info)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(memberName.isEmpty ? L10n.t("العضو", "Member") : memberName)
+                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+                    Text(to)
+                        .font(DS.Font.plex(12))
+                        .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(1)
+                        .environment(\.layoutDirection, .leftToRight)
+                }
+                Spacer(minLength: 0)
+            }
+            .dsRowBox()
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    // MARK: نص الرد
+
+    private var replySection: some View {
+        DSComposerSection(title: L10n.t("الرد على العضو", "Reply to member"),
+                          icon: "arrowshape.turn.up.left.fill",
+                          tint: DS.Color.primary,
+                          index: 1) {
+            ReplyComposerField(label: L10n.t("نص الرد", "Reply"),
+                               placeholder: L10n.t("اكتب ردّك هنا…", "Write your reply…"),
+                               text: $replyText)
+
+            if let errorText {
+                Text(errorText)
+                    .font(DS.Font.plex(12, weight: .semibold))
+                    .foregroundColor(DS.Color.error)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     @MainActor
@@ -941,5 +951,46 @@ private struct OfficialReplySheet: View {
             Log.error("[AdminReply] فشل إرسال الرد: \(error.localizedDescription)")
             errorText = L10n.t("تعذّر إرسال الرد. حاول مرة أخرى.", "Could not send the reply. Try again.")
         }
+    }
+}
+
+/// حقل نص الرد — بنفس شكل `DSComposerField` لكنه أطول (يبدأ بستة أسطر)،
+/// فالرد البريدي يحتاج مساحة كتابة مثل محرّر النص السابق
+private struct ReplyComposerField: View {
+    let label: String
+    let placeholder: String
+    @Binding var text: String
+    var tint: Color = DS.Color.primary
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(focused ? .white : tint)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(focused ? tint : tint.opacity(0.12)))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(focused ? tint : DS.Color.fieldLabel)
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .lineLimit(6...12)
+                    .font(DS.Font.plex(14.5))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .focused($focused)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .strokeBorder(focused ? tint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
+                          lineWidth: focused ? 1.5 : 1))
+        .contentShape(Rectangle())
+        .onTapGesture { focused = true }
+        .animation(.easeInOut(duration: 0.2), value: focused)
     }
 }

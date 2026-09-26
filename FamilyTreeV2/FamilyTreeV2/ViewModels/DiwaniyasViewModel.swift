@@ -115,7 +115,7 @@ class DiwaniyasViewModel: ObservableObject {
         isLoading = false
     }
     
-    func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, address: String? = nil, autoApprove: Bool = false) async -> Bool {
+    func addDiwaniya(ownerId: UUID, ownerName: String, title: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, address: String? = nil, kind: DiwaniyaKind = .diwaniya, autoApprove: Bool = false) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -172,6 +172,14 @@ class DiwaniyasViewModel: ObservableObject {
                     struct DaysUpdate: Codable { let schedule_days: [Int] }
                     try await supabase.from("diwaniyas").update(DaysUpdate(schedule_days: scheduleDays.sorted())).eq("id", value: newId.uuidString).execute()
                 } catch { Log.warning("schedule_days column not available: \(error.localizedDescription)") }
+            }
+
+            // النوع (ديوانية/حسينية) — عمود جديد، يُحدَّث على حدة فلا يُفشل الإضافة
+            if kind != .diwaniya {
+                do {
+                    struct KindUpdate: Codable { let kind: String }
+                    try await supabase.from("diwaniyas").update(KindUpdate(kind: kind.rawValue)).eq("id", value: newId.uuidString).execute()
+                } catch { Log.warning("kind column not available: \(error.localizedDescription)") }
             }
 
             // Refresh the list so the new diwaniya appears
@@ -281,7 +289,7 @@ class DiwaniyasViewModel: ObservableObject {
         })
     }
     
-    func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool) async -> Bool {
+    func updateDiwaniya(id: UUID, title: String, ownerName: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, address: String?, isClosed: Bool, kind: DiwaniyaKind? = nil) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedOwner = ownerName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -321,6 +329,13 @@ class DiwaniyasViewModel: ObservableObject {
                     struct DaysUpdate: Codable { let schedule_days: [Int] }
                     try await supabase.from("diwaniyas").update(DaysUpdate(schedule_days: scheduleDays.sorted())).eq("id", value: id.uuidString).execute()
                 } catch { Log.warning("schedule_days column not available: \(error.localizedDescription)") }
+            }
+
+            if let kind {
+                do {
+                    struct KindUpdate: Codable { let kind: String }
+                    try await supabase.from("diwaniyas").update(KindUpdate(kind: kind.rawValue)).eq("id", value: id.uuidString).execute()
+                } catch { Log.warning("kind column not available: \(error.localizedDescription)") }
             }
 
             

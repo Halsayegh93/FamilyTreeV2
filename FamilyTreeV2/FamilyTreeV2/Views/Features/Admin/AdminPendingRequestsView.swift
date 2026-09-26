@@ -157,12 +157,12 @@ struct AdminPendingRequestsView: View {
         }
         .navigationTitle(L10n.t("طلبات الربط", "Link Requests"))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .sheet(item: $memberToLink) { member in
+        .dsTallBox(item: $memberToLink) { member in   // قائمة أعضاء طويلة (توصية أبل)
             LinkToExistingMemberSheet(pendingMember: member)
                 .environmentObject(memberVM)
                 .environmentObject(adminRequestVM)
         }
-        .sheet(item: $phoneEditMember) { member in
+        .dsCenterBox(item: $phoneEditMember) { member in
             PendingMemberPhoneSheet(member: member)
                 .environmentObject(adminRequestVM)
         }
@@ -695,17 +695,35 @@ struct AdminPendingRequestsView: View {
 }
 
 // MARK: - ربط مباشر بعضو موجود بالشجرة (swipe right)
+
+/// عدد الأعضاء الظاهرين في قائمة الربط قبل «عرض المزيد» — صفوف عادية لا قائمة كسولة
+/// حتى يُقاس ارتفاع المربّع كاملاً (نفس ملاحظة مربّعات الاختيار)
+private let linkCandidatesPageSize = 40
+
+/// صورة الحرف الأول للعضو في صفوف المربّعات (بحجم أيقونة الحقل)
+private func memberInitialBadge(_ name: String, tint: Color) -> some View {
+    Text(name.prefix(1))
+        .font(DS.Font.plex(14, weight: .bold))
+        .foregroundColor(tint)
+        .frame(width: 32, height: 32)
+        .background(Circle().fill(tint.opacity(0.14)))
+}
+
+/// «ربط بعضو موجود» — نفس تصميم المربّعات الموحّد (طلب المالك): رأس كحلي، الحساب المعلّق
+/// ثم البحث في أعضاء الشجرة، و«ربط» / «إلغاء» أسفل المربّع
 struct LinkToExistingMemberSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
-    @FocusState private var searchFocused: Bool
+    /// «تقليل الحركة» (توصية أبل): صف المختار يظهر بتلاشٍ فقط بلا انزلاق ولا تكبير
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let pendingMember: FamilyMember
 
     @State private var searchText = ""
     @State private var selectedMember: FamilyMember? = nil
     @State private var showConfirm = false
+    @State private var displayLimit = linkCandidatesPageSize
 
     private var candidates: [FamilyMember] {
         let all = memberVM.allMembers.filter {
@@ -718,158 +736,27 @@ struct LinkToExistingMemberSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    // بطاقة العضو المعلق
-                    VStack(spacing: DS.Spacing.xs) {
-                        HStack(spacing: DS.Spacing.md) {
-                            ZStack {
-                                Circle()
-                                    .fill(DS.Color.warning.opacity(0.15))
-                                    .frame(width: 46, height: 46)
-                                Text(pendingMember.fullName.prefix(1))
-                                    .font(DS.Font.scaled(20, weight: .bold))
-                                    .foregroundColor(DS.Color.warning)
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("سيتم ربط حساب:", "Linking account:"))
-                                    .font(DS.Font.caption2)
-                                    .foregroundColor(DS.Color.textTertiary)
-                                Text(pendingMember.displayFullName)
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
-                            }
-                            Spacer()
-                        }
-
-                        if let selected = selectedMember {
-                            HStack(spacing: DS.Spacing.sm) {
-                                Image(systemName: "arrow.down")
-                                    .font(DS.Font.scaled(12, weight: .bold))
-                                    .foregroundColor(DS.Color.success)
-                                Text(L10n.t("سيُربط بـ", "Will link to"))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.textSecondary)
-                                Text(selected.displayFullName)
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.success)
-                                    .lineLimit(1)
-                                Spacer()
-                                Button {
-                                    withAnimation(DS.Anim.snappy) { selectedMember = nil }
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(DS.Color.textTertiary)
-                                }
-                            }
-                            .padding(DS.Spacing.sm)
-                            .background(DS.Color.success.opacity(0.08))
-                            .cornerRadius(DS.Radius.md)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-                    }
-                    .padding(DS.Spacing.lg)
-                    .background(DS.Color.surface)
-
-                    // حقل البحث
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(searchFocused ? DS.Color.primary : DS.Color.textTertiary)
-                        TextField(L10n.t("ابحث عن عضو...", "Search member..."), text: $searchText)
-                            .focused($searchFocused)
-                        if !searchText.isEmpty {
-                            Button { searchText = "" } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-                        }
-                    }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surface)
-                    .cornerRadius(DS.Radius.lg)
-                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg)
-                        .stroke(searchFocused ? DS.Color.primary : DS.Color.inactiveBorder, lineWidth: searchFocused ? 2 : 1))
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
-
-                    // القائمة
-                    List {
-                        ForEach(candidates) { member in
-                            let isSelected = selectedMember?.id == member.id
-                            Button {
-                                withAnimation(DS.Anim.snappy) {
-                                    selectedMember = isSelected ? nil : member
-                                }
-                            } label: {
-                                HStack(spacing: DS.Spacing.md) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(isSelected ? DS.Color.success.opacity(0.15) : DS.Color.primary.opacity(0.08))
-                                            .frame(width: 38, height: 38)
-                                        if isSelected {
-                                            Image(systemName: "checkmark")
-                                                .font(DS.Font.scaled(14, weight: .bold))
-                                                .foregroundColor(DS.Color.success)
-                                        } else {
-                                            Text(member.fullName.prefix(1))
-                                                .font(DS.Font.scaled(16, weight: .bold))
-                                                .foregroundColor(DS.Color.primary)
-                                        }
-                                    }
-                                    Text(member.displayFullName)
-                                        .font(DS.Font.callout)
-                                        .foregroundColor(DS.Color.textPrimary)
-                                        .lineLimit(2)
-                                    Spacer()
-                                    if isSelected {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(DS.Color.gradientPrimary)
-                                            .transition(.scale.combined(with: .opacity))
-                                    }
-                                }
-                                .padding(.vertical, DS.Spacing.xs)
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                            .listRowBackground(
-                                isSelected ? DS.Color.success.opacity(0.05) : Color.clear
-                            )
-                            .listRowSeparator(isSelected ? .hidden : .visible)
-                        }
-                    }
-                    .listStyle(.plain)
-
-                    // زر الربط
-                    DSPrimaryButton(
-                        L10n.t("ربط بهذا العضو", "Link to This Member"),
-                        icon: "link.badge.plus",
-                        isLoading: adminRequestVM.isLoading
-                    ) {
-                        showConfirm = true
-                    }
-                    .disabled(selectedMember == nil || adminRequestVM.isLoading)
-                    .opacity(selectedMember == nil ? 0.5 : 1.0)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.surface)
-                }
-            }
-            .navigationTitle(L10n.t("ربط بعضو موجود", "Link to Existing Member"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(20))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
-            }
-            .animation(DS.Anim.snappy, value: selectedMember?.id)
+        DSComposer(
+            title: L10n.t("ربط بعضو موجود", "Link to Existing Member"),
+            subtitle: pendingMember.displayFullName,
+            icon: "link.badge.plus",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("ربط", "Link"),
+            actionIcon: "link",
+            canSubmit: selectedMember != nil,
+            isBusy: adminRequestVM.isLoading,
+            // عضو مختار ولم يُربط بعد → «إلغاء» يسأل قبل التجاهل (توصية أبل)
+            hasUnsavedChanges: selectedMember != nil,
+            onSubmit: { showConfirm = true },
+            onCancel: { dismiss() }
+        ) {
+            accountSection
+            candidatesSection
         }
+        .animation(DS.Anim.snappy, value: selectedMember?.id)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        // بحث جديد → نبدأ من أول النتائج
+        .onChange(of: searchText) { _ in displayLimit = linkCandidatesPageSize }
         .dsAlert(
             L10n.t("تأكيد الربط", "Confirm Link"),
             isPresented: $showConfirm
@@ -894,9 +781,176 @@ struct LinkToExistingMemberSheet: View {
             }
         }
     }
+
+    // MARK: الحساب المعلّق + العضو المختار
+
+    private var accountSection: some View {
+        DSComposerSection(title: L10n.t("الحساب المعلّق", "Pending Account"),
+                          icon: "person.fill",
+                          tint: DS.Color.warning,
+                          index: 0) {
+            HStack(spacing: DS.Spacing.sm) {
+                memberInitialBadge(pendingMember.fullName, tint: DS.Color.warning)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("سيتم ربط حساب:", "Linking account:"))
+                        .font(DS.Font.plex(12, weight: .heavy))
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Text(pendingMember.displayFullName)
+                        .font(DS.Font.plex(14.5))
+                        .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+            }
+            .dsRowBox()
+            .accessibilityElement(children: .combine)
+
+            if let selected = selectedMember {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSFieldIcon(name: "arrow.down", tint: DS.Color.success)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("سيُربط بـ", "Will link to"))
+                            .font(DS.Font.plex(12, weight: .heavy))
+                            .foregroundColor(DS.Color.fieldLabel)
+                        Text(selected.displayFullName)
+                            .font(DS.Font.plex(14.5, weight: .bold))
+                            .foregroundColor(DS.Color.success)
+                            .lineLimit(2)
+                    }
+                    .accessibilityElement(children: .combine)
+                    Spacer(minLength: 0)
+                    Button {
+                        withAnimation(DS.Anim.snappy) { selectedMember = nil }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(DS.Color.textTertiary)
+                            // مساحة ضغط ٤٤ (توصية أبل) — الرمز وحجم الصف كما هما
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                            .padding(-12)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("إلغاء الاختيار", "Clear selection"))
+                }
+                .dsRowBox()
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+            }
+        }
+    }
+
+    // MARK: البحث + أعضاء الشجرة
+
+    private var candidatesSection: some View {
+        let list = candidates
+        let visible = Array(list.prefix(displayLimit))
+        return DSComposerSection(title: L10n.t("أعضاء الشجرة", "Tree Members"),
+                                 icon: "person.3.fill",
+                                 tint: DS.Color.primary,
+                                 index: 1) {
+            DSComposerField(icon: "magnifyingglass",
+                            label: L10n.t("بحث", "Search"),
+                            placeholder: L10n.t("ابحث عن عضو...", "Search member..."),
+                            text: $searchText)
+                .overlay(alignment: .trailing) { clearSearchButton }
+
+            ForEach(visible) { member in
+                candidateRow(member)
+            }
+
+            if list.count > visible.count {
+                showMoreButton(remaining: list.count - visible.count)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var clearSearchButton: some View {
+        if !searchText.isEmpty {
+            Button { searchText = "" } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(DS.Color.textTertiary)
+                    // مساحة ضغط ٤٤ (توصية أبل) بلا هامش — الرمز في نفس موضعه (كان ٣٦ + هامش ٤)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
+        }
+    }
+
+    private func candidateRow(_ member: FamilyMember) -> some View {
+        let isSelected = selectedMember?.id == member.id
+        return Button {
+            withAnimation(DS.Anim.snappy) {
+                selectedMember = isSelected ? nil : member
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Group {
+                    if isSelected {
+                        DSFieldIcon(name: "checkmark", tint: DS.Color.success)
+                    } else {
+                        memberInitialBadge(member.fullName, tint: DS.Color.primary)
+                    }
+                }
+                .accessibilityHidden(true)
+                Text(member.displayFullName)
+                    .font(DS.Font.plex(14.5, weight: isSelected ? .bold : .regular))
+                    .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(DS.Color.success)
+                        // «تقليل الحركة»: تلاشٍ فقط بلا تكبير
+                        .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+                        .accessibilityHidden(true)
+                }
+            }
+            .dsRowBox()
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(DS.Color.success.opacity(isSelected ? 0.55 : 0), lineWidth: 1.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func showMoreButton(remaining: Int) -> some View {
+        Button {
+            withAnimation(DS.Anim.snappy) { displayLimit += linkCandidatesPageSize }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .accessibilityHidden(true)
+                Text(L10n.t(
+                    "عرض المزيد (\(remaining) متبقي)",
+                    "Show more (\(remaining) remaining)"
+                ))
+                .font(DS.Font.plex(12.5, weight: .bold))
+            }
+            .foregroundColor(DS.Color.primary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.xs)
+            .frame(minHeight: 44)   // مساحة ضغط ٤٤ (توصية أبل) — النص كما هو
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
 }
 
-// MARK: - شيت تعديل / إضافة رقم فعلي لعضو معلّق
+// MARK: - مربّع تعديل / إضافة رقم فعلي لعضو معلّق
+/// نفس تصميم المربّعات الموحّد (طلب المالك): رأس كحلي، العضو ثم الرقم الجديد،
+/// و«حفظ» / «إلغاء» أسفل المربّع
 struct PendingMemberPhoneSheet: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) private var dismiss
@@ -914,92 +968,103 @@ struct PendingMemberPhoneSheet: View {
         !localDigits.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !adminRequestVM.isLoading
     }
 
+    /// الرقم الذي يُفتح عليه المربّع (نفس تعبئة onAppear) — للمقارنة بما أُدخل
+    private var start: (country: KuwaitPhone.Country, localDigits: String) {
+        KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
+    }
+
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
+        DSComposer(
+            title: L10n.t("رقم العضو", "Member Number"),
+            subtitle: member.displayFullName,
+            icon: "phone.badge.plus",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("حفظ", "Save"),
+            canSubmit: canSave,
+            isBusy: adminRequestVM.isLoading,
+            // رقم أو دولة مختلفة عمّا فُتح عليه → «إلغاء» يسأل قبل التجاهل (توصية أبل)
+            hasUnsavedChanges: localDigits != start.localDigits || selectedCountry != start.country,
+            onSubmit: { save() },
+            onCancel: { dismiss() }
+        ) {
+            memberSection
+            numberSection
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onAppear {
+            let detected = start
+            selectedCountry = detected.country
+            localDigits = detected.localDigits
+            focused = true
+        }
+    }
 
-                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-                    // العضو
-                    HStack(spacing: DS.Spacing.md) {
-                        ZStack {
-                            Circle()
-                                .fill(DS.Color.warning.opacity(0.15))
-                                .frame(width: 46, height: 46)
-                            Text(member.fullName.prefix(1))
-                                .font(DS.Font.scaled(20, weight: .bold))
-                                .foregroundColor(DS.Color.warning)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(member.displayFullName)
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Text(L10n.t("الرقم الحالي: ", "Current: ") + KuwaitPhone.display(member.phoneNumber))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surface)
-                    .cornerRadius(DS.Radius.lg)
+    // MARK: العضو
 
-                    // الدولة + الرقم المحلي
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.t("الرقم الفعلي الجديد", "New real number"))
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
-
-                        DSPhoneField(
-                            country: $selectedCountry,
-                            digits: $localDigits,
-                            placeholder: String(repeating: "X", count: selectedCountry.maxDigits)
-                        )
-                    }
-
-                    Text(activateOnSave
-                         ? L10n.t(
-                            "سيُضاف الرقم ويُفعّل الحساب مباشرة بعد الحفظ.",
-                            "The number will be added and the account activated right after saving.")
-                         : L10n.t(
-                            "يُحدَّث رقم العضو فقط — يبقى الطلب معلّقاً لتربطه بالشجرة أو ترفضه لاحقاً.",
-                            "Only updates the member's number — the request stays pending so you can link or reject it later."))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textTertiary)
-
-                    if let errorBanner {
-                        Text(errorBanner)
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.error)
-                    }
-
-                    Spacer()
+    private var memberSection: some View {
+        DSComposerSection(title: L10n.t("العضو", "Member"),
+                          icon: "person.fill",
+                          tint: DS.Color.warning,
+                          index: 0) {
+            HStack(spacing: DS.Spacing.sm) {
+                memberInitialBadge(member.fullName, tint: DS.Color.warning)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(member.displayFullName)
+                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+                    // الرقم معزول باتجاه LTR — بدونه يظهر في السطر العربي «50011223 965+»
+                    Text(L10n.t("الرقم الحالي: ", "Current: ")
+                         + "\u{2066}" + KuwaitPhone.display(member.phoneNumber) + "\u{2069}")
+                        .font(DS.Font.plex(12))
+                        .foregroundColor(DS.Color.fieldValue)
                 }
-                .padding(DS.Spacing.lg)
+                Spacer(minLength: 0)
             }
-            .navigationTitle(L10n.t("رقم العضو", "Member Number"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .disabled(adminRequestVM.isLoading)
-                }
-                ToolbarItem(placement: DSToolbar.confirmPlacement) {
-                    Button(L10n.t("حفظ", "Save")) { save() }
-                        .fontWeight(.bold)
-                        .disabled(!canSave)
-                }
+            .dsRowBox()
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    // MARK: الرقم الجديد (الدولة + الرقم المحلي)
+
+    private var numberSection: some View {
+        DSComposerSection(title: L10n.t("الرقم الفعلي الجديد", "New real number"),
+                          icon: "number",
+                          tint: DS.Color.success,
+                          index: 1) {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "phone.fill", tint: DS.Color.success)
+                    .accessibilityHidden(true)
+                DSPhoneField(
+                    country: $selectedCountry,
+                    digits: $localDigits,
+                    placeholder: String(repeating: "X", count: selectedCountry.maxDigits),
+                    compact: true,
+                    bordered: false
+                )
             }
-            .onAppear {
-                let detected = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
-                selectedCountry = detected.country
-                localDigits = detected.localDigits
-                focused = true
+            .dsRowBox()
+
+            Text(activateOnSave
+                 ? L10n.t(
+                    "سيُضاف الرقم ويُفعّل الحساب مباشرة بعد الحفظ.",
+                    "The number will be added and the account activated right after saving.")
+                 : L10n.t(
+                    "يُحدَّث رقم العضو فقط — يبقى الطلب معلّقاً لتربطه بالشجرة أو ترفضه لاحقاً.",
+                    "Only updates the member's number — the request stays pending so you can link or reject it later."))
+                .font(DS.Font.plex(11.5))
+                .foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let errorBanner {
+                Text(errorBanner)
+                    .font(DS.Font.plex(12, weight: .semibold))
+                    .foregroundColor(DS.Color.error)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private func save() {
@@ -1020,4 +1085,3 @@ struct PendingMemberPhoneSheet: View {
         }
     }
 }
-

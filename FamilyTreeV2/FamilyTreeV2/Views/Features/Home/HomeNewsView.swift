@@ -18,10 +18,16 @@ struct HomeNewsView: View {
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
     @State private var showingNotifications = false
+    /// «التواصل» مربّع بمنتصف الشاشة (بدل الصفحة الفرعية)
+    @State private var showingContactForm = false
     @State private var selectedNewsForComments: NewsPost? = nil
     @State private var postToDelete: NewsPost? = nil
     @State private var postToReport: NewsPost? = nil
     @State private var newsReportReason = ""
+    @State private var newsReportSent = false
+    /// حظر ناشر الخبر (Guideline 1.2) — أخبار المحظورين لا تظهر للحاظر
+    @State private var blockTarget: BlockTarget? = nil
+    @ObservedObject private var blockedStore = BlockedMembersStore.shared
     @State private var postToEdit: NewsPost? = nil
     @State private var showNewNewsAlert = false
     @State private var newNewsCount = 0
@@ -141,12 +147,14 @@ struct HomeNewsView: View {
         // Deep-link من push خارجي لطلب انضمام — يفتح مركز الإشعارات تلقائياً
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
             if activeSubPage != nil { activeSubPage = nil }
+            showingContactForm = false   // مربّع التواصل مفتوح؟ يُغلق حتى يظهر مركز الإشعارات
             showingNotifications = true
         }
         // Safety net — لو الـ event وصل قبل ما الـ view يكون mounted
         .onChange(of: notificationVM.pendingJoinDeepLinkRequestId) { newValue in
             guard newValue != nil else { return }
             if activeSubPage != nil { activeSubPage = nil }
+            showingContactForm = false
             showingNotifications = true
         }
         .sheet(isPresented: $showingNotifications) {
@@ -154,6 +162,10 @@ struct HomeNewsView: View {
                 NotificationsCenterView()
             }
             .presentationDragIndicator(.visible)
+        }
+        // التواصل مع الإدارة — مربّع بمنتصف الشاشة لا صفحة فرعية (طلب المالك)
+        .dsCenterBox(isPresented: $showingContactForm) {
+            MemberContactFormView()
         }
         .task {
             // جلب المشاريع لعرض البطاقة الفاخرة بأحدث مشروع (مع كاش داخلي)
@@ -218,15 +230,12 @@ struct HomeNewsView: View {
         .transaction { t in
             if showingAddNews { t.disablesAnimations = true }
         }
-        .sheet(item: $selectedNewsForComments) { news in
+        // التعليقات مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
+        .dsTallBox(item: $selectedNewsForComments) { news in   // محادثة — مربّع طويل (توصية أبل)
             NewsCommentsSheet(news: news)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
         }
-        .sheet(item: $postToEdit) { news in
+        .dsCenterBox(item: $postToEdit) { news in
             EditNewsView(news: news)
-                .presentationDetents([.fraction(0.5), .medium, .large])
-                .presentationDragIndicator(.visible)
         }
         .dsAlert(L10n.t("حذف الخبر", "Delete Post"), isPresented: Binding(
             get: { postToDelete != nil },
@@ -247,10 +256,11 @@ struct HomeNewsView: View {
                 let reason = newsReportReason.trimmingCharacters(in: .whitespacesAndNewlines)
                 if let post = postToReport {
                     Task {
-                        await newsVM.reportNewsPost(
+                        let ok = await newsVM.reportNewsPost(
                             postId: post.id,
                             reason: reason.isEmpty ? "بلاغ على محتوى خبر" : reason
                         )
+                        if ok { await MainActor.run { newsReportSent = true } }
                     }
                 }
                 postToReport = nil
@@ -259,6 +269,14 @@ struct HomeNewsView: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToReport = nil; newsReportReason = "" }
         } message: { Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا الخبر.",
                                 "Enter a reason; it will be sent to the admins to review this post.")) }
+        .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $newsReportSent) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة وستتم مراجعته خلال ٢٤ ساعة.",
+                        "Thank you — your report reached the admins and will be reviewed within 24 hours."))
+        }
+        // حظر ناشر الخبر — نفس رسائل «إبلاغ» (بلاغ تلقائي للإدارة)
+        .dsBlockMemberFlow(target: $blockTarget)
         .fullScreenCover(item: $selectedMemberForDetails) { member in
             MemberDetailsView(member: member, centered: true)
                 .background(ClearPresentationBackground())
@@ -478,7 +496,7 @@ struct HomeNewsView: View {
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
-                action: { activeSubPage = .contact }
+                action: { showingContactForm = true }
             )
         }
     }
@@ -721,7 +739,7 @@ struct HomeNewsView: View {
                 newsLoadingSkeleton(count: 3)
                     .padding(.horizontal, DS.Spacing.lg)
                     .transition(.opacity)
-            } else if newsVM.allNews.isEmpty {
+            } else if filteredNews.isEmpty {
                 if newsVM.newsLoadError == nil {
                     if !debouncedNewsSearch.isEmpty {
                         Text(L10n.t("لا توجد نتائج لهذا البحث", "No results for this search"))
@@ -789,7 +807,31 @@ struct HomeNewsView: View {
         }
     }
 
-    private var filteredNews: [NewsPost] { newsVM.allNews }
+    /// الأخبار بلا منشورات من حظرهم المستخدم (منشور الإدارة بلا كاتب لا يُخفى)
+    private var filteredNews: [NewsPost] {
+        guard !blockedStore.entries.isEmpty else { return newsVM.allNews }
+        return newsVM.allNews.filter { !isFromBlockedAuthor($0) }
+    }
+
+    private func isFromBlockedAuthor(_ news: NewsPost) -> Bool {
+        guard let authorId = news.author_id else { return false }
+        return blockedStore.isBlocked(id: authorId, name: news.author_name)
+    }
+
+    /// عدد التعليقات الظاهرة — عدد السيرفر ناقص تعليقات المحظورين المعروفة (إن حُمّلت)
+    private func visibleCommentCount(for news: NewsPost) -> Int {
+        let serverCount = newsVM.commentsCountByPost[news.id] ?? 0
+        guard !blockedStore.entries.isEmpty, let loaded = newsVM.commentsByPost[news.id] else { return serverCount }
+        let hidden = loaded.filter { blockedStore.isBlocked(id: $0.author_id, name: $0.author_name) }.count
+        return max(0, serverCount - hidden)
+    }
+
+    /// حظر ناشر الخبر — لغير منشوراتي ولغير منشورات الإدارة بلا كاتب
+    private func canBlockAuthor(of news: NewsPost) -> Bool {
+        guard let authorId = news.author_id else { return false }
+        return !AccountIdentity.isMine(authorId, currentUser: authVM.currentUser)
+            && !AccountIdentity.isMine(news.ownerId, currentUser: authVM.currentUser)
+    }
 
 
     private var newsListView: some View {
@@ -867,7 +909,7 @@ struct HomeNewsView: View {
             pollVotes: newsVM.pollVotesByPost[news.id] ?? [:],
             selectedPollOption: newsVM.userVoteByPost[news.id],
             approvalStatus: news.approval_status,
-            commentCount: newsVM.commentsCountByPost[news.id] ?? 0,
+            commentCount: visibleCommentCount(for: news),
             likeCount: newsVM.likesCountByPost[news.id] ?? 0,
             isLiked: newsVM.likedPosts.contains(news.id),
             onCommentTap: { selectedNewsForComments = news },
@@ -883,7 +925,14 @@ struct HomeNewsView: View {
             onReportTap: { postToReport = news },
             onEditTap: { postToEdit = news },
             onMemberTap: { member in selectedMemberForDetails = member },
-            postDate: news.timestamp
+            postDate: news.timestamp,
+            // حظر الناشر بجانب «إبلاغ» (Guideline 1.2)
+            canBlock: canBlockAuthor(of: news),
+            onBlockTap: {
+                if let authorId = news.author_id {
+                    blockTarget = BlockTarget(id: authorId, name: news.author_name)
+                }
+            }
         )
     }
 

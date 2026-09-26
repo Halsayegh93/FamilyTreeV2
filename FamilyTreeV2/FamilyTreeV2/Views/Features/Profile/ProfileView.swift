@@ -28,11 +28,19 @@ struct ProfileView: View {
     @State private var showAddWife = false
     @State private var newWifeName = ""
     @State private var newWifeHidden = false
+    /// ما فُتح عليه مربّع «إضافة زوجة» (الاسم قد يأتي من البحث) — «إلغاء» يسأل فقط
+    /// إذا تغيّر شيء داخل المربّع (توصية أبل)
+    @State private var addWifeStartName = ""
+    @State private var addWifeStartHidden = false
+    /// «تقليل الحركة» من إعدادات الجهاز (توصية أبل): بلا انزلاق لقائمة الترتيب
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// خطأ إضافة الزوجة — كان الفشل صامتاً تماماً (النتيجة مُهمَلة).
     @State private var addWifeError: String? = nil
     // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة
     @State private var showWifeSource = false
     @State private var showWifePicker = false
+    /// عضو من «المفضلة» — تفاصيله بمربّع بالمنتصف مثل الشجرة (طلب المالك)
+    @State private var favoriteDetail: FamilyMember? = nil
     @State private var wifeCandidates: [FamilyMember] = []
     @State private var wifeSearch = ""
     @State private var isLoadingWifeCandidates = false
@@ -170,7 +178,10 @@ struct ProfileView: View {
                 NavigationStack { SettingsView() }
                     .environment(\.layoutDirection, langManager.layoutDirection)
             }
-            .sheet(isPresented: $showEditProfile) { if let c = user { EditProfileView(member: c).presentationDragIndicator(.visible) } }
+            // نموذج طويل فيه كتابة وتمرير — مربّع طويل من الأسفل (توصية أبل)
+            .dsTallBox(isPresented: $showEditProfile) {
+                if let c = user { EditProfileView(member: c) }
+            }
             .fullScreenCover(isPresented: $showAvatarPreview) {
                 if let c = user {
                     AvatarPreview(member: c) {
@@ -185,15 +196,21 @@ struct ProfileView: View {
                 // تظهر في مكانها بلا انزلاق من الأسفل
                 if showAvatarPreview { t.disablesAnimations = true }
             }
-            .sheet(isPresented: $showQRCode) {
+            // رمز QR — مربّع عرض بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
+            .dsCenterBox(isPresented: $showQRCode, onBackgroundTap: { showQRCode = false }) {
                 if let c = user {
                     QRCodeSheet(member: c, selectedTab: $selectedTab)
-                        .presentationDetents([.medium, .large])
-                        .presentationDragIndicator(.visible)
                 }
             }
             .fullScreenCover(isPresented: $showQRScanner) { QRScannerView(selectedTab: $selectedTab) }
-            .sheet(isPresented: $showAddChild) { if let c = user { AddChildSheet(member: c).presentationDragIndicator(.visible) } }
+            // إضافة/تعديل الأبناء مربّعات بمنتصف الشاشة بنفس تصميم الإضافة (طلب المالك)
+            .fullScreenCover(isPresented: $showAddChild) {
+                if let c = user {
+                    DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { AddChildSheet(member: c) }
+                        .background(ClearPresentationBackground())
+                }
+            }
+            .transaction { t in if showAddChild { t.disablesAnimations = true } }
             .confirmationDialog(
                 L10n.t("تسجيل الخروج", "Sign Out"),
                 isPresented: $showSignOutConfirm,
@@ -225,21 +242,32 @@ struct ProfileView: View {
                     "This request will be cancelled and won't be sent to the admins."
                 ))
             }
-            .sheet(item: $editingChild) { child in EditChildSheet(member: child).presentationDragIndicator(.visible) }
-            .sheet(item: $editingFamilyMember) { entry in
-                WomanMemberEditSheet(memberVM: memberVM, entry: entry)
-                    .presentationDragIndicator(.visible)
+            .fullScreenCover(item: $editingChild) { child in
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { EditChildSheet(member: child) }
+                    .background(ClearPresentationBackground())
             }
-            .sheet(isPresented: $showAddWife) { addWifeSheet }
-            .sheet(isPresented: $showWifePicker) {
+            .transaction { t in if editingChild != nil { t.disablesAnimations = true } }
+            // تعديل فرد من «عائلتي» — مربّع بمنتصف الشاشة بتصميم مربّعات الإضافة (طلب المالك)
+            .dsCenterBox(item: $editingFamilyMember) { entry in
+                WomanMemberEditSheet(memberVM: memberVM, entry: entry)
+            }
+            // إضافة زوجة واختيارها — مربّعات بمنتصف الشاشة (طلب المالك)
+            .dsCenterBox(isPresented: $showAddWife) { addWifeSheet }
+            .dsCenterBox(isPresented: $showWifePicker) {
                 wifePickerSheet
-                    // التحميل بعد ظهور الشيت — فتُبنى القائمة على بيانات حاضرة
+                    // التحميل بعد ظهور المربّع — فتُبنى القائمة على بيانات حاضرة
                     .task {
                         isLoadingWifeCandidates = true
                         wifeCandidates = await loadWifeCandidates()
                         isLoadingWifeCandidates = false
                     }
             }
+            // تفاصيل عضو من «المفضلة» — نفس مربّع الشجرة القابل للتوسّع
+            .fullScreenCover(item: $favoriteDetail) { m in
+                MemberDetailsView(member: m, centered: true)
+                    .background(ClearPresentationBackground())
+            }
+            .transaction { t in if favoriteDetail != nil { t.disablesAnimations = true } }
             .onChange(of: showAddChild) { isPresented in
                 guard !isPresented, let currentUser = user else { return }
                 Task {
@@ -589,7 +617,7 @@ struct ProfileView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: DS.Spacing.md) {
                         ForEach(favMembers, id: \.id) { member in
-                            NavigationLink(destination: MemberDetailsView(member: member)) {
+                            Button { favoriteDetail = member } label: {
                                 VStack(spacing: DS.Spacing.xs) {
                                     DSMemberAvatar(name: member.firstName, avatarUrl: member.avatarUrl, size: 50, roleColor: member.roleColor)
 
@@ -601,6 +629,9 @@ struct ProfileView: View {
                                 }
                                 .frame(width: 60)
                             }
+                            // القارئ الصوتي: الاسم وحده (بلا حرف الصورة البديلة)
+                            .accessibilityLabel(member.firstName)
+                            .accessibilityHint(L10n.t("عرض التفاصيل", "Show details"))
                         }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
@@ -793,6 +824,11 @@ struct ProfileView: View {
                                 (isReorderingChildren ? DS.Color.success : DS.Color.primary).opacity(0.1)
                             )
                             .clipShape(Capsule())
+                            // مساحة ضغط ٤٤ نقطة (حد أبل): الحشو يوسّع منطقة الضغط والسالب
+                            // يعيد الحجم كما كان — فلا تتغيّر الحبّة ولا ارتفاع رأس القسم
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                            .padding(.vertical, -10)
                         }
                         .buttonStyle(.plain)
                         .padding(.trailing, DS.Spacing.lg)
@@ -832,6 +868,7 @@ struct ProfileView: View {
                     .frame(width: 36, height: 36)
                     .background(color.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                    .accessibilityHidden(true)   // زخرفة — العنوان يكفي للقارئ الصوتي
                 Text(title).font(DS.Font.caption1).fontWeight(.bold).foregroundColor(color).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -853,8 +890,16 @@ struct ProfileView: View {
         Button { editingFamilyMember = entry } label: { womanFamilyGridCell(entry: entry) }
             .buttonStyle(PlainButtonStyle())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName)
+            .accessibilityLabel(familyMemberAccessibilityLabel(entry))
             .accessibilityHint(L10n.t("تعديل", "Edit"))
+    }
+
+    /// القارئ الصوتي: الاسم + الدور (أم/زوجة) + «متوفى» — نفس ما تعرضه الخلية
+    private func familyMemberAccessibilityLabel(_ entry: WomenFamilyEntry) -> String {
+        var parts = [entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName]
+        if entry.role != .child { parts.append(L10n.t(entry.role.label, entry.role.labelEn)) }
+        if entry.member.isDeceased { parts.append(L10n.t("متوفى", "deceased")) }
+        return parts.joined(separator: L10n.t("، ", ", "))
     }
 
     private var childrenGridView: some View {
@@ -932,7 +977,8 @@ struct ProfileView: View {
                     Button { editingChild = son } label: { childGridCell(son: son) }
                         .buttonStyle(PlainButtonStyle())
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(son.firstName.isEmpty ? L10n.t("ابن بدون اسم", "Unnamed child") : son.firstName)
+                        .accessibilityLabel((son.firstName.isEmpty ? L10n.t("ابن بدون اسم", "Unnamed child") : son.firstName)
+                                            + ((son.isDeceased ?? false) ? L10n.t("، متوفى", ", deceased") : ""))
                         .accessibilityHint(L10n.t("تعديل", "Edit"))
                 }
                 if isCurrentUserMarried {
@@ -950,6 +996,7 @@ struct ProfileView: View {
                             .frame(width: 36, height: 36)
                             .background(DS.Color.primary.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                            .accessibilityHidden(true)   // زخرفة — العنوان يكفي للقارئ الصوتي
                         Text(L10n.t("إضافة ابن", "Add Child"))
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
@@ -1011,55 +1058,78 @@ struct ProfileView: View {
     /// إناث شجرة النساء المتاحات (بلا زوج) — مرشّحات «زوجة من العائلة».
     /// نموذج «إضافة زوجة بالاسم» — الاسم + خيار إخفائها من الشجرة.
     private var addWifeSheet: some View {
-        NavigationStack {
-            Form {
-                Section(L10n.t("الاسم", "Name")) {
-                    TextField(L10n.t("اسم الزوجة", "Wife's name"), text: $newWifeName)
-                        .font(DS.Font.body)
-                }
-                Section {
-                    Toggle(L10n.t("إخفاؤها من الشجرة", "Hide from the tree"), isOn: $newWifeHidden)
-                } footer: {
-                    Text(L10n.t("المخفيّة لا تظهر لأي أحد في الشجرة — تبقى مسجّلة عندك فقط.",
-                                "A hidden wife appears to no one in the tree — she stays recorded for you only."))
-                }
-                if let addWifeError {
-                    Section {
-                        Label(addWifeError, systemImage: "exclamationmark.triangle.fill")
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.error)
-                    }
-                }
-            }
-            .navigationTitle(L10n.t("إضافة زوجة", "Add Wife"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    DSToolbarCancelButton { showAddWife = false }
-                }
-                ToolbarItem(placement: DSToolbar.confirmPlacement) {
-                    Button(L10n.t("إضافة", "Add")) {
-                        let n = newWifeName, h = newWifeHidden
-                        addWifeError = nil
-                        Task {
-                            let ok = await memberVM.addSelfWife(name: n, hidden: h)
-                            await MainActor.run {
-                                if ok {
-                                    showAddWife = false
-                                } else {
-                                    // الشيت يبقى مفتوحاً مع سبب الفشل بدل اختفاء صامت
-                                    addWifeError = memberVM.errorMessage
-                                        ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
-                                }
-                            }
+        DSComposer(
+            title: L10n.t("إضافة زوجة", "Add Wife"),
+            subtitle: L10n.t("تُسجَّل في عائلتك", "Recorded in your family"),
+            icon: "person.crop.circle.badge.plus",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("إضافة", "Add"),
+            actionIcon: "plus",
+            canSubmit: !newWifeName.trimmingCharacters(in: .whitespaces).isEmpty,
+            // تغيّر الاسم أو الإخفاء عمّا فُتح عليه المربّع → «إلغاء» يسأل قبل التجاهل
+            hasUnsavedChanges: newWifeName != addWifeStartName || newWifeHidden != addWifeStartHidden,
+            onSubmit: {
+                let n = newWifeName, h = newWifeHidden
+                addWifeError = nil
+                Task {
+                    let ok = await memberVM.addSelfWife(name: n, hidden: h)
+                    await MainActor.run {
+                        if ok {
+                            showAddWife = false
+                        } else {
+                            // المربّع يبقى مفتوحاً مع سبب الفشل بدل اختفاء صامت
+                            addWifeError = memberVM.errorMessage
+                                ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
                         }
                     }
-                    .disabled(newWifeName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            },
+            onCancel: { showAddWife = false }
+        ) {
+            DSComposerSection(title: L10n.t("الاسم", "Name"), icon: "person.fill",
+                              tint: DS.Color.primary, index: 0) {
+                DSComposerField(icon: "person.fill",
+                                label: L10n.t("اسم الزوجة", "Wife's name"),
+                                placeholder: L10n.t("اسم الزوجة", "Wife's name"),
+                                text: $newWifeName)
+            }
+            DSComposerSection(title: L10n.t("الظهور", "Visibility"), icon: "eye.slash.fill",
+                              tint: DS.Color.accent, index: 1) {
+                VStack(spacing: DS.Spacing.sm) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        DSFieldIcon(name: "eye.slash.fill", tint: DS.Color.accent)
+                            .accessibilityHidden(true)
+                        Text(L10n.t("إخفاؤها من الشجرة", "Hide from the tree"))
+                            .font(DS.Font.plex(13.5, weight: .bold))
+                            .foregroundColor(DS.Color.fieldLabel)
+                            .accessibilityHidden(true)   // يُقرأ اسماً للمفتاح نفسه
+                        Spacer(minLength: DS.Spacing.sm)
+                        Toggle("", isOn: $newWifeHidden)
+                            .labelsHidden()
+                            .tint(DS.Color.primary)
+                            .accessibilityLabel(L10n.t("إخفاؤها من الشجرة", "Hide from the tree"))
+                    }
+                    .dsRowBox()
+                    Text(L10n.t("المخفيّة لا تظهر لأي أحد في الشجرة — تبقى مسجّلة عندك فقط.",
+                                "A hidden wife appears to no one in the tree — she stays recorded for you only."))
+                        .font(DS.Font.plex(11))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            if let addWifeError {
+                Label(addWifeError, systemImage: "exclamationmark.triangle.fill")
+                    .font(DS.Font.plex(12, weight: .semibold))
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .presentationDetents([.medium])
+        // نقطة البداية لمقارنة «تغييرات لم تُحفظ» — الاسم المعبّأ من البحث ليس تغييراً
+        .onAppear {
+            addWifeStartName = newWifeName
+            addWifeStartHidden = newWifeHidden
+        }
     }
 
     private func loadWifeCandidates() async -> [FamilyMember] {
@@ -1132,7 +1202,7 @@ struct ProfileView: View {
         Task { await memberVM.setSelfWife(wifeId: womanId) }
     }
 
-    /// شيت اختيار زوجة من العائلة (مع بحث).
+    /// مربّع اختيار زوجة من العائلة (مع بحث) — بمنتصف الشاشة (طلب المالك).
     private var wifePickerSheet: some View {
         // خصوصية: لا تُستعرض أسماء نساء العائلة. تظهر النتيجة فقط لمن يكتب
         // اسماً محدّداً بما يكفي (كلمتان فأكثر) — لا تصفّح ولا تعداد للقائمة.
@@ -1142,49 +1212,47 @@ struct ProfileView: View {
         let list = queryIsSpecific
             ? wifeCandidates.filter { $0.fullName.contains(query) }
             : []
-        return NavigationStack {
-            Group {
+        return DSComposer(
+            title: L10n.t("اختيار زوجة من العائلة", "Choose wife"),
+            subtitle: L10n.t("اكتب الاسم الرباعي الصحيح", "Type the full name"),
+            icon: "person.2.fill",
+            tint: DS.Color.actionNavy,
+            actionTitle: "",
+            showsAction: false,
+            canSubmit: false,
+            onSubmit: {},
+            onCancel: { showWifePicker = false; wifeSearch = "" }
+        ) {
+            DSComposerSection(title: L10n.t("البحث", "Search"), icon: "magnifyingglass",
+                              tint: DS.Color.primary, index: 0) {
+                DSComposerField(icon: "magnifyingglass",
+                                label: L10n.t("الاسم الرباعي", "Full name"),
+                                placeholder: L10n.t("اكتب الاسم الرباعي", "Type the full name"),
+                                text: $wifeSearch)
+            }
+            DSComposerSection(title: L10n.t("النتيجة", "Result"), icon: "person.crop.circle",
+                              tint: DS.Color.accent, index: 1) {
                 if isLoadingWifeCandidates {
-                    VStack(spacing: DS.Spacing.md) {
+                    HStack(spacing: DS.Spacing.sm) {
                         ProgressView()
                         Text(L10n.t("جارٍ التحميل…", "Loading…"))
-                            .font(DS.Font.callout)
+                            .font(DS.Font.plex(13))
                             .foregroundColor(DS.Color.textSecondary)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.md)
                 } else if !queryIsSpecific {
                     // الحالة الافتراضية: إرشاد بلا أي أسماء
-                    VStack(spacing: DS.Spacing.md) {
-                        Image(systemName: "magnifyingglass")
-                            .font(DS.Font.scaled(36, weight: .regular))
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(L10n.t("اكتب الاسم الرباعي الصحيح لزوجتك",
-                                    "Type your wife's full name"))
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("حفاظاً على الخصوصية لا تُعرض أسماء نساء العائلة — تظهر النتيجة عند كتابة الاسم كاملاً.",
-                                    "For privacy, family women aren't listed — results appear once you type the full name."))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, DS.Spacing.xl)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    wifePickerHint(icon: "magnifyingglass",
+                                   title: L10n.t("اكتب الاسم الرباعي الصحيح لزوجتك", "Type your wife's full name"),
+                                   detail: L10n.t("حفاظاً على الخصوصية لا تُعرض أسماء نساء العائلة — تظهر النتيجة عند كتابة الاسم كاملاً.",
+                                                  "For privacy, family women aren't listed — results appear once you type the full name."))
                 } else if list.isEmpty {
-                    VStack(spacing: DS.Spacing.md) {
-                        Image(systemName: "person.fill.questionmark")
-                            .font(DS.Font.scaled(36, weight: .regular))
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(L10n.t("ما لقينا اسماً مطابقاً", "No matching name"))
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("تأكّد من الاسم، أو أضفها بالاسم وتراجعها الإدارة.",
-                                    "Check the name, or add by name for admin review."))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, DS.Spacing.xl)
-
+                    VStack(spacing: DS.Spacing.sm) {
+                        wifePickerHint(icon: "person.fill.questionmark",
+                                       title: L10n.t("ما لقينا اسماً مطابقاً", "No matching name"),
+                                       detail: L10n.t("تأكّد من الاسم، أو أضفها بالاسم وتراجعها الإدارة.",
+                                                      "Check the name, or add by name for admin review."))
                         Button {
                             showWifePicker = false
                             newWifeName = query
@@ -1192,40 +1260,64 @@ struct ProfileView: View {
                                 showAddWife = true
                             }
                         } label: {
-                            Text(L10n.t("إضافة بالاسم", "Add by name"))
-                                .font(DS.Font.calloutBold)
+                            Label(L10n.t("إضافة بالاسم", "Add by name"), systemImage: "plus")
+                                .font(DS.Font.plex(14, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .background(DSActionFill.style(),
+                                            in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                         }
-                        .buttonStyle(.borderedProminent)
-                        .padding(.top, DS.Spacing.xs)
+                        .buttonStyle(DSScaleButtonStyle())
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List(list) { m in
-                        Button { linkWife(m.id) } label: {
-                            HStack(spacing: DS.Spacing.md) {
-                                wifePickerAvatar(m)
-                                Text(m.fullName.isEmpty ? m.firstName : m.displayFullName)
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                Spacer()
+                    VStack(spacing: DS.Spacing.sm) {
+                        ForEach(list) { m in
+                            let shownName = m.fullName.isEmpty ? m.firstName : m.displayFullName
+                            Button { linkWife(m.id) } label: {
+                                HStack(spacing: DS.Spacing.sm) {
+                                    wifePickerAvatar(m)
+                                    Text(shownName)
+                                        .font(DS.Font.plex(14, weight: .semibold))
+                                        .foregroundColor(DS.Color.fieldValue)
+                                        .multilineTextAlignment(.leading)
+                                    Spacer(minLength: 0)
+                                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(DS.Color.textTertiary)
+                                }
+                                .dsRowBox()
                             }
+                            .buttonStyle(DSScaleButtonStyle())
+                            // القارئ الصوتي: الاسم وحده (الصورة والسهم زخرفة)
+                            .accessibilityLabel(shownName)
+                            .accessibilityHint(L10n.t("ربطها زوجةً لك", "Link as your wife"))
                         }
                     }
-                }
-            }
-            .searchable(text: $wifeSearch,
-                        prompt: L10n.t("اكتب الاسم الرباعي", "Type the full name"))
-            .navigationTitle(L10n.t("اختيار زوجة من العائلة", "Choose wife"))
-            .navigationBarTitleDisplayMode(.inline)
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    DSToolbarCancelButton { showWifePicker = false; wifeSearch = "" }
                 }
             }
         }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .presentationDetents([.large])
+    }
+
+    /// إرشاد داخل مربّع اختيار الزوجة (بلا أي أسماء)
+    private func wifePickerHint(icon: String, title: String, detail: String) -> some View {
+        VStack(spacing: DS.Spacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 26, weight: .regular))
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityHidden(true)   // زخرفة
+            Text(title)
+                .font(DS.Font.plex(14, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
+                .multilineTextAlignment(.center)
+            Text(detail)
+                .font(DS.Font.plex(11.5))
+                .foregroundColor(DS.Color.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     private func wifePickerAvatar(_ m: FamilyMember) -> some View {
@@ -1340,7 +1432,8 @@ struct ProfileView: View {
             }
         }
         .padding(.vertical, DS.Spacing.xs)
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        // «تقليل الحركة»: تلاشٍ فقط بدل الانزلاق من الأعلى
+        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 
     /// صف ترتيب ابن (شجرة الرجال — يحفظ في profiles.sort_order).
@@ -1535,7 +1628,10 @@ struct WomanMemberEditSheet: View {
     @State private var isSaving = false
     @State private var showDeleteConfirm = false
     @State private var errorBanner: String? = nil
-    @State private var sheetHeight: CGFloat = 480
+
+    /// تاريخا الميلاد والوفاة كما فُتح المربّع («yyyy-MM-dd» أو nil) — لمقارنة التغييرات
+    private let startBirthKey: String?
+    private let startDeathKey: String?
 
     init(memberVM: MemberViewModel, entry: WomenFamilyEntry) {
         self.memberVM = memberVM
@@ -1548,196 +1644,191 @@ struct WomanMemberEditSheet: View {
         if let b = entry.member.birthDate, let d = f.date(from: b) {
             _hasBirthDate = State(initialValue: true)
             _birthDate = State(initialValue: d)
+            startBirthKey = Self.dayKey(d)
         } else {
             _hasBirthDate = State(initialValue: false)
             _birthDate = State(initialValue: Date())
+            startBirthKey = nil
         }
         if let dd = entry.member.deathDate, let d = f.date(from: dd) {
             _hasDeathDate = State(initialValue: true)
             _deathDate = State(initialValue: d)
+            startDeathKey = Self.dayKey(d)
         } else {
             _hasDeathDate = State(initialValue: false)
             _deathDate = State(initialValue: Date())
+            startDeathKey = nil
         }
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private static func dayKey(_ date: Date) -> String { dayFormatter.string(from: date) }
+
+    /// أي حقل يختلف عمّا فُتح عليه المربّع (أو صورة جديدة) — «إلغاء» يسأل قبل التجاهل
+    private var hasUnsavedChanges: Bool {
+        let m = entry.member
+        if selectedUIImage != nil { return true }
+        if name != m.firstName || isDeceased != m.isDeceased
+            || isHidden != m.isHiddenFromTree || selectedGender != m.gender { return true }
+        let birthKey = hasBirthDate ? Self.dayKey(birthDate) : nil
+        let deathKey = hasDeathDate ? Self.dayKey(deathDate) : nil
+        return birthKey != startBirthKey || deathKey != startDeathKey
     }
 
     private var roleTitle: String { L10n.t(entry.role.label, entry.role.labelEn) }
     private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && !isSaving }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.md) {
-                    // الصورة للذكر فقط — الأنثى بلا خيار صورة
-                    if selectedGender != "female" {
-                        DSProfilePhotoPicker(
-                            selectedImage: $selectedUIImage,
-                            existingURL: entry.member.displayImageUrl,
-                            enableCrop: true,
-                            cropShape: .circle,
-                            trailing: L10n.t("اختياري", "Optional"),
-                            compactEmptyState: true
-                        )
-                        .padding(.horizontal, DS.Spacing.lg)
-                    }
-
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("المعلومات الشخصية", "Personal Info"),
-                            icon: "person.text.rectangle",
-                            iconColor: DS.Color.primary
-                        )
-                        VStack(spacing: 0) {
-                            DSLabeledFieldRow(icon: "person.fill", iconColor: DS.Color.primary,
-                                              label: L10n.t("الاسم", "Name")) {
-                                TextField(L10n.t("الاسم", "Name"), text: $name)
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                            }
-                            // اختيار الجنس — للأبناء فقط (الأم/الزوجة أنثى دائمًا)
-                            if entry.role == .child {
-                                DSDivider()
-                                DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
-                                          label: L10n.t("الجنس", "Gender")) {
-                                    HStack(spacing: DS.Spacing.xs) {
-                                        genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.primary)
-                                        genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
-                                    }
-                                }
-                            }
-                            DSDivider()
-                            DSDateField(
-                                label: L10n.t("تاريخ الميلاد", "Birth Date"),
-                                date: $birthDate,
-                                range: ...Date(),
-                                labelAbove: true
-                            )
-                            .onChange(of: birthDate) { _ in hasBirthDate = true }
-                            DSDivider()
-                            // الإخفاء — للزوجة فقط، وهي إعداد ذاتي عبر RPC مقيّد.
-                            if entry.role == .wife {
-                                DSDivider()
-                                DSFormRow(icon: "eye.slash.fill", iconColor: DS.Color.textSecondary,
-                                          label: L10n.t("إخفاؤها من الشجرة", "Hide from tree")) {
-                                    Toggle("", isOn: $isHidden).labelsHidden().tint(DS.Color.primary)
-                                }
-                            }
-                            DSDivider()
-                            DSFormRow(icon: "leaf.fill", iconColor: DS.Color.error,
-                                      label: L10n.t("متوفى", "Deceased")) {
-                                Toggle("", isOn: $isDeceased).labelsHidden().tint(DS.Color.error)
-                            }
-                            .animation(.default, value: isDeceased)
-                            if isDeceased {
-                                DSDivider()
-                                DSDateField(
-                                    label: L10n.t("تاريخ الوفاة", "Death Date"),
-                                    date: $deathDate,
-                                    icon: "calendar",
-                                    iconColor: DS.Color.error,
-                                    range: ...Date()
-                                )
-                                .onChange(of: deathDate) { _ in hasDeathDate = true }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                    if let errorBanner {
-                        Text(errorBanner).font(DS.Font.caption1).foregroundColor(DS.Color.error)
-                            .padding(.horizontal, DS.Spacing.lg)
-                    }
-
-                    // «حذف من العائلة» داخل مربّع أحمر خفيف (طلب المالك)
-                    Button(role: .destructive) { showDeleteConfirm = true } label: {
-                        Label(L10n.t("حذف من العائلة", "Remove from family"), systemImage: "trash")
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.error)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, DS.Spacing.md)
-                            .background(
-                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .fill(DS.Color.error.opacity(0.08))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1)
-                            )
-                            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                }
-                .padding(.vertical, DS.Spacing.md)
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: SheetContentHeightKey.self, value: proxy.size.height)
-                    }
-                )
-            }
-            .background(DS.Color.background.ignoresSafeArea())
-            .navigationTitle(L10n.t("تعديل \(roleTitle)", "Edit \(roleTitle)"))
-            .navigationBarTitleDisplayMode(.inline)
-            // الحفظ أعلى يمين، والإغلاق يسار (طلب المالك)
-            .dsSheetToolbar(
-                confirm: L10n.t("حفظ", "Save"),
-                isLoading: isSaving,
-                disabled: !canSave,
-                onConfirm: { save() },
-                onCancel: { dismiss() }
-            )
-            .dsAlert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
-                Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                    Task {
-                        // كلها RPCs مقيّدة على النفس — تعمل لأي دور (الأب/الزوج نفسه).
-                        // الأم: فكّ الارتباط · الزوجة: حذف/فكّ · الابنة: حذف السجل.
-                        let ok: Bool
-                        switch entry.role {
-                        case .mother: ok = await memberVM.setSelfMother(motherId: nil)
-                        case .wife:   ok = await memberVM.removeSelfWife(wifeId: entry.member.id)
-                        default:      ok = await memberVM.removeSelfWomanChild(id: entry.member.id)
-                        }
-                        // نجاح → إغلاق؛ فشل (مثلاً رفض RLS) → رسالة واضحة بدل لا-عمل صامت.
-                        await MainActor.run {
-                            if ok {
-                                dismiss()
-                            } else {
-                                errorBanner = memberVM.errorMessage
-                                    ?? L10n.t("تعذّر الحذف — قد يتطلب موافقة الإدارة.",
-                                              "Couldn't remove — this may require an admin.")
-                            }
-                        }
-                    }
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            } message: {
-                Text(entry.role == .mother
-                     ? L10n.t("إزالة الأم «\(name)» من عائلتك؟ (لن تُحذف من الشجرة)", "Unlink mother “\(name)”?")
-                     : L10n.t("حذف «\(name)» من عائلتك؟", "Remove “\(name)” from your family?"))
-            }
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onPreferenceChange(SheetContentHeightKey.self) { h in
-            if h > 0 { sheetHeight = min(h + 40, 760) }
-        }
-        .presentationDetents([.height(sheetHeight)])
-        .presentationDragIndicator(.visible)
+    /// الاسم كما في الشجرة — عنوان فرعي في رأس المربّع
+    private var memberName: String {
+        entry.member.fullName.isEmpty ? entry.member.firstName : entry.member.fullName
     }
 
-    private func genderButton(title: String, value: String, color: Color) -> some View {
-        let selected = selectedGender == value
-        return Button { selectedGender = value } label: {
-            Text(title)
-                .font(DS.Font.caption1).fontWeight(.bold)
-                .foregroundColor(selected ? .white : DS.Color.textSecondary)
-                .padding(.horizontal, DS.Spacing.md)
-                .frame(height: 34)
-                .background(Capsule().fill(selected ? color : DS.Color.surface))
-                .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.3), lineWidth: 1))
-                .contentShape(Capsule())
+    var body: some View {
+        // مربّع بمنتصف الشاشة بنفس تصميم مربّعات الإضافة (طلب المالك): رأس ملوّن،
+        // أقسام تدخل تباعاً، و«حفظ» كحلي يمين و«إلغاء» يسار أسفل المربّع
+        DSComposer(
+            title: L10n.t("تعديل \(roleTitle)", "Edit \(roleTitle)"),
+            subtitle: memberName,
+            icon: "person.crop.circle.badge.checkmark",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("حفظ", "Save"),
+            actionIcon: "checkmark",
+            canSubmit: canSave,
+            isBusy: isSaving,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: { save() },
+            onCancel: { dismiss() }
+        ) {
+            // الصورة للذكر فقط — الأنثى بلا خيار صورة
+            if selectedGender != "female" {
+                DSProfilePhotoPicker(
+                    selectedImage: $selectedUIImage,
+                    existingURL: entry.member.displayImageUrl,
+                    enableCrop: true,
+                    cropShape: .circle,
+                    trailing: L10n.t("اختياري", "Optional"),
+                    compactEmptyState: true
+                )
+                .dsStaggerIn(0)
+            }
+
+            personalInfoSection
+            datesSection
+
+            if let errorBanner {
+                Text(errorBanner)
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            deleteButton
+                .dsStaggerIn(3)
         }
-        .buttonStyle(.plain)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .dsAlert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                Task {
+                    // كلها RPCs مقيّدة على النفس — تعمل لأي دور (الأب/الزوج نفسه).
+                    // الأم: فكّ الارتباط · الزوجة: حذف/فكّ · الابنة: حذف السجل.
+                    let ok: Bool
+                    switch entry.role {
+                    case .mother: ok = await memberVM.setSelfMother(motherId: nil)
+                    case .wife:   ok = await memberVM.removeSelfWife(wifeId: entry.member.id)
+                    default:      ok = await memberVM.removeSelfWomanChild(id: entry.member.id)
+                    }
+                    // نجاح → إغلاق؛ فشل (مثلاً رفض RLS) → رسالة واضحة بدل لا-عمل صامت.
+                    await MainActor.run {
+                        if ok {
+                            dismiss()
+                        } else {
+                            errorBanner = memberVM.errorMessage
+                                ?? L10n.t("تعذّر الحذف — قد يتطلب موافقة الإدارة.",
+                                          "Couldn't remove — this may require an admin.")
+                        }
+                    }
+                }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(entry.role == .mother
+                 ? L10n.t("إزالة الأم «\(name)» من عائلتك؟ (لن تُحذف من الشجرة)", "Unlink mother “\(name)”?")
+                 : L10n.t("حذف «\(name)» من عائلتك؟", "Remove “\(name)” from your family?"))
+        }
+    }
+
+    /// الاسم (+ الجنس للأبناء، + الإخفاء للزوجة)
+    private var personalInfoSection: some View {
+        DSComposerSection(title: L10n.t("المعلومات الشخصية", "Personal Info"),
+                          icon: "person.text.rectangle",
+                          tint: DS.Color.primary,
+                          index: 1) {
+            DSComposerField(icon: "person.fill",
+                            label: L10n.t("الاسم", "Name"),
+                            placeholder: L10n.t("الاسم", "Name"),
+                            text: $name)
+            // اختيار الجنس — للأبناء فقط (الأم/الزوجة أنثى دائمًا)
+            if entry.role == .child {
+                DSGenderPicker(selection: $selectedGender)
+            }
+            // الإخفاء — للزوجة فقط، وهي إعداد ذاتي عبر RPC مقيّد.
+            if entry.role == .wife {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSFieldIcon(name: "eye.slash.fill", tint: DS.Color.textSecondary)
+                        .accessibilityHidden(true)
+                    Text(L10n.t("إخفاؤها من الشجرة", "Hide from tree"))
+                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .foregroundColor(DS.Color.fieldLabel)
+                        .accessibilityHidden(true)   // يُقرأ اسماً للمفتاح نفسه
+                    Spacer(minLength: 0)
+                    Toggle("", isOn: $isHidden)
+                        .labelsHidden()
+                        .tint(DS.Color.primary)
+                        .accessibilityLabel(L10n.t("إخفاؤها من الشجرة", "Hide from tree"))
+                }
+                .dsRowBox()
+            }
+        }
+    }
+
+    /// الميلاد ← متوفى ← الوفاة — نفس مربّع التواريخ في «إضافة ابن»
+    private var datesSection: some View {
+        DSComposerSection(title: L10n.t("التواريخ والحالة", "Dates & Status"),
+                          icon: "calendar",
+                          tint: DS.Color.warning,
+                          index: 2) {
+            DSLifeDatesBox(hasBirthDate: $hasBirthDate, birthDate: $birthDate,
+                           isDeceased: $isDeceased,
+                           hasDeathDate: $hasDeathDate, deathDate: $deathDate,
+                           deceasedTitle: L10n.t("متوفى", "Deceased"))
+        }
+    }
+
+    /// «حذف من العائلة» داخل مربّع أحمر خفيف (طلب المالك)
+    private var deleteButton: some View {
+        Button(role: .destructive) { showDeleteConfirm = true } label: {
+            Label(L10n.t("حذف من العائلة", "Remove from family"), systemImage: "trash")
+                .font(DS.Font.plex(14, weight: .bold))
+                .foregroundColor(DS.Color.error)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.error.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     private func save() {
@@ -1946,7 +2037,7 @@ private struct AnchoredCardButtons: View {
                     if busy { ProgressView().tint(.white) } else { Text(actionTitle) }
                 }
                 .font(DS.Font.plex(14, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(DSActionFill.label(enabled: actionEnabled && !busy))
                 .frame(maxWidth: .infinity).frame(height: 40)
                 .background(DSActionFill.style(enabled: actionEnabled && !busy),
                             in: RoundedRectangle(cornerRadius: DS.Radius.md))

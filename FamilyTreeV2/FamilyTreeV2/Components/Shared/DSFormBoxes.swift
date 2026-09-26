@@ -24,25 +24,28 @@ struct DSFormCard<Content: View, Trailing: View>: View {
         self.content = content
     }
 
+    // نفس شكل أقسام مربّعات الإضافة (DSComposerSection) — تصميم موحّد (طلب المالك)
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm + 2) {
+            HStack(spacing: 7) {
                 Image(systemName: icon)
-                    .font(DS.Font.plex(12, weight: .bold))
+                    .font(.system(size: 10.5, weight: .bold))
                     .foregroundColor(color)
-                    .frame(width: 28, height: 28)
-                    .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(color.opacity(0.13)))
                 Text(title)
-                    .font(DS.Font.plex(15, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
                 Spacer(minLength: 0)
                 trailing()
             }
             content()
         }
-        .padding(DS.Spacing.lg)
+        .padding(DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
     }
 }
 
@@ -57,7 +60,7 @@ struct DSFieldChrome: ViewModifier {
             .background(DS.Color.background, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
+                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
             )
     }
 }
@@ -80,10 +83,10 @@ struct DSFieldBox<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(label)
-                .font(DS.Font.plex(12.5, weight: .semibold))
-                .foregroundColor(DS.Color.textPrimary.opacity(0.78))
+                .font(DS.Font.plex(12, weight: .heavy))
+                .foregroundColor(DS.Color.fieldLabel)
             content()
                 .font(DS.Font.plex(14.5))
                 .foregroundColor(DS.Color.textPrimary)
@@ -114,8 +117,8 @@ struct DSFieldLabel: View {
     let text: String
     var body: some View {
         Text(text)
-            .font(DS.Font.plex(12.5, weight: .semibold))
-            .foregroundColor(DS.Color.textPrimary.opacity(0.78))
+            .font(DS.Font.plex(12, weight: .heavy))
+            .foregroundColor(DS.Color.fieldLabel)
     }
 }
 
@@ -335,8 +338,9 @@ struct DSLifeDatesBox: View {
                     .padding(.horizontal, DS.Spacing.sm + 2)
                     .frame(height: 30)
                     .background(
+                        // المختار كحلي (واضح بالوضعين) بدل الرمادي الباهت بالداكن
                         Capsule().fill(has.wrappedValue ? DS.Color.mutedBackground.opacity(0.7)
-                                                        : DS.Color.textSecondary)
+                                                        : DS.Color.actionNavy)
                     )
             }
             .buttonStyle(DSScaleButtonStyle())
@@ -420,5 +424,10 @@ struct DSGenderPicker: View {
 enum DSActionFill {
     static func style(enabled: Bool = true) -> some ShapeStyle {
         DS.Color.gradientPrimary.opacity(enabled ? 1 : 0.45)
+    }
+
+    /// نص الزر الكحلي — يخفت مع التعطيل؛ بالوضع الداكن كان الأبيض الكامل يوحي أنه مفعّل
+    static func label(enabled: Bool = true) -> Color {
+        .white.opacity(enabled ? 1 : 0.5)
     }
 }

@@ -882,10 +882,13 @@ class NewsViewModel: ObservableObject {
 
     // MARK: - Report News Post
 
-    func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر") async {
+    /// يرجع true عند وصول البلاغ — لتأكيد «تم الإبلاغ» في الواجهة
+    @discardableResult
+    func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر") async -> Bool {
         // الإبلاغ متاح لجميع المستخدمين (أعضاء وإدارة) — سياسة Apple
-        guard let userId = currentUser?.id else { return }
+        guard let userId = currentUser?.id else { return false }
         self.isLoading = true
+        var delivered = false
 
         do {
             let payload: [String: AnyEncodable] = [
@@ -906,6 +909,7 @@ class NewsViewModel: ObservableObject {
                 .execute()
                 .value
 
+            delivered = true
             let reporterName = currentUser?.fullName ?? ""
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("بلاغ على منشور", "Post Report"),
@@ -920,7 +924,8 @@ class NewsViewModel: ObservableObject {
 
             await notificationVM?.sendNotification(
                 title: L10n.t("تم استلام بلاغك", "Report Received"),
-                body: L10n.t("بلاغك وصلنا وسيتم مراجعته من الإدارة", "Your report was received and will be reviewed"),
+                body: L10n.t("بلاغك وصلنا وسيتم مراجعته من الإدارة خلال ٢٤ ساعة",
+                             "Your report was received and will be reviewed within 24 hours"),
                 targetMemberIds: [userId]
             )
         } catch {
@@ -928,5 +933,6 @@ class NewsViewModel: ObservableObject {
         }
 
         self.isLoading = false
+        return delivered
     }
 }

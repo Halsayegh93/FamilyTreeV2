@@ -57,7 +57,7 @@ struct AdminBannedPhonesView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAddSheet) {
+        .dsCenterBox(isPresented: $showAddSheet) {
             AddBanSheet(authVM: authVM)
         }
         .dsAlert(
@@ -267,92 +267,86 @@ struct AddBanSheet: View {
         localDigits.count >= 6
     }
 
+    /// أي إدخال (رقم، سبب، أو دولة غير الافتراضية) → «إلغاء» يسأل قبل التجاهل (توصية أبل)
+    private var hasInput: Bool {
+        !phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || selectedPhoneCountry != KuwaitPhone.defaultCountry
+    }
+
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
+        // نفس هيكل مربّعات الإضافة (طلب المالك): رأس أحمر للحظر، قسم البيانات،
+        // و«حظر الرقم» كحلي يمين / «إلغاء» رمادي يسار
+        DSComposer(
+            title: t("حظر رقم هاتف", "Ban Phone Number"),
+            subtitle: t("يُمنع الرقم من استخدام التطبيق", "The number is blocked from using the app"),
+            icon: "phone.down.fill",
+            tint: DS.Color.error,
+            actionTitle: t("حظر الرقم", "Ban Number"),
+            actionIcon: "phone.down.fill",
+            canSubmit: isValid,
+            isBusy: isLoading,
+            hasUnsavedChanges: hasInput,
+            onSubmit: { Task { await banAction() } },
+            onCancel: { dismiss() }
+        ) {
+            DSComposerSection(title: t("بيانات الحظر", "Ban details"), icon: "phone.down.fill",
+                              tint: DS.Color.error, index: 0) {
+                // حقل الرقم
+                phoneRow
 
-                VStack(spacing: DS.Spacing.xxl) {
-                    // أيقونة
-                    DSIcon("phone.down.fill", color: DS.Color.error, size: DS.Icon.size, iconSize: 22)
-                        .padding(.top, DS.Spacing.xxl)
-
-                    Text(t("حظر رقم هاتف", "Ban Phone Number"))
-                        .font(DS.Font.headline)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    VStack(spacing: DS.Spacing.lg) {
-                        // حقل الرقم
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text(t("رقم الهاتف", "Phone Number"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-
-                            DSPhoneField(
-                                country: $selectedPhoneCountry,
-                                digits: $phoneNumber,
-                                placeholder: t("مثال: 99123456", "e.g. 99123456")
-                            )
-                        }
-
-                        // سبب الحظر
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                            Text(t("السبب (اختياري)", "Reason (optional)"))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-
-                            TextField(t("سبب الحظر...", "Ban reason..."), text: $reason)
-                                .font(DS.Font.subheadline)
-                                .foregroundStyle(DS.Color.textPrimary)
-                                .padding(DS.Spacing.md)
-                                .background(DS.Color.surface)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                        .stroke(DS.Color.textSecondary.opacity(0.15), lineWidth: 1)
-                                )
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                    // رسالة خطأ
-                    if let error = errorMessage {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(DS.Color.error)
-                            Text(error)
-                                .font(DS.Font.footnote)
-                                .foregroundColor(DS.Color.error)
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                    }
-
-                    // زر الحظر
-                    DSPrimaryButton(
-                        t("حظر الرقم", "Ban Number"),
-                        icon: "phone.down.fill",
-                        isLoading: isLoading,
-                        useGradient: isValid,
-                        color: isValid ? DS.Color.error : .gray
-                    ) {
-                        Task { await banAction() }
-                    }
-                    .disabled(!isValid || isLoading)
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                    Spacer()
-                }
+                // سبب الحظر
+                DSComposerField(icon: "text.bubble.fill",
+                                label: t("السبب (اختياري)", "Reason (optional)"),
+                                placeholder: t("سبب الحظر...", "Ban reason..."),
+                                text: $reason,
+                                tint: DS.Color.error)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(t("إلغاء", "Cancel")) { dismiss() }
-                        .foregroundStyle(DS.Color.primary)
-                }
+
+            // رسالة خطأ
+            if let error = errorMessage {
+                errorRow(error)
             }
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// صف الرقم بنفس شكل حقول المربّعات: أيقونة + العنوان فوق + حقل الهاتف الموحّد
+    private var phoneRow: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: "phone.fill", tint: DS.Color.error)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(t("رقم الهاتف", "Phone Number"))
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+                DSPhoneField(
+                    country: $selectedPhoneCountry,
+                    digits: $phoneNumber,
+                    placeholder: t("مثال: 99123456", "e.g. 99123456"),
+                    compact: true,
+                    bordered: false
+                )
+            }
+        }
+        .dsRowBox()
+    }
+
+    private func errorRow(_ error: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .accessibilityHidden(true)
+            Text(error)
+                .font(DS.Font.plex(12.5, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .foregroundColor(DS.Color.error)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Color.error.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
     }
 
     private func banAction() async {

@@ -16,6 +16,8 @@ private extension View {
 private struct EditLimitPopup: View {
     let onClose: () -> Void
     @State private var appeared = false
+    /// «تقليل الحركة» (توصية أبل): تلاشٍ فقط بلا تكبير
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -27,6 +29,7 @@ private struct EditLimitPopup: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(DS.Font.scaled(18, weight: .semibold))
                         .foregroundColor(DS.Color.warning)
+                        .accessibilityHidden(true)   // زخرفة — العنوان يكفي
                     Text(L10n.t("تم تجاوز حد التعديلات", "Edit limit reached"))
                         .font(DS.Font.plex(17, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
@@ -58,11 +61,13 @@ private struct EditLimitPopup: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
             .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 10)
             .padding(.horizontal, DS.Spacing.xl)
-            .scaleEffect(appeared ? 1 : 0.9)
+            .scaleEffect(appeared || reduceMotion ? 1 : 0.9)
             .opacity(appeared ? 1 : 0)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear { withAnimation(DS.Anim.snappy) { appeared = true } }
+        .onAppear {
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.snappy) { appeared = true }
+        }
     }
 
     private func close() {
@@ -157,108 +162,60 @@ struct EditProfileView: View {
         return L10n.t("تعديل بيانات الابن", "Edit Child Info")
     }
 
+    /// «إلغاء»: يسأل قبل تجاهل التعديلات غير المحفوظة
+    private func cancelTapped() {
+        if hasUnsavedChanges { showDiscardAlert = true } else { dismiss() }
+    }
+
     var body: some View {
-        NavigationStack {
-            ZStack {
-                // Background with decorative circles
-                DS.Color.background.ignoresSafeArea()
+        // مربّع بمنتصف الشاشة بنفس تصميم مربّعات الإضافة وحركتها (طلب المالك
+        // ٢٠٢٦-٠٩-٢٦): رأس متدرّج، أقسام تدخل تباعاً، و«حفظ» / «إلغاء» أسفله.
+        DSComposer(
+            title: editScreenTitle,
+            subtitle: L10n.t("بياناتك كما تظهر لأفراد العائلة", "Your details as the family sees them"),
+            icon: "person.crop.circle.fill",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("حفظ", "Save"),
+            actionIcon: "checkmark",
+            canSubmit: !isSaveDisabled,
+            isBusy: memberVM.isLoading || isSaving,
+            note: network.isConnected ? nil : L10n.t("لا يمكن الحفظ بدون اتصال", "Can't save while offline"),
+            contentPadding: 0,
+            onSubmit: saveChangesAction,
+            onCancel: cancelTapped
+        ) {
+            // 1. الصورة الشخصية
+            VStack(spacing: DS.Spacing.xs) {
+                imagePickerHeader
+                    .cooldownGuarded(.avatar, cooldown: cooldown) { showEditLimitAlert = true }
+                Label(
+                    pendingAvatarDelete
+                        ? L10n.t("ستُحذف الصورة عند الحفظ", "Photo will be removed on save")
+                        : L10n.t("اضغط على الصورة لتغييرها", "Tap the photo to change it"),
+                    systemImage: pendingAvatarDelete ? "trash.fill" : "camera.fill"
+                )
+                .font(DS.Font.plex(12.5))
+                .foregroundColor(DS.Color.primary)
+            }
+            .dsStaggerIn(0)
 
-
-                ScrollView(showsIndicators: false) {
-                    if isLandscape {
-                        // الوضع الأفقي: عمودان — يمين (الصورة + الحالة) ويسار (البيانات + المحطات + الحفظ)
-                        HStack(alignment: .top, spacing: DS.Spacing.md) {
-                            VStack(spacing: DS.Spacing.md) {
-                                avatarPickerBlock
-                            }
-                            .frame(maxWidth: .infinity)
-
-                            VStack(spacing: DS.Spacing.md) {
-                                personalInfoCard
-                                bioStationsSection
-                                    .cooldownGuarded(.bio, cooldown: cooldown) { showEditLimitAlert = true }
-                                offlineNotice
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .padding(.vertical, DS.Spacing.xs)
-                    } else {
-                    VStack(spacing: DS.Spacing.md) {
-
-                        // 1. قسم الصورة الشخصية (تصميم دائري مع ظل فخم)
-                        VStack(spacing: DS.Spacing.xs) {
-                            imagePickerHeader
-                                .cooldownGuarded(.avatar, cooldown: cooldown) { showEditLimitAlert = true }
-                            Label(
-                                L10n.t("اضغط على الصورة لتغييرها", "Tap the photo to change it"),
-                                systemImage: "camera.fill"
-                            )
-                            .font(DS.Font.plex(12.5))
-                            .foregroundColor(DS.Color.primary)
-                        }
-
-                        DSCard(padding: 0) {
-                            DSSectionHeader(
-                                title: L10n.t("المعلومات الشخصية", "Personal Info"),
-                                icon: "person.text.rectangle",
-                                iconColor: DS.Color.primary
-                            )
-
-                                VStack(spacing: 0) {
-                                    nameFieldWithChangeRequest
-                                    DSDivider()
-                                    familyPickerRow
-                                    DSDivider()
-                                    modernPhoneField
-
-                                    DSDivider()
-                                    birthDateRow
-
-                                    DSDivider()
-                                    maritalRow
-
-                                }
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-
-                        // 3. السيرة الذاتية
-                        bioStationsSection
-                            .cooldownGuarded(.bio, cooldown: cooldown) { showEditLimitAlert = true }
-
-                        // 5. تنبيه عدم الاتصال — زر الحفظ صار أعلى الشاشة (طلب المالك)
-                        offlineNotice
-
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    }
+            // 2. المعلومات الشخصية — نفس أقسام وحقول مربّعات الإضافة (تصميم موحّد)
+            DSComposerSection(title: L10n.t("المعلومات الشخصية", "Personal Info"),
+                              icon: "person.text.rectangle", tint: DS.Color.primary, index: 1) {
+                VStack(spacing: DS.Spacing.sm) {
+                    nameFieldWithChangeRequest
+                    familyPickerRow
+                    modernPhoneField
+                    birthDateRow
+                    maritalRow
                 }
             }
-            .navigationTitle(editScreenTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) {
-                        if hasUnsavedChanges {
-                            showDiscardAlert = true
-                        } else {
-                            dismiss()
-                        }
-                    }
-                    .font(DS.Font.plex(14.5, weight: .bold))
-                    .foregroundColor(DS.Color.error)
-                }
-                // زر الحفظ أعلى الشاشة (طلب المالك)
-                ToolbarItem(placement: DSToolbar.confirmPlacement) {
-                    if memberVM.isLoading || isSaving {
-                        ProgressView()
-                    } else {
-                        Button(L10n.t("حفظ", "Save"), action: saveChangesAction)
-                            .font(DS.Font.plex(14.5, weight: .bold))
-                            .foregroundColor(isSaveDisabled ? DS.Color.textTertiary : DS.Color.primary)
-                            .disabled(isSaveDisabled)
-                    }
-                }
-            }
+            .padding(.horizontal, DS.Spacing.lg)
+
+            // 3. السيرة الذاتية
+            bioStationsSection
+                .cooldownGuarded(.bio, cooldown: cooldown) { showEditLimitAlert = true }
+        }
             .dsAlert(
                 L10n.t("تجاهل التعديلات؟", "Discard Changes?"),
                 isPresented: $showDiscardAlert
@@ -271,6 +228,8 @@ struct EditProfileView: View {
                     "You have unsaved changes. Discard them?"
                 ))
             }
+        // مربّع طويل من الأسفل: لا يُسحب وفيه تعديلات غير محفوظة («إلغاء» يسأل أولاً)
+        .interactiveDismissDisabled(hasUnsavedChanges)
         .task { await familyNamesVM.fetch() }
             .onAppear {
                 setupData()
@@ -313,7 +272,6 @@ struct EditProfileView: View {
             } message: {
                 Text(saveSummary)
             }
-        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -364,20 +322,23 @@ struct EditProfileView: View {
 
     /// الحالة الاجتماعية — صف داخل «المعلومات الشخصية» تحت تاريخ الميلاد (طلب المالك)
     private var maritalRow: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon("heart.fill", color: DS.Color.primary)
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: "heart.fill", tint: DS.Color.primary)
+                .accessibilityHidden(true)   // زخرفة
             Text(L10n.t("الحالة الاجتماعية", "Marital Status"))
-                .font(DS.Font.plex(13, weight: .heavy))
+                .font(DS.Font.plex(12, weight: .heavy))
                 .foregroundColor(DS.Color.fieldLabel)
-            Spacer(minLength: DS.Spacing.sm)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .layoutPriority(0)
+            Spacer(minLength: DS.Spacing.xs)
             HStack(spacing: 6) {
                 maritalChip(L10n.t("أعزب", "Single"), selected: !isMarried, color: DS.Color.primary) { setMarried(false) }
                 // «متزوج» بلون التطبيق الأساسي (الكحلي) — طلب المالك
                 maritalChip(L10n.t("متزوج", "Married"), selected: isMarried, color: DS.Color.primary) { setMarried(true) }
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .dsRowBox()
     }
 
     private func maritalChip(_ title: String, selected: Bool, color: Color, action: @escaping () -> Void) -> some View {
@@ -385,14 +346,20 @@ struct EditProfileView: View {
             Text(title)
                 .font(DS.Font.scaled(13, weight: selected ? .bold : .medium))
                 .foregroundColor(selected ? .white : DS.Color.textSecondary)
-                .padding(.horizontal, DS.Spacing.md)
+                // لا تُقصّ الكلمة داخل المربّع الأضيق
+                .fixedSize()
+                .padding(.horizontal, DS.Spacing.sm + 3)
                 .frame(height: 32)
                 .background {
                     // المختار كحلي ممتلئ مثل «طلب تعديل»
                     if selected { Capsule().fill(DSActionFill.style()) }
                     else { Capsule().fill(DS.Color.mutedBackground.opacity(0.6)) }
                 }
-                .contentShape(Capsule())
+                // مساحة ضغط ٤٤ نقطة (حد أبل): الحشو يوسّع منطقة الضغط داخل هامش الصف
+                // والسالب يعيد الحجم كما كان — الحبّة وارتفاع الصف بلا تغيير
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+                .padding(.vertical, -6)
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -434,11 +401,12 @@ struct EditProfileView: View {
                 openNamePopup()
             } label: {
                 HStack(spacing: DS.Spacing.md) {
-                    DSIcon("person.fill", color: DS.Color.primary)
+                    DSFieldIcon(name: "person.fill", tint: DS.Color.primary)
+                        .accessibilityHidden(true)   // زخرفة
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("الاسم الكامل", "Full Name"))
-                            .font(DS.Font.plex(13, weight: .heavy))
+                            .font(DS.Font.plex(12, weight: .heavy))
                             .foregroundColor(DS.Color.fieldLabel)
                         // آخر الاسم = العائلة المختارة — يتحدّث فوراً عند تغيير العائلة
                         // الاسم الكامل كله يظهر بلا قصّ (طلب المالك)
@@ -451,8 +419,7 @@ struct EditProfileView: View {
                     // نفس زر العائلة (طلب المالك) — الاسم والعائلة يتغيّران بطلب
                     requestChip
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.xs)
+                .dsRowBox()
                 .contentShape(Rectangle())
                 .cooldownGuarded(.fullName, cooldown: cooldown) { showEditLimitAlert = true }
             }
@@ -477,11 +444,12 @@ struct EditProfileView: View {
     /// العائلة ثابتة في الملف (طلب المالك): تتغيّر فقط بطلب يعتمده المالك/المدير/المراقب.
     private var familyPickerRow: some View {
         HStack(spacing: DS.Spacing.md) {
-            DSIcon("person.2.fill", color: DS.Color.primary)
+            DSFieldIcon(name: "person.2.fill", tint: DS.Color.primary)
+                .accessibilityHidden(true)   // زخرفة
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("العائلة", "Family"))
-                    .font(DS.Font.plex(13, weight: .heavy))
+                    .font(DS.Font.plex(12, weight: .heavy))
                     .foregroundColor(DS.Color.fieldLabel)
                 // المعدَّل يظهر مكان القديم بلا ملاحظة (طلب المالك)
                 if let chosen = pendingFamilyRequest {
@@ -498,9 +466,9 @@ struct EditProfileView: View {
             // قائمة العوائل في مربّع بمنتصف الشاشة (طلب المالك)
             Button { openFamilyPicker() } label: { requestChip }
                 .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("تغيير العائلة", "Change family"))
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
+        .dsRowBox()
     }
 
     /// زر التعديل الموحّد — أيقونة فقط بلا كلمة (طلب المالك)
@@ -510,6 +478,11 @@ struct EditProfileView: View {
             .foregroundColor(DS.Color.primary)
             .frame(width: 32, height: 32)
             .background(Circle().fill(DS.Color.primary.opacity(0.10)))
+            // مساحة ضغط ٤٤ نقطة (حد أبل): الحشو يوسّع منطقة الضغط داخل هامش الصف،
+            // والسالب يعيد الحجم كما كان — الدائرة وارتفاع الصف بلا تغيير
+            .padding(6)
+            .contentShape(Rectangle())
+            .padding(-6)
             .accessibilityLabel(L10n.t("تعديل", "Edit"))
     }
 
@@ -587,7 +560,7 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.plex(13, weight: .heavy))
+                    .font(DS.Font.plex(12, weight: .heavy))
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
                     .font(DS.Font.plex(14.5))
@@ -609,7 +582,7 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.plex(13, weight: .heavy))
+                    .font(DS.Font.plex(12, weight: .heavy))
                     .foregroundColor(DS.Color.fieldLabel)
                 TextField(placeholder, text: text)
                     .font(DS.Font.plex(14.5))
@@ -667,11 +640,12 @@ struct EditProfileView: View {
     /// الرقم ثابت في الملف (طلب المالك): يتغيّر بطلب بعد إثبات الرقم الجديد برمز تحقق
     private var modernPhoneField: some View {
         HStack(spacing: DS.Spacing.md) {
-            DSIcon("phone.fill", color: DS.Color.success)
+            DSFieldIcon(name: "phone.fill", tint: DS.Color.success)
+                .accessibilityHidden(true)   // زخرفة
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("رقم الهاتف", "Phone Number"))
-                    .font(DS.Font.plex(13, weight: .heavy))
+                    .font(DS.Font.plex(12, weight: .heavy))
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(appliedPhoneDisplay ?? KuwaitPhone.display(member.phoneNumber))
                     .font(DS.Font.plex(14.5))
@@ -705,19 +679,20 @@ struct EditProfileView: View {
             Button { openPhonePopup() } label: { requestChip }
                 .buttonStyle(DSScaleButtonStyle())
                 .disabled(pendingPhoneRequest != nil)
+                .accessibilityLabel(L10n.t("تغيير رقم الهاتف", "Change phone number"))
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
+        .dsRowBox()
     }
 
     /// تاريخ الميلاد — صف للقراءة يفتح مربّعاً بمنتصف الشاشة (طلب المالك)
     private var birthDateRow: some View {
         HStack(spacing: DS.Spacing.md) {
-            DSIcon("calendar", color: DS.Color.warning)
+            DSFieldIcon(name: "calendar", tint: DS.Color.warning)
+                .accessibilityHidden(true)   // زخرفة
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                    .font(DS.Font.plex(13, weight: .heavy))
+                    .font(DS.Font.plex(12, weight: .heavy))
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(birthDateProvided ? birthDateText(birthDate) : L10n.t("لم يُحدَّد", "Not set"))
                     .font(DS.Font.plex(14.5))
@@ -727,9 +702,9 @@ struct EditProfileView: View {
 
             Button { openBirthDatePopup() } label: { requestChip }
                 .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("تعديل تاريخ الميلاد", "Edit birth date"))
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
+        .dsRowBox()
     }
 
     private func birthDateText(_ date: Date) -> String { DSDateText.display(date) }
@@ -745,32 +720,39 @@ struct EditProfileView: View {
     }
 
     private var bioStationsSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("السيرة الذاتية", "Biography"),
-                icon: "text.quote",
-                trailing: bioStations.isEmpty ? nil : "\(bioStations.count) \(L10n.t("حدث", "entries"))",
-                iconColor: DS.Color.accent
-            )
-
+        DSComposerSection(
+            title: L10n.t("السيرة الذاتية", "Biography"),
+            icon: "text.quote",
+            tint: DS.Color.accent,
+            trailing: bioStations.isEmpty ? L10n.t("اختياري", "Optional")
+                                          : "\(bioStations.count) \(L10n.t("حدث", "entries"))",
+            index: 2
+        ) {
             VStack(spacing: DS.Spacing.sm) {
                 if bioStations.isEmpty {
-                    // Empty state
+                    // فارغ: زر بإطار متقطّع مثل إضافات المربّعات
                     Button { openBioPopup() } label: {
                         HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(DS.Font.scaled(18))
-                                .foregroundColor(DS.Color.primary)
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .heavy))
+                                .foregroundColor(.white)
+                                .frame(width: 28, height: 28)
+                                .background(Circle().fill(DS.Color.accent))
+                                .accessibilityHidden(true)   // زخرفة — النص يكفي
                             Text(L10n.t("أضف حدثاً لسيرتك", "Add to your biography"))
-                                .font(DS.Font.plex(14.5))
-                                .foregroundColor(DS.Color.primary)
+                                .font(DS.Font.plex(13.5, weight: .bold))
+                                .foregroundColor(DS.Color.accent)
+                            Spacer(minLength: 0)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.lg)
+                        .padding(.horizontal, DS.Spacing.sm + 2)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .strokeBorder(DS.Color.accent.opacity(0.45), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])))
+                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(DSScaleButtonStyle())
                 } else {
-                    // معاينة المحطات
+                    // معاينة المحطات — في صندوق بنفس إطار الحقول
                     VStack(spacing: 0) {
                         ForEach(Array(bioStations.prefix(3).enumerated()), id: \.element.id) { index, station in
                             if index > 0 { DSDivider() }
@@ -786,6 +768,9 @@ struct EditProfileView: View {
                                 .padding(.vertical, DS.Spacing.sm)
                         }
                     }
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
+                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
 
                     // أزرار التعديل والحذف
                     HStack(spacing: DS.Spacing.sm) {
@@ -811,11 +796,8 @@ struct EditProfileView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
                 }
             }
-            .padding(.bottom, DS.Spacing.md)
-
         }
         .padding(.horizontal, DS.Spacing.lg)
         .dsAlert(
@@ -1347,6 +1329,7 @@ private struct FamilyRequestCard: View {
                                 Spacer()
                                 Image(systemName: selected == name ? "checkmark.circle.fill" : "circle")
                                     .foregroundColor(selected == name ? DS.Color.primary : DS.Color.textTertiary)
+                                    .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
                             }
                             .padding(.horizontal, DS.Spacing.md)
                             .frame(height: 44)
@@ -1356,6 +1339,7 @@ private struct FamilyRequestCard: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityAddTraits(selected == name ? .isSelected : [])
                     }
                 }
             }
@@ -1367,7 +1351,7 @@ private struct FamilyRequestCard: View {
                 Button { if let s = selected { onSend(s) } } label: {
                     Text(L10n.t("إرسال", "Send"))
                         .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DSActionFill.label(enabled: canChoose))
                         .frame(maxWidth: .infinity).frame(height: 44)
                         .background(DSActionFill.style(enabled: canChoose), in: RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
@@ -1424,7 +1408,7 @@ private struct NameRequestCard: View {
                 } label: {
                     Text(L10n.t("إرسال", "Send"))
                         .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DSActionFill.label(enabled: canSend))
                         .frame(maxWidth: .infinity).frame(height: 44)
                         .background(DSActionFill.style(enabled: canSend), in: RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
@@ -1471,6 +1455,8 @@ private struct PhoneRequestCard: View {
     @State private var isBusy = false
     @State private var error: String?
     @State private var info: String?
+    /// «تقليل الحركة» (توصية أبل): الصفحتان تتبدّلان بتلاشٍ فقط بلا انزلاق
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
     /// صيغة التخزين في قاعدة البيانات (الكويت: ٨ أرقام، ويكمّلها مُطبِّع السيرفر)
@@ -1487,10 +1473,10 @@ private struct PhoneRequestCard: View {
         DSCenterCard(onBackgroundTap: isBusy ? nil : onCancel) {
             if codeSent {
                 otpPage
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
             } else {
                 numberPage
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .leading).combined(with: .opacity))
             }
         }
         .animation(DS.Anim.snappy, value: codeSent)
@@ -1546,6 +1532,7 @@ private struct PhoneRequestCard: View {
                 .foregroundColor(DS.Color.primary)
                 .frame(width: 56, height: 56)
                 .background(DS.Color.primary.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)   // زخرفة
 
             VStack(spacing: 4) {
                 Text(t("رمز التحقق", "Verification Code"))
@@ -1581,6 +1568,12 @@ private struct PhoneRequestCard: View {
                     Text(t("إعادة إرسال الرمز", "Resend code"))
                         .font(DS.Font.plex(12.5, weight: .bold))
                         .foregroundColor(DS.Color.primary)
+                        // مساحة ضغط ~٤٤ نقطة (حد أبل) داخل الفراغ حول النص — مكانه وحجمه كما هما
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, -12)
+                        .padding(.horizontal, -DS.Spacing.sm)
                 }
                 .disabled(isBusy)
             }
@@ -1627,7 +1620,7 @@ private struct PhoneRequestCard: View {
                         Text(primary).font(DS.Font.plex(14, weight: .bold))
                     }
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DSActionFill.label(enabled: enabled))
                 .frame(maxWidth: .infinity).frame(height: 44)
                 .background(DSActionFill.style(enabled: enabled), in: RoundedRectangle(cornerRadius: DS.Radius.md))
             }
@@ -1791,6 +1784,10 @@ struct BioEditCard: View {
                     .foregroundColor(DS.Color.primary)
                     .frame(maxWidth: .infinity).frame(height: 38)
                     .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.primary.opacity(0.10)))
+                    // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير ارتفاع الزر الظاهر
+                    .padding(.vertical, 3)
+                    .contentShape(Rectangle())
+                    .padding(.vertical, -3)
             }
             .buttonStyle(DSScaleButtonStyle())
 
@@ -1847,8 +1844,13 @@ struct BioEditCard: View {
                         .foregroundColor(DS.Color.error)
                         .frame(width: 30, height: 30)
                         .background(Circle().fill(DS.Color.error.opacity(0.10)))
+                        // مساحة ضغط ٤٤ نقطة (حد أبل) داخل هامش البطاقة — الدائرة ومكانها كما هما
+                        .padding(7)
+                        .contentShape(Rectangle())
+                        .padding(-7)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(t("حذف الحدث", "Delete entry"))
             }
 
             TextField(t("التفاصيل (اختياري)", "Details (optional)"), text: station.details, axis: .vertical)

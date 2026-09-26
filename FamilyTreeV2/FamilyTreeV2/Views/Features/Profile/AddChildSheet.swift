@@ -25,42 +25,27 @@ struct AddChildSheet: View {
     @State private var sheetHeight: CGFloat = 520
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.md) {
-                        // الصورة للذكر فقط — الأنثى بلا خيار صورة
-                        if selectedGender != "female" { heroHeader }
-                        basicInfoCard
-                            .padding(.horizontal, DS.Spacing.lg)
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(key: SheetContentHeightKey.self, value: proxy.size.height)
-                        }
-                    )
-                }
-            }
-            .navigationTitle(L10n.t("إضافة فرد", "Add Member"))
-            .navigationBarTitleDisplayMode(.inline)
-            // الإضافة/الحفظ أعلى يمين، والإغلاق يسار (طلب المالك)
-            .dsSheetToolbar(
-                confirm: L10n.t("إضافة", "Add"),
-                isLoading: memberVM.isLoading || isSubmitting,
-                disabled: firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading || isSubmitting,
-                onConfirm: saveChild,
-                onCancel: { dismiss() }
-            )
+        // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
+        DSComposer(
+            title: L10n.t("إضافة فرد", "Add Member"),
+            subtitle: L10n.t("ابن أو بنت لعائلتك", "A son or daughter to your family"),
+            icon: "person.crop.circle.badge.plus",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("إضافة", "Add"),
+            actionIcon: "plus",
+            canSubmit: !(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading || isSubmitting),
+            isBusy: memberVM.isLoading || isSubmitting,
+            contentPadding: 0,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: saveChild,
+            onCancel: { dismiss() }
+        ) {
+            // الصورة للذكر فقط — الأنثى بلا خيار صورة
+            if selectedGender != "female" { heroHeader.dsStaggerIn(0) }
+            basicInfoCard
+                .padding(.horizontal, DS.Spacing.lg)
+                .dsStaggerIn(1)
         }
-        .onPreferenceChange(SheetContentHeightKey.self) { h in
-            if h > 0 { sheetHeight = h + 72 }
-        }
-        .presentationDetents([.height(sheetHeight)])
-        .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .dsAlert(L10n.t("تمت الإضافة", "Added Successfully"), isPresented: $showSuccessAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
@@ -77,6 +62,17 @@ struct AddChildSheet: View {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
             }
         }
+    }
+
+    /// أي إدخال (اسم، رقم، صورة، تاريخ، جنس، وفاة) — «إلغاء» يسأل قبل تجاهله (توصية أبل).
+    /// المربّع يبدأ فارغاً؛ رمز الدولة المُعبّأ تلقائياً لا يُحسب وحده.
+    private var hasUnsavedChanges: Bool {
+        !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !phoneNumber.isEmpty
+            || selectedUIImage != nil
+            || birthDateProvided
+            || selectedGender != "male"
+            || isDeceased
     }
 
     private var heroHeader: some View {
@@ -118,7 +114,9 @@ struct AddChildSheet: View {
                     DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
                               label: L10n.t("الجنس", "Gender")) {
                         HStack(spacing: DS.Spacing.xs) {
-                            genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.primary)
+                            // actionNavy: نفس الكحلي في الفاتح، وكحلي غامق في الداكن يُقرأ عليه النص الأبيض
+                            // (primary الداكن أزرق فاتح — «ذكر» الأبيض كان باهتاً عليه)
+                            genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.actionNavy)
                             genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
                         }
                     }
@@ -157,6 +155,8 @@ struct AddChildSheet: View {
                         Toggle("", isOn: $isDeceased)
                             .labelsHidden()
                             .tint(DS.Color.error)
+                            // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
+                            .accessibilityLabel(L10n.t("متوفى", "Deceased"))
                     }
                     .animation(.default, value: isDeceased)
 
@@ -198,9 +198,12 @@ struct AddChildSheet: View {
                 .frame(height: 34)
                 .background(Capsule().fill(selected ? color : DS.Color.surface))
                 .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.3), lineWidth: 1))
-                .contentShape(Capsule())
+                // مساحة ضغط ٤٤ نقطة (حد أبل) والحبّة بنفس شكلها — الصف ارتفاعه ٥٢ فيسعها
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     /// حارس محلي يمنع الإضافة المكرّرة — isLoading في الـ VM يتأخر لحظة

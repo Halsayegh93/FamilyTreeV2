@@ -175,6 +175,8 @@ private struct DSAlertButtonsLayout: Layout {
 
 /// بطاقة المربّع الوسطي — تُستخدم للرسائل ولمربّعات خاصة (مثل «عن التطبيق»)
 struct DSCenterCard<Content: View>: View {
+    /// «تقليل الحركة» (توصية أبل): تلاشٍ فقط بلا تكبير ولا انزلاق
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onBackgroundTap: (() -> Void)?
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
@@ -202,17 +204,19 @@ struct DSCenterCard<Content: View>: View {
             )
             .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 10)
             .padding(.horizontal, DS.Spacing.xl)
-            .scaleEffect(appeared ? 1 : 0.9)
+            .scaleEffect(appeared || reduceMotion ? 1 : 0.9)
             .opacity(appeared ? 1 : 0)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear { withAnimation(DS.Anim.snappy) { appeared = true } }
+        .onAppear { withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.snappy) { appeared = true } }
     }
 }
 
 /// لوح كبير بمنتصف الشاشة — لمحتوى طويل (نموذج) بدل الورقة السفلية.
 /// نفس روح `DSCenterCard` لكنه أوسع وأطول، ومحتواه يتمرّر داخله.
 struct DSCenterPanel<Content: View>: View {
+    /// «تقليل الحركة» (توصية أبل): تلاشٍ فقط بلا تكبير ولا انزلاق
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onBackgroundTap: (() -> Void)?
     /// يجعل ارتفاع اللوح على قدر محتواه (يقرأ `SheetContentHeightKey` من الداخل)
     /// بدل الارتفاع الكامل — طلب المالك لمربّعات «طلب تعديل».
@@ -253,13 +257,13 @@ struct DSCenterPanel<Content: View>: View {
                                           lineWidth: colorScheme == .dark ? 1.25 : 1)
                     )
                     .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
-                    .scaleEffect(appeared ? 1 : 0.94)
+                    .scaleEffect(appeared || reduceMotion ? 1 : 0.94)
                     .opacity(appeared ? 1 : 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear { withAnimation(DS.Anim.snappy) { appeared = true } }
+        .onAppear { withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.snappy) { appeared = true } }
     }
 }
 
@@ -296,6 +300,8 @@ struct DSPanelCollapsedHeightKey: PreferenceKey {
 /// لوح بمنتصف الشاشة قابل للتوسّع مثل الشيت (طلب المالك): يبدأ مضغوطاً،
 /// ويتوسّع ويتصغّر عبر `isExpanded` (زر داخل المحتوى)، ويُغلق بالضغط خارجه.
 struct DSExpandableCenterPanel<Content: View>: View {
+    /// «تقليل الحركة» (توصية أبل): تلاشٍ فقط بلا تكبير ولا انزلاق
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isExpanded: Bool
     let onClose: () -> Void
     @ViewBuilder let content: () -> Content
@@ -345,8 +351,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
                 )
                 .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
                 // فتح/إغلاق بحركة: يكبر من أصغر وأسفل قليلاً مع تلاشٍ (طلب المالك)
-                .scaleEffect(appeared ? 1 : (closing ? 0.9 : 0.9))
-                .offset(y: appeared ? 0 : (closing ? 18 : 20))
+                .scaleEffect(appeared || reduceMotion ? 1 : 0.9)
+                .offset(y: appeared || reduceMotion ? 0 : (closing ? 18 : 20))
                 .opacity(appeared ? 1 : 0)
                 // الارتفاع الفعلي يتحرّك بسلاسة — يصل بعد قياس المحتوى الجديد
                 .animation(DS.Anim.smooth, value: height)
@@ -356,7 +362,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .environment(\.dsPanelClose, animatedClose)
         .onAppear {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { appeared = true }
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.2)
+                                       : .spring(response: 0.4, dampingFraction: 0.8)) { appeared = true }
         }
     }
 

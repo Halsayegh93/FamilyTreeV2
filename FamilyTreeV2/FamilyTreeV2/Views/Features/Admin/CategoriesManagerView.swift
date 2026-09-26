@@ -30,10 +30,11 @@ struct CategoriesManagerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await store.fetch(); await store.fetchCounts() }
         .refreshable { await store.fetch(); await store.fetchCounts() }
-        .sheet(item: $editing) { category in
+        // تعديل/إضافة تصنيف — مربّع بمنتصف الشاشة بدل الورقة السفلية
+        .dsCenterBox(item: $editing) { category in
             CategoryEditSheet(category: category, isNew: false, section: section)
         }
-        .sheet(isPresented: $showAdd) {
+        .dsCenterBox(isPresented: $showAdd) {
             CategoryEditSheet(category: nil, isNew: true, section: section)
         }
         .dsAlert(L10n.t("حذف التصنيف", "Delete Category"),
@@ -189,7 +190,9 @@ struct CategoriesManagerView: View {
     }
 }
 
-/// ورقة تعديل/إضافة تصنيف — الاسم بالعربي والإنجليزي، الأيقونة، اللون، الظهور
+/// مربّع تعديل/إضافة تصنيف — الاسم بالعربي والإنجليزي، الأيقونة، اللون، الظهور.
+/// نفس هيكل مربّعات الإضافة (طلب المالك): رأس كحلي يحمل أيقونة التصنيف، أقسام،
+/// و«إضافة/حفظ» كحلي يمين / «إلغاء» رمادي يسار.
 struct CategoryEditSheet: View {
     let category: ContentCategory?
     let isNew: Bool
@@ -197,124 +200,217 @@ struct CategoryEditSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var store = CategoryStore.shared
-    @State private var nameAr = ""
-    @State private var nameEn = ""
-    @State private var iconKey = "star.fill"
-    @State private var colorKey = "navy"
-    @State private var isActive = true
+    @State private var nameAr: String
+    @State private var nameEn: String
+    @State private var iconKey: String
+    @State private var colorKey: String
+    @State private var isActive: Bool
     @State private var saving = false
     @State private var errorText: String?
     @State private var confirmDelete = false
+    /// ما فُتح عليه المربّع — «إلغاء» يسأل فقط إذا تغيّر شيء (توصية أبل)
+    private let startAr: String
+    private let startEn: String
+    private let startIcon: String
+    private let startColor: String
+    private let startActive: Bool
+
+    init(category: ContentCategory?, isNew: Bool, section: CategorySection) {
+        self.category = category
+        self.isNew = isNew
+        self.section = section
+        // تعبئة بيانات التصنيف من البداية (كانت في onAppear) — حتى لا تومض أيقونة
+        // الرأس من الافتراضية إلى أيقونة التصنيف
+        let ar = category?.nameAr ?? ""
+        let en = category?.nameEn ?? ""
+        let icon = category?.iconKey ?? "star.fill"
+        let color = category?.colorKey ?? "navy"
+        let active = category?.isActive ?? true
+        _nameAr = State(initialValue: ar)
+        _nameEn = State(initialValue: en)
+        _iconKey = State(initialValue: icon)
+        _colorKey = State(initialValue: color)
+        _isActive = State(initialValue: active)
+        startAr = ar
+        startEn = en
+        startIcon = icon
+        startColor = color
+        startActive = active
+    }
 
     private var accent: Color { CategoryPalette.color(colorKey) }
 
+    /// اسم أو أيقونة أو لون أو ظهور مختلف عمّا فُتح عليه المربّع
+    private var hasChanges: Bool {
+        nameAr != startAr || nameEn != startEn || iconKey != startIcon
+            || colorKey != startColor || isActive != startActive
+    }
+
     var body: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.lg) {
-                    // معاينة
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: iconKey).font(DS.Font.scaled(12, weight: .bold))
-                        Text(nameAr.isEmpty ? L10n.t("اسم التصنيف", "Category name") : nameAr)
-                            .font(DS.Font.plex(13, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(height: 32)
-                    .background(Capsule().fill(accent))
-                    .opacity(isActive ? 1 : 0.45)
+        DSComposer(
+            title: isNew ? L10n.t("تصنيف جديد", "New Category") : L10n.t("تعديل التصنيف", "Edit Category"),
+            subtitle: L10n.t("تصنيفات \(section.title)", "\(section.title) categories"),
+            icon: iconKey,
+            tint: DS.Color.actionNavy,
+            actionTitle: isNew ? L10n.t("إضافة", "Add") : L10n.t("حفظ", "Save"),
+            actionIcon: isNew ? "plus" : "checkmark",
+            canSubmit: !nameAr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            isBusy: saving,
+            hasUnsavedChanges: hasChanges,
+            onSubmit: { Task { await save() } },
+            onCancel: { dismiss() }
+        ) {
+            preview.dsStaggerIn(0)
+            namesSection
+            iconSection
+            colorSection
 
-                    DSCard(padding: DS.Spacing.md) {
-                        VStack(spacing: DS.Spacing.sm) {
-                            TextField(L10n.t("الاسم بالعربي", "Arabic name"), text: $nameAr)
-                                .font(DS.Font.callout)
-                            Divider()
-                            TextField(L10n.t("الاسم بالإنجليزي", "English name"), text: $nameEn)
-                                .font(DS.Font.callout)
-                                .environment(\.layoutDirection, .leftToRight)
-                        }
-                    }
-
-                    pickerCard(title: L10n.t("الأيقونة", "Icon")) {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
-                            ForEach(CategoryPalette.icons, id: \.self) { icon in
-                                Button { iconKey = icon } label: {
-                                    Image(systemName: icon)
-                                        .font(DS.Font.scaled(16, weight: .bold))
-                                        .foregroundColor(iconKey == icon ? .white : accent)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 42)
-                                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                            .fill(iconKey == icon ? accent : accent.opacity(0.10)))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    pickerCard(title: L10n.t("اللون", "Colour")) {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 10) {
-                            ForEach(CategoryPalette.colorKeys, id: \.self) { key in
-                                Button { colorKey = key } label: {
-                                    Circle()
-                                        .fill(CategoryPalette.color(key))
-                                        .frame(width: 32, height: 32)
-                                        .overlay(Circle().strokeBorder(Color.white, lineWidth: colorKey == key ? 3 : 0))
-                                        .overlay(Circle().strokeBorder(CategoryPalette.color(key), lineWidth: colorKey == key ? 1.5 : 0).padding(-3))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    if !isNew {
-                        DSCard(padding: DS.Spacing.md) {
-                            Toggle(isOn: $isActive) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(L10n.t("ظاهر للأعضاء", "Visible to members"))
-                                        .font(DS.Font.calloutBold)
-                                    Text(L10n.t("الإخفاء يشيله من الاختيارات، والمحتوى القديم يبقى بتصنيفه",
-                                                "Hiding removes it from choices; existing content keeps it"))
-                                        .font(DS.Font.plex(11, weight: .medium))
-                                        .foregroundColor(DS.Color.textSecondary)
-                                }
-                            }
-                            .tint(DS.Color.primary)
-                        }
-                    }
-
-                    if let category, !isNew, !store.isProtected(category) {
-                        deleteCard(category)
-                    }
-
-                    if let errorText {
-                        Text(errorText)
-                            .font(DS.Font.plex(12, weight: .semibold))
-                            .foregroundColor(DS.Color.error)
-                    }
-                }
-                .padding(DS.Spacing.lg)
+            if !isNew {
+                visibilitySection
             }
-            .background(DS.Color.background.ignoresSafeArea())
-            .navigationTitle(isNew ? L10n.t("تصنيف جديد", "New Category") : L10n.t("تعديل التصنيف", "Edit Category"))
-            .navigationBarTitleDisplayMode(.inline)
-            .dsSheetToolbar(
-                confirm: isNew ? L10n.t("إضافة", "Add") : L10n.t("حفظ", "Save"),
-                isLoading: saving,
-                disabled: nameAr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                onConfirm: { Task { await save() } },
-                onCancel: { dismiss() }
-            )
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+
+            if let category, !isNew, !store.isProtected(category) {
+                deleteCard(category)
+                    .dsStaggerIn(5)
+            }
+
+            if let errorText {
+                Text(errorText)
+                    .font(DS.Font.plex(12, weight: .semibold))
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear {
-            if let category {
-                nameAr = category.nameAr
-                nameEn = category.nameEn
-                iconKey = category.iconKey
-                colorKey = category.colorKey
-                isActive = category.isActive
+    }
+
+    // MARK: الأقسام
+
+    /// معاينة شارة التصنيف كما ستظهر
+    private var preview: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: iconKey).font(DS.Font.scaled(12, weight: .bold))
+                .accessibilityHidden(true)
+            Text(nameAr.isEmpty ? L10n.t("اسم التصنيف", "Category name") : nameAr)
+                .font(DS.Font.plex(13, weight: .bold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(height: 32)
+        .background(Capsule().fill(accent))
+        .opacity(isActive ? 1 : 0.45)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
+    private var namesSection: some View {
+        DSComposerSection(title: L10n.t("الاسم", "Name"), icon: "tag.fill",
+                          tint: DS.Color.primary, index: 1) {
+            DSComposerField(icon: "textformat",
+                            label: L10n.t("الاسم بالعربي", "Arabic name"),
+                            placeholder: L10n.t("اسم التصنيف", "Category name"),
+                            text: $nameAr)
+            DSComposerField(icon: "globe",
+                            label: L10n.t("الاسم بالإنجليزي", "English name"),
+                            placeholder: L10n.t("اختياري", "Optional"),
+                            text: $nameEn,
+                            ltr: true,
+                            ltrKeepsAutocorrect: true)
+        }
+    }
+
+    private var iconSection: some View {
+        DSComposerSection(title: L10n.t("الأيقونة", "Icon"), icon: "square.grid.2x2.fill",
+                          tint: DS.Color.info, index: 2) {
+            // صفوف عادية لا LazyVGrid — الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً فيُقصّ آخر صف
+            // (المسافة ٦ + نقطة ضغط زائدة فوق وتحت كل زر = نفس الفراغ الظاهر ٨ كما كان)
+            gridRows(CategoryPalette.icons, columns: 5, spacing: 6) { icon in
+                Button { iconKey = icon } label: {
+                    Image(systemName: icon)
+                        .font(DS.Font.scaled(16, weight: .bold))
+                        .foregroundColor(iconKey == icon ? .white : accent)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 42)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(iconKey == icon ? accent : accent.opacity(0.10)))
+                        // مساحة ضغط ٤٤ (توصية أبل) — الزر الظاهر ٤٢ كما هو
+                        .frame(height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                // زر أيقونة بلا نص — اسمها للقارئ الصوتي، والمختارة «محدّدة»
+                .accessibilityLabel(CategoryEditA11yNames.icon(icon))
+                .accessibilityAddTraits(iconKey == icon ? .isSelected : [])
+            }
+        }
+    }
+
+    private var colorSection: some View {
+        DSComposerSection(title: L10n.t("اللون", "Colour"), icon: "paintpalette.fill",
+                          tint: DS.Color.accent, index: 3) {
+            // كل لون بخانة ٤٤ نقطة ارتفاعاً وبعرض خانته كاملاً (بلا فراغ بين الخانات) —
+            // الدوائر بنفس حجمها وتقريباً بنفس مواضعها، والحشوة السالبة تبقي ارتفاع الشبكة
+            gridRows(CategoryPalette.colorKeys, columns: 7, spacing: 0, hSpacing: 0) { key in
+                Button { colorKey = key } label: {
+                    Circle()
+                        .fill(CategoryPalette.color(key))
+                        .frame(width: 32, height: 32)
+                        .overlay(Circle().strokeBorder(Color.white, lineWidth: colorKey == key ? 3 : 0))
+                        .overlay(Circle().strokeBorder(CategoryPalette.color(key), lineWidth: colorKey == key ? 1.5 : 0).padding(-3))
+                        // مساحة ضغط ٤٤ (توصية أبل)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                // زر لون بلا نص — اسم اللون للقارئ الصوتي، والمختار «محدّد»
+                .accessibilityLabel(CategoryEditA11yNames.color(key))
+                .accessibilityAddTraits(colorKey == key ? .isSelected : [])
+            }
+            .padding(.vertical, -6)
+        }
+    }
+
+    private var visibilitySection: some View {
+        DSComposerSection(title: L10n.t("الظهور", "Visibility"), icon: "eye.fill",
+                          tint: DS.Color.success, index: 4) {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: isActive ? "eye.fill" : "eye.slash.fill",
+                            tint: isActive ? DS.Color.success : DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+                Toggle(isOn: $isActive) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("ظاهر للأعضاء", "Visible to members"))
+                            .font(DS.Font.plex(13.5, weight: .bold))
+                            .foregroundColor(DS.Color.fieldLabel)
+                        Text(L10n.t("الإخفاء يشيله من الاختيارات، والمحتوى القديم يبقى بتصنيفه",
+                                    "Hiding removes it from choices; existing content keeps it"))
+                            .font(DS.Font.plex(11))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(DS.Color.primary)
+            }
+            .dsRowBox()
+        }
+    }
+
+    /// شبكة غير كسولة: صفوف من `columns` عناصر، والصف الناقص يُكمَّل بفراغ
+    /// (`hSpacing` المسافة بين الخانات — ٠ للألوان حتى تأخذ كل خانة أوسع مساحة ضغط)
+    private func gridRows<Item: Hashable, Cell: View>(_ items: [Item], columns: Int, spacing: CGFloat,
+                                                      hSpacing: CGFloat = 8,
+                                                      @ViewBuilder cell: @escaping (Item) -> Cell) -> some View {
+        VStack(spacing: spacing) {
+            ForEach(Array(stride(from: 0, to: items.count, by: columns)), id: \.self) { start in
+                let end = min(start + columns, items.count)
+                HStack(spacing: hSpacing) {
+                    ForEach(items[start..<end], id: \.self) { item in
+                        cell(item).frame(maxWidth: .infinity)
+                    }
+                    ForEach(0..<(columns - (end - start)), id: \.self) { _ in
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                    }
+                }
             }
         }
     }
@@ -327,20 +423,21 @@ struct CategoryEditSheet: View {
                 confirmDelete = true
             } label: {
                 Label(L10n.t("حذف التصنيف نهائياً", "Delete category permanently"), systemImage: "trash")
-                    .font(DS.Font.calloutBold)
+                    .font(DS.Font.plex(13.5, weight: .bold))
                     .foregroundColor(count == 0 ? DS.Color.error : DS.Color.textTertiary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
                     .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .fill((count == 0 ? DS.Color.error : DS.Color.textTertiary).opacity(0.10)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DSScaleButtonStyle())
             .disabled(count > 0)
             if count > 0 {
                 Text(L10n.t("فيه \(count) عنصر — ما ينحذف إلا وهو فاضي. تقدر تخفيه بدل الحذف.",
                             "It has \(count) items — only empty categories can be deleted. You can hide it instead."))
                     .font(DS.Font.plex(11, weight: .medium))
                     .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .dsAlert(L10n.t("حذف التصنيف", "Delete Category"), isPresented: $confirmDelete) {
@@ -353,17 +450,6 @@ struct CategoryEditSheet: View {
         } message: {
             Text(L10n.t("«\(category.nameAr)» ينحذف نهائياً من التصنيفات.",
                         "«\(category.nameAr)» will be permanently deleted."))
-        }
-    }
-
-    private func pickerCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        DSCard(padding: DS.Spacing.md) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Text(title)
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .foregroundColor(DS.Color.textSecondary)
-                content()
-            }
         }
     }
 
@@ -386,5 +472,56 @@ struct CategoryEditSheet: View {
             ok = false
         }
         if ok { dismiss() } else { errorText = store.errorMessage }
+    }
+}
+
+// MARK: - أسماء الأيقونات والألوان للقارئ الصوتي (خاصة بهذا الملف)
+
+/// أزرار الأيقونة واللون في مربّع التصنيف بلا نص — هذه أسماؤها لـ VoiceOver (توصية أبل)
+private enum CategoryEditA11yNames {
+    static func icon(_ key: String) -> String {
+        switch key {
+        case "newspaper.fill":     return L10n.t("جريدة", "Newspaper")
+        case "megaphone.fill":     return L10n.t("مكبّر صوت", "Megaphone")
+        case "heart.fill":         return L10n.t("قلب", "Heart")
+        case "figure.child":       return L10n.t("طفل", "Child")
+        case "heart.slash.fill":   return L10n.t("قلب مشطوب", "Crossed-out heart")
+        case "hands.clap.fill":    return L10n.t("تصفيق", "Clapping hands")
+        case "envelope.open.fill": return L10n.t("ظرف مفتوح", "Open envelope")
+        case "bell.badge.fill":    return L10n.t("جرس", "Bell")
+        case "chart.bar.fill":     return L10n.t("رسم بياني", "Bar chart")
+        case "star.fill":          return L10n.t("نجمة", "Star")
+        case "calendar":           return L10n.t("تقويم", "Calendar")
+        case "gift.fill":          return L10n.t("هدية", "Gift")
+        case "graduationcap.fill": return L10n.t("قبعة تخرّج", "Graduation cap")
+        case "house.fill":         return L10n.t("منزل", "House")
+        case "trophy.fill":        return L10n.t("كأس", "Trophy")
+        case "doc.text.fill":      return L10n.t("مستند", "Document")
+        case "book.closed.fill":   return L10n.t("كتاب", "Book")
+        case "photo.stack.fill":   return L10n.t("صور", "Photos")
+        case "folder.fill":        return L10n.t("مجلد", "Folder")
+        case "sparkles":           return L10n.t("نجوم لامعة", "Sparkles")
+        default:                   return L10n.t("أيقونة", "Icon")
+        }
+    }
+
+    static func color(_ key: String) -> String {
+        switch key {
+        case "navy":         return L10n.t("كحلي", "Navy")
+        case "green":        return L10n.t("أخضر غامق", "Dark green")
+        case "gold":         return L10n.t("ذهبي", "Gold")
+        case "wedding":      return L10n.t("وردي", "Pink")
+        case "birth":        return L10n.t("أخضر", "Green")
+        case "death":        return L10n.t("رمادي غامق", "Dark gray")
+        case "vote":         return L10n.t("بنفسجي", "Purple")
+        case "announcement": return L10n.t("برتقالي", "Orange")
+        case "congrats":     return L10n.t("أصفر", "Yellow")
+        case "reminder":     return L10n.t("أحمر", "Red")
+        case "invitation":   return L10n.t("فيروزي", "Teal")
+        case "info":         return L10n.t("أزرق", "Blue")
+        case "rose":         return L10n.t("عنّابي", "Burgundy")
+        case "gray":         return L10n.t("رمادي", "Gray")
+        default:             return L10n.t("لون", "Colour")
+        }
     }
 }

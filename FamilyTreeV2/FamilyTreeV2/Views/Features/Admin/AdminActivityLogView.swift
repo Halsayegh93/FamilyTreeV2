@@ -266,7 +266,8 @@ struct AdminActivityLogView: View {
         }
         .task { await notificationVM.fetchNotifications(force: true) }
         .refreshable { await notificationVM.fetchNotifications(force: true) }
-        .sheet(item: $detailItem) { item in
+        // تفاصيل الحركة — مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك ٢٠٢٦-٠٩-٢٦)
+        .dsCenterBox(item: $detailItem) { item in
             ActivityDetailSheet(
                 item: item,
                 style: rowStyle(for: item.kind),
@@ -497,14 +498,11 @@ struct AdminActivityLogView: View {
     }
 }
 
-// MARK: - شيت تفاصيل الحركة
-
-private struct ActivitySheetHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 260
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
+// MARK: - مربّع تفاصيل الحركة
 
 /// تفاصيل سجل واحد: من نفّذها، على مَن، متى بالضبط، وكل ما تغيّر.
+/// مربّع عرض بنفس تصميم المربّعات (طلب المالك ٢٠٢٦-٠٩-٢٦): رأس بلون نوع الحركة،
+/// أقسام تدخل تباعاً، و«إغلاق» أسفل المربّع.
 private struct ActivityDetailSheet: View {
     let item: AppNotification
     let style: (icon: String, color: Color)
@@ -534,154 +532,112 @@ private struct ActivityDetailSheet: View {
         return Self.fullFormatter.string(from: item.createdDate)
     }
 
-    /// ارتفاع المحتوى الفعلي — الشيت يفصّل نفسه عليه
-    @State private var contentHeight: CGFloat = 260
-    /// لا بدّ من ربط الاختيار: بدونه يعلق الشيت على أول ارتفاع ولا يتكيّف
-    @State private var detent: PresentationDetent = .height(260)
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // ═══ شريط علوي ثابت بهوية نوع الحركة ═══
-            VStack(spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.md) {
-                    ZStack {
-                        Circle().fill(SwiftUI.Color.white.opacity(0.20))
-                        Image(systemName: style.icon)
-                            .font(DS.Font.scaled(17, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    .frame(width: 44, height: 44)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title)
-                            .font(DS.Font.plex(16, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(categoryTitle)
-                            .font(DS.Font.caption2)
-                            .foregroundColor(SwiftUI.Color.white.opacity(0.85))
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 32, height: 32)
-                            .background(SwiftUI.Color.white.opacity(0.18), in: Circle())
-                    }
-                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
-            .frame(maxWidth: .infinity)
-            .background(style.color)
-
-            // ═══ المحتوى ═══
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-
-                    // «ما تغيّر» — سبب فتح السجل، فيتصدّر
-                    if let changes = item.details?.changes, !changes.isEmpty {
-                        DSCard(padding: 0) {
-                            DSSectionHeader(
-                                title: L10n.t("ما تغيّر", "What changed"),
-                                icon: "arrow.left.arrow.right",
-                                trailing: "\(changes.count)",
-                                iconColor: DS.Color.accent
-                            )
-                            VStack(spacing: DS.Spacing.xs) {
-                                ForEach(changes) { ch in changeLine(ch) }
-                            }
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.bottom, DS.Spacing.md)
-                        }
-                    }
-
-                    if !item.body.isEmpty {
-                        DSCard(padding: 0) {
-                            DSSectionHeader(
-                                title: L10n.t("التفاصيل", "Details"),
-                                icon: "text.alignright",
-                                iconColor: DS.Color.primary
-                            )
-                            Text(item.body)
-                                .font(DS.Font.subheadline)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.bottom, DS.Spacing.md)
-                        }
-                    }
-
-                    // معلومات السجل — كل الحقول ظاهرة بصفوف موحّدة
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("معلومات السجل", "Record info"),
-                            icon: "info.circle.fill",
-                            iconColor: DS.Color.textSecondary
-                        )
-                        VStack(spacing: 0) {
-                            infoRow(L10n.t("التصنيف", "Category"), categoryTitle)
-                            DSDivider()
-                            infoRow(L10n.t("الوقت", "Time"), fullDate)
-                            if let subject {
-                                DSDivider()
-                                infoRow(L10n.t("تخصّ", "About"), subject.shortFullName)
-                            }
-                            if let actor {
-                                DSDivider()
-                                infoRow(L10n.t("نفّذها", "By"), actor.shortFullName)
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.sm)
-                    }
-                }
-                .padding(DS.Spacing.lg)
-                .background(
-                    GeometryReader { g in
-                        Color.clear.preference(key: ActivitySheetHeightKey.self, value: g.size.height)
-                    }
-                )
-            }
-            .background(DS.Color.background)
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onPreferenceChange(ActivitySheetHeightKey.self) { h in
-            let safeBottom = UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first?.windows.first(where: { $0.isKeyWindow })?
-                .safeAreaInsets.bottom ?? 0
-            // المحتوى + الشريط العلوي (76) + منطقة الأمان
-            let newHeight = min(max(h + 76 + safeBottom, 240),
-                                UIScreen.main.bounds.height * 0.92)
-            guard abs(newHeight - contentHeight) > 1 else { return }
-            contentHeight = newHeight
-            withAnimation(DS.Anim.quick) { detent = .height(newHeight) }
-        }
-        .presentationDetents([.height(contentHeight), .large], selection: $detent)
-        .presentationDragIndicator(.hidden)
+    private var changes: [AppNotification.NotificationDetails.ChangeEntry] {
+        item.details?.changes ?? []
     }
 
-    /// صف معلومة داخل بطاقة «معلومات السجل»
-    private func infoRow(_ label: String, _ value: String) -> some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
-            Text(label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer(minLength: DS.Spacing.sm)
-            Text(value)
-                .font(DS.Font.scaled(12, weight: .semibold))
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(L10n.isArabic ? .leading : .trailing)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
+    /// لون الرأس — درجة داكنة من لون نوع الحركة حتى يُقرأ النص الأبيض (مثل بقية المربّعات)
+    private var headerTint: Color {
+        let c = style.color
+        if c == DS.Color.error { return DS.Color.error }
+        if c == DS.Color.textSecondary { return DS.Color.textSecondary }
+        if c == DS.Color.success { return DS.Color.composerProject }
+        if c == DS.Color.warning || c == DS.Color.accent { return DS.Color.composerLibrary }
+        return DS.Color.actionNavy
+    }
+
+    /// تصنيف الحركة — بأيقونة قائمة التصفية ولونها نفسهما
+    private var category: AdminActivityLogView.ActivityFilter? {
+        AdminActivityLogView.ActivityFilter.allCases.first { $0.title == categoryTitle }
+    }
+
+    /// ترتيب دخول الأقسام تباعاً — حسب الأقسام الظاهرة فعلاً
+    private var bodyIndex: Int { changes.isEmpty ? 0 : 1 }
+    private var infoIndex: Int { bodyIndex + (item.body.isEmpty ? 0 : 1) }
+
+    var body: some View {
+        DSComposer(
+            title: item.title,
+            subtitle: categoryTitle,
+            icon: style.icon,
+            tint: headerTint,
+            actionTitle: "",
+            showsAction: false,
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: false,
+            onSubmit: {},
+            onCancel: { dismiss() }
+        ) {
+            // «ما تغيّر» — سبب فتح السجل، فيتصدّر
+            if !changes.isEmpty { changesSection }
+            if !item.body.isEmpty { bodySection }
+            infoSection
         }
-        .padding(.vertical, DS.Spacing.xs + 1)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private var changesSection: some View {
+        DSComposerSection(title: L10n.t("ما تغيّر", "What changed"), icon: "arrow.left.arrow.right",
+                          tint: DS.Color.accent, trailing: "\(changes.count)", index: 0) {
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(changes) { ch in changeLine(ch) }
+            }
+        }
+    }
+
+    private var bodySection: some View {
+        DSComposerSection(title: L10n.t("التفاصيل", "Details"), icon: "text.alignright",
+                          tint: DS.Color.primary, index: bodyIndex) {
+            Text(item.body)
+                .font(DS.Font.plex(14))
+                .foregroundColor(DS.Color.fieldValue)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .dsRowBox()
+        }
+    }
+
+    /// معلومات السجل — كل الحقول ظاهرة بصفوف موحّدة
+    private var infoSection: some View {
+        DSComposerSection(title: L10n.t("معلومات السجل", "Record info"), icon: "info.circle.fill",
+                          tint: DS.Color.textSecondary, index: infoIndex) {
+            VStack(spacing: DS.Spacing.sm) {
+                infoRow(icon: category?.icon ?? "square.grid.2x2.fill",
+                        tint: category?.color ?? DS.Color.accent,
+                        L10n.t("التصنيف", "Category"), categoryTitle)
+                infoRow(icon: "calendar.badge.clock", tint: DS.Color.warning,
+                        L10n.t("الوقت", "Time"), fullDate)
+                if let subject {
+                    infoRow(icon: "person.fill", tint: DS.Color.primary,
+                            L10n.t("تخصّ", "About"), subject.shortFullName)
+                }
+                if let actor {
+                    infoRow(icon: "person.fill.checkmark", tint: DS.Color.success,
+                            L10n.t("نفّذها", "By"), actor.shortFullName)
+                }
+            }
+        }
+    }
+
+    /// صف معلومة: أيقونة الحقل + العنوان الغامق + القيمة — نفس صفوف المربّعات
+    private func infoRow(icon: String, tint: Color, _ label: String, _ value: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: tint)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+                Text(value)
+                    .font(DS.Font.plex(14.5))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
     }
 
     /// مصغّرة صورة داخل تفاصيل التغيير — تُظهر الصورة الفعلية قبل/بعد
@@ -711,6 +667,7 @@ private struct ActivityDetailSheet: View {
                     .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
             )
             .opacity(faded ? 0.55 : 1)
+            .accessibilityHidden(true)   // المصغّرة للعين — «قبل/بعد» يُقرأ من النص تحتها
 
             Text(label)
                 .font(DS.Font.scaled(11, weight: .semibold))
@@ -725,45 +682,56 @@ private struct ActivityDetailSheet: View {
             if t.isEmpty { return L10n.t("بلا", "None") }
             return t
         }
-        return VStack(alignment: .leading, spacing: 5) {
-            Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(DS.Color.textSecondary)
+        // صف بنفس صفوف المربّعات: أيقونة الحقل + اسم الحقل + القيمة قبل ← بعد
+        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: isPhoto ? "photo.fill" : "pencil", tint: DS.Color.accent)
+                .accessibilityHidden(true)
 
-            if isPhoto {
-                // الصور تُعرض فعلاً — النص «صورة ← صورة» كان بلا فائدة
-                HStack(spacing: DS.Spacing.md) {
-                    photoThumb(ch.before, label: L10n.t("قبل", "Before"), faded: true)
-                    Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                    photoThumb(ch.after, label: L10n.t("بعد", "After"), faded: false)
-                    Spacer(minLength: 0)
-                }
-            } else {
-                HStack(spacing: 6) {
-                    Text(display(ch.before))
-                        .font(DS.Font.scaled(12))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(display(ch.after))
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+
+                if isPhoto {
+                    // الصور تُعرض فعلاً — النص «صورة ← صورة» كان بلا فائدة
+                    HStack(spacing: DS.Spacing.md) {
+                        photoThumb(ch.before, label: L10n.t("قبل", "Before"), faded: true)
+                        Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .accessibilityHidden(true)
+                        photoThumb(ch.after, label: L10n.t("بعد", "After"), faded: false)
+                        Spacer(minLength: 0)
+                    }
+                } else {
+                    HStack(spacing: 6) {
+                        Text(display(ch.before))
+                            .font(DS.Font.plex(13))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .accessibilityHidden(true)
+                        Text(display(ch.after))
+                            .font(DS.Font.plex(13, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    // الشطب والسهم لا يُسمعان — القارئ الصوتي يقرأ «قبل: … بعد: …»
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.t("قبل: \(display(ch.before))، بعد: \(display(ch.after))",
+                                               "Before: \(display(ch.before)), after: \(display(ch.after))"))
                 }
             }
+
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 5)
-        .padding(.horizontal, DS.Spacing.sm)
-        .background(DS.Color.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .dsRowBox()
     }
 }

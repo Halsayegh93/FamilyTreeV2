@@ -9,6 +9,8 @@ struct MainTabView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var showNotificationAlert = false
     @AppStorage("notificationAlertDismissCount") private var dismissCount = 0
+    /// الموافقة على شروط الاستخدام لمرة واحدة (Guideline 1.2) — للأعضاء الحاليين
+    @State private var showTermsGate = false
 
     private var tabSelection: Binding<Int> {
         Binding(
@@ -141,6 +143,25 @@ struct MainTabView: View {
             withAnimation { selectedTab = 0 }
         }
         }
+        // الحظر والموافقة على الشروط لكل مستخدم — تُربط بالحساب الحالي
+        .onAppear { refreshUserSafetyState() }
+        .onChange(of: authVM.currentUser?.id) { _ in refreshUserSafetyState() }
+        // مربّع الشروط لمرة واحدة — لا يُغلق بالضغط خارجه، «أوافق وأتابع» ضغطة واحدة
+        .dsCenterBox(isPresented: $showTermsGate) {
+            TermsAgreementBox(
+                onAccept: {
+                    TermsAgreement.accept([authVM.currentUser?.id, AccountIdentity.authUserId])
+                    showTermsGate = false
+                },
+                onSignOut: {
+                    showTermsGate = false
+                    Task {
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        await authVM.signOut()
+                    }
+                }
+            )
+        }
         .task {
             // تتبع أول شاشة عند الفتح
             MemberActivityTracker.report("home")
@@ -150,6 +171,8 @@ struct MainTabView: View {
             // ننتظر 3 ثواني عشان المستخدم يرد على طلب النظام أول
             try? await Task.sleep(nanoseconds: 3_000_000_000)
 
+            // مربّع الشروط مفتوح — لا نغطيه برسالة الإشعارات (تظهر في فتحة لاحقة)
+            guard !showTermsGate else { return }
             // تحقق إذا رفض — أقصى مرتين بعد طلب النظام
             guard dismissCount < 2 else { return }
             let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -175,6 +198,26 @@ struct MainTabView: View {
                 "فعّل الإشعارات عشان توصلك أخبار العائلة والتحديثات المهمة",
                 "Enable notifications to receive family news and important updates"
             ))
+        }
+    }
+
+    /// يربط قائمة المحظورين بالحساب الحالي، ويعرض مربّع الشروط مرة واحدة لمن لم يوافق
+    /// بعد على هذا الجهاز (من وافق عند التسجيل لا يراه).
+    private func refreshUserSafetyState() {
+        let userId = authVM.currentUser?.id
+        BlockedMembersStore.shared.activate(for: userId)
+        guard let userId else { return }
+        let ids: [UUID?] = [userId, AccountIdentity.authUserId]
+        if TermsAgreement.hasAccepted(ids) {
+            // وافق بمعرّف الدخول عند التسجيل — نسجّلها بمعرّف الملف أيضاً
+            TermsAgreement.accept(ids)
+            return
+        }
+        Task {
+            // بعد استقرار الواجهة — العرض أثناء أول رسم قد لا يظهر
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard authVM.currentUser?.id == userId, !TermsAgreement.hasAccepted(ids) else { return }
+            showTermsGate = true
         }
     }
 }

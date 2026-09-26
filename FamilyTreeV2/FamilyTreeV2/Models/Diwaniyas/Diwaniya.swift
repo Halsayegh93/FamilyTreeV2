@@ -1,3 +1,4 @@
+import SwiftUI
 import Foundation
 import CoreLocation
 
@@ -16,6 +17,11 @@ nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
     var isClosed: Bool?
     var approvalStatus: String
     var approvedBy: UUID?
+    /// «ديوانية» أو «حسينية» (طلب المالك ٢٠٢٦-٠٩-٢٦) — nil = ديوانية (قبل العمود)
+    var kind: String?
+
+    /// حسينية؟ — غير ذلك ديوانية
+    var isHusseiniya: Bool { kind == DiwaniyaKind.husseiniya.rawValue }
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -31,6 +37,7 @@ nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
         case isClosed = "is_closed"
         case approvalStatus = "approval_status"
         case approvedBy = "approved_by"
+        case kind
     }
     
     init(from decoder: Decoder) throws {
@@ -50,6 +57,7 @@ nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
         isClosed = try container.decodeIfPresent(Bool.self, forKey: .isClosed)
         approvalStatus = try container.decode(String.self, forKey: .approvalStatus)
         approvedBy = try container.decodeIfPresent(UUID.self, forKey: .approvedBy)
+        kind = try container.decodeIfPresent(String.self, forKey: .kind)
     }
     
     init(id: UUID, ownerId: UUID, ownerName: String, title: String, scheduleText: String?, scheduleDays: [Int]? = nil, contactPhone: String?, mapsUrl: String?, imageUrl: String?, address: String?, isClosed: Bool? = nil, approvalStatus: String, approvedBy: UUID?) {
@@ -66,5 +74,42 @@ nonisolated struct Diwaniya: Identifiable, Codable, Sendable {
         self.isClosed = isClosed
         self.approvalStatus = approvalStatus
         self.approvedBy = approvedBy
+    }
+}
+
+
+/// نوع المجلس — ديوانية أو حسينية
+enum DiwaniyaKind: String, CaseIterable, Identifiable {
+    case diwaniya
+    case husseiniya
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .diwaniya: return L10n.t("ديوانية", "Diwaniya")
+        case .husseiniya: return L10n.t("حسينية", "Husseiniya")
+        }
+    }
+
+    var plural: String {
+        switch self {
+        case .diwaniya: return L10n.t("ديوانيات", "Diwaniyas")
+        case .husseiniya: return L10n.t("حسينيات", "Husseiniyas")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .diwaniya: return "building.columns.fill"
+        case .husseiniya: return "moon.stars.fill"
+        }
+    }
+
+    var tint: SwiftUI.Color {
+        switch self {
+        case .diwaniya: return DS.Color.composerDiwaniya
+        case .husseiniya: return DS.Color.composerHusseiniya
+        }
     }
 }

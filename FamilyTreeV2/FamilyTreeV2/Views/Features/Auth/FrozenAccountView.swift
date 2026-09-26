@@ -50,26 +50,10 @@ struct FrozenAccountView: View {
                 }
             }
         }
-        .sheet(isPresented: $showContactSheet) {
-            NavigationStack {
-                MemberContactFormView()
-                    .navigationTitle(t("تواصل مع الإدارة", "Contact Admin"))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                            Button { showContactSheet = false } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(DS.Font.scaled(22, weight: .medium))
-                                    .foregroundStyle(DS.Color.textTertiary)
-                                    .symbolRenderingMode(.hierarchical)
-                            }
-                            .accessibilityLabel(t("إغلاق", "Close"))
-                        }
-                    }
-            }
-            .environmentObject(authVM)
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .presentationDragIndicator(.visible)
+        // مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك) — العنوان و«إلغاء» داخل المربّع
+        .dsCenterBox(isPresented: $showContactSheet) {
+            MemberContactFormView()
+                .environmentObject(authVM)
         }
     }
 

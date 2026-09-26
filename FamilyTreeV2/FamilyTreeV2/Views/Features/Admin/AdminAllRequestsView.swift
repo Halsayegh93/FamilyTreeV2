@@ -13,8 +13,10 @@ struct AdminAllRequestsView: View {
     @State private var editedName: String = ""
     @State private var phoneEditRequest: PhoneChangeRequest? = nil
     @State private var editedPhone: String = ""
+    /// ما فُتح عليه مربّعا تعديل الاسم/الرقم — «إلغاء» يسأل فقط إذا تغيّر (توصية أبل)
+    @State private var editedNameStart: String = ""
+    @State private var editedPhoneStart: String = ""
     @State private var selectedDetail: RequestDetail? = nil
-    @State private var detailSheetHeight: CGFloat = 0
     // إدخال سبب الرفض — يُرسل كرسالة لمقدّم الطلب
     @State private var showRejectReason = false
     @State private var rejectReasonText: String = ""
@@ -603,17 +605,9 @@ struct AdminAllRequestsView: View {
         } message: {
             Text(bulkSelectRejectResult ?? "")
         }
-        .sheet(item: $selectedDetail) { detail in
+        // تفاصيل الطلب — مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
+        .dsCenterBox(item: $selectedDetail) { detail in
             requestDetailSheet(detail)
-                .onPreferenceChange(DetailSheetHeightKey.self) { h in
-                    // ارتفاع المحتوى + شريط التنقّل (~56)
-                    detailSheetHeight = h + 56
-                }
-                .presentationDetents(
-                    detailSheetHeight > 0 ? [.height(detailSheetHeight), .large] : [.medium, .large]
-                )
-                .presentationDragIndicator(.visible)
-                .onDisappear { detailSheetHeight = 0 }
                 .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReason) {
                     TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $rejectReasonText)
                         .dsAlertField()
@@ -629,7 +623,7 @@ struct AdminAllRequestsView: View {
                                 "The reason will be sent as a message to the requester."))
                 }
         }
-        .sheet(item: $healthPhoneMember) { member in
+        .dsCenterBox(item: $healthPhoneMember) { member in
             PendingMemberPhoneSheet(member: member, activateOnSave: true)
                 .environmentObject(adminRequestVM)
         }
@@ -672,7 +666,7 @@ struct AdminAllRequestsView: View {
                 "This request will be permanently removed and cannot be undone."
             ))
         }
-        .sheet(item: $memberToLink) { member in
+        .dsTallBox(item: $memberToLink) { member in   // قائمة أعضاء طويلة (توصية أبل)
             LinkToExistingMemberSheet(pendingMember: member)
                 .environmentObject(memberVM)
                 .environmentObject(adminRequestVM)
@@ -1331,7 +1325,7 @@ struct AdminAllRequestsView: View {
                         phoneRow(for: request)
                     }
                 }
-                .sheet(item: $phoneEditRequest) { request in
+                .dsCenterBox(item: $phoneEditRequest) { request in
                     adminPhoneEditSheet(request: request)
                 }
             case .nameChange:
@@ -1346,7 +1340,7 @@ struct AdminAllRequestsView: View {
                         nameChangeRow(for: request)
                     }
                 }
-                .sheet(item: $nameEditRequest) { request in
+                .dsCenterBox(item: $nameEditRequest) { request in
                     adminNameEditSheet(request: request)
                 }
             case .diwaniya:
@@ -3238,146 +3232,132 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    // MARK: - Admin Name Edit Sheet
+    // MARK: - Admin Name Edit Box
+    /// تعديل الاسم قبل الموافقة — مربّع بمنتصف الشاشة بنفس تصميم المربّعات الموحّد
+    /// (طلب المالك): رأس كحلي، الاسم الحالي ثم حقل الاسم المعدّل، و«موافقة» / «إلغاء» أسفله.
     private func adminNameEditSheet(request: AdminRequest) -> some View {
-        NavigationStack {
-            VStack(spacing: DS.Spacing.xl) {
-                // الاسم الحالي
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(L10n.t("الاسم الحالي:", "Current name:"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(request.member?.displayFullName ?? "—")
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
+        DSComposer(
+            title: L10n.t("تعديل الاسم", "Edit Name"),
+            subtitle: L10n.t("يمكنك تعديل الاسم قبل الموافقة عليه.", "You can modify the name before approving."),
+            icon: "rectangle.and.pencil.and.ellipsis",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("موافقة", "Approve"),
+            actionIcon: "checkmark.circle.fill",
+            canSubmit: !editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            hasUnsavedChanges: editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+                != editedNameStart.trimmingCharacters(in: .whitespacesAndNewlines),
+            onSubmit: {
+                let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                Task {
+                    var modifiedRequest = request
+                    modifiedRequest.newValue = trimmed
+                    await adminRequestVM.approveNameChangeRequest(request: modifiedRequest)
+                    nameEditRequest = nil
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                // حقل تعديل الاسم
-                DSTextField(
-                    label: L10n.t("الاسم المعدّل", "Modified Name"),
-                    placeholder: L10n.t("اكتب الاسم الصحيح", "Enter correct name"),
-                    text: $editedName,
-                    icon: "pencil",
-                    iconColor: DS.Color.primary
-                )
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Text(L10n.t(
-                    "يمكنك تعديل الاسم قبل الموافقة عليه.",
-                    "You can modify the name before approving."
-                ))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textTertiary)
-                .padding(.horizontal, DS.Spacing.xxl)
-
-                DSPrimaryButton(
-                    L10n.t("موافقة بالاسم المعدّل", "Approve with Modified Name"),
-                    icon: "checkmark.circle.fill"
-                ) {
-                    let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    Task {
-                        var modifiedRequest = request
-                        modifiedRequest.newValue = trimmed
-                        await adminRequestVM.approveNameChangeRequest(request: modifiedRequest)
-                        nameEditRequest = nil
-                    }
-                }
-                .disabled(editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Spacer()
+            },
+            onCancel: { nameEditRequest = nil }
+        ) {
+            DSComposerSection(title: L10n.t("الاسم", "Name"),
+                              icon: "person.fill",
+                              tint: DS.Color.primary,
+                              index: 0) {
+                editBoxValueRow(icon: "person.fill",
+                                label: L10n.t("الاسم الحالي", "Current Name"),
+                                value: request.member?.displayFullName ?? "—",
+                                tint: DS.Color.primary)
             }
-            .padding(.top, DS.Spacing.xl)
-            .navigationTitle(L10n.t("تعديل الاسم", "Edit Name"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { nameEditRequest = nil }
-                        .foregroundColor(DS.Color.primary)
-                }
+
+            DSComposerSection(title: L10n.t("التعديل", "Edit"),
+                              icon: "pencil",
+                              tint: DS.Color.success,
+                              index: 1) {
+                DSComposerField(icon: "pencil",
+                                label: L10n.t("الاسم المعدّل", "Modified Name"),
+                                placeholder: L10n.t("اكتب الاسم الصحيح", "Enter correct name"),
+                                text: $editedName,
+                                tint: DS.Color.success)
             }
         }
+        .onAppear { editedNameStart = editedName }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - Admin Phone Edit Sheet
-    private func adminPhoneEditSheet(request: PhoneChangeRequest) -> some View {
-        NavigationStack {
-            VStack(spacing: DS.Spacing.xl) {
-                // الرقم الحالي
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(L10n.t("الرقم الحالي:", "Current number:"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(KuwaitPhone.display(request.member?.phoneNumber))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                // الرقم المطلوب
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(L10n.t("الرقم المطلوب:", "Requested number:"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(KuwaitPhone.display(request.newValue))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.success)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                // حقل تعديل الرقم
-                DSTextField(
-                    label: L10n.t("الرقم المعدّل", "Modified Number"),
-                    placeholder: L10n.t("اكتب الرقم الصحيح", "Enter correct number"),
-                    text: $editedPhone,
-                    icon: "phone",
-                    iconColor: DS.Color.primary
-                )
-                .keyboardType(.phonePad)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Text(L10n.t(
-                    "يمكنك تعديل الرقم قبل الموافقة عليه.",
-                    "You can modify the number before approving."
-                ))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textTertiary)
-                .padding(.horizontal, DS.Spacing.xxl)
-
-                DSPrimaryButton(
-                    L10n.t("موافقة بالرقم المعدّل", "Approve with Modified Number"),
-                    icon: "checkmark.circle.fill"
-                ) {
-                    let trimmed = editedPhone.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    Task {
-                        var modifiedRequest = request
-                        modifiedRequest.newValue = trimmed
-                        await adminRequestVM.approvePhoneChangeRequest(request: modifiedRequest)
-                        phoneEditRequest = nil
-                    }
-                }
-                .disabled(editedPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Spacer()
+    /// صف قراءة فقط داخل مربّعي تعديل الاسم/الرقم — أيقونة الحقل + العنوان + القيمة
+    private func editBoxValueRow(icon: String, label: String, value: String,
+                                 tint: Color, valueColor: Color = DS.Color.fieldValue) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: tint)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+                Text(value)
+                    .font(DS.Font.plex(14.5))
+                    .foregroundColor(valueColor)
+                    .lineLimit(2)
             }
-            .padding(.top, DS.Spacing.xl)
-            .navigationTitle(L10n.t("تعديل الرقم", "Edit Number"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { phoneEditRequest = nil }
-                        .foregroundColor(DS.Color.primary)
+            Spacer(minLength: 0)
+        }
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
+    }
+
+    // MARK: - Admin Phone Edit Box
+    /// تعديل الرقم قبل الموافقة — مربّع بمنتصف الشاشة بنفس تصميم المربّعات الموحّد
+    /// (طلب المالك): الرقم الحالي والمطلوب، ثم حقل الرقم المعدّل، و«موافقة» / «إلغاء» أسفله.
+    private func adminPhoneEditSheet(request: PhoneChangeRequest) -> some View {
+        DSComposer(
+            title: L10n.t("تعديل الرقم", "Edit Number"),
+            subtitle: L10n.t("يمكنك تعديل الرقم قبل الموافقة عليه.", "You can modify the number before approving."),
+            icon: "phone.badge.checkmark",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("موافقة", "Approve"),
+            actionIcon: "checkmark.circle.fill",
+            canSubmit: !editedPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            hasUnsavedChanges: editedPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+                != editedPhoneStart.trimmingCharacters(in: .whitespacesAndNewlines),
+            onSubmit: {
+                let trimmed = editedPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                Task {
+                    var modifiedRequest = request
+                    modifiedRequest.newValue = trimmed
+                    await adminRequestVM.approvePhoneChangeRequest(request: modifiedRequest)
+                    phoneEditRequest = nil
                 }
+            },
+            onCancel: { phoneEditRequest = nil }
+        ) {
+            DSComposerSection(title: L10n.t("رقم الهاتف", "Phone"),
+                              icon: "phone.fill",
+                              tint: DS.Color.primary,
+                              index: 0) {
+                editBoxValueRow(icon: "phone.fill",
+                                label: L10n.t("الرقم الحالي", "Current number"),
+                                value: KuwaitPhone.display(request.member?.phoneNumber),
+                                tint: DS.Color.primary)
+                editBoxValueRow(icon: "phone.arrow.right",
+                                label: L10n.t("الرقم المطلوب", "Requested number"),
+                                value: KuwaitPhone.display(request.newValue),
+                                tint: DS.Color.success,
+                                valueColor: DS.Color.success)
+            }
+
+            DSComposerSection(title: L10n.t("التعديل", "Edit"),
+                              icon: "pencil",
+                              tint: DS.Color.success,
+                              index: 1) {
+                DSComposerField(icon: "phone",
+                                label: L10n.t("الرقم المعدّل", "Modified Number"),
+                                placeholder: L10n.t("اكتب الرقم الصحيح", "Enter correct number"),
+                                text: $editedPhone,
+                                tint: DS.Color.success,
+                                keyboard: .phonePad)
             }
         }
+        .onAppear { editedPhoneStart = editedPhone }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -3510,69 +3490,192 @@ struct AdminAllRequestsView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
     }
 
-    // MARK: - Request Detail Sheet
+    // MARK: - Request Detail Box
 
-    /// شيت تفاصيل الطلب — تصميم موحّد لكل الأنواع.
+    /// مربّع تفاصيل الطلب بمنتصف الشاشة — نفس تصميم المربّعات الموحّد (طلب المالك):
+    /// رأس كحلي بأيقونة نوع الطلب ووقته، الصورة (إن وُجدت)، قسم «بيانات الطلب» بصفوف،
+    /// ثم قسم «الإجراءات» (تعديل الرقم، رفض، حذف نهائي). الشريط السفلي: الموافقة كحلي
+    /// يمين و«إغلاق» يسار — عناصر صحة الشجرة للعرض فقط («إغلاق» وحده).
     private func requestDetailSheet(_ detail: RequestDetail) -> some View {
         let meta = detailMeta(for: detail)
-        return NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    // Hero — أيقونة كبيرة + نوع الطلب + الوقت
-                    detailHero(icon: meta.icon, color: meta.color, title: meta.title, timestamp: meta.timestamp, imageUrl: meta.imageUrl)
-
-                    // محتوى مخصّص لكل نوع
-                    detailContent(for: detail)
-
-                    // أزرار الموافقة/الرفض — أسفل الطلب (غير ثابتة)
-                    stickyActionsBar(for: detail, accent: meta.color)
-                        .padding(.top, DS.Spacing.xs)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.lg)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: DetailSheetHeightKey.self, value: geo.size.height)
-                    }
-                )
-            }
-            .background(DS.Color.background)
-            .navigationTitle(L10n.t("تفاصيل الطلب", "Request Details"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إغلاق", "Close")) { selectedDetail = nil }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                }
-            }
-            .dsAlert(
-                L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
-                isPresented: Binding(
-                    get: { deleteConfirmDetail != nil },
-                    set: { if !$0 { deleteConfirmDetail = nil } }
-                )
-            ) {
-                Button(L10n.t("حذف نهائي", "Delete Permanently"), role: .destructive) {
-                    if let d = deleteConfirmDetail {
-                        hardDeleteDetail(d)
-                    }
-                    deleteConfirmDetail = nil
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { deleteConfirmDetail = nil }
-            } message: {
-                Text(L10n.t(
-                    "سيُحذف هذا الطلب نهائياً من قاعدة البيانات ولا يمكن التراجع.",
-                    "This request will be permanently removed and cannot be undone."
-                ))
-            }
-            .sheet(item: $phoneEditPendingMember) { member in
-                PendingMemberPhoneSheet(member: member)
-                    .environmentObject(adminRequestVM)
-            }
+        return DSComposer(
+            title: meta.title,
+            subtitle: meta.timestamp ?? L10n.t("تفاصيل الطلب", "Request Details"),
+            icon: meta.icon,
+            tint: DS.Color.actionNavy,
+            actionTitle: approveLabelFor(detail),
+            actionIcon: approveIconFor(detail),
+            showsAction: detailHasDecision(detail),
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: !adminRequestVM.isLoading,
+            onSubmit: { approveDetail(detail) },
+            onCancel: { selectedDetail = nil }
+        ) {
+            detailBoxContent(detail, meta: meta)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .dsAlert(
+            L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
+            isPresented: Binding(
+                get: { deleteConfirmDetail != nil },
+                set: { if !$0 { deleteConfirmDetail = nil } }
+            )
+        ) {
+            Button(L10n.t("حذف نهائي", "Delete Permanently"), role: .destructive) {
+                if let d = deleteConfirmDetail {
+                    hardDeleteDetail(d)
+                }
+                deleteConfirmDetail = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { deleteConfirmDetail = nil }
+        } message: {
+            Text(L10n.t(
+                "سيُحذف هذا الطلب نهائياً من قاعدة البيانات ولا يمكن التراجع.",
+                "This request will be permanently removed and cannot be undone."
+            ))
+        }
+        .dsCenterBox(item: $phoneEditPendingMember) { member in
+            PendingMemberPhoneSheet(member: member)
+                .environmentObject(adminRequestVM)
+        }
+    }
+
+    /// عناصر صحة الشجرة للعرض فقط — لا موافقة ولا رفض ولا حذف (كما كانت)
+    private func detailHasDecision(_ detail: RequestDetail) -> Bool {
+        if case .healthMember = detail { return false }
+        return true
+    }
+
+    /// محتوى المربّع: الصورة (إن وُجدت) ← «بيانات الطلب» ← «الإجراءات»
+    @ViewBuilder
+    private func detailBoxContent(_ detail: RequestDetail, meta: DetailMeta) -> some View {
+        if let imageUrl = meta.imageUrl, let url = URL(string: imageUrl) {
+            detailHeroImage(url: url, color: meta.color)
+                .dsStaggerIn(0)
+        }
+
+        DSComposerSection(title: detailInfoTitle(detail),
+                          icon: detailInfoIcon(detail),
+                          tint: DS.Color.primary,
+                          index: 1) {
+            detailContent(for: detail)
+        }
+
+        detailActionsSection(for: detail)
+    }
+
+    private func detailInfoTitle(_ detail: RequestDetail) -> String {
+        if case .healthMember = detail { return L10n.t("بيانات العضو", "Member Info") }
+        return L10n.t("بيانات الطلب", "Request Info")
+    }
+
+    private func detailInfoIcon(_ detail: RequestDetail) -> String {
+        if case .healthMember = detail { return "person.text.rectangle.fill" }
+        return "doc.text.fill"
+    }
+
+    /// صورة الطلب (العضو، المشروع، الصورة المقترحة…) دائرية بمنتصف المربّع تحت الرأس
+    private func detailHeroImage(url: URL, color: Color) -> some View {
+        CachedAsyncImage(url: url) { img in
+            img.resizable().scaledToFill()
+        } placeholder: {
+            Circle().fill(color.opacity(0.12))
+                .overlay(ProgressView().tint(color))
+        }
+        .frame(width: 88, height: 88)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(color.opacity(0.25), lineWidth: 1.5))
+        .shadow(color: color.opacity(0.22), radius: 10, x: 0, y: 5)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xs)
+        .accessibilityHidden(true)   // صورة زخرفية فوق البيانات — الصورة المقترحة لها صفّها
+    }
+
+    /// قسم «الإجراءات» — كل ما عدا الموافقة (التي في الشريط السفلي)، بنفس الصلاحيات السابقة:
+    /// تعديل/إضافة رقم فعلي (طلب انضمام + canModerate)، رفض (canRejectRequests)،
+    /// حذف نهائي (canDeleteMembers). عناصر صحة الشجرة بلا إجراءات.
+    @ViewBuilder
+    private func detailActionsSection(for detail: RequestDetail) -> some View {
+        let phoneMember = detailPhoneEditMember(detail)
+        let decision = detailHasDecision(detail)
+        let showReject = decision && authVM.canRejectRequests
+        let showDelete = decision && authVM.canDeleteMembers
+        if phoneMember != nil || showReject || showDelete {
+            DSComposerSection(title: L10n.t("الإجراءات", "Actions"),
+                              icon: "hand.tap.fill",
+                              tint: DS.Color.primary,
+                              index: 2) {
+                // تعديل / إضافة رقم فعلي قبل الربط
+                if let member = phoneMember {
+                    detailActionButton(
+                        title: L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"),
+                        icon: "phone.badge.plus",
+                        color: DS.Color.primary
+                    ) {
+                        phoneEditPendingMember = member
+                    }
+                }
+
+                if showReject || showDelete {
+                    HStack(spacing: DS.Spacing.sm) {
+                        if showReject {
+                            detailActionButton(
+                                title: L10n.t("رفض", "Reject"),
+                                icon: "xmark",
+                                color: DS.Color.warning
+                            ) {
+                                rejectReasonText = ""
+                                rejectReasonDetail = detail
+                                showRejectReason = true
+                            }
+                        }
+                        // حذف نهائي — يمسح الطلب كلياً (للمالك/المدير فقط)
+                        if showDelete {
+                            detailActionButton(
+                                title: L10n.t("حذف نهائي", "Delete Permanently"),
+                                icon: "trash",
+                                color: DS.Color.error
+                            ) {
+                                deleteConfirmDetail = detail
+                            }
+                            .disabled(adminRequestVM.isLoading)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// العضو المعلّق الذي يُعدَّل رقمه — لطلبات الانضمام فقط ولمن يملك canModerate
+    private func detailPhoneEditMember(_ detail: RequestDetail) -> FamilyMember? {
+        guard authVM.canModerate, case .join(let member) = detail else { return nil }
+        return member
+    }
+
+    /// زر إجراء واضح داخل قسم «الإجراءات» — نص وأيقونة بلون الإجراء على خلفية خفيفة منه
+    private func detailActionButton(title: String, icon: String, color: Color,
+                                    action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xs + 2) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .bold))
+                Text(title)
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(color.opacity(0.12)))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(color.opacity(0.25), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     /// metadata موحَّدة لكل نوع طلب — يُستخدم في hero + actions.
@@ -3650,58 +3753,7 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// Hero فاخر: دائرة كبيرة بـ gradient + اسم الطلب + الوقت.
-    private func detailHero(icon: String, color: Color, title: String, timestamp: String?, imageUrl: String? = nil) -> some View {
-        VStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                if let imageUrl, let url = URL(string: imageUrl) {
-                    // صورة دائرية حقيقية (نفس صفحة المشاريع)
-                    CachedAsyncImage(url: url) { img in
-                        img.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle().fill(color.opacity(0.12))
-                            .overlay(ProgressView().tint(color))
-                    }
-                    .frame(width: 96, height: 96)
-                    .clipped()
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(color.opacity(0.18), lineWidth: 1))
-                    .shadow(color: color.opacity(0.25), radius: 10, x: 0, y: 5)
-                } else {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [color, color.opacity(0.75)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 72, height: 72)
-                        .shadow(color: color.opacity(0.35), radius: 10, x: 0, y: 5)
-                    Image(systemName: icon)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
-                }
-            }
-
-            Text(title)
-                .font(DS.Font.scaled(20, weight: .black))
-                .foregroundColor(DS.Color.textPrimary)
-
-            if let timestamp {
-                HStack(spacing: 4) {
-                    Image(systemName: "clock.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                    Text(timestamp)
-                        .font(DS.Font.scaled(11, weight: .semibold))
-                }
-                .foregroundColor(DS.Color.textSecondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
-    }
-
-    /// المحتوى المخصّص لكل نوع — بطاقات معلومات.
+    /// المحتوى المخصّص لكل نوع — صفوف داخل قسم «بيانات الطلب».
     @ViewBuilder
     private func detailContent(for detail: RequestDetail) -> some View {
         switch detail {
@@ -3720,34 +3772,7 @@ struct AdminAllRequestsView: View {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
                          value: KuwaitPhone.display(phone), color: DS.Color.success)
             }
-            // تعديل / إضافة رقم فعلي قبل الربط
-            if authVM.canModerate {
-                Button {
-                    phoneEditPendingMember = member
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "phone.badge.plus")
-                            .font(DS.Font.scaled(13, weight: .semibold))
-                        Text(L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"))
-                            .font(DS.Font.scaled(13, weight: .bold))
-                        Spacer()
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .frame(maxWidth: .infinity)
-                    .background(DS.Color.primary.opacity(0.08))
-                    .cornerRadius(DS.Radius.md)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.primary.opacity(0.2), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
+            // «تعديل / إضافة رقم فعلي» انتقل إلى قسم «الإجراءات» (detailActionsSection)
 
         case .news(let post):
             infoCard(icon: "person.fill", label: L10n.t("الكاتب", "Author"),
@@ -4008,76 +4033,55 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// بطاقة معلومة بسيطة — أيقونة دائرية + label + قيمة.
+    /// صف معلومة — أيقونة الحقل + العنوان الغامق + القيمة (نفس صفوف المربّعات الموحّدة).
     private func infoCard(icon: String, label: String, value: String, color: Color) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(color)
-            }
+            DSFieldIcon(name: icon, tint: color)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .font(DS.Font.scaled(15, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
+                    .font(DS.Font.plex(14.5))
+                    .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(color.opacity(0.12), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity)
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
     }
 
-    /// بطاقة رابط قابلة للنقر — تفتح URL (واتساب/موقع/سوشال).
+    /// صف رابط قابل للنقر — يفتح URL (واتساب/موقع/سوشال) بنفس صفوف المربّعات.
     private func contactLinkCard(icon: String, label: String, value: String, color: Color, url: URL) -> some View {
         Button {
             UIApplication.shared.open(url)
         } label: {
             HStack(spacing: DS.Spacing.sm) {
-                ZStack {
-                    Circle().fill(color.opacity(0.15)).frame(width: 36, height: 36)
-                    Image(systemName: icon)
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(color)
-                }
+                DSFieldIcon(name: icon, tint: color)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label)
-                        .font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
+                        .font(DS.Font.plex(12, weight: .heavy))
+                        .foregroundColor(DS.Color.fieldLabel)
                     Text(value)
-                        .font(DS.Font.scaled(15, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
+                        .font(DS.Font.plex(14.5))
+                        .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
-                Spacer()
+                Spacer(minLength: 0)
                 Image(systemName: "arrow.up.forward")
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundColor(color.opacity(0.7))
+                    .accessibilityHidden(true)
             }
-            .padding(DS.Spacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(color.opacity(0.20), lineWidth: 1)
-            )
+            .frame(maxWidth: .infinity)
+            .dsRowBox()
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     /// يبني رابط سوشال من handle (@user) أو URL كامل.
@@ -4089,178 +4093,98 @@ struct AdminAllRequestsView: View {
         return URL(string: base + handle)
     }
 
-    /// بطاقة نص طويل — label + محتوى متعدد الأسطر.
+    /// صف نص طويل — أيقونة الحقل + العنوان، ثم المحتوى متعدد الأسطر بعرض الصف.
     private func longTextCard(icon: String, label: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(DS.Color.textSecondary)
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: icon, tint: DS.Color.primary)
+                    .accessibilityHidden(true)
                 Text(label)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+                Spacer(minLength: 0)
             }
             Text(text)
-                .font(DS.Font.body)
+                .font(DS.Font.plex(14.5))
                 .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
-        )
+        .dsRowBox()
+        .accessibilityElement(children: .combine)
     }
 
-    /// بطاقة مقارنة "قبل/بعد" — مفيدة لتغييرات الاسم/الهاتف.
+    /// صف مقارنة «قبل/بعد» — القديم مشطوب بالأحمر ← الجديد بالأخضر (تغييرات الاسم/الهاتف).
     private func comparisonCard(oldLabel: String, oldValue: String,
                                  newLabel: String, newValue: String, icon: String) -> some View {
-        VStack(spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.sm) {
-                ZStack {
-                    Circle().fill(DS.Color.error.opacity(0.12)).frame(width: 32, height: 32)
-                    Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.error)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(oldLabel).font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(oldValue).font(DS.Font.scaled(14, weight: .semibold))
-                        .foregroundColor(DS.Color.textPrimary)
+                DSFieldIcon(name: icon, tint: DS.Color.error)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(oldLabel)
+                        .font(DS.Font.plex(12, weight: .heavy))
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Text(oldValue)
+                        .font(DS.Font.plex(14.5))
+                        .foregroundColor(DS.Color.fieldValue)
                         .strikethrough(true, color: DS.Color.error.opacity(0.5))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer()
+                Spacer(minLength: 0)
             }
 
-            HStack(spacing: 4) {
-                Spacer()
-                Image(systemName: "arrow.down")
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                Spacer()
-            }
+            // سهم تحت عمود الأيقونات: من القديم إلى الجديد
+            Image(systemName: "arrow.down")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+                .frame(width: 32)
+                .accessibilityHidden(true)
 
             HStack(spacing: DS.Spacing.sm) {
-                ZStack {
-                    Circle().fill(DS.Color.success.opacity(0.15)).frame(width: 32, height: 32)
-                    Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+                DSFieldIcon(name: icon, tint: DS.Color.success)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(newLabel)
+                        .font(DS.Font.plex(12, weight: .heavy))
                         .foregroundColor(DS.Color.success)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(newLabel).font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.success)
-                    Text(newValue).font(DS.Font.scaled(14, weight: .bold))
+                    Text(newValue)
+                        .font(DS.Font.plex(14.5, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer()
+                Spacer(minLength: 0)
             }
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «الحالي… الجديد…» عنصراً واحداً
     }
 
-    /// بطاقة صورة كبيرة (للصور المقترحة).
+    /// صورة كبيرة (للصور المقترحة) بنفس إطار صفوف المربّعات.
     private func photoCard(url: URL) -> some View {
         CachedAsyncImage(url: url) { img in
             img.resizable().scaledToFit()
         } placeholder: {
-            RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.surface)
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background)
                 .frame(height: 200)
                 .overlay(ProgressView().tint(DS.Color.primary))
         }
         .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+        )
+        // صورة محتوى (المقترحة/الجديدة) — اسم واضح بدل «صورة» بلا وصف
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.t("الصورة", "Photo"))
+        .accessibilityAddTraits(.isImage)
     }
 
-    /// شريط إجراءات سفلي ثابت بـ ultraThinMaterial.
-    @ViewBuilder
-    private func stickyActionsBar(for detail: RequestDetail, accent: Color) -> some View {
-        if case .healthMember = detail {
-            // عناصر صحة الشجرة — شيت للعرض فقط، لا إجراءات موافقة/رفض
-            EmptyView()
-        } else {
-            VStack(spacing: 0) {
-                HStack(spacing: DS.Spacing.sm) {
-                    if authVM.canRejectRequests {
-                        Button {
-                            rejectReasonText = ""
-                            rejectReasonDetail = detail
-                            showRejectReason = true
-                        } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "xmark").font(DS.Font.scaled(12, weight: .bold))
-                                Text(L10n.t("رفض", "Reject")).font(DS.Font.scaled(14, weight: .bold))
-                            }
-                            .foregroundColor(DS.Color.error)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Capsule().fill(DS.Color.error.opacity(0.10)))
-                            .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    Button {
-                        approveDetail(detail)
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: approveIconFor(detail))
-                                .font(DS.Font.scaled(12, weight: .bold))
-                            Text(approveLabelFor(detail))
-                                .font(DS.Font.scaled(14, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    colors: [DS.Color.success, DS.Color.success.opacity(0.85)],
-                                    startPoint: .leading, endPoint: .trailing
-                                )
-                            )
-                        )
-                        .shadow(color: DS.Color.success.opacity(0.35), radius: 6, x: 0, y: 3)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(adminRequestVM.isLoading)
-                }
-
-                // حذف نهائي — يمسح الطلب كلياً (للمالك/المدير فقط)
-                if authVM.canDeleteMembers {
-                    Button {
-                        deleteConfirmDetail = detail
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "trash").font(DS.Font.scaled(11, weight: .bold))
-                            Text(L10n.t("حذف نهائي", "Delete Permanently"))
-                                .font(DS.Font.scaled(13, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.error)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(DS.Color.error.opacity(0.08)))
-                        .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.20), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, DS.Spacing.sm)
-                    .disabled(adminRequestVM.isLoading)
-                }
-            }
-        }
-    }
+    // الموافقة صارت زر الشريط السفلي للمربّع، والرفض والحذف النهائي في قسم «الإجراءات»
+    // (detailActionsSection) — بنفس الصلاحيات وحالة التحميل السابقة.
 
     private func approveLabelFor(_ detail: RequestDetail) -> String {
         switch detail {
@@ -4569,29 +4493,54 @@ struct AdminAllRequestsView: View {
         }
     }
 
+    /// صور الخبر داخل «بيانات الطلب» — صفوف عادية لا LazyVGrid (الشبكة الكسولة
+    /// تُبلِّغ ارتفاعاً ناقصاً داخل المربّع فيُقصّ آخر صف)
     private func newsMediaGrid(urls: [String]) -> some View {
-        DSCard(padding: DS.Spacing.md) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        let items = urls.compactMap { URL(string: $0) }
+        let columns = 3
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "photo.on.rectangle", tint: DS.Color.accent)
+                    .accessibilityHidden(true)
                 Text(L10n.t("الصور", "Images"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: DS.Spacing.sm)], spacing: DS.Spacing.sm) {
-                    ForEach(urls, id: \.self) { urlStr in
-                        if let url = URL(string: urlStr) {
-                            CachedAsyncImage(url: url) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: {
-                                RoundedRectangle(cornerRadius: DS.Radius.sm)
-                                    .fill(DS.Color.surface)
-                                    .overlay(ProgressView().tint(DS.Color.primary))
-                            }
-                            .frame(height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+                Spacer(minLength: 0)
+            }
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(Array(stride(from: 0, to: items.count, by: columns)), id: \.self) { start in
+                    let end = min(start + columns, items.count)
+                    HStack(spacing: DS.Spacing.sm) {
+                        ForEach(start..<end, id: \.self) { index in
+                            newsMediaTile(items[index])
+                        }
+                        ForEach(0..<(columns - (end - start)), id: \.self) { _ in
+                            Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
                         }
                     }
                 }
             }
         }
+        .dsRowBox()
+    }
+
+    private func newsMediaTile(_ url: URL) -> some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: 90)
+            .overlay(
+                CachedAsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    Rectangle()
+                        .fill(DS.Color.surface)
+                        .overlay(ProgressView().tint(DS.Color.primary))
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.t("صورة الخبر", "News image"))
+            .accessibilityAddTraits(.isImage)
     }
 
     private func newsTypeColor(_ type: String) -> Color {
@@ -4606,13 +4555,5 @@ struct AdminAllRequestsView: View {
         case "دعوة": return DS.Color.newsInvitation
         default: return DS.Color.primary
         }
-    }
-}
-
-// MARK: - Detail Sheet Height Preference
-private struct DetailSheetHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }

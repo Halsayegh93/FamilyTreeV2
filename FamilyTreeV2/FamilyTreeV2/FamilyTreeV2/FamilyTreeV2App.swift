@@ -63,7 +63,11 @@ struct FamilyTreeV2App: App {
                 // preferredColorScheme وحده لا يصل للشيتات والتنبيهات المقدَّمة من UIKit،
                 // فنفرض النمط على النافذة نفسها ليشمل كل ما يُعرض فوقها.
                 .onChange(of: appearanceMode) { _ in applyWindowStyle() }
-                .onAppear { applyWindowStyle() }
+                .onAppear {
+                    applyWindowStyle()
+                    // الضغط في أي مكان يُخفي لوحة المفاتيح (طلب المالك)
+                    KeyboardDismisser.shared.install()
+                }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                     Task {
                         try? await UNUserNotificationCenter.current().setBadgeCount(0)

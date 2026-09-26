@@ -2,5 +2,6 @@
 
 "CFBundleDisplayName" = "Al-Mohammadali Family";
 "CFBundleName" = "Al-Mohammadali Family";
-"NSPhotoLibraryUsageDescription" = "The app needs access to your photo library to select profile pictures and news photos";
-"NSCameraUsageDescription" = "The app needs access to your camera to take profile photos and scan QR codes";
+"NSPhotoLibraryUsageDescription" = "Only the photos you pick are used, to add them to the app, for example your profile picture or photos for news, projects and the family library.";
+"NSPhotoLibraryAddUsageDescription" = "To save images you choose to keep from the app, such as your QR code or family library photos, to your photo library.";
+"NSCameraUsageDescription" = "The camera is used to scan a family member's QR code and show how you are related.";

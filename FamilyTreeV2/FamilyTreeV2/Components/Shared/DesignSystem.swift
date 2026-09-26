@@ -1012,40 +1012,31 @@ struct DSSectionHeader: View {
     var trailing: String? = nil
     var iconColor: Color = DS.Color.primary
 
+    // نفس عناوين أقسام مربّعات الإضافة (DSComposerSection) — تصميم موحّد في
+    // كل التطبيق (طلب المالك ٢٠٢٦-٠٩-٢٦): أيقونة في دائرة ملوّنة + عنوان غامق،
+    // والتلميح الثانوي في الطرف
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.xs) {
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(12, weight: .bold))
-                            .foregroundColor(iconColor)
-                    }
-                    Text(title)
-                        .font(DS.Font.scaled(13, weight: .semibold))
-                        .foregroundColor(iconColor)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs + 2)
-                .background(iconColor.opacity(0.08))
-                .clipShape(Capsule())
-
-                if let trailing {
-                    // تلميح ثانوي — لا ينافس عنوان القسم في اللون ولا الحجم
-                    Text(trailing)
-                        .font(DS.Font.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-
-                Spacer()
+        HStack(spacing: 7) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundColor(iconColor)
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(iconColor.opacity(0.13)))
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.sm)
-
-            DSDivider()
+            Text(title)
+                .font(DS.Font.plex(12.5, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
+            Spacer(minLength: 0)
+            if let trailing {
+                Text(trailing)
+                    .font(DS.Font.plex(11, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
         }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.sm)
     }
 }
 

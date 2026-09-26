@@ -227,10 +227,9 @@ struct AdminIncompleteMembersView: View {
                 }
             }
         }
-        .sheet(item: $memberToEdit) { member in
-            NavigationStack {
-                AdminMemberDetailSheet(member: member)
-            }
+        // «تعديل» من السحب — مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
+        .dsTallBox(item: $memberToEdit) { member in   // نموذج طويل — مربّع طويل (توصية أبل)
+            AdminMemberDetailSheet(member: member)
         }
         .dsAlert(
             L10n.t("تأكيد تحديث الجنس", "Confirm Gender Update"),

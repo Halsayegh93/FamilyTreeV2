@@ -14,6 +14,8 @@ struct LoginView: View {
     @State private var otpTimeRemaining = 0
     @State private var logoScale: CGFloat = 0.6
     @State private var logoOpacity: CGFloat = 0
+    /// «شروط الاستخدام وسياسة الخصوصية» قبل الدخول (Guideline 5.1.1)
+    @State private var showLegal = false
 
 
 
@@ -155,7 +157,34 @@ struct LoginView: View {
                 .padding(.horizontal, DS.Spacing.xl)
 
                 Spacer()
+
+                // الشروط والخصوصية متاحة قبل الدخول — تُقرأ داخل التطبيق
+                if !authVM.isOtpSent {
+                    legalFooter
+                        .padding(.bottom, DS.Spacing.sm)
+                }
             }
+    }
+
+    /// سطر صغير أسفل الشاشة يفتح «الخصوصية والشروط»
+    private var legalFooter: some View {
+        VStack(spacing: 0) {
+            Text(L10n.t("باستخدامك التطبيق فإنك توافق على", "By using the app you agree to the"))
+                .font(DS.Font.plex(11))
+                .foregroundColor(DS.Color.textTertiary)
+            Button { showLegal = true } label: {
+                Text(L10n.t("شروط الاستخدام وسياسة الخصوصية", "Terms of Use and Privacy Policy"))
+                    .font(DS.Font.plex(11.5, weight: .bold))
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .frame(minHeight: 44)   // مساحة ضغط ٤٤ (توصية أبل)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .dsTallBox(isPresented: $showLegal) { PrivacyPolicyView() }
     }
 
     /// مربّع رقم واحد من رمز التحقق — يبرز المربّع النشط

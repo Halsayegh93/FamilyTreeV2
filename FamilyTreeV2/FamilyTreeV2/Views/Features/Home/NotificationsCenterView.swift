@@ -76,17 +76,21 @@ private struct NotificationKindStyle {
     static func style(for kind: String) -> NotificationKindStyle {
         styles[kind] ?? fallback
     }
+
+    /// لون رأس مربّع التفاصيل — درجات غامقة تبقى الكتابة البيضاء واضحة عليها في
+    /// الوضعين (ألوان الأنواع نفسها تفتح في الداكن): الحذف/الرفض أحمر، الذهبي
+    /// ذهبي غامق، الأخضر أخضر غامق، الوفاة رمادي، والباقي كحلي
+    static func headerTint(for kind: String) -> Color {
+        if kind == "deceased_report" { return DS.Color.textSecondary }
+        let c = style(for: kind).color
+        if c == DS.Color.error { return DS.Color.error }
+        if c == DS.Color.accent { return DS.Color.composerLibrary }
+        if c == DS.Color.secondary || c == DS.Color.success { return DS.Color.composerProject }
+        return DS.Color.actionNavy
+    }
 }
 
 // MARK: - Layout Constants
-
-/// Preference key لقياس ارتفاع محتوى شيت تفاصيل الإشعار
-private struct DetailSheetHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
 
 private enum NotifLayout {
     /// Detail info row icon column width (also used by detailDivider leading inset)
@@ -106,6 +110,8 @@ struct NotificationsCenterView: View {
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — نضغط المسافات العمودية حتى لا يُقتص المحتوى
     private var isLandscape: Bool { vSizeClass == .compact }
+    /// تعليقات وإعجابات المحظورين لا تظهر في الإشعارات (Guideline 1.2)
+    @ObservedObject private var blockedStore = BlockedMembersStore.shared
 
     @AppStorage("notif_comments") private var notifComments: Bool = true
     @AppStorage("notif_likes") private var notifLikes: Bool = true
@@ -119,10 +125,6 @@ struct NotificationsCenterView: View {
     @State private var showingAppUpdateComposer = false
     /// العضو المختار لفتح تفاصيله من داخل الإشعار (مثل الشجرة).
     @State private var selectedMember: FamilyMember? = nil
-    /// detent المختار حالياً — يُحدَّث ديناميكياً ليتطابق مع ارتفاع المحتوى
-    @State private var detailSheetDetent: PresentationDetent = .height(450)
-    /// آخر ارتفاع تم قياسه للمحتوى
-    @State private var measuredDetailHeight: CGFloat = 450
     /// طلب admin_requests المرتبط بالإشعار الحالي — يُحمَّل عند فتح الشيت (للمرحلة ٣)
     @State private var loadedAdminRequest: AdminRequest? = nil
     /// نتائج مطابقة اسم/أب لطلبات الانضمام
@@ -296,7 +298,10 @@ struct NotificationsCenterView: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .sheet(item: $selectedNotification) { notification in
+        // تفاصيل الإشعار مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك) — للعرض فقط،
+        // فيُغلق أيضاً بالضغط خارجه (بدل سحب الورقة للأسفل سابقاً)
+        .dsCenterBox(item: $selectedNotification,
+                     onBackgroundTap: { selectedNotification = nil }) { notification in
             notificationDetailSheet(notification)
         }
         .sheet(isPresented: $showingAppUpdateComposer) {
@@ -623,9 +628,14 @@ struct NotificationsCenterView: View {
 
     /// كل الإشعارات بعد تطبيق فلتر الإعدادات (الأنواع المخفية)
     private var visibleNotifications: [AppNotification] {
-        let all = notificationVM.notifications
+        let all = notificationVM.notifications.filter { !isFromBlockedMember($0) }
         guard !hiddenKinds.isEmpty else { return all }
         return all.filter { !hiddenKinds.contains($0.kind) }
+    }
+
+    /// تعليق أو إعجاب من عضو حظره المستخدم — لا يظهر (طلبات الإدارة لا تتأثر)
+    private func isFromBlockedMember(_ n: AppNotification) -> Bool {
+        blockedStore.hidesNotification(kind: n.kind, createdBy: n.createdBy, body: n.body)
     }
 
     /// تاب "إشعاراتي":
@@ -951,74 +961,34 @@ struct NotificationsCenterView: View {
         )
     }
 
-    // MARK: - Detail Sheet
+    // MARK: - Detail Box (مربّع تفاصيل الإشعار بمنتصف الشاشة — طلب المالك)
 
+    /// تفاصيل إشعار واحد بنفس مربّعات التطبيق: رأس بلون نوع الإشعار، أقسام،
+    /// وشريط سفلي — «تعليم كمقروء» كحلي يمين (لغير المقروء) و«إغلاق» يسار.
+    /// للقراءة فقط كما كان: الموافقة والرفض والمراجعة من أقسام الإدارة المختصّة،
+    /// والحذف من قائمة الإشعار في القائمة (طلب المالك).
     private func notificationDetailSheet(_ notification: AppNotification) -> some View {
         let iconInfo = NotificationKindStyle.style(for: notification.kind)
-        let relatedMember = relatedMemberForNotification(notification)
-        let isJoinRequest = notification.kind == RequestType.joinRequest.rawValue
-            || notification.kind == NotificationKind.linkRequest.rawValue
 
-        return ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: relatedMember == nil ? DS.Spacing.sm : DS.Spacing.md) {
-                    Spacer().frame(height: isLandscape ? DS.Spacing.md : DS.Spacing.xl)
-
-                    if let member = relatedMember {
-                        detailMemberCard(member: member, iconInfo: iconInfo)
-                    }
-
-                    // قسم التطابقات المحتملة — كارد مستقل قبل جسم الإشعار للأهمية
-                    // ملاحظة: الإشعارات اللي من trigger تحفظ pending ID في created_by،
-                    // والإشعارات من admin_requests تحفظه في request_id — نستخدم fallback
-                    let showMatchesSection = isJoinRequest && authVM.canModerate
-                    let resolvedRequesterId = notification.requestId ?? notification.createdBy
-                    if showMatchesSection, let requesterId = resolvedRequesterId {
-                        joinMatchesCard(
-                            candidates: joinMatchCandidates,
-                            requesterId: requesterId,
-                            iconInfo: iconInfo,
-                            isLoading: !joinMatchesLoaded
-                        )
-                    }
-
-                    detailBodyCard(
-                        notification: notification,
-                        iconInfo: iconInfo
-                    )
-
-                    if authVM.isAdmin,
-                       let details = notification.details,
-                       !details.changes.isEmpty {
-                        DSChangeDetailsCard(details: details)
-                    }
-
-                    detailActions(notification: notification)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.bottom, DS.Spacing.xs)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .preference(key: DetailSheetHeightKey.self, value: geo.size.height)
-                    }
-                )
-            }
-        }
-        .onPreferenceChange(DetailSheetHeightKey.self) { newContentHeight in
-            // buffer: bottom safe area (~34pt) + grabber — تم تقليله لتقليل الفراغ تحت الأزرار
-            let target = newContentHeight + 16
-            let screenH = UIScreen.main.bounds.height
-            let cap = screenH - 60
-            let clamped = max(280, min(target, cap))
-            if abs(clamped - measuredDetailHeight) > 2 {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    measuredDetailHeight = clamped
-                    detailSheetDetent = .height(clamped)
-                }
-            }
+        return DSComposer(
+            title: iconInfo.label,
+            subtitle: relativeTime(notification.createdDate),
+            icon: iconInfo.icon,
+            tint: NotificationKindStyle.headerTint(for: notification.kind),
+            actionTitle: L10n.t("تعليم كمقروء", "Mark as Read"),
+            actionIcon: "envelope.open",
+            showsAction: !notification.read,
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: !notification.read,
+            onSubmit: {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                let id = notification.id
+                selectedNotification = nil
+                Task { await notificationVM.markNotificationAsRead(id: id) }
+            },
+            onCancel: { selectedNotification = nil }
+        ) {
+            detailBoxSections(notification, iconInfo: iconInfo)
         }
         .task(id: notification.id) {
             joinMatchesExpanded = false
@@ -1106,9 +1076,51 @@ struct NotificationsCenterView: View {
                 "Link this join request to \(chainFourNames(target.candidate))?\n\nData will be merged into an existing account and cannot be undone."
             ))
         }
-        .presentationDetents([.height(measuredDetailHeight), .large], selection: $detailSheetDetent)
-        .presentationDragIndicator(.visible)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// أقسام المربّع بنفس ترتيب الشيت السابق: العضو ← التطابقات ← الإشعار ← ما تغيّر
+    @ViewBuilder
+    private func detailBoxSections(_ notification: AppNotification, iconInfo: NotificationKindStyle) -> some View {
+        let relatedMember = relatedMemberForNotification(notification)
+        let isJoinRequest = notification.kind == RequestType.joinRequest.rawValue
+            || notification.kind == NotificationKind.linkRequest.rawValue
+        // قسم التطابقات المحتملة — قبل نص الإشعار للأهمية
+        // ملاحظة: الإشعارات اللي من trigger تحفظ pending ID في created_by،
+        // والإشعارات من admin_requests تحفظه في request_id — نستخدم fallback
+        let showMatchesSection = isJoinRequest && authVM.canModerate
+        let matchesRequesterId: UUID? = showMatchesSection
+            ? (notification.requestId ?? notification.createdBy) : nil
+        // الأقسام تدخل تباعاً (0، 1، 2…) حسب الظاهر منها
+        let matchesIndex = relatedMember == nil ? 0 : 1
+        let bodyIndex = matchesIndex + (matchesRequesterId == nil ? 0 : 1)
+
+        if let member = relatedMember {
+            DSComposerSection(title: L10n.t("العضو", "Member"),
+                              icon: "person.fill",
+                              tint: DS.Color.primary,
+                              index: 0) {
+                detailMemberCard(member: member)
+            }
+        }
+
+        if let requesterId = matchesRequesterId {
+            joinMatchesCard(
+                candidates: joinMatchCandidates,
+                requesterId: requesterId,
+                iconInfo: iconInfo,
+                isLoading: !joinMatchesLoaded,
+                index: matchesIndex
+            )
+        }
+
+        detailBodyCard(notification: notification, iconInfo: iconInfo, index: bodyIndex)
+
+        if authVM.isAdmin,
+           let details = notification.details,
+           !details.changes.isEmpty {
+            detailChangesSection(details, index: bodyIndex + 1)
+        }
     }
 
     /// اسم رباعي — wrapper للـcomputed property على FamilyMember
@@ -1191,14 +1203,14 @@ struct NotificationsCenterView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Detail: Member Card (صورة + اسم + دور)
-    private func detailMemberCard(member: FamilyMember, iconInfo: NotificationKindStyle) -> some View {
+    // MARK: - Detail: Member Row (صورة + اسم + دور) — يفتح تفاصيل العضو
+    private func detailMemberCard(member: FamilyMember) -> some View {
         Button {
             selectedMember = member
         } label: {
-            detailMemberCardBody(member: member, iconInfo: iconInfo)
+            detailMemberCardBody(member: member)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSScaleButtonStyle())
         .fullScreenCover(item: $selectedMember) { m in
             MemberDetailsView(member: m, centered: true)
                 .background(ClearPresentationBackground())
@@ -1209,13 +1221,12 @@ struct NotificationsCenterView: View {
         }
     }
 
-    private func detailMemberCardBody(member: FamilyMember, iconInfo: NotificationKindStyle) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            // صورة العضو (دائرية)
+    private func detailMemberCardBody(member: FamilyMember) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            // صورة العضو (دائرية) بحلقة بلون دوره
             ZStack {
                 Circle()
                     .fill(DS.Color.textTertiary.opacity(0.08))
-                    .frame(width: 48, height: 48)
 
                 if let url = member.avatarUrl, !url.isEmpty {
                     CachedAsyncImage(url: URL(string: url)) { image in
@@ -1224,64 +1235,52 @@ struct NotificationsCenterView: View {
                         Image(systemName: "person.fill")
                             .foregroundColor(DS.Color.textTertiary)
                     }
-                    .frame(width: 48, height: 48)
+                    .frame(width: 44, height: 44)
                     .clipShape(Circle())
                 } else {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
+            .frame(width: 44, height: 44)
+            .overlay(Circle().stroke(member.roleColor.opacity(0.35), lineWidth: 1.5).padding(-2))
+            .accessibilityHidden(true)   // الصورة زخرفة — الاسم يُقرأ بعدها
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(fourPartName(member))
-                    .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
+                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .truncationMode(.tail)
 
                 // رقاقة الدور
                 Text(member.roleName)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.plex(11, weight: .bold))
                     .foregroundColor(member.roleColor)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, 2)
-                    .background(member.roleColor.opacity(0.12))
-                    .clipShape(Capsule())
+                    .background(member.roleColor.opacity(0.12), in: Capsule())
             }
 
             Spacer(minLength: 0)
 
-            // سهم — إشارة أن الكرت يفتح تفاصيل العضو
+            // سهم — إشارة أن الصف يفتح تفاصيل العضو
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(12, weight: .bold))
-                .foregroundColor(DS.Color.textTertiary.opacity(0.6))
-
-            // أيقونة صغيرة تشير لنوع الإشعار
-            Image(systemName: iconInfo.icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
-                .foregroundColor(iconInfo.color)
-                .padding(8)
-                .background(iconInfo.color.opacity(0.10))
-                .clipShape(Circle())
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityHidden(true)
         }
-        .padding(DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(member.roleColor.opacity(0.20), lineWidth: 0.5)
-        )
-        .dsSubtleShadow()
+        .dsRowBox()
+        .contentShape(Rectangle())
     }
 
-    // MARK: - Detail: Body Card (نص الإشعار) — مُحسَّن
+    // MARK: - Detail: Body Section (نص الإشعار)
     private func detailBodyCard(
         notification: AppNotification,
-        iconInfo: NotificationKindStyle
+        iconInfo: NotificationKindStyle,
+        index: Int
     ) -> some View {
         let date = notification.createdDate
         // اسم المدير المنفّذ — يظهر داخل تفاصيل الإشعار حتى للأنواع المُعمَّمة (admin_edit_*)
@@ -1292,171 +1291,173 @@ struct NotificationsCenterView: View {
                   let creatorId = notification.createdBy else { return nil }
             return memberVM.member(byId: creatorId)
         }()
+        // المحتوى الأساسي — للإعلانات الإدارية يُعرض بشكل بارز (نص أكبر)
+        // لأن الرسالة نفسها هي محتوى الإشعار.
+        let isBroadcast = (notification.kind == "admin" || notification.kind == "admin_broadcast")
+        let bodyText = bodyWithoutCreatorPrefix(notification.body, creator: actualCreator)
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            // ── الهيدر داخل البطاقة نفسها: الأيقونة والعنوان والوقت ──
-            HStack(alignment: .center, spacing: DS.Spacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(iconInfo.gradient)
-                        .frame(width: 46, height: 46)
-                        .shadow(color: iconInfo.color.opacity(0.28), radius: 8, x: 0, y: 3)
-                    Image(systemName: iconInfo.icon)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                        .symbolRenderingMode(.hierarchical)
+        return DSComposerSection(
+            title: L10n.t("الإشعار", "Notification"),
+            icon: "text.bubble.fill",
+            tint: iconInfo.color,
+            index: index
+        ) {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Text(notification.title)
+                    .font(DS.Font.plex(15.5, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                // chip التصنيف + chip الإدارة / المدير المنفّذ + الحالة
+                detailChipsRow(notification: notification, iconInfo: iconInfo,
+                               isAdminSender: isAdminSender, creator: actualCreator)
+
+                // معاينة "قبل → بعد" — تظهر فقط للإشعارات اللي تحمل تفاصيل تغيير
+                if let firstChange = notification.details?.changes.first {
+                    detailFromToInline(change: firstChange, color: iconInfo.color)
                 }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(notification.title)
-                        .font(DS.Font.scaled(16, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(relativeTime(date))
-                        .font(DS.Font.scaled(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
+
+                if !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    richBodyView(
+                        bodyText,
+                        font: DS.Font.plex(isBroadcast ? 16.5 : 14.5, weight: isBroadcast ? .semibold : .regular),
+                        color: DS.Color.textPrimary
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dsRowBox()
+
+            // التاريخ والوقت الكامل
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "calendar", tint: DS.Color.primary)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("التاريخ", "Date"))
+                        .font(DS.Font.plex(12, weight: .heavy))
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Text(fullDateTime(date))
+                        .font(DS.Font.plex(14))
+                        .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
             }
-
-            DSDivider()
-
-            // ترويسة: chip التصنيف + chip المدير المنفّذ + الحالة
-            HStack(spacing: DS.Spacing.xs) {
-                // chip التصنيف
-                HStack(spacing: 4) {
-                    Image(systemName: iconInfo.icon)
-                        .font(DS.Font.scaled(11, weight: .bold))
-                    Text(iconInfo.label)
-                        .font(DS.Font.scaled(11, weight: .bold))
-                }
-                .foregroundColor(iconInfo.color)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 3)
-                .background(iconInfo.color.opacity(0.12))
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
-
-                // chip «الإدارة» — لإشعارات الإدارة المُرسَلة (بدون اسم شخصي)
-                if isAdminSender {
-                    HStack(spacing: 3) {
-                        Image(systemName: "shield.lefthalf.filled")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(L10n.t("الإدارة", "Admin"))
-                            .font(DS.Font.scaled(11, weight: .bold))
-                    }
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 3)
-                    .background(DS.Color.primary.opacity(0.10))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(DS.Color.primary.opacity(0.20), lineWidth: 0.5))
-                }
-
-                // chip المدير المنفّذ — للأدمن فقط، اسم حقيقي مو "الإدارة"
-                if let creator = actualCreator {
-                    HStack(spacing: 3) {
-                        Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(creator.shortFullName)
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
-                    .foregroundColor(creator.roleColor)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 3)
-                    .background(creator.roleColor.opacity(0.10))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(creator.roleColor.opacity(0.20), lineWidth: 0.5))
-                    .layoutPriority(-1)
-                }
-
-                Spacer(minLength: 0)
-
-                // حالة القراءة كنقطة ملونة + نص صغير
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(notification.read ? DS.Color.textTertiary : DS.Color.primary)
-                        .frame(width: 6, height: 6)
-                    Text(notification.read ? L10n.t("مقروء", "Read") : L10n.t("جديد", "New"))
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(notification.read ? DS.Color.textTertiary : DS.Color.primary)
-                }
-            }
-
-            // معاينة "قبل → بعد" — تظهر فقط للإشعارات اللي تحمل تفاصيل تغيير
-            if let firstChange = notification.details?.changes.first {
-                detailFromToInline(change: firstChange, color: iconInfo.color)
-            }
-
-            // المحتوى الأساسي — للإعلانات الإدارية يُعرض بشكل بارز (نص أكبر +
-            // علامة اقتباس على الحافة) لأن الرسالة نفسها هي محتوى الإشعار.
-            let isBroadcast = (notification.kind == "admin" || notification.kind == "admin_broadcast")
-            let bodyText = bodyWithoutCreatorPrefix(notification.body, creator: actualCreator)
-
-            // للإعلانات: نص أكبر قليلاً عشان الرسالة هي محتوى الإشعار.
-            if !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                richBodyView(
-                    bodyText,
-                    font: DS.Font.scaled(isBroadcast ? 17 : 15, weight: isBroadcast ? .semibold : .regular),
-                    color: DS.Color.textPrimary
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            // التاريخ والوقت الكامل (تذييل خفيف)
-            HStack(spacing: 4) {
-                Image(systemName: "calendar")
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                Text(fullDateTime(date))
-                    .font(DS.Font.scaled(11, weight: .medium))
-            }
-            .foregroundColor(DS.Color.textTertiary)
-            .padding(.top, DS.Spacing.xs)
-
-
+            .dsRowBox()
+            .accessibilityElement(children: .combine)   // «التاريخ، …» عنصراً واحداً
         }
-        .padding(DS.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.10), lineWidth: 0.5)
-        )
-        .dsSubtleShadow()
     }
 
-    // MARK: - Detail: Matches Card (كارد التطابقات المحتملة)
+    /// chip التصنيف + chip «الإدارة» أو المدير المنفّذ (للأدمن) + حالة القراءة
+    private func detailChipsRow(
+        notification: AppNotification,
+        iconInfo: NotificationKindStyle,
+        isAdminSender: Bool,
+        creator: FamilyMember?
+    ) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            // chip التصنيف
+            HStack(spacing: 4) {
+                Image(systemName: iconInfo.icon)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .accessibilityHidden(true)
+                Text(iconInfo.label)
+                    .font(DS.Font.plex(11, weight: .bold))
+            }
+            .foregroundColor(iconInfo.color)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, 3)
+            .background(iconInfo.color.opacity(0.12), in: Capsule())
+            .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
+
+            // chip «الإدارة» — لإشعارات الإدارة المُرسَلة (بدون اسم شخصي)
+            if isAdminSender {
+                HStack(spacing: 3) {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .accessibilityHidden(true)
+                    Text(L10n.t("الإدارة", "Admin"))
+                        .font(DS.Font.plex(11, weight: .bold))
+                }
+                .foregroundColor(DS.Color.primary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 3)
+                .background(DS.Color.primary.opacity(0.10), in: Capsule())
+                .overlay(Capsule().stroke(DS.Color.primary.opacity(0.20), lineWidth: 0.5))
+            }
+
+            // chip المدير المنفّذ — للأدمن فقط، اسم حقيقي مو "الإدارة"
+            if let creator {
+                HStack(spacing: 3) {
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .accessibilityHidden(true)
+                    Text(creator.shortFullName)
+                        .font(DS.Font.plex(11, weight: .bold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .foregroundColor(creator.roleColor)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, 3)
+                .background(creator.roleColor.opacity(0.10), in: Capsule())
+                .overlay(Capsule().stroke(creator.roleColor.opacity(0.20), lineWidth: 0.5))
+                .layoutPriority(-1)
+            }
+
+            Spacer(minLength: 0)
+
+            // حالة القراءة كنقطة ملونة + نص صغير
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(notification.read ? DS.Color.textTertiary : DS.Color.primary)
+                    .frame(width: 6, height: 6)
+                Text(notification.read ? L10n.t("مقروء", "Read") : L10n.t("جديد", "New"))
+                    .font(DS.Font.plex(11, weight: .bold))
+                    .foregroundColor(notification.read ? DS.Color.textTertiary : DS.Color.primary)
+            }
+        }
+    }
+
+    // MARK: - Detail: Matches Section (قسم التطابقات المحتملة)
+
+    /// العنوان يطوي/يفتح القائمة (مطويّة افتراضياً) — لا طيّ أثناء البحث أو بلا
+    /// نتائج، فتظهر حالة البحث أو «لا توجد مطابقات» مباشرة
     private func joinMatchesCard(
         candidates: [FamilyMember],
         requesterId: UUID,
         iconInfo: NotificationKindStyle,
-        isLoading: Bool
+        isLoading: Bool,
+        index: Int
     ) -> some View {
-        joinMatchesSection(
-            candidates: candidates,
-            requesterId: requesterId,
-            iconInfo: iconInfo,
-            isLoading: isLoading
+        let collapsible = !isLoading && !candidates.isEmpty
+        let expanded = Binding<Bool>(
+            get: { joinMatchesExpanded },
+            set: { newValue in
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                joinMatchesExpanded = newValue
+            }
         )
-        .padding(DS.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5)
-        )
-        .dsSubtleShadow()
+        return DSComposerSection(
+            title: L10n.t("تطابقات محتملة", "Possible Matches"),
+            icon: "person.2.fill",
+            tint: iconInfo.color,
+            trailing: isLoading ? nil : "\(candidates.count)",
+            index: index,
+            isOpen: collapsible ? expanded : nil
+        ) {
+            joinMatchesSection(
+                candidates: candidates,
+                requesterId: requesterId,
+                iconInfo: iconInfo,
+                isLoading: isLoading
+            )
+        }
     }
-
 
     /// معاينة "قبل → بعد" مدمجة — تظهر داخل كرت التفاصيل لإشعارات admin_edit_*
     @ViewBuilder
@@ -1467,34 +1468,34 @@ struct NotificationsCenterView: View {
         HStack(spacing: 6) {
             // اسم الحقل
             Text(fieldLabel)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.plex(11.5, weight: .bold))
                 .foregroundColor(DS.Color.textSecondary)
 
             Text("·")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.plex(11.5, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary)
 
             if isOpaque {
                 // للحقول التي لا تُعرض قيمتها (مثل الصورة): "تم التحديث"
                 Text(L10n.t("تم التحديث", "Updated"))
-                    .font(DS.Font.scaled(11, weight: .medium))
+                    .font(DS.Font.plex(11.5, weight: .medium))
                     .foregroundColor(DS.Color.textSecondary)
             } else {
                 // قيمة قبل
                 Text(change.before ?? "—")
-                    .font(DS.Font.scaled(11, weight: .medium))
+                    .font(DS.Font.plex(11.5, weight: .medium))
                     .foregroundColor(DS.Color.error.opacity(0.85))
                     .strikethrough()
                     .lineLimit(1)
 
                 // سهم
                 Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(.system(size: 10.5, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
 
                 // قيمة بعد
                 Text(change.after ?? "—")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.plex(11.5, weight: .bold))
                     .foregroundColor(DS.Color.secondary)
                     .lineLimit(1)
             }
@@ -1509,6 +1510,12 @@ struct NotificationsCenterView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(color.opacity(0.15), lineWidth: 0.5)
         )
+        // الشطب والسهم لا يُسمعان — القارئ الصوتي يقرأ «الحقل: قبل … بعد …» سطراً واحداً
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isOpaque
+            ? "\(fieldLabel): " + L10n.t("تم التحديث", "Updated")
+            : L10n.t("\(fieldLabel): قبل \(change.before ?? "—")، بعد \(change.after ?? "—")",
+                     "\(fieldLabel): before \(change.before ?? "—"), after \(change.after ?? "—")"))
     }
 
     private func detailChip(text: String, color: Color, icon: String? = nil) -> some View {
@@ -1632,31 +1639,87 @@ struct NotificationsCenterView: View {
         .dsSubtleShadow()
     }
 
-    // MARK: - Detail: Actions (circular icon buttons)
-    @ViewBuilder
-    /// شيت التفاصيل صار للقراءة فقط — الموافقة والرفض والمراجعة تتم من
-    /// أقسام الإدارة المختصّة، والحذف من قائمة الإشعار في القائمة (طلب المالك).
-    private func detailActions(notification: AppNotification) -> some View {
-        Group {
-            if !notification.read {
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    let id = notification.id
-                    selectedNotification = nil
-                    Task { await notificationVM.markNotificationAsRead(id: id) }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "envelope.open")
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                        Text(L10n.t("تعليم كمقروء", "Mark as Read"))
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                    }
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.top, DS.Spacing.sm)
+    // MARK: - Detail: What Changed (محتوى DSChangeDetailsCard نفسه بشكل أقسام المربّعات)
+
+    /// «ما الذي تغيّر» — كل تغيير في صف: اسم الحقل ثم قبل/بعد (أو ملخّص للحقول التي
+    /// لا تُعرض قيمتها كالصورة). للأدمن فقط كما كان.
+    private func detailChangesSection(_ details: AppNotification.NotificationDetails, index: Int) -> some View {
+        DSComposerSection(
+            title: L10n.t("ما الذي تغيّر", "What Changed"),
+            icon: "pencil.line",
+            tint: DS.Color.accent,
+            trailing: "\(details.changes.count)",
+            index: index
+        ) {
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(Array(details.changes.enumerated()), id: \.offset) { _, change in
+                    detailChangeRow(change)
                 }
-                .buttonStyle(DSScaleButtonStyle())
             }
         }
+    }
+
+    private func detailChangeRow(_ change: AppNotification.NotificationDetails.ChangeEntry) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(AppNotification.NotificationDetails.localizedFieldName(change.field))
+                .font(DS.Font.plex(12, weight: .heavy))
+                .foregroundColor(DS.Color.fieldLabel)
+
+            if AppNotification.NotificationDetails.isOpaqueField(change.field) {
+                detailChangeLine(label: nil,
+                                 value: detailOpaqueChangeLabel(for: change.field),
+                                 color: DS.Color.primary)
+            } else {
+                detailChangeLine(label: L10n.t("قبل:", "Before:"),
+                                 value: detailChangeValue(change.before),
+                                 color: DS.Color.error.opacity(0.85))
+                detailChangeLine(label: L10n.t("بعد:", "After:"),
+                                 value: detailChangeValue(change.after),
+                                 color: DS.Color.success)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dsRowBox()
+    }
+
+    /// سطر قيمة بخط ملوّن جانبي (قبل أحمر، بعد أخضر)
+    private func detailChangeLine(label: String?, value: String, color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if let label {
+                Text(label)
+                    .font(DS.Font.plex(12, weight: .bold))
+                    .foregroundColor(color)
+            }
+            Text(value)
+                .font(DS.Font.plex(13.5))
+                .foregroundColor(DS.Color.fieldValue)
+                .lineLimit(3)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, DS.Spacing.sm + 2)
+        .overlay(alignment: .leading) {
+            Capsule()
+                .fill(color.opacity(0.55))
+                .frame(width: 2.5)
+        }
+    }
+
+    /// ملخّص الحقول التي لا تُعرض قيمتها — نفس نصوص DSChangeDetailsCard
+    private func detailOpaqueChangeLabel(for field: String) -> String {
+        switch field {
+        case "avatar_url":
+            return L10n.t("تم تحديث الصورة الشخصية", "Profile photo was updated")
+        case "father_id":
+            return L10n.t("تم تحديث ولي الأمر", "Father reference was updated")
+        default:
+            return L10n.t("تم التحديث", "Updated")
+        }
+    }
+
+    private func detailChangeValue(_ raw: String?) -> String {
+        guard let v = raw, !v.isEmpty else { return L10n.t("—", "—") }
+        return v
     }
 
     // MARK: - Phase 3: Join Request Match Card
@@ -1881,8 +1944,8 @@ struct NotificationsCenterView: View {
         }
     }
 
-    /// قسم التطابقات المحتملة — يُلف داخل joinMatchesCard كي يصير كارد مستقل
-    /// يظهر دائماً للأدمن على طلبات الانضمام مع loading / empty / list states
+    /// محتوى قسم التطابقات: جاري البحث | لا توجد مطابقات | القائمة (عند فتح القسم)
+    /// يظهر دائماً للأدمن على طلبات الانضمام
     @ViewBuilder
     private func joinMatchesSection(
         candidates: [FamilyMember],
@@ -1890,103 +1953,48 @@ struct NotificationsCenterView: View {
         iconInfo: NotificationKindStyle,
         isLoading: Bool = false
     ) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // الترويسة القابلة للنقر — تطوي/تفتح (معطلة عند 0 + loaded عشان empty state يظهر مباشرة)
-            Button {
-                guard !candidates.isEmpty else { return } // لا توسيع لو فاضي
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                withAnimation(DS.Anim.snappy) {
-                    joinMatchesExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.2.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                        Text(L10n.t("تطابقات محتملة", "Possible Matches"))
-                            .font(DS.Font.scaled(11, weight: .bold))
-                    }
-                    .foregroundColor(iconInfo.color)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, 3)
-                    .background(iconInfo.color.opacity(0.12))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(iconInfo.color.opacity(0.20), lineWidth: 0.5))
-
-                    Spacer(minLength: 0)
-
-                    HStack(spacing: 6) {
-                        if isLoading {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                                .tint(DS.Color.textTertiary)
-                        } else {
-                            Text("\(candidates.count)")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(DS.Color.textSecondary)
-
-                            if !candidates.isEmpty {
-                                Image(systemName: joinMatchesExpanded ? "chevron.up" : "chevron.down")
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-                        }
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(candidates.isEmpty || isLoading)
-
-            // States: loading | empty | list
-            if isLoading {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .scaleEffect(0.85)
-                        .tint(iconInfo.color)
-                    Text(L10n.t("جاري البحث عن مطابقات...", "Searching for matches..."))
-                        .font(DS.Font.scaled(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Spacer()
-                }
-                .padding(.vertical, DS.Spacing.xs)
-            } else if candidates.isEmpty {
-                // Empty state — يظهر دائماً (بدون توسيع) لأن المعلومة مهمة
-                HStack(spacing: 6) {
-                    Image(systemName: "person.fill.questionmark")
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(L10n.t(
-                        "لا توجد مطابقات في الشجرة — قد يكون عضو جديد",
-                        "No matches found in the tree — may be a new member"
-                    ))
-                    .font(DS.Font.scaled(11, weight: .medium))
+        if isLoading {
+            HStack(spacing: DS.Spacing.sm) {
+                Spacer(minLength: 0)
+                ProgressView()
+                    .scaleEffect(0.85)
+                    .tint(iconInfo.color)
+                Text(L10n.t("جاري البحث عن مطابقات...", "Searching for matches..."))
+                    .font(DS.Font.plex(12, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, DS.Spacing.xs)
-                .padding(.horizontal, DS.Spacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.textTertiary.opacity(0.05))
-                )
-            } else if joinMatchesExpanded {
-                VStack(spacing: 6) {
-                    ForEach(candidates) { candidate in
-                        joinMatchRow(candidate: candidate, requesterId: requesterId)
-                    }
+                Spacer(minLength: 0)
+            }
+            .dsRowBox()
+        } else if candidates.isEmpty {
+            // Empty state — يظهر دائماً (بدون توسيع) لأن المعلومة مهمة
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "person.fill.questionmark", tint: DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+                Text(L10n.t(
+                    "لا توجد مطابقات في الشجرة — قد يكون عضو جديد",
+                    "No matches found in the tree — may be a new member"
+                ))
+                .font(DS.Font.plex(12.5, weight: .medium))
+                .foregroundColor(DS.Color.fieldValue)
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .dsRowBox()
+        } else {
+            // القائمة — تظهر عند فتح القسم (القسم المطويّ يخفيها)
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(candidates) { candidate in
+                    joinMatchRow(candidate: candidate, requesterId: requesterId)
                 }
             }
         }
     }
 
     private func joinMatchRow(candidate: FamilyMember, requesterId: UUID) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: DS.Spacing.sm) {
             ZStack {
                 Circle()
                     .fill(DS.Color.textTertiary.opacity(0.08))
-                    .frame(width: 28, height: 28)
                 if let url = candidate.avatarUrl, !url.isEmpty {
                     CachedAsyncImage(url: URL(string: url)) { image in
                         image.resizable().scaledToFill()
@@ -1994,18 +2002,20 @@ struct NotificationsCenterView: View {
                         Image(systemName: "person.fill")
                             .foregroundColor(DS.Color.textTertiary)
                     }
-                    .frame(width: 28, height: 28)
+                    .frame(width: 32, height: 32)
                     .clipShape(Circle())
                 } else {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
+            .frame(width: 32, height: 32)
+            .accessibilityHidden(true)   // الصورة زخرفة — الاسم يُقرأ بعدها
 
             Text(chainFourNames(candidate))
-                .font(DS.Font.scaled(12, weight: .semibold))
-                .foregroundColor(DS.Color.textPrimary)
+                .font(DS.Font.plex(13, weight: .semibold))
+                .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -2023,20 +2033,24 @@ struct NotificationsCenterView: View {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "link")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(.system(size: 10.5, weight: .bold))
+                        .accessibilityHidden(true)
                     Text(L10n.t("ربط", "Link"))
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.plex(11.5, weight: .bold))
                 }
                 .foregroundColor(DS.Color.secondary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 3)
-                .background(DS.Color.secondary.opacity(0.12))
-                .clipShape(Capsule())
+                .padding(.horizontal, DS.Spacing.sm + 2)
+                .frame(height: 28)
+                .background(DS.Color.secondary.opacity(0.12), in: Capsule())
                 .overlay(Capsule().stroke(DS.Color.secondary.opacity(0.25), lineWidth: 0.5))
+                // مساحة ضغط ٤٤ (توصية أبل): الكبسولة ٢٨ كما هي، والحشوة السالبة تُبقي ارتفاع الصف
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .padding(.vertical, -8)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DSScaleButtonStyle())
         }
-        .padding(.vertical, 2)
+        .dsRowBox()
     }
 
     /// زر دائري مع اسم سفلي — يتبع تصميم DS (مزيج surface + لون + stroke خفيف)

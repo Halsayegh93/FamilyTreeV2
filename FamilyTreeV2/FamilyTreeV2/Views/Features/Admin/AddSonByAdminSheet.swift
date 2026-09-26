@@ -27,9 +27,68 @@ struct AddSonByAdminSheet: View {
     @State private var isSaving = false
     @State private var showOfflineAlert = false
 
+    // MARK: - تغييرات لم تُحفظ (توصية أبل)
+
+    /// الحقول كما تُحفظ — تُقارن بما فُتح عليه المربّع (فارغ للإضافة، بيانات الابن للتعديل)
+    private struct Draft: Equatable {
+        var name: String = ""
+        var gender: String = "male"
+        /// الدولة تُحسب مع الرقم فقط (رقم فارغ = لا رقم) — رمز الدولة المعبّأ تلقائياً ليس تغييراً
+        var phone: String = ""
+        var birth: String? = nil
+        var isDeceased: Bool = false
+        var death: String? = nil
+    }
+
+    private let startDraft: Draft
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private var currentDraft: Draft {
+        Draft(
+            name: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
+            gender: selectedGender,
+            phone: phoneNumber.isEmpty ? "" : "\(selectedPhoneCountry.id)|\(phoneNumber)",
+            birth: hasBirthDate ? Self.dayFormatter.string(from: birthDate) : nil,
+            isDeceased: isDeceased,
+            death: (isDeceased && hasDeathDate) ? Self.dayFormatter.string(from: deathDate) : nil
+        )
+    }
+
+    /// أي حقل يختلف عمّا فُتح عليه المربّع — «إلغاء» يسأل قبل التجاهل
+    private var hasUnsavedChanges: Bool { currentDraft != startDraft }
+
+    /// نقطة البداية: فارغة للإضافة، وبيانات الابن (بنفس قراءة init) للتعديل
+    private static func makeStartDraft(_ child: FamilyMember?) -> Draft {
+        guard let child else { return Draft() }
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        func day(_ raw: String?) -> String? {
+            guard let raw, !raw.isEmpty, let date = parser.date(from: raw) else { return nil }
+            return dayFormatter.string(from: date)
+        }
+        let phone = KuwaitPhone.detectCountryAndLocal(child.phoneNumber)
+        let deceased = child.isDeceased ?? false
+        return Draft(
+            name: child.firstName.trimmingCharacters(in: .whitespacesAndNewlines),
+            gender: child.gender ?? "male",
+            phone: phone.localDigits.isEmpty ? "" : "\(phone.country.id)|\(phone.localDigits)",
+            birth: day(child.birthDate),
+            isDeceased: deceased,
+            death: deceased ? day(child.deathDate) : nil
+        )
+    }
+
     init(parent: FamilyMember, editingChild: FamilyMember? = nil) {
         self.parent = parent
         self.editingChild = editingChild
+        self.startDraft = Self.makeStartDraft(editingChild)
 
         if let child = editingChild {
             self._firstName = State(initialValue: child.firstName)
@@ -57,55 +116,24 @@ struct AddSonByAdminSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            // نفس تصميم «إدارة السجل» (طلب المالك): بطاقات، وكل حقل داخل مربّع
-            ScrollView {
-                VStack(spacing: DS.Spacing.lg) {
-                    contextSection
-                    basicsCard
-                    datesCard
-                    if !isEditMode {
-                        Label(
-                            L10n.t(
-                                "بصفتك مديراً، ستتم إضافة العضو للشجرة فوراً.",
-                                "As admin, the member will be added to the tree immediately."
-                            ),
-                            systemImage: "info.circle.fill"
-                        )
-                        .font(DS.Font.plex(12, weight: .medium))
-                        .foregroundColor(DS.Color.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, DS.Spacing.xs)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xl)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .background(DS.Color.background)
-            .navigationTitle(isEditMode ? L10n.t("تعديل الابن", "Edit Child") : L10n.t("إضافة ابن", "Add Child"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.plex(14, weight: .semibold))
-                        .foregroundColor(DS.Color.error)
-                }
-                ToolbarItem(placement: DSToolbar.confirmPlacement) {
-                    Button(action: saveAction) {
-                        if isSaving {
-                            ProgressView().tint(DS.Color.primary)
-                        } else {
-                            Text(isEditMode ? L10n.t("حفظ", "Save") : L10n.t("إضافة", "Add"))
-                                .font(DS.Font.callout)
-                                .fontWeight(.bold)
-                                .foregroundColor(DS.Color.primary)
-                        }
-                    }
-                    .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
-                }
-            }
+        // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
+        DSComposer(
+            title: isEditMode ? L10n.t("تعديل الابن", "Edit Child") : L10n.t("إضافة ابن", "Add Child"),
+            subtitle: isEditMode ? L10n.t("عدّل بياناته في الشجرة", "Update the child's details")
+                                 : L10n.t("يُضاف للشجرة فوراً", "Added to the tree right away"),
+            icon: isEditMode ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
+            tint: DS.Color.actionNavy,
+            actionTitle: isEditMode ? L10n.t("حفظ", "Save") : L10n.t("إضافة", "Add"),
+            actionIcon: isEditMode ? "checkmark" : "plus",
+            canSubmit: !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            isBusy: isSaving,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: saveAction,
+            onCancel: { dismiss() }
+        ) {
+            contextSection.dsStaggerIn(0)
+            basicsCard.dsStaggerIn(1)
+            datesCard.dsStaggerIn(2)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .dsAlert(
@@ -134,6 +162,7 @@ struct AddSonByAdminSheet: View {
                 .foregroundColor(DS.Color.primary)
                 .frame(width: 32, height: 32)
                 .background(DS.Color.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .accessibilityHidden(true)   // زخرفة — النص بجانبها يكفي
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(isEditMode

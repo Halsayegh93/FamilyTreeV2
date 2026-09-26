@@ -23,43 +23,28 @@ struct EditChildSheet: View {
     @State private var sheetHeight: CGFloat = 520
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.md) {
-                        // الصورة للذكر فقط — الأنثى بلا خيار صورة
-                        if selectedGender != "female" { heroHeader }
-                        basicInfoCard
-                            .padding(.horizontal, DS.Spacing.lg)
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(key: SheetContentHeightKey.self, value: proxy.size.height)
-                        }
-                    )
-                }
-            }
-            .navigationTitle(L10n.t("تعديل بيانات الابن", "Edit Child Info"))
-            .navigationBarTitleDisplayMode(.inline)
-            // الإضافة/الحفظ أعلى يمين، والإغلاق يسار (طلب المالك)
-            .dsSheetToolbar(
-                confirm: L10n.t("حفظ", "Save"),
-                isLoading: isSaving,
-                disabled: firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving,
-                onConfirm: saveChanges,
-                onCancel: { dismiss() }
-            )
-            .onAppear(perform: setupData)
+        // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
+        DSComposer(
+            title: L10n.t("تعديل بيانات الابن", "Edit Child Info"),
+            subtitle: L10n.t("عدّل بياناته في الشجرة", "Update the details in the tree"),
+            icon: "person.crop.circle.badge.checkmark",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("حفظ", "Save"),
+            actionIcon: "checkmark",
+            canSubmit: !(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving),
+            isBusy: isSaving,
+            contentPadding: 0,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: saveChanges,
+            onCancel: { dismiss() }
+        ) {
+            // الصورة للذكر فقط — الأنثى بلا خيار صورة
+            if selectedGender != "female" { heroHeader.dsStaggerIn(0) }
+            basicInfoCard
+                .padding(.horizontal, DS.Spacing.lg)
+                .dsStaggerIn(1)
         }
-        .onPreferenceChange(SheetContentHeightKey.self) { h in
-            if h > 0 { sheetHeight = h + 72 }
-        }
-        .presentationDetents([.height(sheetHeight)])
-        .presentationDragIndicator(.visible)
+        .onAppear(perform: setupData)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .dsAlert(L10n.t("تم الحفظ", "Saved"), isPresented: $showSuccessAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
@@ -71,6 +56,46 @@ struct EditChildSheet: View {
         } message: {
             Text(errorMessage)
         }
+    }
+
+    // MARK: - تغييرات لم تُحفظ (توصية أبل)
+
+    /// الحقول كما تُحفظ — تُقارن بما فُتح عليه المربّع
+    private struct Draft: Equatable {
+        var name: String
+        var gender: String
+        /// الدولة تُحسب مع الرقم فقط (رقم فارغ = لا رقم)
+        var phone: String
+        var birth: String?
+        var isDeceased: Bool
+        var death: String?
+    }
+
+    /// القيم التي فُتح عليها المربّع — تُلتقط مرة في setupData
+    @State private var startDraft: Draft? = nil
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private var currentDraft: Draft {
+        Draft(
+            name: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
+            gender: selectedGender,
+            phone: phoneNumber.isEmpty ? "" : "\(selectedPhoneCountry.id)|\(phoneNumber)",
+            birth: birthDateProvided ? Self.dayFormatter.string(from: birthDate) : nil,
+            isDeceased: isDeceased,
+            death: isDeceased ? Self.dayFormatter.string(from: deathDate) : nil
+        )
+    }
+
+    /// صورة جديدة أو أي حقل يختلف عمّا فُتح عليه — «إلغاء» يسأل قبل التجاهل
+    private var hasUnsavedChanges: Bool {
+        guard let startDraft else { return false }
+        return selectedUIImage != nil || currentDraft != startDraft
     }
 
     private var heroHeader: some View {
@@ -158,6 +183,8 @@ struct EditChildSheet: View {
                         Toggle("", isOn: $isDeceased)
                             .labelsHidden()
                             .tint(DS.Color.error)
+                            // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
+                            .accessibilityLabel(L10n.t("متوفى", "Deceased"))
                     }
                     .animation(.default, value: isDeceased)
 
@@ -198,9 +225,12 @@ struct EditChildSheet: View {
                 .frame(height: 34)
                 .background(Capsule().fill(selected ? color : DS.Color.surface))
                 .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.3), lineWidth: 1))
-                .contentShape(Capsule())
+                // مساحة ضغط ٤٤ نقطة (حد أبل) والحبّة بنفس شكلها — الصف ارتفاعه ٥٢ فيسعها
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func setupData() {
@@ -223,6 +253,9 @@ struct EditChildSheet: View {
         if let death = member.deathDate, !death.isEmpty, let parsed = formatter.date(from: death) {
             deathDate = parsed
         }
+
+        // نقطة البداية لمقارنة «تغييرات لم تُحفظ» — مرة واحدة فقط (لا يُعاد عند رجوع العرض)
+        if startDraft == nil { startDraft = currentDraft }
     }
 
     @State private var isSaving = false
