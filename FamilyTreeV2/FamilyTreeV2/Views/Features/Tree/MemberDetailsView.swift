@@ -240,6 +240,8 @@ struct MemberDetailsView: View {
             .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
             .toolbar(.hidden, for: .navigationBar)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            // تنسيق الألوان: أقسام التفاصيل بلون شريطها (كحلي، ورمادي للمتوفى) مثل باقي المربّعات
+            .environment(\.dsBoxTint, member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy)
             // ارتفاعات الشيت فقط في وضع الشيت — داخل المربّع تدفع الاختيار إلى «large»
             .modifier(SheetDetents(enabled: !centered, detent: $detent))
             // التعديل المباشر نموذج طويل — مربّع طويل من الأسفل (توصية أبل)

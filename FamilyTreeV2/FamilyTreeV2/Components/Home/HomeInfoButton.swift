@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// علامة المعلومات بجانب جرس الرئيسية — تفتح مربّع «التعليمات» (دليل سريع لكل قسم،
+/// علامة المعلومات بجانب جرس الرئيسية — تفتح مربّع «عن التطبيق» و«دليل الاستخدام» (دليل سريع لكل قسم،
 /// وفي آخره «عن التطبيق»: الاسم والإصدار والمنفّذ) — طلب المالك ٢٠٢٦-٠٩-٢٧
 struct HomeInfoButton: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -17,7 +17,7 @@ struct HomeInfoButton: View {
                 .frame(width: 32, height: 44)
         }
         .buttonStyle(BounceButtonStyle())
-        .accessibilityLabel(L10n.t("التعليمات", "Instructions"))
+        .accessibilityLabel(L10n.t("عن التطبيق ودليل الاستخدام", "About & User Guide"))
         .dsCenterBox(isPresented: $showGuide, onBackgroundTap: { showGuide = false }) {
             AppGuideBox()
                 .environmentObject(authVM)

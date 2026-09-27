@@ -38,6 +38,233 @@ extension View {
     func readHeight(_ h: Binding<CGFloat>) -> some View { modifier(DSHeightReader(height: h)) }
 }
 
+// MARK: - إيقاع الحركة — تسلسل واحد لكل المربّعات (طلب المالك ٢٠٢٦-٠٩-٢٧)
+//
+// «حركات مرتّبة وإبداع في كل مربّع» — إيقاع واحد هادئ في كل مكان:
+//   ١) المربّع يكبر من ٠٫٩٤ مع تلاشٍ (بعد قياس ارتفاعه — فلا يتغيّر حجمه وهو يظهر).
+//   ٢) الرأس: الدائرة الزجاجية تقفز بنابض لطيف ودوران صغير يستقر، ثم العنوان ثم الوصف
+//      ينسابان من جهة الأيقونة، والعلامة المائية تظهر وتطفو، ولمعة تمرّ مرة واحدة.
+//   ٣) الأقسام تتوالى بعد الرأس (٥٥ ملّي ثانية بينها): صعود ١٢ نقطة وتكبير طفيف،
+//      وأيقونة كل قسم تتفتّح بعد بطاقتها بقليل.
+//   ٤) الأزرار آخراً: صعود خفيف مع تلاشٍ؛ والكحلي يلمع مرة واحدة حين يصير ممكناً.
+// «تقليل الحركة» (توصية أبل): لا تكبير ولا انزلاق ولا دوران — تلاشٍ قصير فقط أو ظهور مباشر.
+// كل حركات الدخول إزاحة/شفافية/تكبير عند الرسم فقط — لا تغيّر مقاسات التخطيط،
+// فيبقى قياس ارتفاع المربّع (SheetContentHeightKey) صحيحاً من أول فتح.
+
+enum DSMotion {
+    // ١) المربّع
+    static let panelScale: CGFloat = 0.94
+    /// نفس نابض الفتح المعتمد للمربّعات
+    static let panel = DS.Anim.snappy
+
+    // ٢) الرأس
+    static let iconDelay = 0.06
+    static let iconFromScale: CGFloat = 0.55
+    static let iconFromAngle: Double = -14
+    static let iconPop = Animation.spring(response: 0.5, dampingFraction: 0.6)
+    static let titleDelay = 0.13
+    static let subtitleDelay = 0.19
+    /// إزاحة العنوان والوصف (نحو جهة الأيقونة — تنعكس تلقائياً مع العربية)
+    static let textShift: CGFloat = 10
+    static let text = Animation.spring(response: 0.42, dampingFraction: 0.88)
+    static let watermarkDelay = 0.1
+    static let shineDelay = 0.34
+
+    // ٣) الأقسام
+    /// أول قسم داخل المربّع يدخل بعد الرأس، وفي الصفحات (بلا رأس) مبكراً
+    static let sectionsAfterHeader = 0.22
+    static let sectionsOnPage = 0.08
+    static let step = 0.055
+    /// سقف للتأخير — عنصر رقمه كبير (صف في قائمة) لا ينتظر طويلاً
+    static let maxSteps = 8
+    static let rise: CGFloat = 12
+    static let riseScale: CGFloat = 0.98
+    static let section = Animation.spring(response: 0.46, dampingFraction: 0.84)
+
+    // ٤) الأزرار
+    static let footerRise: CGFloat = 7
+    static let footer = Animation.spring(response: 0.42, dampingFraction: 0.86)
+
+    // التفاعل
+    static let press = Animation.spring(response: 0.26, dampingFraction: 0.72)
+    static let expand = Animation.spring(response: 0.38, dampingFraction: 0.86)
+    static let enable = Animation.easeInOut(duration: 0.25)
+    /// «تقليل الحركة»: تلاشٍ قصير بدل أي حركة
+    static let fade = Animation.easeOut(duration: 0.2)
+
+    /// تأخير عنصر في التسلسل
+    static func staggerDelay(_ index: Int, base: Double) -> Double {
+        base + Double(min(max(index, 0), maxSteps)) * step
+    }
+
+    /// الأزرار بعد آخر قسم (حتى ثلاثة — لا تتأخّر أكثر في المربّعات الطويلة)
+    static func footerDelay(lastSection: Int) -> Double {
+        sectionsAfterHeader + Double(min(max(lastSection + 1, 1), 3)) * step + 0.03
+    }
+}
+
+private struct DSStaggerBaseKey: EnvironmentKey {
+    /// = DSMotion.sectionsOnPage (الصفحات بلا رأس)
+    static let defaultValue: Double = 0.08
+}
+
+extension EnvironmentValues {
+    /// متى يبدأ أول قسم بالدخول: بعد الرأس داخل المربّعات، ومبكراً في الصفحات
+    var dsStaggerBase: Double {
+        get { self[DSStaggerBaseKey.self] }
+        set { self[DSStaggerBaseKey.self] = newValue }
+    }
+}
+
+/// أعلى رقم قسم داخل المربّع — ليدخل شريط الأزرار بعد آخر قسم
+struct DSStaggerIndexKey: PreferenceKey {
+    static let defaultValue = -1
+    static func reduce(value: inout Int, nextValue: () -> Int) { value = max(value, nextValue()) }
+}
+
+/// دخول عنصر في تسلسل المربّع: تلاشٍ + إزاحة صغيرة (+ تكبير طفيف) بعد تأخير.
+/// `x` بإشارة اتجاه الواجهة (موجب = نحو النهاية)، فتنعكس الحركة تلقائياً مع العربية.
+struct DSEntrance: ViewModifier {
+    var delay: Double
+    var x: CGFloat = 0
+    var y: CGFloat = 0
+    var scale: CGFloat = 1
+    var animation: Animation = DSMotion.section
+    /// false = بلا حركة خاصة (العنصر يظهر مع حاويته)
+    var active: Bool = true
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let settled = shown || reduceMotion || !active
+        return content
+            .opacity(shown || !active ? 1 : 0)
+            .offset(x: settled ? 0 : x, y: settled ? 0 : y)
+            .scaleEffect(settled ? 1 : scale, anchor: .top)
+            .onAppear {
+                guard active, !shown else { return }
+                // «تقليل الحركة»: تلاشٍ قصير فقط
+                withAnimation(reduceMotion ? DSMotion.fade : animation.delay(delay)) { shown = true }
+            }
+    }
+}
+
+extension View {
+    func dsEntrance(delay: Double, x: CGFloat = 0, y: CGFloat = 0, scale: CGFloat = 1,
+                    animation: Animation = DSMotion.section, active: Bool = true) -> some View {
+        modifier(DSEntrance(delay: delay, x: x, y: y, scale: scale, animation: animation, active: active))
+    }
+}
+
+/// قفزة أيقونة: تكبير بنابض لطيف مع دوران صغير يستقر (أيقونة الرأس، المربّع الإضافي، الأقسام).
+/// «تقليل الحركة»: تلاشٍ فقط.
+struct DSIconPop: ViewModifier {
+    var delay: Double = DSMotion.iconDelay
+    var fromScale: CGFloat = DSMotion.iconFromScale
+    var fromAngle: Double = DSMotion.iconFromAngle
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let settled = shown || reduceMotion
+        return content
+            .scaleEffect(settled ? 1 : fromScale)
+            .rotationEffect(.degrees(settled ? 0 : fromAngle))
+            .opacity(shown ? 1 : 0)
+            .onAppear {
+                guard !shown else { return }
+                withAnimation(reduceMotion ? DSMotion.fade : DSMotion.iconPop.delay(delay)) { shown = true }
+            }
+    }
+}
+
+/// ضغطة ناعمة موحّدة لأزرار المربّعات (الإجراء الكحلي، «إلغاء»، الشارات):
+/// تصغير ٠٫٩٧ مع خفوت بسيط — ومع «تقليل الحركة» خفوت فقط
+struct DSPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        DSPressLabel(configuration: configuration)
+    }
+}
+
+private struct DSPressLabel: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(DSMotion.press, value: configuration.isPressed)
+    }
+}
+
+/// «جاهز»: حين يصير زر الإجراء الكحلي ممكناً — نبضة واحدة ولمعة تعبره مرة (بلا تكرار).
+/// «تقليل الحركة»: إضاءة خفيفة تتلاشى بدل النبضة واللمعة.
+struct DSReadyGlow: ViewModifier {
+    let isReady: Bool
+    /// false أثناء دخول المربّع (مثل تعبئة الحقول عند الفتح) — لا وميض وقتها
+    var armed: Bool = true
+    var cornerRadius: CGFloat = DS.Radius.lg
+    @State private var pop = false
+    @State private var sweep: CGFloat = 0
+    @State private var flash = false
+    /// آخر وميض — الصلاحية قد تتبدّل مع كل حرف (حذف ثم كتابة)، فلا نكرّره خلال ثانيتين
+    @State private var lastFired = Date.distantPast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return content
+            .overlay {
+                // اللمعة تبدأ وتنتهي خارج الزر (مقصوصة) — لا تُرى إلا وهي تعبره
+                GeometryReader { geo in
+                    LinearGradient(colors: [.clear, DS.Color.textOnPrimary.opacity(0.34), .clear],
+                                   startPoint: .leading, endPoint: .trailing)
+                        .frame(width: 64)
+                        .rotationEffect(.degrees(18))
+                        .offset(x: -80 + sweep * (geo.size.width + 160))
+                }
+                .clipShape(shape)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+            .overlay {
+                shape.fill(DS.Color.textOnPrimary.opacity(flash ? 0.18 : 0))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .scaleEffect(pop ? 1.03 : 1)
+            .onChange(of: isReady) { ready in
+                guard ready, armed else { return }
+                fire()
+            }
+    }
+
+    private func fire() {
+        guard Date().timeIntervalSince(lastFired) > 2 else { return }
+        lastFired = Date()
+        if reduceMotion {
+            withAnimation(.easeOut(duration: 0.14)) { flash = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.easeInOut(duration: 0.4)) { flash = false }
+            }
+            return
+        }
+        guard sweep == 0 else { return }   // لمعة جارية — لا نكرّر
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.5)) { pop = true }
+        withAnimation(.easeInOut(duration: 0.7)) { sweep = 1 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) { pop = false }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            // ترجع خارج الزر بلا حركة — جاهزة للمرة القادمة
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { sweep = 0 }
+        }
+    }
+}
+
 // MARK: - المربّع نفسه
 
 /// هيكل مربّع الإضافة: رأس + محتوى يتمرّر عند الحاجة + شريط أزرار. يبلّغ
@@ -72,8 +299,12 @@ struct DSComposer<Content: View>: View {
     @State private var headerH: CGFloat = 0
     @State private var contentH: CGFloat = 0
     @State private var footerH: CGFloat = 0
-    @State private var submitPop = false
     @State private var confirmDiscard = false
+    /// دخول الأزرار (آخر التسلسل) ورقم آخر قسم — ليأتي الشريط بعده
+    @State private var footerIn = false
+    @State private var lastSection = -1
+    /// لحظة الفتح — لمعة «جاهز» لا تظهر أثناء دخول المربّع (مثل تعبئة الحقول عند الفتح)
+    @State private var openedAt = Date()
     /// «تقليل الحركة» من إعدادات الجهاز (توصية أبل): بلا تصغير ولا نبض
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -84,12 +315,16 @@ struct DSComposer<Content: View>: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) { content() }
+                    .environment(\.dsBoxTint, tint)      // تنسيق الألوان: ما بداخل المربّع بلونه
                     .padding(.horizontal, contentPadding)
                     .padding(.top, DS.Spacing.md)
                     .padding(.bottom, DS.Spacing.sm)
                     .readHeight($contentH)
             }
             .scrollDismissesKeyboard(.interactively)
+            // الأقسام تبدأ بعد الرأس: رأس ← قسم ١ ← قسم ٢ … تسلسل واحد
+            .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
+            .onPreferenceChange(DSStaggerIndexKey.self) { lastSection = $0 }
 
             footer.readHeight($footerH)
         }
@@ -113,6 +348,10 @@ struct DSComposer<Content: View>: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
+    private var actionEnabled: Bool { canSubmit && !isBusy }
+    /// انتهى دخول المربّع — بعده فقط تلمع «جاهز»
+    private var entranceSettled: Bool { Date().timeIntervalSince(openedAt) > 0.8 }
+
     private var footer: some View {
         VStack(spacing: DS.Spacing.sm) {
             if let progress {
@@ -129,39 +368,14 @@ struct DSComposer<Content: View>: View {
                 .foregroundColor(DS.Color.textTertiary)
             }
             HStack(spacing: DS.Spacing.sm) {
-                if showsAction {
-                Button(action: onSubmit) {
-                    HStack(spacing: 7) {
-                        if isBusy {
-                            ProgressView().tint(.white).scaleEffect(0.85)
-                        } else {
-                            Image(systemName: actionIcon).font(.system(size: 14, weight: .bold))
-                        }
-                        Text(actionTitle).font(DS.Font.plex(15, weight: .bold))
-                    }
-                    .foregroundColor(DSActionFill.label(enabled: canSubmit && !isBusy))
-                    .frame(maxWidth: .infinity).frame(height: 48)
-                    .background(DSActionFill.style(enabled: canSubmit && !isBusy),
-                                in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    .scaleEffect(submitPop ? 1.04 : 1)
-                }
-                .disabled(!canSubmit || isBusy)
-                }
-
-                Button {
-                    if hasUnsavedChanges { confirmDiscard = true } else { onCancel() }
-                } label: {
-                    Text(cancelTitle)
-                        .font(DS.Font.plex(15, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .frame(maxWidth: .infinity).frame(height: 48)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                            .fill(DS.Color.mutedBackground.opacity(0.8)))
-                }
-                .disabled(isBusy)
+                if showsAction { actionButton }
+                cancelButton
             }
-            .buttonStyle(DSScaleButtonStyle())
+            .buttonStyle(DSPressStyle())
         }
+        // الأزرار آخر التسلسل: تصعد قليلاً مع تلاشٍ (والشريط نفسه ثابت)
+        .opacity(footerIn ? 1 : 0)
+        .offset(y: footerIn || reduceMotion ? 0 : DSMotion.footerRise)
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.md)
@@ -171,13 +385,61 @@ struct DSComposer<Content: View>: View {
                     Rectangle().fill(DS.Color.textTertiary.opacity(0.12)).frame(height: 1)
                 }
         )
-        .animation(.easeInOut(duration: 0.2), value: progress != nil)
-        // نبضة صغيرة لما يصير الإرسال ممكناً — إشارة «جاهز»
-        .onChange(of: canSubmit) { ready in
-            guard ready, !reduceMotion else { return }
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) { submitPop = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { submitPop = false }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: progress != nil)
+        .onAppear(perform: enterFooter)
+    }
+
+    /// الإجراء الكحلي — المعطّل ↔ الممكن يتحرّك بهدوء، و«جاهز» تلمع مرة (DSReadyGlow)
+    private var actionButton: some View {
+        Button(action: onSubmit) {
+            HStack(spacing: 7) {
+                if isBusy {
+                    ProgressView().tint(.white).scaleEffect(0.85)
+                } else {
+                    Image(systemName: actionIcon).font(.system(size: 14, weight: .bold))
+                        .opacity(actionEnabled ? 1 : DSActionFill.labelDisabledOpacity)
+                }
+                Text(actionTitle).font(DS.Font.plex(15, weight: .bold))
+                    .opacity(actionEnabled ? 1 : DSActionFill.labelDisabledOpacity)
+            }
+            .foregroundColor(DSActionFill.label())
+            .frame(maxWidth: .infinity).frame(height: 48)
+            // نفس DSActionFill.style(enabled:) — لكن الشفافية على الطبقة فتتحرّك بسلاسة
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(DSActionFill.style())
+                    .opacity(actionEnabled ? 1 : DSActionFill.disabledOpacity)
+            )
+            .animation(DSMotion.enable, value: actionEnabled)
+            .modifier(DSReadyGlow(isReady: canSubmit, armed: entranceSettled, cornerRadius: DS.Radius.lg))
+        }
+        .disabled(!canSubmit || isBusy)
+    }
+
+    private var cancelButton: some View {
+        Button {
+            if hasUnsavedChanges { confirmDiscard = true } else { onCancel() }
+        } label: {
+            Text(cancelTitle)
+                .font(DS.Font.plex(15, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .frame(maxWidth: .infinity).frame(height: 48)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(DS.Color.mutedBackground.opacity(0.8)))
+        }
+        .disabled(isBusy)
+    }
+
+    private func enterFooter() {
+        guard !footerIn else { return }
+        guard !reduceMotion else {
+            withAnimation(DSMotion.fade) { footerIn = true }
+            return
+        }
+        // بعد أول تخطيط يصل رقم آخر قسم (تفضيل) — فتدخل الأزرار بعده
+        DispatchQueue.main.async {
+            withAnimation(DSMotion.footer.delay(DSMotion.footerDelay(lastSection: lastSection))) {
+                footerIn = true
             }
         }
     }
@@ -190,7 +452,8 @@ struct DSComposerHeader: View {
     let subtitle: String
     let icon: String
     let tint: Color
-    @State private var appeared = false
+    /// العلامة المائية تظهر بهدوء ثم تطفو، واللمعة تمرّ مرة
+    @State private var markIn = false
     @State private var shine = false
     @State private var drift = false
     @Environment(\.colorScheme) private var colorScheme
@@ -204,58 +467,14 @@ struct DSComposerHeader: View {
             if colorScheme == .dark { Color.black.opacity(0.3) }
 
             // هالة ناعمة + علامة مائية كبيرة في الطرف الآخر
-            Circle()
-                .fill(Color.white.opacity(0.10))
-                .frame(width: 150, height: 150)
-                .blur(radius: 22)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .offset(x: -30, y: -60)
-            // العلامة المائية تطفو ببطء — لمسة حياة خفيفة
-            Image(systemName: icon)
-                .font(.system(size: 96, weight: .bold))
-                .foregroundColor(.white.opacity(0.09))
-                .rotationEffect(.degrees(drift ? -10 : -16))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                .offset(x: 18, y: drift ? 10 : 20)
-                .id("wm-\(icon)")
-                .transition(.opacity)
+            halo
+            watermark
+            shineBand
 
-            // لمعة تمرّ مرة واحدة عند الفتح
-            LinearGradient(colors: [.clear, .white.opacity(0.28), .clear],
-                           startPoint: .leading, endPoint: .trailing)
-                .frame(width: 80)
-                .rotationEffect(.degrees(18))
-                .offset(x: shine ? 320 : -320)
-                .allowsHitTesting(false)
-
+            // التسلسل: الأيقونة تقفز ← العنوان ← الوصف (DSMotion)
             HStack(spacing: DS.Spacing.md) {
-                ZStack {
-                    Circle().fill(Color.white.opacity(0.18))
-                    Circle().strokeBorder(Color.white.opacity(0.38), lineWidth: 1)
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                        .id(icon)
-                        .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
-                }
-                .frame(width: 48, height: 48)
-                .scaleEffect(appeared ? 1 : 0.4)
-                .rotationEffect(.degrees(appeared ? 0 : -40))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(DS.Font.plex(18, weight: .bold))
-                        .foregroundColor(.white)
-                        .id("t-\(title)")
-                        .transition(.opacity)
-                    Text(subtitle)
-                        .font(DS.Font.plex(12))
-                        .foregroundColor(.white.opacity(0.86))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .offset(x: appeared ? 0 : 14)
-                .opacity(appeared ? 1 : 0)
+                iconBadge
+                titles
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -269,11 +488,77 @@ struct DSComposerHeader: View {
         .animation(.easeInOut(duration: 0.35), value: tint)
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: icon)
         .onAppear {
-            // تقليل الحركة: يظهر الرأس مباشرة بلا دوران ولا لمعة ولا طفو
-            if reduceMotion { appeared = true; return }
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.62).delay(0.05)) { appeared = true }
-            withAnimation(.easeInOut(duration: 1.1).delay(0.3)) { shine = true }
+            // تقليل الحركة: العلامة ظاهرة مباشرة بلا طفو ولا لمعة
+            guard !reduceMotion else { markIn = true; return }
+            withAnimation(.easeOut(duration: 0.7).delay(DSMotion.watermarkDelay)) { markIn = true }
+            withAnimation(.easeInOut(duration: 1.1).delay(DSMotion.shineDelay)) { shine = true }
+            // الحركة المتكرّرة الوحيدة في المربّعات: طفو بطيء للعلامة المائية
             withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) { drift = true }
+        }
+    }
+
+    private var halo: some View {
+        Circle()
+            .fill(Color.white.opacity(0.10))
+            .frame(width: 150, height: 150)
+            .blur(radius: 22)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .offset(x: -30, y: -60)
+    }
+
+    /// العلامة المائية تطفو ببطء — لمسة حياة خفيفة
+    private var watermark: some View {
+        Image(systemName: icon)
+            .font(.system(size: 96, weight: .bold))
+            .foregroundColor(.white.opacity(0.09))
+            .rotationEffect(.degrees(drift ? -10 : -16))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .offset(x: 18, y: drift ? 10 : 20)
+            .opacity(markIn ? 1 : 0)
+            .id("wm-\(icon)")
+            .transition(.opacity)
+    }
+
+    /// لمعة تمرّ مرة واحدة عند الفتح
+    private var shineBand: some View {
+        LinearGradient(colors: [.clear, .white.opacity(0.28), .clear],
+                       startPoint: .leading, endPoint: .trailing)
+            .frame(width: 80)
+            .rotationEffect(.degrees(18))
+            .offset(x: shine ? 320 : -320)
+            .allowsHitTesting(false)
+    }
+
+    /// الدائرة الزجاجية: قفزة بنابض لطيف مع دوران صغير يستقر
+    private var iconBadge: some View {
+        ZStack {
+            Circle().fill(Color.white.opacity(0.18))
+            Circle().strokeBorder(Color.white.opacity(0.38), lineWidth: 1)
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+                .id(icon)
+                .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
+        }
+        .frame(width: 48, height: 48)
+        .modifier(DSIconPop())
+    }
+
+    /// العنوان ثم الوصف ينسابان من جهة الأيقونة (٦٠ ملّي ثانية بينهما)
+    private var titles: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(DS.Font.plex(18, weight: .bold))
+                .foregroundColor(.white)
+                .id("t-\(title)")
+                .transition(.opacity)
+                .dsEntrance(delay: DSMotion.titleDelay, x: -DSMotion.textShift, animation: DSMotion.text)
+            Text(subtitle)
+                .font(DS.Font.plex(12))
+                .foregroundColor(.white.opacity(0.86))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .dsEntrance(delay: DSMotion.subtitleDelay, x: -DSMotion.textShift, animation: DSMotion.text)
         }
     }
 }
@@ -304,24 +589,17 @@ struct DSShineSweep: View {
 
 // MARK: - دخول الأقسام تباعاً
 
+/// صعود ١٢ نقطة + تكبير طفيف بنابض، بفاصل ٥٥ ملّي ثانية بين الأقسام — داخل المربّع يبدأ
+/// بعد الرأس (`dsStaggerBase`). «تقليل الحركة»: تلاشٍ هادئ فقط بدل الصعود والتكبير.
 struct DSStaggerIn: ViewModifier {
     let index: Int
-    @State private var shown = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsStaggerBase) private var base
     func body(content: Content) -> some View {
         content
-            .opacity(shown ? 1 : 0)
-            .offset(y: shown || reduceMotion ? 0 : 16)
-            .scaleEffect(shown || reduceMotion ? 1 : 0.98, anchor: .top)
-            .onAppear {
-                // «تقليل الحركة»: تلاشٍ هادئ فقط بدل الصعود والتكبير
-                if reduceMotion {
-                    withAnimation(.easeInOut(duration: 0.2)) { shown = true }
-                } else {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.82)
-                        .delay(0.1 + Double(index) * 0.06)) { shown = true }
-                }
-            }
+            .dsEntrance(delay: DSMotion.staggerDelay(index, base: base),
+                        y: DSMotion.rise, scale: DSMotion.riseScale)
+            // رقم القسم يصل للمربّع — فيدخل شريط الأزرار بعد آخر قسم
+            .preference(key: DSStaggerIndexKey.self, value: index)
     }
 }
 
@@ -336,17 +614,18 @@ struct DSStaggerWhen: ViewModifier {
     @State private var shown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func body(content: Content) -> some View {
-        content
+        let settled = shown || reduceMotion
+        return content
             .opacity(shown ? 1 : 0)
-            .offset(y: shown || reduceMotion ? 0 : 18)
+            .offset(y: settled ? 0 : DSMotion.rise)
+            .scaleEffect(settled ? 1 : DSMotion.riseScale, anchor: .top)
             .onAppear { shown = active }
             .onChange(of: active) { on in
                 if on {
-                    if reduceMotion {
-                        withAnimation(.easeInOut(duration: 0.2)) { shown = true }
-                    } else {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)
-                            .delay(0.08 + Double(index) * 0.07)) { shown = true }
+                    // نفس صعود الأقسام — و«تقليل الحركة»: تلاشٍ فقط
+                    withAnimation(reduceMotion ? DSMotion.fade
+                                               : DSMotion.section.delay(DSMotion.staggerDelay(index, base: 0.06))) {
+                        shown = true
                     }
                 } else {
                     shown = false
@@ -372,12 +651,16 @@ struct DSComposerSection<Content: View>: View {
     /// قسم قابل للطي: الضغط على العنوان يفتح المحتوى ويخفيه (مثل «العائلة»)
     var isOpen: Binding<Bool>? = nil
     @ViewBuilder let content: () -> Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsStaggerBase) private var staggerBase
+    @Environment(\.dsBoxTint) private var boxTint
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm + 2) {
             if let isOpen {
                 Button {
-                    withAnimation(DS.Anim.snappy) { isOpen.wrappedValue.toggle() }
+                    // البطاقة تتمدّد بنابض هادئ والسهم يدور — «تقليل الحركة»: فتح/طي مباشر
+                    withAnimation(reduceMotion ? nil : DSMotion.expand) { isOpen.wrappedValue.toggle() }
                 } label: {
                     headerRow(chevronUp: isOpen.wrappedValue)
                         // مساحة ضغط ٤٤ نقطة (حد أبل) والعنوان بنفس ارتفاعه
@@ -394,7 +677,7 @@ struct DSComposerSection<Content: View>: View {
             }
             if isOpen?.wrappedValue ?? true {
                 content()
-                    .transition(.opacity)
+                    .transition(contentTransition)
             }
         }
         .padding(DS.Spacing.md)
@@ -404,14 +687,28 @@ struct DSComposerSection<Content: View>: View {
         .dsStaggerIn(index)
     }
 
+    /// الفتح: المحتوى ينساب من تحت العنوان مع تلاشٍ بعد بدء تمدّد البطاقة بلحظة؛
+    /// الطي: يتلاشى سريعاً قبل أن تنكمش البطاقة فوقه
+    private var contentTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: AnyTransition.opacity.combined(with: .offset(y: -8))
+                .animation(DSMotion.expand.delay(0.04)),
+            removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
+        )
+    }
+
     /// عنوان القسم: أيقونة بدائرة + العنوان + نص جانبي (+ سهم للقسم القابل للطي)
     private func headerRow(chevronUp: Bool?) -> some View {
         HStack(spacing: 7) {
             Image(systemName: icon)
                 .font(.system(size: 10.5, weight: .bold))
-                .foregroundColor(tint.dsReadableGlyph)
+                .foregroundColor(tint.dsHarmonized(with: boxTint).dsReadableGlyph)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(tint.dsReadableGlyph.opacity(0.13)))
+                .background(Circle().fill(tint.dsHarmonized(with: boxTint).dsReadableGlyph.opacity(0.13)))
+                // أيقونة القسم تتفتّح بعد صعود بطاقتها بقليل — نفس لغة أيقونة الرأس
+                .modifier(DSIconPop(delay: DSMotion.staggerDelay(index, base: staggerBase) + 0.08,
+                                    fromScale: 0.6, fromAngle: 0))
             Text(title)
                 .font(DS.Font.plex(12.5, weight: .bold))
                 .foregroundColor(DS.Color.fieldLabel)
@@ -448,15 +745,22 @@ struct DSComposerField: View {
     /// حقل إنجليزي يبقي التصحيح والحرف الكبير (مثل أسماء التصنيفات) — الافتراضي يطفئهما
     var ltrKeepsAutocorrect: Bool = false
     @FocusState private var focused: Bool
+    /// نبضة صغيرة لأيقونة الحقل عند التركيز (مرة واحدة)
+    @State private var iconPop = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsBoxTint) private var boxTint
 
     var body: some View {
-        HStack(alignment: multiline ? .top : .center, spacing: DS.Spacing.sm) {
+        // داخل مربّع: لون الحقل = لون المربّع (تنسيق)
+        let tint = self.tint.dsHarmonized(with: boxTint)
+        return HStack(alignment: multiline ? .top : .center, spacing: DS.Spacing.sm) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(focused ? .white : tint)
                 .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(focused ? tint : tint.opacity(0.12)))
+                .scaleEffect(iconPop ? 1.08 : 1)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(label)
@@ -498,12 +802,46 @@ struct DSComposerField: View {
         .onChange(of: text) { v in
             if let limit, v.count > limit { text = String(v.prefix(limit)) }
         }
+        // التركيز: الأيقونة تتلوّن وتنبض نبضة صغيرة — «تقليل الحركة»: اللون فقط
+        .onChange(of: focused) { on in
+            guard on, !reduceMotion else { return }
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.5)) { iconPop = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.72)) { iconPop = false }
+            }
+        }
     }
 }
 
 // MARK: - أيقونة حقل + صندوق صف
 
 /// أيقونة الحقل (مربّع مستدير صغير) — نفس أيقونة DSComposerField
+// MARK: - تنسيق ألوان المربّع (طلب المالك ٢٠٢٦-٠٩-٢٧: «الألوان بشكل منسق أكثر»)
+//
+// كل مربّع يمرّر لونه لما بداخله: أيقونات الأقسام والحقول والإضافات تأخذ لون رأس المربّع
+// نفسه — فالمربّع الواحد بلون واحد متناسق. يبقى الأحمر (حذف/خطر) والكهرماني (تنبيه/انتظار)
+// كما هما لأنهما دلالة. خارج المربّعات (الصفحات) لا يتغيّر شيء.
+
+private struct DSBoxTintKey: EnvironmentKey {
+    static let defaultValue: Color? = nil
+}
+
+extension EnvironmentValues {
+    /// لون المربّع الحالي — nil خارج المربّعات
+    var dsBoxTint: Color? {
+        get { self[DSBoxTintKey.self] }
+        set { self[DSBoxTintKey.self] = newValue }
+    }
+}
+
+extension Color {
+    /// داخل مربّع: لون المربّع نفسه، إلا الأحمر والكهرماني (دلالة) — وخارجه اللون كما هو
+    func dsHarmonized(with box: Color?) -> Color {
+        guard let box, self != DS.Color.error, self != DS.Color.warning else { return self }
+        return box
+    }
+}
+
 extension Color {
     /// لون أيقونة/شارة مقروء في الوضعين: الكحلي الغامق (`actionNavy`) يختفي كرمز على بطاقة داكنة،
     /// فنستعمل `primary` — نفس الكحلي تماماً في الفاتح، وأزرق فاتح مقروء في الداكن. باقي الألوان كما هي.
@@ -513,8 +851,9 @@ extension Color {
 struct DSFieldIcon: View {
     let name: String
     var tint: Color = DS.Color.primary
+    @Environment(\.dsBoxTint) private var boxTint
     var body: some View {
-        let glyph = tint.dsReadableGlyph
+        let glyph = tint.dsHarmonized(with: boxTint).dsReadableGlyph
         Image(systemName: name)
             .font(.system(size: 13, weight: .semibold))
             .foregroundColor(glyph)
@@ -545,6 +884,9 @@ struct DSExtraChip: View {
     /// ملخّص ما أُضيف — nil = لم يُضف شيء بعد
     var summary: String? = nil
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @Environment(\.dsBoxTint) private var boxTint
 
     var body: some View {
         Button(action: action) {
@@ -558,21 +900,22 @@ struct DSExtraChip: View {
                     .font(DS.Font.plex(12, weight: .bold))
                     .lineLimit(1)
             }
-            .foregroundColor(summary == nil ? DS.Color.textSecondary : tint)
+            .foregroundColor(summary == nil ? DS.Color.textSecondary : tint.dsHarmonized(with: boxTint))
             .padding(.horizontal, 12)
             .frame(height: 34)
-            .background(Capsule().fill(summary == nil ? Color.clear : tint.opacity(0.12)))
+            .background(Capsule().fill(summary == nil ? Color.clear : tint.dsHarmonized(with: boxTint).opacity(0.12)))
             .overlay(
-                Capsule().strokeBorder(summary == nil ? DS.Color.textTertiary.opacity(0.4) : tint.opacity(0.45),
+                Capsule().strokeBorder(summary == nil ? DS.Color.textTertiary.opacity(0.4) : tint.dsHarmonized(with: boxTint).opacity(0.45),
                                        style: StrokeStyle(lineWidth: 1.2, dash: summary == nil ? [4, 3] : []))
             )
             // مساحة ضغط ٤٤ نقطة (الحد الأدنى عند أبل) والشكل كما هو
             .padding(.vertical, 5)
             .contentShape(Rectangle())
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(DSPressStyle())
         .accessibilityLabel(summary.map { "\(title): \($0)" } ?? title)
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: summary)
+        // تمتلئ الشارة بنابض حين يُضاف شيء — «تقليل الحركة»: تتبدّل مباشرة
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7), value: summary)
     }
 }
 
@@ -596,6 +939,8 @@ struct DSExtraBox<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @State private var appeared = false
+    /// لحظة الفتح — لمعة «جاهز» لا تظهر أثناء الدخول
+    @State private var openedAt = Date()
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -605,66 +950,15 @@ struct DSExtraBox<Content: View>: View {
                 .ignoresSafeArea()
                 .onTapGesture { close(onCancel) }
 
+            // نفس تسلسل المربّعات: الأيقونة تقفز ← العنوان ← المحتوى يصعد ← الأزرار آخراً
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack(spacing: DS.Spacing.sm + 2) {
-                    ZStack {
-                        Circle().fill(LinearGradient(colors: [tint, tint.opacity(0.75)],
-                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                        Image(systemName: icon)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .id(icon)
-                            .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
-                    }
-                    .frame(width: 40, height: 40)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: icon)
-                    .shadow(color: tint.opacity(0.35), radius: 8, y: 3)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(title).font(DS.Font.plex(16, weight: .bold)).foregroundColor(DS.Color.textPrimary)
-                        if let subtitle {
-                            Text(subtitle).font(DS.Font.plex(11.5)).foregroundColor(DS.Color.textSecondary)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    if let onBack {
-                        Button(action: onBack) {
-                            Image(systemName: "arrow.uturn.backward")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(DS.Color.textSecondary)
-                                .frame(width: 32, height: 32)
-                                .background(Circle().fill(DS.Color.mutedBackground.opacity(0.8)))
-                                .frame(width: 44, height: 44)   // مساحة ضغط ٤٤ (توصية أبل)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(DSScaleButtonStyle())
-                        .accessibilityLabel(L10n.t("رجوع", "Back"))
-                    }
-                }
+                headerRow
 
-                content()
+                VStack(alignment: .leading, spacing: DS.Spacing.md) { content() }
+                    .dsEntrance(delay: 0.2, y: DSMotion.rise, scale: DSMotion.riseScale)
 
-                HStack(spacing: DS.Spacing.sm) {
-                    if showsDone {
-                    Button { close(onDone) } label: {
-                        Text(doneTitle)
-                            .font(DS.Font.plex(14.5, weight: .bold))
-                            .foregroundColor(DSActionFill.label(enabled: doneEnabled))
-                            .frame(maxWidth: .infinity).frame(height: 44)
-                            .background(DSActionFill.style(enabled: doneEnabled),
-                                        in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    }
-                    .disabled(!doneEnabled)
-                    }
-                    Button { close(onCancel) } label: {
-                        Text(L10n.t("إلغاء", "Cancel"))
-                            .font(DS.Font.plex(14.5, weight: .bold))
-                            .foregroundColor(DS.Color.textPrimary)
-                            .frame(maxWidth: .infinity).frame(height: 44)
-                            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .fill(DS.Color.mutedBackground.opacity(0.8)))
-                    }
-                }
-                .buttonStyle(DSScaleButtonStyle())
+                buttonsRow
+                    .dsEntrance(delay: 0.28, y: DSMotion.footerRise, animation: DSMotion.footer)
             }
             .padding(DS.Spacing.lg + 2)
             .frame(maxWidth: 380)
@@ -681,15 +975,89 @@ struct DSExtraBox<Content: View>: View {
             }
             .shadow(color: .black.opacity(0.3), radius: 26, x: 0, y: 12)
             .padding(.horizontal, DS.Spacing.xl)
-            .scaleEffect(appeared || reduceMotion ? 1 : 0.86)
-            .offset(y: appeared || reduceMotion ? 0 : 36)
+            // يطلع فوق المربّع: يكبر من ٠٫٩٤ ويصعد قليلاً مع تلاشٍ
+            .scaleEffect(appeared || reduceMotion ? 1 : DSMotion.panelScale)
+            .offset(y: appeared || reduceMotion ? 0 : 14)
             .opacity(appeared ? 1 : 0)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear {
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.2)
-                                       : .spring(response: 0.42, dampingFraction: 0.74)) { appeared = true }
+            withAnimation(reduceMotion ? DSMotion.fade : DSMotion.panel) { appeared = true }
         }
+    }
+
+    private var headerRow: some View {
+        HStack(spacing: DS.Spacing.sm + 2) {
+            ZStack {
+                Circle().fill(LinearGradient(colors: [tint, tint.opacity(0.75)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                    .id(icon)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
+            }
+            .frame(width: 40, height: 40)
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: icon)
+            .shadow(color: tint.opacity(0.35), radius: 8, y: 3)
+            .modifier(DSIconPop())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(DS.Font.plex(16, weight: .bold)).foregroundColor(DS.Color.textPrimary)
+                    .dsEntrance(delay: 0.12, x: -8, animation: DSMotion.text)
+                if let subtitle {
+                    Text(subtitle).font(DS.Font.plex(11.5)).foregroundColor(DS.Color.textSecondary)
+                        .dsEntrance(delay: 0.17, x: -8, animation: DSMotion.text)
+                }
+            }
+            Spacer(minLength: 0)
+            if let onBack {
+                Button(action: onBack) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(DS.Color.mutedBackground.opacity(0.8)))
+                        .frame(width: 44, height: 44)   // مساحة ضغط ٤٤ (توصية أبل)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(DSPressStyle())
+                .accessibilityLabel(L10n.t("رجوع", "Back"))
+            }
+        }
+    }
+
+    private var buttonsRow: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            if showsDone {
+                Button { close(onDone) } label: {
+                    Text(doneTitle)
+                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .foregroundColor(DSActionFill.label())
+                        .opacity(doneEnabled ? 1 : DSActionFill.labelDisabledOpacity)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        // نفس DSActionFill.style(enabled:) — الشفافية على الطبقة فتتحرّك بسلاسة
+                        .background(
+                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                .fill(DSActionFill.style())
+                                .opacity(doneEnabled ? 1 : DSActionFill.disabledOpacity)
+                        )
+                        .animation(DSMotion.enable, value: doneEnabled)
+                        .modifier(DSReadyGlow(isReady: doneEnabled,
+                                              armed: Date().timeIntervalSince(openedAt) > 0.6,
+                                              cornerRadius: DS.Radius.md))
+                }
+                .disabled(!doneEnabled)
+            }
+            Button { close(onCancel) } label: {
+                Text(L10n.t("إلغاء", "Cancel"))
+                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.mutedBackground.opacity(0.8)))
+            }
+        }
+        .buttonStyle(DSPressStyle())
     }
 
     private func close(_ then: @escaping () -> Void) {
@@ -764,7 +1132,8 @@ struct DSComposerPhotoStrip: View {
                         .overlay(alignment: .topLeading) {
                             Button {
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                _ = withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                // «تقليل الحركة»: تُحذف مباشرة بلا انزلاق الصور المجاورة
+                                _ = withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
                                     images.remove(at: idx)
                                 }
                             } label: {
@@ -797,7 +1166,7 @@ struct DSComposerPhotoStrip: View {
                 }
                 await MainActor.run {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.7)) {
                         images.append(contentsOf: loaded.prefix(max(0, limit - images.count)))
                     }
                     pickerItems = []
@@ -869,7 +1238,7 @@ struct DSComposerLogoPicker: View {
                         .offset(x: 2, y: 2)
                 }
             }
-            .buttonStyle(DSScaleButtonStyle())
+            .buttonStyle(DSPressStyle())
             .contextMenu {
                 if image != nil {
                     Button(role: .destructive) {

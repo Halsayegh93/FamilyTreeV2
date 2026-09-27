@@ -422,12 +422,17 @@ struct DSGenderPicker: View {
 /// نفس تدرّج زر «طلب تعديل» — كحلي عميق في الوضع الداكن بدل الأزرق الفاتح.
 /// `enabled: false` يخفّته للزر المعطّل.
 enum DSActionFill {
+    /// شفافية الزر المعطّل (التعبئة ثم النص) — المربّعات تطبّقها على الطبقة فيتحرّك
+    /// الانتقال معطّل ↔ ممكن بسلاسة، بنفس الشكل تماماً
+    static let disabledOpacity: Double = 0.45
+    static let labelDisabledOpacity: Double = 0.5
+
     static func style(enabled: Bool = true) -> some ShapeStyle {
-        DS.Color.gradientPrimary.opacity(enabled ? 1 : 0.45)
+        DS.Color.gradientPrimary.opacity(enabled ? 1 : disabledOpacity)
     }
 
     /// نص الزر الكحلي — يخفت مع التعطيل؛ بالوضع الداكن كان الأبيض الكامل يوحي أنه مفعّل
     static func label(enabled: Bool = true) -> Color {
-        .white.opacity(enabled ? 1 : 0.5)
+        .white.opacity(enabled ? 1 : labelDisabledOpacity)
     }
 }

@@ -50,6 +50,16 @@ private struct DSAlertPressStyle: ButtonStyle {
     let role: ButtonRole?
 
     func makeBody(configuration: Configuration) -> some View {
+        DSAlertPressBody(configuration: configuration, role: role)
+    }
+}
+
+private struct DSAlertPressBody: View {
+    let configuration: ButtonStyleConfiguration
+    let role: ButtonRole?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
         // أزرار موحّدة في كل المربّعات (طلب المالك): الإجراء كحلي ممتلئ بنص
         // أبيض (نفس «طلب تعديل»)، الحذف أحمر ممتلئ، و«إلغاء» رمادي هادئ.
         let destructive = role == .destructive
@@ -73,8 +83,10 @@ private struct DSAlertPressStyle: ButtonStyle {
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            // ضغطة ناعمة موحّدة (DSMotion) — «تقليل الحركة»: خفوت فقط بلا تصغير
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(DSMotion.press, value: configuration.isPressed)
     }
 }
 
@@ -178,6 +190,9 @@ struct DSCenterCard<Content: View>: View {
     /// «تقليل الحركة» (توصية أبل): تلاشٍ فقط بلا تكبير ولا انزلاق
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onBackgroundTap: (() -> Void)?
+    /// المحتوى يدخل بعد البطاقة (تلاشٍ + صعود خفيف) — false لمحتوى يُدخل عناصره
+    /// تباعاً بنفسه (مثل رسائل dsAlert: العنوان ← النص ← الأزرار)
+    var animatesContent: Bool = true
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
     @Environment(\.colorScheme) private var colorScheme
@@ -191,6 +206,8 @@ struct DSCenterCard<Content: View>: View {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 content()
             }
+            // نفس لغة المربّعات: البطاقة تكبر، ثم محتواها يصعد بهدوء داخلها
+            .dsEntrance(delay: 0.05, y: 8, animation: DSMotion.text, active: animatesContent)
             .padding(DS.Spacing.xl)
             .frame(maxWidth: 340)
             .background(DS.Color.background)
@@ -204,11 +221,11 @@ struct DSCenterCard<Content: View>: View {
             )
             .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 10)
             .padding(.horizontal, DS.Spacing.xl)
-            .scaleEffect(appeared || reduceMotion ? 1 : 0.9)
+            .scaleEffect(appeared || reduceMotion ? 1 : DSMotion.panelScale)
             .opacity(appeared ? 1 : 0)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear { withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.snappy) { appeared = true } }
+        .onAppear { withAnimation(reduceMotion ? DSMotion.fade : DSMotion.panel) { appeared = true } }
     }
 }
 
@@ -242,7 +259,10 @@ struct DSCenterPanel<Content: View>: View {
 
                 content()
                     .onPreferenceChange(SheetContentHeightKey.self) { h in
-                        if h > 0 { contentHeight = h }
+                        guard h > 0 else { return }
+                        contentHeight = h
+                        // أول قياس: يظهر بعده مباشرة (الإطار التالي) وبحجمه الصحيح
+                        if !appeared { DispatchQueue.main.async { reveal() } }
                     }
                     .frame(
                         width: min(geo.size.width - DS.Spacing.lg * 2, 520),
@@ -257,13 +277,27 @@ struct DSCenterPanel<Content: View>: View {
                                           lineWidth: colorScheme == .dark ? 1.25 : 1)
                     )
                     .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
-                    .scaleEffect(appeared || reduceMotion ? 1 : 0.94)
+                    // يكبر من ٠٫٩٤ مع تلاشٍ — ثم يبدأ تسلسل محتواه (DSMotion)
+                    .scaleEffect(appeared || reduceMotion ? 1 : DSMotion.panelScale)
                     .opacity(appeared ? 1 : 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear { withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.snappy) { appeared = true } }
+        .onAppear {
+            // المربّع المحتضن لمحتواه ينتظر قياس ارتفاعه (إطاراً أو اثنين) فلا يُرى
+            // يتغيّر حجمه وهو يظهر — واحتياطاً يظهر بعد لحظة إن لم يصل قياس
+            if hugsContent {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { reveal() }
+            } else {
+                reveal()
+            }
+        }
+    }
+
+    private func reveal() {
+        guard !appeared else { return }
+        withAnimation(reduceMotion ? DSMotion.fade : DSMotion.panel) { appeared = true }
     }
 }
 
@@ -339,6 +373,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
                         .onPreferenceChange(DSPanelCollapsedHeightKey.self) { h in
                             if h > 0 { collapsedHeight = h }
                         }
+                        // المحتوى تحت رأس ملوّن (تفاصيل العضو) — أقسامه تدخل بعد الرأس (DSMotion)
+                        .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
                 }
                 .frame(width: min(geo.size.width - DS.Spacing.lg * 2, 520), height: height)
                 .background(DS.Color.background)
@@ -355,7 +391,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
                 .offset(y: appeared || reduceMotion ? 0 : (closing ? 18 : 20))
                 .opacity(appeared ? 1 : 0)
                 // الارتفاع الفعلي يتحرّك بسلاسة — يصل بعد قياس المحتوى الجديد
-                .animation(DS.Anim.smooth, value: height)
+                // («تقليل الحركة»: يتبدّل مباشرة بلا تمدّد)
+                .animation(reduceMotion ? nil : DS.Anim.smooth, value: height)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -390,13 +427,15 @@ private struct DSAlertBody<A: View, M: View>: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        DSCenterCard(onBackgroundTap: nil) {
+        // نفس لغة المربّعات: البطاقة تكبر ← العنوان ← النص ← الأزرار آخراً
+        DSCenterCard(onBackgroundTap: nil, animatesContent: false) {
             Text(title)
                 .font(DS.Font.plex(17, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
+                .dsEntrance(delay: 0.05, y: 8, animation: DSMotion.text)
 
             if let message {
                 message
@@ -405,6 +444,7 @@ private struct DSAlertBody<A: View, M: View>: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .dsEntrance(delay: 0.09, y: 8, animation: DSMotion.text)
             }
 
             DSAlertButtonsLayout {
@@ -418,6 +458,7 @@ private struct DSAlertBody<A: View, M: View>: View {
             .buttonStyle(DSAlertButtonStyle())
             .environment(\.dsAlertDismiss, onDismiss)
             .padding(.top, DS.Spacing.xs)
+            .dsEntrance(delay: 0.14, y: DSMotion.footerRise, animation: DSMotion.footer)
         }
     }
 }

@@ -57,18 +57,11 @@ struct AdminTreeEditRequestsView: View {
         adminRequestVM.treeEditRequests.filter { $0.treeEditPayload?.resolvedAction == selectedAction }
     }
 
+    /// الأدوار مجالات (٢٠٢٦-٠٩-٢١، CLAUDE.md): قبول طلبات الشجرة للمالك والمدير والمراقب —
+    /// نفس «طلبات المراجعة» (`canApproveTreeRequests`). كان هنا تقسيم قديم يعطي المشرف
+    /// «الإضافة» ويحرم المراقب من بعض الأنواع، والسيرفر يرفضه أصلاً.
     private func canApprove(_ action: TreeEditAction) -> Bool {
-        guard let role = authVM.currentUser?.role else { return false }
-        switch role {
-        case .owner, .admin:
-            return true
-        case .monitor:
-            return action == .editName || action == .editPhone || action == .deceased || action == .delete
-        case .supervisor:
-            return action == .add
-        default:
-            return false
-        }
+        authVM.canApproveTreeRequests
     }
 
     /// أول تحميل ولا طلبات محمّلة بعد
