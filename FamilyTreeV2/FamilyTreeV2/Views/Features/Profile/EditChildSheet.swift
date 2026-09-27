@@ -144,7 +144,7 @@ struct EditChildSheet: View {
                     DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
                               label: L10n.t("الجنس", "Gender")) {
                         HStack(spacing: DS.Spacing.xs) {
-                            genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.primary)
+                            genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.actionNavy)
                             genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
                         }
                     }
