@@ -55,7 +55,7 @@ struct AdminSecuritySettingsView: View {
             title: L10n.t("إعدادات النظام", "System Settings"),
             subtitle: authVM.canManageSettings
                 ? L10n.t("الإدارة وصحة النظام والاستخدام", "Management, health & usage")
-                : L10n.t("تتصفّح للقراءة — التعديل للمالك", "Read-only — the owner edits"),
+                : L10n.t("الإعدادات للقراءة — تعديلها للمالك", "Settings are read-only — the owner edits them"),
             icon: "lock.shield.fill",
             tint: DS.Color.actionNavy,
             stats: [
@@ -187,7 +187,8 @@ struct AdminSecuritySettingsView: View {
                         subtitle: L10n.t("الأدوار والصلاحيات", "Roles & permissions"),
                         icon: "person.3.fill",
                         color: DS.Color.actionNavy,
-                        badge: moderatorCount, compact: true
+                        badge: moderatorCount, compact: true,
+                        badgeSpoken: L10n.t("\(moderatorCount) في الفريق", "\(moderatorCount) on the team")
                     ) {
                         AdminModeratorsView()
                             .environmentObject(authVM)

@@ -219,9 +219,9 @@ struct SysSectionTitle: View {
         HStack(spacing: 7) {
             Image(systemName: icon)
                 .font(.system(size: 10.5, weight: .bold))
-                .foregroundColor(tint)
+                .foregroundColor(tint.dsReadableGlyph)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(tint.opacity(0.13)))
+                .background(Circle().fill(tint.dsReadableGlyph.opacity(0.13)))
                 .accessibilityHidden(true)
             Text(title)
                 .font(DS.Font.plex(12.5, weight: .bold))

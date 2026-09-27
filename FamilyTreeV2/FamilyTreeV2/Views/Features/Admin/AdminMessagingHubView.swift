@@ -16,6 +16,8 @@ struct AdminMessagingHubView: View {
     @State private var mode: Mode = .notification
     /// الكيبورد ظاهر — تنطوي بطاقة الرأس
     @State private var keyboardVisible = false
+    /// بالعرض (ارتفاع مضغوط) نخفي بطاقة الرأس حتى يبقى للنموذج مكان
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// المستلمون المحتملون — نفس فلتر «إرسال إشعار»: بلا المعلّقين والمتوفّين والمجمّدين
@@ -34,7 +36,7 @@ struct AdminMessagingHubView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: DS.Spacing.sm) {
-                if !keyboardVisible {
+                if !keyboardVisible && verticalSizeClass != .compact {
                     DSPageHero(
                         title: L10n.t("الإشعارات والتحديثات", "Notifications & Updates"),
                         subtitle: L10n.t("إشعار موجّه للأعضاء، أو إعلان عن تحديث التطبيق للجميع",

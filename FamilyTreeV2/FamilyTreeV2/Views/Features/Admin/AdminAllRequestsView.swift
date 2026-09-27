@@ -767,7 +767,8 @@ struct AdminAllRequestsView: View {
         cachedTotalCount = Self.reviewRequestsTotal(
             memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
             diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
-            pendingArchiveCount: pendingArchiveItems.count
+            pendingArchiveCount: pendingArchiveItems.count,
+            scope: Self.reviewScope(for: authVM)
         )
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
         // ما عدا التابات المخفية (مغطّاة بأقسام أخرى).
@@ -776,6 +777,17 @@ struct AdminAllRequestsView: View {
 
     /// مصدر واحد للحقيقة لعدد «طلبات المراجعة» — يستخدمه «الكل» داخل الطلبات وبادج لوحة الإدارة
     /// حتى يتطابق الرقمان دائماً. يطابق مجموع عدّادات كل التابات (joinRequests…صحة الشجرة).
+    /// مجال العدّاد حسب الدور — نفس `tabsForRole`: الإدارة كل شيء، المشرف المحتوى والبلاغات،
+    /// والمراقب الشجرة والأعضاء (مع صحة الشجرة) — حتى يطابق الرقم ما يراه في القائمة.
+    enum ReviewScope { case all, content, tree }
+
+    @MainActor
+    static func reviewScope(for authVM: AuthViewModel) -> ReviewScope {
+        if authVM.isAdmin { return .all }
+        if authVM.currentUser?.role == .supervisor { return .content }
+        return .tree
+    }
+
     @MainActor
     static func reviewRequestsTotal(
         memberVM: MemberViewModel,
@@ -783,7 +795,8 @@ struct AdminAllRequestsView: View {
         adminRequestVM: AdminRequestViewModel,
         diwaniyaVM: DiwaniyasViewModel,
         projectsVM: ProjectsViewModel,
-        pendingArchiveCount: Int = 0
+        pendingArchiveCount: Int = 0,
+        scope: ReviewScope = .all
     ) -> Int {
         let members = memberVM.allMembers
         let pending = members.filter { $0.role == .pending }.count
@@ -811,19 +824,25 @@ struct AdminAllRequestsView: View {
             healthTotal += issues.values.filter { $0.contains(issue) }.count
         }
 
-        return pending
-            + newsVM.pendingNewsRequests.count
+        // المحتوى والبلاغات = تبويبات `contentTabs`، والباقي الشجرة والأعضاء
+        let content = newsVM.pendingNewsRequests.count
             + adminRequestVM.newsReportRequests.count
-            + adminRequestVM.phoneChangeRequests.count
-            + adminRequestVM.nameChangeRequests.count
             + diwaniyaVM.pendingDiwaniyas.count
-            + adminRequestVM.deceasedRequests.count
-            + adminRequestVM.childAddRequests.count
-            + adminRequestVM.treeEditRequests.count
             + adminRequestVM.photoSuggestionRequests.count
             + projectsVM.pendingProjects.count
             + pendingArchiveCount
+        let tree = pending
+            + adminRequestVM.phoneChangeRequests.count
+            + adminRequestVM.nameChangeRequests.count
+            + adminRequestVM.deceasedRequests.count
+            + adminRequestVM.childAddRequests.count
+            + adminRequestVM.treeEditRequests.count
             + healthTotal
+        switch scope {
+        case .all:     return content + tree
+        case .content: return content
+        case .tree:    return tree
+        }
     }
 
     // MARK: - بطاقة الرأس (صفحات الإدارة الموحّدة — طلب المالك ٢٠٢٦-٠٩-٢٧)

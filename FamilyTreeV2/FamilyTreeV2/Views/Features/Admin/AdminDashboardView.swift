@@ -112,7 +112,8 @@ struct AdminDashboardView: View {
         let reviewTotal = AdminAllRequestsView.reviewRequestsTotal(
             memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
             diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
-            pendingArchiveCount: pendingArchiveCount
+            pendingArchiveCount: pendingArchiveCount,
+            scope: AdminAllRequestsView.reviewScope(for: authVM)
         )
 
         withAnimation(DS.Anim.smooth) {
@@ -847,6 +848,8 @@ struct AdminTile<Destination: View>: View {
     var detail: String? = nil
     /// أصغر — لشبكة «إعدادات النظام» بثلاثة أعمدة (طلب المالك)
     var compact: Bool = false
+    /// ما يقوله القارئ الصوتي عن الشارة — nil = «N بانتظارك» (للشارات التي ليست طلبات، مثل عدد الفريق)
+    var badgeSpoken: String? = nil
     @ViewBuilder let destination: () -> Destination
 
     private var hasBadge: Bool { (badge ?? 0) > 0 }
@@ -861,7 +864,7 @@ struct AdminTile<Destination: View>: View {
 
     private var accessibilityText: String {
         var parts = [title, subtitle]
-        if let badge, badge > 0 { parts.append(L10n.t("\(badge) بانتظارك", "\(badge) pending")) }
+        if let badge, badge > 0 { parts.append(badgeSpoken ?? L10n.t("\(badge) بانتظارك", "\(badge) pending")) }
         if let detail, !compact { parts.append(detail) }
         return parts.joined(separator: "، ")
     }
@@ -890,7 +893,7 @@ struct AdminTile<Destination: View>: View {
             HStack(spacing: 4) {
                 Text(detail ?? " ")
                     .font(DS.Font.plex(11, weight: .bold))
-                    .foregroundColor(color)
+                    .foregroundColor(color.dsReadableGlyph)
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)

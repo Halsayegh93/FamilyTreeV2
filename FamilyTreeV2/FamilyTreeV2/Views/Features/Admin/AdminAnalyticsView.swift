@@ -255,11 +255,14 @@ struct AdminAnalyticsView: View {
                                  index: 3) {
             VStack(spacing: 10) {
                 HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                    // عدد الذكور معروف دائماً (من الأعضاء) — النسبة فقط تنتظر شجرة النساء
                     genderBlock(title: L10n.t("ذكور", "Males"), count: males, total: total,
-                                color: DS.Color.primary, alignment: .leading, known: known)
+                                color: DS.Color.primary, alignment: .leading,
+                                countKnown: true, shareKnown: known)
                     Spacer(minLength: 0)
                     genderBlock(title: L10n.t("إناث", "Females"), count: females, total: total,
-                                color: DS.Color.female, alignment: .trailing, known: known)
+                                color: DS.Color.female, alignment: .trailing,
+                                countKnown: known, shareKnown: known)
                 }
                 // لمحة النسبة — بعد معرفة أرقام شجرة النساء (قبلها تبدو ١٠٠٪ ذكوراً)
                 if known {
@@ -275,9 +278,9 @@ struct AdminAnalyticsView: View {
 
     /// عدد جنس واحد: نقطة اللون + العنوان، الرقم كبيراً، والنسبة تحته
     private func genderBlock(title: String, count: Int, total: Int, color: Color,
-                             alignment: HorizontalAlignment, known: Bool) -> some View {
-        let value = known ? count.formatted() : "—"
-        let share = known ? AnalyticsPercent.text(count, of: total) : "—"
+                             alignment: HorizontalAlignment, countKnown: Bool, shareKnown: Bool) -> some View {
+        let value = countKnown ? count.formatted() : "—"
+        let share = shareKnown ? AnalyticsPercent.text(count, of: total) : "—"
         return VStack(alignment: alignment, spacing: 1) {
             HStack(spacing: 5) {
                 Circle().fill(color).frame(width: 7, height: 7)

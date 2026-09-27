@@ -254,7 +254,7 @@ struct AdminDevicesView: View {
 
     private func memberAvatar(_ member: FamilyMember?) -> some View {
         ZStack {
-            Circle().fill(tint.opacity(0.12))
+            Circle().fill(tint.dsReadableGlyph.opacity(0.12))
             if let urlStr = member?.avatarUrl, let url = URL(string: urlStr) {
                 CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
                 placeholder: { ProgressView() }
@@ -263,11 +263,11 @@ struct AdminDevicesView: View {
             } else if let name = member?.fullName, let first = name.first {
                 Text(String(first))
                     .font(DS.Font.plex(15, weight: .bold))
-                    .foregroundColor(tint)
+                    .foregroundColor(tint.dsReadableGlyph)
             } else {
                 Image(systemName: "person.fill")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(tint)
+                    .foregroundColor(tint.dsReadableGlyph)
             }
         }
         .frame(width: 38, height: 38)
