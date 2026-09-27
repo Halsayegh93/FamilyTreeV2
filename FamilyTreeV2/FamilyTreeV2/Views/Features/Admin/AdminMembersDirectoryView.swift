@@ -1,6 +1,11 @@
 import SwiftUI
 
 // MARK: - Admin Members Registry — سجل الأعضاء
+//
+// تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): قائمة واحدة تتمرّر كلها —
+// بطاقة رأس بأرقام حيّة ← بحث ← فلاتر بالعدد ← مسار الفروع ← صفوف `.dsRowBox()`.
+// بقيت `List` لأجل السحب (تجميد/تفعيل/رقم) والتحميل التدريجي.
+// الضغط على الصف يفتح تفاصيل العضو، وعلى عدّاد الذرّية ينزل داخل الفرع — كما كان.
 struct AdminMembersDirectoryView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -15,12 +20,16 @@ struct AdminMembersDirectoryView: View {
     @State private var memberToEditPhone: FamilyMember?
     @State private var branchRootId: UUID? = nil
     @State private var branchPickerOpen = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// مسار التصفّح الشجري — فارغ يعني مستوى الجذور (رؤوس الفروع)
     @State private var drillPath: [FamilyMember] = []
 
     /// عدد ذرّية كل عضو — يُحسب مرة واحدة بدل مسح الشجرة لكل صف عند كل رسم
     @State private var descendantCounts: [UUID: Int] = [:]
+
+    /// لون مجال «الشجرة والأعضاء»
+    private let tint = DS.Color.composerProject
 
     // MARK: - Filter
 
@@ -179,78 +188,120 @@ struct AdminMembersDirectoryView: View {
         descendantCounts = memo
     }
 
+    /// حركة التنقّل في الفروع — هادئة مع «تقليل الحركة»
+    private var drillAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy
+    }
+
     /// شريط المسار — يرجّعك لأي مستوى بضغطة
     private var breadcrumbBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                Button {
-                    withAnimation(DS.Anim.snappy) { drillPath.removeAll() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "house.fill")
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                        Text(L10n.t("الفروع", "Branches"))
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                    }
-                    .foregroundColor(drillPath.isEmpty ? DS.Color.textOnPrimary : DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.sm + 2)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(drillPath.isEmpty ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                crumb(title: L10n.t("الفروع", "Branches"), icon: "house.fill",
+                      isCurrent: drillPath.isEmpty) {
+                    withAnimation(drillAnimation) { drillPath.removeAll() }
                 }
 
                 ForEach(Array(drillPath.enumerated()), id: \.element.id) { idx, node in
                     Image(systemName: "chevron.forward")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
-                    Button {
-                        withAnimation(DS.Anim.snappy) {
+                        .accessibilityHidden(true)
+                    crumb(title: node.firstName.isEmpty ? node.fullName : node.firstName, icon: nil,
+                          isCurrent: idx == drillPath.count - 1) {
+                        withAnimation(drillAnimation) {
                             drillPath = Array(drillPath.prefix(idx + 1))
                         }
-                    } label: {
-                        let isLast = idx == drillPath.count - 1
-                        Text(node.firstName.isEmpty ? node.fullName : node.firstName)
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                            .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.primary)
-                            .lineLimit(1)
-                            .padding(.horizontal, DS.Spacing.sm + 2)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(isLast ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
                     }
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)
         }
-        .buttonStyle(DSScaleButtonStyle())
     }
 
-    /// صفّ فرع — الضغط على الاسم يفتح التفاصيل، وعلى شارة الذرّية ينزل داخل الفرع
+    /// عنصر في المسار — الحالي كحلي ممتلئ مثل الفلاتر، والسابق بلون القسم
+    private func crumb(title: String, icon: String?, isCurrent: Bool,
+                       action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 10.5, weight: .bold))
+                        .accessibilityHidden(true)
+                }
+                Text(title)
+                    .font(DS.Font.plex(12, weight: .bold))
+                    .lineLimit(1)
+            }
+            .foregroundColor(isCurrent ? .white : tint)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(height: 32)
+            .background {
+                if isCurrent {
+                    Capsule().fill(DSActionFill.style())
+                } else {
+                    Capsule().fill(tint.opacity(0.10))
+                }
+            }
+            // مساحة ضغط ٤٤ نقطة والشكل كما هو
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+    }
+
+    /// صفّ فرع — الضغط على الصف يفتح التفاصيل، وعلى عدّاد الذرّية ينزل داخل الفرع
     private func branchRow(_ member: FamilyMember) -> some View {
         let kids = descendantCount(of: member)
-        return HStack(spacing: DS.Spacing.sm) {
-            NavigationLink(destination: AdminMemberDetailSheet(member: member)) {
-                memberRow(member: member, index: 0)
-            }
-            .buttonStyle(PlainButtonStyle())
+        return ZStack {
+            // الرابط مخفي: الصف كله يفتح التفاصيل بلا سهم النظام خارج الصندوق
+            NavigationLink(destination: AdminMemberDetailSheet(member: member)) { EmptyView() }
+                .opacity(0)
 
-            if kids > 0 {
-                Button {
-                    withAnimation(DS.Anim.snappy) { drillPath.append(member) }
-                } label: {
-                    VStack(spacing: 1) {
-                        Text("\(kids)")
-                            .font(DS.Font.plex(13, weight: .bold))
-                        Image(systemName: "chevron.forward")
-                            .font(DS.Font.scaled(11, weight: .bold))
+            memberRow(member: member, index: 0) {
+                if kids > 0 {
+                    Button {
+                        withAnimation(drillAnimation) { drillPath.append(member) }
+                    } label: {
+                        VStack(spacing: 1) {
+                            Text("\(kids)")
+                                .font(DS.Font.plex(13, weight: .bold))
+                                .monospacedDigit()
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            Image(systemName: "chevron.forward")
+                                .font(.system(size: 9.5, weight: .bold))
+                                .accessibilityHidden(true)
+                        }
+                        .foregroundColor(tint)
+                        .frame(width: 44, height: 44)
+                        .background(tint.opacity(0.10),
+                                    in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                .strokeBorder(tint.opacity(0.22), lineWidth: 1)
+                        )
+                        .contentShape(Rectangle())
                     }
-                    .foregroundColor(DS.Color.primary)
-                    .frame(width: 42, height: 42)
-                    .background(DS.Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1)
-                    )
+                    .buttonStyle(DSScaleButtonStyle())
+                    .accessibilityLabel(L10n.t("ذرّية \(member.firstName): \(kids)",
+                                               "\(member.firstName)'s descendants: \(kids)"))
+                    .accessibilityHint(L10n.t("يعرض الفرع", "Opens the branch"))
+                } else {
+                    SysChevron()
                 }
-                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
+    }
+
+    /// صف نتيجة بحث — الصف كله يفتح التفاصيل (نفس الرابط، بلا سهم النظام خارج الصندوق)
+    private func searchResultRow(_ member: FamilyMember, index: Int) -> some View {
+        ZStack {
+            NavigationLink(destination: AdminMemberDetailSheet(member: member)) { EmptyView() }
+                .opacity(0)
+            memberRow(member: member, index: index) {
+                SysChevron()
             }
         }
     }
@@ -261,61 +312,47 @@ struct AdminMembersDirectoryView: View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
-            VStack(spacing: DS.Spacing.sm) {
-                // 1) البحث — أعلى شي
-                searchBar
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
+            List {
+                // 0) بطاقة الرأس — تتمرّر مع القائمة
+                hero
+                    .registryListRow(top: DS.Spacing.sm, bottom: DS.Spacing.sm)
+
+                // 1) البحث
+                DSSearchField(text: $searchText,
+                              placeholder: L10n.t("بحث بالاسم أو رقم الهاتف...", "Search by name or phone..."),
+                              tint: tint)
+                    .onChange(of: searchText) { _ in displayLimit = 20 }
+                    .registryListRow(top: 0, bottom: 2)
 
                 // 2) فلتر الحالة (الكل/أحياء/متوفون)
                 filterChips
+                    .registryListRow(top: 0, bottom: 0)
 
                 if searchText.isEmpty {
                     breadcrumbBar
+                        .registryListRow(top: 0, bottom: 2, horizontal: 0)
                 }
 
                 if filteredMembers.isEmpty {
                     noResultsState
+                        .registryListRow(top: DS.Spacing.sm)
                 } else if searchText.isEmpty {
                     // تصفّح شجري — مستوى واحد في كل مرة
-                    List {
-                        ForEach(currentLevelMembers, id: \.id) { member in
-                            branchRow(member)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(
-                                    top: 3, leading: DS.Spacing.lg,
-                                    bottom: 3, trailing: DS.Spacing.lg
-                                ))
-                        }
-                        if currentLevelMembers.isEmpty {
-                            Text(L10n.t("ما فيه ذرّية مسجّلة لهذا الفرع", "No descendants recorded for this branch"))
-                                .font(DS.Font.scaled(12))
-                                .foregroundColor(DS.Color.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, DS.Spacing.xxl)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                        }
+                    ForEach(currentLevelMembers, id: \.id) { member in
+                        branchRow(member)
+                            .registryListRow()
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .environment(\.defaultMinListRowHeight, 0)
+                    if currentLevelMembers.isEmpty {
+                        SysStateCard(icon: "person.2.slash",
+                                     title: L10n.t("ما فيه ذرّية مسجّلة لهذا الفرع", "No descendants recorded for this branch"),
+                                     tint: DS.Color.textTertiary)
+                            .registryListRow(top: DS.Spacing.sm)
+                    }
                 } else {
-                    List {
-                        let visible = Array(filteredMembers.prefix(displayLimit))
-                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
-                            NavigationLink(destination: AdminMemberDetailSheet(member: member)) {
-                                memberRow(member: member, index: index)
-                            }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(
-                                top: 3,
-                                leading: DS.Spacing.lg,
-                                bottom: 3,
-                                trailing: DS.Spacing.lg
-                            ))
+                    let visible = Array(filteredMembers.prefix(displayLimit))
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
+                        searchResultRow(member, index: index)
+                            .registryListRow()
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 // التجميد/التفعيل للمدير فقط (كان canEditMembers يشمل المراقب)
                                 // لا تجميد للمالك ولا لنفسك (السيرفر يرفضهما أيضاً)
@@ -348,36 +385,21 @@ struct AdminMembersDirectoryView: View {
                                     .tint(DS.Color.primary)
                                 }
                             }
-                        }
-
-                        // Load more
-                        if displayLimit < filteredMembers.count {
-                            Button {
-                                displayLimit += 20
-                            } label: {
-                                HStack {
-                                    Spacer()
-                                    Text(L10n.t(
-                                        "عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)",
-                                        "Show more (\(filteredMembers.count - displayLimit) remaining)"
-                                    ))
-                                    .font(DS.Font.caption1)
-                                    .foregroundColor(DS.Color.primary)
-                                    Spacer()
-                                }
-                                .padding(.vertical, DS.Spacing.sm)
-                            }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        }
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .environment(\.defaultMinListRowHeight, 0)
+
+                    // Load more
+                    if displayLimit < filteredMembers.count {
+                        loadMoreButton
+                            .registryListRow(top: DS.Spacing.xs)
+                    }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .environment(\.defaultMinListRowHeight, 0)
             .onAppear {
-                withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.smooth.delay(0.1)) { appeared = true }
                 if descendantCounts.isEmpty { buildDescendantCounts() }
             }
             .onChange(of: memberVM.allMembers.count) { _ in buildDescendantCounts() }
@@ -442,140 +464,174 @@ struct AdminMembersDirectoryView: View {
         }
     }
 
+    // MARK: - بطاقة الرأس
+
+    /// أرقام حيّة بمرور واحد على الأعضاء المحمّلين (بلا فرز): الأفراد، رؤوس الفروع، من لهم رقم
+    private var heroNumbers: (total: Int, branches: Int, withPhone: Int) {
+        var total = 0, branches = 0, withPhone = 0
+        for m in memberVM.allMembers where m.isCountable {
+            total += 1
+            if m.fatherId == nil { branches += 1 }
+            if !(m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { withPhone += 1 }
+        }
+        return (total, branches, withPhone)
+    }
+
+    private var hero: some View {
+        let n = heroNumbers
+        let ready = !memberVM.allMembers.isEmpty
+        return DSPageHero(
+            title: L10n.t("سجل الأعضاء", "Members Registry"),
+            subtitle: L10n.t("تصفّح الفروع، أو ابحث بالاسم أو الرقم", "Browse branches, or search by name or phone"),
+            icon: "person.3.sequence.fill",
+            tint: tint,
+            stats: [
+                DSHeroStat(value: ready ? "\(n.total)" : "—",
+                           label: L10n.t("الأفراد", "Members"), icon: "person.3.fill"),
+                DSHeroStat(value: ready ? "\(n.branches)" : "—",
+                           label: L10n.t("الفروع", "Branches"), icon: "arrow.triangle.branch"),
+                DSHeroStat(value: ready ? "\(n.withPhone)" : "—",
+                           label: L10n.t("لهم رقم", "With phone"), icon: "phone.fill")
+            ]
+        )
+    }
+
     // MARK: - Filter Chips
 
     private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
-                ForEach(RegistryFilter.allCases, id: \.self) { filter in
-                    filterChip(filter)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-        }
+        DSFilterChips(
+            options: RegistryFilter.allCases.map { filter in
+                let n = count(for: filter)
+                return DSFilterOption(id: filter, title: filter.label, icon: filter.icon,
+                                      count: n > 0 ? n : nil)
+            },
+            selection: $selectedFilter,
+            tint: tint
+        )
         .onChange(of: selectedFilter) { _ in
             displayLimit = 20
             searchText = ""
         }
     }
 
-    private func filterChip(_ filter: RegistryFilter) -> some View {
-        let isSelected = selectedFilter == filter
-        let chipCount = count(for: filter)
-        return Button {
-            withAnimation(DS.Anim.snappy) { selectedFilter = filter }
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: filter.icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                Text(filter.label)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.semibold)
-                if chipCount > 0 {
-                    Text("\(chipCount)")
-                        .font(DS.Font.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(isSelected ? filter.color : DS.Color.textOnPrimary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(isSelected ? Color.white.opacity(0.28) : filter.color)
-                        )
+    // MARK: - Member Row
+
+    /// صف عضو بإطار حقول المربّعات: الصورة (وعليها الحالة) + الاسم + الدور والهاتف + طرف
+    private func memberRow<Trailing: View>(member: FamilyMember, index: Int,
+                                           @ViewBuilder trailing: () -> Trailing) -> some View {
+        let muted = member.isDeceased == true || member.status == .frozen
+        return HStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                memberAvatar(member)
+
+                // سطران: الاسم، ثم شارة العضو والهاتف — بلا تكرار الاسم
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(member.shortFullName)
+                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .foregroundColor(muted ? DS.Color.textTertiary : DS.Color.fieldLabel)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        SysStatusChip(text: member.roleName, tint: member.roleColor)
+
+                        if let phone = member.phoneNumber, !phone.isEmpty {
+                            HStack(spacing: 3) {
+                                Image(systemName: "phone.fill")
+                                    .font(.system(size: 9.5, weight: .semibold))
+                                    .accessibilityHidden(true)
+                                Text(KuwaitPhone.display(phone))
+                                    .font(DS.Font.plex(12))
+                                    .monospacedDigit()
+                                    .lineLimit(1)
+                            }
+                            .foregroundColor(DS.Color.fieldValue)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
                 }
+                Spacer(minLength: 0)
             }
-            .foregroundColor(isSelected ? DS.Color.textOnPrimary : filter.color)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(Capsule().fill(isSelected ? filter.color : filter.color.opacity(0.1)))
-            .overlay(Capsule().stroke(isSelected ? Color.clear : filter.color.opacity(0.3), lineWidth: 1))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(rowAccessibilityLabel(member))
+            .accessibilityAddTraits(.isButton)
+
+            trailing()
+        }
+        .frame(minHeight: 44)
+        .dsRowBox()
+        .contentShape(Rectangle())
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared || reduceMotion ? 0 : 15)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2)
+                                : DS.Anim.smooth.delay(Double(min(index, 15)) * 0.03),
+                   value: appeared)
+    }
+
+    /// الصورة وعليها حالة العضو — بدل شارات نصّية تزحم السطر
+    private func memberAvatar(_ member: FamilyMember) -> some View {
+        DSMemberAvatar(
+            name: member.fullName,
+            avatarUrl: member.avatarUrl,
+            size: 40,
+            roleColor: member.isDeceased == true ? DS.Color.textTertiary : member.roleColor
+        )
+        .overlay(alignment: .bottomTrailing) {
+            if member.isDeceased == true {
+                statusBadge("leaf.fill", DS.Color.textTertiary)
+            } else if member.status == .frozen {
+                statusBadge("lock.fill", DS.Color.error)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func statusBadge(_ icon: String, _ color: Color) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 8.5, weight: .bold))
+            .foregroundColor(.white)
+            .frame(width: 17, height: 17)
+            .background(Circle().fill(color))
+            .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
+            .offset(x: 2, y: 2)
+    }
+
+    private func rowAccessibilityLabel(_ member: FamilyMember) -> String {
+        var parts = [member.shortFullName, member.roleName]
+        if member.isDeceased == true { parts.append(L10n.t("متوفى", "Deceased")) }
+        if member.status == .frozen { parts.append(L10n.t("مجمّد", "Frozen")) }
+        if let phone = member.phoneNumber, !phone.isEmpty { parts.append(KuwaitPhone.display(phone)) }
+        return parts.joined(separator: "، ")
+    }
+
+    private var loadMoreButton: some View {
+        Button {
+            displayLimit += 20
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 12.5, weight: .bold))
+                    .accessibilityHidden(true)
+                Text(L10n.t(
+                    "عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)",
+                    "Show more (\(filteredMembers.count - displayLimit) remaining)"
+                ))
+                .font(DS.Font.plex(12.5, weight: .bold))
+            }
+            .foregroundColor(tint)
+            .padding(.horizontal, DS.Spacing.lg)
+            .frame(minHeight: 40)
+            .background(Capsule().fill(tint.opacity(0.10)))
+            .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 1))
+            .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
     }
 
-    // MARK: - Member Row
-
-    /// شارة حالة صغيرة موحّدة (متوفي / مجمّد)
-    private func statusChip(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(DS.Font.caption2)
-            .fontWeight(.bold)
-            .foregroundColor(color)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(color.opacity(0.12))
-            .clipShape(Capsule())
-    }
-
-    private func memberRow(member: FamilyMember, index: Int) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSMemberAvatar(
-                name: member.fullName,
-                avatarUrl: member.avatarUrl,
-                size: 40,
-                roleColor: member.isDeceased == true ? DS.Color.textTertiary : member.roleColor
-            )
-            .overlay(alignment: .bottomTrailing) {
-                // حالة العضو على الصورة نفسها — بدل شارات نصّية تزحم السطر
-                if member.isDeceased == true {
-                    Image(systemName: "leaf.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(4)
-                        .background(DS.Color.textTertiary)
-                        .clipShape(Circle())
-                        .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
-                } else if member.status == .frozen {
-                    Image(systemName: "lock.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(4)
-                        .background(DS.Color.error)
-                        .clipShape(Circle())
-                        .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
-                }
-            }
-
-            // سطران: الاسم، ثم شارة العضو والهاتف — بلا تكرار الاسم
-            VStack(alignment: .leading, spacing: 3) {
-                Text(member.shortFullName)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(
-                        member.isDeceased == true ? DS.Color.textTertiary :
-                        member.status == .frozen ? DS.Color.textTertiary :
-                        DS.Color.textPrimary
-                    )
-                    .lineLimit(1)
-
-                HStack(spacing: DS.Spacing.sm) {
-                    DSRoleBadge(title: member.roleName, color: member.roleColor)
-
-                    if let phone = member.phoneNumber, !phone.isEmpty {
-                        HStack(spacing: 3) {
-                            Image(systemName: "phone.fill")
-                                .font(DS.Font.scaled(11))
-                            Text(KuwaitPhone.display(phone))
-                                .font(DS.Font.caption2)
-                                .monospacedDigit()
-                        }
-                        .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    Spacer(minLength: 0)
-                }
-            }
-        }
-        .frame(minHeight: 50)
-        .padding(.vertical, DS.Spacing.sm)
-        .padding(.horizontal, DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 15)
-        .animation(DS.Anim.smooth.delay(Double(index) * 0.03), value: appeared)
-    }
-
     // MARK: - Branch Filter Row
+    // (غير معروض حالياً — التصفّح الشجري حلّ محلّه؛ بقي كما هو لو أُعيد)
 
     private var branchFilterRow: some View {
         Group {
@@ -659,40 +715,27 @@ struct AdminMembersDirectoryView: View {
         }
     }
 
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(DS.Color.textTertiary)
-            TextField(L10n.t("بحث بالاسم أو رقم الهاتف...", "Search by name or phone..."), text: $searchText)
-                .font(DS.Font.callout)
-                .onChange(of: searchText) { _ in displayLimit = 20 }
-            if !searchText.isEmpty {
-                Button { searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-            }
-        }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .cornerRadius(DS.Radius.lg)
-    }
-
     // MARK: - Empty States
 
     private var noResultsState: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "person.fill.questionmark")
-                .font(DS.Font.scaled(32))
-                .foregroundColor(DS.Color.textTertiary)
-            Text(L10n.t("لا يوجد نتائج", "No results found"))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.xxxl)
+        SysStateCard(
+            icon: "person.fill.questionmark",
+            title: L10n.t("لا يوجد نتائج", "No results found"),
+            hint: L10n.t("جرّب اسماً آخر أو غيّر الفلتر", "Try another name or change the filter"),
+            tint: DS.Color.textTertiary
+        )
     }
 }
 
+// MARK: - صف القائمة الشفاف (نمط صفحات الإدارة)
+
+private extension View {
+    /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
+    func registryListRow(top: CGFloat = 4, bottom: CGFloat = 4,
+                         horizontal: CGFloat = DS.Spacing.lg) -> some View {
+        self
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: top, leading: horizontal, bottom: bottom, trailing: horizontal))
+    }
+}

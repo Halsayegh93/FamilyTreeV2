@@ -107,6 +107,9 @@ struct AppUsageMember: Decodable, Identifiable {
     }
 }
 
+/// أعضاء فئة من «استخدام التطبيق» — بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧):
+/// بطاقة رأس بأرقام حيّة ← «لماذا هم هنا؟» ← «الأعضاء» صفوفاً `.dsRowBox()`
+/// مع اتصال/واتساب سريع لمن له رقم. التحميل والسحب للتحديث كما كانا.
 struct AppUsageMembersView: View {
     let category: AppUsageCategory
     @Environment(\.openURL) private var openURL
@@ -115,41 +118,44 @@ struct AppUsageMembersView: View {
     @State private var isLoading = true
     @State private var loadFailed = false
 
+    /// لون مجال «الشجرة والأعضاء» (الرأس والأقسام) — ولون الفئة للأيقونات
+    private let tint = DS.Color.composerProject
+
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
-                    explanationCard
+                    hero
+                    explanationSection
 
                     if isLoading {
-                        ProgressView().tint(category.color).padding(.top, DS.Spacing.xl)
+                        SysStateCard(icon: category.icon,
+                                     title: L10n.t("جارٍ تحميل القائمة…", "Loading the list…"),
+                                     tint: category.color,
+                                     isLoading: true)
                     } else if loadFailed {
-                        Text(L10n.t("تعذّر تحميل القائمة. اسحب للتحديث.", "Couldn't load the list. Pull to refresh."))
-                            .font(DS.Font.plex(13, weight: .medium))
-                            .foregroundColor(DS.Color.textSecondary)
-                            .padding(.top, DS.Spacing.xl)
-                    } else if members.isEmpty {
-                        Text(L10n.t("لا يوجد أحد في هذه الفئة.", "Nobody in this category."))
-                            .font(DS.Font.plex(13, weight: .medium))
-                            .foregroundColor(DS.Color.textSecondary)
-                            .padding(.top, DS.Spacing.xl)
-                    } else {
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-                                memberRow(member)
-                                if index < members.count - 1 {
-                                    Divider().padding(.leading, DS.Spacing.lg)
-                                }
+                        SysStateCard(icon: "wifi.exclamationmark",
+                                     title: L10n.t("تعذّر تحميل القائمة. اسحب للتحديث.",
+                                                   "Couldn't load the list. Pull to refresh."),
+                                     tint: DS.Color.error,
+                                     actionTitle: L10n.t("إعادة المحاولة", "Retry")) {
+                            Task {
+                                isLoading = true
+                                await load()
                             }
                         }
-                        .background(DS.Color.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                        .dsSubtleShadow()
+                    } else if members.isEmpty {
+                        SysStateCard(icon: "person.crop.circle.badge.checkmark",
+                                     title: L10n.t("لا يوجد أحد في هذه الفئة.", "Nobody in this category."),
+                                     tint: category.color)
+                    } else {
+                        membersSection
                     }
                 }
-                .padding(DS.Spacing.lg)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
             .refreshable { await load() }
@@ -160,80 +166,148 @@ struct AppUsageMembersView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    private var explanationCard: some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
-            ZStack {
-                Circle().fill(category.color.opacity(0.16)).frame(width: 40, height: 40)
-                Image(systemName: category.icon)
-                    .font(DS.Font.scaled(16, weight: .bold))
-                    .foregroundColor(category.color)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(category.title)
-                        .font(DS.Font.plex(15, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                    Spacer(minLength: 0)
-                    if !isLoading {
-                        Text("\(members.count)")
-                            .font(DS.Font.plex(15, weight: .bold))
-                            .foregroundColor(category.color)
-                    }
-                }
-                Text(category.explanation)
-                    .font(DS.Font.plex(12, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(DS.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(category.color.opacity(0.07))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(category.color.opacity(0.22), lineWidth: 1)
+    // MARK: - بطاقة الرأس
+
+    private var withPhoneCount: Int {
+        members.filter { !($0.phone ?? "").trimmingCharacters(in: .whitespaces).isEmpty }.count
+    }
+
+    /// نسبة الفئة من كل الأحياء — من آخر أرقام «استخدام التطبيق» المحفوظة (بلا طلب جديد)
+    private var shareText: String {
+        guard let u = AppUsageStats.cached else { return "—" }
+        let total = AppUsageCategory.allCases.reduce(0) { $0 + u.value(for: $1) }
+        guard total > 0 else { return "—" }
+        let pct = Int((Double(u.value(for: category)) / Double(total) * 100).rounded())
+        return L10n.t("\(pct)٪", "\(pct)%")
+    }
+
+    private var hero: some View {
+        DSPageHero(
+            title: category.title,
+            subtitle: L10n.t("فئة من «استخدام التطبيق» — الأحياء فقط",
+                             "An “App usage” group — living members only"),
+            icon: category.icon,
+            tint: tint,
+            stats: [
+                DSHeroStat(value: isLoading ? "—" : "\(members.count)",
+                           label: L10n.t("عضو", "Members"), icon: "person.2.fill"),
+                DSHeroStat(value: isLoading ? "—" : "\(withPhoneCount)",
+                           label: L10n.t("لهم رقم", "With phone"), icon: "phone.fill"),
+                DSHeroStat(value: shareText,
+                           label: L10n.t("من الأحياء", "Of living"), icon: "chart.pie.fill")
+            ]
         )
     }
 
+    // MARK: - لماذا هم هنا؟
+
+    private var explanationSection: some View {
+        DSComposerSection(title: L10n.t("لماذا هم هنا؟", "Why are they here?"),
+                          icon: "info.circle.fill",
+                          tint: tint,
+                          index: 1) {
+            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: category.icon, tint: category.color)
+                    .accessibilityHidden(true)
+                Text(category.explanation)
+                    .font(DS.Font.plex(12.5, weight: .medium))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .dsRowBox()
+        }
+    }
+
+    // MARK: - الأعضاء
+
+    private var membersSection: some View {
+        DSComposerSection(title: L10n.t("الأعضاء", "Members"),
+                          icon: "person.2.fill",
+                          tint: tint,
+                          trailing: "\(members.count)",
+                          index: 2) {
+            LazyVStack(spacing: 6) {
+                ForEach(members) { member in
+                    memberRow(member)
+                }
+            }
+        }
+    }
+
     private func memberRow(_ member: AppUsageMember) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(member.fullName ?? "—")
-                    .font(DS.Font.plex(13, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
+        let name = member.fullName ?? "—"
+        return HStack(spacing: DS.Spacing.sm) {
+            initialAvatar(member.fullName)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(2)
                 Text(lastSeenText(member))
-                    .font(DS.Font.plex(11, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
+
             Spacer(minLength: 0)
 
             // دعوة سريعة للرجوع للتطبيق — اتصال أو واتساب
             if let phone = member.phone, !phone.isEmpty {
-                contactButton(icon: "phone.fill", color: DS.Color.success) {
+                contactButton(icon: "phone.fill", color: DS.Color.success,
+                              label: L10n.t("اتصال بـ \(name)", "Call \(name)")) {
                     let digits = phone.filter { $0.isNumber || $0 == "+" }
                     if let url = URL(string: "tel:\(digits)") { openURL(url) }
                 }
-                contactButton(icon: "message.fill", color: Color(hex: "#25D366")) {
+                // أخضر من ألوان التطبيق (مثل «الرسائل») — أخضر واتساب الثابت باهت بالوضع الفاتح
+                contactButton(icon: "message.fill", color: DS.Color.secondary,
+                              label: L10n.t("واتساب \(name)", "WhatsApp \(name)")) {
                     let digits = phone.filter { $0.isNumber }
                     if let url = URL(string: "https://wa.me/\(digits)") { openURL(url) }
                 }
             }
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
+        .frame(minHeight: 36)
+        .dsRowBox()
     }
 
-    private func contactButton(icon: String, color: Color, action: @escaping () -> Void) -> some View {
+    /// الحرف الأول بلون الفئة (بدل صورة — القائمة من السيرفر بلا صور)
+    private func initialAvatar(_ name: String?) -> some View {
+        let first = (name ?? "").trimmingCharacters(in: .whitespaces).first
+        return ZStack {
+            Circle().fill(category.color.opacity(0.12))
+            if let first {
+                Text(String(first))
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(category.color)
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(category.color)
+            }
+        }
+        .frame(width: 34, height: 34)
+        .accessibilityHidden(true)
+    }
+
+    private func contactButton(icon: String, color: Color, label: String,
+                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(13, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(color))
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(color)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(color.opacity(0.13)))
+                .overlay(Circle().strokeBorder(color.opacity(0.25), lineWidth: 1))
+                // مساحة ضغط ٤٤ نقطة والشكل كما هو
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
+        .padding(.vertical, -5)
+        .accessibilityLabel(label)
     }
 
     private func lastSeenText(_ member: AppUsageMember) -> String {
@@ -269,5 +343,3 @@ struct AppUsageMembersView: View {
         isLoading = false
     }
 }
-
-

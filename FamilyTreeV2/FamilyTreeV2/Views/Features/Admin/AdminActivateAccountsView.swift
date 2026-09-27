@@ -22,6 +22,9 @@ struct AdminActivateAccountsView: View {
     @State private var genderUpdateResult: String?
     @State private var showGenderResult = false
     @State private var displayLimit = 20
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// لون مجال «الشجرة والأعضاء»
+    private let stationTint = DS.Color.composerProject
 
     /// نوع النقص المطلوب التركيز عليه — يُمرَّر من بطاقات «جودة البيانات»
     enum IssueFocus: String, CaseIterable {
@@ -247,133 +250,29 @@ struct AdminActivateAccountsView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            if memberVM.isLoading && memberVM.allMembers.isEmpty {
-                VStack(spacing: DS.Spacing.lg) {
-                    ProgressView()
-                        .tint(DS.Color.primary)
-                        .scaleEffect(1.3)
-                    Text(L10n.t("جاري فحص البيانات...", "Checking data..."))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if allIssueMembers.isEmpty {
-                emptyState
-            } else {
-                VStack(spacing: 0) {
-
-                    stationView
-                    Spacer(minLength: 0)
-                    if false {
-                    // Swipe hint
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "hand.draw")
-                            .font(DS.Font.scaled(11, weight: .medium))
-                        Text(L10n.t(
-                            "← سحب يمين: هاتف / ميلاد  •  سحب يسار: ربط أب / تفعيل →",
-                            "← Swipe right: Phone / Birth  •  Swipe left: Father / Activate →"
-                        ))
-                        .font(DS.Font.caption2)
-                    }
-                    .foregroundColor(DS.Color.textTertiary)
+        // صفحة واحدة تتمرّر: بطاقة الرأس ← المحطة (بطاقة عضو + إجراءاته) — طلب المالك ٢٠٢٦-٠٩-٢٧
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: DS.Spacing.md) {
+                stationHero
                     .padding(.horizontal, DS.Spacing.lg)
 
-                    // Search
-                    searchBar
+                if memberVM.isLoading && memberVM.allMembers.isEmpty {
+                    SysStateCard(icon: "person.crop.circle.badge.exclamationmark",
+                                 title: L10n.t("جاري فحص البيانات...", "Checking data..."),
+                                 tint: stationTint,
+                                 isLoading: true)
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.xs)
-
-                    if filteredMembers.isEmpty {
-                        noResultsState
-                    } else {
-                        List {
-                            let visible = Array(filteredMembers.prefix(displayLimit))
-                            ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
-                                if isSelectionMode {
-                                    Button {
-                                        withAnimation(DS.Anim.snappy) {
-                                            toggleSelection(member)
-                                        }
-                                    } label: {
-                                        HStack(spacing: DS.Spacing.md) {
-                                            selectionCheckbox(for: member)
-                                            memberRow(member: member, index: index)
-                                        }
-                                    }
-                                    .buttonStyle(DSScaleButtonStyle())
-                                } else {
-                                    memberRow(member: member, index: index)
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            if hasNoPhone(member) {
-                                                Button {
-                                                    memberToEditPhone = member
-                                                } label: {
-                                                    Label(L10n.t("هاتف", "Phone"), systemImage: "phone.badge.plus")
-                                                }
-                                                .tint(DS.Color.primary)
-                                            }
-                                            if isMissingBirthDate(member) {
-                                                Button {
-                                                    memberToEditBirthDate = member
-                                                } label: {
-                                                    Label(L10n.t("ميلاد", "Birth"), systemImage: "calendar.badge.plus")
-                                                }
-                                                .tint(DS.Color.warning)
-                                            }
-                                        }
-                                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                                            if isMissingFather(member) {
-                                                Button {
-                                                    memberToEdit = member
-                                                } label: {
-                                                    Label(L10n.t("ربط أب", "Link Father"), systemImage: "person.line.dotted.person")
-                                                }
-                                                .tint(DS.Color.info)
-                                            }
-                                            if isNotActivated(member) {
-                                                Button {
-                                                    memberToActivate = member
-                                                    showActivateConfirm = true
-                                                } label: {
-                                                    Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
-                                                }
-                                                .tint(DS.Color.success)
-                                            }
-                                        }
-                                }
-                            }
-
-                            if displayLimit < stationPool.count {
-                                Button {
-                                    displayLimit += 20
-                                } label: {
-                                    HStack {
-                                        Spacer()
-                                        Text(L10n.t(
-                                            "عرض المزيد (\(stationPool.count - displayLimit) متبقي)",
-                                            "Show more (\(stationPool.count - displayLimit) remaining)"
-                                        ))
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.primary)
-                                        Spacer()
-                                    }
-                                    .padding(.vertical, DS.Spacing.sm)
-                                }
-                            }
-                        }
-                        .listStyle(.plain)
-                        .scrollContentBackground(.hidden)
-                    }
-
-                    // Selection action bar
-                    if isSelectionMode {
-                        selectionActionBar
-                    }
-                    }
+                } else if allIssueMembers.isEmpty {
+                    emptyState
+                        .padding(.horizontal, DS.Spacing.lg)
+                } else {
+                    stationView
                 }
             }
+            .padding(.top, DS.Spacing.sm)
+            .padding(.bottom, DS.Spacing.xxxl)
         }
+        .background(DS.Color.background.ignoresSafeArea())
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if selectedFilter == .noGender && !filteredMembers.isEmpty {
@@ -493,6 +392,117 @@ struct AdminActivateAccountsView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
+    /// وضع «القائمة» القديم (تصفّح بالسحب + تحديد جماعي للجنس) — مخفي منذ صارت «المحطة»
+    /// هي الوضع الوحيد (كان خلف `if false`)؛ بقي كما هو لو أُعيد.
+    private var legacyListMode: some View {
+        VStack(spacing: 0) {
+            // Swipe hint
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "hand.draw")
+                    .font(DS.Font.scaled(11, weight: .medium))
+                Text(L10n.t(
+                    "← سحب يمين: هاتف / ميلاد  •  سحب يسار: ربط أب / تفعيل →",
+                    "← Swipe right: Phone / Birth  •  Swipe left: Father / Activate →"
+                ))
+                .font(DS.Font.caption2)
+            }
+            .foregroundColor(DS.Color.textTertiary)
+            .padding(.horizontal, DS.Spacing.lg)
+
+            // Search
+            searchBar
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.xs)
+
+            if filteredMembers.isEmpty {
+                noResultsState
+            } else {
+                List {
+                    let visible = Array(filteredMembers.prefix(displayLimit))
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
+                        if isSelectionMode {
+                            Button {
+                                withAnimation(DS.Anim.snappy) {
+                                    toggleSelection(member)
+                                }
+                            } label: {
+                                HStack(spacing: DS.Spacing.md) {
+                                    selectionCheckbox(for: member)
+                                    memberRow(member: member, index: index)
+                                }
+                            }
+                            .buttonStyle(DSScaleButtonStyle())
+                        } else {
+                            memberRow(member: member, index: index)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    if hasNoPhone(member) {
+                                        Button {
+                                            memberToEditPhone = member
+                                        } label: {
+                                            Label(L10n.t("هاتف", "Phone"), systemImage: "phone.badge.plus")
+                                        }
+                                        .tint(DS.Color.primary)
+                                    }
+                                    if isMissingBirthDate(member) {
+                                        Button {
+                                            memberToEditBirthDate = member
+                                        } label: {
+                                            Label(L10n.t("ميلاد", "Birth"), systemImage: "calendar.badge.plus")
+                                        }
+                                        .tint(DS.Color.warning)
+                                    }
+                                }
+                                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                    if isMissingFather(member) {
+                                        Button {
+                                            memberToEdit = member
+                                        } label: {
+                                            Label(L10n.t("ربط أب", "Link Father"), systemImage: "person.line.dotted.person")
+                                        }
+                                        .tint(DS.Color.info)
+                                    }
+                                    if isNotActivated(member) {
+                                        Button {
+                                            memberToActivate = member
+                                            showActivateConfirm = true
+                                        } label: {
+                                            Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
+                                        }
+                                        .tint(DS.Color.success)
+                                    }
+                                }
+                        }
+                    }
+
+                    if displayLimit < stationPool.count {
+                        Button {
+                            displayLimit += 20
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text(L10n.t(
+                                    "عرض المزيد (\(stationPool.count - displayLimit) متبقي)",
+                                    "Show more (\(stationPool.count - displayLimit) remaining)"
+                                ))
+                                .font(DS.Font.caption1)
+                                .foregroundColor(DS.Color.primary)
+                                Spacer()
+                            }
+                            .padding(.vertical, DS.Spacing.sm)
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+
+            // Selection action bar
+            if isSelectionMode {
+                selectionActionBar
+            }
+        }
+    }
+
     // MARK: - محطة الاستكمال
 
     /// مبدّل الوضع — محطة (إجراءات ظاهرة) أو قائمة (تصفّح وسحب)
@@ -541,71 +551,62 @@ struct AdminActivateAccountsView: View {
         return pool[min(stationCursor, pool.count - 1)]
     }
 
+    // MARK: - بطاقة الرأس
+
+    /// أرقام حيّة بمرور واحد (بلا فرز) على نفس مجموعة النواقص: بلا رقم، بلا ميلاد
+    private var heroCounts: (noPhone: Int, noBirth: Int) {
+        var noPhone = 0, noBirth = 0
+        for m in memberVM.allMembers where m.role != .pending && m.isDeceased != true && memberHasAnyIssue(m) {
+            if hasNoPhone(m) { noPhone += 1 }
+            if isMissingBirthDate(m) { noBirth += 1 }
+        }
+        return (noPhone, noBirth)
+    }
+
+    private var stationHero: some View {
+        let loading = memberVM.isLoading && memberVM.allMembers.isEmpty
+        let counts = heroCounts
+        return DSPageHero(
+            title: L10n.t("استكمال الحسابات", "Complete Accounts"),
+            subtitle: L10n.t("عضو واحد في كل مرة — أكمل نواقصه ثم اسحب للتالي",
+                             "One member at a time — fill the gaps, then swipe to the next"),
+            icon: "person.crop.circle.badge.exclamationmark",
+            tint: stationTint,
+            stats: [
+                DSHeroStat(value: loading ? "—" : "\(stationPool.count)",
+                           label: L10n.t("في القائمة", "In queue"), icon: "list.bullet.rectangle.fill"),
+                DSHeroStat(value: loading ? "—" : "\(counts.noPhone)",
+                           label: L10n.t("بلا رقم", "No phone"), icon: "phone.down.fill"),
+                DSHeroStat(value: loading ? "—" : "\(counts.noBirth)",
+                           label: L10n.t("بلا ميلاد", "No birth date"), icon: "calendar.badge.exclamationmark")
+            ]
+        )
+    }
+
+    // MARK: - المحطة
+
     private var stationView: some View {
         VStack(spacing: DS.Spacing.md) {
-            if stationPool.isEmpty {
-                VStack(spacing: DS.Spacing.md) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 42, weight: .light))
-                        .foregroundColor(DS.Color.success)
-                    Text(L10n.t("ما فيه ملفات ناقصة", "No incomplete profiles"))
-                        .font(DS.Font.plex(16, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                }
-                .padding(.vertical, DS.Spacing.xxxl)
-            } else {
-                // ═══ شريحة التصنيف النشط ═══
-                if focus != .all {
-                    HStack(spacing: 5) {
-                        Text(focus.label)
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                        Button {
-                            focus = .all
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                        }
-                    }
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
+            // ═══ شريحة التصنيف النشط — تبقى ظاهرة حتى لو فرغ التصنيف (لإلغائه) ═══
+            if focus != .all {
+                focusChip
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.lg)
-                }
+            }
 
+            if stationPool.isEmpty {
+                SysStateCard(icon: "checkmark.seal.fill",
+                             title: L10n.t("ما فيه ملفات ناقصة", "No incomplete profiles"),
+                             hint: focus != .all
+                                ? L10n.t("لا أحد في هذا التصنيف — ألغِه لعرض كل النواقص",
+                                         "Nobody in this category — clear it to see all gaps")
+                                : nil,
+                             tint: DS.Color.success)
+                    .padding(.horizontal, DS.Spacing.lg)
+            } else {
                 // ═══ التقدّم ═══
-                VStack(spacing: DS.Spacing.xs) {
-                    HStack {
-                        Text(L10n.t(
-                            "\(min(stationCursor + 1, stationPool.count)) من \(stationPool.count)",
-                            "\(min(stationCursor + 1, stationPool.count)) of \(stationPool.count)"
-                        ))
-                        .font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                        Spacer()
-                        if resolvedCount > 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                Text(L10n.t("أنجزت \(resolvedCount)", "\(resolvedCount) done"))
-                                    .font(DS.Font.scaled(11, weight: .semibold))
-                            }
-                            .foregroundColor(DS.Color.success)
-                        }
-                    }
-
-                    GeometryReader { geo in
-                        let ratio = CGFloat(stationCursor + 1) / CGFloat(max(1, stationPool.count))
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(DS.Color.textTertiary.opacity(0.12))
-                            Capsule().fill(DS.Color.primary)
-                                .frame(width: max(0, geo.size.width * ratio))
-                        }
-                    }
-                    .frame(height: 5)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
+                stationProgress
+                    .padding(.horizontal, DS.Spacing.lg)
 
                 // ═══ تمرير أفقي سلس بين الأعضاء ═══
                 TabView(selection: $stationCursor) {
@@ -620,97 +621,196 @@ struct AdminActivateAccountsView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .frame(height: 340)
 
-                Text(L10n.t("اسحب يميناً أو يساراً للتنقّل", "Swipe to move between members"))
-                    .font(DS.Font.scaled(11))
-                    .foregroundColor(DS.Color.textTertiary)
+                HStack(spacing: 5) {
+                    Image(systemName: "hand.draw")
+                        .font(.system(size: 11, weight: .semibold))
+                        .accessibilityHidden(true)
+                    Text(L10n.t("اسحب يميناً أو يساراً للتنقّل", "Swipe to move between members"))
+                        .font(DS.Font.plex(11.5, weight: .medium))
+                }
+                .foregroundColor(DS.Color.textTertiary)
             }
         }
-        .padding(.top, DS.Spacing.sm)
     }
 
-    /// بطاقة عضو واحد داخل المحطة — الإجراءات أيقونات مضغوطة
+    /// التصنيف النشط (من «جودة البيانات») — × يرجّع لكل النواقص
+    private var focusChip: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                .font(.system(size: 12, weight: .bold))
+                .accessibilityHidden(true)
+            Text(focus.label)
+                .font(DS.Font.plex(12, weight: .bold))
+                .lineLimit(1)
+            Button {
+                focus = .all
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .frame(width: 40, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, -6)
+            .accessibilityLabel(L10n.t("إلغاء التصنيف", "Clear filter"))
+        }
+        .foregroundColor(stationTint)
+        .padding(.leading, DS.Spacing.md)
+        .frame(height: 34)
+        .background(Capsule().fill(stationTint.opacity(0.10)))
+        .overlay(Capsule().strokeBorder(stationTint.opacity(0.22), lineWidth: 1))
+    }
+
+    /// «٣ من ٤٥» + شريط التقدّم بلون القسم
+    private var stationProgress: some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text(L10n.t(
+                    "\(min(stationCursor + 1, stationPool.count)) من \(stationPool.count)",
+                    "\(min(stationCursor + 1, stationPool.count)) of \(stationPool.count)"
+                ))
+                .font(DS.Font.plex(12, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
+                .monospacedDigit()
+                Spacer()
+                if resolvedCount > 0 {
+                    SysStatusChip(text: L10n.t("أنجزت \(resolvedCount)", "\(resolvedCount) done"),
+                                  icon: "checkmark.circle.fill",
+                                  tint: DS.Color.success)
+                }
+            }
+
+            GeometryReader { geo in
+                let ratio = CGFloat(stationCursor + 1) / CGFloat(max(1, stationPool.count))
+                ZStack(alignment: .leading) {
+                    Capsule().fill(DS.Color.textTertiary.opacity(0.12))
+                    Capsule().fill(stationTint)
+                        .frame(width: max(6, geo.size.width * min(1, ratio)))
+                }
+            }
+            .frame(height: 6)
+            .animation(reduceMotion ? nil : DS.Anim.snappy, value: stationCursor)
+            .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// إجراء في بطاقة المحطة
+    private struct StationAction: Identifiable {
+        let id: String
+        let title: String
+        let icon: String
+        let color: Color
+        var disabled: Bool = false
+        let action: () -> Void
+    }
+
+    /// إجراءات العضو — نفس الشروط والوجهات والترتيب كما كانت
+    private func stationActions(for member: FamilyMember) -> [StationAction] {
+        var items: [StationAction] = []
+        if hasNoPhone(member), member.isDeceased != true {
+            items.append(StationAction(id: "phone", title: L10n.t("هاتف", "Phone"),
+                                       icon: "phone.badge.plus", color: DS.Color.primary) {
+                memberToEditPhone = member
+            })
+        }
+        if isMissingBirthDate(member) {
+            items.append(StationAction(id: "birth", title: L10n.t("ميلاد", "Birth"),
+                                       icon: "calendar.badge.plus", color: DS.Color.accent) {
+                memberToEditBirthDate = member
+            })
+        }
+        if isMissingFather(member) {
+            items.append(StationAction(id: "father", title: L10n.t("الأب", "Father"),
+                                       icon: "person.line.dotted.person", color: DS.Color.info) {
+                memberToEdit = member
+            })
+        }
+        if isMissingGender(member) {
+            items.append(StationAction(id: "gender", title: L10n.t("الجنس", "Gender"),
+                                       icon: "person.fill.questionmark", color: DS.Color.neonPurple) {
+                memberToEditGender = member
+            })
+        }
+        if (member.avatarUrl ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
+           member.avatarUnavailable != true {
+            items.append(StationAction(id: "photo", title: L10n.t("صورة", "Photo"),
+                                       icon: "camera.fill", color: DS.Color.secondary) {
+                memberToEditPhoto = member
+            })
+        }
+        if member.isDeceased == true,
+           (member.deathDate ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
+           member.deathDateUnknown != true {
+            items.append(StationAction(id: "death", title: L10n.t("وفاة", "Death"),
+                                       icon: "calendar.badge.clock", color: DS.Color.textSecondary) {
+                memberToEditDeathDate = member
+            })
+        }
+        // التفعيل — لغير المتوفّين فقط، ومعطّل حتى يُضاف رقم
+        if member.status != .active, member.isDeceased != true {
+            items.append(StationAction(id: "activate", title: L10n.t("تفعيل", "Activate"),
+                                       icon: "checkmark.seal.fill", color: DS.Color.success,
+                                       disabled: hasNoPhone(member)) {
+                memberToActivate = member
+                showActivateConfirm = true
+            })
+        }
+        return items
+    }
+
+    /// بطاقة عضو واحد داخل المحطة — الإجراءات أيقونات مضغوطة، أربعة بالسطر والباقي يلتفّ
+    /// (كانت سطراً واحداً يُقصّ إذا كثرت النواقص)
     private func stationCard(_ member: FamilyMember, loadsImage: Bool = true) -> some View {
-        VStack(spacing: DS.Spacing.md) {
+        let actions = stationActions(for: member)
+        let rows = stride(from: 0, to: actions.count, by: 4).map { start in
+            Array(actions[start..<min(start + 4, actions.count)])
+        }
+        return VStack(spacing: DS.Spacing.md) {
             DSMemberAvatar(
                 name: member.fullName,
                 avatarUrl: loadsImage ? member.avatarUrl : nil,
                 size: 66,
                 roleColor: member.roleColor
             )
+            .accessibilityHidden(true)
 
-            VStack(spacing: 2) {
+            VStack(spacing: 3) {
                 Text(member.shortFullName)
                     .font(DS.Font.plex(18, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
+                    .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Text(member.displayFullName)
-                    .font(DS.Font.scaled(11))
-                    .foregroundColor(DS.Color.textTertiary)
+                    .font(DS.Font.plex(11.5))
+                    .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
+            .accessibilityElement(children: .combine)
 
             // ═══ الإجراءات كأيقونات ═══
-            HStack(spacing: DS.Spacing.md) {
-                if hasNoPhone(member), member.isDeceased != true {
-                    stationIcon(L10n.t("هاتف", "Phone"), "phone.badge.plus", DS.Color.primary) {
-                        memberToEditPhone = member
-                    }
-                }
-                if isMissingBirthDate(member) {
-                    stationIcon(L10n.t("ميلاد", "Birth"), "calendar.badge.plus", DS.Color.accent) {
-                        memberToEditBirthDate = member
-                    }
-                }
-                if isMissingFather(member) {
-                    stationIcon(L10n.t("الأب", "Father"), "person.line.dotted.person", DS.Color.info) {
-                        memberToEdit = member
-                    }
-                }
-                if isMissingGender(member) {
-                    stationIcon(L10n.t("الجنس", "Gender"), "person.fill.questionmark", DS.Color.neonPurple) {
-                        memberToEditGender = member
-                    }
-                }
-                if (member.avatarUrl ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
-                   member.avatarUnavailable != true {
-                    stationIcon(L10n.t("صورة", "Photo"), "camera.fill", DS.Color.secondary) {
-                        memberToEditPhoto = member
-                    }
-                }
-                if member.isDeceased == true,
-                   (member.deathDate ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
-                   member.deathDateUnknown != true {
-                    stationIcon(L10n.t("وفاة", "Death"), "calendar.badge.clock", DS.Color.textSecondary) {
-                        memberToEditDeathDate = member
-                    }
-                }
-
-                // التفعيل — لغير المتوفّين فقط، ومعطّل حتى يُضاف رقم
-                if member.status != .active, member.isDeceased != true {
-                    stationIcon(
-                        L10n.t("تفعيل", "Activate"),
-                        "checkmark.seal.fill",
-                        DS.Color.success,
-                        disabled: hasNoPhone(member)
-                    ) {
-                        memberToActivate = member
-                        showActivateConfirm = true
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(rows.indices, id: \.self) { r in
+                    HStack(spacing: DS.Spacing.sm) {
+                        ForEach(rows[r]) { item in
+                            stationIcon(item.title, item.icon, item.color,
+                                        disabled: item.disabled, action: item.action)
+                        }
                     }
                 }
             }
         }
         .padding(DS.Spacing.lg)
         .frame(maxWidth: .infinity)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
+        .background(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous).fill(DS.Color.surface))
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
         )
     }
 
-    /// زر إجراء أيقوني مع تسمية تحته
+    /// زر إجراء أيقوني مع تسمية تحته (دائرة ٥٢ نقطة — فوق حد الضغط)
     private func stationIcon(
         _ title: String,
         _ icon: String,
@@ -720,22 +820,26 @@ struct AdminActivateAccountsView: View {
     ) -> some View {
         Button(action: action) {
             VStack(spacing: 5) {
-                ZStack {
-                    Circle().fill(color.opacity(disabled ? 0.06 : 0.14))
-                    Image(systemName: icon)
-                        .font(DS.Font.scaled(17, weight: .semibold))
-                        .foregroundColor(disabled ? DS.Color.textTertiary : color)
-                }
-                .frame(width: 52, height: 52)
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(disabled ? DS.Color.textTertiary : color)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(color.opacity(disabled ? 0.06 : 0.13)))
+                    .overlay(Circle().strokeBorder(color.opacity(disabled ? 0.08 : 0.22), lineWidth: 1))
                 Text(title)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(disabled ? DS.Color.textTertiary : DS.Color.textSecondary)
+                    .font(DS.Font.plex(11.5, weight: .semibold))
+                    .foregroundColor(disabled ? DS.Color.textTertiary : DS.Color.fieldValue)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
+            .frame(width: 64)
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
         .disabled(disabled)
         .opacity(disabled ? 0.55 : 1)
+        .accessibilityLabel(title)
+        .accessibilityHint(disabled ? L10n.t("أضف رقماً أولاً", "Add a phone number first") : "")
     }
 
     /// صف إجراء داخل بطاقة المحطة
@@ -1060,18 +1164,20 @@ struct AdminActivateAccountsView: View {
 
     // MARK: - Empty State
     private var emptyState: some View {
-        DSEmptyState(
+        SysStateCard(
             icon: "checkmark.shield.fill",
             title: L10n.t("جميع الحسابات مفعلة والبيانات مكتملة", "All accounts activated and data complete"),
+            hint: L10n.t("تظهر هنا الملفات الناقصة أولاً بأول", "Incomplete profiles show up here as they appear"),
             tint: DS.Color.success
         )
     }
 
     // MARK: - No Results
     private var noResultsState: some View {
-        DSEmptyState(
+        SysStateCard(
             icon: "magnifyingglass",
-            title: L10n.t("لا توجد نتائج", "No results found")
+            title: L10n.t("لا توجد نتائج", "No results found"),
+            tint: DS.Color.textTertiary
         )
     }
 
