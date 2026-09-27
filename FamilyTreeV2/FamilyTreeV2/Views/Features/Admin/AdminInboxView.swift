@@ -3,6 +3,11 @@ import Supabase
 
 /// قائمة رسائل التواصل من الأعضاء — نموذج بسيط (لا دردشة).
 /// كل صف = رسالة واحدة. الضغط يفتح تفاصيلها مع خيارات الرد بالاتصال/واتساب.
+///
+/// بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بلون بلاطة «الرسائل» في لوحة
+/// الإدارة وأرقامها الحيّة ← بحث + فلترا الحالة بعددهما ← صفوف `.dsRowBox()` (صورة المرسل · الاسم
+/// والوقت · مقتطف الرسالة · التصنيف والحالة). السحب («حذف» / «تم التعامل»)، التحديد المتعدد والحذف
+/// وتأكيداتهما، السحب للتحديث، ومربّع التفاصيل كما كانت تماماً.
 struct AdminInboxView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
 
@@ -16,6 +21,15 @@ struct AdminInboxView: View {
     @State private var isDeleting = false
     /// رسالة طُلب حذفها بالسحب — تأكيد قبل الحذف
     @State private var messageToDelete: AdminRequest? = nil
+    /// اكتمل أول جلب — قبله «—» في الأرقام وبطاقة تحميل (إن لم تكن هناك رسائل محمّلة أصلاً)
+    @State private var hasLoaded = false
+    /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل «ما فيه رسائل» المضلِّلة
+    /// (تبقى حتى جلب ناجح: السحب للتحديث أو «إعادة المحاولة»)
+    @State private var lastFetchOffline = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// لون بلاطة «الرسائل» في لوحة الإدارة — رأس الصفحة يطابق البلاطة التي ضُغطت
+    private let pageTint = DS.Color.composerDiwaniya
 
     private enum InboxFilter: String, CaseIterable {
         case pending, handled
@@ -23,6 +37,19 @@ struct AdminInboxView: View {
             switch self {
             case .pending: return L10n.t("لم يتم التعامل", "Pending")
             case .handled: return L10n.t("تم التعامل", "Handled")
+            }
+        }
+        var icon: String {
+            switch self {
+            case .pending: return "clock.fill"
+            case .handled: return "checkmark.circle.fill"
+            }
+        }
+        /// لون الحالة: منتظر = تحذير، تم = نجاح
+        var color: Color {
+            switch self {
+            case .pending: return DS.Color.warning
+            case .handled: return DS.Color.success
             }
         }
     }
@@ -44,81 +71,73 @@ struct AdminInboxView: View {
         }
     }
 
+    /// عدد الرسائل في كل حالة (نفس أعداد التبويبين السابقين) — مرور واحد على الرسائل
+    private var statusCounts: [InboxFilter: Int] {
+        var counts: [InboxFilter: Int] = [:]
+        for msg in adminRequestVM.contactMessages {
+            if msg.status == ApprovalStatus.pending.rawValue {
+                counts[.pending, default: 0] += 1
+            } else if msg.status == ApprovalStatus.approved.rawValue {
+                counts[.handled, default: 0] += 1
+            }
+        }
+        return counts
+    }
+
+    // MARK: - حالة التحميل
+
+    /// أول تحميل (أو «إعادة المحاولة») ولا رسائل محمّلة بعد
+    private var isInitialLoading: Bool {
+        (isLoading || !hasLoaded) && adminRequestVM.contactMessages.isEmpty
+    }
+
+    /// الجلب انتهى بلا رسائل والجهاز غير متصل — القائمة الفارغة هنا ليست «ما فيه رسائل»
+    private var loadFailed: Bool {
+        hasLoaded && !isLoading && adminRequestVM.contactMessages.isEmpty && lastFetchOffline
+    }
+
+    /// نفس الجلب السابق تماماً (`fetchContactMessages`) — ويحفظ هل انتهى بلا اتصال
+    private func loadMessages(force: Bool = false) async {
+        await adminRequestVM.fetchContactMessages(force: force)
+        lastFetchOffline = !NetworkMonitor.shared.isConnected
+    }
+
+    /// «إعادة المحاولة» — نفس تحميل الفتح (مع بطاقة التحميل)
+    private func retryLoad() async {
+        isLoading = true
+        await loadMessages(force: true)
+        isLoading = false
+    }
+
+    // MARK: - Body
+
     var body: some View {
-        ZStack {
+        let messages = filteredMessages
+        let counts = statusCounts
+
+        return ZStack {
             DS.Color.background.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                filterBar
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
-
-                searchBar
+            // بطاقة الرأس ← البحث والفلاتر ← الرسائل: تتمرّر معاً (والسحب للتحديث يعمل حتى والقائمة فارغة)
+            ScrollView(showsIndicators: false) {
+                pageContent(messages: messages, counts: counts)
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xs)
-
-                if isLoading && adminRequestVM.contactMessages.isEmpty {
-                    Spacer()
-                    ProgressView().tint(DS.Color.primary)
-                    Spacer()
-                } else if filteredMessages.isEmpty {
-                    Spacer()
-                    emptyState
-                    Spacer()
-                } else {
-                    if adminRequestVM.unreadContactMessagesCount > 0 {
-                        markAllReadBar
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.top, DS.Spacing.sm)
-                    }
-
-                    ScrollView {
-                        AdaptiveLazyStack(spacing: DS.Spacing.sm, landscapeMinimum: 340) {
-                            ForEach(filteredMessages) { msg in
-                                // ضغطة فعلية فقط تفتح التفاصيل — السحب لا يفتحها (طلب المالك).
-                                // (زر Button كان يعدّ رفع الإصبع بعد السحب ضغطة)
-                                HStack(spacing: DS.Spacing.sm) {
-                                    if isSelectMode {
-                                        Image(systemName: selectedIDs.contains(msg.id) ? "checkmark.circle.fill" : "circle")
-                                            .font(DS.Font.scaled(20, weight: .semibold))
-                                            .foregroundColor(selectedIDs.contains(msg.id) ? DS.Color.primary : DS.Color.textTertiary)
-                                    }
-                                    messageRow(msg)
-                                }
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if isSelectMode {
-                                        toggleSelection(msg.id)
-                                    } else {
-                                        adminRequestVM.markContactMessageRead(msg.id)
-                                        selectedMessage = msg
-                                    }
-                                }
-                                .accessibilityAddTraits(.isButton)
-                                // نفس سحب الأخبار: صوب اليمين يكشف «حذف» و«تم التعامل» (طلب المالك)
-                                .dsSwipeActions(id: msg.id, actions: isSelectMode ? [] : swipeActions(for: msg))
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.bottom, DS.Spacing.xxxl)
-                    }
-                    .refreshable { await adminRequestVM.fetchContactMessages(force: true) }
-                }
+                    .padding(.bottom, DS.Spacing.xxxl)
             }
-
-            // شريط الحذف السفلي في وضع التحديد
-            if isSelectMode {
-                VStack {
-                    Spacer()
+            .scrollDismissesKeyboard(.interactively)
+            .refreshable { await loadMessages(force: true) }
+            // شريط الحذف السفلي في وضع التحديد — مثبّت، وآخر رسالة تبقى فوقه
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if isSelectMode {
                     deleteBar
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 }
             }
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if !filteredMessages.isEmpty {
+                if !messages.isEmpty {
                     Button {
                         withAnimation(DS.Anim.quick) {
                             isSelectMode.toggle()
@@ -159,8 +178,9 @@ struct AdminInboxView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             isLoading = true
-            await adminRequestVM.fetchContactMessages()
+            await loadMessages()
             isLoading = false
+            withAnimation(reduceMotion ? nil : DS.Anim.smooth) { hasLoaded = true }
         }
         .dsCenterBox(item: $selectedMessage) { msg in
             MessageDetailSheet(message: msg) {
@@ -169,49 +189,118 @@ struct AdminInboxView: View {
         }
     }
 
-    // MARK: - Filter Bar
+    // MARK: - هيكل الصفحة
 
-    /// تبويبان بعرض متساوٍ داخل حاوية واحدة (نمط segmented) — مرتّب وثابت الحجم
-    private var filterBar: some View {
-        HStack(spacing: 4) {
-            ForEach(InboxFilter.allCases, id: \.self) { f in
-                let selected = filter == f
-                let count = f == .pending
-                    ? adminRequestVM.contactMessages.filter { $0.status == ApprovalStatus.pending.rawValue }.count
-                    : adminRequestVM.contactMessages.filter { $0.status == ApprovalStatus.approved.rawValue }.count
-                Button {
-                    withAnimation(DS.Anim.quick) { filter = f }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(f.title)
-                            .font(DS.Font.plex(13, weight: selected ? .bold : .medium))
-                            .lineLimit(1)
-                        if count > 0 {
-                            Text("\(count)")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(selected ? DS.Color.primary : DS.Color.textSecondary)
-                                .frame(minWidth: 18, minHeight: 18)
-                                .padding(.horizontal, 3)
-                                .background(Capsule().fill(selected ? DS.Color.primary.opacity(0.12) : DS.Color.mutedBackground))
+    private func pageContent(messages: [AdminRequest], counts: [InboxFilter: Int]) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            heroSection(counts: counts)
+
+            if isInitialLoading {
+                SysStateCard(icon: "bubble.left.and.bubble.right.fill",
+                             title: L10n.t("جارٍ تحميل الرسائل…", "Loading messages…"),
+                             tint: pageTint,
+                             isLoading: true)
+                    .padding(.top, DS.Spacing.xs)
+                    .dsStaggerIn(1)
+            } else if loadFailed {
+                SysStateCard(icon: "wifi.exclamationmark",
+                             title: L10n.t("تعذّر تحميل الرسائل", "Couldn't load messages"),
+                             hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                             tint: DS.Color.error,
+                             actionTitle: L10n.t("إعادة المحاولة", "Retry"),
+                             action: { Task { await retryLoad() } })
+                    .padding(.top, DS.Spacing.xs)
+                    .dsStaggerIn(1)
+            } else {
+                DSSearchField(text: $searchText,
+                              placeholder: L10n.t("ابحث…", "Search…"),
+                              tint: pageTint)
+                    .dsStaggerIn(1)
+
+                filterChips(counts)
+                    .dsStaggerIn(1)
+
+                if messages.isEmpty {
+                    emptyState(counts: counts)
+                        .padding(.top, DS.Spacing.xs)
+                        .dsStaggerIn(2)
+                } else {
+                    if adminRequestVM.unreadContactMessagesCount > 0 {
+                        markAllReadBar
+                            .dsStaggerIn(2)
+                    }
+
+                    // عنوان الحالة المختارة + عدد ما يظهر منها
+                    SysSectionTitle(title: filter.title,
+                                    icon: filter.icon,
+                                    tint: filter.color,
+                                    trailing: L10n.t("\(messages.count) رسالة", "\(messages.count) messages"))
+                        .dsStaggerIn(2)
+
+                    AdaptiveLazyStack(spacing: DS.Spacing.sm, landscapeMinimum: 340) {
+                        ForEach(Array(messages.enumerated()), id: \.element.id) { index, msg in
+                            messageCell(msg)
+                                .dsStaggerIn(min(index, 5) + 3)
                         }
                     }
-                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(selected ? DS.Color.background : Color.clear)
-                            .shadow(color: selected ? .black.opacity(0.06) : .clear, radius: 3, x: 0, y: 1)
-                    )
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
             }
         }
-        .padding(4)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(DS.Color.surface)
+    }
+
+    // MARK: - بطاقة الرأس
+
+    private func heroSection(counts: [InboxFilter: Int]) -> some View {
+        DSPageHero(
+            title: L10n.t("رسائل التواصل", "Contact Messages"),
+            subtitle: L10n.t("رسائل الأعضاء من «تواصل مع الإدارة» — اضغط أي رسالة للرد عليها",
+                             "Members' messages from “Contact Admin” — tap one to reply"),
+            icon: "bubble.left.and.bubble.right.fill",
+            tint: pageTint,
+            stats: heroStats(counts: counts)
+        )
+    }
+
+    /// ٣ أرقام حيّة من الرسائل المحمّلة أصلاً (بلا طلبات جديدة للسيرفر): غير المقروءة، ما ينتظر
+    /// الرد، وما وصل اليوم — «—» قبل اكتمال أول تحميل.
+    private func heroStats(counts: [InboxFilter: Int]) -> [DSHeroStat] {
+        let unreadLabel = L10n.t("غير مقروءة", "Unread")
+        let pendingLabel = L10n.t("بانتظار الرد", "Awaiting reply")
+        let todayLabel = L10n.t("جديد اليوم", "New today")
+
+        guard !isInitialLoading, !loadFailed else {
+            return [
+                DSHeroStat(value: "—", label: unreadLabel, icon: "envelope.badge.fill"),
+                DSHeroStat(value: "—", label: pendingLabel, icon: "clock.fill"),
+                DSHeroStat(value: "—", label: todayLabel, icon: "sparkles")
+            ]
+        }
+
+        let calendar = Calendar.current
+        let today = adminRequestVM.contactMessages.filter { msg in
+            guard let date = ContactParser.date(msg.createdAt) else { return false }
+            return calendar.isDateInToday(date)
+        }.count
+
+        return [
+            DSHeroStat(value: "\(adminRequestVM.unreadContactMessagesCount)",
+                       label: unreadLabel, icon: "envelope.badge.fill"),
+            DSHeroStat(value: "\(counts[.pending] ?? 0)", label: pendingLabel, icon: "clock.fill"),
+            DSHeroStat(value: "\(today)", label: todayLabel, icon: "sparkles")
+        ]
+    }
+
+    // MARK: - الفلاتر
+
+    /// نفس التبويبين السابقين («لم يتم التعامل» / «تم التعامل») — العدد يظهر فقط إذا أكبر من صفر
+    private func filterChips(_ counts: [InboxFilter: Int]) -> some View {
+        DSFilterChips(
+            options: InboxFilter.allCases.map { f in
+                let n = counts[f] ?? 0
+                return DSFilterOption(id: f, title: f.title, icon: f.icon, count: n > 0 ? n : nil)
+            },
+            selection: $filter,
+            tint: pageTint
         )
     }
 
@@ -247,206 +336,248 @@ struct AdminInboxView: View {
         withAnimation(DS.Anim.quick) { isSelectMode = false }
     }
 
+    /// شريط وضع التحديد: العدد · «حذف» (يسأل قبل الحذف)
     private var deleteBar: some View {
         HStack(spacing: DS.Spacing.md) {
             Text(L10n.t("\(selectedIDs.count) محدّدة", "\(selectedIDs.count) selected"))
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textSecondary)
+                .font(DS.Font.plex(13.5, weight: .bold))
+                .foregroundColor(DS.Color.fieldValue)
+                .monospacedDigit()
             Spacer()
             Button {
                 showDeleteConfirm = true
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     if isDeleting {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(DSActionFill.label()).scaleEffect(0.85)
                     } else {
-                        Image(systemName: "trash.fill").font(DS.Font.scaled(13, weight: .bold))
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .accessibilityHidden(true)
                     }
-                    Text(L10n.t("حذف", "Delete")).font(DS.Font.scaled(14, weight: .bold))
+                    Text(L10n.t("حذف", "Delete"))
+                        .font(DS.Font.plex(14, weight: .bold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DSActionFill.label())
                 .padding(.horizontal, DS.Spacing.xl)
-                .padding(.vertical, 12)
+                .frame(minHeight: 44)
                 .background(Capsule().fill(DS.Color.error))
+                .contentShape(Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DSScaleButtonStyle())
             .disabled(selectedIDs.isEmpty || isDeleting)
             .opacity(selectedIDs.isEmpty ? 0.5 : 1)
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
         .dsGlass(Rectangle())
         .overlay(Divider(), alignment: .top)
     }
 
-    // MARK: - Search
+    // MARK: - الحالة الفارغة
 
-    private var searchBar: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "magnifyingglass")
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textTertiary)
-            TextField(L10n.t("ابحث…", "Search…"), text: $searchText)
-                .font(DS.Font.callout)
-                .textInputAutocapitalization(.never)
-            if !searchText.isEmpty {
-                Button { searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-            }
+    /// لا رسائل في الحالة المختارة (أو لا نتيجة للبحث) — وزر يفتح الحالة الأخرى إن كان فيها رسائل
+    @ViewBuilder
+    private func emptyState(counts: [InboxFilter: Int]) -> some View {
+        let searching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if searching {
+            SysStateCard(icon: "magnifyingglass",
+                         title: L10n.t("لا توجد نتائج", "No results"),
+                         hint: L10n.t("جرّب كلمة أخرى", "Try another word"),
+                         tint: DS.Color.textTertiary)
+        } else {
+            let other: InboxFilter = filter == .pending ? .handled : .pending
+            let otherCount = counts[other] ?? 0
+            let showOther: (() -> Void)? = otherCount > 0 ? { showFilter(other) } : nil
+            SysStateCard(icon: filter == .pending ? "checkmark.circle.fill" : "tray",
+                         title: L10n.t("ما فيه رسائل", "No messages"),
+                         hint: filter == .pending
+                            ? L10n.t("كل الرسائل تم التعامل معها", "All messages handled")
+                            : L10n.t("لا توجد رسائل متعامل معها بعد", "No handled messages yet"),
+                         tint: filter == .pending ? DS.Color.success : DS.Color.textTertiary,
+                         actionTitle: otherCount > 0
+                            ? L10n.t("عرض «\(other.title)» (\(otherCount))", "Show \(other.title) (\(otherCount))")
+                            : nil,
+                         actionIcon: other.icon,
+                         action: showOther)
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(height: 40)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(DS.Color.surface)
-        )
     }
 
-    // MARK: - Empty
-
-    private var emptyState: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.08))
-                    .frame(width: 100, height: 100)
-                Image(systemName: "tray")
-                    .font(.system(size: 44, weight: .light))
-                    .foregroundColor(DS.Color.primary)
-            }
-            VStack(spacing: 6) {
-                Text(L10n.t("ما فيه رسائل", "No messages"))
-                    .font(DS.Font.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(filter == .pending
-                     ? L10n.t("كل الرسائل تم التعامل معها", "All messages handled")
-                     : L10n.t("لا توجد رسائل متعامل معها بعد", "No handled messages yet"))
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textSecondary)
-            }
-        }
-        .padding(DS.Spacing.xxxl)
+    private func showFilter(_ f: InboxFilter) {
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) { filter = f }
     }
 
     // MARK: - Row
 
-    private func messageRow(_ msg: AdminRequest) -> some View {
-        let category = ContactParser.category(of: msg)
+    /// الخلية: دائرة التحديد (في وضع التحديد) + الصف.
+    /// ضغطة فعلية فقط تفتح التفاصيل — السحب لا يفتحها (طلب المالك).
+    /// (زر Button كان يعدّ رفع الإصبع بعد السحب ضغطة)
+    private func messageCell(_ msg: AdminRequest) -> some View {
+        let picked = selectedIDs.contains(msg.id)
+        let isUnread = !adminRequestVM.readContactMessageIds.contains(msg.id)
+        let actions = isSelectMode ? [] : swipeActions(for: msg)
+
+        return HStack(spacing: DS.Spacing.sm) {
+            if isSelectMode {
+                Image(systemName: picked ? "checkmark.circle.fill" : "circle")
+                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .foregroundColor(picked ? DS.Color.primary : DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+            }
+            messageRow(msg, isUnread: isUnread, picked: picked)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isSelectMode {
+                toggleSelection(msg.id)
+            } else {
+                adminRequestVM.markContactMessageRead(msg.id)
+                selectedMessage = msg
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isUnread ? L10n.t("جديدة", "New") : "")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelectMode && picked ? .isSelected : [])
+        // نفس أزرار السحب للقارئ الصوتي (لا يسحب البطاقة) — نفس الإجراءات تماماً
+        .accessibilityActions {
+            ForEach(actions) { action in
+                Button(action.title) { action.action() }
+            }
+        }
+        // نفس سحب الأخبار: صوب اليمين يكشف «حذف» و«تم التعامل» (طلب المالك)
+        .dsSwipeActions(id: msg.id, actions: actions)
+    }
+
+    /// صف بإطار صفوف المربّعات: صورة المرسل (ونقطة «جديد» على ركنها) + الاسم (Plex 13.5 عريض)
+    /// وشارة الوقت + مقتطف الرسالة (Plex 12) + شارتا التصنيف و«بانتظار الرد»
+    private func messageRow(_ msg: AdminRequest, isUnread: Bool, picked: Bool) -> some View {
+        let info = ContactCategoryInfo.from(raw: ContactParser.category(of: msg))
         let preview = ContactParser.message(from: msg)
         let date = ContactParser.date(msg.createdAt)
         let isPending = msg.status == ApprovalStatus.pending.rawValue
-        let isUnread = !adminRequestVM.readContactMessageIds.contains(msg.id)
 
-        // صندوق موحّد الحجم: صورة · (الاسم + الوقت) · (التصنيف) · مقتطف من سطرين
-        return HStack(alignment: .top, spacing: DS.Spacing.sm + 2) {
-            avatar(for: msg.member)
+        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            avatar(for: msg.member, isUnread: isUnread)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
-                    // الاسم أصغر بخط IBM Plex وعلى سطرين (طلب المالك)
+                HStack(alignment: .top, spacing: DS.Spacing.xs) {
+                    // الاسم بخط IBM Plex وعلى سطرين (طلب المالك)
                     Text(msg.member?.displayFullName ?? L10n.t("عضو", "Member"))
-                        .font(DS.Font.plex(13, weight: isUnread ? .bold : .semibold))
-                        .foregroundColor(DS.Color.textPrimary)
+                        .font(DS.Font.plex(13.5, weight: isUnread ? .bold : .semibold))
+                        .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: DS.Spacing.xs)
-                    HStack(spacing: 4) {
-                        if isUnread {
-                            Circle().fill(DS.Color.primary).frame(width: 7, height: 7)
-                        }
-                        if let d = date {
-                            Text(relativeShort(d))
-                                .font(DS.Font.plex(11, weight: isUnread ? .bold : .regular))
-                                .foregroundColor(isUnread ? DS.Color.primary : DS.Color.textTertiary)
-                        }
+                    if let date {
+                        // الوقت — أزرق للرسالة الجديدة، رمادي لما قُرئ
+                        SysStatusChip(text: relativeShort(date),
+                                      tint: isUnread ? DS.Color.primary : DS.Color.textTertiary)
+                            .fixedSize()
                     }
                 }
 
-                HStack(spacing: DS.Spacing.xs) {
-                    categoryChip(category)
+                if !preview.isEmpty {
+                    Text(preview)
+                        .font(DS.Font.plex(12, weight: isUnread ? .medium : .regular))
+                        .foregroundColor(isUnread ? DS.Color.fieldLabel : DS.Color.fieldValue)
+                        .lineLimit(1)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                HStack(spacing: 6) {
+                    SysStatusChip(text: info.title, icon: info.icon, tint: info.color)
                     if isPending {
-                        Image(systemName: "clock.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.warning)
+                        SysStatusChip(text: L10n.t("بانتظار الرد", "Awaiting reply"),
+                                      icon: "clock.fill",
+                                      tint: DS.Color.warning)
                     }
                     Spacer(minLength: 0)
                 }
-
-                Text(preview)
-                    .font(DS.Font.plex(12, weight: .regular))
-                    .foregroundColor(isUnread ? DS.Color.textPrimary : DS.Color.textSecondary)
-                    .lineLimit(1)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .strokeBorder(isUnread ? DS.Color.primary.opacity(0.30) : DS.Color.cardBorder,
-                              lineWidth: isUnread ? 1.2 : 0.75)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .dsRowBox()
+        .overlay {
+            // المحدّدة بإطار أوضح، والجديدة بإطار أزرق خفيف
+            if isSelectMode && picked {
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(DS.Color.primary.opacity(0.55), lineWidth: 1.5)
+            } else if isUnread {
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(DS.Color.primary.opacity(0.30), lineWidth: 1.2)
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
     }
 
     // MARK: - Mark all read bar
 
+    /// «N رسالة جديدة» + «تحديد الكل كمقروء» — صف بإطار صفوف المربّعات
     private var markAllReadBar: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Text(L10n.t(
-                "\(adminRequestVM.unreadContactMessagesCount) رسالة جديدة",
-                "\(adminRequestVM.unreadContactMessagesCount) new messages"
-            ))
-            .font(DS.Font.plex(12, weight: .semibold))
-            .foregroundColor(DS.Color.textSecondary)
-            Spacer()
+        let unread = adminRequestVM.unreadContactMessagesCount
+        return HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: "envelope.badge.fill", tint: DS.Color.primary)
+                .accessibilityHidden(true)
+            Text(L10n.t("\(unread) رسالة جديدة", "\(unread) new messages"))
+                .font(DS.Font.plex(13, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
             Button {
                 withAnimation(DS.Anim.quick) {
                     adminRequestVM.markAllContactMessagesRead()
                 }
             } label: {
-                Text(L10n.t("تحديد الكل كمقروء", "Mark all read"))
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                actionCapsule(icon: "envelope.open.fill",
+                              title: L10n.t("تحديد الكل كمقروء", "Mark all read"),
+                              tint: DS.Color.primary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DSScaleButtonStyle())
         }
-        .padding(.horizontal, DS.Spacing.xs)
+        .dsRowBox()
     }
 
-    private func avatar(for member: FamilyMember?) -> some View {
+    /// كبسولة إجراء صغيرة — مساحة ضغط ٤٤ نقطة والشكل كما هو
+    private func actionCapsule(icon: String, title: String, tint: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .bold))
+                .accessibilityHidden(true)
+            Text(title)
+                .font(DS.Font.plex(12, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .foregroundColor(tint)
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(height: 30)
+        .background(tint.opacity(0.10), in: Capsule())
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
+        .padding(.vertical, -7)
+    }
+
+    /// صورة المرسل — ونقطة «جديد» صغيرة على ركنها للرسالة غير المقروءة
+    private func avatar(for member: FamilyMember?, isUnread: Bool) -> some View {
         DSMemberAvatar(
             name: member?.firstName ?? "?",
             avatarUrl: member?.avatarUrl,
             size: 36,
             roleColor: member?.roleColor ?? DS.Color.primary
         )
-    }
-
-    private func categoryChip(_ raw: String) -> some View {
-        let info = ContactCategoryInfo.from(raw: raw)
-        return HStack(spacing: 4) {
-            Image(systemName: info.icon)
-                .font(DS.Font.scaled(11, weight: .bold))
-            Text(info.title)
-                .font(DS.Font.scaled(11, weight: .bold))
+        .overlay(alignment: .topTrailing) {
+            if isUnread {
+                Circle()
+                    .fill(DS.Color.primary)
+                    .frame(width: 10, height: 10)
+                    .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
+            }
         }
-        .foregroundColor(info.color)
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, 3)
-        .background(info.color.opacity(0.12))
-        .clipShape(Capsule())
+        .accessibilityHidden(true)
     }
 
     private func relativeShort(_ d: Date) -> String {
