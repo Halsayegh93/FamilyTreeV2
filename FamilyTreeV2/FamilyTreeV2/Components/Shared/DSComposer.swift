@@ -409,9 +409,9 @@ struct DSComposerSection<Content: View>: View {
         HStack(spacing: 7) {
             Image(systemName: icon)
                 .font(.system(size: 10.5, weight: .bold))
-                .foregroundColor(tint)
+                .foregroundColor(tint.dsReadableGlyph)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(tint.opacity(0.13)))
+                .background(Circle().fill(tint.dsReadableGlyph.opacity(0.13)))
             Text(title)
                 .font(DS.Font.plex(12.5, weight: .bold))
                 .foregroundColor(DS.Color.fieldLabel)
@@ -504,15 +504,22 @@ struct DSComposerField: View {
 // MARK: - أيقونة حقل + صندوق صف
 
 /// أيقونة الحقل (مربّع مستدير صغير) — نفس أيقونة DSComposerField
+extension Color {
+    /// لون أيقونة/شارة مقروء في الوضعين: الكحلي الغامق (`actionNavy`) يختفي كرمز على بطاقة داكنة،
+    /// فنستعمل `primary` — نفس الكحلي تماماً في الفاتح، وأزرق فاتح مقروء في الداكن. باقي الألوان كما هي.
+    var dsReadableGlyph: Color { self == DS.Color.actionNavy ? DS.Color.primary : self }
+}
+
 struct DSFieldIcon: View {
     let name: String
     var tint: Color = DS.Color.primary
     var body: some View {
+        let glyph = tint.dsReadableGlyph
         Image(systemName: name)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundColor(tint)
+            .foregroundColor(glyph)
             .frame(width: 32, height: 32)
-            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(tint.opacity(0.12)))
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(glyph.opacity(0.12)))
     }
 }
 

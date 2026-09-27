@@ -47,10 +47,10 @@ struct SysStatusChip: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
-        .foregroundColor(tint)
+        .foregroundColor(tint.dsReadableGlyph)
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(tint.opacity(0.13), in: Capsule())
+        .background(tint.dsReadableGlyph.opacity(0.13), in: Capsule())
     }
 }
 
@@ -67,16 +67,19 @@ struct SysStateCard: View {
     var actionIcon: String = "arrow.clockwise"
     var action: (() -> Void)? = nil
 
+    /// الكحلي الغامق لا يُقرأ كأيقونة في الداكن — `dsReadableGlyph` (نفس اللون في الفاتح)
+    private var iconTint: Color { tint.dsReadableGlyph }
+
     var body: some View {
         VStack(spacing: DS.Spacing.sm) {
             ZStack {
-                Circle().fill(tint.opacity(0.12))
+                Circle().fill(iconTint.opacity(0.12))
                 if isLoading {
-                    ProgressView().tint(tint)
+                    ProgressView().tint(iconTint)
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(tint)
+                        .foregroundColor(iconTint)
                 }
             }
             .frame(width: 52, height: 52)

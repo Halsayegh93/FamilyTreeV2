@@ -223,18 +223,21 @@ struct AdminActivityLogView: View {
         .toolbar {
             // البحث والتصفية صارا تحت بطاقة الرأس (حقل بحث + فلاتر بعددها) — والتحديد باقٍ هنا
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    withAnimation(DS.Anim.quick) {
-                        isSelecting.toggle()
-                        if !isSelecting { selectedIds.removeAll() }
+                // لا تحديد والسجل فارغ (يبقى ظاهراً أثناء التحديد ليُلغى)
+                if isSelecting || !activityItems.isEmpty {
+                    Button {
+                        withAnimation(DS.Anim.quick) {
+                            isSelecting.toggle()
+                            if !isSelecting { selectedIds.removeAll() }
+                        }
+                    } label: {
+                        // التحديد علامة بدل النص (طلب المالك)
+                        Image(systemName: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
+                            .foregroundColor(DS.Color.primary)
                     }
-                } label: {
-                    // التحديد علامة بدل النص (طلب المالك)
-                    Image(systemName: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
-                        .foregroundColor(DS.Color.primary)
+                    .accessibilityLabel(isSelecting ? L10n.t("إلغاء التحديد", "Cancel selection")
+                                                    : L10n.t("تحديد", "Select"))
                 }
-                .accessibilityLabel(isSelecting ? L10n.t("إلغاء التحديد", "Cancel selection")
-                                                : L10n.t("تحديد", "Select"))
             }
         }
         .confirmationDialog(

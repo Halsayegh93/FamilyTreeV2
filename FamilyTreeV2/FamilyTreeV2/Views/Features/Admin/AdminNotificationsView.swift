@@ -726,6 +726,8 @@ struct AdminNotificationsView: View {
                 .overlay(alignment: .top) {
                     Rectangle().fill(DS.Color.textTertiary.opacity(0.12)).frame(height: 1)
                 }
+                // الخلفية تكمل لأسفل الشاشة — لا تظهر صفوف الأعضاء تحت الشريط
+                .ignoresSafeArea(edges: .bottom)
         )
     }
 
