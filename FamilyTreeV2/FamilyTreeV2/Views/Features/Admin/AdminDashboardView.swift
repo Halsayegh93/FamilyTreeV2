@@ -12,7 +12,7 @@ enum AdminReviewDestination: Hashable {
 // (أي نص يجمع كل أدوات المشاهد المسموحة في قائمة واحدة، والفارغ يرجع للعرض العادي) ←
 // مبدّل كبير بثلاثة أقسام يتذكّر آخر اختيار طوال الجلسة:
 //   ١. «المطلوب مني» (الافتراضي): ما ينتظر المشاهد فقط — صف كبير لكل نوع بعدده الأحمر،
-//      أو «كل شي تمام ✓» — ثم «أفراد العائلة» (لمن يرى الإحصائيات) و«مجالك» (المراقب والمشرف).
+//      أو «لا توجد مهام معلّقة» — ثم «أفراد العائلة» (لمن يرى الإحصائيات) و«نطاق الصلاحيات» (المراقب والمشرف).
 //   ٢. «الأعضاء والشجرة»: أدوات الشجرة والأعضاء المتاحة للمشاهد.
 //   ٣. «المحتوى والنظام»: الرسائل والإحصائيات والتقارير وإعدادات النظام.
 // كل أداة في قسم واحد، وكل صف بشكل واحد (أيقونة بمربّع فاتح، عنوان، تلميح، عدد، سهم) داخل
@@ -157,7 +157,7 @@ struct AdminDashboardView: View {
                     MainHeaderView(
                         selectedTab: $selectedTab,
                         showingNotifications: $showingNotifications,
-                        title: L10n.t("الادارة", "Admin Dashboard"),
+                        title: L10n.t("الإدارة", "Admin Dashboard"),
                         subtitle: L10n.t("المراجعة والإعدادات والتقارير", "Review, settings and reports"),
                         icon: "shield.lefthalf.filled",
                         backgroundGradient: DS.Color.gradientPrimary,
@@ -243,7 +243,7 @@ struct AdminDashboardView: View {
 
             VStack(spacing: DS.Spacing.md) {
                 DSSearchField(text: $toolQuery,
-                              placeholder: L10n.t("ابحث عن أداة…", "Find a tool…"),
+                              placeholder: L10n.t("البحث في أدوات الإدارة…", "Find a tool…"),
                               tint: domainTint.dsReadableGlyph)
 
                 if isSearching {
@@ -323,7 +323,7 @@ struct AdminDashboardView: View {
         // المشرف: مجاله المحتوى — المحتوى المنتظر بدل إحصائيات الأعضاء
         return [
             DSHeroStat(value: heroValue(newsVM.pendingNewsRequests.count),
-                       label: L10n.t("أخبار منتظرة", "Pending news"), icon: "newspaper.fill"),
+                       label: L10n.t("أخبار معلّقة", "Pending news"), icon: "newspaper.fill"),
             DSHeroStat(value: heroValue(diwaniyaVM.pendingDiwaniyas.count),
                        label: L10n.t("ديوانيات", "Diwaniyas"), icon: "tent.fill"),
             DSHeroStat(value: heroValue(projectsVM.pendingProjects.count),
@@ -388,7 +388,7 @@ struct AdminDashboardView: View {
             items.append(DashItem(
                 id: "attention.requests",
                 title: L10n.t("طلبات المراجعة", "Review requests"),
-                hint: L10n.t("بانتظار قرارك", "Awaiting your decision"),
+                hint: L10n.t("بانتظار الاعتماد", "Awaiting your decision"),
                 icon: "tray.full.fill", tint: DS.Color.warning,
                 alert: totalReviewRequestsCount,
                 target: .requests))
@@ -397,19 +397,19 @@ struct AdminDashboardView: View {
         if unread > 0 {
             items.append(DashItem(
                 id: "attention.messages",
-                title: L10n.t("رسائل جديدة", "New messages"),
-                hint: L10n.t("لم تُقرأ بعد", "Not read yet"),
+                title: L10n.t("الرسائل الواردة", "New messages"),
+                hint: L10n.t("غير مقروءة", "Not read yet"),
                 icon: "bubble.left.and.bubble.right.fill", tint: DS.Color.composerDiwaniya,
                 alert: unread,
-                alertSpoken: L10n.t("\(unread) لم تُقرأ", "\(unread) unread"),
+                alertSpoken: L10n.t("\(unread) غير مقروءة", "\(unread) unread"),
                 target: .inbox))
         }
         // طلبات الانضمام — مجال الشجرة والأعضاء
         if authVM.canModerateTree && pendingCount > 0 {
             items.append(DashItem(
                 id: "attention.join",
-                title: L10n.t("طلبات انضمام", "Join requests"),
-                hint: L10n.t("بانتظار القبول", "Awaiting approval"),
+                title: L10n.t("طلبات الانضمام", "Join requests"),
+                hint: L10n.t("بانتظار المراجعة", "Awaiting approval"),
                 icon: "person.badge.clock.fill", tint: DS.Color.composerProject,
                 alert: pendingCount,
                 target: .requests))
@@ -420,7 +420,7 @@ struct AdminDashboardView: View {
             items.append(DashItem(
                 id: "attention.treeEdits",
                 title: L10n.t("طلبات تعديل الشجرة", "Tree edit requests"),
-                hint: L10n.t("إضافة وتعديل في الشجرة", "Additions and edits in the tree"),
+                hint: L10n.t("إضافات وتعديلات على الشجرة", "Additions and edits in the tree"),
                 icon: "arrow.triangle.branch", tint: DS.Color.composerProject,
                 alert: treeEdits,
                 target: .treeEdits))
@@ -430,8 +430,8 @@ struct AdminDashboardView: View {
         if authVM.canModerateContent && reports > 0 {
             items.append(DashItem(
                 id: "attention.reports",
-                title: L10n.t("بلاغات", "Reports"),
-                hint: L10n.t("على المحتوى", "On content"),
+                title: L10n.t("البلاغات", "Reports"),
+                hint: L10n.t("بلاغات عن المحتوى", "On content"),
                 icon: "exclamationmark.bubble.fill", tint: DS.Color.error,
                 alert: reports,
                 target: .requests))
@@ -474,10 +474,10 @@ struct AdminDashboardView: View {
         HStack(spacing: DS.Spacing.md) {
             SysGradientIcon(name: "checkmark.seal.fill", tint: DS.Color.success, size: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("كل شي تمام ✓", "All clear ✓"))
+                Text(L10n.t("لا توجد مهام معلّقة", "All clear ✓"))
                     .font(DS.Font.plex(14, weight: .bold))
                     .foregroundColor(DS.Color.fieldLabel)
-                Text(L10n.t("ما فيه طلبات ولا رسائل تنتظرك", "No requests or messages are waiting for you"))
+                Text(L10n.t("تمت معالجة جميع الطلبات والرسائل", "No requests or messages are waiting for you"))
                     .font(DS.Font.plex(12))
                     .foregroundColor(DS.Color.fieldValue)
                     .fixedSize(horizontal: false, vertical: true)
@@ -492,7 +492,7 @@ struct AdminDashboardView: View {
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .strokeBorder(DS.Color.success.opacity(0.20), lineWidth: 1))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.t("كل شي تمام، ما فيه طلبات ولا رسائل تنتظرك",
+        .accessibilityLabel(L10n.t("لا توجد مهام معلّقة، تمت معالجة جميع الطلبات والرسائل",
                                    "All clear, no requests or messages are waiting for you"))
     }
 
@@ -523,7 +523,7 @@ struct AdminDashboardView: View {
                 id: "tool.members",
                 title: L10n.t("إدارة الأعضاء", "Members"),
                 hint: loaded && gaps > 0
-                    ? L10n.t("\(gaps) نقص في البيانات", "\(gaps) data gaps")
+                    ? L10n.t("\(gaps) بيانات ناقصة", "\(gaps) data gaps")
                     : L10n.t("الحسابات والسجل والعوائل", "Accounts, registry, families"),
                 icon: "person.2.badge.gearshape", tint: DS.Color.composerProject,
                 info: loaded ? totalMembersCount : nil,
@@ -544,7 +544,7 @@ struct AdminDashboardView: View {
             list.append(DashItem(
                 id: "tool.activity",
                 title: L10n.t("سجل النشاط", "Activity Log"),
-                hint: L10n.t("كل حركة وتغيير", "Every change"),
+                hint: L10n.t("جميع العمليات والتعديلات", "Every change"),
                 icon: "clock.arrow.circlepath", tint: DS.Color.actionNavy,
                 alert: activityUnread,
                 alertSpoken: L10n.t("\(activityUnread) جديد", "\(activityUnread) new"),
@@ -562,10 +562,10 @@ struct AdminDashboardView: View {
             title: L10n.t("الرسائل", "Messages"),
             hint: loaded && awaitingReply > 0
                 ? L10n.t("\(awaitingReply) بانتظار الرد", "\(awaitingReply) awaiting reply")
-                : L10n.t("محادثاتك مع الأعضاء", "Conversations with members"),
+                : L10n.t("مراسلات الأعضاء", "Conversations with members"),
             icon: "bubble.left.and.bubble.right.fill", tint: DS.Color.composerDiwaniya,
             alert: messagesUnread,
-            alertSpoken: L10n.t("\(messagesUnread) لم تُقرأ", "\(messagesUnread) unread"),
+            alertSpoken: L10n.t("\(messagesUnread) غير مقروءة", "\(messagesUnread) unread"),
             section: .content,
             keywords: ["رسائل", "المحادثات", "التواصل", "الرد", "صندوق الوارد",
                        "messages", "inbox", "contact", "chat", "reply"],
@@ -574,7 +574,7 @@ struct AdminDashboardView: View {
         if authVM.isAdmin {
             list.append(DashItem(
                 id: "tool.analytics",
-                title: L10n.t("إحصائيات متقدمة", "Analytics"),
+                title: L10n.t("الإحصائيات المتقدمة", "Analytics"),
                 hint: L10n.t("الأدوار والأعمار والنمو", "Roles, ages, growth"),
                 icon: "chart.bar.xaxis", tint: DS.Color.composerProject,
                 section: .content,
@@ -584,8 +584,8 @@ struct AdminDashboardView: View {
 
             list.append(DashItem(
                 id: "tool.pdf",
-                title: L10n.t("تقارير PDF", "PDF Reports"),
-                hint: L10n.t("تصدير ملف للطباعة", "Export printable file"),
+                title: L10n.t("مركز التقارير", "PDF Reports"),
+                hint: L10n.t("تصدير تقارير قابلة للطباعة", "Export printable file"),
                 icon: "doc.text.fill", tint: DS.Color.composerLibrary,
                 section: .content,
                 keywords: ["تقرير", "طباعة", "تصدير", "ملف",
@@ -617,7 +617,7 @@ struct AdminDashboardView: View {
             list.append(DashItem(
                 id: "tool.usage.active",
                 title: L10n.t("الأعضاء الفعّالون", "Active members"),
-                hint: L10n.t("رقم + جهاز دخل التطبيق", "Phone + device that used the app"),
+                hint: L10n.t("رقم مسجّل وجهاز دخل التطبيق", "Phone + device that used the app"),
                 icon: "checkmark.seal.fill", tint: DS.Color.success,
                 info: active,
                 infoSpoken: active.map { L10n.t("\($0) عضو", "\($0) members") },
@@ -627,8 +627,8 @@ struct AdminDashboardView: View {
             let noPhone = usageStats?.noPhone
             list.append(DashItem(
                 id: "tool.usage.noPhone",
-                title: L10n.t("أعضاء بلا رقم", "Members without a phone"),
-                hint: L10n.t("أحياء بلا رقم جوال", "Living members with no phone"),
+                title: L10n.t("أعضاء دون رقم هاتف", "Members without a phone"),
+                hint: L10n.t("أحياء دون رقم هاتف", "Living members with no phone"),
                 icon: "phone.down.fill", tint: DS.Color.textTertiary,
                 info: noPhone,
                 infoSpoken: noPhone.map { L10n.t("\($0) عضو", "\($0) members") },
@@ -642,7 +642,7 @@ struct AdminDashboardView: View {
     /// وصف «طلبات المراجعة» بما يراه هذا الدور فيها
     private func requestsHint(_ scope: AdminAllRequestsView.ReviewScope) -> String {
         switch scope {
-        case .all:     return L10n.t("انضمام، شجرة، أخبار، بلاغات", "Join, tree, news, reports")
+        case .all:     return L10n.t("الانضمام والشجرة والأخبار والبلاغات", "Join, tree, news, reports")
         case .tree:    return L10n.t("الانضمام وتعديلات الشجرة", "Join and tree edits")
         case .content: return L10n.t("الأخبار والمحتوى والبلاغات", "News, content and reports")
         }
@@ -689,11 +689,11 @@ struct AdminDashboardView: View {
             switch section {
             case .pending:
                 return DSSegmentOption(id: .pending,
-                                       title: L10n.t("المطلوب مني", "For me"),
+                                       title: L10n.t("المهام المعلّقة", "For me"),
                                        icon: "checklist")
             case .members:
                 return DSSegmentOption(id: .members,
-                                       title: L10n.t("الأعضاء والشجرة", "Members"),
+                                       title: L10n.t("شؤون الأعضاء", "Members"),
                                        icon: "person.fill")
             case .content:
                 return DSSegmentOption(id: .content,
@@ -771,8 +771,8 @@ struct AdminDashboardView: View {
             let examples = tools.filter { $0.section != .pending }
                 .prefix(3).map(\.title).joined(separator: L10n.t("، ", ", "))
             SysStateCard(icon: "magnifyingglass",
-                         title: L10n.t("ما لقينا أداة بهذا الاسم", "No tool matches that"),
-                         hint: L10n.t("جرّب كلمة ثانية، مثل: \(examples)", "Try another word, like: \(examples)"),
+                         title: L10n.t("لا توجد أداة بهذا الاسم", "No tool matches that"),
+                         hint: L10n.t("جرّب كلمة أخرى، مثل: \(examples)", "Try another word, like: \(examples)"),
                          tint: DS.Color.textTertiary)
         } else {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -904,7 +904,7 @@ struct AdminDashboardView: View {
     private func spokenLabel(_ item: DashItem) -> String {
         var parts = [item.title]
         if item.alert > 0 {
-            parts.append(item.alertSpoken ?? L10n.t("\(item.alert) بانتظارك", "\(item.alert) pending"))
+            parts.append(item.alertSpoken ?? L10n.t("\(item.alert) بانتظار الإجراء", "\(item.alert) pending"))
         } else if let info = item.info {
             parts.append(item.infoSpoken ?? "\(info)")
         }
@@ -924,7 +924,7 @@ struct AdminDashboardView: View {
                 HStack(spacing: DS.Spacing.md) {
                     SysGradientIcon(name: guide.icon, tint: domainTint, size: 34)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(L10n.t("مجالك · \(guide.title)", "Your scope · \(guide.title)"))
+                        Text(L10n.t("نطاق الصلاحيات · \(guide.title)", "Your scope · \(guide.title)"))
                             .font(DS.Font.plex(13, weight: .bold))
                             .foregroundColor(DS.Color.fieldLabel)
                             .lineLimit(rowTextLines)
@@ -947,11 +947,11 @@ struct AdminDashboardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(DashRowPressStyle())
-            .accessibilityLabel(L10n.t("مجالك: \(guide.title)، \(guide.mandate)",
+            .accessibilityLabel(L10n.t("نطاق الصلاحيات: \(guide.title)، \(guide.mandate)",
                                        "Your scope: \(guide.title), \(guide.mandate)"))
             .accessibilityHint(showFullScope
                                ? L10n.t("يخفي التفاصيل", "Hides the details")
-                               : L10n.t("يعرض كل ما تقدر عليه وما لا تقدر", "Shows everything you can and can't do"))
+                               : L10n.t("يعرض الصلاحيات المتاحة وغير المتاحة", "Shows everything you can and can't do"))
 
             if showFullScope {
                 Divider().padding(.horizontal, DS.Spacing.md)
@@ -988,7 +988,7 @@ struct AdminDashboardView: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(allowed ? text : L10n.t("لا: \(text)", "Can't: \(text)"))
+        .accessibilityLabel(allowed ? text : L10n.t("غير مسموح: \(text)", "Can't: \(text)"))
     }
 
     // MARK: - أفراد العائلة
@@ -1014,10 +1014,10 @@ struct AdminDashboardView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         // كل من عنده رقم وجهاز — بدون فصل الخامل (طلب المالك)
                         usagePill(category: .active, icon: "checkmark.seal.fill", value: usage.active + usage.idle,
-                                  label: L10n.t("فعّال (رقم + جهاز)", "Active (phone + device)"),
+                                  label: L10n.t("فعّال (رقم وجهاز)", "Active (phone + device)"),
                                   color: DS.Color.success)
                         usagePill(category: .noPhone, icon: "phone.down.fill", value: usage.noPhone,
-                                  label: L10n.t("بلا رقم", "No phone"),
+                                  label: L10n.t("دون رقم", "No phone"),
                                   color: DS.Color.textTertiary)
                     }
                 }
@@ -1185,7 +1185,7 @@ struct AdminTile<Destination: View>: View {
 
     private var accessibilityText: String {
         var parts = [title, subtitle]
-        if let badge, badge > 0 { parts.append(badgeSpoken ?? L10n.t("\(badge) بانتظارك", "\(badge) pending")) }
+        if let badge, badge > 0 { parts.append(badgeSpoken ?? L10n.t("\(badge) بانتظار الإجراء", "\(badge) pending")) }
         if let detail, !compact { parts.append(detail) }
         return parts.joined(separator: "، ")
     }
