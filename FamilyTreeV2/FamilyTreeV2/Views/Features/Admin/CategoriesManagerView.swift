@@ -4,6 +4,11 @@ import SwiftUI
 //
 // لكل قسم فيه تصنيفات (الأخبار، مكتبة العائلة): تعديل الاسم والأيقونة واللون،
 // إخفاء/إظهار (بدون حذف — المحتوى القديم يبقى بتصنيفه)، ترتيب، وإضافة للأخبار.
+//
+// بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بلون قسم «التصنيفات» في
+// إعدادات التطبيق وأرقامها الحيّة ← فلترا القسمين بعددهما (بدل المبدّل) ← صفوف `.dsRowBox()`
+// داخل `List` (بقيت لأجل السحب لإعادة الترتيب والسحب للتحديث). التعديل والإضافة والحذف والترتيب
+// للمالك فقط (`canManageSettings`) وبنفس المربّعات والتأكيدات كما كانت تماماً.
 
 struct CategoriesManagerView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -14,22 +19,80 @@ struct CategoriesManagerView: View {
     /// التصنيف المطلوب حذفه من القائمة — ينتظر التأكيد
     @State private var pendingDelete: ContentCategory?
     @State private var deleteError: String?
+    /// اكتمل أول جلب — قبله «—» في الأرقام وبطاقة تحميل (إن لم تكن التصنيفات محمّلة أصلاً)
+    @State private var hasLoaded = false
+    /// جلب جارٍ (الفتح أو السحب للتحديث أو «إعادة المحاولة»)
+    @State private var isFetching = false
+    /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل قائمة فارغة مضلِّلة
+    @State private var lastFetchOffline = false
+
+    /// لون قسم «التصنيفات» في إعدادات التطبيق (مجال المحتوى) — رأس الصفحة يطابق ما ضُغط
+    private let pageTint = DS.Color.composerLibrary
 
     private var canEdit: Bool { authVM.canManageSettings }
 
     var body: some View {
-        List {
-            pickerSection
-            categoriesSection
-            addSection
+        let items = store.list(section, activeOnly: false)
+
+        return List {
+            hero
+                .categoryListRow(top: DS.Spacing.sm, bottom: DS.Spacing.xs)
+
+            if isInitialLoading {
+                SysStateCard(icon: "tag.fill",
+                             title: L10n.t("جارٍ تحميل التصنيفات…", "Loading categories…"),
+                             tint: pageTint,
+                             isLoading: true)
+                    .dsStaggerIn(1)
+                    .categoryListRow(top: DS.Spacing.md, bottom: DS.Spacing.xxxl)
+            } else if loadFailed {
+                SysStateCard(icon: "wifi.exclamationmark",
+                             title: L10n.t("تعذّر تحميل التصنيفات", "Couldn't load categories"),
+                             hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                             tint: DS.Color.error,
+                             actionTitle: L10n.t("إعادة المحاولة", "Retry"),
+                             action: { Task { await loadCategories() } })
+                    .dsStaggerIn(1)
+                    .categoryListRow(top: DS.Spacing.md, bottom: DS.Spacing.xxxl)
+            } else {
+                sectionChips
+                    .dsStaggerIn(1)
+                    .categoryListRow(top: DS.Spacing.xs, bottom: 0)
+
+                hintRow
+                    .dsStaggerIn(1)
+                    .categoryListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xs)
+
+                sectionTitle(count: items.count)
+                    .dsStaggerIn(2)
+                    .categoryListRow(top: DS.Spacing.sm, bottom: 2)
+
+                if items.isEmpty {
+                    emptySection
+                        .dsStaggerIn(3)
+                        .categoryListRow()
+                } else {
+                    categoriesRows(items)
+                }
+
+                addSection
+
+                // مسافة أسفل القائمة
+                Color.clear
+                    .frame(height: DS.Spacing.xxl)
+                    .categoryListRow(top: 0, bottom: 0)
+                    .accessibilityHidden(true)
+            }
         }
+        .listStyle(.plain)
         .environment(\.editMode, editModeBinding)
         .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 0)
         .background(DS.Color.background.ignoresSafeArea())
         .navigationTitle(L10n.t("التصنيفات", "Categories"))
         .navigationBarTitleDisplayMode(.inline)
-        .task { await store.fetch(); await store.fetchCounts() }
-        .refreshable { await store.fetch(); await store.fetchCounts() }
+        .task { await loadCategories() }
+        .refreshable { await loadCategories() }
         // تعديل/إضافة تصنيف — مربّع بمنتصف الشاشة بدل الورقة السفلية
         .dsCenterBox(item: $editing) { category in
             CategoryEditSheet(category: category, isNew: false, section: section)
@@ -64,55 +127,91 @@ struct CategoriesManagerView: View {
         Binding.constant(canEdit ? EditMode.active : EditMode.inactive)
     }
 
-    private var pickerSection: some View {
-        Section {
-            Picker("", selection: $section) {
-                ForEach(CategorySection.allCases) { item in
-                    Text(item.title).tag(item)
-                }
-            }
-            .pickerStyle(.segmented)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
-        } footer: {
+    // MARK: - التحميل
+
+    /// نفس الجلب السابق تماماً (`fetch` ثم `fetchCounts`) — ويحفظ اكتماله وهل انتهى بلا اتصال
+    private func loadCategories() async {
+        isFetching = true
+        await store.fetch()
+        await store.fetchCounts()
+        lastFetchOffline = !NetworkMonitor.shared.isConnected
+        isFetching = false
+        hasLoaded = true
+    }
+
+    /// أول تحميل (أو «إعادة المحاولة») ولا تصنيفات محمّلة بعد
+    private var isInitialLoading: Bool {
+        store.categories.isEmpty && (isFetching || !hasLoaded)
+    }
+
+    /// الجلب انتهى بلا تصنيفات والجهاز غير متصل
+    private var loadFailed: Bool {
+        store.categories.isEmpty && hasLoaded && !isFetching && lastFetchOffline
+    }
+
+    // MARK: - بطاقة الرأس
+
+    /// ٣ أرقام حيّة من التصنيفات المحمّلة أصلاً (بلا طلبات جديدة للسيرفر): كلها، الظاهرة، والمخفية —
+    /// وعدد كل قسم على فلتره. «—» قبل اكتمال أول تحميل.
+    private var hero: some View {
+        let all = CategorySection.allCases.flatMap { store.list($0, activeOnly: false) }
+        let visible = all.filter(\.isActive).count
+        let pending = isInitialLoading || loadFailed
+        return DSPageHero(
+            title: L10n.t("التصنيفات", "Categories"),
+            subtitle: canEdit
+                ? L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب", "Name, icon, colour, hide and order")
+                : L10n.t("تتصفّح للقراءة — التعديل للمالك", "Read-only — the owner edits"),
+            icon: "tag.fill",
+            tint: pageTint,
+            stats: [
+                DSHeroStat(value: pending ? "—" : "\(all.count)",
+                           label: L10n.t("الكل", "All"), icon: "tag.fill"),
+                DSHeroStat(value: pending ? "—" : "\(visible)",
+                           label: L10n.t("ظاهر", "Visible"), icon: "eye.fill"),
+                DSHeroStat(value: pending ? "—" : "\(all.count - visible)",
+                           label: L10n.t("مخفي", "Hidden"), icon: "eye.slash.fill")
+            ]
+        )
+    }
+
+    // MARK: - القسم (الأخبار / مكتبة العائلة)
+
+    /// نفس المبدّل السابق (نفس الاختيار) — فلاتر بعدد تصنيفات كل قسم
+    private var sectionChips: some View {
+        DSFilterChips(
+            options: CategorySection.allCases.map { item in
+                let n = store.list(item, activeOnly: false).count
+                return DSFilterOption(id: item, title: item.title, icon: sectionIcon(item), count: n > 0 ? n : nil)
+            },
+            selection: $section,
+            tint: pageTint
+        )
+    }
+
+    private func sectionIcon(_ item: CategorySection) -> String {
+        switch item {
+        case .news:    return "newspaper.fill"
+        case .archive: return "books.vertical.fill"
+        }
+    }
+
+    /// نفس نص التوضيح السابق — سطر صغير تحت الفلاتر
+    private var hintRow: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: canEdit ? "info.circle.fill" : "lock.fill")
+                .font(.system(size: 11.5, weight: .bold))
+                .foregroundColor(canEdit ? pageTint : DS.Color.textTertiary)
+                .padding(.top, 2)
+                .accessibilityHidden(true)
             Text(footerText)
-                .font(DS.Font.plex(11, weight: .medium))
-                .foregroundColor(DS.Color.textSecondary)
+                .font(DS.Font.plex(11.5))
+                .foregroundColor(DS.Color.fieldValue)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
-    }
-
-    private var categoriesSection: some View {
-        Section {
-            ForEach(store.list(section, activeOnly: false)) { category in
-                Button {
-                    if canEdit { editing = category }
-                } label: {
-                    row(category)
-                }
-                .buttonStyle(.plain)
-                .moveDisabled(!canEdit)
-            }
-            .onMove { source, destination in
-                if canEdit { move(from: source, to: destination) }
-            }
-        } header: {
-            Text(L10n.t("اسحب لإعادة الترتيب", "Drag to reorder"))
-                .font(DS.Font.plex(11, weight: .medium))
-                .textCase(nil)
-        }
-    }
-
-    @ViewBuilder
-    private var addSection: some View {
-        if canEdit && section.allowsAdding {
-            Section {
-                Button { showAdd = true } label: {
-                    Label(L10n.t("إضافة تصنيف", "Add category"), systemImage: "plus.circle.fill")
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                }
-            }
-        }
+        .padding(.horizontal, 2)
+        .accessibilityElement(children: .combine)
     }
 
     private var footerText: String {
@@ -128,41 +227,88 @@ struct CategoriesManagerView: View {
         return text
     }
 
+    /// عنوان القسم المختار — للمالك «اسحب لإعادة الترتيب» (كما كان)، ولغيره عدد التصنيفات
+    private func sectionTitle(count: Int) -> some View {
+        SysSectionTitle(title: L10n.t("تصنيفات \(section.title)", "\(section.title) categories"),
+                        icon: sectionIcon(section),
+                        tint: pageTint,
+                        trailing: canEdit
+                            ? L10n.t("اسحب لإعادة الترتيب", "Drag to reorder")
+                            : L10n.t("\(count) تصنيف", count == 1 ? "1 category" : "\(count) categories"))
+    }
+
+    // MARK: - التصنيفات
+
+    private func categoriesRows(_ items: [ContentCategory]) -> some View {
+        ForEach(Array(items.enumerated()), id: \.element.id) { index, category in
+            Button {
+                if canEdit { editing = category }
+            } label: {
+                row(category)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(canEdit ? L10n.t("يفتح تعديل التصنيف", "Opens category editing") : "")
+            .moveDisabled(!canEdit)
+            .dsStaggerIn(min(index, 6) + 3)
+            .categoryListRow()
+        }
+        .onMove { source, destination in
+            if canEdit { move(from: source, to: destination) }
+        }
+    }
+
+    /// لا تصنيفات في القسم المختار
+    private var emptySection: some View {
+        SysStateCard(icon: "tag.slash.fill",
+                     title: L10n.t("لا توجد تصنيفات", "No categories"),
+                     hint: canEdit && section.allowsAdding
+                        ? L10n.t("أضف تصنيفاً من الزر أدناه", "Add one with the button below")
+                        : nil,
+                     tint: DS.Color.textTertiary)
+    }
+
+    @ViewBuilder
+    private var addSection: some View {
+        if canEdit && section.allowsAdding {
+            SysActionButton(title: L10n.t("إضافة تصنيف", "Add category"), icon: "plus.circle.fill") {
+                showAdd = true
+            }
+            .dsStaggerIn(4)
+            .categoryListRow(top: DS.Spacing.md, bottom: 0)
+        }
+    }
+
+    /// صف بإطار صفوف المربّعات: أيقونة التصنيف بلونه + الاسم (وعدد عناصره جنبه) + الاسم الإنجليزي،
+    /// وشارة «مخفي» وزر الحذف (للتصنيف الفارغ غير الأساسي) في الطرف
     private func row(_ category: ContentCategory) -> some View {
         let count = store.itemCount(category)
         return HStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle().fill(category.color.opacity(category.isActive ? 0.18 : 0.08))
-                    .frame(width: 34, height: 34)
-                Image(systemName: category.iconKey)
-                    .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(category.isActive ? category.color : DS.Color.textTertiary)
-            }
-            VStack(alignment: .leading, spacing: 1) {
+            DSFieldIcon(name: category.iconKey,
+                        tint: category.isActive ? category.color : DS.Color.textTertiary)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(category.nameAr)
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(category.isActive ? DS.Color.textPrimary : DS.Color.textTertiary)
+                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .foregroundColor(category.isActive ? DS.Color.fieldLabel : DS.Color.textTertiary)
+                        .lineLimit(1)
                     // عدد العناصر — رقم فقط جنب الاسم (طلب المالك)
-                    Text("\(count)")
-                        .font(DS.Font.plex(11, weight: .bold))
-                        .foregroundColor(count > 0 ? category.color : DS.Color.textTertiary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill((count > 0 ? category.color : DS.Color.textTertiary).opacity(0.12)))
+                    SysStatusChip(text: "\(count)", tint: count > 0 ? category.color : DS.Color.textTertiary)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(L10n.t("\(count) عنصر", count == 1 ? "1 item" : "\(count) items"))
                 }
                 Text(category.nameEn)
-                    .font(DS.Font.plex(11, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
+
             Spacer(minLength: 0)
+
             if !category.isActive {
-                Text(L10n.t("مخفي", "Hidden"))
-                    .font(DS.Font.plex(10, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(DS.Color.textTertiary))
+                SysStatusChip(text: L10n.t("مخفي", "Hidden"), icon: "eye.slash.fill", tint: DS.Color.textTertiary)
             }
             // حذف من برّا — للتصنيف الفارغ غير الأساسي فقط
             if canEdit && count == 0 && !store.isProtected(category) {
@@ -170,15 +316,20 @@ struct CategoriesManagerView: View {
                     pendingDelete = category
                 } label: {
                     Image(systemName: "trash")
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundColor(DS.Color.error)
                         .frame(width: 30, height: 30)
                         .background(Circle().fill(DS.Color.error.opacity(0.10)))
+                        // مساحة ضغط ٤٤ نقطة والشكل كما هو
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, -7)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.t("حذف التصنيف", "Delete category"))
             }
         }
+        .dsRowBox()
         .contentShape(Rectangle())
     }
 
@@ -187,6 +338,18 @@ struct CategoriesManagerView: View {
         ids.move(fromOffsets: source, toOffset: destination)
         let current = section
         Task { await store.reorder(current, ids: ids) }
+    }
+}
+
+// MARK: - صف القائمة الشفاف (نمط صفحات الإدارة)
+
+private extension View {
+    /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
+    func categoryListRow(top: CGFloat = 4, bottom: CGFloat = 4) -> some View {
+        self
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: top, leading: DS.Spacing.lg, bottom: bottom, trailing: DS.Spacing.lg))
     }
 }
 
