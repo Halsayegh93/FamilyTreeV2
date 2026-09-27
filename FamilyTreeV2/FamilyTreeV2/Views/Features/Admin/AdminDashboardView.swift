@@ -394,73 +394,61 @@ struct AdminDashboardView: View {
 
             let items = attentionItems
             if isInitialLoading {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        DSSkeleton(height: 112, cornerRadius: DS.Radius.lg)
-                    }
-                }
-                .transition(.opacity)
+                DSSkeleton(height: 62, cornerRadius: DS.Radius.md)
+                    .transition(.opacity)
             } else if items.isEmpty {
                 allClearCard
                     .transition(.opacity)
-            } else if items.count <= 3 {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(items) { attentionCard($0) }
-                }
-                .transition(.opacity)
             } else {
-                // أكثر من ثلاث: شريط أفقي يمتد لحافة الشاشة
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        ForEach(items) { attentionCard($0).frame(width: 138) }
+                // أبسط (طلب المالك): بطاقة واحدة فيها صف لكل ما ينتظر — أيقونة، عنوان، عدد، سهم
+                VStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        attentionRow(item)
+                        if index < items.count - 1 {
+                            Divider().padding(.leading, 56)
+                        }
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, 2)
                 }
-                .padding(.horizontal, -DS.Spacing.lg)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.surface))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 .transition(.opacity)
             }
         }
         .animation(reduceMotion ? nil : DS.Anim.smooth, value: isInitialLoading)
     }
 
-    private func attentionCard(_ item: AttentionItem) -> some View {
+    /// صف واحد فيما ينتظر: أيقونة بلون النوع، العنوان والتلميح، العدد بشارة، ثم السهم
+    private func attentionRow(_ item: AttentionItem) -> some View {
         NavigationLink {
             attentionDestination(item.target)
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 0) {
-                    SysGradientIcon(name: item.icon, tint: item.tint, size: 30)
-                    Spacer(minLength: 0)
-                    SysChevron()
-                }
-                Text("\(item.count)")
-                    .font(DS.Font.plex(22, weight: .bold))
-                    .foregroundColor(DS.Color.fieldLabel)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .contentTransition(.numericText())
+            HStack(spacing: DS.Spacing.sm) {
+                SysGradientIcon(name: item.icon, tint: item.tint, size: 34)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.title)
-                        .font(DS.Font.plex(12, weight: .bold))
+                        .font(DS.Font.plex(13.5, weight: .bold))
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
                     Text(item.hint)
-                        .font(DS.Font.plex(10.5))
+                        .font(DS.Font.plex(11.5))
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
                 }
+                Spacer(minLength: 0)
+                Text("\(item.count)")
+                    .font(DS.Font.plex(12, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .frame(minWidth: 26, minHeight: 22)
+                    .background(Capsule().fill(DS.Color.error))
+                SysChevron()
             }
-            .padding(DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(item.tint.opacity(0.09)))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(item.tint.opacity(0.24), lineWidth: 1))
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .padding(.vertical, DS.Spacing.sm + 2)
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel("\(item.title): \(item.count)، \(item.hint)")
@@ -869,45 +857,35 @@ struct AdminTile<Destination: View>: View {
         return parts.joined(separator: "، ")
     }
 
+    /// بلاطة أبسط (طلب المالك): أيقونة + العنوان + رقم صغير، والشارة الحمراء إن وُجدت — سطر واحد
     private var fullLabel: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(alignment: .top, spacing: 0) {
-                SysGradientIcon(name: icon, tint: color, size: 40)
-                Spacer(minLength: 4)
-                if hasBadge { badgeView }
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: DS.Spacing.sm) {
+            SysGradientIcon(name: icon, tint: color, size: 34)
+            VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(DS.Font.plex(13.5, weight: .bold))
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                Text(subtitle)
-                    .font(DS.Font.plex(11.5))
-                    .foregroundColor(DS.Color.fieldValue)
-                    .lineLimit(2, reservesSpace: true)
-                    .minimumScaleFactor(0.85)
+                if let detail {
+                    Text(detail)
+                        .font(DS.Font.plex(11, weight: .semibold))
+                        .foregroundColor(DS.Color.fieldValue)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
-
-            HStack(spacing: 4) {
-                Text(detail ?? " ")
-                    .font(DS.Font.plex(11, weight: .bold))
-                    .foregroundColor(color.dsReadableGlyph)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .contentTransition(.numericText())
-                Spacer(minLength: 0)
-                SysChevron()
-            }
+            Spacer(minLength: 0)
+            if hasBadge { badgeView }
         }
-        .padding(DS.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(hasBadge ? color.opacity(0.28) : DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .padding(.horizontal, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.sm + 2)
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.surface))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
     }
 
     private var compactLabel: some View {

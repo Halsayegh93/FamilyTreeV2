@@ -178,20 +178,15 @@ struct SysGradientIcon: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        // أبسط (طلب المالك): خلفية فاتحة بلون القسم وأيقونة بلونه — بلا تدرّج ولا ظل
         Image(systemName: name)
             .font(.system(size: size * 0.42, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundColor(tint.dsReadableGlyph)
             .frame(width: size, height: size)
             .background(
-                RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                    .fill(LinearGradient(colors: [tint, tint.opacity(0.72)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                            .fill(Color.black.opacity(colorScheme == .dark ? 0.22 : 0))
-                    )
+                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                    .fill(tint.dsReadableGlyph.opacity(colorScheme == .dark ? 0.18 : 0.12))
             )
-            .shadow(color: tint.opacity(colorScheme == .dark ? 0 : 0.28), radius: 5, x: 0, y: 3)
             .accessibilityHidden(true)
     }
 }

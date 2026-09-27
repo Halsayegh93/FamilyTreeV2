@@ -108,6 +108,7 @@ struct NotificationsCenterView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
     @Environment(\.verticalSizeClass) private var vSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// الوضع الأفقي — نضغط المسافات العمودية حتى لا يُقتص المحتوى
     private var isLandscape: Bool { vSizeClass == .compact }
     /// تعليقات وإعجابات المحظورين لا تظهر في الإشعارات (Guideline 1.2)
@@ -146,7 +147,6 @@ struct NotificationsCenterView: View {
         let candidate: FamilyMember
     }
     @State private var selectedTab: NotifTab = .notifications
-    @Namespace private var tabIndicator
 
     enum NotifTab: Hashable {
         case notifications // إشعاراتي — ما يخصّني شخصياً
@@ -261,10 +261,13 @@ struct NotificationsCenterView: View {
                 actionBar
 
                 if notificationVM.isLoading && filteredNotifications.isEmpty {
-                    Spacer()
-                    ProgressView(L10n.t("جاري التحميل...", "Loading..."))
-                        .tint(DS.Color.primary)
-                    Spacer()
+                    SysStateCard(icon: "bell.fill",
+                                 title: L10n.t("جاري التحميل...", "Loading..."),
+                                 tint: DS.Color.primary,
+                                 isLoading: true)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.md)
+                    Spacer(minLength: 0)
                 } else if filteredNotifications.isEmpty {
                     emptyState
                         .frame(maxHeight: .infinity)
@@ -293,6 +296,7 @@ struct NotificationsCenterView: View {
             notificationVM.pendingJoinDeepLinkRequestId = nil
         }
         .onAppear {
+            if reduceMotion { appeared = true; return }
             withAnimation(DS.Anim.smooth.delay(0.15)) {
                 appeared = true
             }
@@ -332,183 +336,140 @@ struct NotificationsCenterView: View {
         }
     }
 
-    // MARK: - Action Bar (Unified)
+    // MARK: - Action Bar — صف أزرار مرتّب: كلها بنفس الارتفاع والشكل وبعرض متساوٍ (طلب المالك)
+
+    private enum BarStyle {
+        case tinted(Color)   // خلفية فاتحة بلون الزر
+        case filled          // كحلي الإجراء الأساسي
+        case danger          // أحمر (حذف)
+    }
 
     private var actionBar: some View {
         let unreadCount = filteredNotifications.filter { !$0.read }.count
+        let canPublish = selectedTab == .activity && authVM.canSendNotifications && !isSelecting
+        let showSelect = !isSelecting && !filteredNotifications.isEmpty
+        let showReadAll = !isSelecting && unreadCount > 0
+        let hasButtons = isSelecting || canPublish || showSelect || showReadAll
 
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
-
-                // «المستجدات» هي قناة تحديثات التطبيق — والإدارة تنشر منها مباشرة
-                if selectedTab == .activity, authVM.canSendNotifications, !isSelecting {
-                    pillButton(
-                        icon: "megaphone.fill",
-                        label: L10n.t("نشر تحديث", "Publish Update"),
-                        fg: DS.Color.textOnPrimary,
-                        bg: DS.Color.primary
-                    ) {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        showingAppUpdateComposer = true
-                    }
-                }
-
-                if isSelecting {
-                    // ── وضع التحديد ──
-
-                    // إلغاء
-                    pillButton(
-                        icon: "xmark",
-                        label: L10n.t("إلغاء", "Cancel"),
-                        fg: DS.Color.error,
-                        bg: DS.Color.error.opacity(0.10)
-                    ) {
-                        withAnimation(DS.Anim.snappy) {
-                            isSelecting = false
-                            selectedIds.removeAll()
+        return Group {
+            if hasButtons {
+                HStack(spacing: DS.Spacing.sm) {
+                    // «المستجدات» هي قناة تحديثات التطبيق — والإدارة تنشر منها مباشرة
+                    if canPublish {
+                        barButton(icon: "megaphone.fill", label: L10n.t("نشر تحديث", "Publish Update"),
+                                  style: .filled) {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            showingAppUpdateComposer = true
                         }
                     }
 
-                    // تحديد الكل / إلغاء الكل
-                    let allIds = Set(filteredNotifications.map(\.id))
-                    let allSelected = !allIds.isEmpty && selectedIds == allIds
-                    pillButton(
-                        icon: allSelected ? "checkmark.square.fill" : "square.dashed",
-                        label: allSelected ? L10n.t("إلغاء الكل", "Deselect") : L10n.t("الكل", "All"),
-                        fg: DS.Color.accent,
-                        bg: DS.Color.accent.opacity(0.10)
-                    ) {
-                        withAnimation(DS.Anim.snappy) {
-                            selectedIds = allSelected ? [] : allIds
+                    if isSelecting {
+                        // ── وضع التحديد ──
+                        barButton(icon: "xmark", label: L10n.t("إلغاء", "Cancel"),
+                                  style: .tinted(DS.Color.error)) {
+                            withAnimation(reduceMotion ? nil : DS.Anim.snappy) {
+                                isSelecting = false
+                                selectedIds.removeAll()
+                            }
                         }
-                        UISelectionFeedbackGenerator().selectionChanged()
-                    }
 
-                    // مقروء
-                    pillButton(
-                        icon: "envelope.open.fill",
-                        label: L10n.t("مقروء", "Read"),
-                        fg: DS.Color.textOnPrimary,
-                        bg: selectedIds.isEmpty ? DS.Color.inactive : DS.Color.primary,
-                        disabled: selectedIds.isEmpty
-                    ) {
-                        let ids = selectedIds
-                        withAnimation(DS.Anim.snappy) { selectedIds.removeAll(); isSelecting = false }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        Task { await notificationVM.markNotificationsAsRead(ids: ids) }
-                    }
-
-                    // حذف — المدير والمالك فقط
-                    if authVM.isAdmin {
-                        pillButton(
-                            icon: "trash.fill",
-                            label: L10n.t("حذف", "Delete"),
-                            fg: DS.Color.textOnPrimary,
-                            bg: selectedIds.isEmpty ? DS.Color.inactive : DS.Color.error,
-                            disabled: selectedIds.isEmpty
-                        ) {
-                            let ids = selectedIds
-                            withAnimation(DS.Anim.snappy) { selectedIds.removeAll(); isSelecting = false }
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            Task { await notificationVM.deleteNotifications(ids: ids) }
-                        }
-                    }
-
-                    // عداد المحدد
-                    if !selectedIds.isEmpty {
-                        Text("\(selectedIds.count)")
-                            .font(DS.Font.scaled(11, weight: .black))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(minWidth: NotifLayout.badgeSize, minHeight: NotifLayout.badgeSize)
-                            .background(DS.Color.primary)
-                            .clipShape(Circle())
-                    }
-
-                } else {
-                    // ── الوضع العادي ──
-
-                    // تحديد
-                    if !filteredNotifications.isEmpty {
-                        pillButton(
-                            icon: "checklist.unchecked",
-                            label: L10n.t("تحديد", "Select"),
-                            fg: DS.Color.accent,
-                            bg: DS.Color.accent.opacity(0.10)
-                        ) {
-                            withAnimation(DS.Anim.snappy) { isSelecting = true; selectedIds.removeAll() }
+                        // تحديد الكل / إلغاء الكل
+                        let allIds = Set(filteredNotifications.map(\.id))
+                        let allSelected = !allIds.isEmpty && selectedIds == allIds
+                        barButton(icon: allSelected ? "checkmark.square.fill" : "square.dashed",
+                                  label: allSelected ? L10n.t("إلغاء الكل", "Deselect") : L10n.t("الكل", "All"),
+                                  style: .tinted(DS.Color.accent)) {
+                            withAnimation(reduceMotion ? nil : DS.Anim.snappy) {
+                                selectedIds = allSelected ? [] : allIds
+                            }
                             UISelectionFeedbackGenerator().selectionChanged()
                         }
-                    }
 
-                    // قراءة الكل
-                    if unreadCount > 0 {
-                        pillButton(
-                            icon: "envelope.open.fill",
-                            label: L10n.t("قراءة الكل", "Read All"),
-                            fg: DS.Color.primary,
-                            bg: DS.Color.primary.opacity(0.10)
-                        ) {
-                            UINotificationFeedbackGenerator().notificationOccurred(.success)
-                            Task { await notificationVM.markAllNotificationsAsRead() }
+                        // مقروء (بعدد المحدد)
+                        barButton(icon: "envelope.open.fill",
+                                  label: selectedIds.isEmpty ? L10n.t("مقروء", "Read")
+                                                             : L10n.t("مقروء (\(selectedIds.count))", "Read (\(selectedIds.count))"),
+                                  style: .filled, disabled: selectedIds.isEmpty) {
+                            let ids = selectedIds
+                            withAnimation(reduceMotion ? nil : DS.Anim.snappy) { selectedIds.removeAll(); isSelecting = false }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            Task { await notificationVM.markNotificationsAsRead(ids: ids) }
                         }
-                    }
 
-                    // عداد غير المقروء — كبسولة محايدة + الرقم في badge منفصل
-                    if unreadCount > 0 {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Text("\(unreadCount)")
-                                .font(DS.Font.scaled(11, weight: .black))
-                                .foregroundColor(DS.Color.textOnPrimary)
-                                .frame(minWidth: 18, minHeight: 18)
-                                .padding(.horizontal, 4)
-                                .background(Capsule().fill(DS.Color.primary))
-                            Text(L10n.t("غير مقروء", "unread"))
-                                .font(DS.Font.scaled(11, weight: .semibold))
-                                .foregroundColor(DS.Color.textSecondary)
+                        // حذف — المدير والمالك فقط
+                        if authVM.isAdmin {
+                            barButton(icon: "trash.fill", label: L10n.t("حذف", "Delete"),
+                                      style: .danger, disabled: selectedIds.isEmpty) {
+                                let ids = selectedIds
+                                withAnimation(reduceMotion ? nil : DS.Anim.snappy) { selectedIds.removeAll(); isSelecting = false }
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                Task { await notificationVM.deleteNotifications(ids: ids) }
+                            }
                         }
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 6)
-                        .background(DS.Color.textTertiary.opacity(0.10))
-                        .clipShape(Capsule())
+                    } else {
+                        // ── الوضع العادي ──
+                        if showSelect {
+                            barButton(icon: "checklist.unchecked", label: L10n.t("تحديد", "Select"),
+                                      style: .tinted(DS.Color.accent)) {
+                                withAnimation(reduceMotion ? nil : DS.Anim.snappy) { isSelecting = true; selectedIds.removeAll() }
+                                UISelectionFeedbackGenerator().selectionChanged()
+                            }
+                        }
+
+                        // قراءة الكل — وعدد غير المقروء داخله بدل شارة منفصلة
+                        if showReadAll {
+                            barButton(icon: "envelope.open.fill",
+                                      label: L10n.t("قراءة الكل (\(unreadCount))", "Read All (\(unreadCount))"),
+                                      style: .tinted(DS.Color.primary)) {
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                Task { await notificationVM.markAllNotificationsAsRead() }
+                            }
+                        }
                     }
                 }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.xs)
+                .animation(reduceMotion ? nil : DS.Anim.snappy, value: isSelecting)
+                .animation(reduceMotion ? nil : DS.Anim.snappy, value: selectedIds.count)
             }
-            .padding(.horizontal, DS.Spacing.lg)
         }
-        .padding(.vertical, DS.Spacing.sm)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(DS.Color.textTertiary.opacity(0.1)).frame(height: 0.5)
-        }
-        .animation(DS.Anim.snappy, value: isSelecting)
-        .animation(DS.Anim.snappy, value: selectedIds.count)
     }
 
-    // MARK: - Pill Button
-
-    private func pillButton(
-        icon: String,
-        label: String,
-        fg: Color,
-        bg: Color,
-        disabled: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xs) {
+    /// زر الشريط: ارتفاع ٤٠ وعرض متساوٍ مع جيرانه، أيقونة + نص، بأحد ثلاثة أشكال
+    private func barButton(icon: String, label: String, style: BarStyle,
+                           disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        let fg: Color
+        let bg: AnyShapeStyle
+        switch style {
+        case .tinted(let tint):
+            fg = tint.dsReadableGlyph
+            bg = AnyShapeStyle(tint.dsReadableGlyph.opacity(0.12))
+        case .filled:
+            fg = DSActionFill.label(enabled: !disabled)
+            bg = AnyShapeStyle(DSActionFill.style(enabled: !disabled))
+        case .danger:
+            fg = .white
+            bg = AnyShapeStyle(DS.Color.error.opacity(disabled ? 0.45 : 1))
+        }
+        return Button(action: action) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .font(.system(size: 12.5, weight: .bold))
+                    .accessibilityHidden(true)
                 Text(label)
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.plex(13, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .foregroundColor(fg)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(bg)
-            .clipShape(Capsule())
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .background(Capsule().fill(bg))   // دائري الأطراف (طلب المالك)
+            .padding(.vertical, 2)            // مساحة ضغط ٤٤
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
         .disabled(disabled)
-        .opacity(disabled ? 0.5 : 1)
     }
 
     // MARK: - Filtered Notifications
@@ -521,77 +482,20 @@ struct NotificationsCenterView: View {
         return kinds
     }
 
-    // MARK: - Segmented Tab Bar (sliding indicator)
+    // MARK: - التبويبان — المبدّل الكبير المرتّب (DSSegmentedSwitch)
 
     private func segmentedTabBar(notifCount: Int, activityCount: Int) -> some View {
-        HStack(spacing: 2) {
-            segmentTab(
-                icon: "bell.badge.fill",
-                title: L10n.t("الإشعارات", "Notifications"),
-                count: notifCount,
-                tab: .notifications
-            )
-            segmentTab(
-                icon: "sparkles",
-                title: L10n.t("المستجدات", "Activity"),
-                count: activityCount,
-                tab: .activity
-            )
-        }
-        .padding(3)
-        .fixedSize(horizontal: false, vertical: true)
-        .dynamicTypeSize(...DynamicTypeSize.large)
-    }
-
-    private func segmentTab(icon: String, title: String, count: Int, tab: NotifTab) -> some View {
-        let isSelected = selectedTab == tab
-
-        return Button {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
-                selectedTab = tab
-            }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
-            ZStack {
-                // مؤشر الاختيار المتحرك (sliding indicator)
-                if isSelected {
-                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                        .fill(DS.Color.gradientPrimary)
-                        .shadow(color: DS.Color.primary.opacity(0.3), radius: 6, x: 0, y: 2)
-                        .matchedGeometryEffect(id: "tabIndicator", in: tabIndicator)
-                }
-
-                HStack(spacing: 5) {
-                    Image(systemName: icon)
-                        .font(.system(size: 13, weight: .bold))
-                        .symbolRenderingMode(.hierarchical)
-
-                    Text(title)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.system(size: 10, weight: .black, design: .rounded))
-                            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textOnPrimary)
-                            .frame(minWidth: 16, minHeight: 16)
-                            .padding(.horizontal, 3)
-                            .background(
-                                Capsule()
-                                    .fill(isSelected ? Color.white : DS.Color.error)
-                            )
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-                .frame(maxWidth: .infinity)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-        }
-        .buttonStyle(.plain)
+        DSSegmentedSwitch(
+            options: [
+                DSSegmentOption(id: NotifTab.notifications,
+                                title: L10n.t("الإشعارات", "Notifications"),
+                                icon: "bell.badge.fill", count: notifCount),
+                DSSegmentOption(id: NotifTab.activity,
+                                title: L10n.t("المستجدات", "Activity"),
+                                icon: "sparkles", count: activityCount)
+            ],
+            selection: $selectedTab
+        )
     }
 
     /// إجراءات تمّت — تظهر في تاب "المستجدات" للأدمن فقط (موافقة/رفض/تعديل/تفعيل/نشر)
@@ -750,9 +654,9 @@ struct NotificationsCenterView: View {
 
                         notificationRow(item: item, iconInfo: iconInfo, isUnread: isUnread)
                             .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 20)
-                            .animation(DS.Anim.smooth.delay(Double(min(index, 5)) * 0.04), value: appeared)
-                            .listRowInsets(EdgeInsets(top: 3, leading: DS.Spacing.lg, bottom: 3, trailing: DS.Spacing.lg))
+                            .offset(y: appeared || reduceMotion ? 0 : 20)
+                            .animation(reduceMotion ? nil : DS.Anim.smooth.delay(Double(min(index, 5)) * 0.04), value: appeared)
+                            .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 4, trailing: DS.Spacing.lg))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -779,13 +683,19 @@ struct NotificationsCenterView: View {
                 } header: {
                     HStack(spacing: DS.Spacing.sm) {
                         Text(section)
-                            .font(DS.Font.scaled(12, weight: .bold))
-                            .foregroundColor(DS.Color.textSecondary)
+                            .font(DS.Font.plex(12.5, weight: .bold))
+                            .foregroundColor(DS.Color.fieldLabel)
+                        Text("\(items.count)")
+                            .font(DS.Font.plex(11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .monospacedDigit()
                         Rectangle()
-                            .fill(DS.Color.textTertiary.opacity(0.2))
+                            .fill(DS.Color.textTertiary.opacity(0.18))
                             .frame(height: 1)
                     }
                     .padding(.vertical, 3)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
                     .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 2, trailing: DS.Spacing.lg))
                 }
             }
@@ -797,12 +707,13 @@ struct NotificationsCenterView: View {
         }
     }
 
-    // MARK: - Notification Row
+    // MARK: - Notification Row (صف موحّد: أيقونة النوع + العنوان والوقت + النص + شارات)
 
     private func notificationRow(item: AppNotification, iconInfo: NotificationKindStyle, isUnread: Bool) -> some View {
-        Button {
+        let isSelected = selectedIds.contains(item.id)
+        return Button {
             if isSelecting {
-                withAnimation(DS.Anim.snappy) {
+                withAnimation(reduceMotion ? nil : DS.Anim.snappy) {
                     if selectedIds.contains(item.id) {
                         selectedIds.remove(item.id)
                     } else {
@@ -817,118 +728,93 @@ struct NotificationsCenterView: View {
                 }
             }
         } label: {
-            HStack(spacing: DS.Spacing.md) {
-                // Checkbox في وضع التحديد
+            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                // دائرة التحديد في وضع التحديد
                 if isSelecting {
-                    let isSelected = selectedIds.contains(item.id)
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(DS.Font.scaled(22, weight: .medium))
+                        .font(.system(size: 21, weight: .medium))
                         .foregroundStyle(isSelected ? DS.Color.primary : DS.Color.textTertiary)
-                        .animation(DS.Anim.snappy, value: isSelected)
+                        .frame(width: 26)
+                        .padding(.top, 5)
+                        .accessibilityHidden(true)
                 }
 
-                // أيقونة النوع — دائرة كبيرة
-                ZStack {
-                    Circle()
-                        .fill(isUnread ? iconInfo.color.opacity(0.12) : DS.Color.textTertiary.opacity(0.08))
-                        .frame(width: NotifLayout.rowIconSize, height: NotifLayout.rowIconSize)
+                // أيقونة النوع (بلونه لغير المقروء) + نقطة غير مقروء على طرفها
+                DSFieldIcon(name: iconInfo.icon, tint: isUnread ? iconInfo.color : DS.Color.textTertiary)
+                    .overlay(alignment: .topLeading) {
+                        if isUnread && !isSelecting {
+                            Circle()
+                                .fill(DS.Color.primary)
+                                .frame(width: 10, height: 10)
+                                .overlay(Circle().stroke(DS.Color.surface, lineWidth: 2))
+                                .offset(x: -3, y: -3)
+                        }
+                    }
+                    .accessibilityHidden(true)
 
-                    Image(systemName: iconInfo.icon)
-                        .font(DS.Font.scaled(18, weight: .semibold))
-                        .foregroundColor(isUnread ? iconInfo.color : DS.Color.textTertiary)
-                }
-
-                // المحتوى
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                VStack(alignment: .leading, spacing: 4) {
                     // العنوان + الوقت
-                    HStack(alignment: .top) {
+                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
                         Text(item.title)
-                            .font(DS.Font.scaled(15, weight: isUnread ? .bold : .medium))
-                            .foregroundColor(isUnread ? DS.Color.textPrimary : DS.Color.textTertiary)
+                            .font(DS.Font.plex(13.5, weight: isUnread ? .bold : .semibold))
+                            .foregroundColor(isUnread ? DS.Color.fieldLabel : DS.Color.fieldValue)
                             .lineLimit(2)
-
-                        Spacer(minLength: DS.Spacing.sm)
-
+                        Spacer(minLength: DS.Spacing.xs)
                         Text(relativeTime(item.createdDate))
-                            .font(DS.Font.scaled(11, weight: .medium))
-                            .foregroundColor(DS.Color.textTertiary)
+                            .font(DS.Font.plex(11, weight: .semibold))
+                            .foregroundColor(isUnread ? DS.Color.primary : DS.Color.textTertiary)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
 
-                    // النص الكامل
+                    // النص
                     richBodyView(
                         item.body,
-                        font: DS.Font.scaled(13, weight: .regular),
-                        color: isUnread ? DS.Color.textSecondary : DS.Color.textTertiary,
+                        font: DS.Font.plex(12.5),
+                        color: isUnread ? DS.Color.fieldValue : DS.Color.textTertiary,
                         lineLimit: 3
                     )
 
-                    // شريط سفلي: التصنيف + بادج المدير
-                    HStack(spacing: DS.Spacing.sm) {
-                        // التصنيف
-                        Text(iconInfo.label)
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(isUnread ? iconInfo.color : DS.Color.textTertiary)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 2)
-                            .background((isUnread ? iconInfo.color : DS.Color.textTertiary).opacity(0.08))
-                            .clipShape(Capsule())
+                    // التصنيف + (للإدارة) من أرسل
+                    HStack(spacing: DS.Spacing.xs) {
+                        SysStatusChip(text: iconInfo.label,
+                                      tint: isUnread ? iconInfo.color : DS.Color.textTertiary)
 
-                        // اسم المرسل — إداري يعرض "الإدارة"
                         if authVM.isAdmin, let creatorId = item.createdBy {
                             let isAdminNotif = Self.completedActionKinds.contains(item.kind)
                             let creator = memberVM.member(byId: creatorId)
-                            // في القائمة: نُبقي "الإدارة" كاسم مُعمَّم لإشعارات تعديل المدير
-                            // (الاسم الفعلي يظهر فقط داخل sheet التفاصيل، للمدراء فقط)
+                            // في القائمة: «الإدارة» كاسم مُعمَّم لإشعارات تعديل المدير
+                            // (الاسم الفعلي يظهر فقط داخل مربّع التفاصيل، للمدراء فقط)
                             let creatorName = isAdminNotif
                                 ? L10n.t("الإدارة", "Admin")
                                 : (creator?.shortFullName ?? L10n.t("الإدارة", "Admin"))
                             let roleColor: Color = isAdminNotif ? DS.Color.primary : (creator?.roleColor ?? DS.Color.accent)
-
-                            // «من فلان» — يوضّح للإدارة أن الإشعار يخصّ عضواً بعينه
-                            HStack(spacing: 3) {
-                                Image(systemName: isAdminNotif ? "shield.fill" : "person.fill")
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                Text(isAdminNotif ? creatorName : L10n.t("من \(creatorName)", "from \(creatorName)"))
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                    .lineLimit(1)
-                            }
-                            .foregroundColor(roleColor)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 2)
-                            .background(roleColor.opacity(0.10))
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(roleColor.opacity(0.2), lineWidth: 0.5))
+                            SysStatusChip(text: isAdminNotif ? creatorName : L10n.t("من \(creatorName)", "from \(creatorName)"),
+                                          icon: isAdminNotif ? "shield.fill" : "person.fill",
+                                          tint: roleColor)
                         }
 
                         Spacer(minLength: 0)
                         // أزرار الموافقة/الرفض السريعة أُزيلت من صف الإشعار —
-                        // الإجراءات تتم من شاشة تفاصيل الإشعار أو من لوحة الإدارة.
+                        // الإجراءات تتم من مربّع تفاصيل الإشعار أو من لوحة الإدارة.
                     }
                 }
-
-                // نقطة غير مقروء
-                if isUnread && !isSelecting {
-                    Circle()
-                        .fill(DS.Color.primary)
-                        .frame(width: 9, height: 9)
-                }
             }
-            .padding(DS.Spacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .fill(DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .stroke(
-                        isUnread ? iconInfo.color.opacity(0.15) : DS.Color.textTertiary.opacity(0.08),
-                        lineWidth: isUnread ? 1 : 0.5
-                    )
-            )
-            .dsSubtleShadow()
-            .opacity(isUnread ? 1 : 0.55)
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .padding(.vertical, DS.Spacing.sm + 2)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(DS.Color.surface))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .strokeBorder(isSelected
+                              ? DS.Color.primary.opacity(0.75)
+                              : (isUnread ? iconInfo.color.dsReadableGlyph.opacity(0.35)
+                                          : DS.Color.textTertiary.opacity(0.12)),
+                              lineWidth: isSelected ? 1.5 : 1))
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint(isUnread ? L10n.t("غير مقروء", "Unread") : "")
         .contextMenu {
             if isUnread {
                 Button {
@@ -949,16 +835,21 @@ struct NotificationsCenterView: View {
 
     private var emptyState: some View {
         let isActivity = authVM.isAdmin && selectedTab == .activity
-        return DSEmptyState(
-            icon: isActivity ? "sparkles" : "bell.slash.fill",
-            title: isActivity
-                ? L10n.t("لا يوجد نشاط", "No Activity")
-                : L10n.t("لا توجد إشعارات", "No Notifications"),
-            subtitle: isActivity
-                ? L10n.t("نشاط النظام يظهر هنا", "System activity appears here")
-                : L10n.t("الإشعارات الموجهة لك تظهر هنا", "Notifications for you appear here"),
-            style: .halo
-        )
+        return VStack {
+            SysStateCard(
+                icon: isActivity ? "sparkles" : "bell.slash.fill",
+                title: isActivity
+                    ? L10n.t("لا يوجد نشاط", "No Activity")
+                    : L10n.t("لا توجد إشعارات", "No Notifications"),
+                hint: isActivity
+                    ? L10n.t("نشاط النظام يظهر هنا", "System activity appears here")
+                    : L10n.t("الإشعارات الموجهة لك تظهر هنا", "Notifications for you appear here"),
+                tint: DS.Color.primary
+            )
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.md)
+            Spacer(minLength: 0)
+        }
     }
 
     // MARK: - Detail Box (مربّع تفاصيل الإشعار بمنتصف الشاشة — طلب المالك)

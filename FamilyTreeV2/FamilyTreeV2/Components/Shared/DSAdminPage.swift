@@ -96,29 +96,16 @@ struct DSPageHero: View {
                 LinearGradient(colors: [tint, tint.opacity(0.72)],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
                 if colorScheme == .dark { Color.black.opacity(0.3) }
-                Circle()
-                    .fill(Color.white.opacity(0.10))
-                    .frame(width: 160, height: 160)
-                    .blur(radius: 24)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .offset(x: -30, y: -60)
-                Image(systemName: icon)
-                    .font(.system(size: 110, weight: .bold))
-                    .foregroundColor(.white.opacity(0.08))
-                    .rotationEffect(.degrees(drift ? -10 : -16))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .offset(x: 20, y: drift ? 8 : 18)
-                DSShineSweep(delay: 0.35)
+                // أبسط (طلب المالك): بلا علامة مائية ولا لمعة ولا حركة
             }
             .accessibilityHidden(true)
         )
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .shadow(color: tint.opacity(colorScheme == .dark ? 0 : 0.25), radius: 12, x: 0, y: 6)
+        .shadow(color: tint.opacity(colorScheme == .dark ? 0 : 0.14), radius: 8, x: 0, y: 4)
         .accessibilityElement(children: .contain)
         .onAppear {
             if reduceMotion { appeared = true; return }
             withAnimation(.spring(response: 0.55, dampingFraction: 0.65).delay(0.05)) { appeared = true }
-            withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) { drift = true }
         }
     }
 }
