@@ -234,6 +234,8 @@ struct AdminTreeHealthView: View {
                                     trailing: members.isEmpty ? nil
                                         : L10n.t("← سحب لإجراءات سريعة →", "← Swipe for quick actions →"))
                         .dsStaggerIn(3)
+                        // العنوان يظهر مع الصفوف (بعد الفحص) — فتبدأ الصفوف بعده
+                        .onAppear(perform: startRowsCascade)
                         .healthListRow(top: DS.Spacing.xs, bottom: 2)
 
                     if members.isEmpty {
@@ -244,7 +246,9 @@ struct AdminTreeHealthView: View {
                         let visible = Array(members.prefix(displayLimit))
                         ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
                             let memberIssues = cachedMemberIssues[member.id] ?? []
-                            memberRow(member: member, index: index)
+                            memberRow(member: member)
+                                // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
+                                .dsCardCascade(index, appeared: appeared)
                                 .healthListRow()
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
@@ -370,10 +374,6 @@ struct AdminTreeHealthView: View {
             EditNameSheet(member: member, memberVM: memberVM)
         }
         .onAppear {
-            // «تقليل الحركة»: تلاشٍ هادئ فقط بدل الصعود
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.smooth.delay(0.15)) {
-                appeared = true
-            }
             rebuildCache()
             if (cachedCounts[selectedFilter] ?? 0) == 0 {
                 if let first = TreeIssueFilter.allCases.first(where: { (cachedCounts[$0] ?? 0) > 0 }) {
@@ -385,6 +385,16 @@ struct AdminTreeHealthView: View {
             rebuildCache()
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// الصفوف تدخل بعد أقسام الصفحة فوقها (الحلقة ← البحث والفلاتر ← العنوان = ٣)، فيبقى التسلسل:
+    /// الرأس ← الأقسام ← الصفوف. مرة واحدة؛ «تقليل الحركة»: تلاشٍ فوري بلا انتظار.
+    private func startRowsCascade() {
+        guard !appeared else { return }
+        guard !reduceMotion else { appeared = true; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.staggerDelay(4, base: DSMotion.sectionsOnPage)) {
+            appeared = true
+        }
     }
 
     // MARK: - Toggle Hidden
@@ -506,7 +516,7 @@ struct AdminTreeHealthView: View {
 
     /// صف بإطار صفوف المربّعات: الحرف الأول بإطار أيقونة الحقل (بلون المشكلة المختارة) +
     /// الاسم (Plex 13.5 عريض) + الرقم (Plex 12) + شارة الدور، وتحتها شارات المشاكل.
-    private func memberRow(member: FamilyMember, index: Int) -> some View {
+    private func memberRow(member: FamilyMember) -> some View {
         let tint = selectedFilter.color
         let displayName = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         let phone = member.phoneNumber ?? ""
@@ -557,8 +567,6 @@ struct AdminTreeHealthView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dsRowBox()
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared || reduceMotion ? 0 : 10)
         .accessibilityElement(children: .combine)
     }
 

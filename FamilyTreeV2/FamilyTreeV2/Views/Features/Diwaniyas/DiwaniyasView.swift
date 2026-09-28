@@ -4,6 +4,7 @@ import SwiftUI
 struct DiwaniyasView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var viewModel = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
@@ -60,19 +61,16 @@ struct DiwaniyasView: View {
                                         spacing: DS.Spacing.md
                                     ) {
                                         ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
+                                            // نفس الدخول المتتالي — والآن يحترم «تقليل الحركة» (تلاشٍ فقط)
                                             diwaniyaCard(for: diwaniya)
-                                                .opacity(appeared ? 1 : 0)
-                                                .offset(y: appeared ? 0 : 30)
-                                                .animation(DS.Anim.smooth.delay(Double(min(index, 6)) * 0.06), value: appeared)
+                                                .dsCardCascade(index, appeared: appeared)
                                         }
                                     }
                                 } else {
                                     LazyVStack(spacing: DS.Spacing.md) {
                                         ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
                                             diwaniyaCard(for: diwaniya)
-                                                .opacity(appeared ? 1 : 0)
-                                                .offset(y: appeared ? 0 : 30)
-                                                .animation(DS.Anim.smooth.delay(Double(min(index, 6)) * 0.06), value: appeared)
+                                                .dsCardCascade(index, appeared: appeared)
                                         }
                                     }
                                 }
@@ -190,7 +188,7 @@ struct DiwaniyasView: View {
             }
             .onChange(of: viewModel.diwaniyas.count) { _ in rebuildFilteredDiwaniyas() }
             .onChange(of: kindFilter) { _ in
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { rebuildFilteredDiwaniyas() }
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.4, dampingFraction: 0.85)) { rebuildFilteredDiwaniyas() }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .dsAlert(L10n.t("خطأ", "Error"), isPresented: .init(
@@ -254,7 +252,7 @@ struct DiwaniyasView: View {
     private func filterChip(_ k: DiwaniyaKind?, title: String, icon: String, count: Int, tint: Color) -> some View {
         let selected = kindFilter == k
         return Button {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) { kindFilter = k }
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.78)) { kindFilter = k }
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
             HStack(spacing: 5) {

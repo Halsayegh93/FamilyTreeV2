@@ -17,6 +17,9 @@ struct AdminBannedPhonesView: View {
     /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل «لا توجد أرقام محظورة» المضلِّلة
     /// (تبقى حتى جلب ناجح عبر «إعادة المحاولة»)
     @State private var lastFetchOffline = false
+    /// دخول صفوف الأرقام (نمط الأخبار والديوانيات) — مرة واحدة، بعد بطاقتها
+    @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// لون بلاطة «الأرقام المحظورة» في إعدادات النظام — رأس الصفحة يطابق البلاطة التي ضُغطت
     private let pageTint = DS.Color.error
@@ -202,10 +205,23 @@ struct AdminBannedPhonesView: View {
                           trailing: t("\(phones.count) رقم", phones.count == 1 ? "1 number" : "\(phones.count) numbers"),
                           index: 2) {
             AdaptiveLazyStack(spacing: DS.Spacing.sm, landscapeMinimum: 300) {
-                ForEach(phones) { banned in
+                ForEach(Array(phones.enumerated()), id: \.element.id) { index, banned in
                     bannedPhoneRow(banned)
+                        // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
+                        .dsCardCascade(index, appeared: appeared)
                 }
             }
+            .onAppear(perform: startRowsCascade)
+        }
+    }
+
+    /// الصفوف تدخل بعد بطاقتها (٢) — فيبقى التسلسل: الرأس ← البحث ← البطاقة ← صفوفها.
+    /// مرة واحدة؛ «تقليل الحركة»: تلاشٍ فوري بلا انتظار.
+    private func startRowsCascade() {
+        guard !appeared else { return }
+        guard !reduceMotion else { appeared = true; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.staggerDelay(3, base: DSMotion.sectionsOnPage)) {
+            appeared = true
         }
     }
 

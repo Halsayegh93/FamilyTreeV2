@@ -67,6 +67,11 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         isRead ?? false
     }
 
+    /// إعلان وفاة من دالة السيرفر `announce_death` (بثّ لكل الأعضاء)
+    var isDeathAnnouncement: Bool {
+        details?.type == "death_announcement"
+    }
+
     /// Whether this notification carries an actionable request the admin can approve
     var isActionableRequest: Bool {
         requestId != nil && requestType != nil
@@ -101,6 +106,16 @@ extension AppNotification {
     nonisolated struct NotificationDetails: Codable, Sendable, Equatable {
         let v: Int
         let changes: [ChangeEntry]
+        /// نوع خاص للإشعار (مثل «death_announcement») — بلا v/changes في تلك الحمولة
+        let type: String?
+        let memberId: String?
+        let newsId: String?
+
+        enum CodingKeys: String, CodingKey {
+            case v, changes, type
+            case memberId = "member_id"
+            case newsId = "news_id"
+        }
 
         nonisolated struct ChangeEntry: Codable, Sendable, Equatable, Identifiable {
             let field: String
@@ -113,6 +128,27 @@ extension AppNotification {
         init(changes: [ChangeEntry], v: Int = 1) {
             self.v = v
             self.changes = changes
+            self.type = nil
+            self.memberId = nil
+            self.newsId = nil
+        }
+
+        /// حمولة «ما الذي تغيّر» أو حمولة نوع خاص (إعلان وفاة) — الغائب يأخذ قيمة فارغة
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            type = try? c.decodeIfPresent(String.self, forKey: .type)
+            memberId = try? c.decodeIfPresent(String.self, forKey: .memberId)
+            newsId = try? c.decodeIfPresent(String.self, forKey: .newsId)
+            changes = (try? c.decodeIfPresent([ChangeEntry].self, forKey: .changes)) ?? []
+            if let version = try? c.decodeIfPresent(Int.self, forKey: .v) {
+                v = version
+            } else if type != nil {
+                v = 1
+            } else {
+                // لا v ولا نوع — شكل غير متوقّع (يبقى السلوك القديم: details = nil)
+                throw DecodingError.dataCorruptedError(forKey: .v, in: c,
+                                                       debugDescription: "unknown details payload")
+            }
         }
 
         /// Localized label for a field key (e.g., "birth_date" → "تاريخ الميلاد").

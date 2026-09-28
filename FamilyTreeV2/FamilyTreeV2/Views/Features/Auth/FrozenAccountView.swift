@@ -7,11 +7,11 @@ struct FrozenAccountView: View {
 
     @State private var iconScale: CGFloat = 0.5
     @State private var iconOpacity: Double = 0
-    @State private var textOpacity: Double = 0
     @State private var showContactSheet = false
     @State private var confirmDeletion = false
     @State private var deletingAccount = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — نلف المحتوى بـScrollView حتى لا يُقتص
     private var isLandscape: Bool { vSizeClass == .compact }
@@ -33,12 +33,10 @@ struct FrozenAccountView: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear {
-            withAnimation(DS.Anim.elastic.delay(0.2)) {
+            // الأيقونة أولاً («تقليل الحركة»: تلاشٍ قصير بلا تكبير)، ثم النص والأزرار تباعاً (dsStaggerIn)
+            withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.elastic.delay(0.2)) {
                 iconScale = 1.0
                 iconOpacity = 1.0
-            }
-            withAnimation(DS.Anim.smooth.delay(0.5)) {
-                textOpacity = 1.0
             }
         }
         .confirmationDialog(t("حذف الحساب وبياناته نهائياً؟", "Permanently delete your account and personal data?"), isPresented: $confirmDeletion, titleVisibility: .visible) {
@@ -73,7 +71,7 @@ struct FrozenAccountView: View {
                         .font(DS.Font.scaled(48, weight: .bold))
                         .foregroundStyle(DS.Color.warning)
                 }
-                .scaleEffect(iconScale)
+                .scaleEffect(reduceMotion ? 1 : iconScale)
                 .opacity(iconOpacity)
 
                 // العنوان والوصف
@@ -103,7 +101,7 @@ struct FrozenAccountView: View {
                         .padding(.top, DS.Spacing.sm)
                     }
                 }
-                .opacity(textOpacity)
+                .dsStaggerIn(0)
 
                 Spacer()
 
@@ -117,6 +115,7 @@ struct FrozenAccountView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+                .dsStaggerIn(1)
 
                 // زر التواصل مع الإدارة
                 DSSecondaryButton(
@@ -126,6 +125,7 @@ struct FrozenAccountView: View {
                     showContactSheet = true
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+                .dsStaggerIn(2)
 
                 if !authVM.isOwner {
                     Button(role: .destructive) { confirmDeletion = true } label: {
@@ -135,6 +135,7 @@ struct FrozenAccountView: View {
                         }
                     }
                     .disabled(deletingAccount)
+                    .dsStaggerIn(3)
                     if let error = authVM.deleteAccountError {
                         Text(error).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
                     }
@@ -151,6 +152,9 @@ struct FrozenAccountView: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xxxxl)
+                .dsStaggerIn(authVM.isOwner ? 3 : 4)
             }
+            // بعد الأيقونة: النص ← الأزرار واحداً بعد الآخر (نفس «بعد الرأس» في المربّعات)
+            .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
     }
 }

@@ -458,7 +458,8 @@ struct ProjectContactTiles: View {
     }
 
     /// «+965 » المبدئي في واتساب لا يُعدّ حساباً
-    static func isFilled(_ v: String) -> Bool {
+    /// (فحص نصّي خالص — `nonisolated` حتى يُمرَّر كدالة لـ`filter` بلا تحذير عزل)
+    nonisolated static func isFilled(_ v: String) -> Bool {
         let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
         return !t.isEmpty && t != "+965"
     }
@@ -680,31 +681,53 @@ struct ProjectDetailView: View {
     /// الوضع الأفقي — عمودان
     private var isLandscape: Bool { vSizeClass == .compact }
 
+    /// رقم كل قسم في تسلسل الدخول — ٠، ١، ٢… بالترتيب الظاهر، بلا فجوة لقسم غائب
+    private var sectionOrder: (description: Int, photos: Int, social: Int, delete: Int) {
+        var next = 1   // ٠ = بطاقة المشروع
+        func take(_ present: Bool) -> Int {
+            defer { if present { next += 1 } }
+            return next
+        }
+        let description = take(!(project.description ?? "").isEmpty)
+        let photos = take(!project.imageUrls.isEmpty)
+        let social = take(project.hasSocialLinks)
+        let delete = take(isOwnerOrAdmin)
+        return (description, photos, social, delete)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 DS.Color.background.ignoresSafeArea()
                 
                 ScrollView(showsIndicators: false) {
+                    // الأقسام تدخل تباعاً بالترتيب الظاهر (dsStaggerIn): البطاقة ← النبذة ← الصور
+                    // ← الحسابات ← الحذف — «تقليل الحركة»: تلاشٍ فقط
+                    let order = sectionOrder
                     Group {
                         if isLandscape {
                             // الوضع الأفقي: الشعار والعنوان يمين، وباقي التفاصيل يسار
                             HStack(alignment: .top, spacing: DS.Spacing.lg) {
                                 projectHeader
                                     .frame(maxWidth: .infinity)
+                                    .dsStaggerIn(0)
 
                                 VStack(spacing: DS.Spacing.md) {
                                     if let desc = project.description, !desc.isEmpty {
                                         descriptionSection(desc)
+                                            .dsStaggerIn(order.description)
                                     }
                                     if !project.imageUrls.isEmpty {
                                         ProjectPhotosMosaic(urls: project.imageUrls)
+                                            .dsStaggerIn(order.photos)
                                     }
                                     if project.hasSocialLinks {
                                         socialLinksSection
+                                            .dsStaggerIn(order.social)
                                     }
                                     if isOwnerOrAdmin {
                                         deleteSection
+                                            .dsStaggerIn(order.delete)
                                     }
                                 }
                                 .frame(maxWidth: .infinity)
@@ -713,25 +736,30 @@ struct ProjectDetailView: View {
                     VStack(spacing: DS.Spacing.md) {
                         // Logo + Title
                         projectHeader
+                            .dsStaggerIn(0)
                         
                         // Description
                         if let desc = project.description, !desc.isEmpty {
                             descriptionSection(desc)
+                                .dsStaggerIn(order.description)
                         }
 
                         // صور المشروع
                         if !project.imageUrls.isEmpty {
                             ProjectPhotosMosaic(urls: project.imageUrls)
+                                .dsStaggerIn(order.photos)
                         }
                         
                         // Social Media Links
                         if project.hasSocialLinks {
                             socialLinksSection
+                                .dsStaggerIn(order.social)
                         }
                         
                         // Delete button for owner/admin
                         if isOwnerOrAdmin {
                             deleteSection
+                                .dsStaggerIn(order.delete)
                         }
                     }
                         }
@@ -863,6 +891,9 @@ struct ProjectDetailView: View {
                 .strokeBorder(DS.Color.surface, lineWidth: 4)
         )
         .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 4)
+        // الشعار يتفتّح بعد صعود بطاقته بقليل — نفس أيقونات أقسام المربّعات («تقليل الحركة»: تلاشٍ)
+        .modifier(DSIconPop(delay: DSMotion.staggerDelay(0, base: DSMotion.sectionsOnPage) + 0.08,
+                            fromScale: 0.6, fromAngle: 0))
     }
 
     /// صاحب المشروع — كبسولة تحت الاسم بدل بطاقة مستقلّة
@@ -1229,7 +1260,7 @@ struct EditProjectView: View {
     }
 
     @State private var accountsBoxOpen = false
-    private let tint = DS.Color.composerProject
+    private let tint = DS.Color.tileProjects
 
     var body: some View {
         // نفس مربّع «مشروع جديد» (طلب المالك): تصميم موحّد للإضافة والتعديل

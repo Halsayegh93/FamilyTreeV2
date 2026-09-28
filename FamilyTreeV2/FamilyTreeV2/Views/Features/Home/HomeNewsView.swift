@@ -38,6 +38,11 @@ struct HomeNewsView: View {
     @State private var newsSearchText = ""
     @State private var debouncedNewsSearch = ""
     @State private var newsSearchTask: Task<Void, Never>?
+    /// دخول بطاقات الرئيسية تباعاً مرة عند ظهورها — نمط الأخبار والديوانيات
+    /// (طلب المالك ٢٠٢٦-٠٩-٢٧: «طبّقه على البقية»)
+    @State private var appeared = false
+    /// دخول بطاقات صفحة الأخبار — يُصفَّر قبل كل فتح للصفحة فتتوالى البطاقات مع كل دخول
+    @State private var newsAppeared = false
 
     private enum HomeSubPage: Hashable {
         case archive, projects, contact, news
@@ -64,9 +69,14 @@ struct HomeNewsView: View {
 
                         ScrollView(showsIndicators: false) {
                             bentoSection
-                                // بلا أنيميشن ظهور — المحتوى يثبت مكانه بلا انزلاق
+                                // البطاقات تتوالى مرة عند الظهور (الترحيب ← المربّعات ← الأخبار) —
+                                // إزاحة وشفافية عند الرسم فقط، فلا يتغيّر القياس ولا التخطيط
                                 .padding(.top, DS.Spacing.md)
                                 .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
+                                .onAppear {
+                                    guard !appeared else { return }
+                                    appeared = true
+                                }
                         }
                         // القياس خارج التمرير: كان GeometryReader داخل ScrollView يقيس
                         // المحتوى الذي تحدّده مقاساتُه نفسها، فتنشأ حلقة إعادة قياس
@@ -199,6 +209,8 @@ struct HomeNewsView: View {
                     newsFeedSection
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
+                        // بطاقات الأخبار تتوالى مع دخول الصفحة (نمط الأخبار والديوانيات)
+                        .onAppear { newsAppeared = true }
                 }
                 .refreshable { await refreshNews(notifyIfNew: true, force: true) }
             }
@@ -421,6 +433,8 @@ struct HomeNewsView: View {
 
     private var greetingRow: some View {
         HomeGreetingRow(onOpenProfile: { selectedTab = 3 }, onLongPress: debugLongPress)
+            // أول البطاقات دخولاً
+            .dsCardCascade(0, appeared: appeared)
     }
 
     // MARK: - Primary Tiles Row — الشجرة + الديوانيات
@@ -436,6 +450,7 @@ struct HomeNewsView: View {
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
+                cascade: 1,
                 action: { selectedTab = 1 }
             )
             if appSettingsVM.settings.diwaniyasEnabled ?? true {
@@ -447,6 +462,7 @@ struct HomeNewsView: View {
                     imageURL: nil,
                     count: nil,
                     height: tileHeight,
+                    cascade: 2,
                     action: { selectedTab = 2 }
                 )
             }
@@ -474,6 +490,7 @@ struct HomeNewsView: View {
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
+                cascade: 3,
                 action: { activeSubPage = .archive }
             )
             if projectsOn {
@@ -485,6 +502,7 @@ struct HomeNewsView: View {
                     imageURL: projectImageURL,
                     count: projectsVM.projects.count,
                     height: tileHeight,
+                    cascade: 4,
                     action: { activeSubPage = .projects }
                 )
             }
@@ -496,6 +514,7 @@ struct HomeNewsView: View {
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
+                cascade: 5,
                 action: { showingContactForm = true }
             )
         }
@@ -510,6 +529,8 @@ struct HomeNewsView: View {
         imageURL: String?,
         count: Int?,
         height: CGFloat? = nil,
+        /// ترتيب المربّع في دخول الرئيسية (بعد الترحيب ٠، وقبل الأخبار ٦)
+        cascade: Int,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: {
@@ -580,6 +601,8 @@ struct HomeNewsView: View {
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(title)
+        // المربّعات تتوالى واحداً بعد الآخر مع بقية بطاقات الرئيسية
+        .dsCardCascade(cascade, appeared: appeared)
     }
 
     /// خلفية المربّع — صورة من رابط أو gradient بلون الفئة مع زخارف.
@@ -719,7 +742,13 @@ struct HomeNewsView: View {
     /// مربع الأخبار — بنية مستقلة (HomeNewsPreviewCard) وليست جسماً داخل هذه
     /// الصفحة، حتى يبقى عمق نوع الواجهة منخفضاً.
     private var newsBentoCard: some View {
-        HomeNewsPreviewCard { activeSubPage = .news }
+        HomeNewsPreviewCard {
+            // تصفير دخول بطاقات الصفحة قبل فتحها (الصفحة غير ظاهرة بعد) — فتتوالى مع كل فتح
+            if activeSubPage != .news { newsAppeared = false }
+            activeSubPage = .news
+        }
+        // آخر بطاقات الرئيسية دخولاً
+        .dsCardCascade(6, appeared: appeared)
     }
 
     // MARK: - News Feed Section
@@ -734,6 +763,7 @@ struct HomeNewsView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
+                .dsCardCascade(0, appeared: newsAppeared)
             }
             if newsVM.isLoadingNews && newsVM.allNews.isEmpty {
                 newsLoadingSkeleton(count: 3)
@@ -801,8 +831,10 @@ struct HomeNewsView: View {
 
     private func newsLoadingSkeleton(count: Int) -> some View {
         VStack(spacing: DS.Spacing.md) {
-            ForEach(0..<count, id: \.self) { _ in
+            ForEach(0..<count, id: \.self) { i in
+                // حالة التحميل تدخل بنفس تتالي البطاقات
                 newsCardSkeleton
+                    .dsCardCascade(i, appeared: newsAppeared)
             }
         }
     }
@@ -843,7 +875,7 @@ struct HomeNewsView: View {
                     alignment: .center,
                     spacing: DS.Spacing.lg
                 ) {
-                    ForEach(filteredNews) { news in
+                    ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
                         newsCard(for: news)
                             .newsSwipeActions(
                                         id: news.id,
@@ -853,12 +885,13 @@ struct HomeNewsView: View {
                                         onDelete: { postToDelete = news },
                                         onReport: { postToReport = news }
                                     )
+                            .dsCardCascade(index, appeared: newsAppeared)
                     }
                 }
             } else {
                 // قائمة واحدة بلا عناوين «اليوم / أمس / … / أقدم» ولا عدّاد (طلب المالك)
                 LazyVStack(spacing: DS.Spacing.md) {
-                    ForEach(filteredNews) { news in
+                    ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
                         newsCard(for: news)
                             .newsSwipeActions(
                                 id: news.id,
@@ -868,6 +901,8 @@ struct HomeNewsView: View {
                                 onDelete: { postToDelete = news },
                                 onReport: { postToReport = news }
                             )
+                            // أول ٧ بطاقات تتوالى مع دخول الصفحة، وما يُبنى بالتمرير يظهر مباشرة
+                            .dsCardCascade(index, appeared: newsAppeared)
                     }
                 }
             }
@@ -975,6 +1010,8 @@ struct HomeNewsView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.sm)
+        // الحالة الفارغة تدخل مثل البطاقات
+        .dsCardCascade(0, appeared: newsAppeared)
     }
 
     // MARK: - Helpers

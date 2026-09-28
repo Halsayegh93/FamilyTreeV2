@@ -39,7 +39,9 @@ struct SettingsView: View {
                     // كل سطر فيها يعرض قيمته الحالية — تشوف إعداداتك بدون ما تفتحها.
                     profileCard
 
-                    // مربّعات بدل القائمة (طلب المالك) — كل مربّع يعرض قيمته الحالية
+                    // مربّعات بدل القائمة (طلب المالك) — كل مربّع يعرض قيمته الحالية.
+                    // الحركة (طلب المالك ٢٠٢٦-٠٩-٢٧): العنوان ثم المربّعات واحداً بعد الآخر
+                    // (بدل دخول الصف كاملاً دفعة واحدة) — نفس إيقاع المربّعات. «تقليل الحركة»: تلاشٍ فقط
                     sectionTitle(t("التفضيلات", "Preferences"), icon: "slider.horizontal.3")
                         .dsStaggerIn(1)
                     HStack(spacing: DS.Spacing.md) {
@@ -48,36 +50,41 @@ struct SettingsView: View {
                                       title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
                                       value: notificationsEnabled ? t("مفعّلة", "On") : t("موقوفة", "Off"))
                         }
+                        .dsStaggerIn(2)
                         Button { showAppearance = true } label: {
                             valueTile(icon: "paintbrush.fill", color: DS.Color.accent,
                                       title: t("المظهر واللغة", "Appearance & Language"),
                                       value: "\(appearanceLabel) · \(langManager.selectedLanguage == "ar" ? "العربية" : "English")")
                         }
+                        .dsStaggerIn(3)
                         Button { showLinkedDevices = true } label: {
                             valueTile(icon: "iphone.gen3", color: DS.Color.info,
                                       title: t("الأجهزة المرتبطة", "Linked Devices"),
-                                      value: t("\(notificationVM.linkedDevices.count) جهاز", "\(notificationVM.linkedDevices.count) devices"))
+                                      value: t("\(notificationVM.linkedDevices.count) جهاز", "\(notificationVM.linkedDevices.count) devices"),
+                                      // العدد يصل بعد الجلب — يتبدّل بلفّة أرقام بدل القفز
+                                      liveNumber: true)
                         }
+                        .dsStaggerIn(4)
                     }
                     .buttonStyle(DSScaleButtonStyle())
-                    .dsStaggerIn(2)
 
                     sectionTitle(t("عن التطبيق", "About"), icon: "info.circle.fill")
-                        .dsStaggerIn(3)
+                        .dsStaggerIn(5)
                     HStack(spacing: DS.Spacing.md) {
                         Button { showAbout = true } label: {
                             valueTile(icon: "app.badge.fill", color: DS.Color.secondary,
                                       title: t("عن التطبيق", "About"),
                                       value: AppVersion.string)
                         }
+                        .dsStaggerIn(6)
                         Button { showTerms = true } label: {
                             valueTile(icon: "doc.text.fill", color: DS.Color.primary,
                                       title: t("الخصوصية والشروط", "Privacy & Terms"),
                                       value: t("كيف نحمي بياناتك", "How we protect you"))
                         }
+                        .dsStaggerIn(7)
                     }
                     .buttonStyle(DSScaleButtonStyle())
-                    .dsStaggerIn(4)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.md)
@@ -107,7 +114,8 @@ struct SettingsView: View {
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.sm)
                 .background(DS.Color.background)
-                .dsStaggerIn(5)
+                // الشريط السفلي آخر التسلسل (بعد آخر مربّع)
+                .dsStaggerIn(8)
             }
         }
         .navigationTitle(t("الإعدادات", "Settings"))
@@ -372,7 +380,9 @@ struct SettingsView: View {
     }
 
     /// مربّع إعداد (طلب المالك): أيقونة ملوّنة، العنوان، والقيمة الحالية تحته
-    private func valueTile(icon: String, color: Color, title: String, value: String) -> some View {
+    /// `liveNumber`: قيمة رقمية تصل بعد الظهور (مثل عدد الأجهزة) — تتبدّل بلفّة أرقام
+    private func valueTile(icon: String, color: Color, title: String, value: String,
+                           liveNumber: Bool = false) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(DS.Font.scaled(16, weight: .semibold))
@@ -394,6 +404,7 @@ struct SettingsView: View {
                 .foregroundColor(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
+                .modifier(SettingsLiveNumber(active: liveNumber, value: value))
         }
         .padding(.horizontal, DS.Spacing.xs)
         .frame(maxWidth: .infinity)
@@ -487,6 +498,24 @@ struct SettingsView: View {
             .font(DS.Font.caption2)
             .foregroundColor(DS.Color.textTertiary)
             .frame(maxWidth: .infinity)
+    }
+}
+
+/// قيمة مربّع رقمية تصل بعد ظهور الصفحة (عدد الأجهزة): تتبدّل بلفّة أرقام بدل القفز.
+/// بقية المربّعات كما هي تماماً. «تقليل الحركة»: تتبدّل مباشرة.
+private struct SettingsLiveNumber: ViewModifier {
+    let active: Bool
+    let value: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if active {
+            content
+                .contentTransition(.numericText())
+                .animation(reduceMotion ? nil : DS.Anim.smooth, value: value)
+        } else {
+            content
+        }
     }
 }
 

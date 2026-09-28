@@ -29,6 +29,9 @@ struct NewsCommentsSheet: View {
     @State private var contentH: CGFloat = 0
     @State private var footerH: CGFloat = 0
     @FocusState private var inputFocused: Bool
+    /// دخول التعليقات (نمط الأخبار والديوانيات) — مرة حين تظهر القائمة
+    @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let tint = DS.Color.actionNavy
 
@@ -155,9 +158,19 @@ struct NewsCommentsSheet: View {
             VStack(spacing: DS.Spacing.sm) {
                 ForEach(Array(postComments.enumerated()), id: \.element.id) { idx, comment in
                     commentCard(comment)
-                        .dsStaggerIn(min(idx, 6))
+                        // نمط الأخبار والديوانيات: تصعد وتظهر تباعاً (أول ٧، والباقي مع السابع)
+                        .dsCardCascade(idx, appeared: appeared)
+                        // تعليق جديد بعد الفتح (أو حذف) — صعود خفيف مع تلاشٍ، و«تقليل الحركة»: تلاشٍ فقط
+                        .transition(reduceMotion
+                                    ? .opacity
+                                    : .asymmetric(insertion: .opacity.combined(with: .offset(y: DSMotion.rise)),
+                                                  removal: .opacity))
                 }
             }
+            .animation(reduceMotion ? DSMotion.fade : DS.Anim.smooth, value: postComments.map(\.id))
+            // مرة لكل ظهور للقائمة (بعد التحميل) — وتعود للبداية إن اختفت ثم ظهرت
+            .onAppear { appeared = true }
+            .onDisappear { appeared = false }
         } else {
             VStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "bubble.left.and.bubble.right.fill")

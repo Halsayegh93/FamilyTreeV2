@@ -27,6 +27,8 @@ struct AdminModeratorsView: View {
     @State private var hasLoaded = false
     /// جلب جارٍ (الفتح أو «إعادة المحاولة»)
     @State private var isFetching = false
+    /// دخول صفوف الأعضاء (نمط الأخبار والديوانيات) — مرة واحدة، بعد عنوان بطاقتها وخلفيتها
+    @State private var rowsAppeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// لون بلاطة «فريق الإدارة» في إعدادات النظام — رأس الصفحة يطابق البلاطة التي ضُغطت
@@ -205,7 +207,9 @@ struct AdminModeratorsView: View {
         } else {
             let groups = roleGroups(team)
             ForEach(Array(groups.enumerated()), id: \.element.id) { offset, group in
-                groupRows(group, index: offset + 1)
+                // رقم أول صف في البطاقة — الصفوف تتوالى عبر البطاقات بالترتيب الظاهر
+                groupRows(group, index: offset + 1,
+                          firstRow: groups.prefix(offset).reduce(0) { $0 + $1.members.count })
             }
 
             // قسم الصلاحيات
@@ -279,21 +283,24 @@ struct AdminModeratorsView: View {
     /// بطاقة دور واحدة كصفوف في القائمة: رأس البطاقة ثم أعضاؤها — كل صف يرسم جزءه من البطاقة
     /// (أعلى / وسط / أسفل) حتى يبقى السحب على صف العضو نفسه كما كان
     @ViewBuilder
-    private func groupRows(_ group: RoleGroup, index: Int) -> some View {
+    private func groupRows(_ group: RoleGroup, index: Int, firstRow: Int) -> some View {
         SysSectionTitle(title: group.title,
                         icon: group.icon,
                         tint: group.tint,
                         trailing: membersCountText(group.members.count))
             .dsStaggerIn(index)
+            // العنوان يظهر مع الصفوف (بعد التحميل) — فتبدأ الصفوف بعده
+            .onAppear(perform: startRowsCascade)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: cardGap + DS.Spacing.md, leading: cardInset,
                                       bottom: rowHalfGap, trailing: cardInset))
             .listRowBackground(cardSegment(.top, index: index))
 
-        ForEach(group.members) { member in
+        ForEach(Array(group.members.enumerated()), id: \.element.id) { i, member in
             let isLast = member.id == group.members.last?.id
             moderatorRow(member: member)
-                .dsStaggerIn(index)
+                // نمط الأخبار والديوانيات: أول ٧ صفوف تصعد تباعاً (عبر البطاقات)، والباقي مع السابع
+                .dsCardCascade(firstRow + i, appeared: rowsAppeared)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: rowHalfGap, leading: cardInset,
                                           bottom: isLast ? DS.Spacing.md : rowHalfGap, trailing: cardInset))
@@ -314,6 +321,16 @@ struct AdminModeratorsView: View {
 
     private func membersCountText(_ n: Int) -> String {
         L10n.t("\(n) عضو", n == 1 ? "1 member" : "\(n) members")
+    }
+
+    /// الصفوف تبدأ بعد عنوان أول بطاقة وخلفيتها (٢)، فيبقى كل صف بعد عنوان بطاقته وخلفيتها:
+    /// الرأس ← عنوان البطاقة ← صفوفها. مرة واحدة؛ «تقليل الحركة»: تلاشٍ فوري بلا انتظار.
+    private func startRowsCascade() {
+        guard !rowsAppeared else { return }
+        guard !reduceMotion else { rowsAppeared = true; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.staggerDelay(2, base: DSMotion.sectionsOnPage)) {
+            rowsAppeared = true
+        }
     }
 
     // MARK: - Moderator Row

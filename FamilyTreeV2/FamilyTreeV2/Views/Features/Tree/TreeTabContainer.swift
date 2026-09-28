@@ -7,6 +7,11 @@ struct TreeTabContainer: View {
     @Binding var selectedTab: Int
     /// تبويب الشجرة: 0 = شجرة العائلة (كلاسيكية)، 1 = النساء.
     @State private var treeTab = 0
+    /// دخول أدوات الشجرة (شريط الأدوات، زر التحديث، الحالة الفارغة) مرة مع أول ظهور
+    /// للتبويب — نمط الأخبار والديوانيات (طلب المالك ٢٠٢٦-٠٩-٢٧). يعيش هنا لا في الشجرة:
+    /// التبديل «العائلة/النساء» يبني الشجرة من جديد، فلو عاش فيها لأعاد الدخول مع كل تبديل
+    /// واختفى الشريط الذي ضُغط عليه لحظة — التبديل يبقى تلاشياً متقاطعاً كما هو.
+    @State private var chromeAppeared = false
 
     var body: some View {
         Group {
@@ -16,6 +21,23 @@ struct TreeTabContainer: View {
                 TreeView(selectedTab: $selectedTab, treeTab: $treeTab)
             }
         }
+        .environment(\.treeChromeAppeared, chromeAppeared)
+        .onAppear {
+            guard !chromeAppeared else { return }
+            chromeAppeared = true
+        }
+    }
+}
+
+/// هل دخلت أدوات الشجرة؟ `true` افتراضياً — الشجرة خارج التبويب تظهر أدواتها مباشرة بلا حركة
+private struct TreeChromeAppearedKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var treeChromeAppeared: Bool {
+        get { self[TreeChromeAppearedKey.self] }
+        set { self[TreeChromeAppearedKey.self] = newValue }
     }
 }
 

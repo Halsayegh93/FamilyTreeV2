@@ -77,9 +77,24 @@ private struct NotificationKindStyle {
         styles[kind] ?? fallback
     }
 
+    /// إعلان وفاة: بثّ «admin_broadcast» يحمل `details.type` — يُعرض بشكل الوفاة
+    /// الهادئ بدل «إعلان من الإدارة»
+    private static let deathAnnouncement = NotificationKindStyle(
+        icon: "heart.fill", gradient: DS.Color.gradientAccent, color: DS.Color.newsDeath,
+        labelAr: "وفاة", labelEn: "Obituary"
+    )
+
+    static func style(for notification: AppNotification) -> NotificationKindStyle {
+        notification.isDeathAnnouncement ? deathAnnouncement : style(for: notification.kind)
+    }
+
     /// لون رأس مربّع التفاصيل — درجات غامقة تبقى الكتابة البيضاء واضحة عليها في
     /// الوضعين (ألوان الأنواع نفسها تفتح في الداكن): الحذف/الرفض أحمر، الذهبي
     /// ذهبي غامق، الأخضر أخضر غامق، الوفاة رمادي، والباقي كحلي
+    static func headerTint(for notification: AppNotification) -> Color {
+        notification.isDeathAnnouncement ? DS.Color.textSecondary : headerTint(for: notification.kind)
+    }
+
     static func headerTint(for kind: String) -> Color {
         if kind == "deceased_report" { return DS.Color.textSecondary }
         let c = style(for: kind).color
@@ -267,6 +282,7 @@ struct NotificationsCenterView: View {
                                  isLoading: true)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.md)
+                        .dsStaggerIn(0)   // بطاقة الحالة تصعد وتظهر (تلاشٍ فقط مع «تقليل الحركة»)
                     Spacer(minLength: 0)
                 } else if filteredNotifications.isEmpty {
                     emptyState
@@ -294,12 +310,6 @@ struct NotificationsCenterView: View {
                 selectedNotification = target
             }
             notificationVM.pendingJoinDeepLinkRequestId = nil
-        }
-        .onAppear {
-            if reduceMotion { appeared = true; return }
-            withAnimation(DS.Anim.smooth.delay(0.15)) {
-                appeared = true
-            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         // تفاصيل الإشعار مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك) — للعرض فقط،
@@ -644,18 +654,33 @@ struct NotificationsCenterView: View {
 
     // MARK: - Notifications List
 
+    /// ترتيب دخول القائمة (نمط الأخبار والديوانيات): عنوان كل يوم ثم صفوفه، بالترتيب الظاهر —
+    /// رقم أول عنصر (العنوان) في كل قسم؛ `dsCardCascade` يدرّج أول ٧ فقط والباقي مع السابع
+    private func cascadeStarts(_ groups: [(String, [AppNotification])]) -> [String: Int] {
+        var starts: [String: Int] = [:]
+        var next = 0
+        for (section, items) in groups {
+            starts[section] = next
+            next += items.count + 1
+        }
+        return starts
+    }
+
     private var notificationsList: some View {
-        List {
-            ForEach(groupedNotifications, id: \.0) { section, items in
+        let groups = groupedNotifications
+        let starts = cascadeStarts(groups)
+        return List {
+            ForEach(groups, id: \.0) { section, items in
+                let start = starts[section] ?? 0
                 Section {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        let iconInfo = NotificationKindStyle.style(for: item.kind)
+                        let iconInfo = NotificationKindStyle.style(for: item)
                         let isUnread = !item.read
 
                         notificationRow(item: item, iconInfo: iconInfo, isUnread: isUnread)
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared || reduceMotion ? 0 : 20)
-                            .animation(reduceMotion ? nil : DS.Anim.smooth.delay(Double(min(index, 5)) * 0.04), value: appeared)
+                            // نمط الأخبار والديوانيات: تصعد وتظهر واحدة بعد الأخرى مرة عند الظهور
+                            // («تقليل الحركة»: تلاشٍ فقط) — والصفوف التي تُبنى بالتمرير تظهر مباشرة
+                            .dsCardCascade(start + 1 + index, appeared: appeared)
                             .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 4, trailing: DS.Spacing.lg))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -696,6 +721,8 @@ struct NotificationsCenterView: View {
                     .padding(.vertical, 3)
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isHeader)
+                    // عنوان اليوم يدخل قبل صفوفه مباشرة
+                    .dsCardCascade(start, appeared: appeared)
                     .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 2, trailing: DS.Spacing.lg))
                 }
             }
@@ -705,6 +732,9 @@ struct NotificationsCenterView: View {
         .refreshable {
             await notificationVM.fetchNotifications(force: true)
         }
+        // مرة واحدة حين تظهر القائمة (بعد التحميل إن لم تكن محمّلة) — نفس الأخبار والديوانيات؛
+        // بعد أول تخطيط (خلايا `List` تُبنى فيه) حتى تبدأ أول الصفوف مخفية ثم تصعد
+        .onAppear { DispatchQueue.main.async { appeared = true } }
     }
 
     // MARK: - Notification Row (صف موحّد: أيقونة النوع + العنوان والوقت + النص + شارات)
@@ -848,6 +878,7 @@ struct NotificationsCenterView: View {
             )
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.md)
+            .dsStaggerIn(0)   // بطاقة الحالة تصعد وتظهر (تلاشٍ فقط مع «تقليل الحركة»)
             Spacer(minLength: 0)
         }
     }
@@ -859,13 +890,13 @@ struct NotificationsCenterView: View {
     /// للقراءة فقط كما كان: الموافقة والرفض والمراجعة من أقسام الإدارة المختصّة،
     /// والحذف من قائمة الإشعار في القائمة (طلب المالك).
     private func notificationDetailSheet(_ notification: AppNotification) -> some View {
-        let iconInfo = NotificationKindStyle.style(for: notification.kind)
+        let iconInfo = NotificationKindStyle.style(for: notification)
 
         return DSComposer(
             title: iconInfo.label,
             subtitle: relativeTime(notification.createdDate),
             icon: iconInfo.icon,
-            tint: NotificationKindStyle.headerTint(for: notification.kind),
+            tint: NotificationKindStyle.headerTint(for: notification),
             actionTitle: L10n.t("تعليم كمقروء", "Mark as Read"),
             actionIcon: "envelope.open",
             showsAction: !notification.read,

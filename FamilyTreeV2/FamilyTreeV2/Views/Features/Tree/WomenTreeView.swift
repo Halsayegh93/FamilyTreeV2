@@ -30,6 +30,8 @@ struct WomenTreeView: View {
                             .font(DS.Font.callout)
                             .foregroundColor(DS.Color.textSecondary)
                     }
+                    // الحالة الفارغة تدخل بتلاشٍ وصعود خفيف — «تقليل الحركة»: تلاشٍ فقط
+                    .dsStaggerIn(0)
                 }
             } else {
                 VStack(spacing: 0) {
@@ -139,6 +141,8 @@ struct WomenTreeView: View {
 private struct WomenLoadingView: View {
     @State private var pulse = false
     private let rose = DS.Color.female
+    /// «تقليل الحركة»: بلا نبض ولا تكبير — الهالة والنقاط ثابتة ظاهرة
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -148,8 +152,8 @@ private struct WomenLoadingView: View {
                 ZStack {
                     Circle().fill(rose.opacity(0.15))
                         .frame(width: 110, height: 110)
-                        .scaleEffect(pulse ? 1.15 : 0.85)
-                        .opacity(pulse ? 0.3 : 0.7)
+                        .scaleEffect(reduceMotion ? 1 : (pulse ? 1.15 : 0.85))
+                        .opacity(reduceMotion ? 0.5 : (pulse ? 0.3 : 0.7))
                     Circle().fill(DS.Color.gradientPrimary)
                         .frame(width: 76, height: 76)
                         .overlay(Image(systemName: "person.2.fill")
@@ -172,14 +176,19 @@ private struct WomenLoadingView: View {
                     ForEach(0..<3, id: \.self) { i in
                         Circle().fill(DS.Color.primary)
                             .frame(width: 9, height: 9)
-                            .scaleEffect(pulse ? 1.0 : 0.5)
-                            .opacity(pulse ? 1 : 0.4)
-                            .animation(.easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.18), value: pulse)
+                            .scaleEffect(pulse || reduceMotion ? 1.0 : 0.5)
+                            .opacity(pulse || reduceMotion ? 1 : 0.4)
+                            .animation(reduceMotion ? nil
+                                                    : .easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.18),
+                                       value: pulse)
                     }
                 }
             }
+            // حالة التحميل تدخل بتلاشٍ وصعود خفيف (نفس دخول الأقسام) — الخلفية ثابتة
+            .dsStaggerIn(0)
         }
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true }
         }
     }
@@ -1470,14 +1479,23 @@ private struct WomanDetailSheet: View {
 
     private func toggleDeceased() {
         busy = true
+        let becomingDeceased = !(woman.isDeceased == true)
+        let name = woman.fullName.isEmpty ? woman.firstName : woman.fullName
         Task {
-            try? await WomenStore.update(id: woman.id,
-                                         fullName: woman.fullName.isEmpty ? woman.firstName : woman.fullName,
-                                         isDeceased: !(woman.isDeceased == true),
+            let saved = (try? await WomenStore.update(id: woman.id,
+                                         fullName: name,
+                                         isDeceased: becomingDeceased,
                                          deathDate: woman.deathDate, birthDate: woman.birthDate,
-                                         gender: woman.gender, isHidden: woman.isHiddenFromTree)
+                                         gender: woman.gender, isHidden: woman.isHiddenFromTree)) != nil
             await onChanged?()
             await MainActor.run { busy = false; dismiss() }
+            // وفاة امرأة سُجّلت الآن → مربّع «إعلان وفاة» بصيغة المؤنث
+            // (الرجال المنعكسون هنا تُسجَّل وفاتهم من شجرة الرجال)
+            if saved, becomingDeceased, woman.isFemale {
+                await DeathAnnouncementPresenter.offer(
+                    DeathAnnouncementTarget(id: woman.id, name: name, isFemale: true),
+                    canAnnounce: canEdit)
+            }
         }
     }
 

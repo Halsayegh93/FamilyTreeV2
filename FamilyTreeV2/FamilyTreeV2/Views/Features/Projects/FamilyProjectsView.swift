@@ -23,8 +23,11 @@ struct FamilyProjectsView: View {
     @State private var projectToReport: Project? = nil
     @State private var reportReason = ""
     @State private var reportSent = false
+    /// دخول البطاقات مرة واحدة عند ظهور الشبكة (نمط الأخبار والديوانيات)
+    @State private var appeared = false
 
     @Environment(\.verticalSizeClass) private var vSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// الوضع الأفقي — أعمدة أكثر لاستغلال العرض
     private var isLandscape: Bool { vSizeClass == .compact }
 
@@ -220,11 +223,12 @@ struct FamilyProjectsView: View {
         } else if currentItems.isEmpty {
             Spacer()
             emptyStateView
+                .dsStaggerIn(0)   // الحالة الفارغة تصعد وتظهر (تلاشٍ فقط مع «تقليل الحركة»)
             Spacer()
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVGrid(columns: gridColumns, spacing: DS.Spacing.md) {
-                    ForEach(currentItems) { project in
+                    ForEach(Array(currentItems.enumerated()), id: \.element.id) { index, project in
                         Button {
                             if selectionMode {
                                 toggleSelection(project.id)
@@ -257,10 +261,13 @@ struct FamilyProjectsView: View {
                                 projectActionsMenu(for: project)
                             }
                         }
+                        // نمط الأخبار والديوانيات: البطاقات تصعد وتظهر تباعاً (أول ٧) مرة عند الظهور
+                        .dsCardCascade(index, appeared: appeared)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xxxxl)
+                .onAppear { appeared = true }
             }
             .refreshable { await refreshAll() }
         }
@@ -378,7 +385,11 @@ struct FamilyProjectsView: View {
             if pendingCount > 0 || filter == .pending {
                 let on = filter == .pending
                 Button {
-                    withAnimation(DS.Anim.snappy) { filter = on ? .approved : .pending }
+                    // تبديل القائمة بنابض هادئ مثل فلتر الديوانيات — «تقليل الحركة»: تلاشٍ قصير
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.15)
+                                               : .spring(response: 0.4, dampingFraction: 0.85)) {
+                        filter = on ? .approved : .pending
+                    }
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "clock.fill")
@@ -687,7 +698,7 @@ struct AddProjectView: View {
     }
 
     @State private var accountsBoxOpen = false
-    private let tint = DS.Color.composerProject
+    private let tint = DS.Color.tileProjects
 
     private var filledAccounts: Int {
         [phoneNumber, whatsappNumber, instagramUrl, twitterUrl, websiteUrl, locationUrl]

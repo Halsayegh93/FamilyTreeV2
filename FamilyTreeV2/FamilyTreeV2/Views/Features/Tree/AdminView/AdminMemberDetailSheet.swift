@@ -996,13 +996,22 @@ struct AdminMemberDetailSheet: View {
             }
             if datesChanged {
                 Log.info("[AdminEdit] 📅 تعديل التواريخ: deceased=\(capturedIsDeceased), birth=\(capturedBirthDate?.description ?? "—"), death=\(capturedDeathDate?.description ?? "—")")
-                await memberVM.updateMemberHealthAndBirth(
+                let datesSaved = await memberVM.updateMemberHealthAndBirth(
                     memberId: capturedMemberId,
                     birthDate: capturedBirthDate,
                     isDeceased: capturedIsDeceased,
                     deathDate: capturedDeathDate
                 )
                 if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث التواريخ: \(err)") }
+                // وفاة سُجّلت الآن (كان حياً) → مربّع «إعلان وفاة» — الإداري يختار «نشر» أو «ليس الآن»
+                if datesSaved, deceasedJustMarked {
+                    let target = DeathAnnouncementTarget(
+                        id: capturedMemberId,
+                        name: nameChanged ? capturedFullName : auditMemberName,
+                        isFemale: capturedGender == "female")
+                    let canAnnounce = authVM.canApproveTreeRequests
+                    Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
+                }
             }
             if bioChanged {
                 Log.info("[AdminEdit] 📖 تعديل السيرة: \(capturedBioStations.count) محطّة")

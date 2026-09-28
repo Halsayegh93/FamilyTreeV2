@@ -259,7 +259,7 @@ struct AdminMembersDirectoryView: View {
             NavigationLink(destination: AdminMemberDetailSheet(member: member)) { EmptyView() }
                 .opacity(0)
 
-            memberRow(member: member, index: 0) {
+            memberRow(member: member) {
                 if kids > 0 {
                     Button {
                         withAnimation(drillAnimation) { drillPath.append(member) }
@@ -296,11 +296,11 @@ struct AdminMembersDirectoryView: View {
     }
 
     /// صف نتيجة بحث — الصف كله يفتح التفاصيل (نفس الرابط، بلا سهم النظام خارج الصندوق)
-    private func searchResultRow(_ member: FamilyMember, index: Int) -> some View {
+    private func searchResultRow(_ member: FamilyMember) -> some View {
         ZStack {
             NavigationLink(destination: AdminMemberDetailSheet(member: member)) { EmptyView() }
                 .opacity(0)
-            memberRow(member: member, index: index) {
+            memberRow(member: member) {
                 SysChevron()
             }
         }
@@ -338,8 +338,10 @@ struct AdminMembersDirectoryView: View {
                         .registryListRow(top: DS.Spacing.sm)
                 } else if searchText.isEmpty {
                     // تصفّح شجري — مستوى واحد في كل مرة
-                    ForEach(currentLevelMembers, id: \.id) { member in
+                    // نمط الأخبار والديوانيات: أول ٧ صفوف تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
+                    ForEach(Array(currentLevelMembers.enumerated()), id: \.element.id) { index, member in
                         branchRow(member)
+                            .dsCardCascade(index, appeared: appeared)
                             .registryListRow()
                     }
                     if currentLevelMembers.isEmpty {
@@ -351,7 +353,8 @@ struct AdminMembersDirectoryView: View {
                 } else {
                     let visible = Array(filteredMembers.prefix(displayLimit))
                     ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
-                        searchResultRow(member, index: index)
+                        searchResultRow(member)
+                            .dsCardCascade(index, appeared: appeared)
                             .registryListRow()
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 // التجميد/التفعيل للمدير فقط (كان canEditMembers يشمل المراقب)
@@ -399,7 +402,9 @@ struct AdminMembersDirectoryView: View {
             .scrollDismissesKeyboard(.interactively)
             .environment(\.defaultMinListRowHeight, 0)
             .onAppear {
-                withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.smooth.delay(0.1)) { appeared = true }
+                // دخول الصفوف مرة واحدة (نمط الأخبار والديوانيات) — الحركة نفسها في dsCardCascade؛
+                // بعد أول تخطيط (خلايا `List` تُبنى فيه) حتى تبدأ أول الصفوف مخفية ثم تصعد
+                DispatchQueue.main.async { appeared = true }
                 if descendantCounts.isEmpty { buildDescendantCounts() }
             }
             .onChange(of: memberVM.allMembers.count) { _ in buildDescendantCounts() }
@@ -517,7 +522,8 @@ struct AdminMembersDirectoryView: View {
     // MARK: - Member Row
 
     /// صف عضو بإطار حقول المربّعات: الصورة (وعليها الحالة) + الاسم + الدور والهاتف + طرف
-    private func memberRow<Trailing: View>(member: FamilyMember, index: Int,
+    /// (دخوله بـ`dsCardCascade` في القائمة نفسها)
+    private func memberRow<Trailing: View>(member: FamilyMember,
                                            @ViewBuilder trailing: () -> Trailing) -> some View {
         let muted = member.isDeceased == true || member.status == .frozen
         return HStack(spacing: DS.Spacing.sm) {
@@ -561,11 +567,6 @@ struct AdminMembersDirectoryView: View {
         .frame(minHeight: 44)
         .dsRowBox()
         .contentShape(Rectangle())
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared || reduceMotion ? 0 : 15)
-        .animation(reduceMotion ? .easeInOut(duration: 0.2)
-                                : DS.Anim.smooth.delay(Double(min(index, 15)) * 0.03),
-                   value: appeared)
     }
 
     /// الصورة وعليها حالة العضو — بدل شارات نصّية تزحم السطر

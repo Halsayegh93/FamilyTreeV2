@@ -1202,6 +1202,7 @@ struct DSFloatingButton: View {
     var action: () -> Void
 
     @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var debouncedAction: () -> Void {
         let key = "DSFloating_\(icon ?? "")_\(label ?? "")"
@@ -1230,11 +1231,12 @@ struct DSFloatingButton: View {
         }
         // شفّاف عادةً، ولونه الطبيعي عند الضغط (طلب المالك)
         .buttonStyle(FloatingButtonStyle(gradient: gradient, color: color))
-        .scaleEffect(appeared ? 1 : 0.3)
+        .scaleEffect(appeared || reduceMotion ? 1 : 0.3)
         .opacity(appeared ? 1 : 0)
         .onAppear {
             guard !appeared else { return }
-            withAnimation(DS.Anim.elastic.delay(0.4)) { appeared = true }
+            // «تقليل الحركة»: يظهر بتلاشٍ فقط بلا قفزة
+            withAnimation(reduceMotion ? .easeOut(duration: 0.2) : DS.Anim.elastic.delay(0.4)) { appeared = true }
         }
     }
 }

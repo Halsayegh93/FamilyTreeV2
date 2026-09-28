@@ -27,6 +27,8 @@ struct FamilyArchiveView: View {
     @State private var selectionMode = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var showBatchDeleteAlert = false
+    /// دخول البطاقات مرة واحدة عند ظهور الشبكة (نمط الأخبار والديوانيات)
+    @State private var appeared = false
 
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — أعمدة أكثر لاستغلال العرض
@@ -75,11 +77,13 @@ struct FamilyArchiveView: View {
                 } else if archiveVM.items(in: selectedCategory).isEmpty {
                     Spacer()
                     emptyState
+                        .dsStaggerIn(0)   // الحالة الفارغة تصعد وتظهر (تلاشٍ فقط مع «تقليل الحركة»)
                     Spacer()
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
-                            ForEach(archiveVM.items(in: selectedCategory)) { item in
+                            ForEach(Array(archiveVM.items(in: selectedCategory).enumerated()),
+                                    id: \.element.id) { index, item in
                                 Button {
                                     if selectionMode {
                                         toggleSelection(item.id)
@@ -114,11 +118,14 @@ struct FamilyArchiveView: View {
                                         archiveActionsMenu(for: item)
                                     }
                                 }
+                                // نمط الأخبار والديوانيات: البطاقات تصعد وتظهر تباعاً (أول ٧) مرة عند الظهور
+                                .dsCardCascade(index, appeared: appeared)
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.md)
                         .padding(.bottom, DS.Spacing.xxxxl)
+                        .onAppear { appeared = true }
                     }
                     .refreshable { await archiveVM.fetchItems() }
                 }
@@ -844,7 +851,7 @@ struct ArchiveUploadSheet: View {
             || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private let tint = DS.Color.composerLibrary
+    private let tint = DS.Color.tileLibrary
     @State private var floatIcons = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -1246,7 +1253,7 @@ struct ArchiveEditSheet: View {
             != initial.normalized
     }
 
-    private let tint = DS.Color.composerLibrary
+    private let tint = DS.Color.tileLibrary
 
     var body: some View {
         // نفس مربّع «إضافة إلى المكتبة» (طلب المالك): تصميم موحّد للإضافة والتعديل
@@ -1721,7 +1728,7 @@ struct UnevenCorners: Shape {
 /// أقسام المكتبة ككبسولات قابلة للاختيار — مشتركة بين الإضافة والتعديل
 struct ArchiveCategoryChips: View {
     @Binding var key: String
-    var tint: Color = DS.Color.composerLibrary
+    var tint: Color = DS.Color.tileLibrary
     /// «تقليل الحركة» (توصية أبل): بلا تكبير للمختار
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

@@ -54,6 +54,7 @@ struct LoginView: View {
 
     @State private var otpText: String = ""
     @Environment(\.verticalSizeClass) private var vSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// الوضع الأفقي — نلف المحتوى بـScrollView
     private var isLandscape: Bool { vSizeClass == .compact }
 
@@ -80,6 +81,12 @@ struct LoginView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
         .onAppear {
+            // «تقليل الحركة»: الشعار يظهر بتلاشٍ فقط بلا تكبير
+            guard !reduceMotion else {
+                logoScale = 1.0
+                withAnimation(DSMotion.fade) { logoOpacity = 1.0 }
+                return
+            }
             withAnimation(DS.Anim.elastic.delay(0.15)) {
                 logoScale = 1.0
                 logoOpacity = 1.0
@@ -131,11 +138,13 @@ struct LoginView: View {
                 }
 
                 // مؤشر التقدم — خطوة ١ / خطوة ٢
+                // بعد الشعار تدخل الأقسام بالترتيب: المؤشر ← بطاقة الإدخال ← الشروط (مرة عند الظهور)
                 HStack(spacing: DS.Spacing.sm) {
                     stepDot(filled: true)
                     stepDot(filled: authVM.isOtpSent)
                 }
                 .padding(.bottom, DS.Spacing.sm)
+                .dsStaggerIn(0)
 
                 // منطقة الإدخال
                 VStack(spacing: DS.Spacing.xl) {
@@ -155,6 +164,8 @@ struct LoginView: View {
                 }
                 .frame(maxWidth: 380)
                 .padding(.horizontal, DS.Spacing.xl)
+                // الحاوية تدخل مرة واحدة — تبديل الرقم ↔ الرمز يبقى بانتقاله كما هو
+                .dsStaggerIn(1)
 
                 Spacer()
 
@@ -162,8 +173,11 @@ struct LoginView: View {
                 if !authVM.isOtpSent {
                     legalFooter
                         .padding(.bottom, DS.Spacing.sm)
+                        .dsStaggerIn(2)
                 }
             }
+            // الأقسام تبدأ بعد الشعار (نفس «بعد الرأس» في المربّعات)
+            .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
     }
 
     /// سطر صغير أسفل الشاشة يفتح «الخصوصية والشروط»

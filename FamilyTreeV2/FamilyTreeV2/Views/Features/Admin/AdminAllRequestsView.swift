@@ -948,18 +948,172 @@ struct AdminAllRequestsView: View {
         )
     }
 
-    /// المستوى الأول: «الكل» + أقسام مجال الدور، بعدد كلٍّ منها
-    private var sectionChips: some View {
-        var options: [DSFilterOption<RequestSection?>] = [
-            DSFilterOption<RequestSection?>(id: nil, title: L10n.t("الكل", "All"),
-                                            icon: RequestTab.all.icon,
-                                            count: countOrNil(cachedTotalCount))
-        ]
-        options += visibleSections.map { section in
-            DSFilterOption<RequestSection?>(id: section, title: section.title, icon: section.icon,
-                                            count: countOrNil(sectionCount(section)))
+    // MARK: - شبكة أنواع الطلبات (بلاطات ديناميكية)
+
+    /// الأنواع التي تظهر: «الكل» ثم كل نوع في مجال الدور عليه طلبات (بترتيب الأقسام)،
+    /// ويبقى المختار ظاهراً ولو صار فارغاً حتى لا يختفي من تحت إصبع المستخدم.
+    private var tileTabs: [RequestTab] {
+        let withItems = availableTabs.filter { $0 != .all && (itemCount(for: $0) > 0 || $0 == selectedTab) }
+        return [.all] + withItems
+    }
+
+    private var typeTiles: some View {
+        let tabs = tileTabs
+        let columns = 5
+        let rows = stride(from: 0, to: tabs.count, by: columns).map { Array(tabs[$0..<min($0 + columns, tabs.count)]) }
+        return VStack(spacing: 6) {
+            ForEach(rows.indices, id: \.self) { r in
+                HStack(spacing: 6) {
+                    ForEach(rows[r], id: \.self) { tab in
+                        typeTile(tab)
+                    }
+                    // أكمل الصف الأخير بفراغات حتى تبقى البلاطات بنفس العرض
+                    ForEach(0..<(columns - rows[r].count), id: \.self) { _ in
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                    }
+                }
+            }
         }
-        return DSFilterChips(options: options, selection: sectionSelection, tint: pageTint)
+        .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.82),
+                   value: tabs)
+    }
+
+    /// بلاطة نوع: أيقونة ملوّنة كبيرة وعليها العدد، وتحتها الاسم — المختارة ممتلئة بلونها
+    private func typeTile(_ tab: RequestTab) -> some View {
+        let selected = selectedTab == tab
+        let count = tab == .all ? cachedTotalCount : itemCount(for: tab)
+        let tint = (tab == .all ? pageTint : tab.color).dsReadableGlyph
+        let title = tab == .all ? L10n.t("الكل", "All") : chipTitle(tab)
+        return Button {
+            guard !selected else { return }
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.4, dampingFraction: 0.82)) {
+                selectedTab = tab
+                selectedSection = tab.section
+            }
+        } label: {
+            VStack(spacing: 5) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: tab.icon)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(selected ? .white : tint)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(selected
+                                      ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.78)],
+                                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                                      : AnyShapeStyle(tint.opacity(0.14)))
+                        )
+                        .shadow(color: selected && !reduceMotion ? tint.opacity(0.4) : .clear, radius: 6, x: 0, y: 3)
+                    if count > 0 {
+                        Text(count > 99 ? "99+" : "\(count)")
+                            .font(DS.Font.plex(9.5, weight: .heavy))
+                            .monospacedDigit()
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .frame(minWidth: 17, minHeight: 16)
+                            .background(Capsule().fill(selected ? Color.black.opacity(0.35) : DS.Color.error))
+                            .overlay(Capsule().strokeBorder(DS.Color.surface, lineWidth: 1.5))
+                            .offset(x: 6, y: -5)
+                            .contentTransition(.numericText())
+                    }
+                }
+                .scaleEffect(selected && !reduceMotion ? 1.05 : 1)
+                .accessibilityHidden(true)
+
+                Text(title)
+                    .font(DS.Font.plex(10, weight: .bold))
+                    .foregroundColor(selected ? tint : DS.Color.fieldLabel)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8)
+                    .frame(height: 25, alignment: .top)
+            }
+            .padding(.top, 6)
+            .padding(.bottom, 2)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(selected ? tint.opacity(0.10) : DS.Color.surface))
+            .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .strokeBorder(selected ? tint.opacity(0.6) : DS.Color.textTertiary.opacity(0.12),
+                              lineWidth: selected ? 1.5 : 1))
+            .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
+        .accessibilityLabel(count > 0 ? "\(title)، \(count)" : title)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// المستوى الأول: «الكل» + أقسام مجال الدور — بطاقات بأيقونات ملوّنة كبيرة وتحتها الاسم
+    /// والعدد، والمختارة مظلّلة بلونها (اختيار المالك ٢٠٢٦-٠٩-٢٧)
+    private var sectionChips: some View {
+        var cards: [(id: RequestSection?, title: String, icon: String, color: Color, count: Int)] = [
+            (nil, L10n.t("الكل", "All"), RequestTab.all.icon, DS.Color.primary, cachedTotalCount)
+        ]
+        cards += visibleSections.map { section in
+            (section, section.title, section.icon, section.color, sectionCount(section))
+        }
+        let selected = sectionSelection.wrappedValue
+        return HStack(spacing: 6) {
+            ForEach(cards, id: \.title) { card in
+                sectionCard(title: card.title, icon: card.icon, color: card.color,
+                            count: card.count, isSelected: card.id == selected) {
+                    guard card.id != selected else { return }
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.15)
+                                               : .spring(response: 0.4, dampingFraction: 0.82)) {
+                        sectionSelection.wrappedValue = card.id
+                    }
+                }
+            }
+        }
+    }
+
+    /// بطاقة قسم: أيقونة ملوّنة كبيرة، تحتها الاسم ثم العدد — المختارة ممتلئة الأيقونة ومظلّلة بلونها
+    private func sectionCard(title: String, icon: String, color: Color, count: Int,
+                             isSelected: Bool, action: @escaping () -> Void) -> some View {
+        let tint = color.dsReadableGlyph
+        return Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(isSelected ? .white : tint)
+                    .frame(width: 40, height: 40)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(isSelected ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.8)],
+                                                                         startPoint: .topLeading,
+                                                                         endPoint: .bottomTrailing))
+                                         : AnyShapeStyle(tint.opacity(0.14))))
+                    .shadow(color: isSelected && !reduceMotion ? tint.opacity(0.35) : .clear, radius: 5, x: 0, y: 3)
+                    .scaleEffect(isSelected && !reduceMotion ? 1.06 : 1)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(DS.Font.plex(11.5, weight: .bold))
+                    .foregroundColor(isSelected ? tint : DS.Color.fieldLabel)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(count > 0 ? "\(count)" : "—")
+                    .font(DS.Font.plex(11, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundColor(count > 0 ? (isSelected ? .white : tint) : DS.Color.textTertiary)
+                    .padding(.horizontal, 7)
+                    .frame(minWidth: 22, minHeight: 17)
+                    .background(Capsule().fill(count > 0 ? (isSelected ? tint : tint.opacity(0.14)) : Color.clear))
+            }
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isSelected ? tint.opacity(0.10) : DS.Color.surface))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(isSelected ? tint.opacity(0.55) : DS.Color.textTertiary.opacity(0.12),
+                              lineWidth: isSelected ? 1.5 : 1))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(count > 0 ? "\(title)، \(count)" : title)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     /// المستوى الثاني: كل تبويبات القسم المختار في مجال الدور — حتى الفارغة (طلب المستخدم)
@@ -971,7 +1125,7 @@ struct AdminAllRequestsView: View {
                                count: countOrNil(itemCount(for: tab)))
             },
             selection: $selectedTab,
-            tint: sectionTint(section)
+            tint: section.color.dsReadableGlyph
         )
     }
 
@@ -1177,15 +1331,13 @@ struct AdminAllRequestsView: View {
                     .dsStaggerIn(1)
                     .reviewListRow()
             } else {
-                // الفلاتر — تظهر فقط إذا في طلبات، وفي وضع التحديد يحلّ محلها شريط الملخّص أعلاه
+                // شبكة أنواع الطلبات (فكرة جديدة — طلب المالك): بلاطة لكل نوع فيه طلبات فقط،
+                // بأيقونة ملوّنة كبيرة واسمه وعدده — ضغطة واحدة تفتح النوع (بدل قسم ثم نوع).
+                // وفي وضع التحديد يحلّ محلها شريط الملخّص أعلاه.
                 if totalCount > 0 && !isSelectMode {
-                    sectionChips
+                    typeTiles
                         .dsStaggerIn(1)
-                        .reviewListRow(top: 0, bottom: 0)
-                    if let section = selectedSection {
-                        tabChips(for: section)
-                            .reviewListRow(top: 0, bottom: DS.Spacing.xs)
-                    }
+                        .reviewListRow(top: 0, bottom: DS.Spacing.xs)
                 }
 
                 if totalCount == 0 || itemCount(for: selectedTab) == 0 {

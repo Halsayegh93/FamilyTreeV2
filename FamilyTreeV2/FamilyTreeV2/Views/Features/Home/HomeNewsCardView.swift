@@ -4,6 +4,7 @@ import SwiftUI
 // منشورات الإدارة تلبس هوية الهيدر (درع متدرّج + خيط علوي)،
 // والتصويت بأشرطة نسب حيّة بدل أرقام صمّاء.
 struct HomeNewsCardView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.colorScheme) private var colorScheme
@@ -305,7 +306,7 @@ struct HomeNewsCardView: View {
                     .font(DS.Font.scaled(60, weight: .bold))
                     .foregroundStyle(DS.Color.textOnPrimary)
                     .dsCardShadow()
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
@@ -316,7 +317,7 @@ struct HomeNewsCardView: View {
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             if !isLiked { onLikeTap() }
-            withAnimation(DS.Anim.bouncy) {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.15) : DS.Anim.bouncy) {
                 showDoubleTapHeart = true
             }
             Task {

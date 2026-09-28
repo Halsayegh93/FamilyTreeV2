@@ -8,10 +8,8 @@ struct WaitingForApprovalView: View {
     @State private var pulseOpacity: CGFloat = 0.6
     @State private var ringRotation: Double = 0
     @State private var dotPhase: CGFloat = 0
-    @State private var cardAppeared = false
     @State private var contentOpacity: CGFloat = 0
     @State private var iconBounce: CGFloat = 0
-    @State private var buttonsAppeared = false
     @State private var showContactSheet = false
     /// حذف الحساب متاح لمن ينتظر الموافقة أيضاً (Guideline 5.1.1(v))
     @State private var confirmDeletion = false
@@ -36,27 +34,27 @@ struct WaitingForApprovalView: View {
                 VStack(spacing: DS.Spacing.xxl) {
                     Spacer().frame(height: DS.Spacing.xl)
 
-                    // أيقونة الانتظار مع الحركة
+                    // أيقونة الانتظار مع الحركة («تقليل الحركة»: تلاشٍ بلا تكبير)
                     waitingIcon
                         .opacity(contentOpacity)
-                        .scaleEffect(contentOpacity)
+                        .scaleEffect(reduceMotion ? 1 : contentOpacity)
 
                     // نقاط التحميل — تحت الدائرة
                     animatedDots
                         .opacity(contentOpacity)
 
+                    // بعد الأيقونة تدخل البطاقة ثم الأزرار واحداً بعد الآخر (dsStaggerIn)
                     // بطاقة المعلومات
                     infoCard
-                        .opacity(cardAppeared ? 1 : 0)
-                        .offset(y: cardAppeared ? 0 : 30)
+                        .dsStaggerIn(0)
 
                     // الأزرار
                     actionButtons
-                        .opacity(buttonsAppeared ? 1 : 0)
-                        .offset(y: buttonsAppeared ? 0 : 20)
 
                     Spacer().frame(height: DS.Spacing.xxl)
                 }
+                // الأقسام تبدأ بعد الأيقونة (نفس «بعد الرأس» في المربّعات)
+                .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
                 }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -215,6 +213,7 @@ struct WaitingForApprovalView: View {
                 Task { await authVM.checkUserProfile() }
             }
             .padding(.horizontal, DS.Spacing.xl)
+            .dsStaggerIn(1)
 
             DSSecondaryButton(
                 L10n.t("تعديل البيانات", "Edit Info"),
@@ -223,6 +222,7 @@ struct WaitingForApprovalView: View {
                 authVM.status = .authenticatedNoProfile
             }
             .padding(.horizontal, DS.Spacing.xl)
+            .dsStaggerIn(2)
 
             DSSecondaryButton(
                 L10n.t("تواصل مع الإدارة", "Contact Admin"),
@@ -231,6 +231,7 @@ struct WaitingForApprovalView: View {
                 showContactSheet = true
             }
             .padding(.horizontal, DS.Spacing.xl)
+            .dsStaggerIn(3)
 
             DSSecondaryButton(
                 L10n.t("تسجيل الخروج", "Sign Out"),
@@ -240,6 +241,7 @@ struct WaitingForApprovalView: View {
                 Task { await authVM.signOut() }
             }
             .padding(.horizontal, DS.Spacing.xl)
+            .dsStaggerIn(4)
 
             // حذف الحساب — زر هادئ في الأسفل (نفس أسلوب الإعدادات)
             Button { confirmDeletion = true } label: {
@@ -264,24 +266,16 @@ struct WaitingForApprovalView: View {
             .disabled(deletingAccount)
             .padding(.horizontal, DS.Spacing.xl)
             .padding(.bottom, DS.Spacing.xl)
+            .dsStaggerIn(5)
         }
     }
 
     // MARK: - Animations
     private func startAnimations() {
-        // ظهور المحتوى
-        withAnimation(DS.Anim.elastic.delay(0.2)) {
+        // ظهور المحتوى — «تقليل الحركة»: تلاشٍ قصير بدل النابض
+        // (البطاقة والأزرار تدخل تباعاً بعدها عبر dsStaggerIn)
+        withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.elastic.delay(0.2)) {
             contentOpacity = 1.0
-        }
-
-        // ظهور البطاقة
-        withAnimation(DS.Anim.elastic.delay(0.5)) {
-            cardAppeared = true
-        }
-
-        // ظهور الأزرار
-        withAnimation(DS.Anim.smooth.delay(0.7)) {
-            buttonsAppeared = true
         }
 
         // تقليل الحركة: تبقى الحلقة والأيقونة والنقاط ثابتة

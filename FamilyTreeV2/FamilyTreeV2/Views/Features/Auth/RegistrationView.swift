@@ -20,8 +20,8 @@ struct RegistrationView: View {
     // Animation states
     @State private var headerScale: CGFloat = 0.8
     @State private var headerOpacity: CGFloat = 0
-    @State private var cardsAppeared = false
     @State private var hasAttemptedSubmit = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showConfirmSubmit = false
     /// الموافقة على شروط الاستخدام (EULA — Guideline 1.2) — شرط لإرسال طلب الانضمام
     @State private var termsAccepted = false
@@ -42,38 +42,35 @@ struct RegistrationView: View {
                             .scaleEffect(headerScale)
                             .opacity(headerOpacity)
 
-                        // الحقول
+                        // الحقول — تدخل واحداً بعد الآخر بعد الصورة (dsStaggerIn):
+                        // الاسم ← العائلة ← الميلاد ← الشروط ← زر الإرسال
                         VStack(spacing: DS.Spacing.md) {
                             nameFieldSection
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 20)
+                                .dsStaggerIn(0)
 
                             familyNameSection
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 25)
+                                .dsStaggerIn(1)
 
                             birthDateSection
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 30)
+                                .dsStaggerIn(2)
 
                             // TODO: gender — re-enable when needed
                             // genderSection
-                            //     .opacity(cardsAppeared ? 1 : 0)
-                            //     .offset(y: cardsAppeared ? 0 : 35)
+                            //     .dsStaggerIn(3)
 
                             // الموافقة على الشروط — قبل زر الإرسال مباشرة
                             TermsConsentRow(isAccepted: $termsAccepted,
                                             showError: hasAttemptedSubmit)
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 35)
+                                .dsStaggerIn(3)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // زر الإرسال
                         submitButton
-                            .opacity(cardsAppeared ? 1 : 0)
-                            .offset(y: cardsAppeared ? 0 : 40)
+                            .dsStaggerIn(4)
                     }
+                    // الحقول تبدأ بعد الصورة (نفس «بعد الرأس» في المربّعات)
+                    .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
                 }
             }
         }
@@ -106,12 +103,15 @@ struct RegistrationView: View {
                 termsAccepted = true
             }
             Log.info("[REGISTRATION] RegistrationView ظهرت — البروفايل غير موجود. phone=\(Log.masked(authVM.phoneNumber))")
+            // «تقليل الحركة»: الصورة تظهر بتلاشٍ فقط بلا تكبير
+            guard !reduceMotion else {
+                headerScale = 1.0
+                withAnimation(DSMotion.fade) { headerOpacity = 1.0 }
+                return
+            }
             withAnimation(DS.Anim.elastic.delay(0.2)) {
                 headerScale = 1.0
                 headerOpacity = 1.0
-            }
-            withAnimation(DS.Anim.smooth.delay(0.5)) {
-                cardsAppeared = true
             }
         }
     }
@@ -468,6 +468,7 @@ struct RegistrationView: View {
         }
         .foregroundColor(DS.Color.error)
         .padding(.leading, DS.Spacing.sm)
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        // «تقليل الحركة»: تلاشٍ فقط بلا انزلاق
+        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 }

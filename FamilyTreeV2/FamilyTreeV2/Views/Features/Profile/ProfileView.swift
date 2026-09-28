@@ -91,6 +91,9 @@ struct ProfileView: View {
                         }
 
                         ScrollView(showsIndicators: false) {
+                            // دخول الأقسام تباعاً مرة عند الظهور — نمط الأخبار والديوانيات
+                            // (طلب المالك ٢٠٢٦-٠٩-٢٧): الملف ← المعلومات ← طلباتي ← المفضلة ← عائلتي ← الخروج.
+                            // «تقليل الحركة»: تلاشٍ فقط (داخل dsCardCascade)
                             Group {
                                 if isLandscape {
                                     // الوضع الأفقي: عمودان — يمين (الملف + المعلومات) ويسار (الطلبات + المفضلة + العائلة)
@@ -98,60 +101,63 @@ struct ProfileView: View {
                                         VStack(spacing: DS.Spacing.md) {
                                             profileHeader(user: currentUser)
                                                 .padding(.top, DS.Spacing.md)
+                                                .dsCardCascade(0, appeared: appeared)
                                             personalInfoSection(user: currentUser)
+                                                .dsCardCascade(1, appeared: appeared)
                                         }
                                         .frame(maxWidth: .infinity)
 
                                         VStack(spacing: DS.Spacing.md) {
                                             myRequestsSection
+                                                .dsCardCascade(2, appeared: appeared)
                                             favoritesSection
+                                                .dsCardCascade(3, appeared: appeared)
                                             if isCurrentUserMarried {
                                                 serverSonsSection
+                                                    .dsCardCascade(4, appeared: appeared)
                                             }
                                             signOutButton
+                                                .dsCardCascade(5, appeared: appeared)
                                         }
                                         .padding(.top, DS.Spacing.md)
                                         .frame(maxWidth: .infinity)
                                     }
-                                    .opacity(appeared ? 1 : 0)
                                 } else {
                                     VStack(spacing: DS.Spacing.md) {
                                         // Profile Header
                                         profileHeader(user: currentUser)
                                             .padding(.top, DS.Spacing.md)
-                                            .opacity(appeared ? 1 : 0)
-                                            .offset(y: appeared ? 0 : 20)
+                                            .dsCardCascade(0, appeared: appeared)
 
                                         // Personal Info section
                                         personalInfoSection(user: currentUser)
-                                            .opacity(appeared ? 1 : 0)
-                                            .offset(y: appeared ? 0 : 25)
+                                            .dsCardCascade(1, appeared: appeared)
 
                                         // طلباتي — الطلبات المعلّقة التي أرسلها العضو للإدارة
                                         myRequestsSection
-                                            .opacity(appeared ? 1 : 0)
-                                            .offset(y: appeared ? 0 : 26)
+                                            .dsCardCascade(2, appeared: appeared)
 
                                         // المفضلة
                                         favoritesSection
-                                            .opacity(appeared ? 1 : 0)
-                                            .offset(y: appeared ? 0 : 28)
+                                            .dsCardCascade(3, appeared: appeared)
 
                                         // قسم «عائلتي» — يظهر فقط عند «متزوج»، ويختفي كاملاً عند «أعزب»
                                         if isCurrentUserMarried {
                                             serverSonsSection
-                                                .opacity(appeared ? 1 : 0)
-                                                .offset(y: appeared ? 0 : 30)
+                                                .dsCardCascade(4, appeared: appeared)
                                         }
 
                                         // زر تسجيل الخروج بأسفل الصفحة
                                         signOutButton
-                                            .opacity(appeared ? 1 : 0)
-                                            .offset(y: appeared ? 0 : 35)
+                                            .dsCardCascade(5, appeared: appeared)
                                     }
                                 }
                             }
                             .padding(.bottom, DS.Spacing.xxl)
+                            // «طلباتي» تصل بعد الظهور (جلب غير متزامن) أو تُسحب — القسم يظهر/يختفي بتلاشٍ
+                            // وما تحته ينزاح بهدوء بدل القفز. «تقليل الحركة»: مباشرة كما كان
+                            .animation(reduceMotion ? nil : DS.Anim.smooth,
+                                       value: adminRequestVM.myPendingRequests.map(\.id))
                         } // closes ScrollView
                         .refreshable {
                             await memberVM.fetchAllMembers(force: true)
@@ -165,8 +171,9 @@ struct ProfileView: View {
                             await adminRequestVM.fetchMyPendingRequests()
                         }
                         .onAppear {
+                            // الحركة نفسها داخل dsCardCascade (توقيت كل قسم + «تقليل الحركة»)
                             guard !appeared else { return }
-                            withAnimation(DS.Anim.smooth.delay(0.1)) { appeared = true }
+                            appeared = true
                         }
                     } // closes VStack
                 } else {
@@ -407,6 +414,9 @@ struct ProfileView: View {
                                 .font(DS.Font.scaled(11, weight: .semibold))
                             Text("\(totalChildren) " + L10n.t("من العائلة", "family"))
                                 .font(DS.Font.scaled(11, weight: .bold))
+                                // العدد يتبدّل بلفّة أرقام حين يُضاف فرد — «تقليل الحركة»: مباشرة
+                                .contentTransition(.numericText())
+                                .animation(reduceMotion ? nil : DS.Anim.smooth, value: totalChildren)
                         }
                         .foregroundColor(DS.Color.textSecondary)
                         .padding(.horizontal, DS.Spacing.sm)
@@ -830,7 +840,7 @@ struct ProfileView: View {
                             .contentShape(Rectangle())
                             .padding(.vertical, -10)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(DSPressStyle())
                         .padding(.trailing, DS.Spacing.lg)
                     }
                 }
@@ -880,7 +890,7 @@ struct ProfileView: View {
                     .stroke(color.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
             )
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(DSPressStyle())   // ضغطة ناعمة موحّدة (كانت بلا أي إحساس بالضغط)
     }
 
     /// خلية فرد عائلة (أم/زوجة/ابنة) — قابلة للنقر لأي عضو لإدارة عائلته نفسه.
@@ -888,7 +898,7 @@ struct ProfileView: View {
     /// يظهر خطأً واضحاً إن رفضته RLS — لا صمت.
     private func familyMemberButton(_ entry: WomenFamilyEntry) -> some View {
         Button { editingFamilyMember = entry } label: { womanFamilyGridCell(entry: entry) }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(DSPressStyle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(familyMemberAccessibilityLabel(entry))
             .accessibilityHint(L10n.t("تعديل", "Edit"))
@@ -975,7 +985,7 @@ struct ProfileView: View {
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
                 ForEach(memberVM.currentMemberChildren, id: \.id) { son in
                     Button { editingChild = son } label: { childGridCell(son: son) }
-                        .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(DSPressStyle())
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel((son.firstName.isEmpty ? L10n.t("ابن بدون اسم", "Unnamed child") : son.firstName)
                                             + ((son.isDeceased ?? false) ? L10n.t("، متوفى", ", deceased") : ""))
@@ -1012,7 +1022,7 @@ struct ProfileView: View {
                             .stroke(DS.Color.primary.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
                     )
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(DSPressStyle())
             }
         }
         .padding(DS.Spacing.md)

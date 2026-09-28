@@ -26,6 +26,8 @@ struct AdminInboxView: View {
     /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل «ما فيه رسائل» المضلِّلة
     /// (تبقى حتى جلب ناجح: السحب للتحديث أو «إعادة المحاولة»)
     @State private var lastFetchOffline = false
+    /// دخول صفوف الرسائل (نمط الأخبار والديوانيات) — مرة واحدة حين تظهر القائمة
+    @State private var appeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// لون بلاطة «الرسائل» في لوحة الإدارة — رأس الصفحة يطابق البلاطة التي ضُغطت
@@ -240,11 +242,23 @@ struct AdminInboxView: View {
                     AdaptiveLazyStack(spacing: DS.Spacing.sm, landscapeMinimum: 340) {
                         ForEach(Array(messages.enumerated()), id: \.element.id) { index, msg in
                             messageCell(msg)
-                                .dsStaggerIn(min(index, 5) + 3)
+                                // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
+                                .dsCardCascade(index, appeared: appeared)
                         }
                     }
+                    .onAppear(perform: startRowsCascade)
                 }
             }
+        }
+    }
+
+    /// الصفوف تدخل بعد أقسام الصفحة فوقها (البحث والفلاتر ← العنوان = ٢) — من حيث كانت تبدأ (٣)،
+    /// فيبقى التسلسل: الرأس ← الأقسام ← الصفوف. مرة واحدة؛ «تقليل الحركة»: تلاشٍ فوري بلا انتظار.
+    private func startRowsCascade() {
+        guard !appeared else { return }
+        guard !reduceMotion else { appeared = true; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.staggerDelay(3, base: DSMotion.sectionsOnPage)) {
+            appeared = true
         }
     }
 

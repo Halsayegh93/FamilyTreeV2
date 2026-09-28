@@ -18,7 +18,7 @@ struct DeviceLimitView: View {
 
                 Spacer()
 
-                // Icon
+                // Icon — تقفز أولاً مثل أيقونة رأس المربّعات («تقليل الحركة»: تلاشٍ)
                 ZStack {
                     Circle()
                         .fill(DS.Color.error.opacity(0.15))
@@ -28,6 +28,7 @@ struct DeviceLimitView: View {
                         .font(DS.Font.scaled(42, weight: .bold))
                         .foregroundColor(DS.Color.error)
                 }
+                .modifier(DSIconPop())
 
                 // Title & Description
                 VStack(spacing: DS.Spacing.md) {
@@ -45,6 +46,7 @@ struct DeviceLimitView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, DS.Spacing.xxl)
                 }
+                .dsStaggerIn(0)
 
                 Spacer()
 
@@ -56,6 +58,7 @@ struct DeviceLimitView: View {
                     showDevicesSheet = true
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+                .dsStaggerIn(1)
 
                 DSSecondaryButton(
                     t("تسجيل الخروج", "Sign Out"),
@@ -66,7 +69,10 @@ struct DeviceLimitView: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xxxxl)
+                .dsStaggerIn(2)
             }
+            // بعد الأيقونة: النص ← الأزرار تباعاً (نفس «بعد الرأس» في المربّعات)
+            .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
         }
         .dsCenterBox(isPresented: $showDevicesSheet) {
             LinkedDevicesSheet()
@@ -98,6 +104,7 @@ struct DeviceOverLimitView: View {
             VStack(spacing: DS.Spacing.xxl) {
                 Spacer()
 
+                // الأيقونة تقفز أولاً مثل أيقونة رأس المربّعات («تقليل الحركة»: تلاشٍ)
                 ZStack {
                     Circle()
                         .fill(DS.Color.warning.opacity(0.12))
@@ -106,6 +113,7 @@ struct DeviceOverLimitView: View {
                         .font(DS.Font.scaled(42, weight: .bold))
                         .foregroundColor(DS.Color.warning)
                 }
+                .modifier(DSIconPop())
 
                 VStack(spacing: DS.Spacing.md) {
                     Text(t("تم تقليل حد الأجهزة", "Device Limit Reduced"))
@@ -122,6 +130,7 @@ struct DeviceOverLimitView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.xxl)
                 }
+                .dsStaggerIn(0)
 
                 Spacer()
 
@@ -132,6 +141,7 @@ struct DeviceOverLimitView: View {
                     showDevicesSheet = true
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+                .dsStaggerIn(1)
 
                 DSSecondaryButton(
                     t("تسجيل الخروج", "Sign Out"),
@@ -142,7 +152,10 @@ struct DeviceOverLimitView: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xxxxl)
+                .dsStaggerIn(2)
             }
+            // بعد الأيقونة: النص ← الأزرار تباعاً (نفس «بعد الرأس» في المربّعات)
+            .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
         }
         .dsCenterBox(isPresented: $showDevicesSheet) {
             OverLimitDevicesSheet()

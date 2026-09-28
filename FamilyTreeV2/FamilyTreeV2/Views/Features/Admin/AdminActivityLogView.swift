@@ -264,11 +264,15 @@ struct AdminActivityLogView: View {
             )
             .environmentObject(memberVM)
         }
-        .onAppear {
-            // «تقليل الحركة»: تلاشٍ هادئ فقط بدل الصعود
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.smooth.delay(0.15)) {
-                appeared = true
-            }
+    }
+
+    /// الصفوف تدخل بعد أقسام الصفحة فوقها (البحث والفلاتر ← العنوان = ٢)، فيبقى التسلسل:
+    /// الرأس ← الأقسام ← الصفوف. مرة واحدة؛ «تقليل الحركة»: تلاشٍ فوري بلا انتظار.
+    private func startRowsCascade() {
+        guard !appeared else { return }
+        guard !reduceMotion else { appeared = true; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.staggerDelay(3, base: DSMotion.sectionsOnPage)) {
+            appeared = true
         }
     }
 
@@ -326,6 +330,8 @@ struct AdminActivityLogView: View {
                             tint: filter.color,
                             trailing: items.isEmpty ? nil : L10n.t("\(items.count) حركة", "\(items.count) entries"))
                 .dsStaggerIn(2)
+                // العنوان يظهر مع الصفوف (بعد التحميل) — فتبدأ الصفوف بعده
+                .onAppear(perform: startRowsCascade)
                 .activityListRow(top: DS.Spacing.xs, bottom: 2)
 
             if items.isEmpty {
@@ -333,8 +339,10 @@ struct AdminActivityLogView: View {
                     .padding(.top, DS.Spacing.xs)
                     .activityListRow()
             } else {
-                ForEach(items) { item in
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     activityRow(item)
+                        // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
+                        .dsCardCascade(index, appeared: appeared)
                         .activityListRow()
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
@@ -585,8 +593,6 @@ struct AdminActivityLogView: View {
                 }
             }
         }
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared || reduceMotion ? 0 : 10)
         .accessibilityElement(children: .combine)
         .accessibilityValue(isNew ? L10n.t("جديد", "New") : "")
         .accessibilityAddTraits(.isButton)

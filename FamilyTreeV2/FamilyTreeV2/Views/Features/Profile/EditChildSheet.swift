@@ -4,6 +4,8 @@ import UIKit
 
 struct EditChildSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) private var dismiss
     let member: FamilyMember
 
@@ -18,6 +20,8 @@ struct EditChildSheet: View {
     @State private var deathDate: Date = Date()
     @State private var selectedUIImage: UIImage? = nil
     @State private var showSuccessAlert = false
+    /// وفاة الابن أُرسلت طلباً للإدارة (بدل تسجيلها مباشرة) — تتغيّر رسالة الحفظ
+    @State private var deathRequestSent = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
     @State private var sheetHeight: CGFloat = 520
@@ -49,7 +53,10 @@ struct EditChildSheet: View {
         .dsAlert(L10n.t("تم الحفظ", "Saved"), isPresented: $showSuccessAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
-            Text(L10n.t("تم تحديث بيانات الابن بنجاح.", "Child info updated successfully."))
+            Text(deathRequestSent
+                 ? L10n.t("تم حفظ التعديلات، وأُرسل طلب تسجيل الوفاة للإدارة لتأكيده.",
+                          "Changes saved. The death was sent to the administration to confirm.")
+                 : L10n.t("تم تحديث بيانات الابن بنجاح.", "Child info updated successfully."))
         }
         .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
             Button(L10n.t("حسناً", "OK")) {}
@@ -199,6 +206,22 @@ struct EditChildSheet: View {
                         )
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.xs)
+
+                        // الوفاة من غير الإدارة تُرسل طلباً لتأكيدها
+                        if !(member.isDeceased ?? false), !authVM.canEditMembers {
+                            HStack(spacing: 6) {
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text(L10n.t("تُرسل للإدارة لتأكيدها قبل ظهورها في الشجرة",
+                                            "Sent to the administration to confirm first"))
+                                    .font(DS.Font.plex(11.5, weight: .semibold))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .foregroundColor(DS.Color.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .padding(.bottom, DS.Spacing.sm)
+                        }
                     }
                 }
             }
@@ -284,6 +307,12 @@ struct EditChildSheet: View {
             updatedMember.fullName = finalFullName
             updatedMember.firstName = cleanFirst
 
+            // وفاة الابن يسجّلها الأب (من غير الإدارة) = طلب للإدارة (طلب المالك):
+            // بقية التعديلات تُحفظ مباشرة، والوفاة تنتظر القبول ثم يطلع «إعلان وفاة» للإدارة
+            let wasDeceased = member.isDeceased ?? false
+            let newlyDeceased = isDeceased && !wasDeceased
+            let deathNeedsApproval = newlyDeceased && !authVM.canEditMembers
+
             let success = await memberVM.updateChildData(
                 member: updatedMember,
                 firstName: cleanFirst,
@@ -292,18 +321,41 @@ struct EditChildSheet: View {
                     rawLocalDigits: phoneNumber
                 ) ?? "",
                 birthDate: birthDateString,
-                isDeceased: isDeceased,
-                deathDate: deathDateString,
+                isDeceased: deathNeedsApproval ? wasDeceased : isDeceased,
+                deathDate: deathNeedsApproval ? member.deathDate : deathDateString,
                 gender: selectedGender
             )
+
+            var requestFailed = false
+            if success, deathNeedsApproval {
+                let sent = await adminRequestVM.submitTreeEditRequest(payload: TreeEditPayload.make(
+                    action: .deceased,
+                    targetMemberId: member.id.uuidString,
+                    targetMemberName: finalFullName,
+                    deathDate: deathDateString
+                ))
+                requestFailed = !sent
+            }
 
             if let image = selectedUIImage {
                 await memberVM.uploadAvatar(image: image, for: member.id)
             }
 
             isSaving = false
-            if success {
+            if success, requestFailed {
+                errorMessage = L10n.t("حُفظت التعديلات، لكن تعذّر إرسال طلب الوفاة للإدارة. حاول مرة ثانية.",
+                                      "Changes saved, but the death request couldn't be sent. Try again.")
+                showErrorAlert = true
+            } else if success {
+                deathRequestSent = deathNeedsApproval
                 showSuccessAlert = true
+                // الإدارة سجّلت الوفاة مباشرة → مربّع «إعلان وفاة»
+                if newlyDeceased, !deathNeedsApproval {
+                    let target = DeathAnnouncementTarget(id: member.id, name: finalFullName,
+                                                         isFemale: selectedGender == "female")
+                    let canAnnounce = authVM.canApproveTreeRequests
+                    Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
+                }
             } else {
                 errorMessage = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
                 showErrorAlert = true

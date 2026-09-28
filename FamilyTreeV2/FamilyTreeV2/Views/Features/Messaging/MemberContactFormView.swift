@@ -37,7 +37,7 @@ struct MemberContactFormView: View {
             title: L10n.t("تواصل مع الإدارة", "Contact Admin"),
             subtitle: L10n.t("اكتب رسالتك ويصلك الرد بأقرب وقت", "Write your message — you'll get a reply soon"),
             icon: "envelope.fill",
-            tint: DS.Color.actionNavy,
+            tint: DS.Color.tileContact,
             actionTitle: submitTitle,
             actionIcon: didSend ? "square.and.pencil" : "paperplane.fill",
             cancelTitle: didSend ? L10n.t("إغلاق", "Close") : L10n.t("إلغاء", "Cancel"),

@@ -25,6 +25,9 @@ struct CategoriesManagerView: View {
     @State private var isFetching = false
     /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل قائمة فارغة مضلِّلة
     @State private var lastFetchOffline = false
+    /// دخول صفوف التصنيفات (نمط الأخبار والديوانيات) — مرة واحدة، بعد عنوان القسم
+    @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// لون قسم «التصنيفات» في إعدادات التطبيق (مجال المحتوى) — رأس الصفحة يطابق ما ضُغط
     private let pageTint = DS.Color.composerLibrary
@@ -65,6 +68,8 @@ struct CategoriesManagerView: View {
 
                 sectionTitle(count: items.count)
                     .dsStaggerIn(2)
+                    // العنوان يظهر مع الصفوف (بعد التحميل) — فتبدأ الصفوف بعده
+                    .onAppear(perform: startRowsCascade)
                     .categoryListRow(top: DS.Spacing.sm, bottom: 2)
 
                 if items.isEmpty {
@@ -249,11 +254,22 @@ struct CategoriesManagerView: View {
             .buttonStyle(.plain)
             .accessibilityHint(canEdit ? L10n.t("يفتح تعديل التصنيف", "Opens category editing") : "")
             .moveDisabled(!canEdit)
-            .dsStaggerIn(min(index, 6) + 3)
+            // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
+            .dsCardCascade(index, appeared: appeared)
             .categoryListRow()
         }
         .onMove { source, destination in
             if canEdit { move(from: source, to: destination) }
+        }
+    }
+
+    /// الصفوف تدخل بعد أقسام الصفحة فوقها (الفلاتر والتوضيح ← العنوان = ٢) — من حيث كانت تبدأ (٣)،
+    /// فيبقى التسلسل: الرأس ← الأقسام ← الصفوف. مرة واحدة؛ «تقليل الحركة»: تلاشٍ فوري بلا انتظار.
+    private func startRowsCascade() {
+        guard !appeared else { return }
+        guard !reduceMotion else { appeared = true; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.staggerDelay(3, base: DSMotion.sectionsOnPage)) {
+            appeared = true
         }
     }
 

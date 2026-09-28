@@ -173,6 +173,12 @@ struct TreeView: View {
     @Environment(\.verticalSizeClass) var verticalSizeClass
     private var isLandscapeMode: Bool { verticalSizeClass == .compact }
     @Environment(\.colorScheme) var colorScheme
+    /// دخول الأدوات حول الشجرة (الشريط، زر التحديث، الحالة الفارغة) مرة مع أول ظهور
+    /// للتبويب — من TreeTabContainer، فلا يتكرر عند التبديل «العائلة/النساء».
+    /// الرسم والعُقد والإيماءات لا تُمسّ.
+    @Environment(\.treeChromeAppeared) private var chromeAppeared
+    /// «تقليل الحركة»: شريط المسار وبانر القرابة يظهران بتلاشٍ بلا انزلاق
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var activePath: Set<UUID> = []
     @State private var kinshipBanner: String? = nil
     @State private var kinshipHighlightedIds: Set<UUID> = [] // الأعضاء المهايلايتين بصلة القرابة
@@ -261,6 +267,8 @@ struct TreeView: View {
 
                     if cachedVisibleMembers.isEmpty {
                         emptyStateView
+                            // حالة المزامنة/الفراغ تدخل بتلاشٍ وصعود مع أول ظهور
+                            .dsCardCascade(1, appeared: chromeAppeared)
                     } else {
                         // حاوية بحجم الشاشة بالضبط + الكانفس كـ overlay لا يؤثر على تخطيطها —
                         // يمنع انزياح الشجرة يساراً عندما يكون الكانفس أعرض من الشاشة
@@ -373,10 +381,13 @@ struct TreeView: View {
                             }
                         }
                         .padding(.horizontal, DS.Spacing.sm)
+                        .dsCardCascade(0, appeared: chromeAppeared)
                         .zIndex(101)
 
                         // البار الجانبي — نفس أدوات البار العلوي عمودياً (طلب المالك)
                         landscapeSideToolbar
+                            // يدخل بعد شريط المسار (نفس تتالي البطاقات)
+                            .dsCardCascade(1, appeared: chromeAppeared)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                             .padding(.leading, DS.Spacing.sm)
                             .zIndex(101)
@@ -423,6 +434,9 @@ struct TreeView: View {
                             }
                         }
                         .padding(.horizontal, DS.Spacing.sm)
+                        // الهيدر ثابت (مثل بقية التبويبات)، وبطاقة الأدوات تدخل تحته أولاً —
+                        // مرة مع أول ظهور للتبويب. «تقليل الحركة»: تلاشٍ فقط
+                        .dsCardCascade(0, appeared: chromeAppeared)
                         }
                         .zIndex(101)
                     }
@@ -463,7 +477,8 @@ struct TreeView: View {
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.top, DS.Spacing.sm)
                                 .shadow(color: DS.Color.primary.opacity(0.3), radius: 8, y: 4)
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                                // «تقليل الحركة»: تلاشٍ بلا انزلاق
+                                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
 
                                 Spacer()
                             }
@@ -905,7 +920,8 @@ struct TreeView: View {
                 scrollBreadcrumbToEnd(proxy, animated: true)
             }
         }
-        .transition(.move(edge: .top).combined(with: .opacity))
+        // «تقليل الحركة»: تلاشٍ بلا انزلاق
+        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
     }
 
     /// يمرّر شريط المسار حتى يظهر آخر اسم (الموقع الحالي)
@@ -948,7 +964,8 @@ struct TreeView: View {
                                 .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
                         }
                     }
-                    .buttonStyle(.plain)
+                    // ضغطة ناعمة موحّدة (كان بلا إحساس بالضغط)
+                    .buttonStyle(DSPressStyle())
                     .disabled(isRefreshing)
                     .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
                 }
@@ -959,6 +976,8 @@ struct TreeView: View {
                         .stroke(DS.Color.mutedBackground, lineWidth: 1)
                 )
                 .dsSubtleShadow()
+                // الزر العائم يقفز آخراً بعد بطاقة الأدوات (مثل أزرار «+» العائمة)
+                .modifier(TreeToolPop(shown: chromeAppeared))
                 .padding(.bottom, DS.Spacing.xl)
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -1350,6 +1369,21 @@ struct TreeView: View {
         }
     }
 
+}
+
+/// زر الشجرة العائم يقفز آخراً — نفس قفزة DSIconPop (تكبير بنابض من ٠٫٥٥) وتأخير أزرار «+»
+/// العائمة، لكن يقوده علم ظهور التبويب فلا يتكرر مع التبديل «العائلة/النساء».
+/// «تقليل الحركة»: تلاشٍ فقط.
+private struct TreeToolPop: ViewModifier {
+    let shown: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(shown || reduceMotion ? 1 : DSMotion.iconFromScale)
+            .opacity(shown ? 1 : 0)
+            .animation(reduceMotion ? DSMotion.fade : DSMotion.iconPop.delay(0.4), value: shown)
+    }
 }
 
 

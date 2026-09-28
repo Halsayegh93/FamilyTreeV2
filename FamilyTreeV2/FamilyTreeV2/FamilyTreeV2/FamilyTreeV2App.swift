@@ -112,9 +112,9 @@ struct FamilyTreeV2App: App {
                         return
                     }
 
-                    // باقي أنواع الطلبات: موافقة مباشرة كالسابق
+                    // باقي أنواع الطلبات: موافقة كاملة تطبّق التعديل (لا تغيير الحالة فقط)
                     Task {
-                        let ok = await self.appState.notificationVM.approveRequest(requestId: requestId, requestType: requestType)
+                        let ok = await self.appState.adminRequestVM.approveFromPush(requestId: requestId, requestType: requestType)
                         if ok {
                             async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
                             async let m: () = self.appState.memberVM.fetchAllMembers(force: true)

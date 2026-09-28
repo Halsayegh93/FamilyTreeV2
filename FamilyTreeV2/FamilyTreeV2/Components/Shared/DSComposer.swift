@@ -607,6 +607,35 @@ extension View {
     func dsStaggerIn(_ index: Int) -> some View { modifier(DSStaggerIn(index: index)) }
 }
 
+// MARK: - دخول البطاقات في الصفحات — نمط الأخبار والديوانيات (طلب المالك ٢٠٢٦-٠٩-٢٧: «طبّقه على البقية»)
+//
+// كل بطاقة/صف تصعد ٣٠ نقطة وتظهر، واحدة بعد الأخرى (٠٫٠٦ ث، أول ٧ فقط والباقي مع السابع)،
+// مرة واحدة عند ظهور الصفحة — والصفوف التي تُبنى لاحقاً بالتمرير تظهر مباشرة بلا حركة.
+// الاستخدام: `@State private var appeared = false` في الصفحة + `.onAppear { appeared = true }`
+// ثم `.dsCardCascade(index, appeared: appeared)` على كل بطاقة. «تقليل الحركة»: تلاشٍ فقط.
+
+struct DSCardCascade: ViewModifier {
+    let index: Int
+    let appeared: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared || reduceMotion ? 0 : 30)
+            .animation(reduceMotion ? .easeOut(duration: 0.2)
+                                    : DS.Anim.smooth.delay(Double(min(max(index, 0), 6)) * 0.06),
+                       value: appeared)
+    }
+}
+
+extension View {
+    /// دخول البطاقة رقم [index] في قائمة الصفحة (نمط الأخبار والديوانيات)
+    func dsCardCascade(_ index: Int, appeared: Bool) -> some View {
+        modifier(DSCardCascade(index: index, appeared: appeared))
+    }
+}
+
 /// دخول تباعاً عند تفعيل شرط (مثل توسيع «عرض التفاصيل») بدل الظهور مرة عند الفتح
 struct DSStaggerWhen: ViewModifier {
     let index: Int

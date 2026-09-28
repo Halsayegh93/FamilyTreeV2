@@ -2303,14 +2303,17 @@ class MemberViewModel: ObservableObject {
     
     // MARK: - Update Member Health And Birth
     
+    /// true = حُفظ على السيرفر (يُستخدم لعرض «إعلان وفاة» بعد تسجيل الوفاة)
+    @discardableResult
     func updateMemberHealthAndBirth(
         memberId: UUID,
         birthDate: Date?,    // أصبح اختيارياً ليدعم "Not Available"
         isDeceased: Bool,
         deathDate: Date?     // أصبح اختيارياً ليدعم "Not Available"
-    ) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
+    ) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         self.isLoading = true
+        var saved = false
 
         // 1. تنسيق التواريخ
         let birthDateString = birthDate.map { DateHelper.format($0) }
@@ -2344,12 +2347,14 @@ class MemberViewModel: ObservableObject {
             // 4. تحديث القائمة المحلية فوراً
             await fetchSingleMember(id: memberId)
             Log.info("تم تحديث البيانات بنجاح (مع دعم التواريخ المفقودة)")
+            saved = true
             
         } catch {
             Log.error("خطأ في تحديث البيانات: \(error.localizedDescription)")
         }
         
         self.isLoading = false
+        return saved
     }
     
     // MARK: - Update Child Data
