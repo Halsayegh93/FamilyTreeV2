@@ -165,6 +165,8 @@ unauthenticated → (OTP login) → checking → authenticatedNoProfile → (reg
 - `trg_profiles_protect_sensitive_columns` — `is_admin`/`is_hr_member`/`hr_status` للمالك فقط؛ `is_approved=true` للإدارة؛ العضو المفعّل لا يغيّر في سجله: متوفى، تاريخ الوفاة، الأب، الإخفاء، اسم العائلة. القيم غير المتغيّرة تمر.
 - `trg_content_force_pending` (أخبار، مشاريع، ديوانيات، مكتبة) — محتوى غير المالك/المدير يُحفظ `pending`؛ تغيير `approval_status` لغير `pending` للمالك/المدير فقط. استثناء: المراقب/المشرف ينشرون أخبارهم مباشرة، والكل إذا أُطفئت «مراجعة الأخبار».
 - الهوية من `current_profile_id()` (app_metadata) — **لا تقرأ `raw_user_meta_data` للهوية** (المستخدم يعدّلها بنفسه).
+- **مطابقة الأرقام بالرقم الكامل مع مفتاح الدولة** (`phones_match_suffix`، ٨ أرقام محلية = +965) — لا ترجعها لآخر ٨ أرقام (نقلت ملف المالك لحساب +973 في 2026-09-27). `adopt_tree_profile` لا ينقل ملف المالك ولا ملفاً مربوطاً بحساب دخول متحقَّق برقمه.
+- `merge_member_into_tree` — المالك/المدير/المراقب فقط، ولا دمج لحساب المالك.
 - `can_handle_admin_request(type)` — المراقب: طلبات الشجرة والأعضاء؛ المشرف: البلاغات والرسائل؛ المالك/المدير: الكل.
 - `is_moderator()` يعتمد `current_user_role()` فالمجمّد يفقد صلاحياته. دوال النشاط للمالك/المدير/المراقب. دوال البحث بالرقم/الاسم ليست لـ anon.
 - **الأرقام المخفية:** اقرأ الأعضاء من `members_masked` (لا `profiles` بـ `select()`)، وفي الـ embed: `member:members_masked!member_id(*)`. المرحلة الثانية (بعد تحديث الكل): إلغاء قراءة عمود `phone_number` من `profiles`.
