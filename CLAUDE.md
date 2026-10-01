@@ -161,7 +161,14 @@ unauthenticated → (OTP login) → checking → authenticatedNoProfile → (reg
 
 القاعدة: **أي صلاحية في جدول الأدوار لازم يطبّقها السيرفر أيضاً** — إخفاء زر في التطبيق لا يكفي. الحراس الحالية (migrations `20260922170000`…`20260922230000`):
 - `trg_zz_deceased_no_admin_role` — المتوفى لا يحمل دوراً إدارياً (يرجع «عضو» عند تسجيل الوفاة، ويُرفض تعيينه).
-- `trg_profiles_protect_delete` — لا حذف للمالك ولا للنفس من التطبيق (حذف الحساب الذاتي عبر `delete-account` بمفتاح الخدمة لا يتأثر). `father_id` للأبناء يُفرَّغ تلقائياً (ON DELETE SET NULL) — لا تفرّغه قبل الحذف.
+- `trg_profiles_protect_delete` — لا حذف للمالك ولا للنفس من التطبيق (حذف الحساب الذاتي عبر `delete-account` بمفتاح الخدمة لا يتأثر).
+- **حماية روابط العائلة (2026-10-01، `20261001150000_protect_family_links`)** — طلب المالك: «لا تفصل عن الأعضاء الربط نهائياً»:
+  - روابط العائلة الست (`profiles.father_id/mother_id/husband_id` و`women_members.parent_id/mother_id/husband_id`) صارت **NO ACTION** بدل SET NULL، و`trg_family_links_protect_delete` يرفض حذف أي شخص له أبناء/بنات/زوجة مرتبطون برسالة عربية (`hint = family_links_protected`). التطبيق يحذف السجل **أولاً** (الإشعارات والأجهزة والصور تُحذف معه CASCADE) ويعرض الرسالة إن رُفض — لا تحذف المرتبطات قبله.
+  - نقل الملف لمعرّف جديد (`adopt_tree_profile` عند أول دخول، `merge_member_into_tree` في «ربط بالشجرة») ينقل عقدة شجرة النساء ومن يشير لها عبر `repoint_women_node` — كان يفصل الزوجة والبنات بصمت. أي دالة جديدة تنقل/تحذف ملفاً يجب أن تستدعيها قبل الحذف.
+  - `trg_zzz_family_links_guard`: أي عملية بلا مستخدم (دالة سيرفر، مفتاح الخدمة، SQL صيانة) لا تفرّغ رابطاً — تبقى القيمة وتُسجَّل `blocked`. الفصل المقصود من مستخدم (إزالة زوجة، تصحيح أب) مسموح ومسجَّل. للصيانة المقصودة فقط: `set_config('family.allow_unlink','on', true)`.
+  - كل تغيير في رابط يُسجَّل في `family_link_history` (قبل/بعد/من/متى) — للاسترجاع، يقرؤه المالك والمدير.
+  - التراجع: `supabase/rollback/20261001150000_protect_family_links_rollback.sql`.
+  - تجربة محلية قبل أي تعديل على هذه الدوال: `cd supabase/tests/family_links && npm install && node test.mjs` (قاعدة معزولة، لا تلمس السيرفر).
 - `trg_profiles_protect_sensitive_columns` — `is_admin`/`is_hr_member`/`hr_status` للمالك فقط؛ `is_approved=true` للإدارة؛ العضو المفعّل لا يغيّر في سجله: متوفى، تاريخ الوفاة، الأب، الإخفاء، اسم العائلة. القيم غير المتغيّرة تمر.
 - `trg_content_force_pending` (أخبار، مشاريع، ديوانيات، مكتبة) — محتوى غير المالك/المدير يُحفظ `pending`؛ تغيير `approval_status` لغير `pending` للمالك/المدير فقط. استثناء: المراقب/المشرف ينشرون أخبارهم مباشرة، والكل إذا أُطفئت «مراجعة الأخبار».
 - الهوية من `current_profile_id()` (app_metadata) — **لا تقرأ `raw_user_meta_data` للهوية** (المستخدم يعدّلها بنفسه).
