@@ -24,6 +24,8 @@ struct AdminTreeHealthView: View {
     @State private var showToggleHiddenConfirm = false
     @State private var memberToDelete: FamilyMember?
     @State private var showDeleteConfirm = false
+    @State private var deleteFailureText: String?
+    @State private var showDeleteFailure = false
     @State private var displayLimit = 20
 
     // MARK: - Cached data (computed once per allMembers change)
@@ -338,7 +340,12 @@ struct AdminTreeHealthView: View {
             presenting: memberToDelete
         ) { member in
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                Task { await memberVM.deleteMember(memberId: member.id) }
+                Task {
+                    if await !memberVM.deleteMember(memberId: member.id) {
+                        deleteFailureText = memberVM.errorMessage
+                        showDeleteFailure = true
+                    }
+                }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: { member in
@@ -346,6 +353,11 @@ struct AdminTreeHealthView: View {
                 "هل أنت متأكد من حذف \(member.fullName)؟ هذا الإجراء لا يمكن التراجع عنه.",
                 "Are you sure you want to delete \(member.fullName)? This action cannot be undone."
             ))
+        }
+        .dsAlert(L10n.t("لم يُحذف العضو", "Member Not Deleted"), isPresented: $showDeleteFailure) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(deleteFailureText ?? "")
         }
         .dsAlert(
             L10n.t("مسح رقم الهاتف", "Clear Phone Number"),

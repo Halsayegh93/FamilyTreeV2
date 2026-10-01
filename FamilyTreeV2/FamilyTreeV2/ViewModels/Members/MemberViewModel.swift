@@ -1731,32 +1731,11 @@ class MemberViewModel: ObservableObject {
         }
 
         isLoading = true
+        errorMessage = nil
         do {
-            // حذف الإشعارات المرتبطة — نسجّل الفشل لكن لا نوقف الحذف
-            do {
-                try await supabase.from("notifications")
-                    .delete()
-                    .eq("target_member_id", value: memberId.uuidString)
-                    .execute()
-            } catch { Log.warning("[Delete] فشل حذف notifications للعضو \(memberId): \(error.localizedDescription)") }
-
-            // حذف device tokens
-            do {
-                try await supabase.from("device_tokens")
-                    .delete()
-                    .eq("member_id", value: memberId.uuidString)
-                    .execute()
-            } catch { Log.warning("[Delete] فشل حذف device_tokens للعضو \(memberId): \(error.localizedDescription)") }
-
-            // حذف صور المعرض
-            do {
-                try await supabase.from("member_gallery_photos")
-                    .delete()
-                    .eq("member_id", value: memberId.uuidString)
-                    .execute()
-            } catch { Log.warning("[Delete] فشل حذف member_gallery_photos للعضو \(memberId): \(error.localizedDescription)") }
-
-            // حذف العضو من profiles
+            // حذف السجل أولاً: قاعدة البيانات تحذف معه إشعاراته وأجهزته وصوره (CASCADE)،
+            // وترفض حذف من له أبناء أو بنات أو زوجة مرتبطون (حماية روابط العائلة) فلا يُمسّ
+            // شيء. كان يحذف المرتبطات قبله، فيضيع جزء منها إذا رُفض الحذف.
             try await supabase.from("profiles")
                 .delete()
                 .eq("id", value: memberId.uuidString)
@@ -1771,6 +1750,11 @@ class MemberViewModel: ObservableObject {
             return true
         } catch {
             Log.error("فشل حذف العضو: \(error.localizedDescription)")
+            if let pgError = error as? PostgrestError, pgError.hint == "family_links_protected" {
+                errorMessage = pgError.message
+            } else {
+                errorMessage = L10n.t("تعذّر حذف العضو. حاول مرة أخرى.", "Couldn't delete the member. Try again.")
+            }
             isLoading = false
             return false
         }

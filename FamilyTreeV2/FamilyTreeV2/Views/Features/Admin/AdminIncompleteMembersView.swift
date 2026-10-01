@@ -17,6 +17,8 @@ struct AdminIncompleteMembersView: View {
     @State private var memberToEdit: FamilyMember?
     @State private var memberToDelete: FamilyMember?
     @State private var showDeleteConfirm = false
+    @State private var deleteFailureText: String?
+    @State private var showDeleteFailure = false
     @State private var showGenderConfirm = false
     @State private var pendingGender: String = "male"
     @State private var genderUpdateResult: String?
@@ -309,7 +311,12 @@ struct AdminIncompleteMembersView: View {
             presenting: memberToDelete
         ) { member in
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                Task { await memberVM.deleteMember(memberId: member.id) }
+                Task {
+                    if await !memberVM.deleteMember(memberId: member.id) {
+                        deleteFailureText = memberVM.errorMessage
+                        showDeleteFailure = true
+                    }
+                }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: { member in
@@ -317,6 +324,11 @@ struct AdminIncompleteMembersView: View {
                 "هل أنت متأكد من حذف \(member.fullName)؟ هذا الإجراء لا يمكن التراجع عنه.",
                 "Are you sure you want to delete \(member.fullName)? This action cannot be undone."
             ))
+        }
+        .dsAlert(L10n.t("لم يُحذف العضو", "Member Not Deleted"), isPresented: $showDeleteFailure) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(deleteFailureText ?? "")
         }
         .onAppear {
             selectedFilter = initialFilter
