@@ -12,7 +12,8 @@ const base = readFileSync(new URL('./base.sql', import.meta.url), 'utf8');
 const [baseBody, rest] = base.split('-- ─── المشغّلات');
 const baseTriggers = rest.slice(rest.indexOf('\n') + 1);
 const rollback = readFileSync(`${REPO}/rollback/20261001150000_protect_family_links_rollback.sql`, 'utf8');
-const migration = readFileSync(`${REPO}/migrations/20261001150000_protect_family_links.sql`, 'utf8');
+const migrations = ['20261001150000_protect_family_links', '20261001190000_carry_own_women_node_links']
+  .map(n => readFileSync(`${REPO}/migrations/${n}.sql`, 'utf8'));
 const grab = (src, name) => {
   const i = src.indexOf(`create or replace function public.${name}(`);
   return src.slice(i, src.indexOf('$function$;', i) + '$function$;'.length);
@@ -21,19 +22,19 @@ const liveFns = ['adopt_tree_profile', 'merge_member_into_tree', 'women_auto_mer
 
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const P = { O: id(1), G: id(2), H: id(3), S: id(4), T: id(5), ST: id(6), N: id(7), A: id(8), M2: id(9), M3: id(10), M4: id(11), X: id(12), SS: id(13) };
-const W = { W: id(101), D1: id(102), D2: id(103), WT: id(104), DT: id(105), W2: id(106), DM: id(107), C1: id(108), C2: id(109), NW: id(110) };
+const W = { HM: id(111), TM: id(112), W: id(101), D1: id(102), D2: id(103), WT: id(104), DT: id(105), W2: id(106), DM: id(107), C1: id(108), C2: id(109), NW: id(110) };
 const name = Object.fromEntries([...Object.entries(P), ...Object.entries(W)].map(([k, v]) => [v, k]));
 const nm = v => (v == null ? 'NULL' : name[v] ?? v.slice(-4));
 
 let pass = 0, fail = 0;
 const check = (label, ok, extra = '') => { ok ? pass++ : fail++; console.log(`${ok ? '✅' : '❌'} ${label}${extra ? ' — ' + extra : ''}`); };
 
-async function fresh(withMigration) {
+async function fresh(level) {
   const db = new PGlite();
   await db.exec(baseBody);
   await db.exec(liveFns);
   await db.exec(baseTriggers);
-  if (withMigration) await db.exec(migration);
+  for (const m of migrations.slice(0, level)) await db.exec(m);
   const q = async (sql, params) => (await db.query(sql, params)).rows;
   const as = async (uid, fn) => {
     await db.query(`select set_config('request.jwt.claims', $1, false)`, [uid ? JSON.stringify({ sub: uid, role: 'authenticated' }) : '']);
@@ -60,6 +61,11 @@ async function fresh(withMigration) {
       ('${W.D1}', 'زهراء', 'زهراء حسن', 'female', '${P.H}', '${W.W}'),
       ('${W.D2}', 'حوراء', 'حوراء حسن', 'female', '${P.H}', '${W.W}'),
       ('${W.DT}', 'سارة', 'سارة طاهر', 'female', '${P.T}', '${W.WT}');
+    insert into women_members(id, first_name, full_name, gender, husband_id) values
+      ('${W.HM}', 'هدى', 'هدى الصالح', 'female', '${P.G}'),
+      ('${W.TM}', 'نورية', 'نورية', 'female', '${P.G}');
+    update women_members set mother_id = '${W.HM}' where id = '${P.H}';
+    update women_members set mother_id = '${W.TM}' where id = '${P.T}';
     insert into profiles(id, first_name, full_name, gender, role, status, phone_number) values
       ('${P.N}', 'طاهر', 'طاهر (تسجيل جديد)', 'male', 'pending', 'pending', '+96590000002');
     insert into auth.users(id, phone) values ('${P.A}', '96590000001');
@@ -70,8 +76,10 @@ async function fresh(withMigration) {
 // ═════════ قبل الحماية: إعادة إنتاج الخلل كما على السيرفر اليوم ═════════
 console.log('\n══ قبل الحماية (نسخة السيرفر اليوم) ══');
 {
-  const { q, one, as } = await fresh(false);
+  const { q, one, as } = await fresh(0);
   await q(`select adopt_tree_profile($1, $2)`, [P.A, P.H]);
+  const m0 = await one(`select mother_id from women_members where id = $1`, [P.A]);
+  console.log(`أول دخول (adopt): أم حسن = ${nm(m0?.mother_id)}`);
   const w = await one(`select husband_id from women_members where id = $1`, [W.W]);
   const d = await q(`select parent_id from women_members where id = any($1)`, [[W.D1, W.D2]]);
   console.log(`أول دخول (adopt): زوج زينب = ${nm(w.husband_id)} · أب البنات = ${d.map(r => nm(r.parent_id)).join('، ')}`);
@@ -81,10 +89,21 @@ console.log('\n══ قبل الحماية (نسخة السيرفر اليوم)
   console.log(`ربط بالشجرة (merge): ${r.r.success} · زوج مريم = ${nm(wt.husband_id)} · أب سارة = ${nm(dt.parent_id)}`);
 }
 
+// ═════════ بعد الترحيل الأول فقط (الثغرة التي ضيّعت أم المالك) ═════════
+console.log('\n══ بعد 20261001150000 فقط ══');
+{
+  const { q, one, as } = await fresh(1);
+  await q(`select adopt_tree_profile($1, $2)`, [P.A, P.H]);
+  const m1 = await one(`select mother_id from women_members where id = $1`, [P.A]);
+  const r1 = await as(P.O, () => one(`select merge_member_into_tree($1, $2) as r`, [P.N, P.T]));
+  const n1 = await one(`select mother_id from women_members where id = $1`, [P.N]);
+  console.log(`أول دخول: أم حسن = ${nm(m1?.mother_id)} · ربط بالشجرة: أم طاهر = ${nm(n1?.mother_id)} (${r1.r.success})`);
+}
+
 // ═════════ بعد الحماية ═════════
 console.log('\n══ بعد الحماية ══');
 {
-  const { db, q, one, as, err } = await fresh(true);
+  const { db, q, one, as, err } = await fresh(2);
 
   // ١) أول دخول: كل الروابط تنتقل للمعرّف الجديد
   await q(`select adopt_tree_profile($1, $2)`, [P.A, P.H]);
@@ -98,6 +117,8 @@ console.log('\n══ بعد الحماية ══');
   check('أول دخول: البنات باقيات مع أبيهن', d.every(r => r.parent_id === P.A), d.map(r => nm(r.parent_id)).join('، '));
   check('أول دخول: الابن باقٍ مع أبيه (وعقدته)', s.father_id === P.A && sMirror.parent_id === P.A);
   check('أول دخول: عقدة الجديد تحت جده، والقديم انحذف', aMirror?.parent_id === P.G && hGone);
+  const aMom = await one(`select mother_id from women_members where id = $1`, [P.A]);
+  check('أول دخول: الأم باقية (هدى الصالح)', aMom.mother_id === W.HM, `أم حسن = ${nm(aMom.mother_id)}`);
 
   // ٢) ربط بالشجرة: الزوجة والبنت والابن ينتقلون
   const r = await as(P.O, () => one(`select merge_member_into_tree($1, $2) as r`, [P.N, P.T]));
@@ -105,12 +126,14 @@ console.log('\n══ بعد الحماية ══');
   const dt = await one(`select parent_id from women_members where id = $1`, [W.DT]);
   const st = await one(`select father_id from profiles where id = $1`, [P.ST]);
   check('ربط بالشجرة: نجح', r.r.success === true, r.r.message);
+  const nMom = await one(`select mother_id from women_members where id = $1`, [P.N]);
+  check('ربط بالشجرة: الأم باقية', nMom.mother_id === W.TM, `أم طاهر = ${nm(nMom.mother_id)}`);
   check('ربط بالشجرة: الزوجة والبنت والابن انتقلوا', wt.husband_id === P.N && dt.parent_id === P.N && st.father_id === P.N,
     `مريم→${nm(wt.husband_id)} سارة→${nm(dt.parent_id)} محمد→${nm(st.father_id)}`);
 
   // ٣) حذف شخص له أبناء يُرفض برسالة عربية ولا يتغير شيء
   const e1 = await as(P.O, () => err(() => q(`delete from profiles where id = $1`, [P.G])));
-  check('حذف الجد (له أبناء) مرفوض', !!e1 && e1.includes('لا يمكن حذف') && e1.includes('٤'), e1 ?? 'انحذف!');
+  check('حذف الجد (له أبناء) مرفوض', !!e1 && e1.includes('لا يمكن حذف') && e1.includes('٦'), e1 ?? 'انحذف!');
 
   // ٤) حذف رجل بلا أبناء لكن له زوجة في شجرة النساء يُرفض (هذا ما فصل عائلة المالك)
   await db.exec(`insert into profiles(id, first_name, full_name, gender, role, status, father_id) values ('${P.M2}', 'جاسم', 'جاسم صلاح', 'male', 'member', 'active', '${P.G}');
