@@ -536,7 +536,8 @@ class AdminRequestViewModel: ObservableObject {
                                 deathToAnnounce = DeathAnnouncementTarget(
                                     id: targetUUID,
                                     name: memberName.isEmpty ? (before?.fullName ?? "") : memberName,
-                                    isFemale: before?.isFemale ?? false)
+                                    isFemale: before?.isFemale ?? false,
+                                    deathDate: payload.deathDate)
                             }
                             let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
                             let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"

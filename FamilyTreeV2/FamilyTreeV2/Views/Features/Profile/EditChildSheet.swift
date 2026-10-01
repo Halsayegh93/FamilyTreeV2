@@ -352,7 +352,8 @@ struct EditChildSheet: View {
                 // الإدارة سجّلت الوفاة مباشرة → مربّع «إعلان وفاة»
                 if newlyDeceased, !deathNeedsApproval {
                     let target = DeathAnnouncementTarget(id: member.id, name: finalFullName,
-                                                         isFemale: selectedGender == "female")
+                                                         isFemale: selectedGender == "female",
+                                                         deathDate: deathDateString)
                     let canAnnounce = authVM.canApproveTreeRequests
                     Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
                 }

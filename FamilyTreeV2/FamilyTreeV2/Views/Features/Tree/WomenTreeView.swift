@@ -1493,7 +1493,8 @@ private struct WomanDetailSheet: View {
             // (الرجال المنعكسون هنا تُسجَّل وفاتهم من شجرة الرجال)
             if saved, becomingDeceased, woman.isFemale {
                 await DeathAnnouncementPresenter.offer(
-                    DeathAnnouncementTarget(id: woman.id, name: name, isFemale: true),
+                    DeathAnnouncementTarget(id: woman.id, name: name, isFemale: true,
+                                            deathDate: woman.deathDate),
                     canAnnounce: canEdit)
             }
         }

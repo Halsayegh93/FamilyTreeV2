@@ -719,6 +719,8 @@ struct LinkToExistingMemberSheet: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let pendingMember: FamilyMember
+    /// الأقرب لاسمه (مطابقات الشجرة من «طلبات المراجعة») — تظهر أولاً، وتُستبعد من «كل الأعضاء»
+    var suggested: [FamilyMember] = []
 
     @State private var searchText = ""
     @State private var selectedMember: FamilyMember? = nil
@@ -731,13 +733,22 @@ struct LinkToExistingMemberSheet: View {
             $0.id != pendingMember.id &&
             $0.isDeceased != true
         }
-        if searchText.isEmpty { return all }
+        if searchText.isEmpty {
+            // بلا تكرار: المقترحون في قسمهم أعلى
+            let suggestedIds = Set(suggested.map(\.id))
+            return all.filter { !suggestedIds.contains($0.id) }
+        }
         return all.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    /// المقترحون الأحياء غير المعلّقين فقط
+    private var visibleSuggestions: [FamilyMember] {
+        suggested.filter { $0.role != .pending && $0.isDeceased != true && $0.id != pendingMember.id }
     }
 
     var body: some View {
         DSComposer(
-            title: L10n.t("ربط بعضو موجود", "Link to Existing Member"),
+            title: L10n.t("ربط بالشجرة", "Link to Tree"),
             subtitle: pendingMember.displayFullName,
             icon: "link.badge.plus",
             tint: DS.Color.actionNavy,
@@ -750,7 +761,10 @@ struct LinkToExistingMemberSheet: View {
             onSubmit: { showConfirm = true },
             onCancel: { dismiss() }
         ) {
-            accountSection
+            linkPreview
+            if searchText.isEmpty && !visibleSuggestions.isEmpty {
+                suggestionsSection
+            }
             candidatesSection
         }
         .animation(DS.Anim.snappy, value: selectedMember?.id)
@@ -782,61 +796,116 @@ struct LinkToExistingMemberSheet: View {
         }
     }
 
-    // MARK: الحساب المعلّق + العضو المختار
+    // MARK: مخطط الربط — الحساب الجديد ← عضو الشجرة (طلب المالك ٢٠٢٦-١٠-٠١)
 
-    private var accountSection: some View {
-        DSComposerSection(title: L10n.t("الحساب المعلّق", "Pending Account"),
-                          icon: "person.fill",
-                          tint: DS.Color.warning,
-                          index: 0) {
+    /// بطاقة واحدة: الحساب الجديد فوق، ثم سهم، ثم عضو الشجرة المختار (أو مكانه منقّطاً)
+    private var linkPreview: some View {
+        VStack(spacing: 0) {
+            linkPerson(name: pendingMember.displayFullName,
+                       caption: L10n.t("الحساب الجديد", "New account"),
+                       ring: DS.Color.warning)
+
+            // الوصلة
             HStack(spacing: DS.Spacing.sm) {
-                memberInitialBadge(pendingMember.fullName, tint: DS.Color.warning)
+                Rectangle()
+                    .fill(DS.Color.textTertiary.opacity(0.35))
+                    .frame(width: 2, height: 16)
+                    .padding(.leading, 21)
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundColor(selectedMember == nil ? DS.Color.textTertiary : DS.Color.success)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("سيتم ربط حساب:", "Linking account:"))
-                        .font(DS.Font.plex(12, weight: .heavy))
-                        .foregroundColor(DS.Color.fieldLabel)
-                    Text(pendingMember.displayFullName)
-                        .font(DS.Font.plex(14.5))
-                        .foregroundColor(DS.Color.fieldValue)
-                        .lineLimit(2)
-                }
+                Text(L10n.t("يُربط بـ", "Links to"))
+                    .font(DS.Font.plex(11, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
                 Spacer(minLength: 0)
             }
-            .dsRowBox()
-            .accessibilityElement(children: .combine)
+            .padding(.vertical, 2)
 
             if let selected = selectedMember {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSFieldIcon(name: "arrow.down", tint: DS.Color.success)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("سيُربط بـ", "Will link to"))
-                            .font(DS.Font.plex(12, weight: .heavy))
-                            .foregroundColor(DS.Color.fieldLabel)
-                        Text(selected.displayFullName)
-                            .font(DS.Font.plex(14.5, weight: .bold))
-                            .foregroundColor(DS.Color.success)
-                            .lineLimit(2)
-                    }
-                    .accessibilityElement(children: .combine)
-                    Spacer(minLength: 0)
+                linkPerson(name: selected.displayFullName,
+                           caption: L10n.t("عضو الشجرة", "Tree member"),
+                           ring: DS.Color.success) {
                     Button {
-                        withAnimation(DS.Anim.snappy) { selectedMember = nil }
+                        withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) { selectedMember = nil }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 18))
                             .foregroundColor(DS.Color.textTertiary)
-                            // مساحة ضغط ٤٤ (توصية أبل) — الرمز وحجم الصف كما هما
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
-                            .padding(-12)
+                            .padding(-10)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.t("إلغاء الاختيار", "Clear selection"))
                 }
-                .dsRowBox()
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+            } else {
+                HStack(spacing: DS.Spacing.sm) {
+                    Circle()
+                        .strokeBorder(DS.Color.textTertiary.opacity(0.45),
+                                      style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        .frame(width: 44, height: 44)
+                        .overlay(Image(systemName: "questionmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary))
+                        .accessibilityHidden(true)
+                    Text(L10n.t("اختر عضو الشجرة من القائمة", "Pick the tree member below"))
+                        .font(DS.Font.plex(13.5, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(DS.Spacing.md)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .dsStaggerIn(0)
+    }
+
+    private func linkPerson(name: String, caption: String, ring: Color) -> some View {
+        linkPerson(name: name, caption: caption, ring: ring) { EmptyView() }
+    }
+
+    /// شخص في مخطط الربط: أول حرف بحلقة اللون + الاسم + وصفه
+    private func linkPerson<Trailing: View>(name: String, caption: String, ring: Color,
+                                            @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)))
+                .font(DS.Font.plex(17, weight: .bold))
+                .foregroundColor(DS.Color.actionNavy.dsReadableGlyph)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(DS.Color.actionNavy.dsReadableGlyph.opacity(0.08)))
+                .overlay(Circle().strokeBorder(ring.dsReadableGlyph, lineWidth: 2))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(caption)
+                    .font(DS.Font.plex(11, weight: .semibold))
+                    .foregroundColor(ring.dsReadableGlyph)
+                Text(name)
+                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
+            trailing()
+        }
+    }
+
+    // MARK: الأقرب لاسمه (من مطابقات الشجرة)
+
+    private var suggestionsSection: some View {
+        DSComposerSection(title: L10n.t("الأقرب لاسمه", "Closest names"),
+                          icon: "sparkles",
+                          tint: DS.Color.success,
+                          trailing: "\(visibleSuggestions.count)",
+                          index: 1) {
+            ForEach(visibleSuggestions) { member in
+                candidateRow(member)
             }
         }
     }
@@ -846,10 +915,12 @@ struct LinkToExistingMemberSheet: View {
     private var candidatesSection: some View {
         let list = candidates
         let visible = Array(list.prefix(displayLimit))
-        return DSComposerSection(title: L10n.t("أعضاء الشجرة", "Tree Members"),
+        return DSComposerSection(title: searchText.isEmpty && !visibleSuggestions.isEmpty
+                                        ? L10n.t("كل أعضاء الشجرة", "All tree members")
+                                        : L10n.t("أعضاء الشجرة", "Tree Members"),
                                  icon: "person.3.fill",
                                  tint: DS.Color.primary,
-                                 index: 1) {
+                                 index: 2) {
             DSComposerField(icon: "magnifyingglass",
                             label: L10n.t("بحث", "Search"),
                             placeholder: L10n.t("ابحث عن عضو...", "Search member..."),

@@ -1008,7 +1008,8 @@ struct AdminMemberDetailSheet: View {
                     let target = DeathAnnouncementTarget(
                         id: capturedMemberId,
                         name: nameChanged ? capturedFullName : auditMemberName,
-                        isFemale: capturedGender == "female")
+                        isFemale: capturedGender == "female",
+                        deathDate: DeathRecency.string(from: capturedDeathDate))
                     let canAnnounce = authVM.canApproveTreeRequests
                     Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
                 }

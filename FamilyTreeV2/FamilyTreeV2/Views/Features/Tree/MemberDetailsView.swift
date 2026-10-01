@@ -95,6 +95,8 @@ struct MemberDetailsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// ارتفاع شريط الأزرار السفلي (والرأس إن وُجد) — يدخل في ارتفاع المربّع المصغّر والموسّع
     @State private var panelFooterH: CGFloat = 0
+    /// أُعلن عن وفاته؟ nil = لم يُتحقق بعد (لا يظهر زر «إعلان وفاة»)
+    @State private var deathAnnounced: Bool? = nil
     @State private var panelHeaderH: CGFloat = 0
     /// رأس ملوّن مثل مربّعات الإضافة فوق الصورة (لا يتداخل معها) — خيار للمالك
     private static let showsHeaderBand = true   // قرار المالك: الشكل (ب) — رأس ملوّن مثل بقية المربّعات
@@ -238,6 +240,10 @@ struct MemberDetailsView: View {
             .onChange(of: currentMemberId) { _ in recomputeCache() }
             .onChange(of: memberVM.membersVersion) { _ in recomputeCache() }
             .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
+            .task(id: member.isDeceased) { await refreshDeathAnnounced() }
+            .onReceive(NotificationCenter.default.publisher(for: .deathAnnouncementPublished)) { note in
+                if (note.object as? UUID) == member.id { deathAnnounced = true }
+            }
             .toolbar(.hidden, for: .navigationBar)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             // تنسيق الألوان: أقسام التفاصيل بلون شريطها (كحلي، ورمادي للمتوفى) مثل باقي المربّعات
@@ -1387,6 +1393,14 @@ struct MemberDetailsView: View {
                             tint: DS.Color.primary
                         ) { showAdminControl = true }
                     }
+
+                    if showsDeathAnnounce {
+                        circleActionButton(
+                            icon: NewsTypeHelper.icon(for: "وفاة"),
+                            label: L10n.t("إعلان وفاة", "Obituary"),
+                            tint: NewsTypeHelper.color(for: "وفاة")
+                        ) { openDeathAnnouncement() }
+                    }
                 }
                 .frame(maxWidth: .infinity)
 
@@ -1537,6 +1551,44 @@ struct MemberDetailsView: View {
         .buttonStyle(DSScaleButtonStyle())
     }
 
+    // MARK: - إعلان وفاة (مكان ثابت — طلب المالك «وين الوفاة؟»)
+
+    /// يظهر للمتوفى الذي لم يُعلن عنه بعد، لمن يعتمد الوفيات (المالك والمدير والمراقب)
+    private var showsDeathAnnounce: Bool {
+        member.isDeceased == true && authVM.canApproveTreeRequests && deathAnnounced == false
+            && DeathRecency.isRecent(member.deathDate)
+    }
+
+    private func refreshDeathAnnounced() async {
+        guard member.isDeceased == true, authVM.canApproveTreeRequests else { return }
+        let ids = await DeathAnnouncementPresenter.announcedIDs()
+        deathAnnounced = ids.contains(member.id)
+    }
+
+    private func openDeathAnnouncement() {
+        DeathAnnouncementPresenter.open(DeathAnnouncementTarget(
+            id: member.id, name: member.fullName, isFemale: member.isFemale,
+            deathDate: member.deathDate))
+    }
+
+    private var deathAnnounceButton: some View {
+        let tint = NewsTypeHelper.color(for: "وفاة")
+        return Button { openDeathAnnouncement() } label: {
+            HStack(spacing: 7) {
+                Image(systemName: NewsTypeHelper.icon(for: "وفاة"))
+                    .font(.system(size: 14, weight: .bold))
+                    .accessibilityHidden(true)
+                Text(L10n.t("إعلان وفاة", "Death announcement"))
+                    .font(DS.Font.plex(14.5, weight: .bold))
+            }
+            .foregroundColor(tint.dsReadableGlyph)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(tint.opacity(0.14),
+                        in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        }
+    }
+
     // MARK: - Panel Footer (نفس شريط مربّعات الإضافة)
 
     private struct PanelAction {
@@ -1563,6 +1615,9 @@ struct MemberDetailsView: View {
 
     /// شريط ثابت أسفل المربّع: الإجراء كحلي يمين، «إبلاغ» صغير، «إغلاق» يسار
     private var panelFooter: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            // إعلان وفاة — للمتوفى الذي لم يُعلن عنه، لمن يعتمد الوفيات
+            if showsDeathAnnounce { deathAnnounceButton }
         HStack(spacing: DS.Spacing.sm) {
             if let primary = primaryPanelAction {
                 Button(action: primary.run) {
@@ -1605,6 +1660,7 @@ struct MemberDetailsView: View {
                                                     : L10n.t("حظر العضو", "Block member"))
             }
             PanelCloseButton()
+        }
         }
         .buttonStyle(DSScaleButtonStyle())
         .padding(.horizontal, DS.Spacing.lg)

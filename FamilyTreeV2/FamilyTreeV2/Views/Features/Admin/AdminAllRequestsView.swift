@@ -620,7 +620,8 @@ struct AdminAllRequestsView: View {
             ))
         }
         .dsTallBox(item: $memberToLink) { member in   // قائمة أعضاء طويلة (توصية أبل)
-            LinkToExistingMemberSheet(pendingMember: member)
+            LinkToExistingMemberSheet(pendingMember: member,
+                                      suggested: orderedMatchList(for: member).map(\.member))
                 .environmentObject(memberVM)
                 .environmentObject(adminRequestVM)
         }
@@ -2406,131 +2407,160 @@ struct AdminAllRequestsView: View {
 
     private typealias JoinMatch = (member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)
 
+    /// صف طلب الانضمام — أنيق ومحترم (طلب المالك ٢٠٢٦-١٠-٠١): صورة بأول حرف بحلقة لون الحالة،
+    /// الاسم عنواناً، سطر حالة هادئ (مطابقة/اسم جديد · من الموقع)، عمر الطلب نصاً خفيفاً،
+    /// ثم الرقم وزر واتساب دائري، وأقرب تطابق فقط. التفاصيل الكاملة داخل الطلب.
     private func joinRequestRow(for member: FamilyMember) -> some View {
         // كل المتغيرات خارج ViewBuilder لتفادي مشاكل @ViewBuilder مع let
-        let registrationTime = member.createdAt.map { formatRegistrationDate($0) } ?? "—"
-        let uname = member.username
         let phone: String? = {
             guard let p = member.phoneNumber, !p.isEmpty else { return nil }
             return p
         }()
-        let orderedResults = orderedMatchList(for: member)
-        let hasMatches = !orderedResults.isEmpty
-        let serverMatchCount = orderedResults.count
+        let results = orderedMatchList(for: member)
+        let hasMatches = !results.isEmpty
+        let fromWeb = member.registrationPlatform == "web"
+        let age = Self.requestDate(member.createdAt).map { ageText(days: daysWaiting(since: $0)) }
 
-        return VStack(alignment: .leading, spacing: 6) {
-            // رأس الصف: نوع الطلب + اسم المنضم + عمر الطلب (وبادج المطابقات)
-            requestRowHeader(icon: "person.badge.shield.checkmark",
-                             tint: hasMatches ? DS.Color.success : DS.Color.warning,
-                             title: L10n.t("طلب انضمام", "Join Request"),
-                             subtitle: member.displayFullName) {
-                VStack(alignment: .trailing, spacing: 4) {
-                    pendingChip(Self.requestDate(member.createdAt))
-                    // بادج مطابقات التسجيل
-                    if serverMatchCount > 0 {
-                        SysStatusChip(text: L10n.t("\(serverMatchCount) مطابقة", "\(serverMatchCount) match"),
-                                      icon: "person.2.fill",
-                                      tint: DS.Color.info)
-                    }
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(alignment: .center, spacing: DS.Spacing.md) {
+                joinPersonAvatar(member, ring: hasMatches ? DS.Color.success : DS.Color.warning, size: 44)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(member.displayFullName)
+                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .foregroundColor(DS.Color.fieldLabel)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    joinStatusLine(matches: results.count, fromWeb: fromWeb)
+                }
+
+                Spacer(minLength: DS.Spacing.xs)
+
+                if let age {
+                    Text(age)
+                        .font(DS.Font.plex(11, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .fixedSize()
                 }
             }
 
-            rowExtras {
-                // اسم المستخدم (من الموقع) + رقم هاتف المنضم
-                if uname != nil || phone != nil {
-                    HStack(spacing: DS.Spacing.sm) {
-                        if let uname {
-                            metaItem("at", uname, color: DS.Color.primary)
-                        }
-                        if let phone {
-                            metaItem("phone.fill", KuwaitPhone.display(phone), color: DS.Color.fieldValue)
-                        }
-                    }
-                }
-                // الوقت والتاريخ + واتساب (تواصل مباشر مع المنضم من الصف)
+            if let phone {
                 HStack(spacing: DS.Spacing.sm) {
-                    metaItem("clock.fill", registrationTime)
+                    metaItem("phone.fill", KuwaitPhone.display(phone), color: DS.Color.fieldValue)
                     Spacer(minLength: 0)
-                    if let phone, let wa = KuwaitPhone.whatsappURL(phone) {
-                        whatsAppButton(wa)
+                    if let wa = KuwaitPhone.whatsappURL(phone) {
+                        roundContactButton(icon: "message.fill", tint: DS.Color.success,
+                                           label: L10n.t("واتساب", "WhatsApp")) {
+                            UIApplication.shared.open(wa)
+                        }
                     }
                 }
+                .padding(.leading, 56)   // تحت الاسم (الصورة ٤٤ + المسافة)
             }
 
-            // نتائج التطابق — لستة مرتبة من الاسم الأول للأخير
-            joinMatchesBox(for: member, results: orderedResults)
+            if hasMatches {
+                joinBestMatches(for: member, results: results)
+            }
         }
     }
 
-    /// مربّع المطابقات المحتملة داخل صف الانضمام — أو سطر «اسم جديد» إن لم يوجد تطابق
-    @ViewBuilder
-    private func joinMatchesBox(for member: FamilyMember, results: [JoinMatch]) -> some View {
-        if results.isEmpty {
-            HStack(spacing: 6) {
-                Image(systemName: "person.badge.plus")
-                    .font(.system(size: 11, weight: .semibold))
+    /// سطر حالة هادئ بلا شارات: «٣ مطابقات في الشجرة» أو «اسم جديد» · «من الموقع»
+    private func joinStatusLine(matches: Int, fromWeb: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: matches > 0 ? "checkmark.seal.fill" : "sparkles")
+                .font(.system(size: 10, weight: .bold))
+                .accessibilityHidden(true)
+            Text(matches > 0 ? L10n.t("\(matches) مطابقة في الشجرة", "\(matches) in the tree")
+                             : L10n.t("اسم جديد", "New name"))
+            if fromWeb {
+                Text("·").foregroundColor(DS.Color.textTertiary)
+                Image(systemName: "globe")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(DS.Color.info.dsReadableGlyph)
                     .accessibilityHidden(true)
-                Text(L10n.t("لا يوجد تطابق — اسم جديد", "No tree matches — new name"))
-                    .font(DS.Font.plex(11.5, weight: .bold))
-                Spacer(minLength: 0)
+                Text(L10n.t("من الموقع", "From website"))
+                    .foregroundColor(DS.Color.info.dsReadableGlyph)
             }
-            .foregroundColor(DS.Color.textSecondary)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                .fill(DS.Color.surface))
-        } else {
-            let isExpanded = expandedMatchMembers.contains(member.id)
-            let visible = isExpanded ? results : Array(results.prefix(5))
-            VStack(spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
-                        .accessibilityHidden(true)
-                    Text(L10n.t(
-                        "تطابق محتمل (\(results.count))",
-                        "Potential matches (\(results.count))"
-                    ))
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .foregroundColor(DS.Color.fieldLabel)
-                    Spacer(minLength: 0)
-                }
-
-                ForEach(visible, id: \.member.id) { match in
-                    joinMatchRow(match: match, pendingMember: member)
-                }
-
-                if results.count > 5 && !isExpanded {
-                    Button {
-                        withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
-                            _ = expandedMatchMembers.insert(member.id)
-                        }
-                    } label: {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 10.5, weight: .bold))
-                                .accessibilityHidden(true)
-                            Text(L10n.t(
-                                "عرض الكل (\(results.count))",
-                                "Show all (\(results.count))"
-                            ))
-                            .font(DS.Font.plex(11.5, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.primary)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .padding(.vertical, -6)
-                }
-            }
-            .padding(DS.Spacing.sm)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.primary.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
         }
+        .font(DS.Font.plex(11.5, weight: .semibold))
+        .foregroundColor(matches > 0 ? DS.Color.success.dsReadableGlyph : DS.Color.textSecondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+    }
+
+    /// صورة المنضم (أو أول حرف من اسمه) بحلقة رفيعة بلون الحالة: أخضر له مطابقة، كهرماني اسم جديد
+    private func joinPersonAvatar(_ member: FamilyMember, ring: Color, size: CGFloat) -> some View {
+        let initial = member.firstName.trimmingCharacters(in: .whitespaces).first
+            ?? member.fullName.trimmingCharacters(in: .whitespaces).first ?? "؟"
+        let ringColor = ring.dsReadableGlyph
+        return ZStack {
+            Circle().fill(DS.Color.actionNavy.dsReadableGlyph.opacity(0.08))
+            if let raw = member.avatarUrl, !raw.isEmpty, let url = URL(string: raw) {
+                CachedAsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    Color.clear
+                }
+                .clipShape(Circle())
+            } else {
+                Text(String(initial))
+                    .font(DS.Font.plex(size * 0.4, weight: .bold))
+                    .foregroundColor(DS.Color.actionNavy.dsReadableGlyph)
+            }
+        }
+        .frame(width: size, height: size)
+        .overlay(Circle().strokeBorder(ringColor, lineWidth: size > 60 ? 3 : 2))
+        .accessibilityHidden(true)
+    }
+
+    /// زر تواصل دائري صغير (واتساب/اتصال) بمساحة ضغط ٤٤ نقطة
+    private func roundContactButton(icon: String, tint: Color, label: String,
+                                    action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(tint.dsReadableGlyph)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(tint.dsReadableGlyph.opacity(0.12)))
+                .padding(5)
+                .contentShape(Rectangle())
+                .padding(-5)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(label)
+    }
+
+    /// أقرب تطابق فقط — والباقي بزر «عرض كل المطابقات»
+    @ViewBuilder
+    private func joinBestMatches(for member: FamilyMember, results: [JoinMatch]) -> some View {
+        let isExpanded = expandedMatchMembers.contains(member.id)
+        let visible = isExpanded ? results : Array(results.prefix(1))
+        VStack(spacing: 6) {
+            ForEach(visible, id: \.member.id) { match in
+                joinMatchRow(match: match, pendingMember: member)
+            }
+            if results.count > 1 && !isExpanded {
+                Button {
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
+                        _ = expandedMatchMembers.insert(member.id)
+                    }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text(L10n.t("عرض كل المطابقات (\(results.count))",
+                                    "Show all matches (\(results.count))"))
+                            .font(DS.Font.plex(11.5, weight: .bold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .bold))
+                            .accessibilityHidden(true)
+                    }
+                    .foregroundColor(DS.Color.primary)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+            }
+        }
+        .padding(.leading, 56)   // تحت الاسم (الصورة ٤٤ + المسافة)
     }
 
     // MARK: - تنسيق تاريخ التسجيل مع الوقت
@@ -3580,6 +3610,139 @@ struct AdminAllRequestsView: View {
     /// محتوى المربّع: الصورة (إن وُجدت) ← «بيانات الطلب» ← «الإجراءات»
     @ViewBuilder
     private func detailBoxContent(_ detail: RequestDetail, meta: DetailMeta) -> some View {
+        if case .join(let member) = detail {
+            joinDetailContent(member)
+            detailActionsSection(for: detail)
+        } else {
+            genericDetailBoxContent(detail, meta: meta)
+        }
+    }
+
+    /// تفاصيل طلب الانضمام — مرتّبة ومحترمة (طلب المالك ٢٠٢٦-١٠-٠١):
+    /// بطاقة الشخص (صورته، اسمه، طريقة تسجيله) ← «بيانات المنضم» صفوفاً بعنوان وقيمة
+    /// ← «في الشجرة» (المطابقات بزر «ربط» أو «اسم جديد») ← «الإجراءات». وقت الطلب في الرأس فقط.
+    @ViewBuilder
+    private func joinDetailContent(_ member: FamilyMember) -> some View {
+        let results = orderedMatchList(for: member)
+        let fromWeb = member.registrationPlatform == "web"
+        let uname = member.username?.trimmingCharacters(in: .whitespaces) ?? ""
+        let phone = member.phoneNumber?.trimmingCharacters(in: .whitespaces) ?? ""
+        let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        // ١) بطاقة الشخص
+        VStack(spacing: 6) {
+            joinPersonAvatar(member, ring: results.isEmpty ? DS.Color.warning : DS.Color.success, size: 74)
+                .padding(.bottom, 2)
+            Text(member.fullName)
+                .font(DS.Font.plex(17, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 5) {
+                Image(systemName: fromWeb ? "globe" : "iphone")
+                    .font(.system(size: 11, weight: .bold))
+                    .accessibilityHidden(true)
+                Text(fromWeb
+                     ? (uname.isEmpty ? L10n.t("سجّل من الموقع", "Signed up on the website")
+                                      : L10n.t("سجّل من الموقع · \u{2066}@\(uname)\u{2069}", "Website · @\(uname)"))
+                     : L10n.t("سجّل من التطبيق برقم الجوال", "Signed up in the app by phone"))
+            }
+            .font(DS.Font.plex(12, weight: .semibold))
+            .foregroundColor(fromWeb ? DS.Color.info.dsReadableGlyph : DS.Color.fieldValue)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xs)
+        .dsStaggerIn(0)
+
+        // ٢) بيانات المنضم — صفوف بعنوان وقيمة وفاصل رفيع
+        DSComposerSection(title: L10n.t("بيانات المنضم", "Applicant"),
+                          icon: "person.text.rectangle.fill",
+                          tint: DS.Color.primary,
+                          index: 1) {
+            VStack(spacing: 0) {
+                joinFactRow(icon: "phone.fill", tint: DS.Color.success,
+                            label: L10n.t("الهاتف", "Phone"),
+                            value: phone.isEmpty ? L10n.t("غير مسجّل", "Not set") : KuwaitPhone.display(phone)) {
+                    if !phone.isEmpty {
+                        HStack(spacing: 6) {
+                            if let wa = KuwaitPhone.whatsappURL(phone) {
+                                roundContactButton(icon: "message.fill", tint: DS.Color.success,
+                                                   label: L10n.t("واتساب", "WhatsApp")) {
+                                    UIApplication.shared.open(wa)
+                                }
+                            }
+                            if let tel = KuwaitPhone.telURL(phone) {
+                                roundContactButton(icon: "phone.fill", tint: DS.Color.primary,
+                                                   label: L10n.t("اتصال", "Call")) {
+                                    UIApplication.shared.open(tel)
+                                }
+                            }
+                        }
+                    }
+                }
+                Divider().padding(.leading, 44)
+                joinFactRow(icon: "calendar", tint: DS.Color.neonPurple,
+                            label: L10n.t("تاريخ الميلاد", "Birth date"),
+                            value: birth.isEmpty ? L10n.t("غير مذكور", "Not given") : birth) { EmptyView() }
+            }
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(DS.Color.background))
+        }
+
+        // ٣) في الشجرة — المطابقات بزر «ربط»، أو اسم جديد
+        DSComposerSection(title: L10n.t("في الشجرة", "In the tree"),
+                          icon: results.isEmpty ? "sparkles" : "person.2.fill",
+                          tint: results.isEmpty ? DS.Color.warning : DS.Color.success,
+                          trailing: results.isEmpty ? nil : "\(results.count)",
+                          index: 2) {
+            if results.isEmpty {
+                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                    DSFieldIcon(name: "person.badge.plus", tint: DS.Color.warning)
+                    Text(L10n.t("لا يوجد اسم مطابق في الشجرة — عند «ربط بالشجرة» يُضاف عضواً جديداً.",
+                                "No matching name in the tree — linking adds them as a new member."))
+                        .font(DS.Font.plex(12.5, weight: .medium))
+                        .foregroundColor(DS.Color.fieldValue)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .dsRowBox()
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(results, id: \.member.id) { match in
+                        joinMatchRow(match: match, pendingMember: member)
+                    }
+                }
+            }
+        }
+    }
+
+    /// صف معلومة: أيقونة + العنوان فوق القيمة (وأزرار اختيارية) — مثل بطاقات جهات الاتصال
+    private func joinFactRow<Trailing: View>(icon: String, tint: Color, label: String, value: String,
+                                             @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: tint)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(DS.Font.plex(11, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
+                Text(value)
+                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: DS.Spacing.xs)
+            trailing()
+        }
+        .frame(minHeight: 54)
+    }
+
+    @ViewBuilder
+    private func genericDetailBoxContent(_ detail: RequestDetail, meta: DetailMeta) -> some View {
         if let imageUrl = meta.imageUrl, let url = URL(string: imageUrl) {
             detailHeroImage(url: url, color: meta.color)
                 .dsStaggerIn(0)
@@ -3791,17 +3954,30 @@ struct AdminAllRequestsView: View {
         case .join(let member):
             infoCard(icon: "person.fill", label: L10n.t("الاسم الكامل", "Full Name"),
                      value: member.fullName, color: DS.Color.primary)
-            if let uname = member.username, !uname.isEmpty {
-                infoCard(icon: "at", label: L10n.t("اسم المستخدم", "Username"),
-                         value: uname, color: DS.Color.info)
+            if let phone = member.phoneNumber, !phone.isEmpty {
+                infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
+                         value: KuwaitPhone.display(phone), color: DS.Color.success)
             }
             if let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines), !birth.isEmpty {
                 infoCard(icon: "calendar", label: L10n.t("تاريخ الميلاد", "Birth Date"),
                          value: birth, color: DS.Color.neonPurple)
             }
-            if let phone = member.phoneNumber, !phone.isEmpty {
-                infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
-                         value: KuwaitPhone.display(phone), color: DS.Color.success)
+            // طريقة التسجيل في سطر واحد: الموقع باسم دخول وكلمة مرور، والتطبيق برقم الجوال
+            if member.registrationPlatform == "web" {
+                let uname = member.username?.trimmingCharacters(in: .whitespaces) ?? ""
+                infoCard(icon: "globe", label: L10n.t("التسجيل", "Signed up"),
+                         value: uname.isEmpty
+                            ? L10n.t("من الموقع", "Website")
+                            : L10n.t("من الموقع · اسم الدخول: \(uname)", "Website · username: \(uname)"),
+                         color: DS.Color.info)
+            } else {
+                infoCard(icon: "iphone", label: L10n.t("التسجيل", "Signed up"),
+                         value: L10n.t("من التطبيق برقم الجوال", "App, with phone number"),
+                         color: DS.Color.info)
+            }
+            if let created = member.createdAt {
+                infoCard(icon: "clock.fill", label: L10n.t("وقت الطلب", "Requested"),
+                         value: formatRegistrationDate(created), color: DS.Color.warning)
             }
             // «تعديل / إضافة رقم فعلي» انتقل إلى قسم «الإجراءات» (detailActionsSection)
 
