@@ -1,10 +1,26 @@
-do $test$
-declare
-  r text := 'session_user=' || session_user;
-  v_owner uuid; v_admin uuid; v_member uuid; v_member2 uuid; v_phone text; v_phone2 text;
-  v_new uuid := gen_random_uuid();
-begin
-  execute $ddl0$create or replace function public.adopt_tree_profile(p_auth_uid uuid, p_tree_id uuid)
+-- حماية حسابات كل الأعضاء من النقل والحذف الآلي (طلب المالك ٢٠٢٦-١٠-٠١)
+--
+-- ما حدث للمالك (٢٠٢٦-٠٩-٢٤/٢٥): دخول برمز دولة خطأ (+٩٦٨) لنفس الأرقام الثمانية →
+-- handle_new_user_by_phone ← adopt_tree_profile نسخ ملفه لحساب الدخول الجديد وترك
+-- القديم فارغاً، ثم حُذف القديم بما ارتبط به. هذا ممكن لأي عضو، لا للمالك فقط.
+--
+-- القاعدة الجديدة: الملف المربوط بحساب دخول **لا يُنقل ولا يُسحب رقمه ولا يُحذف آلياً** —
+-- لأي عضو. الربط الآلي يبقى فقط لملفات الشجرة التي لم يدخل أصحابها بعد.
+--   ١) adopt_tree_profile: يرفض نقل ملفات الإدارة، وأي ملف له حساب دخول (معرّفه نفسه
+--      حساب دخول، أو مربوط بحساب عبر profile_id) — يشمل التحقق القديم وأوسع منه.
+--   ٢) تحرير الرقم المتعارض عند إدراج عضو: رقم الإدارة أو أي ملف له حساب دخول لا يُفرَّغ —
+--      يُرفض الإدراج بـ phone_in_use بدل إفراغ رقم صاحبه.
+--   ٣) handle_new_user_by_phone: فشل السجل المبدئي لا يمنع إنشاء حساب الدخول.
+--   ٤) الحذف: سجل المالك لا يُحذف إلا يدوياً من لوحة التحكم، وملف أي عضو له حساب دخول
+--      لا يُحذف من مسارات الدخول الآلية.
+-- (مطبّق مسبقاً على السيرفر ٢٠٢٦-٠٩-٢٨: مطابقة الرقم كاملاً مع رمز الدولة.)
+--
+-- ملاحظة: إعادة ربط عضو بحساب دخول جديد (مثلاً غيّر شريحته) صارت يدوية ومقصودة.
+--
+-- التراجع: supabase/rollback/20261001100000_protect_all_accounts_rollback.sql
+
+-- ─── ١) النقل الآلي: لا للإدارة، ولا لأي ملف له حساب دخول ───────────────────────
+create or replace function public.adopt_tree_profile(p_auth_uid uuid, p_tree_id uuid)
  returns void
  language plpgsql
  security definer
@@ -24,21 +40,21 @@ begin
     return;
   end if;
 
-  -- حماية: ملفات الإدارة (المالك/المدير/المراقب/المشرف) لا تُنقل تلقائياً أبداً —
-  -- نقلها يدوي ومقصود فقط
+  -- حماية: ملفات الإدارة (المالك/المدير/المراقب/المشرف) لا تُنقل آلياً أبداً
   if v_tree.role in ('owner', 'admin', 'monitor', 'supervisor') then
     raise warning '[ADOPT] رُفض نقل ملف الإدارة % (%) إلى %', p_tree_id, v_tree.role, p_auth_uid;
     return;
   end if;
 
-  -- حماية: الملف مربوط أصلاً بحساب دخول متحقَّق من رقمه (صاحبه الفعلي) → لا يُسحب منه
-  if exists (
-    select 1 from auth.users u
-    where u.id = p_tree_id
-      and u.phone_confirmed_at is not null
-      and public.phones_match_suffix(u.phone, v_tree.phone_number)
-  ) then
-    raise warning '[ADOPT] رُفض: الملف % مربوط بحساب دخول متحقَّق', p_tree_id;
+  -- حماية كل الأعضاء: الملف المربوط بحساب دخول — معرّفه نفسه حساب دخول، أو مربوط
+  -- بحساب آخر عبر profile_id — صاحبه موجود، فلا يُنقل لحساب دخول جديد آلياً
+  if exists (select 1 from auth.users u where u.id = p_tree_id)
+     or exists (
+       select 1 from auth.users u
+       where u.id <> p_auth_uid
+         and coalesce(u.raw_app_meta_data->>'profile_id', '') = p_tree_id::text
+     ) then
+    raise warning '[ADOPT] رُفض: الملف % مربوط بحساب دخول — لا يُنقل آلياً', p_tree_id;
     return;
   end if;
 
@@ -109,11 +125,13 @@ begin
    where sons_ids is not null
      and p_tree_id = any(sons_ids);
 
-  -- 2.5) حذف صف الشجرة القديم (كل المراجع تحوّلت)
+  -- 2.5) حذف صف الشجرة القديم (ملف شجرة بلا حساب دخول — كل المراجع تحوّلت)
   delete from public.profiles where id = p_tree_id;
 end;
-$function$$ddl0$;
-  execute $ddl1$create or replace function public.trg_profiles_free_conflicting_phone()
+$function$;
+
+-- ─── ٢) الرقم المتعارض عند إدراج عضو: لا يُسحب رقم الإدارة ولا رقم من له حساب دخول ──
+create or replace function public.trg_profiles_free_conflicting_phone()
  returns trigger
  language plpgsql
  security definer
@@ -137,17 +155,16 @@ begin
     return new;
   end if;
 
-  -- صاحب الرقم من الإدارة، أو مربوط بحساب دخول متحقَّق من هذا الرقم → رقمه لا يُفرَّغ
+  -- صاحب الرقم من الإدارة، أو له حساب دخول (مباشرة أو عبر profile_id) → رقمه لا يُفرَّغ
   if exists (
        select 1 from public.profiles h
        where h.id = v_conflicting_id
          and h.role in ('owner', 'admin', 'monitor', 'supervisor')
      )
+     or exists (select 1 from auth.users u where u.id = v_conflicting_id)
      or exists (
        select 1 from auth.users u
-       where u.id = v_conflicting_id
-         and u.phone_confirmed_at is not null
-         and public.phones_match_suffix(u.phone, new.phone_number)
+       where coalesce(u.raw_app_meta_data->>'profile_id', '') = v_conflicting_id::text
      ) then
     raise exception 'phone_in_use' using errcode = '23505',
       hint = 'هذا الرقم مسجّل لعضو آخر';
@@ -171,8 +188,10 @@ begin
   update public.profiles set phone_number = null where id = v_conflicting_id;
   return new;
 end;
-$function$$ddl1$;
-  execute $ddl2$create or replace function public.handle_new_user_by_phone()
+$function$;
+
+-- ─── ٣) حساب الدخول الجديد يُنشأ دائماً حتى لو تعذّر سجله المبدئي ──────────────
+create or replace function public.handle_new_user_by_phone()
  returns trigger
  language plpgsql
  security definer
@@ -187,15 +206,15 @@ begin
       case when new.phone like '+%' then new.phone else '+' || new.phone end
     );
 
-    -- عضو موجود بالشجرة بنفس الرقم → ربط الحساب الجديد بسجله (ذرّياً)
-    -- (ملفات الإدارة والمربوطة بحساب متحقَّق لا تُنقل — تُرفض داخل adopt)
+    -- عضو شجرة بنفس الرقم (لم يدخل بعد) → ربط الحساب الجديد بسجله (ذرّياً)
+    -- (ملفات الإدارة وكل ملف له حساب دخول لا تُنقل — تُرفض داخل adopt)
     v_tree_id := public.find_profile_id_by_auth_phone(new.phone, new.id);
     if v_tree_id is not null then
       begin
         perform public.adopt_tree_profile(new.id, v_tree_id);
         return new;
       exception when others then
-        -- الربط التلقائي يجب ألا يمنع إنشاء حساب الدخول إطلاقاً
+        -- الربط الآلي يجب ألا يمنع إنشاء حساب الدخول إطلاقاً
         raise warning '[AUTH-LINK] فشل ربط % بالعضو %: %', new.id, v_tree_id, sqlerrm;
       end;
     end if;
@@ -232,16 +251,24 @@ begin
 
   return new;
 end;
-$function$$ddl2$;
-  execute $ddl3$create or replace function public.trg_profiles_protect_delete()
+$function$;
+
+-- ─── ٤) الحذف: المالك يدوياً فقط، والمربوط بدخول لا يُحذف من مسارات الدخول الآلية ──
+create or replace function public.trg_profiles_protect_delete()
  returns trigger
  language plpgsql
 as $function$
 begin
-  -- المالك: لا حذف من التطبيق ولا من أي آلية (دوال/ربط/مهام) — يدوياً من لوحة التحكم فقط
+  -- المالك: لا حذف من التطبيق ولا من أي آلية — يدوياً من لوحة التحكم فقط
   if old.role = 'owner' and session_user not in ('postgres', 'supabase_admin') then
     raise exception 'owner_protected'
       using hint = 'لا يمكن حذف المالك';
+  end if;
+  -- أي عضو له حساب دخول: لا يُحذف ملفه من مسارات الدخول الآلية (ربط/إنشاء حساب)
+  if session_user = 'supabase_auth_admin'
+     and exists (select 1 from auth.users u where u.id = old.id) then
+    raise exception 'account_protected'
+      using hint = 'ملف عضو مربوط بحساب دخول لا يُحذف آلياً';
   end if;
   if auth.uid() is not null then
     if old.id = auth.uid() then
@@ -251,66 +278,4 @@ begin
   end if;
   return old;
 end;
-$function$$ddl3$;
-
-  select id into v_owner from public.profiles where role = 'owner' limit 1;
-  select id, phone_number into v_admin, v_phone from public.profiles
-   where role = 'admin' and status = 'active' and phone_number is not null limit 1;
-
-  -- T1 المالك لا يُنقل
-  perform public.adopt_tree_profile(v_new, v_owner);
-  r := r || ' | T1 owner_kept=' || exists(select 1 from public.profiles where id = v_owner)::text
-         || ' no_clone=' || (not exists(select 1 from public.profiles where id = v_new))::text;
-
-  -- T2 المدير لا يُنقل
-  perform public.adopt_tree_profile(v_new, v_admin);
-  r := r || ' | T2 admin_kept=' || exists(select 1 from public.profiles where id = v_admin)::text
-         || ' no_clone=' || (not exists(select 1 from public.profiles where id = v_new))::text;
-
-  -- T3 رقم المدير لا يُسحب بإدراج عضو جديد
-  begin
-    insert into public.profiles (id, full_name, first_name, phone_number, role, status)
-    values (gen_random_uuid(), 'اختبار', 'اختبار', v_phone, 'member', 'pending');
-    r := r || ' | T3 INSERTED(BAD)';
-  exception when others then
-    r := r || ' | T3 blocked=' || sqlerrm;
-  end;
-  r := r || ' admin_phone_intact=' || ((select phone_number from public.profiles where id = v_admin) = v_phone)::text;
-
-  -- T4 عضو عادي غير مربوط: الربط يعمل كالسابق
-  select p.id into v_member from public.profiles p
-   where p.role = 'member' and p.status = 'active' and p.phone_number is not null
-     and coalesce(btrim(p.full_name), '') <> ''
-     and not exists (select 1 from auth.users u where u.id = p.id)
-     and not exists (select 1 from auth.users u where public.phones_match_suffix(u.phone, p.phone_number))
-   limit 1;
-  if v_member is null then
-    r := r || ' | T4 no_candidate';
-  else
-    perform public.adopt_tree_profile(v_new, v_member);
-    r := r || ' | T4 member_moved=' || exists(select 1 from public.profiles where id = v_new)::text
-           || ' old_gone=' || (not exists(select 1 from public.profiles where id = v_member))::text;
-  end if;
-
-  -- T5 رقم عضو عادي غير مربوط: يُحرَّر للعضو الجديد كالسابق
-  select p.id, p.phone_number into v_member2, v_phone2 from public.profiles p
-   where p.role = 'member' and p.phone_number is not null
-     and p.id <> coalesce(v_member, '00000000-0000-0000-0000-000000000000'::uuid)
-     and not exists (select 1 from auth.users u where u.id = p.id)
-   limit 1;
-  if v_member2 is null then
-    r := r || ' | T5 no_candidate';
-  else
-    begin
-      insert into public.profiles (id, full_name, first_name, phone_number, role, status)
-      values (gen_random_uuid(), 'اختبار٢', 'اختبار٢', v_phone2, 'member', 'pending');
-      r := r || ' | T5 inserted=true old_phone_freed='
-             || ((select phone_number from public.profiles where id = v_member2) is null)::text;
-    exception when others then
-      r := r || ' | T5 error=' || sqlerrm;
-    end;
-  end if;
-
-  raise exception 'TEST_RESULT %', r;
-end
-$test$;
+$function$;
