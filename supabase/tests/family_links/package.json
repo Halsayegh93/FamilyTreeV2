@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "تجربة محلية لحماية روابط العائلة",
+  "dependencies": { "@electric-sql/pglite": "0.5.8" }
+}

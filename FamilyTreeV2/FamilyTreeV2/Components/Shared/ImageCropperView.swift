@@ -58,47 +58,53 @@ struct ImageCropperView: View {
                 .gesture(pinchGesture)
                 .simultaneousGesture(doubleTapGesture)
 
-                // Controls
-                VStack {
-                    HStack {
+                // Controls — العنوان فوق، والزرّان جنب بعض تحت (طلب المالك):
+                // «إلغاء» يسار و«تأكيد» يمين، بنفس أزرار مربّعات التطبيق
+                VStack(spacing: 0) {
+                    Text(L10n.t("تعديل الصورة", "Edit Photo"))
+                        .font(DS.Font.plex(17, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(.black.opacity(0.35), in: Capsule())
+                        .padding(.top, 64)
+
+                    Spacer()
+
+                    Text(L10n.t("اسحب وكبّر الصورة للتعديل", "Drag and pinch to adjust"))
+                        .font(DS.Font.plex(12.5, weight: .medium))
+                        .foregroundColor(.white.opacity(0.85))
+                        .padding(.bottom, DS.Spacing.md)
+
+                    HStack(spacing: DS.Spacing.sm) {
+                        // الاتجاه هنا يسار→يمين (للإيماءات)، فالأول = يسار
                         Button { onCancel() } label: {
                             Text(L10n.t("إلغاء", "Cancel"))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.error)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.sm)
+                                .font(DS.Font.plex(15, weight: .bold))
+                                .foregroundColor(DS.Color.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(DS.Color.background,
+                                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                         }
-
-                        Spacer()
-
-                        Text(L10n.t("تعديل الصورة", "Edit Photo"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-
-                        Spacer()
 
                         Button {
                             let cropped = performCrop()
                             onCrop(cropped)
                         } label: {
-                            Text(L10n.t("تأكيد", "Confirm"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textOnPrimary)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.sm)
-                                .background(DS.Color.primary)
-                                .clipShape(Capsule())
+                            Label(L10n.t("تأكيد", "Confirm"), systemImage: "checkmark")
+                                .font(DS.Font.plex(15, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(DSActionFill.style(),
+                                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                         }
+                        .disabled(displayImage == nil)
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 60)
-
-                    Spacer()
-
-                    Text(L10n.t("اسحب وكبّر الصورة للتعديل", "Drag and pinch to adjust"))
-                        .font(DS.Font.scaled(13))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .padding(.bottom, 50)
+                    .buttonStyle(DSScaleButtonStyle())
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.bottom, 44)
                 }
             }
             .onAppear {

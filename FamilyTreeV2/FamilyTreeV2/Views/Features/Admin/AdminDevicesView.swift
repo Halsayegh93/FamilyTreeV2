@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// الأجهزة المرتبطة بالحسابات — بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧):
+/// بطاقة رأس بأرقام حيّة ← حقل بحث ← بطاقة لكل عضو فيها أجهزته صفوفاً `.dsRowBox()`.
+/// فصل الجهاز للمالك فقط، وبتأكيد كما كان.
 struct AdminDevicesView: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -15,6 +18,9 @@ struct AdminDevicesView: View {
     @State private var removalMessage: String?
     @State private var removalFailed = false
     @State private var isLoading = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let tint = DS.Color.actionNavy
 
     /// تجميع الأجهزة حسب العضو — مرتبة بأحدث نشاط أولاً
     private var groupedDevices: [(member: FamilyMember?, memberId: UUID, devices: [NotificationViewModel.LinkedDevice])] {
@@ -50,76 +56,79 @@ struct AdminDevicesView: View {
     private var totalMembersWithDevices: Int { groupedDevices.count }
     /// إجمالي الأجهزة
     private var totalDevices: Int { allDevices.count }
+    /// أعضاء بأكثر من جهاز — يهمّ مع «الحد الأقصى للأجهزة»
+    private var multiDeviceMembers: Int { groupedDevices.filter { $0.devices.count > 1 }.count }
 
     var body: some View {
         ZStack {
             DS.Color.background.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                if isLoading {
-                    Spacer()
-                    ProgressView()
-                        .scaleEffect(1.2)
-                    Spacer()
-                } else if allDevices.isEmpty {
-                    emptyState
-                } else {
-                    SystemHealthSectionHeader(title: t("الأجهزة المرتبطة", "Connected devices"), subtitle: t("ابحث عن العضو وتابع أجهزته", "Find a member and manage their devices"))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.md)
-                    // Stats
-                    statsBar
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.sm)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: DS.Spacing.md) {
+                    hero
 
-                    // Search
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(DS.Color.textTertiary)
-                        TextField(t("بحث بالاسم أو الجهاز...", "Search by name or device..."), text: $searchText)
-                            .font(DS.Font.callout)
-                    }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surface)
-                    .cornerRadius(DS.Radius.md)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
+                    if isLoading {
+                        SysStateCard(icon: "iphone.gen3",
+                                     title: t("جارٍ تحميل الأجهزة…", "Loading devices…"),
+                                     tint: tint,
+                                     isLoading: true)
+                            .padding(.top, DS.Spacing.sm)
+                    } else if allDevices.isEmpty {
+                        emptyState
+                            .padding(.top, DS.Spacing.sm)
+                    } else {
+                        DSSearchField(text: $searchText,
+                                      placeholder: t("بحث بالاسم أو الجهاز...", "Search by name or device..."),
+                                      tint: tint)
+                            .dsStaggerIn(1)
 
-                    // Device list
-                    ScrollView(showsIndicators: false) {
+                        // قائمة الأجهزة — الوضع الأفقي على عمودين
                         AdaptiveLazyStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
                             if filteredGroups.isEmpty {
-                                DSEmptyState(icon: "magnifyingglass", title: t("لا توجد نتائج مطابقة", "No matching results"))
+                                SysStateCard(icon: "magnifyingglass",
+                                             title: t("لا توجد نتائج مطابقة", "No matching results"),
+                                             hint: t("جرّب اسماً آخر أو نوع جهاز", "Try another name or device model"),
+                                             tint: DS.Color.textTertiary)
                             }
                             ForEach(filteredGroups, id: \.memberId) { group in
                                 memberDeviceCard(group)
                             }
                         }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.xxxl)
                     }
                 }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xxxl)
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .overlay(alignment: .bottom) {
             if let removalMessage {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: removalFailed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .accessibilityHidden(true)
                     Text(removalMessage)
                         .font(DS.Font.plex(12, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Button { self.removalMessage = nil } label: {
-                        Image(systemName: "xmark").font(DS.Font.scaled(11, weight: .bold))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, -10)
+                    .accessibilityLabel(t("إغلاق", "Close"))
                 }
                 .foregroundColor(.white)
-                .padding(DS.Spacing.md)
+                .padding(.leading, DS.Spacing.md)
+                .padding(.trailing, DS.Spacing.xs)
+                .padding(.vertical, DS.Spacing.md)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .fill(removalFailed ? DS.Color.error : DS.Color.success))
                 .padding(DS.Spacing.lg)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(DS.Anim.snappy, value: removalMessage)
@@ -169,142 +178,150 @@ struct AdminDevicesView: View {
         }
     }
 
-    // MARK: - Stats Bar
+    // MARK: - بطاقة الرأس
 
-    private var statsBar: some View {
-        HStack(spacing: DS.Spacing.md) {
-            statPill(
-                icon: "person.2.fill",
-                value: "\(totalMembersWithDevices)",
-                label: t("عضو", "Members"),
-                color: DS.Color.info
-            )
-            statPill(
-                icon: "iphone.gen3",
-                value: "\(totalDevices)",
-                label: t("جهاز", "Devices"),
-                color: DS.Color.neonBlue
-            )
-        }
-    }
-
-    private func statPill(icon: String, value: String, label: String, color: Color) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(13, weight: .bold))
-                .foregroundColor(color)
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-            Text(label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
-        .frame(maxWidth: .infinity)
-        .glassCard(radius: DS.Radius.md)
+    private var hero: some View {
+        DSPageHero(
+            title: t("الأجهزة المرتبطة", "Connected devices"),
+            subtitle: t("ابحث عن العضو وتابع أجهزته", "Find a member and manage their devices"),
+            icon: "iphone.gen3",
+            tint: tint,
+            stats: [
+                DSHeroStat(value: isLoading ? "—" : "\(totalMembersWithDevices)",
+                           label: t("عضو", "Members"), icon: "person.2.fill"),
+                DSHeroStat(value: isLoading ? "—" : "\(totalDevices)",
+                           label: t("جهاز", "Devices"), icon: "iphone.gen3"),
+                DSHeroStat(value: isLoading ? "—" : "\(multiDeviceMembers)",
+                           label: t("بأكثر من جهاز", "Multi-device"), icon: "ipad.and.iphone")
+            ]
+        )
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        DSEmptyState(
+        SysStateCard(
             icon: "iphone.slash",
-            title: t("لا توجد أجهزة مسجلة", "No registered devices")
+            title: t("لا توجد أجهزة مسجلة", "No registered devices"),
+            hint: t("تظهر هنا أجهزة الأعضاء بعد دخولهم التطبيق", "Members' devices appear here after they sign in"),
+            tint: tint
         )
     }
 
     // MARK: - Member Device Card
 
     private func memberDeviceCard(_ group: (member: FamilyMember?, memberId: UUID, devices: [NotificationViewModel.LinkedDevice])) -> some View {
-        DSCard(padding: 0) {
-            // Member header
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("person.fill", color: DS.Color.primary)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm + 2) {
+            // رأس العضو
+            HStack(spacing: DS.Spacing.sm) {
+                memberAvatar(group.member)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(group.member?.displayFullName ?? t("عضو غير معروف", "Unknown Member"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
+                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
 
                     HStack(spacing: DS.Spacing.xs) {
                         if let member = group.member {
-                            DSRoleBadge(title: member.roleName, color: member.roleColor)
+                            SysStatusChip(text: member.roleName, tint: member.roleColor)
                         }
-                        Text(t(
-                            "\(group.devices.count) جهاز",
-                            "\(group.devices.count) device\(group.devices.count == 1 ? "" : "s")"
-                        ))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textTertiary)
+                        SysStatusChip(
+                            text: t("\(group.devices.count) جهاز",
+                                    "\(group.devices.count) device\(group.devices.count == 1 ? "" : "s")"),
+                            icon: "iphone.gen3",
+                            tint: group.devices.count > 1 ? DS.Color.warning : DS.Color.primary
+                        )
                     }
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
+            .accessibilityElement(children: .combine)
 
-            DSDivider()
-
-            // Device rows
-            VStack(spacing: 0) {
-                ForEach(Array(group.devices.enumerated()), id: \.element.id) { index, device in
-                    if index > 0 { DSDivider() }
+            // أجهزة العضو
+            VStack(spacing: 6) {
+                ForEach(group.devices) { device in
                     adminDeviceRow(device)
                 }
             }
         }
+        .padding(DS.Spacing.md)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+    }
+
+    private func memberAvatar(_ member: FamilyMember?) -> some View {
+        ZStack {
+            Circle().fill(tint.dsReadableGlyph.opacity(0.12))
+            if let urlStr = member?.avatarUrl, let url = URL(string: urlStr) {
+                CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                placeholder: { ProgressView() }
+                .frame(width: 38, height: 38)
+                .clipShape(Circle())
+            } else if let name = member?.fullName, let first = name.first {
+                Text(String(first))
+                    .font(DS.Font.plex(15, weight: .bold))
+                    .foregroundColor(tint.dsReadableGlyph)
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(tint.dsReadableGlyph)
+            }
+        }
+        .frame(width: 38, height: 38)
+        .accessibilityHidden(true)
     }
 
     // MARK: - Device Row
 
     private func adminDeviceRow(_ device: NotificationViewModel.LinkedDevice) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            Image(systemName: "iphone.gen3")
-                .font(DS.Font.scaled(16, weight: .bold))
-                .foregroundColor(DS.Color.neonBlue)
-                .frame(width: 32, height: 32)
-                .background(DS.Color.neonBlue.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: device.platform.lowercased() == "android" ? "candybarphone" : "iphone.gen3",
+                        tint: tint)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.displayName)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .lineLimit(1)
                 Text(formattedDate(device.updatedAt))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             // فصل الأجهزة للمالك فقط (إجراء أمني — كان بلا بوابة)
             if authVM.canManageDevices {
                 Button {
                     deviceToRemove = device
                 } label: {
-                    HStack(spacing: DS.Spacing.xs) {
+                    HStack(spacing: 4) {
                         Image(systemName: "trash.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(.system(size: 10.5, weight: .bold))
                         Text(t("إزالة", "Remove"))
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.plex(11.5, weight: .bold))
                     }
                     .foregroundColor(DS.Color.error)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs + 2)
-                    .background(DS.Color.error.opacity(0.1))
-                    .clipShape(Capsule())
+                    .padding(.horizontal, DS.Spacing.sm + 2)
+                    .frame(height: 30)
+                    .background(DS.Color.error.opacity(0.10), in: Capsule())
+                    // مساحة ضغط ٤٤ نقطة والشكل كما هو
+                    .padding(.vertical, 7)
+                    .contentShape(Rectangle())
+                    .padding(.vertical, -7)
                 }
                 .buttonStyle(.plain)
                 .disabled(isRemoving)
+                .accessibilityLabel(t("إزالة \(device.displayName)", "Remove \(device.displayName)"))
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
+        .dsRowBox()
     }
 
     // MARK: - Date Formatter

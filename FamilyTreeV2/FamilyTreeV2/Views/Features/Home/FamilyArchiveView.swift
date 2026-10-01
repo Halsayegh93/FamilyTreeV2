@@ -27,6 +27,8 @@ struct FamilyArchiveView: View {
     @State private var selectionMode = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var showBatchDeleteAlert = false
+    /// دخول البطاقات مرة واحدة عند ظهور الشبكة (نمط الأخبار والديوانيات)
+    @State private var appeared = false
 
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — أعمدة أكثر لاستغلال العرض
@@ -75,11 +77,13 @@ struct FamilyArchiveView: View {
                 } else if archiveVM.items(in: selectedCategory).isEmpty {
                     Spacer()
                     emptyState
+                        .dsStaggerIn(0)   // الحالة الفارغة تصعد وتظهر (تلاشٍ فقط مع «تقليل الحركة»)
                     Spacer()
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
-                            ForEach(archiveVM.items(in: selectedCategory)) { item in
+                            ForEach(Array(archiveVM.items(in: selectedCategory).enumerated()),
+                                    id: \.element.id) { index, item in
                                 Button {
                                     if selectionMode {
                                         toggleSelection(item.id)
@@ -114,11 +118,14 @@ struct FamilyArchiveView: View {
                                         archiveActionsMenu(for: item)
                                     }
                                 }
+                                // نمط الأخبار والديوانيات: البطاقات تصعد وتظهر تباعاً (أول ٧) مرة عند الظهور
+                                .dsCardCascade(index, appeared: appeared)
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, DS.Spacing.md)
                         .padding(.bottom, DS.Spacing.xxxxl)
+                        .onAppear { appeared = true }
                     }
                     .refreshable { await archiveVM.fetchItems() }
                 }
@@ -155,19 +162,26 @@ struct FamilyArchiveView: View {
                 selectedIDs = []
             }
         }
-        .sheet(isPresented: $showingUpload) {
-            ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: selectedCategory ?? .documents)
-                .presentationDetents([.fraction(0.62)])
-                .presentationDragIndicator(.visible)
+        // «إضافة إلى المكتبة» مربّع بمنتصف الشاشة (طلب المالك)
+        .fullScreenCover(isPresented: $showingUpload) {
+            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: selectedCategory ?? .documents)
+            }
+            .background(ClearPresentationBackground())
+        }
+        .transaction { t in
+            if showingUpload { t.disablesAnimations = true }
         }
         .sheet(item: $selectedItem) { item in
             ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item))
         }
-        .sheet(item: $itemToEdit) { item in
-            ArchiveEditSheet(archiveVM: archiveVM, item: item)
-                .presentationDetents([.fraction(0.62)])
-                .presentationDragIndicator(.visible)
+        .fullScreenCover(item: $itemToEdit) { item in
+            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                ArchiveEditSheet(archiveVM: archiveVM, item: item)
+            }
+            .background(ClearPresentationBackground())
         }
+        .transaction { t in if itemToEdit != nil { t.disablesAnimations = true } }
         .dsAlert(L10n.t("إبلاغ عن عنصر", "Report Item"), isPresented: Binding(
             get: { itemToReport != nil },
             set: { if !$0 { itemToReport = nil } }
@@ -198,7 +212,7 @@ struct FamilyArchiveView: View {
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
-            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة وستتم مراجعته خلال ٢٤ ساعة.", "Thank you — your report reached the admins and will be reviewed within 24 hours."))
         }
         .dsAlert(L10n.t("تأكيد الموافقة", "Confirm Approval"), isPresented: Binding(
             get: { itemToApprove != nil },
@@ -225,7 +239,7 @@ struct FamilyArchiveView: View {
         } message: {
             Text(L10n.t("هل تريد رفض هذا العنصر؟", "Reject this item?"))
         }
-        .dsAlert(L10n.t("حذف من الأرشيف", "Delete from archive"),
+        .dsAlert(L10n.t("حذف من المكتبة", "Delete from library"),
                isPresented: Binding(
                 get: { itemToDelete != nil },
                 set: { if !$0 { itemToDelete = nil } }
@@ -238,7 +252,7 @@ struct FamilyArchiveView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { itemToDelete = nil }
         } message: {
-            Text(L10n.t("حذف هذا العنصر نهائياً من الأرشيف؟",
+            Text(L10n.t("حذف هذا العنصر نهائياً من المكتبة؟",
                        "Permanently delete this item from the archive?"))
         }
         .dsAlert(L10n.t("حذف العناصر المختارة", "Delete selected items"),
@@ -253,7 +267,7 @@ struct FamilyArchiveView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
-            Text(L10n.t("حذف \(selectedIDs.count) عنصر نهائياً من الأرشيف؟",
+            Text(L10n.t("حذف \(selectedIDs.count) عنصر نهائياً من المكتبة؟",
                        "Permanently delete \(selectedIDs.count) items from the archive?"))
         }
     }
@@ -828,192 +842,239 @@ struct ArchiveUploadSheet: View {
         !archiveVM.isUploading
     }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-
-                    // اختيار الملف — الـ"hero" بالأعلى
-                    fileSelectionSection
-
-                    // بطاقة موحّدة بنمط إضافة ابن
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("تفاصيل العنصر", "Item Details"),
-                            icon: "tray.full.fill",
-                            iconColor: DS.Color.primary
-                        )
-
-                        VStack(spacing: 0) {
-                            DSLabeledFieldRow(icon: "textformat", iconColor: DS.Color.primary,
-                                              label: L10n.t("العنوان *", "Title *")) {
-                                TextField(L10n.t("مثلاً: شجرة العائلة 1965", "e.g. Family Tree 1965"), text: $title)
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                            }
-
-                            DSDivider()
-
-                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.success,
-                                              label: L10n.t("السنة", "Year")) {
-                                TextField("1965", text: $yearText)
-                                    .keyboardType(.numberPad)
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                            }
-
-                            DSDivider()
-
-                            DSLabeledFieldRow(icon: "text.alignleft", iconColor: DS.Color.accent,
-                                              label: L10n.t("الوصف", "Description")) {
-                                TextField(L10n.t("ملاحظات أو سياق", "Notes or context"), text: $description, axis: .vertical)
-                                    .font(DS.Font.callout)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                    .lineLimit(2...4)
-                            }
-
-                            DSDivider()
-
-                            DSLabeledFieldRow(icon: "folder.fill", iconColor: DS.Color.warning,
-                                              label: L10n.t("القسم", "Category")) {
-                                categoryMenu
-                            }
-                        }
-                    }
-
-                    if archiveVM.isUploading {
-                        VStack(spacing: DS.Spacing.xs) {
-                            ProgressView(value: archiveVM.uploadProgress)
-                                .progressViewStyle(.linear)
-                                .tint(DS.Color.primary)
-                            Text(L10n.t("جاري الرفع...", "Uploading..."))
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                        .padding(.top, DS.Spacing.sm)
-                    }
-
-                    if let errorBanner {
-                        Text(errorBanner)
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.error)
-                            .padding(.top, DS.Spacing.xs)
-                    }
-
-
-                    Spacer(minLength: DS.Spacing.xxxl)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-            }
-            .background(DS.Color.background.ignoresSafeArea())
-            .navigationTitle(L10n.t("إضافة للأرشيف", "Add to Archive"))
-            .navigationBarTitleDisplayMode(.inline)
-            // الإضافة أعلى يمين، والإغلاق يسار (طلب المالك)
-            .dsSheetToolbar(
-                confirm: L10n.t("إضافة", "Add"),
-                isLoading: archiveVM.isUploading,
-                disabled: !canSubmit,
-                onConfirm: { submit() },
-                onCancel: { dismiss() }
-            )
-            .fileImporter(
-                isPresented: $showFileImporter,
-                allowedContentTypes: [UTType.pdf],
-                allowsMultipleSelection: false
-            ) { result in
-                handleFileImport(result)
-            }
-            .photosPicker(
-                isPresented: $showPhotoPicker,
-                selection: $photoItem,
-                matching: .images
-            )
-            .onChange(of: photoItem) { newItem in
-                handlePhotoPick(newItem)
-            }
-        }
-        .presentationDetents([.fraction(0.62)])
-        .presentationDragIndicator(.visible)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    /// ملف مختار أو نص مكتوب لم يُرفع — «إلغاء» يسأل قبل التجاهل (توصية أبل).
+    /// «القسم» اختيار فقط فلا يُحتسب.
+    private var hasUnsavedChanges: Bool {
+        pickedFileData != nil
+            || !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !yearText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    // MARK: - File Selection Section
+    private let tint = DS.Color.tileLibrary
+    @State private var floatIcons = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var fileSelectionSection: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            if pickedFileData != nil {
-                // عرض الملف المختار
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: pickedMimeType == "application/pdf" ? "doc.text.fill" : "photo.fill")
-                        .font(DS.Font.scaled(20, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(pickedFileName.isEmpty ? L10n.t("ملف مختار", "Selected file") : pickedFileName)
-                            .font(DS.Font.callout)
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
-                        Text(ByteCountFormatter().string(fromByteCount: Int64(pickedFileData?.count ?? 0)))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
+    private var pickedImage: UIImage? {
+        guard pickedMimeType.hasPrefix("image/"), let pickedFileData else { return nil }
+        return UIImage(data: pickedFileData)
+    }
+
+    var body: some View {
+        DSComposer(
+            title: L10n.t("إضافة إلى المكتبة", "Add to Library"),
+            subtitle: L10n.t("وثيقة أو صورة من تاريخ العائلة", "A document or photo from family history"),
+            icon: "books.vertical.fill",
+            tint: tint,
+            actionTitle: L10n.t("إضافة إلى المكتبة", "Add to Library"),
+            actionIcon: "tray.and.arrow.down.fill",
+            canSubmit: canSubmit,
+            isBusy: archiveVM.isUploading,
+            progress: archiveVM.isUploading ? archiveVM.uploadProgress : nil,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: { submit() },
+            onCancel: { dismiss() }
+        ) {
+            // ── الملف ──
+            DSComposerSection(title: L10n.t("الملف", "File"), icon: "doc.on.doc.fill", tint: tint,
+                              trailing: pickedFileData == nil ? L10n.t("صورة أو PDF", "Photo or PDF") : nil,
+                              index: 0) {
+                if pickedFileData != nil {
+                    pickedPreview
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
+                } else {
+                    HStack(spacing: DS.Spacing.sm) {
+                        sourceCard(icon: "photo.fill", title: L10n.t("صورة", "Photo"),
+                                   subtitle: L10n.t("من ألبوم الصور", "From your photos"),
+                                   delay: 0) { showPhotoPicker = true }
+                        sourceCard(icon: "doc.richtext.fill", title: L10n.t("ملف PDF", "PDF file"),
+                                   subtitle: L10n.t("من الملفات", "From Files"),
+                                   delay: 0.5) { showFileImporter = true }
                     }
-                    Spacer()
-                    Button {
+                    .transition(.opacity)
+                }
+            }
+
+            // ── تفاصيل العنصر ──
+            DSComposerSection(title: L10n.t("تفاصيل العنصر", "Item Details"), icon: "tray.full.fill",
+                              tint: tint, index: 1) {
+                DSComposerField(icon: "textformat", label: L10n.t("العنوان *", "Title *"),
+                                placeholder: L10n.t("مثلاً: شجرة العائلة 1965", "e.g. Family Tree 1965"),
+                                text: $title, tint: tint, limit: 80)
+                DSComposerField(icon: "calendar", label: L10n.t("السنة", "Year"),
+                                placeholder: "1965", text: $yearText, tint: tint,
+                                limit: 4, keyboard: .numberPad, ltr: true)
+                DSComposerField(icon: "text.alignright", label: L10n.t("الوصف", "Description"),
+                                placeholder: L10n.t("ملاحظات أو قصة العنصر", "Notes or the story behind it"),
+                                text: $description, tint: tint, multiline: true, limit: 300)
+            }
+
+            // ── القسم ──
+            DSComposerSection(title: L10n.t("القسم", "Section"), icon: "folder.fill", tint: tint, index: 2) {
+                ArchiveCategoryChips(key: $categoryKey, tint: tint)
+            }
+
+            if let errorBanner {
+                Label(errorBanner, systemImage: "exclamationmark.triangle.fill")
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: pickedFileData != nil)
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [UTType.pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            handleFileImport(result)
+        }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) { newItem in handlePhotoPick(newItem) }
+        .onAppear {
+            guard !reduceMotion else { return }   // أيقونات ثابتة مع «تقليل الحركة»
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { floatIcons = true }
+        }
+    }
+
+    /// بطاقة مصدر كبيرة — الأيقونة تطفو بهدوء
+    private func sourceCard(icon: String, title: String, subtitle: String, delay: Double,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                ZStack {
+                    Circle().fill(tint.opacity(0.14)).frame(width: 56, height: 56)
+                    Circle().strokeBorder(tint.opacity(0.35), lineWidth: 1).frame(width: 56, height: 56)
+                    Image(systemName: icon)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(tint)
+                        .offset(y: floatIcons ? -3 : 2)
+                        .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true).delay(delay),
+                                   value: floatIcons)
+                }
+                .accessibilityHidden(true)   // زخرفة — العنوان والوصف يُقرآن
+                Text(title)
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(subtitle)
+                    .font(DS.Font.plex(11))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.md)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.background))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .strokeBorder(tint.opacity(0.4), style: StrokeStyle(lineWidth: 1.2, dash: [6, 4])))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    /// معاينة الملف المختار: الصورة نفسها، أو بطاقة PDF
+    private var pickedPreview: some View {
+        let size = ByteCountFormatter().string(fromByteCount: Int64(pickedFileData?.count ?? 0))
+        return VStack(spacing: 0) {
+            if let img = pickedImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 150)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                    .overlay(alignment: .bottom) {
+                        LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 60)
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        Label(size, systemImage: "photo")
+                            .font(DS.Font.plex(11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(DS.Spacing.sm)
+                    }
+            } else {
+                HStack(spacing: DS.Spacing.md) {
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(systemName: "doc.richtext.fill")
+                            .font(.system(size: 34, weight: .regular))
+                            .foregroundColor(tint)
+                            .accessibilityHidden(true)
+                        Text("PDF")
+                            .font(.system(size: 8.5, weight: .heavy))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4).padding(.vertical, 1.5)
+                            .background(RoundedRectangle(cornerRadius: 3).fill(DS.Color.error))
+                            .offset(x: 6, y: 4)
+                    }
+                    .frame(width: 52, height: 58)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(pickedFileName.isEmpty ? L10n.t("ملف مختار", "Selected file") : pickedFileName)
+                            .font(DS.Font.plex(13.5, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(2)
+                        Text(size)
+                            .font(DS.Font.plex(11))
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(DS.Spacing.md)
+            }
+            // الشريط ٣٦ نقطة ← مساحة ضغط ٤٤ (٤ فوق وتحت) بلا تغيير في التخطيط: فوقه
+            // المعاينة (لا تُضغط) وتحته هامش القسم
+            HStack(spacing: DS.Spacing.sm) {
+                Button {
+                    if pickedMimeType == "application/pdf" { showFileImporter = true } else { showPhotoPicker = true }
+                } label: {
+                    Label(L10n.t("تغيير", "Change"), systemImage: "arrow.triangle.2.circlepath")
+                        .font(DS.Font.plex(12, weight: .bold))
+                        .foregroundColor(tint)
+                        .frame(maxWidth: .infinity).frame(height: 36)
+                        .tapArea(vertical: 4)
+                }
+                Rectangle().fill(DS.Color.textTertiary.opacity(0.15)).frame(width: 1, height: 20)
+                    .accessibilityHidden(true)
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         pickedFileData = nil
                         pickedFileName = ""
                         pickedMimeType = ""
                         photoItem = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(DS.Color.error)
                     }
-                }
-                .padding(DS.Spacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .fill(DS.Color.primary.opacity(0.08))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1)
-                )
-            } else {
-                // أزرار اختيار النوع
-                HStack(spacing: DS.Spacing.sm) {
-                    pickButton(
-                        icon: "doc.text.fill",
-                        title: L10n.t("ملف PDF", "PDF File")
-                    ) { showFileImporter = true }
-
-                    pickButton(
-                        icon: "photo.fill",
-                        title: L10n.t("صورة", "Photo")
-                    ) { showPhotoPicker = true }
+                } label: {
+                    Label(L10n.t("إزالة", "Remove"), systemImage: "trash")
+                        .font(DS.Font.plex(12, weight: .bold))
+                        .foregroundColor(DS.Color.error)
+                        .frame(maxWidth: .infinity).frame(height: 36)
+                        .tapArea(vertical: 4)
                 }
             }
+            .buttonStyle(.plain)
+            .background(DS.Color.background)
         }
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(tint.opacity(0.35), lineWidth: 1))
     }
 
-    private func pickButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(22, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-                Text(title)
-                    .font(DS.Font.callout)
-                    .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.textPrimary)
+    private func categoryChip(_ key: String) -> some View {
+        let selected = categoryKey == key
+        return Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) { categoryKey = key }
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: ArchiveItem.categoryIcon(key))
+                    .font(.system(size: 12, weight: .bold))
+                Text(ArchiveItem.categoryName(key))
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .lineLimit(1)
             }
-            .frame(maxWidth: .infinity, minHeight: 90)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .fill(DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1.5)
-            )
+            .foregroundColor(selected ? .white : DS.Color.textSecondary)
+            .padding(.horizontal, 13)
+            .frame(height: 36)
+            .background(Capsule().fill(selected ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.8)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(DS.Color.background)))
+            .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.18), lineWidth: 1))
+            .shadow(color: selected ? tint.opacity(0.35) : .clear, radius: 6, y: 2)
+            .scaleEffect(selected ? 1.03 : 1)
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -1157,65 +1218,80 @@ struct ArchiveEditSheet: View {
         _description = State(initialValue: item.description ?? "")
         _yearText = State(initialValue: item.year.map(String.init) ?? "")
         _categoryKey = State(initialValue: item.effectiveCategoryKey)
+        _initial = State(initialValue: Fields(title: item.title, description: item.description ?? "",
+                                              year: item.year.map(String.init) ?? "",
+                                              categoryKey: item.effectiveCategoryKey))
     }
 
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
     }
 
+    // MARK: - تغييرات لم تُحفظ (توصية أبل)
+
+    private struct Fields: Equatable {
+        var title: String
+        var description: String
+        var year: String
+        var categoryKey: String
+
+        /// بلا فراغات الأطراف — فراغ زائد وحده لا يُعدّ تعديلاً
+        var normalized: Fields {
+            Fields(title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                   description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                   year: year.trimmingCharacters(in: .whitespacesAndNewlines),
+                   categoryKey: categoryKey)
+        }
+    }
+
+    /// القيم التي فُتح بها المربّع — تُلتقط مرة واحدة
+    @State private var initial: Fields
+
+    /// أي حقل يختلف عمّا فُتح به المربّع — «إلغاء» يسأل قبل التجاهل
+    private var hasUnsavedChanges: Bool {
+        Fields(title: title, description: description, year: yearText, categoryKey: categoryKey).normalized
+            != initial.normalized
+    }
+
+    private let tint = DS.Color.tileLibrary
+
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    DSTextField(label: L10n.t("العنوان", "Title"), placeholder: "", text: $title, icon: "textformat")
-                    DSTextField(label: L10n.t("الوصف (اختياري)", "Description (optional)"), placeholder: "", text: $description, icon: "text.alignleft")
-
-                    // السنة + القسم — عمودان متحاذيان
-                    HStack(alignment: .top, spacing: DS.Spacing.md) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(L10n.t("السنة", "Year"))
-                                .font(DS.Font.scaled(12, weight: .semibold))
-                                .foregroundColor(DS.Color.textSecondary)
-                            editBoxedField {
-                                TextField("1965", text: $yearText)
-                                    .keyboardType(.numberPad)
-                                    .font(DS.Font.scaled(14))
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(L10n.t("القسم", "Category"))
-                                .font(DS.Font.scaled(12, weight: .semibold))
-                                .foregroundColor(DS.Color.textSecondary)
-                            editCategoryMenu
-                        }
-                    }
-
-                    if let errorBanner {
-                        Text(errorBanner).font(DS.Font.caption1).foregroundColor(DS.Color.error)
-                    }
-                    Spacer(minLength: DS.Spacing.xxxl)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
+        // نفس مربّع «إضافة إلى المكتبة» (طلب المالك): تصميم موحّد للإضافة والتعديل
+        DSComposer(
+            title: L10n.t("تعديل العنصر", "Edit Item"),
+            subtitle: item.title,
+            icon: "books.vertical.fill",
+            tint: tint,
+            actionTitle: L10n.t("حفظ", "Save"),
+            actionIcon: "checkmark",
+            canSubmit: canSave,
+            isBusy: isSaving,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: { save() },
+            onCancel: { dismiss() }
+        ) {
+            DSComposerSection(title: L10n.t("تفاصيل العنصر", "Item Details"), icon: "tray.full.fill",
+                              tint: tint, index: 0) {
+                DSComposerField(icon: "textformat", label: L10n.t("العنوان *", "Title *"),
+                                placeholder: L10n.t("عنوان العنصر", "Item title"),
+                                text: $title, tint: tint, limit: 80)
+                DSComposerField(icon: "calendar", label: L10n.t("السنة", "Year"),
+                                placeholder: "1965", text: $yearText, tint: tint,
+                                limit: 4, keyboard: .numberPad, ltr: true)
+                DSComposerField(icon: "text.alignright", label: L10n.t("الوصف", "Description"),
+                                placeholder: L10n.t("ملاحظات أو قصة العنصر", "Notes or the story behind it"),
+                                text: $description, tint: tint, multiline: true, limit: 300)
             }
-            .background(DS.Color.background.ignoresSafeArea())
-            .navigationTitle(L10n.t("تعديل العنصر", "Edit Item"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    DSToolbarCancelButton { dismiss() }.disabled(isSaving)
-                }
-                ToolbarItem(placement: DSToolbar.confirmPlacement) {
-                    Button(L10n.t("حفظ", "Save")) { save() }
-                        .fontWeight(.bold)
-                        .disabled(!canSave)
-                }
+            DSComposerSection(title: L10n.t("القسم", "Section"), icon: "folder.fill", tint: tint, index: 1) {
+                ArchiveCategoryChips(key: $categoryKey, tint: tint)
+            }
+            if let errorBanner {
+                Label(errorBanner, systemImage: "exclamationmark.triangle.fill")
+                    .font(DS.Font.plex(12))
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .presentationDetents([.fraction(0.62)])
-        .presentationDragIndicator(.visible)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     /// صندوق إدخال موحّد الارتفاع — لمحاذاة الحقول في صف عمودين.
@@ -1645,5 +1721,71 @@ struct UnevenCorners: Shape {
         }
         path.closeSubpath()
         return path
+    }
+}
+
+
+/// أقسام المكتبة ككبسولات قابلة للاختيار — مشتركة بين الإضافة والتعديل
+struct ArchiveCategoryChips: View {
+    @Binding var key: String
+    var tint: Color = DS.Color.tileLibrary
+    /// «تقليل الحركة» (توصية أبل): بلا تكبير للمختار
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            // بلا حشوة عمودية هنا: الكبسولة تحمل حشوة ٤ نقاط لمساحة الضغط (داخل حدود التمرير)
+            HStack(spacing: DS.Spacing.sm) {
+                ForEach(ArchiveItem.selectableCategoryKeys, id: \.self) { k in
+                    chip(k)
+                }
+            }
+        }
+    }
+
+    private func chip(_ k: String) -> some View {
+        let selected = key == k
+        return Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) { key = k }
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: ArchiveItem.categoryIcon(k))
+                    .font(.system(size: 12, weight: .bold))
+                    .accessibilityHidden(true)
+                Text(ArchiveItem.categoryName(k))
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .lineLimit(1)
+            }
+            .foregroundColor(selected ? .white : DS.Color.textSecondary)
+            .padding(.horizontal, 13)
+            .frame(height: 36)
+            .background(Capsule().fill(selected ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.8)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(DS.Color.background)))
+            .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.18), lineWidth: 1))
+            .shadow(color: selected ? tint.opacity(0.35) : .clear, radius: 6, y: 2)
+            .scaleEffect(selected && !reduceMotion ? 1.03 : 1)
+            // الكبسولة ٣٦ ← مساحة ضغط ٤٤ نقطة (توصية أبل) — الشكل كما هو
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+// MARK: - مساحة ضغط أكبر (توصية أبل: ٤٤ نقطة)
+
+private extension View {
+    /// يكبّر منطقة اللمس حول عنصر صغير بلا تغيير في شكله ولا في التخطيط: الحشوة تُضاف
+    /// لمنطقة اللمس ثم تُسترد من التخطيط. القيم محسوبة لكل عنصر حتى لا تتداخل مع جيرانه.
+    func tapArea(top: CGFloat = 0, leading: CGFloat = 0, bottom: CGFloat = 0, trailing: CGFloat = 0) -> some View {
+        self
+            .padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
+            .contentShape(Rectangle())
+            .padding(EdgeInsets(top: -top, leading: -leading, bottom: -bottom, trailing: -trailing))
+    }
+
+    func tapArea(horizontal: CGFloat = 0, vertical: CGFloat = 0) -> some View {
+        tapArea(top: vertical, leading: horizontal, bottom: vertical, trailing: horizontal)
     }
 }

@@ -18,10 +18,16 @@ struct HomeNewsView: View {
     @Binding var selectedTab: Int
     @State private var showingAddNews = false
     @State private var showingNotifications = false
+    /// «التواصل» مربّع بمنتصف الشاشة (بدل الصفحة الفرعية)
+    @State private var showingContactForm = false
     @State private var selectedNewsForComments: NewsPost? = nil
     @State private var postToDelete: NewsPost? = nil
     @State private var postToReport: NewsPost? = nil
     @State private var newsReportReason = ""
+    @State private var newsReportSent = false
+    /// حظر ناشر الخبر (Guideline 1.2) — أخبار المحظورين لا تظهر للحاظر
+    @State private var blockTarget: BlockTarget? = nil
+    @ObservedObject private var blockedStore = BlockedMembersStore.shared
     @State private var postToEdit: NewsPost? = nil
     @State private var showNewNewsAlert = false
     @State private var newNewsCount = 0
@@ -32,6 +38,11 @@ struct HomeNewsView: View {
     @State private var newsSearchText = ""
     @State private var debouncedNewsSearch = ""
     @State private var newsSearchTask: Task<Void, Never>?
+    /// دخول بطاقات الرئيسية تباعاً مرة عند ظهورها — نمط الأخبار والديوانيات
+    /// (طلب المالك ٢٠٢٦-٠٩-٢٧: «طبّقه على البقية»)
+    @State private var appeared = false
+    /// دخول بطاقات صفحة الأخبار — يُصفَّر قبل كل فتح للصفحة فتتوالى البطاقات مع كل دخول
+    @State private var newsAppeared = false
 
     private enum HomeSubPage: Hashable {
         case archive, projects, contact, news
@@ -58,9 +69,14 @@ struct HomeNewsView: View {
 
                         ScrollView(showsIndicators: false) {
                             bentoSection
-                                // بلا أنيميشن ظهور — المحتوى يثبت مكانه بلا انزلاق
+                                // البطاقات تتوالى مرة عند الظهور (الترحيب ← المربّعات ← الأخبار) —
+                                // إزاحة وشفافية عند الرسم فقط، فلا يتغيّر القياس ولا التخطيط
                                 .padding(.top, DS.Spacing.md)
                                 .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
+                                .onAppear {
+                                    guard !appeared else { return }
+                                    appeared = true
+                                }
                         }
                         // القياس خارج التمرير: كان GeometryReader داخل ScrollView يقيس
                         // المحتوى الذي تحدّده مقاساتُه نفسها، فتنشأ حلقة إعادة قياس
@@ -141,12 +157,14 @@ struct HomeNewsView: View {
         // Deep-link من push خارجي لطلب انضمام — يفتح مركز الإشعارات تلقائياً
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
             if activeSubPage != nil { activeSubPage = nil }
+            showingContactForm = false   // مربّع التواصل مفتوح؟ يُغلق حتى يظهر مركز الإشعارات
             showingNotifications = true
         }
         // Safety net — لو الـ event وصل قبل ما الـ view يكون mounted
         .onChange(of: notificationVM.pendingJoinDeepLinkRequestId) { newValue in
             guard newValue != nil else { return }
             if activeSubPage != nil { activeSubPage = nil }
+            showingContactForm = false
             showingNotifications = true
         }
         .sheet(isPresented: $showingNotifications) {
@@ -154,6 +172,10 @@ struct HomeNewsView: View {
                 NotificationsCenterView()
             }
             .presentationDragIndicator(.visible)
+        }
+        // التواصل مع الإدارة — مربّع بمنتصف الشاشة لا صفحة فرعية (طلب المالك)
+        .dsCenterBox(isPresented: $showingContactForm) {
+            MemberContactFormView()
         }
         .task {
             // جلب المشاريع لعرض البطاقة الفاخرة بأحدث مشروع (مع كاش داخلي)
@@ -187,6 +209,8 @@ struct HomeNewsView: View {
                     newsFeedSection
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
+                        // بطاقات الأخبار تتوالى مع دخول الصفحة (نمط الأخبار والديوانيات)
+                        .onAppear { newsAppeared = true }
                 }
                 .refreshable { await refreshNews(notifyIfNew: true, force: true) }
             }
@@ -208,20 +232,22 @@ struct HomeNewsView: View {
         }
         // الأوراق والتنبيهات مربوطة بصفحة الأخبار نفسها — كانت على الرئيسية خلف
         // الصفحة المدفوعة فلا تظهر إلا بعد الخروج من القسم
-        .sheet(isPresented: $showingAddNews) {
-            AddNewsView()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+        // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
+        .fullScreenCover(isPresented: $showingAddNews) {
+            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                AddNewsView()
+            }
+            .background(ClearPresentationBackground())
         }
-        .sheet(item: $selectedNewsForComments) { news in
+        .transaction { t in
+            if showingAddNews { t.disablesAnimations = true }
+        }
+        // التعليقات مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
+        .dsTallBox(item: $selectedNewsForComments) { news in   // محادثة — مربّع طويل (توصية أبل)
             NewsCommentsSheet(news: news)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
         }
-        .sheet(item: $postToEdit) { news in
+        .dsCenterBox(item: $postToEdit) { news in
             EditNewsView(news: news)
-                .presentationDetents([.fraction(0.5), .medium, .large])
-                .presentationDragIndicator(.visible)
         }
         .dsAlert(L10n.t("حذف الخبر", "Delete Post"), isPresented: Binding(
             get: { postToDelete != nil },
@@ -242,10 +268,11 @@ struct HomeNewsView: View {
                 let reason = newsReportReason.trimmingCharacters(in: .whitespacesAndNewlines)
                 if let post = postToReport {
                     Task {
-                        await newsVM.reportNewsPost(
+                        let ok = await newsVM.reportNewsPost(
                             postId: post.id,
                             reason: reason.isEmpty ? "بلاغ على محتوى خبر" : reason
                         )
+                        if ok { await MainActor.run { newsReportSent = true } }
                     }
                 }
                 postToReport = nil
@@ -254,12 +281,21 @@ struct HomeNewsView: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToReport = nil; newsReportReason = "" }
         } message: { Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا الخبر.",
                                 "Enter a reason; it will be sent to the admins to review this post.")) }
-        .sheet(item: $selectedMemberForDetails) { member in
-            NavigationStack {
-                MemberDetailsView(member: member)
-            }
-            .presentationDetents([.fraction(0.42), .large])
-            .presentationDragIndicator(.visible)
+        .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $newsReportSent) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة وستتم مراجعته خلال ٢٤ ساعة.",
+                        "Thank you — your report reached the admins and will be reviewed within 24 hours."))
+        }
+        // حظر ناشر الخبر — نفس رسائل «إبلاغ» (بلاغ تلقائي للإدارة)
+        .dsBlockMemberFlow(target: $blockTarget)
+        .fullScreenCover(item: $selectedMemberForDetails) { member in
+            MemberDetailsView(member: member, centered: true)
+                .background(ClearPresentationBackground())
+        }
+        .transaction { t in
+            // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
+            if selectedMemberForDetails != nil { t.disablesAnimations = true }
         }
     }
 
@@ -397,6 +433,8 @@ struct HomeNewsView: View {
 
     private var greetingRow: some View {
         HomeGreetingRow(onOpenProfile: { selectedTab = 3 }, onLongPress: debugLongPress)
+            // أول البطاقات دخولاً
+            .dsCardCascade(0, appeared: appeared)
     }
 
     // MARK: - Primary Tiles Row — الشجرة + الديوانيات
@@ -412,6 +450,7 @@ struct HomeNewsView: View {
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
+                cascade: 1,
                 action: { selectedTab = 1 }
             )
             if appSettingsVM.settings.diwaniyasEnabled ?? true {
@@ -423,6 +462,7 @@ struct HomeNewsView: View {
                     imageURL: nil,
                     count: nil,
                     height: tileHeight,
+                    cascade: 2,
                     action: { selectedTab = 2 }
                 )
             }
@@ -450,6 +490,7 @@ struct HomeNewsView: View {
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
+                cascade: 3,
                 action: { activeSubPage = .archive }
             )
             if projectsOn {
@@ -461,6 +502,7 @@ struct HomeNewsView: View {
                     imageURL: projectImageURL,
                     count: projectsVM.projects.count,
                     height: tileHeight,
+                    cascade: 4,
                     action: { activeSubPage = .projects }
                 )
             }
@@ -472,7 +514,8 @@ struct HomeNewsView: View {
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
-                action: { activeSubPage = .contact }
+                cascade: 5,
+                action: { showingContactForm = true }
             )
         }
     }
@@ -486,6 +529,8 @@ struct HomeNewsView: View {
         imageURL: String?,
         count: Int?,
         height: CGFloat? = nil,
+        /// ترتيب المربّع في دخول الرئيسية (بعد الترحيب ٠، وقبل الأخبار ٦)
+        cascade: Int,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: {
@@ -556,6 +601,8 @@ struct HomeNewsView: View {
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(title)
+        // المربّعات تتوالى واحداً بعد الآخر مع بقية بطاقات الرئيسية
+        .dsCardCascade(cascade, appeared: appeared)
     }
 
     /// خلفية المربّع — صورة من رابط أو gradient بلون الفئة مع زخارف.
@@ -695,7 +742,13 @@ struct HomeNewsView: View {
     /// مربع الأخبار — بنية مستقلة (HomeNewsPreviewCard) وليست جسماً داخل هذه
     /// الصفحة، حتى يبقى عمق نوع الواجهة منخفضاً.
     private var newsBentoCard: some View {
-        HomeNewsPreviewCard { activeSubPage = .news }
+        HomeNewsPreviewCard {
+            // تصفير دخول بطاقات الصفحة قبل فتحها (الصفحة غير ظاهرة بعد) — فتتوالى مع كل فتح
+            if activeSubPage != .news { newsAppeared = false }
+            activeSubPage = .news
+        }
+        // آخر بطاقات الرئيسية دخولاً
+        .dsCardCascade(6, appeared: appeared)
     }
 
     // MARK: - News Feed Section
@@ -710,12 +763,13 @@ struct HomeNewsView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
+                .dsCardCascade(0, appeared: newsAppeared)
             }
             if newsVM.isLoadingNews && newsVM.allNews.isEmpty {
                 newsLoadingSkeleton(count: 3)
                     .padding(.horizontal, DS.Spacing.lg)
                     .transition(.opacity)
-            } else if newsVM.allNews.isEmpty {
+            } else if filteredNews.isEmpty {
                 if newsVM.newsLoadError == nil {
                     if !debouncedNewsSearch.isEmpty {
                         Text(L10n.t("لا توجد نتائج لهذا البحث", "No results for this search"))
@@ -777,13 +831,39 @@ struct HomeNewsView: View {
 
     private func newsLoadingSkeleton(count: Int) -> some View {
         VStack(spacing: DS.Spacing.md) {
-            ForEach(0..<count, id: \.self) { _ in
+            ForEach(0..<count, id: \.self) { i in
+                // حالة التحميل تدخل بنفس تتالي البطاقات
                 newsCardSkeleton
+                    .dsCardCascade(i, appeared: newsAppeared)
             }
         }
     }
 
-    private var filteredNews: [NewsPost] { newsVM.allNews }
+    /// الأخبار بلا منشورات من حظرهم المستخدم (منشور الإدارة بلا كاتب لا يُخفى)
+    private var filteredNews: [NewsPost] {
+        guard !blockedStore.entries.isEmpty else { return newsVM.allNews }
+        return newsVM.allNews.filter { !isFromBlockedAuthor($0) }
+    }
+
+    private func isFromBlockedAuthor(_ news: NewsPost) -> Bool {
+        guard let authorId = news.author_id else { return false }
+        return blockedStore.isBlocked(id: authorId, name: news.author_name)
+    }
+
+    /// عدد التعليقات الظاهرة — عدد السيرفر ناقص تعليقات المحظورين المعروفة (إن حُمّلت)
+    private func visibleCommentCount(for news: NewsPost) -> Int {
+        let serverCount = newsVM.commentsCountByPost[news.id] ?? 0
+        guard !blockedStore.entries.isEmpty, let loaded = newsVM.commentsByPost[news.id] else { return serverCount }
+        let hidden = loaded.filter { blockedStore.isBlocked(id: $0.author_id, name: $0.author_name) }.count
+        return max(0, serverCount - hidden)
+    }
+
+    /// حظر ناشر الخبر — لغير منشوراتي ولغير منشورات الإدارة بلا كاتب
+    private func canBlockAuthor(of news: NewsPost) -> Bool {
+        guard let authorId = news.author_id else { return false }
+        return !AccountIdentity.isMine(authorId, currentUser: authVM.currentUser)
+            && !AccountIdentity.isMine(news.ownerId, currentUser: authVM.currentUser)
+    }
 
 
     private var newsListView: some View {
@@ -795,7 +875,7 @@ struct HomeNewsView: View {
                     alignment: .center,
                     spacing: DS.Spacing.lg
                 ) {
-                    ForEach(filteredNews) { news in
+                    ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
                         newsCard(for: news)
                             .newsSwipeActions(
                                         id: news.id,
@@ -805,12 +885,13 @@ struct HomeNewsView: View {
                                         onDelete: { postToDelete = news },
                                         onReport: { postToReport = news }
                                     )
+                            .dsCardCascade(index, appeared: newsAppeared)
                     }
                 }
             } else {
                 // قائمة واحدة بلا عناوين «اليوم / أمس / … / أقدم» ولا عدّاد (طلب المالك)
                 LazyVStack(spacing: DS.Spacing.md) {
-                    ForEach(filteredNews) { news in
+                    ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
                         newsCard(for: news)
                             .newsSwipeActions(
                                 id: news.id,
@@ -820,6 +901,8 @@ struct HomeNewsView: View {
                                 onDelete: { postToDelete = news },
                                 onReport: { postToReport = news }
                             )
+                            // أول ٧ بطاقات تتوالى مع دخول الصفحة، وما يُبنى بالتمرير يظهر مباشرة
+                            .dsCardCascade(index, appeared: newsAppeared)
                     }
                 }
             }
@@ -861,7 +944,7 @@ struct HomeNewsView: View {
             pollVotes: newsVM.pollVotesByPost[news.id] ?? [:],
             selectedPollOption: newsVM.userVoteByPost[news.id],
             approvalStatus: news.approval_status,
-            commentCount: newsVM.commentsCountByPost[news.id] ?? 0,
+            commentCount: visibleCommentCount(for: news),
             likeCount: newsVM.likesCountByPost[news.id] ?? 0,
             isLiked: newsVM.likedPosts.contains(news.id),
             onCommentTap: { selectedNewsForComments = news },
@@ -877,7 +960,14 @@ struct HomeNewsView: View {
             onReportTap: { postToReport = news },
             onEditTap: { postToEdit = news },
             onMemberTap: { member in selectedMemberForDetails = member },
-            postDate: news.timestamp
+            postDate: news.timestamp,
+            // حظر الناشر بجانب «إبلاغ» (Guideline 1.2)
+            canBlock: canBlockAuthor(of: news),
+            onBlockTap: {
+                if let authorId = news.author_id {
+                    blockTarget = BlockTarget(id: authorId, name: news.author_name)
+                }
+            }
         )
     }
 
@@ -920,6 +1010,8 @@ struct HomeNewsView: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.sm)
+        // الحالة الفارغة تدخل مثل البطاقات
+        .dsCardCascade(0, appeared: newsAppeared)
     }
 
     // MARK: - Helpers

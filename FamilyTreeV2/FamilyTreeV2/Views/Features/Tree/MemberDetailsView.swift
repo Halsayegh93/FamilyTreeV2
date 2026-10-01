@@ -16,8 +16,12 @@ struct MemberDetailsView: View {
         memberVM.member(byId: currentMemberId) ?? initialMember
     }
 
-    init(member: FamilyMember) {
+    /// true = مربّع بمنتصف الشاشة قابل للتوسّع بدل الشيت (طلب المالك)
+    private let centered: Bool
+
+    init(member: FamilyMember, centered: Bool = false) {
         self.initialMember = member
+        self.centered = centered
         _currentMemberId = State(initialValue: member.id)
     }
 
@@ -33,8 +37,12 @@ struct MemberDetailsView: View {
     @State private var showReportConfirm = false
     @State private var reportReason = ""
     @State private var reportSent = false
-    @State private var childrenExpanded = false
+    /// حظر العضو / إلغاء حظره (Guideline 1.2) — بجانب «إبلاغ»
+    @State private var blockTarget: BlockTarget? = nil
+    @ObservedObject private var blockedStore = BlockedMembersStore.shared
     @State private var showChildrenSheet = false
+    /// شريط العائلة (الأب والأبناء) مخفي بالبداية (طلب المالك)
+    @State private var familyOpen = false
     /// حجم الشيت: متوسط = صورة+اسم+قرابة+عمر فقط، كبير = كل المعلومات.
     @State private var detent: PresentationDetent = .fraction(0.46)
     @Environment(\.verticalSizeClass) private var vSizeClass
@@ -52,8 +60,21 @@ struct MemberDetailsView: View {
         member.id == authVM.currentUser?.id
     }
 
-    /// العضو نشط داخل المنظومة — يستخدم helper مشترك في FamilyMember+UI
-    private var isMemberActive: Bool { member.isInSystem }
+    /// هل حظر المستخدم الحالي هذا العضو؟ (يخفي عنه أخباره وتعليقاته)
+    private var isMemberBlocked: Bool {
+        blockedStore.isBlocked(id: member.id, name: member.fullName)
+    }
+
+    /// «حظر» لغير صاحب الملف ولغير المتوفى (لا ينشر شيئاً) — ويبقى «إلغاء الحظر» متاحاً دائماً
+    private var canShowBlock: Bool {
+        !isViewingSelf && !member.isDeleted && (member.isDeceased != true || isMemberBlocked)
+    }
+
+    private func requestBlockToggle() {
+        blockTarget = BlockTarget(id: member.id, name: member.fullName,
+                                  otherNames: [member.displayFullName])
+    }
+
 
     private var canSeePendingRequests: Bool {
         authVM.canModerate ||
@@ -70,7 +91,38 @@ struct MemberDetailsView: View {
         cachedBasicInfoRows = computeBasicInfoRows(for: m)
     }
 
+    @State private var heroIn = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// ارتفاع شريط الأزرار السفلي (والرأس إن وُجد) — يدخل في ارتفاع المربّع المصغّر والموسّع
+    @State private var panelFooterH: CGFloat = 0
+    /// أُعلن عن وفاته؟ nil = لم يُتحقق بعد (لا يظهر زر «إعلان وفاة»)
+    @State private var deathAnnounced: Bool? = nil
+    @State private var panelHeaderH: CGFloat = 0
+    /// رأس ملوّن مثل مربّعات الإضافة فوق الصورة (لا يتداخل معها) — خيار للمالك
+    private static let showsHeaderBand = true   // قرار المالك: الشكل (ب) — رأس ملوّن مثل بقية المربّعات
+    private var panelChromeH: CGFloat { centered ? panelHeaderH + panelFooterH : 0 }
+    /// الشريط (والرأس إن وُجد) قيس — قبلها لا نُبلِّغ ارتفاعاً ناقصاً
+    private var chromeReady: Bool {
+        !centered || (panelFooterH > 0 && (!Self.showsHeaderBand || panelHeaderH > 0))
+    }
+
     var body: some View {
+        if centered {
+            DSExpandableCenterPanel(
+                isExpanded: Binding(
+                    get: { detent == .large },
+                    set: { detent = $0 ? .large : .fraction(0.46) }
+                ),
+                onClose: { dismiss() }
+            ) {
+                detailsStack
+            }
+        } else {
+            detailsStack
+        }
+    }
+
+    private var detailsStack: some View {
         NavigationStack {
             ZStack(alignment: .top) {
                 DS.Color.background.ignoresSafeArea()
@@ -78,6 +130,11 @@ struct MemberDetailsView: View {
                 if member.isDeleted {
                     deletedMemberView
                 } else {
+                    VStack(spacing: 0) {
+                    if centered && Self.showsHeaderBand {
+                        memberHeaderBand.readHeight($panelHeaderH)
+                    }
+                    ScrollViewReader { scrollProxy in
                     ScrollView(showsIndicators: false) {
                         if isLandscape {
                             // الوضع الأفقي: الشيت يملأ الشاشة — نعرض كل التفاصيل على عمودين
@@ -88,13 +145,11 @@ struct MemberDetailsView: View {
 
                                     quickActionsRow
                                         .padding(.horizontal, DS.Spacing.lg)
-
-                                    fatherCell
                                 }
                                 .frame(maxWidth: .infinity)
 
                                 VStack(spacing: DS.Spacing.md) {
-                                    basicInfoCard
+                                    infoGrid
                                         .padding(.horizontal, DS.Spacing.lg)
 
                                     bioCard
@@ -103,8 +158,10 @@ struct MemberDetailsView: View {
                                     pendingRequestsCard
                                         .padding(.horizontal, DS.Spacing.lg)
 
-                                    actionButtonsSection
-                                        .padding(.horizontal, DS.Spacing.lg)
+                                    if !centered {
+                                        actionButtonsSection
+                                            .padding(.horizontal, DS.Spacing.lg)
+                                    }
                                 }
                                 .padding(.top, DS.Spacing.lg)
                                 .frame(maxWidth: .infinity)
@@ -112,29 +169,38 @@ struct MemberDetailsView: View {
                             .padding(.bottom, DS.Spacing.xxxl)
                         } else {
                         VStack(spacing: DS.Spacing.md) {
-                            compactHeroSection
-                                .padding(.top, DS.Spacing.lg)
+                            // الرأس: الصورة والاسم والقرابة وزر التفاصيل — ارتفاعه = المربّع المصغّر
+                            VStack(spacing: DS.Spacing.md) {
+                                // الرأس المتدرّج خلف الصورة أُزيل (لم يعجب المالك) — الشكل السابق مع حركة دخول
+                                compactHeroSection
+                                    .padding(.top, DS.Spacing.lg)
 
-                            quickActionsRow
-                                .padding(.horizontal, DS.Spacing.lg)
-
-                            // المعلومات تظهر فقط عند توسيع الشيت (الحجم الكبير)
-                            if detent == .large {
-                                // مسار لأعلى — الأب (يظهر فقط عند وجود أب)
-                                fatherCell
-
-                                basicInfoCard
+                                quickActionsRow
                                     .padding(.horizontal, DS.Spacing.lg)
+                                    .dsStaggerIn(1)
 
-                                bioCard
-                                    .padding(.horizontal, DS.Spacing.lg)
+                                if centered {
+                                    detailsToggleButton
+                                        .dsStaggerIn(2)
+                                }
+                            }
+                            .id("detailsTop")
+                            .background(
+                                GeometryReader { geo in
+                                    // بعد قياس الشريط السفلي فقط (نفس سبب مربّعات الإضافة)
+                                    Color.clear.preference(key: DSPanelCollapsedHeightKey.self,
+                                                           value: chromeReady ? geo.size.height + DS.Spacing.lg + panelChromeH : 0)
+                                }
+                            )
 
-                                pendingRequestsCard
-                                    .padding(.horizontal, DS.Spacing.lg)
-
-                                actionButtonsSection
-                                    .padding(.horizontal, DS.Spacing.lg)
-                                    .padding(.top, DS.Spacing.md)
+                            if centered {
+                                // التفاصيل تبقى في مكانها ويُقصّ المربّع فوقها عند الإخفاء —
+                                // فلا تختفي فجأة (طلب المالك): يتحرّك الارتفاع وحده
+                                detailsBody
+                                    .opacity(detent == .large ? 1 : 0)
+                                    .allowsHitTesting(detent == .large)
+                            } else if detent == .large {
+                                detailsBody
                             } else {
                                 // تلميح: اسحب لأعلى لعرض المزيد
                                 Text(L10n.t("اسحب لأعلى لعرض التفاصيل", "Swipe up for details"))
@@ -143,33 +209,76 @@ struct MemberDetailsView: View {
                                     .padding(.top, DS.Spacing.md)
                             }
 
-                            Spacer(minLength: 60)
+                            Spacer(minLength: centered ? DS.Spacing.md : 60)
                         }
+                        // المربّع بحجم محتواه (طلب المالك)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(key: SheetContentHeightKey.self,
+                                                       value: chromeReady ? geo.size.height + panelChromeH : 0)
+                            }
+                        )
                         }
+                    }
+                    .scrollDisabled(centered && detent != .large)
+                    .onChange(of: detent) { newValue in
+                        if centered, newValue != .large {
+                            withAnimation(DS.Anim.smooth) { scrollProxy.scrollTo("detailsTop", anchor: .top) }
+                        }
+                    }
+                    }
+                    // شريط أزرار ثابت أسفل المربّع — مثل كل المربّعات: الإجراء كحلي يمين و«إغلاق» يسار
+                    if centered {
+                        panelFooter.readHeight($panelFooterH)
+                    }
                     }
                 }
 
-                floatingCloseButton
+                if !centered { floatingCloseButton }
             }
             .onAppear { recomputeCache() }
             .onChange(of: currentMemberId) { _ in recomputeCache() }
             .onChange(of: memberVM.membersVersion) { _ in recomputeCache() }
             .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
+            .task(id: member.isDeceased) { await refreshDeathAnnounced() }
+            .onReceive(NotificationCenter.default.publisher(for: .deathAnnouncementPublished)) { note in
+                if (note.object as? UUID) == member.id { deathAnnounced = true }
+            }
             .toolbar(.hidden, for: .navigationBar)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .presentationDetents([.fraction(0.46), .large], selection: $detent)
-            .presentationDragIndicator(.visible)
-            .sheet(isPresented: $showAdminControl) {
+            // تنسيق الألوان: أقسام التفاصيل بلون شريطها (كحلي، ورمادي للمتوفى) مثل باقي المربّعات
+            .environment(\.dsBoxTint, member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy)
+            // ارتفاعات الشيت فقط في وضع الشيت — داخل المربّع تدفع الاختيار إلى «large»
+            .modifier(SheetDetents(enabled: !centered, detent: $detent))
+            // التعديل المباشر نموذج طويل — مربّع طويل من الأسفل (توصية أبل)
+            .dsTallBox(isPresented: $showAdminControl) {
                 if authVM.canEditMembers {
                     // ملاحظة: لا نضع .id(membersVersion) هنا — كان يُعيد بناء
-                    // الـsheet بالكامل عند كل upsertMemberLocally (مثلاً
+                    // اللوح بالكامل عند كل upsertMemberLocally (مثلاً
                     // عند إضافة ابن)، فيُفقد scroll position ويرجع للأعلى.
-                    // الـsheet يتحدث طبيعياً عبر @EnvironmentObject memberVM.
+                    // المحتوى يتحدث طبيعياً عبر @EnvironmentObject memberVM.
                     AdminMemberDetailSheet(member: member)
                 }
             }
-            .sheet(item: $pendingEditAction) { action in
-                TreeEditRequestView(member: member, action: action)
+            .transaction { t in
+                // بلا انزلاق من الأسفل — اللوح يظهر بنفسه في المنتصف
+                if pendingEditAction != nil || showEditActions {
+                    t.disablesAnimations = true
+                }
+            }
+            // اختيار نوع الطلب — مربّع بمنتصف الشاشة (طلب المالك)
+            .fullScreenCover(isPresented: $showEditActions) {
+                DSCenterPanel(onBackgroundTap: { showEditActions = false }, hugsContent: true) {
+                    editActionsGrid
+                }
+                .background(ClearPresentationBackground())
+            }
+            // «طلب تعديل» كذلك لوح بمنتصف الشاشة (طلب المالك)
+            .fullScreenCover(item: $pendingEditAction) { action in
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                    TreeEditRequestView(member: member, action: action)
+                }
+                .background(ClearPresentationBackground())
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .memberDeleted)) { notification in
@@ -194,6 +303,7 @@ struct MemberDetailsView: View {
         }
         .dsAlert(L10n.t("إبلاغ عن عضو", "Report Member"), isPresented: $showReportConfirm) {
             TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+                .dsAlertField()
             Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
                 let target = member
                 let reason = reportReason
@@ -216,8 +326,11 @@ struct MemberDetailsView: View {
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) { }
         } message: {
-            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة وستتم مراجعته خلال ٢٤ ساعة.",
+                        "Thank you — your report reached the admins and will be reviewed within 24 hours."))
         }
+        // حظر العضو / إلغاء الحظر — نفس رسائل «إبلاغ» (بلاغ تلقائي للإدارة عند الحظر)
+        .dsBlockMemberFlow(target: $blockTarget)
     }
 
     // MARK: - عضو محذوف
@@ -233,6 +346,7 @@ struct MemberDetailsView: View {
                     .font(DS.Font.scaled(36))
                     .foregroundColor(DS.Color.textTertiary)
             }
+            .accessibilityHidden(true)   // زخرفة — النص تحتها يشرح
             Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
                 .font(DS.Font.title3)
                 .foregroundColor(DS.Color.textSecondary)
@@ -246,21 +360,49 @@ struct MemberDetailsView: View {
 
     // MARK: - Hero Section (Compact circular)
 
+    /// «عرض التفاصيل» / «إخفاء التفاصيل» — يوسّع المربّع أو يصغّره
+    private var detailsToggleButton: some View {
+        let expanded = detent == .large
+        return Button {
+            withAnimation(DS.Anim.snappy) { detent = expanded ? .fraction(0.46) : .large }
+        } label: {
+            Label(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
+                           : L10n.t("عرض التفاصيل", "Show details"),
+                  systemImage: expanded ? "chevron.down" : "chevron.up")
+                .font(DS.Font.plex(13, weight: .bold))
+                // لون ممتلئ مختلف عن شارة العمر (طلب المالك)
+                .foregroundColor(.white)
+                .padding(.horizontal, DS.Spacing.lg)
+                .frame(height: 38)
+                .background(DSActionFill.style(), in: Capsule())
+                // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير الحبّة ولا ارتفاع المربّع المصغّر
+                .padding(.vertical, 3)
+                .contentShape(Rectangle())
+                .padding(.vertical, -3)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
     private var compactHeroSection: some View {
         VStack(spacing: DS.Spacing.md) {
             ZStack {
-                Circle()
-                    .fill(DS.Color.gradientPrimary)
-                    .frame(width: 170, height: 170)
-                    .blur(radius: 28)
-                    .opacity(0.35)
-
+                // (أُزيل التوهّج المموّه خلف الصورة — كان يُقصّ بإطار مربّع، طلب المالك)
                 ZStack {
                     avatarContent
                         .frame(width: 130, height: 130)
                         .clipShape(Circle())
-                        .dsGlowShadow()
+                        // المتوفّى بالأبيض والأسود (طلب المالك)
+                        .grayscale(member.isDeceased == true ? 1 : 0)
+                        // إطار دائري خفيف جداً بلا توهّج (طلب المالك)
+                        .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                        .scaleEffect(heroIn || reduceMotion ? 1 : 0.6)
+                        .opacity(heroIn ? 1 : 0)
                         .onTapGesture { showAvatarPreview = true }
+                        // القارئ الصوتي: الصورة تُفتح مكبّرة — زر باسم واضح
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(L10n.t("معاينة الصورة", "Preview photo"))
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { showAvatarPreview = true }
 
                     // علامة وفاة (نفس نمط الأبناء)
                     if member.isDeceased == true {
@@ -272,30 +414,29 @@ struct MemberDetailsView: View {
                                     .font(DS.Font.scaled(18, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
                             )
+                            // إطار خفيف لعلامة الوفاة (طلب المالك)
+                            .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
                             .offset(x: 48, y: 48)
-                    } else if isMemberActive {
-                        // دائرة خضراء للأعضاء النشطين (داخل المنظومة)
-                        Circle()
-                            .fill(DS.Color.background)
-                            .frame(width: 26, height: 26)
-                            .overlay(
-                                Circle()
-                                    .fill(DS.Color.secondary)
-                                    .frame(width: 16, height: 16)
-                                    .shadow(color: DS.Color.secondary.opacity(0.5), radius: 4, x: 0, y: 1)
-                            )
-                            .offset(x: 48, y: 48)
+                            // القارئ الصوتي: علامة الوفاة تُقرأ كلمةً لا اسم رمز
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(L10n.t("متوفّى", "Deceased"))
                     }
                 }
             }
 
             Text(member.displayFullName)
-                .font(DS.Font.title2)
-                .fontWeight(.bold)
+                // أصغر حبّتين (طلب المالك)
+                .font(DS.Font.plex(18, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .padding(.horizontal, DS.Spacing.lg)
+                .offset(y: heroIn || reduceMotion ? 0 : 10)
+                .opacity(heroIn ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.2)
+                                       : .spring(response: 0.55, dampingFraction: 0.68).delay(0.05)) { heroIn = true }
         }
     }
 
@@ -332,6 +473,7 @@ struct MemberDetailsView: View {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: isDeceased ? "heart.slash.fill" : "timelapse")
                         .font(DS.Font.scaled(11, weight: .semibold))
+                        .accessibilityHidden(true)   // زخرفة
                     Text("\(age) " + L10n.t("سنة", "yrs"))
                         .font(DS.Font.scaled(12, weight: .bold))
                     if isDeceased {
@@ -344,6 +486,7 @@ struct MemberDetailsView: View {
                 .padding(.vertical, DS.Spacing.xs + 2)
                 .background(color.opacity(0.12))
                 .clipShape(Capsule())
+                .accessibilityElement(children: .combine)   // الحبّة تُقرأ جملةً واحدة
             }
         }
     }
@@ -359,6 +502,7 @@ struct MemberDetailsView: View {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
                     .font(DS.Font.scaled(11, weight: .semibold))
+                    .accessibilityHidden(true)   // زخرفة — النص يكفي
                 Text(label)
                     .font(DS.Font.scaled(12, weight: .bold))
             }
@@ -367,6 +511,11 @@ struct MemberDetailsView: View {
             .padding(.vertical, DS.Spacing.xs + 2)
             .background(color.opacity(0.12))
             .clipShape(Capsule())
+            // مساحة ضغط ٤٤ نقطة (حد أبل): الحشو يوسّع منطقة الضغط والسالب يعيد الحجم
+            // كما كان — الحبّة وارتفاع المربّع المصغّر بلا تغيير
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .padding(.vertical, -8)
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -376,44 +525,210 @@ struct MemberDetailsView: View {
     /// خلية الأب القابلة للضغط — تنقل الشيت والشجرة للأب (مسار لأعلى في الشجرة).
     /// تظهر فقط عند وجود أب، وتحاكي خلايا الأم/الزوج في شيت النساء (relationCell).
     @ViewBuilder
-    private var fatherCell: some View {
-        if let father = cachedFather {
-            Button {
-                openMemberInTree(father.id)
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    ZStack {
-                        Circle()
-                            .fill(DS.Color.primary.opacity(0.12))
-                            .frame(width: 34, height: 34)
-                        Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(14, weight: .semibold))
-                            .foregroundColor(DS.Color.primary)
-                    }
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(L10n.t("الأب", "Father"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textSecondary)
-                        Text(father.firstName.isEmpty ? father.fullName : father.firstName)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(DS.Spacing.sm)
-                .background(DS.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .dsSubtleShadow()
+    /// جسم التفاصيل: شبكة أيقونات (المعلومات + الأب + الأبناء) ← السيرة ← الطلبات ← الأزرار
+    private var detailsBody: some View {
+        // الأقسام تدخل تباعاً عند «عرض التفاصيل» (نفس حركة مربّعات الإضافة)
+        let open = detent == .large
+        return VStack(spacing: DS.Spacing.md) {
+            infoGrid
+                .dsStaggerWhen(0, active: open)
+
+            familyStrip
+                .dsStaggerWhen(1, active: open)
+
+            bioCard
+                .dsStaggerWhen(2, active: open)
+
+            pendingRequestsCard
+                .dsStaggerWhen(3, active: open)
+
+            // داخل المربّع الأزرار في الشريط السفلي؛ في الصفحة تبقى هنا
+            if !centered {
+                actionButtonsSection
+                    .padding(.top, DS.Spacing.sm)
+                    .dsStaggerWhen(4, active: open)
             }
-            .buttonStyle(DSScaleButtonStyle())
-            .padding(.horizontal, DS.Spacing.lg)
         }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: شريط العائلة — الأب والأبناء بشكل جديد (طلب المالك)
+
+    /// الأب بصورته وحلقة ذهبية، ثم فاصل، ثم الأبناء بصور صغيرة تتمرّر أفقياً.
+    /// الضغط على أي صورة يفتح صاحبها.
+    @ViewBuilder
+    private var familyStrip: some View {
+        let father = cachedFather
+        let children = cachedChildren
+        if father != nil || !children.isEmpty {
+            // نفس أقسام المربّعات — العنوان يفتح/يخفي الأب والأبناء (مخفيّون بالبداية)
+            DSComposerSection(
+                title: L10n.t("العائلة", "Family"),
+                icon: "person.2.fill",
+                tint: DS.Color.success,
+                trailing: familySummary(hasFather: father != nil, children: children.count),
+                isOpen: $familyOpen
+            ) {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    // الأب بالمنتصف بخلفية خفيفة بعرض القسم (طلب المالك)
+                    if let father {
+                        Button { openMemberInTree(father.id) } label: {
+                            familyBubble(father, size: 50, ring: DS.Color.warning,
+                                         caption: L10n.t("الأب", "Father"))
+                                .padding(.vertical, DS.Spacing.sm)
+                                .frame(maxWidth: .infinity)
+                                .dsRowBox()
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
+                        // القارئ الصوتي: «الأب، الاسم» بلا حرف الصورة البديلة
+                        .accessibilityLabel(L10n.t("الأب، \(father.firstName)", "Father, \(father.firstName)"))
+                    }
+
+                    // الأبناء: صفوف من أربعة، كل صف متمركز (طلب المالك)
+                    if !children.isEmpty {
+                        VStack(spacing: DS.Spacing.sm) {
+                            Text(L10n.t("الأبناء", "Children") + " · \(children.count)")
+                                .font(DS.Font.plex(12, weight: .heavy))
+                                .foregroundColor(DS.Color.fieldLabel)
+                                .frame(maxWidth: .infinity)
+                            VStack(spacing: 4) {
+                                ForEach(Array(stride(from: 0, to: children.count, by: 4)), id: \.self) { start in
+                                    HStack(alignment: .top, spacing: DS.Spacing.md) {
+                                        ForEach(children[start..<min(start + 4, children.count)]) { child in
+                                            Button { openMemberInTree(child.id) } label: {
+                                                familyBubble(child, size: 42, ring: DS.Color.primary.opacity(0.35),
+                                                             caption: nil)
+                                            }
+                                            .buttonStyle(DSScaleButtonStyle())
+                                            // القارئ الصوتي: الاسم (+ «متوفّى») بلا حرف الصورة البديلة
+                                            .accessibilityLabel(child.firstName
+                                                                + (child.isDeceased == true ? L10n.t("، متوفّى", ", deceased") : ""))
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                            }
+                        }
+                        .padding(.vertical, DS.Spacing.sm)
+                        .frame(maxWidth: .infinity)
+                        .dsRowBox()
+                    }
+                }
+            }
+        }
+    }
+
+    /// «الأب · ٣ أبناء» — ملخّص تحت العنوان والشريط مقفول
+    private func familySummary(hasFather: Bool, children: Int) -> String {
+        var parts: [String] = []
+        if hasFather { parts.append(L10n.t("الأب", "Father")) }
+        if children > 0 { parts.append(L10n.t("\(children) أبناء", "\(children) children")) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// صورة دائرية بحلقة + الاسم الأول تحتها (+ وصف فوق الاسم للأب)
+    private func familyBubble(_ m: FamilyMember, size: CGFloat, ring: Color, caption: String?) -> some View {
+        VStack(spacing: 4) {
+            ZStack {
+                if let url = m.avatarUrl, let imgUrl = URL(string: url) {
+                    CachedAsyncImage(url: imgUrl) { img in img.resizable().scaledToFill() }
+                    placeholder: { Circle().fill(DS.Color.primary.opacity(0.10)) }
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(DS.Color.primary.opacity(0.10))
+                        .frame(width: size, height: size)
+                        .overlay(
+                            Text(String(m.firstName.prefix(1)))
+                                .font(DS.Font.plex(size * 0.36, weight: .bold))
+                                .foregroundColor(DS.Color.primary)
+                        )
+                }
+            }
+            .overlay(Circle().stroke(ring, lineWidth: 1.5).padding(-2))
+            // المتوفّى بالأبيض والأسود (طلب المالك)
+            .grayscale(m.isDeceased == true ? 1 : 0)
+
+            if let caption {
+                Text(caption)
+                    .font(DS.Font.plex(10.5, weight: .bold))
+                    .foregroundColor(DS.Color.warning)
+            }
+            Text(m.firstName)
+                .font(DS.Font.plex(11.5, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: size + 18)
+        }
+    }
+
+    // MARK: شبكة المعلومات الأيقونية (طلب المالك)
+
+    private struct InfoTileData: Identifiable {
+        let id: String
+        let icon: String
+        let label: String
+        let value: String
+        let color: Color
+        var ltr = false
+    }
+
+    /// المعلومات في بلاطات أيقونية: الميلاد، الهاتف، الوفاة (بلا الأب والأبناء — طلب المالك)
+    private var infoTiles: [InfoTileData] {
+        cachedBasicInfoRows.enumerated().map { idx, row in
+            InfoTileData(id: "info-\(idx)", icon: row.icon, label: row.label, value: row.value,
+                         color: row.color, ltr: row.icon == "phone.fill")
+        }
+    }
+
+    @ViewBuilder
+    private var infoGrid: some View {
+        let tiles = infoTiles
+        if !tiles.isEmpty {
+            DSComposerSection(title: L10n.t("المعلومات", "Info"),
+                              icon: "person.text.rectangle.fill",
+                              tint: DS.Color.primary) {
+                // صفّان في كل سطر (طلب المالك) — بنفس صفوف «تعديل البيانات»؛
+                // صفوف عادية لا LazyVGrid حتى يُقاس الارتفاع كاملاً
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(Array(stride(from: 0, to: tiles.count, by: 2)), id: \.self) { start in
+                        let end = min(start + 2, tiles.count)
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(tiles[start..<end]) { infoTileView($0) }
+                            if end - start < 2 {
+                                Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// صف معلومة: أيقونة الحقل + العنوان الغامق + القيمة — نفس صفوف المربّعات
+    private func infoTileView(_ tile: InfoTileData) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: tile.icon, tint: tile.color)
+                .accessibilityHidden(true)   // زخرفة
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tile.label)
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+                Text(tile.value)
+                    .font(DS.Font.plex(14))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .environment(\.layoutDirection, tile.ltr ? .leftToRight : LanguageManager.shared.layoutDirection)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
     }
 
     // MARK: - Basic Info Card
@@ -441,70 +756,6 @@ struct MemberDetailsView: View {
             s.append(.init(value: L10n.t("نشِط", "Active"), label: L10n.t("الحالة", "Status"), color: DS.Color.success))
         }
         return s
-    }
-
-    /// بطاقة موحّدة: المعلومات الأساسية (الميلاد/الهاتف/الوفاة) + الأبناء داخل نفس
-    /// المربّع. بلا العمر (انتقل لحبّة القرابة) وبلا الأب (فقط الأبناء)، ويتوسّع داخليًا.
-    @ViewBuilder
-    private var basicInfoCard: some View {
-        let rows = cachedBasicInfoRows          // الميلاد · الهاتف · الوفاة (صفوف عريضة مقروءة)
-        let hasChildren = !cachedChildren.isEmpty
-
-        if !rows.isEmpty || hasChildren {
-            DSCard(padding: 0) {
-                VStack(spacing: 0) {
-                    DSSectionHeader(
-                        title: L10n.t("المعلومات", "Info"),
-                        icon: "person.text.rectangle.fill",
-                        iconColor: DS.Color.primary
-                    )
-
-                    // أيقونات (ميلاد · هاتف · وفاة) والمعلومة تحت كل أيقونة.
-                    if !rows.isEmpty {
-                        HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                                infoTile(row: row)
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.md)
-                    }
-
-                    // الأبناء فقط (بلا الأب) — الكلمة والسهم بالنص، ويتوسّع داخل المربّع.
-                    if hasChildren {
-                        if !rows.isEmpty {
-                            Divider().overlay(DS.Color.textTertiary.opacity(0.15))
-                                .padding(.horizontal, DS.Spacing.lg)
-                        }
-                        Button {
-                            withAnimation(DS.Anim.snappy) { childrenExpanded.toggle() }
-                        } label: {
-                            HStack(spacing: DS.Spacing.sm) {
-                                Image(systemName: "person.3.fill")
-                                    .font(DS.Font.scaled(13, weight: .semibold))
-                                    .foregroundColor(DS.Color.primary)
-                                Text(L10n.t("الأبناء", "Children") + " (\(cachedChildren.count))")
-                                    .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                Image(systemName: "chevron.down")
-                                    .font(DS.Font.scaled(11, weight: .semibold))
-                                    .foregroundColor(DS.Color.textTertiary)
-                                    .rotationEffect(.degrees(childrenExpanded ? 180 : 0))
-                            }
-                            .frame(maxWidth: .infinity)      // بالنص
-                            .padding(.vertical, DS.Spacing.sm + 2)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-
-                        if childrenExpanded {
-                            childrenInlineGrid
-                                .padding(.horizontal, DS.Spacing.lg)
-                        }
-                    }
-                }
-                .padding(.bottom, DS.Spacing.md)
-            }
-        }
     }
 
     private struct ChipData: Identifiable {
@@ -609,31 +860,6 @@ struct MemberDetailsView: View {
                 .environment(\.layoutDirection, ltrValue ? .leftToRight : LanguageManager.shared.layoutDirection)
         }
         .padding(.vertical, DS.Spacing.sm + 2)
-    }
-
-    /// خانة إيقونة + قيمة + label عمودياً — للتخطيط الأفقي ثنائي الأعمدة
-    private func infoTile(row: InfoRowData) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            ZStack {
-                Circle()
-                    .fill(row.color.opacity(0.12))
-                    .frame(width: 38, height: 38)
-                Image(systemName: row.icon)
-                    .font(DS.Font.scaled(15, weight: .semibold))
-                    .foregroundColor(row.color)
-            }
-            Text(row.label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-            Text(row.value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .environment(\.layoutDirection, row.icon == "phone.fill" ? .leftToRight : LanguageManager.shared.layoutDirection)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
     }
 
     private struct InfoRowData {
@@ -854,56 +1080,6 @@ struct MemberDetailsView: View {
         .presentationDragIndicator(.visible)
     }
 
-    private func childButton(_ child: FamilyMember) -> some View {
-        Button {
-            // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه
-            let childId = child.id
-            currentMemberId = childId
-            NotificationCenter.default.post(
-                name: .openMemberInTree,
-                object: nil,
-                userInfo: ["memberId": childId]
-            )
-        } label: {
-            childTileFirstName(child)
-                .frame(width: 52)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    /// صور الأبناء — صف واحد حتى ٥، وسطران إذا أكثر من ٥.
-    private var childrenInlineGrid: some View {
-        Group {
-            if cachedChildren.count > 5 {
-                let mid = (cachedChildren.count + 1) / 2
-                let row1 = Array(cachedChildren.prefix(mid))
-                let row2 = Array(cachedChildren.dropFirst(mid))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                        HStack(alignment: .top, spacing: DS.Spacing.md) {
-                            ForEach(row1) { childButton($0) }
-                        }
-                        HStack(alignment: .top, spacing: DS.Spacing.md) {
-                            ForEach(row2) { childButton($0) }
-                        }
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: DS.Spacing.md) {
-                        ForEach(cachedChildren) { childButton($0) }
-                    }
-                    .padding(.vertical, DS.Spacing.xs)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-            }
-        }
-        .padding(.top, DS.Spacing.sm)
-        .padding(.bottom, DS.Spacing.xs)
-    }
-
     private func childTileFirstName(_ child: FamilyMember) -> some View {
         VStack(spacing: DS.Spacing.xs) {
             ZStack {
@@ -1020,21 +1196,21 @@ struct MemberDetailsView: View {
     @ViewBuilder
     private var bioCard: some View {
         if let bioStations = member.bio, !bioStations.isEmpty {
-            DSCard(padding: 0) {
-                VStack(spacing: 0) {
-                    DSSectionHeader(
-                        title: L10n.t("السيرة", "Biography"),
-                        icon: "book.fill",
-                        trailing: "\(bioStations.count) " + L10n.t("حدث", "entries"),
-                        iconColor: DS.Color.primary
-                    )
-
+            // نفس قسم «السيرة الذاتية» في «تعديل البيانات»
+            DSComposerSection(
+                title: L10n.t("السيرة الذاتية", "Biography"),
+                icon: "text.quote",
+                tint: DS.Color.accent,
+                trailing: "\(bioStations.count) " + L10n.t("حدث", "entries")
+            ) {
+                VStack(spacing: DS.Spacing.sm) {
                     VStack(spacing: 0) {
                         ForEach(Array(bioStations.enumerated()), id: \.element.id) { index, station in
                             bioStationRow(index: index, total: bioStations.count, station: station)
                         }
                     }
-                    .padding(.horizontal, DS.Spacing.md)
+                    .frame(maxWidth: .infinity)
+                    .dsRowBox()
 
                     if authVM.isAdmin || isViewingSelf {
                         Button {
@@ -1042,19 +1218,22 @@ struct MemberDetailsView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "trash")
-                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                    .font(.system(size: 12.5, weight: .bold))
+                                    .accessibilityHidden(true)   // زخرفة — النص يكفي
                                 Text(L10n.t("حذف السيرة", "Delete Biography"))
-                                    .font(DS.Font.calloutBold)
+                                    .font(DS.Font.plex(13, weight: .bold))
                             }
                             .foregroundColor(DS.Color.error)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, DS.Spacing.sm)
-                            .background(DS.Color.error.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                            .frame(height: 40)
+                            .background(DS.Color.error.opacity(0.08),
+                                        in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                            // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير ارتفاع الزر الظاهر
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
+                            .padding(.vertical, -2)
                         }
                         .buttonStyle(DSScaleButtonStyle())
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.md)
                     }
                 }
             }
@@ -1108,6 +1287,7 @@ struct MemberDetailsView: View {
             Spacer()
         }
         .padding(.top, DS.Spacing.sm)
+        .accessibilityElement(children: .combine)   // الحدث (السنة، العنوان، التفاصيل) عنصراً واحداً
     }
 
     // MARK: - Pending Requests Card
@@ -1115,25 +1295,16 @@ struct MemberDetailsView: View {
     @ViewBuilder
     private var pendingRequestsCard: some View {
         if canSeePendingRequests && !cachedPendingRequests.isEmpty {
-            DSCard(padding: 0) {
-                VStack(spacing: 0) {
-                    DSSectionHeader(
-                        title: L10n.t("طلبات معلقة", "Pending Requests"),
-                        icon: "clock.badge.exclamationmark.fill",
-                        trailing: "\(cachedPendingRequests.count)",
-                        iconColor: DS.Color.warning
-                    )
-
-                    VStack(spacing: 0) {
-                        ForEach(cachedPendingRequests.indices, id: \.self) { index in
-                            pendingRequestRow(cachedPendingRequests[index])
-                            if index < cachedPendingRequests.count - 1 {
-                                Divider().padding(.leading, 56)
-                            }
-                        }
+            DSComposerSection(
+                title: L10n.t("طلبات معلّقة", "Pending Requests"),
+                icon: "clock.badge.exclamationmark.fill",
+                tint: DS.Color.warning,
+                trailing: "\(cachedPendingRequests.count)"
+            ) {
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(cachedPendingRequests.indices, id: \.self) { index in
+                        pendingRequestRow(cachedPendingRequests[index])
                     }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.md)
                 }
             }
         }
@@ -1159,34 +1330,27 @@ struct MemberDetailsView: View {
             }
         }()
 
-        return HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(color)
-            }
+        return HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: color)
+                .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t(actionLabelAr, actionLabelEn))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("قيد المراجعة", "Under review"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textTertiary)
+                    .font(DS.Font.plex(12.5))
+                    .foregroundColor(DS.Color.fieldValue)
             }
-            Spacer()
-            Text(L10n.t("معلق", "Pending"))
-                .font(DS.Font.caption2)
-                .fontWeight(.semibold)
+            Spacer(minLength: 0)
+            Text(L10n.t("معلّق", "Pending"))
+                .font(DS.Font.plex(11, weight: .bold))
                 .foregroundColor(DS.Color.warning)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 3)
-                .background(DS.Color.warning.opacity(0.12))
-                .clipShape(Capsule())
+                .background(DS.Color.warning.opacity(0.12), in: Capsule())
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // الطلب وحالته عنصراً واحداً
     }
 
     // MARK: - Action Buttons (bottom)
@@ -1202,7 +1366,7 @@ struct MemberDetailsView: View {
                             label: L10n.t("طلب تعديل", "Request Edit"),
                             tint: DS.Color.primary,
                             filled: true
-                        ) { withAnimation(DS.Anim.snappy) { showEditActions.toggle() } }
+                        ) { showEditActions = true }
 
                         // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
                         circleActionButton(
@@ -1210,6 +1374,16 @@ struct MemberDetailsView: View {
                             label: L10n.t("إبلاغ", "Report"),
                             tint: DS.Color.warning
                         ) { showReportConfirm = true }
+
+                        // حظر العضو بجانب «إبلاغ» (Guideline 1.2)
+                        if canShowBlock {
+                            circleActionButton(
+                                icon: isMemberBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
+                                label: isMemberBlocked ? L10n.t("إلغاء الحظر", "Unblock")
+                                                       : L10n.t("حظر", "Block"),
+                                tint: isMemberBlocked ? DS.Color.textSecondary : DS.Color.error
+                            ) { requestBlockToggle() }
+                        }
                     }
 
                     if authVM.canEditMembers {
@@ -1219,40 +1393,57 @@ struct MemberDetailsView: View {
                             tint: DS.Color.primary
                         ) { showAdminControl = true }
                     }
+
+                    if showsDeathAnnounce {
+                        circleActionButton(
+                            icon: NewsTypeHelper.icon(for: "وفاة"),
+                            label: L10n.t("إعلان وفاة", "Obituary"),
+                            tint: NewsTypeHelper.color(for: "وفاة")
+                        ) { openDeathAnnouncement() }
+                    }
                 }
                 .frame(maxWidth: .infinity)
 
-                // شبكة أنواع الطلبات مدمجة داخل التفاصيل — تدفق واحد:
-                // كان المسار 3 شيتات متتالية (تفاصيل ← اختيار نوع ← نموذج) مع تأخير 0.3 ثانية؛
-                // الآن النوع يُختار هنا والنموذج يفتح مباشرة فوق التفاصيل.
-                if showEditActions && !isViewingSelf {
-                    editActionsGrid
-                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
-                }
+                // اختيار نوع الطلب صار مربّعاً بمنتصف الشاشة (طلب المالك) —
+                // يُعرض في fullScreenCover أدناه، لا داخل التفاصيل.
             }
         }
     }
 
-    /// شبكة أنواع طلبات التعديل — مدمجة داخل شيت التفاصيل (بدل الشيت الوسيط السابق).
+    /// اختيار نوع الطلب — نفس تصميم المربّعات: رأس ملوّن + قسم + «إلغاء» (طلب المالك)
     private var editActionsGrid: some View {
-        VStack(spacing: DS.Spacing.md) {
-            Text(L10n.t("اختر نوع الطلب", "Choose Request Type"))
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.md), count: 3),
-                spacing: DS.Spacing.lg
-            ) {
-                ForEach(availableEditActions, id: \.rawValue) { action in
-                    editActionCircle(for: action)
+        DSComposer(
+            title: L10n.t("طلب تعديل", "Edit Request"),
+            subtitle: member.displayFullName,
+            icon: "pencil.and.list.clipboard",
+            tint: DS.Color.actionNavy,
+            actionTitle: "",
+            showsAction: false,
+            canSubmit: false,
+            note: L10n.t("يصل الطلب للإدارة لمراجعته", "The request goes to the admins for review"),
+            onSubmit: {},
+            onCancel: { showEditActions = false }
+        ) {
+            DSComposerSection(title: L10n.t("اختر نوع الطلب", "Choose Request Type"),
+                              icon: "square.grid.2x2.fill",
+                              tint: DS.Color.primary) {
+                // صفوف عادية لا LazyVGrid — الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً فيُقصّ آخر صف
+                let actions = availableEditActions
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(Array(stride(from: 0, to: actions.count, by: 3)), id: \.self) { start in
+                        let end = min(start + 3, actions.count)
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(actions[start..<end], id: \.rawValue) { action in
+                                editActionCircle(for: action)
+                            }
+                            ForEach(0..<(3 - (end - start)), id: \.self) { _ in
+                                Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                            }
+                        }
+                    }
                 }
             }
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
     }
 
     private var availableEditActions: [TreeEditAction] {
@@ -1294,26 +1485,28 @@ struct MemberDetailsView: View {
         let tint = editActionColor(for: action)
         return Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            pendingEditAction = action
+            // نُغلق مربّع الاختيار أولاً ثم نفتح نموذج الطلب (عرضان متتاليان)
+            showEditActions = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                pendingEditAction = action
+            }
         } label: {
-            VStack(spacing: DS.Spacing.xs) {
-                ZStack {
-                    Circle()
-                        .fill(tint.opacity(0.12))
-                        .overlay(Circle().stroke(tint.opacity(0.28), lineWidth: 1))
-                        .frame(width: 64, height: 64)
-                    Image(systemName: action.iconName)
-                        .font(DS.Font.scaled(24, weight: .semibold))
-                        .foregroundColor(tint)
-                }
+            // مربّع نوع الطلب — مثل مربّعات التصنيف في «خبر جديد»
+            VStack(spacing: 6) {
+                Image(systemName: action.iconName)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(tint)
+                    .frame(width: 42, height: 42)
+                    .background(Circle().fill(tint.opacity(0.14)))
                 Text(editActionLabel(for: action))
-                    .font(DS.Font.caption1)
-                    .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
+                    .font(DS.Font.plex(12, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.xs)
+            .dsRowBox()
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(editActionLabel(for: action))
@@ -1348,6 +1541,7 @@ struct MemberDetailsView: View {
                             .foregroundColor(tint)
                     }
                 }
+                .accessibilityHidden(true)   // زخرفة — التسمية تحتها تكفي
                 Text(label)
                     .font(DS.Font.caption1)
                     .fontWeight(.semibold)
@@ -1355,6 +1549,139 @@ struct MemberDetailsView: View {
             }
         }
         .buttonStyle(DSScaleButtonStyle())
+    }
+
+    // MARK: - إعلان وفاة (مكان ثابت — طلب المالك «وين الوفاة؟»)
+
+    /// يظهر للمتوفى الذي لم يُعلن عنه بعد، لمن يعتمد الوفيات (المالك والمدير والمراقب)
+    private var showsDeathAnnounce: Bool {
+        member.isDeceased == true && authVM.canApproveTreeRequests && deathAnnounced == false
+            && DeathRecency.isRecent(member.deathDate)
+    }
+
+    private func refreshDeathAnnounced() async {
+        guard member.isDeceased == true, authVM.canApproveTreeRequests else { return }
+        let ids = await DeathAnnouncementPresenter.announcedIDs()
+        deathAnnounced = ids.contains(member.id)
+    }
+
+    private func openDeathAnnouncement() {
+        DeathAnnouncementPresenter.open(DeathAnnouncementTarget(
+            id: member.id, name: member.fullName, isFemale: member.isFemale,
+            deathDate: member.deathDate))
+    }
+
+    private var deathAnnounceButton: some View {
+        let tint = NewsTypeHelper.color(for: "وفاة")
+        return Button { openDeathAnnouncement() } label: {
+            HStack(spacing: 7) {
+                Image(systemName: NewsTypeHelper.icon(for: "وفاة"))
+                    .font(.system(size: 14, weight: .bold))
+                    .accessibilityHidden(true)
+                Text(L10n.t("إعلان وفاة", "Death announcement"))
+                    .font(DS.Font.plex(14.5, weight: .bold))
+            }
+            .foregroundColor(tint.dsReadableGlyph)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(tint.opacity(0.14),
+                        in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        }
+    }
+
+    // MARK: - Panel Footer (نفس شريط مربّعات الإضافة)
+
+    private struct PanelAction {
+        let title: String
+        let icon: String
+        let run: () -> Void
+    }
+
+    /// الإجراء الرئيسي: «تعديل مباشر» لمن يعدّل الأعضاء، وإلا «طلب تعديل» لغير صاحب الملف
+    private var primaryPanelAction: PanelAction? {
+        guard !member.isDeleted else { return nil }
+        if authVM.canEditMembers {
+            return PanelAction(title: L10n.t("تعديل مباشر", "Direct Edit"), icon: "pencil") {
+                showAdminControl = true
+            }
+        }
+        if !isViewingSelf {
+            return PanelAction(title: L10n.t("طلب تعديل", "Request Edit"), icon: "pencil.and.list.clipboard") {
+                showEditActions = true
+            }
+        }
+        return nil
+    }
+
+    /// شريط ثابت أسفل المربّع: الإجراء كحلي يمين، «إبلاغ» صغير، «إغلاق» يسار
+    private var panelFooter: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            // إعلان وفاة — للمتوفى الذي لم يُعلن عنه، لمن يعتمد الوفيات
+            if showsDeathAnnounce { deathAnnounceButton }
+        HStack(spacing: DS.Spacing.sm) {
+            if let primary = primaryPanelAction {
+                Button(action: primary.run) {
+                    HStack(spacing: 7) {
+                        Image(systemName: primary.icon).font(.system(size: 14, weight: .bold))
+                            .accessibilityHidden(true)   // زخرفة — النص يكفي
+                        Text(primary.title).font(DS.Font.plex(15, weight: .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .background(DSActionFill.style(),
+                                in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                }
+            }
+            // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
+            if !isViewingSelf && !member.isDeleted {
+                Button { showReportConfirm = true } label: {
+                    Image(systemName: "exclamationmark.bubble.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(DS.Color.warning)
+                        .frame(width: 48, height: 48)
+                        .background(DS.Color.warning.opacity(0.12),
+                                    in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                }
+                .accessibilityLabel(L10n.t("إبلاغ", "Report"))
+            }
+            // حظر العضو بجانب «إبلاغ» (Guideline 1.2) — ولإلغاء الحظر إن كان محظوراً
+            if canShowBlock {
+                Button { requestBlockToggle() } label: {
+                    Image(systemName: isMemberBlocked ? "hand.raised.slash.fill" : "hand.raised.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(isMemberBlocked ? DS.Color.textSecondary : DS.Color.error)
+                        .frame(width: 48, height: 48)
+                        .background((isMemberBlocked ? DS.Color.textSecondary : DS.Color.error).opacity(0.12),
+                                    in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                }
+                .accessibilityLabel(isMemberBlocked ? L10n.t("إلغاء حظر العضو", "Unblock member")
+                                                    : L10n.t("حظر العضو", "Block member"))
+            }
+            PanelCloseButton()
+        }
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.top, DS.Spacing.sm)
+        .padding(.bottom, DS.Spacing.md)
+        .background(
+            DS.Color.background
+                .overlay(alignment: .top) {
+                    Rectangle().fill(DS.Color.textTertiary.opacity(0.12)).frame(height: 1)
+                }
+        )
+    }
+
+    /// رأس ملوّن مثل مربّعات الإضافة (فوق الصورة، بلا تداخل) — يظهر فقط مع showsHeaderBand
+    private var memberHeaderBand: some View {
+        DSComposerHeader(
+            title: L10n.t("تفاصيل العضو", "Member Details"),
+            subtitle: L10n.t("من شجرة العائلة", "From the family tree"),
+            icon: "person.text.rectangle.fill",
+            tint: member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy
+        )
     }
 
     // MARK: - Floating Close Button
@@ -1372,6 +1699,10 @@ struct MemberDetailsView: View {
                         .clipShape(Circle())
                         .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 0.5))
                         .dsSubtleShadow()
+                        // مساحة ضغط ٤٤ نقطة (حد أبل) — الدائرة ومكانها كما هما
+                        .padding(3)
+                        .contentShape(Rectangle())
+                        .padding(-3)
                 }
                 .accessibilityLabel(L10n.t("إغلاق", "Close"))
             }
@@ -1484,5 +1815,42 @@ struct MemberDetailsView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.t("إغلاق", "Close"))
         }
+    }
+}
+
+/// ارتفاعات الشيت (0.46 / كامل) — تُطبَّق فقط عند العرض كشيت
+private struct SheetDetents: ViewModifier {
+    let enabled: Bool
+    @Binding var detent: PresentationDetent
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .presentationDetents([.fraction(0.46), .large], selection: $detent)
+                .presentationDragIndicator(.visible)
+        } else {
+            content
+        }
+    }
+}
+
+/// «إغلاق» في شريط المربّع السفلي (يسار، مثل «إلغاء» بقية المربّعات) — عرض مستقل
+/// حتى يقرأ إغلاق المربّع المتحرّك من داخله (قراءته من MemberDetailsView كانت فارغة)
+private struct PanelCloseButton: View {
+    @Environment(\.dsPanelClose) private var panelClose
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Button {
+            if let panelClose { panelClose() } else { dismiss() }
+        } label: {
+            Text(L10n.t("إغلاق", "Close"))
+                .font(DS.Font.plex(15, weight: .bold))
+                .foregroundColor(DS.Color.textPrimary)
+                .frame(maxWidth: .infinity).frame(height: 48)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(DS.Color.mutedBackground.opacity(0.8)))
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 }

@@ -23,8 +23,11 @@ struct FamilyProjectsView: View {
     @State private var projectToReport: Project? = nil
     @State private var reportReason = ""
     @State private var reportSent = false
+    /// دخول البطاقات مرة واحدة عند ظهور الشبكة (نمط الأخبار والديوانيات)
+    @State private var appeared = false
 
     @Environment(\.verticalSizeClass) private var vSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// الوضع الأفقي — أعمدة أكثر لاستغلال العرض
     private var isLandscape: Bool { vSizeClass == .compact }
 
@@ -104,11 +107,18 @@ struct FamilyProjectsView: View {
                 await projectsVM.fetchPendingProjects()
             }
         }
-        .sheet(isPresented: $showingAddProject) {
-            AddProjectView(showAddedAlert: $showAddedAlert)
-                .environmentObject(projectsVM)
-                .environmentObject(authVM)
-                .environmentObject(memberVM)
+        // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
+        .fullScreenCover(isPresented: $showingAddProject) {
+            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                AddProjectView(showAddedAlert: $showAddedAlert)
+                    .environmentObject(projectsVM)
+                    .environmentObject(authVM)
+                    .environmentObject(memberVM)
+            }
+            .background(ClearPresentationBackground())
+        }
+        .transaction { t in
+            if showingAddProject { t.disablesAnimations = true }
         }
         .dsAlert(
             L10n.t("تم إرسال المشروع", "Project Submitted"),
@@ -126,13 +136,15 @@ struct FamilyProjectsView: View {
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)
         }
-        .sheet(item: $projectToEdit) { project in
-            NavigationStack {
+        .fullScreenCover(item: $projectToEdit) { project in
+            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
                 EditProjectView(project: project, didEdit: $didEditProject)
                     .environmentObject(projectsVM)
                     .environmentObject(authVM)
             }
+            .background(ClearPresentationBackground())
         }
+        .transaction { t in if projectToEdit != nil { t.disablesAnimations = true } }
         .dsAlert(L10n.t("إبلاغ عن مشروع", "Report Project"), isPresented: Binding(
             get: { projectToReport != nil },
             set: { if !$0 { projectToReport = nil } }
@@ -163,7 +175,7 @@ struct FamilyProjectsView: View {
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
-            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة.", "Thank you, your report reached the admins."))
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة وستتم مراجعته خلال ٢٤ ساعة.", "Thank you — your report reached the admins and will be reviewed within 24 hours."))
         }
         .dsAlert(L10n.t("حذف المشروع", "Delete project"),
                isPresented: Binding(
@@ -211,11 +223,12 @@ struct FamilyProjectsView: View {
         } else if currentItems.isEmpty {
             Spacer()
             emptyStateView
+                .dsStaggerIn(0)   // الحالة الفارغة تصعد وتظهر (تلاشٍ فقط مع «تقليل الحركة»)
             Spacer()
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVGrid(columns: gridColumns, spacing: DS.Spacing.md) {
-                    ForEach(currentItems) { project in
+                    ForEach(Array(currentItems.enumerated()), id: \.element.id) { index, project in
                         Button {
                             if selectionMode {
                                 toggleSelection(project.id)
@@ -248,10 +261,13 @@ struct FamilyProjectsView: View {
                                 projectActionsMenu(for: project)
                             }
                         }
+                        // نمط الأخبار والديوانيات: البطاقات تصعد وتظهر تباعاً (أول ٧) مرة عند الظهور
+                        .dsCardCascade(index, appeared: appeared)
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xxxxl)
+                .onAppear { appeared = true }
             }
             .refreshable { await refreshAll() }
         }
@@ -369,7 +385,11 @@ struct FamilyProjectsView: View {
             if pendingCount > 0 || filter == .pending {
                 let on = filter == .pending
                 Button {
-                    withAnimation(DS.Anim.snappy) { filter = on ? .approved : .pending }
+                    // تبديل القائمة بنابض هادئ مثل فلتر الديوانيات — «تقليل الحركة»: تلاشٍ قصير
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.15)
+                                               : .spring(response: 0.4, dampingFraction: 0.85)) {
+                        filter = on ? .approved : .pending
+                    }
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "clock.fill")
@@ -671,61 +691,76 @@ struct AddProjectView: View {
     @State private var showMemberPicker = false
     @State private var memberSearchText = ""
     // طي/فتح قسم روابط التواصل (محتوى كبير) لإبقاء الشيت مضغوطاً.
-    @State private var contactsOpen = false
+    @State private var contactsOpen = true
 
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
     }
 
+    @State private var accountsBoxOpen = false
+    private let tint = DS.Color.tileProjects
+
+    private var filledAccounts: Int {
+        [phoneNumber, whatsappNumber, instagramUrl, twitterUrl, websiteUrl, locationUrl]
+            .filter(ProjectContactTiles.isFilled).count
+    }
+
+    /// ما أدخله المستخدم ولم يُرسل (نص، شعار، صور، حسابات) — «إلغاء» يسأل قبل التجاهل
+    /// (توصية أبل). «+965 » المبدئي في واتساب لا يُعدّ حساباً.
+    private var hasUnsavedChanges: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || logoImage != nil
+            || !photoImages.isEmpty
+            || filledAccounts > 0
+    }
+
     var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.md) {
-
-                        // ── شعار المشروع — صورة دائرية بالأعلى (مطابق إضافة ابن) ──
-                        heroHeader
-
-                        // ── إرشاد للأعضاء العاديين ──
-                        if !authVM.isAdmin {
-                            approvalHintCard
-                        }
-
-                        // ── البطاقة 1: الأساسيات (اسم + وصف) ──
-                        basicsCard
-
-                        // ── صور المشروع (معرض) ──
-                        ProjectPhotosEditor(existingUrls: $noExistingPhotos, newImages: $photoImages)
-
-                        // صاحب المشروع أُزيل من الإضافة — يُعيَّن فقط في تعديل
-                        // المشروع (للإدارة). المنشئ يصبح صاحب المشروع تلقائياً.
-
-                        // ── البطاقة 2: روابط التواصل (اختيارية، مجموعة) ──
-                        contactLinksCard
-                    }
-                    .padding(DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.xxxl)
-                }
+        DSComposer(
+            title: L10n.t("مشروع جديد", "New Project"),
+            subtitle: L10n.t("عرّف العائلة بمشروعك", "Introduce your project to the family"),
+            icon: "briefcase.fill",
+            tint: tint,
+            actionTitle: authVM.isAdmin ? L10n.t("إضافة المشروع", "Add Project") : L10n.t("إرسال للمراجعة", "Submit"),
+            actionIcon: "sparkles",
+            canSubmit: canSubmit,
+            isBusy: isSaving,
+            note: authVM.isAdmin ? nil : L10n.t("يظهر لك فوراً، وللجميع بعد موافقة الإدارة", "Visible to you now, to everyone after approval"),
+            isBehindExtra: accountsBoxOpen,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: { Task { await saveProject() } },
+            onCancel: { dismiss() }
+        ) {
+            // ── الهوية: الشعار + الاسم + الوصف ──
+            DSComposerSection(title: L10n.t("هوية المشروع", "Project Identity"), icon: "sparkles", tint: tint, index: 0) {
+                DSComposerLogoPicker(image: $logoImage, tint: tint, size: 88)
+                    .padding(.bottom, 2)
+                DSComposerField(icon: "textformat", label: L10n.t("اسم المشروع *", "Project name *"),
+                                placeholder: L10n.t("مثال: مخبز البيت", "e.g. Home Bakery"),
+                                text: $title, tint: tint, limit: 60)
+                DSComposerField(icon: "text.alignright", label: L10n.t("وصف مختصر", "Short description"),
+                                placeholder: L10n.t("سطر يعرّف بالمشروع وما يقدّمه", "One line about what it offers"),
+                                text: $description, tint: tint, multiline: true, limit: 160)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            // الإضافة أعلى يمين، والإغلاق يسار (طلب المالك)
-            .dsSheetToolbar(
-                confirm: L10n.t("إضافة", "Add"),
-                isLoading: isSaving,
-                disabled: !canSubmit,
-                onConfirm: { Task { await saveProject() } },
-                onCancel: { dismiss() }
-            )
-            .navigationTitle(L10n.t("مشروع جديد", "New Project"))
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+
+            // ── الصور ──
+            DSComposerSection(title: L10n.t("صور المشروع", "Project Photos"), icon: "photo.on.rectangle.angled",
+                              tint: tint, trailing: "\(photoImages.count)/\(projectPhotosLimit)", index: 1) {
+                DSComposerPhotoStrip(images: $photoImages, limit: projectPhotosLimit, tint: tint, size: 80)
+            }
+
+            // ── حسابات التواصل ──
+            DSComposerSection(title: L10n.t("حسابات التواصل", "Contact Accounts"), icon: "link", tint: tint,
+                              trailing: filledAccounts == 0 ? L10n.t("اختياري", "Optional") : "\(filledAccounts)",
+                              index: 2) {
+                ProjectAccountsEditor(phone: $phoneNumber, whatsapp: $whatsappNumber,
+                                      instagram: $instagramUrl, twitter: $twitterUrl,
+                                      website: $websiteUrl, location: $locationUrl,
+                                      tint: tint,
+                                      onExtraChange: { accountsBoxOpen = $0 })
+            }
         }
-        // الاتجاه على الـNavigationStack نفسه — داخله فقط يجعل شريط الأزرار LTR
-        // فتنعكس مواضع «إضافة/إلغاء» (طلب المالك)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .presentationDetents([.fraction(0.62)])
-        .presentationDragIndicator(.visible)
+        .dsTallBox(isPresented: $showMemberPicker) { memberPickerSheet }   // قائمة أعضاء طويلة (توصية أبل)
     }
 
     // MARK: - Hint card (للأعضاء العاديين)
@@ -846,7 +881,7 @@ struct AddProjectView: View {
 
     private var contactLinksCard: some View {
         let filled = [phoneNumber, whatsappNumber, instagramUrl, twitterUrl, websiteUrl, locationUrl]
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0 != "+965 " }.count
+            .filter(ProjectContactTiles.isFilled).count
         return DSCard(padding: 0) {
             // رأس قابل للطي.
             Button {
@@ -856,7 +891,7 @@ struct AddProjectView: View {
                     Image(systemName: "link")
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.success)
-                    Text(L10n.t("روابط التواصل", "Contact Links"))
+                    Text(L10n.t("حسابات التواصل", "Contact Accounts"))
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                     Spacer()
@@ -873,22 +908,11 @@ struct AddProjectView: View {
             .buttonStyle(.plain)
 
             if contactsOpen {
-                // شبكة مدمجة بعمودين لتقليص الارتفاع (تتسع داخل الشيت).
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: DS.Spacing.sm),
-                        GridItem(.flexible(), spacing: DS.Spacing.sm)
-                    ],
-                    spacing: DS.Spacing.sm
-                ) {
-                    compactLink(icon: "phone.fill", color: DS.Color.success, placeholder: "+965...", text: $phoneNumber)
-                    compactLink(icon: "message.fill", color: DS.Color.success, placeholder: L10n.t("واتساب", "WhatsApp"), text: $whatsappNumber)
-                    compactLink(icon: "camera.fill", color: DS.Color.accent, placeholder: L10n.t("إنستغرام", "Instagram"), text: $instagramUrl)
-                    compactLink(icon: "at", color: DS.Color.info, placeholder: L10n.t("إكس", "X"), text: $twitterUrl)
-                    compactLink(icon: "globe", color: DS.Color.primary, placeholder: L10n.t("موقع", "Website"), text: $websiteUrl)
-                    compactLink(icon: "mappin.and.ellipse", color: DS.Color.error, placeholder: L10n.t("الموقع", "Maps"), text: $locationUrl)
-                }
-                .padding([.horizontal, .bottom], DS.Spacing.md)
+                // مربّعات — كل حساب يفتح مربّعاً بالمنتصف (طلب المالك)
+                ProjectContactTiles(phone: $phoneNumber, whatsapp: $whatsappNumber,
+                                    instagram: $instagramUrl, twitter: $twitterUrl,
+                                    website: $websiteUrl, location: $locationUrl)
+                    .padding([.horizontal, .bottom], DS.Spacing.md)
             }
         }
     }
@@ -919,88 +943,117 @@ struct AddProjectView: View {
 
     // MARK: - Member Picker Sheet
 
+    /// اختيار صاحب المشروع — مربّع بمنتصف الشاشة بتصميم المربّعات الموحّد: بحث ثم
+    /// الأعضاء صفوفاً والمختار بعلامة ✓. الضغط على عضو يختاره ويغلق المربّع (كالسابق)،
+    /// و«إعادة تعيين» (كانت بجهة التأكيد في الشريط العلوي) صارت زر الإجراء أسفل المربّع.
     private var memberPickerSheet: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
+        let list = filteredMembers
+        let projectTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return DSComposer(
+            title: L10n.t("اختيار صاحب المشروع", "Select Project Owner"),
+            subtitle: projectTitle.isEmpty ? L10n.t("مشروع جديد", "New Project") : projectTitle,
+            icon: "person.crop.circle.badge.checkmark",
+            tint: tint,
+            actionTitle: L10n.t("إعادة تعيين", "Reset"),
+            actionIcon: "arrow.counterclockwise",
+            cancelTitle: L10n.t("إلغاء", "Cancel"),
+            canSubmit: true,
+            onSubmit: {
+                selectedOwnerId = nil
+                showMemberPicker = false
+                memberSearchText = ""
+            },
+            onCancel: {
+                showMemberPicker = false
+                memberSearchText = ""
+            }
+        ) {
+            DSComposerField(icon: "magnifyingglass",
+                            label: L10n.t("بحث", "Search"),
+                            placeholder: L10n.t("بحث عن عضو...", "Search member..."),
+                            text: $memberSearchText,
+                            tint: tint)
+                .dsStaggerIn(0)
 
-                VStack(spacing: 0) {
-                    // Search bar
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(DS.Color.textTertiary)
-                        TextField(L10n.t("بحث عن عضو...", "Search member..."), text: $memberSearchText)
-                            .font(DS.Font.body)
-                    }
-                    .padding(DS.Spacing.md)
-                    .background(DS.Color.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
-
-                    List {
-                        ForEach(filteredMembers) { member in
-                            Button {
-                                selectedOwnerId = member.id
-                                showMemberPicker = false
-                                memberSearchText = ""
-                            } label: {
-                                HStack(spacing: DS.Spacing.md) {
-                                    // Avatar
-                                    if let avatarUrl = member.avatarUrl, let url = URL(string: avatarUrl) {
-                                        CachedAsyncImage(url: url) { image in
-                                            image
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(width: 40, height: 40)
-                                                .clipShape(Circle())
-                                        } placeholder: {
-                                            memberPlaceholderAvatar
-                                        }
-                                    } else {
-                                        memberPlaceholderAvatar
-                                    }
-
-                                    Text(member.displayFullName)
-                                        .font(DS.Font.body)
-                                        .foregroundColor(DS.Color.textPrimary)
-
-                                    Spacer()
-
-                                    if selectedOwnerId == member.id {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(DS.Color.primary)
-                                    }
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .listStyle(.plain)
+            DSComposerSection(title: L10n.t("الأعضاء", "Members"), icon: "person.2.fill",
+                              tint: tint, index: 1) {
+                if list.isEmpty {
+                    Text(L10n.t("لا توجد نتائج", "No results"))
+                        .font(DS.Font.plex(13, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DS.Spacing.md)
+                } else {
+                    memberPickerRows(list)
                 }
             }
-            .navigationTitle(L10n.t("اختيار صاحب المشروع", "Select Project Owner"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) {
-                        showMemberPicker = false
-                        memberSearchText = ""
-                    }
-                }
-                ToolbarItem(placement: DSToolbar.confirmPlacement) {
-                    Button(L10n.t("إعادة تعيين", "Reset")) {
-                        selectedOwnerId = nil
-                        showMemberPicker = false
-                        memberSearchText = ""
-                    }
-                    .foregroundColor(DS.Color.textSecondary)
-                }
-            }
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// صفوف الأعضاء — كسولة للقوائم الطويلة (نتائج البحث قد تكون آلافاً)، وعادية
+    /// للقصيرة حتى يُقاس ارتفاع المربّع كاملاً (الكسولة تُبلِّغ ارتفاعاً ناقصاً للقصيرة)
+    @ViewBuilder
+    private func memberPickerRows(_ list: [FamilyMember]) -> some View {
+        if list.count > 40 {
+            LazyVStack(spacing: DS.Spacing.sm) {
+                ForEach(list) { member in memberPickerRow(member) }
+            }
+        } else {
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(list) { member in memberPickerRow(member) }
+            }
+        }
+    }
+
+    /// صف عضو: الصورة + الاسم، والمختار بعلامة ✓ وإطار بلون القسم
+    private func memberPickerRow(_ member: FamilyMember) -> some View {
+        let isSelected = selectedOwnerId == member.id
+        return Button {
+            selectedOwnerId = member.id
+            showMemberPicker = false
+            memberSearchText = ""
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                // Avatar
+                if let avatarUrl = member.avatarUrl, let url = URL(string: avatarUrl) {
+                    CachedAsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                    } placeholder: {
+                        memberPlaceholderAvatar
+                    }
+                } else {
+                    memberPlaceholderAvatar
+                }
+
+                Text(member.displayFullName)
+                    .font(DS.Font.plex(14.5, weight: isSelected ? .bold : .regular))
+                    .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+
+                Spacer(minLength: 0)
+
+                if isSelected {
+                    // الاختيار يُقرأ من سمة «مُختار» على الصف
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(tint)
+                        .accessibilityHidden(true)
+                }
+            }
+            .dsRowBox()
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(tint.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var memberPlaceholderAvatar: some View {
@@ -1012,6 +1065,7 @@ struct AddProjectView: View {
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.primary)
         }
+        .accessibilityHidden(true)   // زخرفة — الاسم يُقرأ
     }
 
     private var filteredMembers: [FamilyMember] {

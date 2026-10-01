@@ -1,5 +1,10 @@
 import SwiftUI
 
+// MARK: - الملفات الناقصة — بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧)
+//
+// ملاحظة: الشاشة غير مربوطة حالياً بأي مكان (حلّت محلّها محطة «الحسابات» في
+// «إدارة الأعضاء»)، ووُحّد شكلها لو أُعيدت: بطاقة رأس بأرقام حيّة ← فلاتر بالعدد ←
+// بحث ← صفوف `.dsRowBox()` في `List` (لأجل السحب: تعديل/حذف) ← شريط التحديد الجماعي.
 struct AdminIncompleteMembersView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -12,11 +17,17 @@ struct AdminIncompleteMembersView: View {
     @State private var memberToEdit: FamilyMember?
     @State private var memberToDelete: FamilyMember?
     @State private var showDeleteConfirm = false
+    @State private var deleteFailureText: String?
+    @State private var showDeleteFailure = false
     @State private var showGenderConfirm = false
     @State private var pendingGender: String = "male"
     @State private var genderUpdateResult: String?
     @State private var showGenderResult = false
     @State private var displayLimit = 20
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// لون مجال «الشجرة والأعضاء»
+    private let tint = DS.Color.composerProject
 
     enum IncompleteFilter: String, CaseIterable {
         case noBirthDate, noFather, noGender
@@ -106,61 +117,97 @@ struct AdminIncompleteMembersView: View {
         return missing
     }
 
+    /// أرقام حيّة بمرور واحد (بلا فرز) على نفس المجموعة
+    private var counts: (total: Int, noBirth: Int, noFather: Int, noGender: Int) {
+        var t = 0, b = 0, f = 0, g = 0
+        for m in memberVM.allMembers where m.isCountable && m.isDeceased != true && memberHasIncompleteData(m) {
+            t += 1
+            if isMissingBirthDate(m) { b += 1 }
+            if isMissingFather(m) { f += 1 }
+            if isMissingGender(m) { g += 1 }
+        }
+        return (t, b, f, g)
+    }
+
+    private func count(for filter: IncompleteFilter) -> Int {
+        let c = counts
+        switch filter {
+        case .noBirthDate: return c.noBirth
+        case .noFather:    return c.noFather
+        case .noGender:    return c.noGender
+        }
+    }
+
     // MARK: - Body
 
     var body: some View {
         ZStack {
+            DS.Color.background.ignoresSafeArea()
+
             if memberVM.isLoading && memberVM.allMembers.isEmpty {
                 // حالة التحميل — البيانات لم تصل بعد
-                VStack(spacing: DS.Spacing.lg) {
-                    ProgressView()
-                        .tint(DS.Color.warning)
-                        .scaleEffect(1.3)
-                    Text(L10n.t("جاري فحص البيانات...", "Checking data..."))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textSecondary)
+                stateScroll {
+                    SysStateCard(icon: "person.text.rectangle",
+                                 title: L10n.t("جاري فحص البيانات...", "Checking data..."),
+                                 tint: DS.Color.warning,
+                                 isLoading: true)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if allIncompleteMembers.isEmpty {
-                emptyState
+                stateScroll { emptyState }
             } else {
                 VStack(spacing: 0) {
-                    // Stats summary
-                    statsSummary
-                        .padding(.top, DS.Spacing.sm)
+                    List {
+                        hero
+                            .incompleteListRow(top: DS.Spacing.md, bottom: DS.Spacing.sm)
 
-                    // Filter chips
-                    filterChips
-                        .padding(.vertical, DS.Spacing.xs)
+                        // Filter chips
+                        DSFilterChips(
+                            options: IncompleteFilter.visible.map { filter in
+                                DSFilterOption(id: filter, title: filter.label, icon: filter.icon,
+                                               count: count(for: filter))
+                            },
+                            selection: $selectedFilter,
+                            tint: tint
+                        )
+                        .onChange(of: selectedFilter) { _ in displayLimit = 20 }
+                        .incompleteListRow(top: 0, bottom: 0)
 
-                    // Search bar
-                    searchBar
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.sm)
+                        // Search bar
+                        DSSearchField(text: $searchText,
+                                      placeholder: L10n.t("بحث عن عضو...", "Search member..."),
+                                      tint: tint)
+                            .onChange(of: searchText) { _ in displayLimit = 20 }
+                            .incompleteListRow(top: 2, bottom: DS.Spacing.xs)
 
-                    if filteredMembers.isEmpty {
-                        noResultsState
-                    } else {
-                        List {
+                        if filteredMembers.isEmpty {
+                            noResultsState
+                                .incompleteListRow(top: DS.Spacing.sm)
+                        } else {
                             let visible = Array(filteredMembers.prefix(displayLimit))
                             ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
                                 if isSelectionMode {
                                     Button {
-                                        withAnimation(DS.Anim.snappy) {
+                                        withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
                                             toggleSelection(member)
                                         }
                                     } label: {
-                                        HStack(spacing: DS.Spacing.md) {
+                                        memberRow(member: member, index: index) {
                                             selectionCheckbox(for: member)
-                                            memberRow(member: member, index: index)
                                         }
                                     }
                                     .buttonStyle(DSScaleButtonStyle())
+                                    .accessibilityAddTraits(selectedMembers.contains(member.id) ? .isSelected : [])
+                                    .incompleteListRow()
                                 } else {
-                                    NavigationLink(destination: AdminMemberDetailSheet(member: member)) {
-                                        memberRow(member: member, index: index)
+                                    ZStack {
+                                        // الرابط مخفي — الصف كله يفتح التفاصيل بلا سهم النظام خارج الصندوق
+                                        NavigationLink(destination: AdminMemberDetailSheet(member: member)) { EmptyView() }
+                                            .opacity(0)
+                                        memberRow(member: member, index: index) {
+                                            SysChevron()
+                                        }
                                     }
-                                    .buttonStyle(DSBoldButtonStyle())
+                                    .incompleteListRow()
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                         Button(role: .destructive) {
                                             memberToDelete = member
@@ -179,26 +226,15 @@ struct AdminIncompleteMembersView: View {
                             }
 
                             if displayLimit < filteredMembers.count {
-                                Button {
-                                    displayLimit += 20
-                                } label: {
-                                    HStack {
-                                        Spacer()
-                                        Text(L10n.t(
-                                            "عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)",
-                                            "Show more (\(filteredMembers.count - displayLimit) remaining)"
-                                        ))
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.primary)
-                                        Spacer()
-                                    }
-                                    .padding(.vertical, DS.Spacing.sm)
-                                }
+                                loadMoreButton
+                                    .incompleteListRow(top: DS.Spacing.xs)
                             }
                         }
-                        .listStyle(.plain)
-                        .scrollContentBackground(.hidden)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
+                    .environment(\.defaultMinListRowHeight, 0)
 
                     // Action bar when in selection mode
                     if isSelectionMode {
@@ -227,10 +263,9 @@ struct AdminIncompleteMembersView: View {
                 }
             }
         }
-        .sheet(item: $memberToEdit) { member in
-            NavigationStack {
-                AdminMemberDetailSheet(member: member)
-            }
+        // «تعديل» من السحب — مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
+        .dsTallBox(item: $memberToEdit) { member in   // نموذج طويل — مربّع طويل (توصية أبل)
+            AdminMemberDetailSheet(member: member)
         }
         .dsAlert(
             L10n.t("تأكيد تحديث الجنس", "Confirm Gender Update"),
@@ -276,7 +311,12 @@ struct AdminIncompleteMembersView: View {
             presenting: memberToDelete
         ) { member in
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                Task { await memberVM.deleteMember(memberId: member.id) }
+                Task {
+                    if await !memberVM.deleteMember(memberId: member.id) {
+                        deleteFailureText = memberVM.errorMessage
+                        showDeleteFailure = true
+                    }
+                }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: { member in
@@ -285,168 +325,121 @@ struct AdminIncompleteMembersView: View {
                 "Are you sure you want to delete \(member.fullName)? This action cannot be undone."
             ))
         }
+        .dsAlert(L10n.t("لم يُحذف العضو", "Member Not Deleted"), isPresented: $showDeleteFailure) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(deleteFailureText ?? "")
+        }
         .onAppear {
             selectedFilter = initialFilter
-            withAnimation(DS.Anim.smooth.delay(0.15)) {
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.smooth.delay(0.15)) {
                 appeared = true
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - Stats Summary
-    private var statsSummary: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            miniStat(
-                count: allIncompleteMembers.count,
-                label: L10n.t("إجمالي", "Total"),
-                color: DS.Color.warning
-            )
-            miniStat(
-                count: filteredMembers.count,
-                label: selectedFilter.label,
-                color: selectedFilter.color
-            )
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-    }
-
-    private func miniStat(count: Int, label: String, color: Color) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            Text("\(count)")
-                .font(DS.Font.headline)
-                .fontWeight(.black)
-                .foregroundColor(color)
-            Text(label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.sm)
-        .glassCard(radius: DS.Radius.md)
-    }
-
-    // MARK: - Filter Chips
-    private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
-                ForEach(IncompleteFilter.visible, id: \.self) { filter in
-                    filterChip(filter)
-                }
+    /// الرأس + بطاقة حالة (تحميل / لا نواقص) في صفحة تتمرّر
+    private func stateScroll<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: DS.Spacing.md) {
+                hero
+                content()
             }
             .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xxxl)
         }
     }
 
-    private func filterChip(_ filter: IncompleteFilter) -> some View {
-        let isSelected = selectedFilter == filter
-        return Button {
-            withAnimation(DS.Anim.snappy) {
-                selectedFilter = filter
-                displayLimit = 20
-            }
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: filter.icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                Text(filter.label)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.semibold)
-            }
-            .foregroundColor(isSelected ? DS.Color.textOnPrimary : filter.color)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(isSelected ? filter.color : filter.color.opacity(0.1))
-            .clipShape(Capsule())
-            .overlay(
-                Capsule().stroke(filter.color.opacity(0.3), lineWidth: isSelected ? 0 : 1)
-            )
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
+    // MARK: - بطاقة الرأس
 
-    // MARK: - Search Bar
-    private var searchBar: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(DS.Color.textTertiary)
-            TextField(L10n.t("بحث عن عضو...", "Search member..."), text: $searchText)
-                .font(DS.Font.callout)
-                .onChange(of: searchText) { _ in displayLimit = 20 }
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-                .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
-            }
-        }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .cornerRadius(DS.Radius.lg)
+    private var hero: some View {
+        let c = counts
+        let loading = memberVM.isLoading && memberVM.allMembers.isEmpty
+        return DSPageHero(
+            title: L10n.t("الملفات الناقصة", "Incomplete Profiles"),
+            subtitle: L10n.t("أحياء ينقصهم تاريخ ميلاد أو أب مرتبط أو جنس",
+                             "Living members missing a birth date, father or gender"),
+            icon: "person.text.rectangle",
+            tint: tint,
+            stats: [
+                DSHeroStat(value: loading ? "—" : "\(c.total)",
+                           label: L10n.t("إجمالي", "Total"), icon: "person.3.fill"),
+                DSHeroStat(value: loading ? "—" : "\(c.noBirth)",
+                           label: IncompleteFilter.noBirthDate.label, icon: IncompleteFilter.noBirthDate.icon),
+                DSHeroStat(value: loading ? "—" : "\(c.noFather)",
+                           label: IncompleteFilter.noFather.label, icon: IncompleteFilter.noFather.icon)
+            ]
+        )
     }
 
     // MARK: - Member Row
-    private func memberRow(member: FamilyMember, index: Int) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            // Avatar
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [DS.Color.warning.opacity(0.3), DS.Color.warning.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 50, height: 50)
 
-                Text(String(member.fullName.prefix(1)))
-                    .font(DS.Font.headline)
-                    .foregroundColor(DS.Color.warning)
-            }
+    private func memberRow<Trailing: View>(member: FamilyMember, index: Int,
+                                           @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            // الحرف الأول
+            Text(String(member.fullName.prefix(1)))
+                .font(DS.Font.plex(15, weight: .bold))
+                .foregroundColor(DS.Color.warning)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(DS.Color.warning.opacity(0.12)))
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(member.displayFullName)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(2)
 
-                // Role badge
-                DSRoleBadge(title: member.roleName, color: member.roleColor)
-
-                // Missing fields tags
-                let missing = missingFields(for: member)
-                if !missing.isEmpty {
-                    FlowLayout(spacing: DS.Spacing.xs) {
-                        ForEach(missing, id: \.self) { field in
-                            HStack(spacing: 2) {
-                                Image(systemName: field.icon)
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                Text(field.label)
-                                    .font(DS.Font.caption2)
-                                    .fontWeight(.medium)
-                            }
-                            .foregroundColor(field.color)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 2)
-                            .background(field.color.opacity(0.1))
-                            .clipShape(Capsule())
-                        }
+                // الدور + الحقول الناقصة
+                FlowLayout(spacing: DS.Spacing.xs) {
+                    SysStatusChip(text: member.roleName, tint: member.roleColor)
+                    ForEach(missingFields(for: member), id: \.self) { field in
+                        SysStatusChip(text: field.label, icon: field.icon, tint: field.color)
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
-            Spacer()
+            Spacer(minLength: 0)
+
+            trailing()
         }
-        .padding(.vertical, DS.Spacing.xs)
+        .dsRowBox()
+        .contentShape(Rectangle())
         .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 15)
-        .animation(DS.Anim.smooth.delay(Double(index) * 0.03), value: appeared)
+        .offset(y: appeared || reduceMotion ? 0 : 15)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2)
+                                : DS.Anim.smooth.delay(Double(min(index, 15)) * 0.03),
+                   value: appeared)
+    }
+
+    private var loadMoreButton: some View {
+        Button {
+            displayLimit += 20
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 12.5, weight: .bold))
+                    .accessibilityHidden(true)
+                Text(L10n.t(
+                    "عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)",
+                    "Show more (\(filteredMembers.count - displayLimit) remaining)"
+                ))
+                .font(DS.Font.plex(12.5, weight: .bold))
+            }
+            .foregroundColor(tint)
+            .padding(.horizontal, DS.Spacing.lg)
+            .frame(minHeight: 40)
+            .background(Capsule().fill(tint.opacity(0.10)))
+            .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 1))
+            .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Selection Helpers
@@ -463,18 +456,20 @@ struct AdminIncompleteMembersView: View {
         let isSelected = selectedMembers.contains(member.id)
         return ZStack {
             Circle()
-                .stroke(isSelected ? DS.Color.primary : DS.Color.textTertiary, lineWidth: 2)
+                .strokeBorder(isSelected ? tint : DS.Color.textTertiary, lineWidth: 2)
                 .frame(width: 24, height: 24)
 
             if isSelected {
                 Circle()
-                    .fill(DS.Color.primary)
+                    .fill(tint)
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
-                    .font(DS.Font.scaled(12, weight: .bold))
-                    .foregroundColor(DS.Color.textOnPrimary)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
             }
         }
+        .frame(width: 32, height: 32)
+        .accessibilityHidden(true)
     }
 
     // MARK: - Selection Action Bar
@@ -494,25 +489,25 @@ struct AdminIncompleteMembersView: View {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: selectedMembers.count == filteredMembers.count
                               ? "checklist.unchecked" : "checklist.checked")
-                            .font(DS.Font.callout)
+                            .font(.system(size: 14, weight: .semibold))
                         Text(selectedMembers.count == filteredMembers.count
                              ? L10n.t("إلغاء الكل", "Deselect All")
                              : L10n.t("تحديد الكل", "Select All"))
-                            .font(DS.Font.calloutBold)
+                            .font(DS.Font.plex(13.5, weight: .bold))
                     }
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(tint)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(DSScaleButtonStyle())
 
                 Spacer()
 
                 if !selectedMembers.isEmpty {
-                    Text(L10n.t(
+                    SysStatusChip(text: L10n.t(
                         "محدد: \(selectedMembers.count)",
                         "Selected: \(selectedMembers.count)"
-                    ))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
+                    ), tint: tint)
                 }
             }
 
@@ -527,30 +522,34 @@ struct AdminIncompleteMembersView: View {
                             memberToEdit = member
                         }
                     } label: {
-                        Image(systemName: "pencil.circle.fill")
-                            .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(tint)
                             .frame(width: 44, height: 44)
-                            .background(DS.Color.primary.opacity(0.1))
-                            .clipShape(Circle())
+                            .background(Circle().fill(tint.opacity(0.12)))
                     }
                     .buttonStyle(DSScaleButtonStyle())
                     .accessibilityLabel(L10n.t("تعديل", "Edit"))
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
         .background(
             DS.Color.surface
-                .dsSubtleShadow()
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(DS.Color.textTertiary.opacity(0.12))
+                        .frame(height: 1)
+                }
+                .ignoresSafeArea(edges: .bottom)
         )
     }
 
     // MARK: - Empty State
     private var emptyState: some View {
-        DSEmptyState(
+        SysStateCard(
             icon: "checkmark.shield.fill",
             title: L10n.t("جميع بيانات الأعضاء مكتملة", "All member data is complete"),
             tint: DS.Color.success
@@ -559,10 +558,23 @@ struct AdminIncompleteMembersView: View {
 
     // MARK: - No Results State
     private var noResultsState: some View {
-        DSEmptyState(
+        SysStateCard(
             icon: "magnifyingglass",
-            title: L10n.t("لا توجد نتائج", "No results found")
+            title: L10n.t("لا توجد نتائج", "No results found"),
+            tint: DS.Color.textTertiary
         )
+    }
+}
+
+// MARK: - صف القائمة الشفاف (نمط صفحات الإدارة)
+
+private extension View {
+    /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
+    func incompleteListRow(top: CGFloat = 4, bottom: CGFloat = 4) -> some View {
+        self
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: top, leading: DS.Spacing.lg, bottom: bottom, trailing: DS.Spacing.lg))
     }
 }
 

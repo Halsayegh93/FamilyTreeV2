@@ -11,20 +11,22 @@ let projectPhotosLimit = 8
 struct ProjectPhotosEditor: View {
     @Binding var existingUrls: [String]
     @Binding var newImages: [UIImage]
+    var tint: Color = DS.Color.primary
+    var index: Int = 0
     @State private var pickerItems: [PhotosPickerItem] = []
 
     private var total: Int { existingUrls.count + newImages.count }
     private let columns = [GridItem(.adaptive(minimum: 84), spacing: DS.Spacing.sm)]
 
     var body: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("صور المشروع", "Project Photos"),
-                icon: "photo.on.rectangle.angled",
-                trailing: "\(total)/\(projectPhotosLimit)",
-                iconColor: DS.Color.primary
-            )
-
+        // نفس شكل أقسام مربّعات الإضافة (طلب المالك)
+        DSComposerSection(
+            title: L10n.t("صور المشروع", "Project Photos"),
+            icon: "photo.on.rectangle.angled",
+            tint: tint,
+            trailing: "\(total)/\(projectPhotosLimit)",
+            index: index
+        ) {
             LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
                 ForEach(Array(existingUrls.enumerated()), id: \.offset) { idx, url in
                     thumb {
@@ -66,7 +68,6 @@ struct ProjectPhotosEditor: View {
                     }
                 }
             }
-            .padding(DS.Spacing.md)
         }
         .onChange(of: pickerItems) { items in
             guard !items.isEmpty else { return }
@@ -95,9 +96,12 @@ struct ProjectPhotosEditor: View {
                         .foregroundColor(.white)
                         .frame(width: 22, height: 22)
                         .background(Circle().fill(Color.black.opacity(0.55)))
+                        .padding(5)
+                        // مساحة ضغط ٤٤ نقطة حول الشارة الصغيرة (حد أبل) والشكل كما هو
+                        .frame(width: 44, height: 44, alignment: .topLeading)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(5)
                 .accessibilityLabel(L10n.t("حذف الصورة", "Remove photo"))
             }
     }

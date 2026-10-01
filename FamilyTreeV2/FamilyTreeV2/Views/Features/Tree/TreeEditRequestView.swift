@@ -72,40 +72,39 @@ struct TreeEditRequestView: View {
         }
     }
 
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
+    /// لون الرأس — ألوان الأنواع الفاتحة تُعتَّم حتى يُقرأ النص الأبيض
+    private var headerTint: Color {
+        switch action {
+        case .deceased, .addDeathDate: return DS.Color.textSecondary
+        case .editPhone, .addPhoto, .editName, .other: return DS.Color.actionNavy
+        // ألوان رؤوس غامقة تبقي النص الأبيض واضحاً بالوضع الداكن (ألوان الأقسام الفاتحة باهتة فيه)
+        case .add: return DS.Color.composerProject
+        case .editBirth: return DS.Color.composerLibrary
+        case .delete: return DS.Color.error
+        }
+    }
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xxl) {
-                        memberCard
-                        primaryFieldSection
-                        notesSection
-                        submitButton
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.xl)
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.preference(
-                                key: SheetContentHeightKey.self,
-                                value: geo.size.height
-                            )
-                        }
-                    )
-                }
-            }
-            .navigationTitle(screenTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.error)
-                }
-            }
+    var body: some View {
+        // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك): رأس بلون نوع الطلب،
+        // أقسام تدخل تباعاً، و«إرسال الطلب» / «إلغاء» أسفل المربّع
+        DSComposer(
+            title: screenTitle,
+            subtitle: member.fullName,
+            icon: action.iconName,
+            tint: headerTint,
+            actionTitle: L10n.t("إرسال الطلب", "Submit Request"),
+            actionIcon: "paperplane.fill",
+            canSubmit: canSubmit,
+            isBusy: adminRequestVM.isLoading || isUploadingPhoto,
+            note: L10n.t("يصل الطلب للإدارة لمراجعته", "Sent to the admins for review"),
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: { submit() },
+            onCancel: { dismiss() }
+        ) {
+            memberCard.dsStaggerIn(0)
+            primaryFieldSection.dsStaggerIn(1)
+            notesSection.dsStaggerIn(2)
+        }
             .dsAlert(L10n.t("تم الإرسال", "Request Sent"), isPresented: $showSuccessAlert) {
                 Button(L10n.t("حسناً", "OK")) { dismiss() }
             } message: {
@@ -122,18 +121,50 @@ struct TreeEditRequestView: View {
                     "Failed to send request. Please try again."
                 ))
             }
-            .sheet(isPresented: $showCountrySheet) {
+            // اختيار الدولة — مربّع ثانٍ بمنتصف الشاشة فوق مربّع الطلب
+            .dsCenterBox(isPresented: $showCountrySheet) {
                 countryPickerSheet
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onAppear { prefillFromMember() }
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onPreferenceChange(SheetContentHeightKey.self) { h in
-            if h > 0 { sheetHeight = h + 72 }
-        }
-        .presentationDetents([.height(sheetHeight)])
-        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - تغييرات لم تُحفظ (توصية أبل)
+
+    /// ما يُرسل مع الطلب — يُقارن بما فُتح عليه المربّع (بعد التعبئة المسبقة)
+    private struct Draft: Equatable {
+        var primaryText: String
+        var notes: String
+        /// الدولة تُحسب مع الرقم فقط (رقم فارغ = لا رقم)
+        var phone: String
+        var birthDay: String
+        var deathDay: String
+    }
+
+    /// نقطة البداية — تُلتقط مرة واحدة بعد prefillFromMember
+    @State private var startDraft: Draft? = nil
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private var currentDraft: Draft {
+        Draft(
+            primaryText: primaryText.trimmingCharacters(in: .whitespacesAndNewlines),
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            phone: localPhoneDigits.isEmpty ? "" : "\(phoneCountry.id)|\(localPhoneDigits)",
+            birthDay: Self.dayFormatter.string(from: birthDate),
+            deathDay: Self.dayFormatter.string(from: deathDate)
+        )
+    }
+
+    /// نص أو تاريخ أو رقم أو صورة تختلف عمّا فُتح عليه المربّع — «إلغاء» يسأل قبل التجاهل
+    private var hasUnsavedChanges: Bool {
+        guard let startDraft else { return false }
+        return selectedPhoto != nil || currentDraft != startDraft
     }
 
     // MARK: - Member Card
@@ -145,17 +176,18 @@ struct TreeEditRequestView: View {
                     .fill(actionColor.opacity(0.12))
                     .frame(width: 56, height: 56)
                 Image(systemName: action.iconName)
-                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .font(DS.Font.plex(20, weight: .semibold))
                     .foregroundColor(actionColor)
             }
+            .accessibilityHidden(true)   // زخرفة — نوع الطلب مكتوب بجانبها
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t(action.arabicLabel, action.englishLabel))
-                    .font(DS.Font.caption1)
+                    .font(DS.Font.plex(12))
                     .fontWeight(.semibold)
                     .foregroundColor(actionColor)
                 Text(member.displayFullName)
-                    .font(DS.Font.calloutBold)
+                    .font(DS.Font.plex(14, weight: .bold))
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
             }
@@ -218,7 +250,7 @@ struct TreeEditRequestView: View {
     private func dateSection(title: String, label: String, date: Binding<Date>, iconColor: Color) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(title)
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             DSDateField(
@@ -243,7 +275,7 @@ struct TreeEditRequestView: View {
     private var photoPickerSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(L10n.t("الصورة المقترحة", "Suggested Photo"))
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             DSProfilePhotoPicker(
@@ -259,26 +291,34 @@ struct TreeEditRequestView: View {
     private func textInputSection(label: String, placeholder: String, icon: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(label)
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .medium))
+                    .font(DS.Font.plex(14, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                     .frame(width: 24)
 
                 TextField(placeholder, text: text)
-                    .font(DS.Font.body)
+                    .font(DS.Font.plex(15))
                     .foregroundColor(DS.Color.textPrimary)
                     .focused($isPrimaryFieldFocused)
 
                 if !text.wrappedValue.isEmpty {
                     Button { text.wrappedValue = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(14, weight: .medium))
+                            .font(DS.Font.plex(14, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
+                            // مساحة ضغط ٤٤ نقطة (حد أبل): العرض من مساحة الكتابة والأيقونة
+                            // في مكانها على الطرف، والطول داخل هامش الصندوق — فلا يتغيّر
+                            // ارتفاع الحقل ولا شكله
+                            .frame(width: 44, alignment: .trailing)
+                            .padding(.vertical, 14)
+                            .contentShape(Rectangle())
+                            .padding(.vertical, -14)
                     }
+                    .accessibilityLabel(L10n.t("مسح النص", "Clear text"))
                 }
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -298,7 +338,7 @@ struct TreeEditRequestView: View {
     private var phoneInputSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(L10n.t("الرقم الجديد", "New Phone Number"))
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             DSPhoneField(
@@ -309,41 +349,78 @@ struct TreeEditRequestView: View {
         }
     }
 
+    /// اختيار دولة الرقم — مربّع بمنتصف الشاشة بتصميم المربّعات الموحّد: الدول صفوفاً
+    /// والمختارة بعلامة ✓، والضغط على دولة يختارها ويغلق المربّع (كالسابق)
     private var countryPickerSheet: some View {
-        NavigationStack {
-            List(KuwaitPhone.supportedCountries) { country in
-                Button {
-                    phoneCountry = country
-                    showCountrySheet = false
-                } label: {
-                    HStack(spacing: DS.Spacing.md) {
-                        Text(country.flag).font(DS.Font.scaled(20))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t(country.nameArabic, country.isoCode))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Text(country.dialingCode)
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                        Spacer()
-                        if phoneCountry == country {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(DS.Color.primary)
-                        }
+        DSComposer(
+            title: L10n.t("اختر الدولة", "Select Country"),
+            subtitle: L10n.t("رمز الدولة للرقم الجديد", "Country code for the new number"),
+            icon: "globe",
+            tint: DS.Color.actionNavy,
+            actionTitle: "",
+            showsAction: false,
+            cancelTitle: L10n.t("إلغاء", "Cancel"),
+            canSubmit: false,
+            onSubmit: {},
+            onCancel: { showCountrySheet = false }
+        ) {
+            DSComposerSection(title: L10n.t("الدول", "Countries"), icon: "globe",
+                              tint: DS.Color.primary, index: 0) {
+                // صفوف عادية لا كسولة — القائمة قصيرة وتُقاس كاملةً فلا يُقصّ آخرها
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(KuwaitPhone.supportedCountries) { country in
+                        countryRow(country)
                     }
                 }
             }
-            .navigationTitle(L10n.t("اختر الدولة", "Select Country"))
-            .navigationBarTitleDisplayMode(.inline)
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+    }
+
+    /// صف دولة: العلم بمربّع أيقونة الحقل + الاسم والرمز، والمختارة بعلامة ✓ وإطار
+    private func countryRow(_ country: KuwaitPhone.Country) -> some View {
+        let isSelected = phoneCountry == country
+        return Button {
+            phoneCountry = country
+            showCountrySheet = false
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Text(country.flag)
+                    .font(DS.Font.scaled(20))
+                    .frame(width: 32, height: 32)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(DS.Color.primary.opacity(0.08)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t(country.nameArabic, country.isoCode))
+                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .foregroundColor(DS.Color.fieldLabel)
+                    // علامة اتجاه (LRM) حتى يظهر «+965» لا «965+» في العربي
+                    Text("\u{200E}" + country.dialingCode)
+                        .font(DS.Font.plex(12))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                Spacer(minLength: 0)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(DS.Color.primary)
+                        .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
+                }
+            }
+            .dsRowBox()
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(DS.Color.primary.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var deceasedDateSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(L10n.t("تاريخ الوفاة", "Date of Death"))
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(14, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             DSDateField(
@@ -367,28 +444,35 @@ struct TreeEditRequestView: View {
     // MARK: - Notes / Reason Section
 
     private var notesSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        // مربّع الملاحظات صغير (طلب المالك) — يكبر بالكتابة لا أكثر
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             Text(notesLabel)
-                .font(DS.Font.calloutBold)
+                .font(DS.Font.plex(13, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
 
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $notes)
-                    .frame(minHeight: action == .delete ? 100 : 80)
+                    .frame(minHeight: notesRequired ? 56 : 38)
                     .focused($isDetailsFocused)
                     .scrollContentBackground(.hidden)
-                    .font(DS.Font.body)
+                    .font(DS.Font.plex(14))
+                    // القارئ الصوتي: مربّع الكتابة بلا اسم — العنوان اسمه والتلميح وصفه
+                    .accessibilityLabel(notesLabel)
+                    .accessibilityHint(notesPlaceholder)
 
                 if notes.isEmpty {
                     Text(notesPlaceholder)
-                        .font(DS.Font.body)
+                        .font(DS.Font.plex(14))
                         .foregroundColor(DS.Color.textTertiary)
                         .padding(.top, DS.Spacing.sm)
                         .padding(.leading, DS.Spacing.xs)
+                        .lineLimit(1)
                         .allowsHitTesting(false)
+                        .accessibilityHidden(true)   // يُقرأ تلميحاً لمربّع الكتابة
                 }
             }
-            .padding(DS.Spacing.md)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
             .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
             .overlay(
@@ -400,6 +484,9 @@ struct TreeEditRequestView: View {
             )
         }
     }
+
+    /// الملاحظات مطلوبة في الحذف و«أخرى» — تأخذ ارتفاعاً أكبر قليلاً
+    private var notesRequired: Bool { action == .delete || action == .other }
 
     private var notesLabel: String {
         switch action {
@@ -425,18 +512,35 @@ struct TreeEditRequestView: View {
 
     // MARK: - Submit
 
+    /// «إرسال الطلب» و«إلغاء» جنب بعض، والإلغاء في الجهة اليسرى (طلب المالك)
     private var submitButton: some View {
-        DSPrimaryButton(
-            L10n.t("إرسال الطلب", "Submit Request"),
-            icon: "paperplane.fill",
-            isLoading: adminRequestVM.isLoading,
-            useGradient: canSubmit,
-            color: canSubmit ? actionColor : .gray
-        ) {
-            submit()
+        HStack(spacing: DS.Spacing.sm) {
+            Button { submit() } label: {
+                Group {
+                    if adminRequestVM.isLoading {
+                        ProgressView().tint(.white)
+                    } else {
+                        Label(L10n.t("إرسال الطلب", "Submit Request"), systemImage: "paperplane.fill")
+                            .font(DS.Font.plex(14, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity).frame(height: 48)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(canSubmit ? actionColor : actionColor.opacity(0.4)))
+            }
+            .disabled(!canSubmit)
+
+            Button { dismiss() } label: {
+                Text(L10n.t("إلغاء", "Cancel"))
+                    .font(DS.Font.plex(14, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.mutedBackground.opacity(0.8)))
+            }
         }
-        .disabled(!canSubmit)
-        .opacity(canSubmit ? 1.0 : DS.Opacity.disabled)
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Helpers
@@ -454,6 +558,8 @@ struct TreeEditRequestView: View {
         default:
             break
         }
+        // نقطة البداية لـ«تغييرات لم تُحفظ» — المعبّأ مسبقاً ليس تغييراً (مرة واحدة فقط)
+        if startDraft == nil { startDraft = currentDraft }
     }
 
     private func submit() {

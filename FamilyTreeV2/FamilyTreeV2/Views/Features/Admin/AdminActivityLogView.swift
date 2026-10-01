@@ -4,6 +4,11 @@ import SwiftUI
 /// تعديلات الأعضاء، الموافقات والرفض، نشر/حذف المحتوى، وتغيّرات النظام.
 /// انتقل هنا من تبويب «المستجدات» في مركز الإشعارات (طلب المالك)، فصار
 /// مركز الإشعارات مخصّصاً لإشعارات العضو نفسه، وهذا السجل للإدارة فقط.
+///
+/// بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بلون بلاطة «سجل النشاط»
+/// في لوحة الإدارة وأرقامها الحيّة ← بحث + فلاتر التصنيفات بعددها ← قائمة واحدة بلا تقسيم
+/// حسب اليوم (طلب المالك) بصفوف `.dsRowBox()` داخل `List` (بقيت لأجل السحب للحذف والسحب
+/// للتحديث). التحديد المتعدد والحذف وتأكيده ومربّع التفاصيل كما كانت تماماً.
 struct AdminActivityLogView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
@@ -11,8 +16,6 @@ struct AdminActivityLogView: View {
 
     @State private var filter: ActivityFilter = .all
     @State private var searchText = ""
-    @State private var showSearch = false
-    @FocusState private var searchFocused: Bool
     /// وضع التحديد المتعدد + الحذف
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
@@ -20,6 +23,17 @@ struct AdminActivityLogView: View {
     @State private var isDeleting = false
     /// السجل المفتوح في شيت التفاصيل
     @State private var detailItem: AppNotification?
+    /// اكتمل أول جلب — قبله «—» في الأرقام وبطاقة تحميل (إن لم يكن هناك سجل محمّل أصلاً)
+    @State private var hasLoaded = false
+    /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل «لا توجد حركة» المضلِّلة
+    /// (تبقى حتى جلب ناجح: السحب للتحديث أو «إعادة المحاولة»)
+    @State private var lastFetchOffline = false
+    /// دخول الصفوف مرة واحدة عند فتح الصفحة
+    @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// لون بلاطة «سجل النشاط» في لوحة الإدارة — رأس الصفحة يطابق البلاطة التي ضُغطت
+    private let pageTint = DS.Color.actionNavy
 
     // MARK: - التصنيفات
 
@@ -151,94 +165,66 @@ struct AdminActivityLogView: View {
             .sorted { $0.createdDate > $1.createdDate }
     }
 
+    /// عدد الحركات في كل تصنيف (نفس أعداد قائمة التصفية السابقة) — مرور واحد على السجل
+    private var filterCounts: [ActivityFilter: Int] {
+        var counts: [ActivityFilter: Int] = [:]
+        for n in activityItems {
+            for f in ActivityFilter.allCases where matches(n, f) {
+                counts[f, default: 0] += 1
+            }
+        }
+        return counts
+    }
+
+    // MARK: - حالة التحميل
+
+    /// أول تحميل ولا سجل محمّل بعد
+    private var isInitialLoading: Bool {
+        !hasLoaded && activityItems.isEmpty
+    }
+
+    /// الجلب انتهى بلا سجل والجهاز غير متصل — القائمة الفارغة هنا ليست «لا توجد حركة»
+    private var loadFailed: Bool {
+        hasLoaded && activityItems.isEmpty && lastFetchOffline
+    }
+
+    /// نفس الجلب السابق تماماً (`fetchNotifications(force: true)`) — ويحفظ هل انتهى بلا اتصال
+    private func fetchLog() async {
+        await notificationVM.fetchNotifications(force: true)
+        lastFetchOffline = !NetworkMonitor.shared.isConnected
+    }
+
     // MARK: - Body
 
-    // تصميم مبسّط بنفس تنسيق «صحة النظام» (طلب المالك): بطاقة واحدة بفواصل رفيعة
-    // بلا تقسيم حسب اليوم، وصف واحد لكل حركة (أيقونة · عنوان · سطر · وقت). التصفية والبحث
-    // والتحديد في الشريط العلوي بدل صف الكبسولات.
+    // قائمة واحدة بلا تقسيم «اليوم / هذا الأسبوع / أقدم» (طلب المالك)، وصف واحد لكل حركة
+    // (أيقونة · عنوان · سطر · وقت). التفاصيل (قبل ← بعد) في المربّع عند الضغط.
     var body: some View {
-        ZStack {
+        let counts = filterCounts
+
+        return ZStack {
             DS.Color.background.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                if showSearch {
-                    searchField
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm)
-                }
+            // بطاقة الرأس ← البحث والفلاتر ← الحركات: قائمة واحدة تتمرّر معاً
+            // (بقيت `List` لأجل السحب للحذف والسحب للتحديث — والسحب للتحديث يعمل حتى والسجل فارغ)
+            List {
+                heroSection(counts: counts)
+                    .activityListRow(top: DS.Spacing.sm, bottom: DS.Spacing.sm)
 
-                if isSelecting {
-                    selectionBar
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm)
-                }
-
-                if filteredItems.isEmpty {
-                    emptyState
-                        .frame(maxHeight: .infinity)
-                } else {
-                    // List مجمّعة — بطاقات بفواصل، والسحب للحذف يعمل
-                    List {
-                        if filter != .all {
-                            Section {
-                                EmptyView()
-                            } header: {
-                                activeFilterChip
-                            }
-                        }
-                        // قائمة واحدة بلا تقسيم «اليوم / هذا الأسبوع / أقدم» (طلب المالك)
-                        Section {
-                            ForEach(filteredItems) { item in
-                                activityRow(item)
-                                    .listRowBackground(DS.Color.surface)
-                                    .listRowInsets(EdgeInsets(top: 10, leading: DS.Spacing.md,
-                                                              bottom: 10, trailing: DS.Spacing.md))
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            Task { await notificationVM.deleteNotification(id: item.id) }
-                                        } label: {
-                                            Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
-                                        }
-                                    }
-                            }
-                        }
-                    }
-                    .listStyle(.insetGrouped)
-                    .scrollContentBackground(.hidden)
-                }
+                listContent(counts: counts)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .environment(\.defaultMinListRowHeight, 0)
         }
         .navigationTitle(L10n.t("سجل النشاط", "Activity Log"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .toolbar {
+            // البحث والتصفية صارا تحت بطاقة الرأس (حقل بحث + فلاتر بعددها) — والتحديد باقٍ هنا
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: DS.Spacing.md) {
-                    // التصفية — قائمة بدل صف الكبسولات
-                    Menu {
-                        Picker(L10n.t("تصفية", "Filter"), selection: $filter) {
-                            ForEach(ActivityFilter.allCases) { f in
-                                let count = activityItems.filter { matches($0, f) }.count
-                                Label("\(f.title) (\(count))", systemImage: f.icon).tag(f)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: filter == .all
-                              ? "line.3.horizontal.decrease.circle"
-                              : "line.3.horizontal.decrease.circle.fill")
-                            .foregroundColor(DS.Color.primary)
-                    }
-                    .accessibilityLabel(L10n.t("تصفية", "Filter"))
-
-                    Button {
-                        withAnimation(DS.Anim.quick) { showSearch.toggle() }
-                        if showSearch { searchFocused = true } else { searchText = "" }
-                    } label: {
-                        Image(systemName: showSearch ? "xmark.circle.fill" : "magnifyingglass")
-                            .foregroundColor(DS.Color.primary)
-                    }
-                    .accessibilityLabel(L10n.t("بحث", "Search"))
-
+                // لا تحديد والسجل فارغ (يبقى ظاهراً أثناء التحديد ليُلغى)
+                if isSelecting || !activityItems.isEmpty {
                     Button {
                         withAnimation(DS.Anim.quick) {
                             isSelecting.toggle()
@@ -264,9 +250,13 @@ struct AdminActivityLogView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         }
-        .task { await notificationVM.fetchNotifications(force: true) }
-        .refreshable { await notificationVM.fetchNotifications(force: true) }
-        .sheet(item: $detailItem) { item in
+        .task {
+            await fetchLog()
+            withAnimation(reduceMotion ? nil : DS.Anim.smooth) { hasLoaded = true }
+        }
+        .refreshable { await fetchLog() }
+        // تفاصيل الحركة — مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك ٢٠٢٦-٠٩-٢٦)
+        .dsCenterBox(item: $detailItem) { item in
             ActivityDetailSheet(
                 item: item,
                 style: rowStyle(for: item.kind),
@@ -276,43 +266,198 @@ struct AdminActivityLogView: View {
         }
     }
 
-    // MARK: - التصفية الحالية
+    /// الصفوف تدخل بعد أقسام الصفحة فوقها (البحث والفلاتر ← العنوان = ٢)، فيبقى التسلسل:
+    /// الرأس ← الأقسام ← الصفوف. مرة واحدة؛ «تقليل الحركة»: تلاشٍ فوري بلا انتظار.
+    private func startRowsCascade() {
+        guard !appeared else { return }
+        guard !reduceMotion else { appeared = true; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.staggerDelay(3, base: DSMotion.sectionsOnPage)) {
+            appeared = true
+        }
+    }
 
-    /// شارة التصفية الفعّالة — تظهر فقط عند اختيار غير «الكل»، والضغط يرجع للكل
-    private var activeFilterChip: some View {
-        Button {
-            withAnimation(DS.Anim.quick) { filter = .all }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: filter.icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                Text(filter.title)
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Image(systemName: "xmark")
-                    .font(DS.Font.scaled(9, weight: .heavy))
+    // MARK: - محتوى القائمة
+
+    @ViewBuilder
+    private func listContent(counts: [ActivityFilter: Int]) -> some View {
+        if isInitialLoading {
+            SysStateCard(icon: "clock.arrow.circlepath",
+                         title: L10n.t("جارٍ تحميل السجل…", "Loading the log…"),
+                         tint: pageTint,
+                         isLoading: true)
+                .padding(.top, DS.Spacing.xs)
+                .dsStaggerIn(1)
+                .activityListRow()
+        } else if loadFailed {
+            SysStateCard(icon: "wifi.exclamationmark",
+                         title: L10n.t("تعذّر تحميل السجل", "Couldn't load the log"),
+                         hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                         tint: DS.Color.error,
+                         actionTitle: L10n.t("إعادة المحاولة", "Retry"),
+                         action: { Task { await fetchLog() } })
+                .padding(.top, DS.Spacing.xs)
+                .dsStaggerIn(1)
+                .activityListRow()
+        } else if activityItems.isEmpty {
+            SysStateCard(icon: "clock.arrow.circlepath",
+                         title: L10n.t("لا توجد حركة بعد", "No activity yet"),
+                         hint: L10n.t("كل حركة أو تغيير في التطبيق يظهر هنا", "Every change in the app shows up here"),
+                         tint: pageTint)
+                .padding(.top, DS.Spacing.xs)
+                .dsStaggerIn(1)
+                .activityListRow()
+        } else {
+            let items = filteredItems
+
+            DSSearchField(text: $searchText,
+                          placeholder: L10n.t("ابحث في السجل…", "Search the log…"),
+                          tint: pageTint)
+                .dsStaggerIn(1)
+                .activityListRow(top: DS.Spacing.xs, bottom: 2)
+
+            filterChips(counts)
+                .dsStaggerIn(1)
+                .activityListRow(top: 0, bottom: 0)
+
+            if isSelecting {
+                selectionBar
+                    .activityListRow(top: DS.Spacing.xs, bottom: 2)
             }
-            .foregroundColor(.white)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(height: 28)
-            .background(Capsule().fill(filter.color))
+
+            // عنوان التصفية المختارة + عدد ما يظهر منها
+            SysSectionTitle(title: filter == .all ? L10n.t("كل الحركات", "All activity") : filter.title,
+                            icon: filter.icon,
+                            tint: filter.color,
+                            trailing: items.isEmpty ? nil : L10n.t("\(items.count) حركة", "\(items.count) entries"))
+                .dsStaggerIn(2)
+                // العنوان يظهر مع الصفوف (بعد التحميل) — فتبدأ الصفوف بعده
+                .onAppear(perform: startRowsCascade)
+                .activityListRow(top: DS.Spacing.xs, bottom: 2)
+
+            if items.isEmpty {
+                noResultsState
+                    .padding(.top, DS.Spacing.xs)
+                    .activityListRow()
+            } else {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    activityRow(item)
+                        // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
+                        .dsCardCascade(index, appeared: appeared)
+                        .activityListRow()
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task { await notificationVM.deleteNotification(id: item.id) }
+                            } label: {
+                                Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                            }
+                        }
+                }
+            }
         }
-        .buttonStyle(.plain)
-        .textCase(nil)
     }
 
-    private var searchField: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "magnifyingglass")
-                .font(DS.Font.scaled(13, weight: .medium))
-                .foregroundColor(DS.Color.textTertiary)
-            TextField(L10n.t("ابحث في السجل…", "Search the log…"), text: $searchText)
-                .font(DS.Font.callout)
-                .focused($searchFocused)
-        }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+    // MARK: - بطاقة الرأس
+
+    private func heroSection(counts: [ActivityFilter: Int]) -> some View {
+        DSPageHero(
+            title: L10n.t("سجل النشاط", "Activity Log"),
+            subtitle: L10n.t("كل حركة وتغيير في التطبيق — اضغط أي حركة لتفاصيلها",
+                             "Every change in the app — tap an entry for its details"),
+            icon: "clock.arrow.circlepath",
+            tint: pageTint,
+            stats: heroStats(counts: counts)
+        )
     }
+
+    /// ٣ أرقام حيّة من السجل المحمّل أصلاً (بلا طلبات جديدة للسيرفر): حركة اليوم، من نفّذ حركات
+    /// هذا الأسبوع (بلا تكرار)، والتصنيف الأكثر حركة — «—» قبل اكتمال أول تحميل.
+    private func heroStats(counts: [ActivityFilter: Int]) -> [DSHeroStat] {
+        let todayLabel = L10n.t("حركة اليوم", "Today")
+        let weekLabel = L10n.t("نشطون هذا الأسبوع", "Active this week")
+        let topLabel = L10n.t("الأكثر", "Most common")
+
+        guard !isInitialLoading, !loadFailed else {
+            return [
+                DSHeroStat(value: "—", label: todayLabel, icon: "clock.fill"),
+                DSHeroStat(value: "—", label: weekLabel, icon: "person.2.fill"),
+                DSHeroStat(value: "—", label: topLabel, icon: "chart.bar.fill")
+            ]
+        }
+
+        let calendar = Calendar.current
+        let now = Date()
+        var today = 0
+        var actors = Set<UUID>()
+        for n in activityItems {
+            let date = n.createdDate
+            if calendar.isDateInToday(date) { today += 1 }
+            if let by = n.createdBy, calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear) {
+                actors.insert(by)
+            }
+        }
+
+        // الأكثر حركة — عند التساوي يبقى الأسبق بترتيب الفلاتر
+        var top: ActivityFilter? = nil
+        var topCount = 0
+        for f in ActivityFilter.allCases where f != .all && (counts[f] ?? 0) > topCount {
+            top = f
+            topCount = counts[f] ?? 0
+        }
+
+        let topStat: DSHeroStat
+        if let top {
+            topStat = DSHeroStat(value: "\(topCount)",
+                                 label: L10n.t("الأكثر: \(top.title)", "Top: \(top.title)"),
+                                 icon: top.icon)
+        } else {
+            topStat = DSHeroStat(value: "—", label: topLabel, icon: "chart.bar.fill")
+        }
+
+        return [
+            DSHeroStat(value: "\(today)", label: todayLabel, icon: "clock.fill"),
+            DSHeroStat(value: "\(actors.count)", label: weekLabel, icon: "person.2.fill"),
+            topStat
+        ]
+    }
+
+    // MARK: - الفلاتر
+
+    /// نفس تصنيفات قائمة التصفية السابقة — العدد يظهر فقط إذا أكبر من صفر
+    private func filterChips(_ counts: [ActivityFilter: Int]) -> some View {
+        DSFilterChips(
+            options: ActivityFilter.allCases.map { f in
+                let n = counts[f] ?? 0
+                return DSFilterOption(id: f, title: f.title, icon: f.icon, count: n > 0 ? n : nil)
+            },
+            selection: $filter,
+            tint: pageTint
+        )
+    }
+
+    /// لا نتيجة للبحث أو للتصنيف — زر يرجع لـ«الكل» (مثل شارة التصفية السابقة)
+    private var noResultsState: some View {
+        let searching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return SysStateCard(
+            icon: searching ? "magnifyingglass" : filter.icon,
+            title: searching ? L10n.t("لا توجد نتائج", "No results")
+                             : L10n.t("لا توجد حركة بعد", "No activity yet"),
+            hint: searching ? L10n.t("جرّب كلمة أخرى", "Try another word")
+                            : L10n.t("لا حركة في «\(filter.title)» الآن", "Nothing in \(filter.title) right now"),
+            tint: DS.Color.textTertiary,
+            actionTitle: filter == .all ? nil : L10n.t("عرض الكل", "Show all"),
+            actionIcon: ActivityFilter.all.icon,
+            action: showAllAction
+        )
+    }
+
+    private var showAllAction: (() -> Void)? {
+        guard filter != .all else { return nil }
+        return {
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) { filter = .all }
+        }
+    }
+
+    // MARK: - شريط التحديد
 
     /// شريط التحديد: تحديد الكل · العدد · حذف
     private var selectionBar: some View {
@@ -323,47 +468,57 @@ struct AdminActivityLogView: View {
                     selectedIds = (selectedIds == all) ? [] : all
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                    Text(L10n.t("تحديد الكل", "Select all"))
-                        .font(DS.Font.scaled(12, weight: .bold))
-                }
-                .foregroundColor(DS.Color.primary)
-                .padding(.horizontal, DS.Spacing.md)
-                .frame(height: 30)
-                .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
+                selectionCapsule(icon: "checkmark.circle.fill",
+                                 title: L10n.t("تحديد الكل", "Select all"),
+                                 tint: DS.Color.primary)
             }
             .buttonStyle(.plain)
 
             Text(L10n.t("\(selectedIds.count) محدّد", "\(selectedIds.count) selected"))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
+                .font(DS.Font.plex(12, weight: .semibold))
+                .foregroundColor(DS.Color.fieldValue)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             Spacer(minLength: 0)
 
             Button {
                 showDeleteConfirm = true
             } label: {
-                HStack(spacing: 4) {
-                    if isDeleting {
-                        ProgressView().tint(DS.Color.error).scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "trash.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                    }
-                    Text(L10n.t("حذف", "Delete"))
-                        .font(DS.Font.scaled(12, weight: .bold))
-                }
-                .foregroundColor(DS.Color.error)
-                .padding(.horizontal, DS.Spacing.md)
-                .frame(height: 30)
-                .background(Capsule().fill(DS.Color.error.opacity(0.10)))
+                selectionCapsule(icon: "trash.fill",
+                                 title: L10n.t("حذف", "Delete"),
+                                 tint: DS.Color.error,
+                                 busy: isDeleting)
             }
             .buttonStyle(.plain)
             .disabled(selectedIds.isEmpty || isDeleting)
             .opacity(selectedIds.isEmpty ? 0.45 : 1)
         }
+        .dsRowBox()
+    }
+
+    /// كبسولة شريط التحديد — مساحة ضغط ٤٤ نقطة والشكل كما هو
+    private func selectionCapsule(icon: String, title: String, tint: Color, busy: Bool = false) -> some View {
+        HStack(spacing: 4) {
+            if busy {
+                ProgressView().tint(tint).scaleEffect(0.7)
+            } else {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+                .font(DS.Font.plex(12, weight: .bold))
+                .lineLimit(1)
+        }
+        .foregroundColor(tint)
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(height: 30)
+        .background(tint.opacity(0.10), in: Capsule())
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
+        .padding(.vertical, -7)
     }
 
     @MainActor
@@ -380,51 +535,51 @@ struct AdminActivityLogView: View {
 
     // MARK: - صف الحركة
 
-    /// صف واحد بسيط — التفاصيل (قبل ← بعد) في الشيت عند الضغط
+    /// صف بإطار صفوف المربّعات: أيقونة نوع الحركة (ونقطة «جديد» على ركنها) + العنوان
+    /// (Plex 13.5 عريض) + سطر التفاصيل (Plex 12) + شارة الوقت. التفاصيل (قبل ← بعد) في المربّع.
     private func activityRow(_ item: AppNotification) -> some View {
         let style = rowStyle(for: item.kind)
         let isNew = !item.read
         let picked = selectedIds.contains(item.id)
-        return HStack(spacing: DS.Spacing.md) {
+        return HStack(spacing: DS.Spacing.sm) {
             if isSelecting {
                 Image(systemName: picked ? "checkmark.circle.fill" : "circle")
                     .font(DS.Font.scaled(20))
                     .foregroundColor(picked ? DS.Color.primary : DS.Color.textTertiary)
+                    .accessibilityHidden(true)
             }
 
-            Image(systemName: style.icon)
-                .font(DS.Font.scaled(15, weight: .semibold))
-                .foregroundColor(style.color)
-                .frame(width: 36, height: 36)
-                .background(style.color.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.Radius.md))
+            rowIcon(style: style, isNew: isNew)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
-                    .font(DS.Font.plex(15, weight: .semibold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 if !item.body.isEmpty {
                     Text(item.body)
-                        .font(DS.Font.plex(12.5, weight: .regular))
-                        .foregroundColor(DS.Color.textSecondary)
+                        .font(DS.Font.plex(12))
+                        .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
             }
 
-            Spacer(minLength: DS.Spacing.xs)
+            Spacer(minLength: 0)
 
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(relativeTime(item.createdDate))
-                    .font(DS.Font.plex(11, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .lineLimit(1)
-                // نقطة «جديد» بدل الكبسولة
-                if isNew {
-                    Circle().fill(DS.Color.primary).frame(width: 8, height: 8)
-                }
-            }
+            // الوقت — كحلي للحركة الجديدة، رمادي لما قُرئ
+            SysStatusChip(text: relativeTime(item.createdDate),
+                          tint: isNew ? DS.Color.primary : DS.Color.textTertiary)
+                .fixedSize()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .dsRowBox()
+        .overlay {
+            if isSelecting && picked {
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(DS.Color.primary.opacity(0.55), lineWidth: 1.5)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             if isSelecting {
@@ -438,6 +593,25 @@ struct AdminActivityLogView: View {
                 }
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isNew ? L10n.t("جديد", "New") : "")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelecting && picked ? .isSelected : [])
+    }
+
+    /// أيقونة نوع الحركة — نقطة «جديد» صغيرة على ركنها بدل الكبسولة
+    private func rowIcon(style: (icon: String, color: Color), isNew: Bool) -> some View {
+        DSFieldIcon(name: style.icon, tint: style.color)
+            .overlay(alignment: .topTrailing) {
+                if isNew {
+                    Circle()
+                        .fill(DS.Color.primary)
+                        .frame(width: 9, height: 9)
+                        .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
+                        .offset(x: L10n.isArabic ? -3 : 3, y: -3)
+                }
+            }
+            .accessibilityHidden(true)
     }
 
     /// اسم تصنيف الحركة (للعرض في التفاصيل)
@@ -484,27 +658,25 @@ struct AdminActivityLogView: View {
         Self.relativeFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
         return Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
+}
 
-    private var emptyState: some View {
-        VStack(spacing: DS.Spacing.md) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(DS.Font.scaled(38, weight: .regular))
-                .foregroundColor(DS.Color.textTertiary)
-            Text(L10n.t("لا توجد حركة بعد", "No activity yet"))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-        }
+// MARK: - صف القائمة الشفاف (نمط صفحات الإدارة)
+
+private extension View {
+    /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
+    func activityListRow(top: CGFloat = 4, bottom: CGFloat = 4) -> some View {
+        self
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: top, leading: DS.Spacing.lg, bottom: bottom, trailing: DS.Spacing.lg))
     }
 }
 
-// MARK: - شيت تفاصيل الحركة
-
-private struct ActivitySheetHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 260
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
+// MARK: - مربّع تفاصيل الحركة
 
 /// تفاصيل سجل واحد: من نفّذها، على مَن، متى بالضبط، وكل ما تغيّر.
+/// مربّع عرض بنفس تصميم المربّعات (طلب المالك ٢٠٢٦-٠٩-٢٦): رأس بلون نوع الحركة،
+/// أقسام تدخل تباعاً، و«إغلاق» أسفل المربّع.
 private struct ActivityDetailSheet: View {
     let item: AppNotification
     let style: (icon: String, color: Color)
@@ -534,154 +706,112 @@ private struct ActivityDetailSheet: View {
         return Self.fullFormatter.string(from: item.createdDate)
     }
 
-    /// ارتفاع المحتوى الفعلي — الشيت يفصّل نفسه عليه
-    @State private var contentHeight: CGFloat = 260
-    /// لا بدّ من ربط الاختيار: بدونه يعلق الشيت على أول ارتفاع ولا يتكيّف
-    @State private var detent: PresentationDetent = .height(260)
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // ═══ شريط علوي ثابت بهوية نوع الحركة ═══
-            VStack(spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.md) {
-                    ZStack {
-                        Circle().fill(SwiftUI.Color.white.opacity(0.20))
-                        Image(systemName: style.icon)
-                            .font(DS.Font.scaled(17, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    .frame(width: 44, height: 44)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title)
-                            .font(DS.Font.plex(16, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(categoryTitle)
-                            .font(DS.Font.caption2)
-                            .foregroundColor(SwiftUI.Color.white.opacity(0.85))
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 32, height: 32)
-                            .background(SwiftUI.Color.white.opacity(0.18), in: Circle())
-                    }
-                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
-            .frame(maxWidth: .infinity)
-            .background(style.color)
-
-            // ═══ المحتوى ═══
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-
-                    // «ما تغيّر» — سبب فتح السجل، فيتصدّر
-                    if let changes = item.details?.changes, !changes.isEmpty {
-                        DSCard(padding: 0) {
-                            DSSectionHeader(
-                                title: L10n.t("ما تغيّر", "What changed"),
-                                icon: "arrow.left.arrow.right",
-                                trailing: "\(changes.count)",
-                                iconColor: DS.Color.accent
-                            )
-                            VStack(spacing: DS.Spacing.xs) {
-                                ForEach(changes) { ch in changeLine(ch) }
-                            }
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.bottom, DS.Spacing.md)
-                        }
-                    }
-
-                    if !item.body.isEmpty {
-                        DSCard(padding: 0) {
-                            DSSectionHeader(
-                                title: L10n.t("التفاصيل", "Details"),
-                                icon: "text.alignright",
-                                iconColor: DS.Color.primary
-                            )
-                            Text(item.body)
-                                .font(DS.Font.subheadline)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.bottom, DS.Spacing.md)
-                        }
-                    }
-
-                    // معلومات السجل — كل الحقول ظاهرة بصفوف موحّدة
-                    DSCard(padding: 0) {
-                        DSSectionHeader(
-                            title: L10n.t("معلومات السجل", "Record info"),
-                            icon: "info.circle.fill",
-                            iconColor: DS.Color.textSecondary
-                        )
-                        VStack(spacing: 0) {
-                            infoRow(L10n.t("التصنيف", "Category"), categoryTitle)
-                            DSDivider()
-                            infoRow(L10n.t("الوقت", "Time"), fullDate)
-                            if let subject {
-                                DSDivider()
-                                infoRow(L10n.t("تخصّ", "About"), subject.shortFullName)
-                            }
-                            if let actor {
-                                DSDivider()
-                                infoRow(L10n.t("نفّذها", "By"), actor.shortFullName)
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.sm)
-                    }
-                }
-                .padding(DS.Spacing.lg)
-                .background(
-                    GeometryReader { g in
-                        Color.clear.preference(key: ActivitySheetHeightKey.self, value: g.size.height)
-                    }
-                )
-            }
-            .background(DS.Color.background)
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onPreferenceChange(ActivitySheetHeightKey.self) { h in
-            let safeBottom = UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first?.windows.first(where: { $0.isKeyWindow })?
-                .safeAreaInsets.bottom ?? 0
-            // المحتوى + الشريط العلوي (76) + منطقة الأمان
-            let newHeight = min(max(h + 76 + safeBottom, 240),
-                                UIScreen.main.bounds.height * 0.92)
-            guard abs(newHeight - contentHeight) > 1 else { return }
-            contentHeight = newHeight
-            withAnimation(DS.Anim.quick) { detent = .height(newHeight) }
-        }
-        .presentationDetents([.height(contentHeight), .large], selection: $detent)
-        .presentationDragIndicator(.hidden)
+    private var changes: [AppNotification.NotificationDetails.ChangeEntry] {
+        item.details?.changes ?? []
     }
 
-    /// صف معلومة داخل بطاقة «معلومات السجل»
-    private func infoRow(_ label: String, _ value: String) -> some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
-            Text(label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer(minLength: DS.Spacing.sm)
-            Text(value)
-                .font(DS.Font.scaled(12, weight: .semibold))
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(L10n.isArabic ? .leading : .trailing)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
+    /// لون الرأس — درجة داكنة من لون نوع الحركة حتى يُقرأ النص الأبيض (مثل بقية المربّعات)
+    private var headerTint: Color {
+        let c = style.color
+        if c == DS.Color.error { return DS.Color.error }
+        if c == DS.Color.textSecondary { return DS.Color.textSecondary }
+        if c == DS.Color.success { return DS.Color.composerProject }
+        if c == DS.Color.warning || c == DS.Color.accent { return DS.Color.composerLibrary }
+        return DS.Color.actionNavy
+    }
+
+    /// تصنيف الحركة — بأيقونة قائمة التصفية ولونها نفسهما
+    private var category: AdminActivityLogView.ActivityFilter? {
+        AdminActivityLogView.ActivityFilter.allCases.first { $0.title == categoryTitle }
+    }
+
+    /// ترتيب دخول الأقسام تباعاً — حسب الأقسام الظاهرة فعلاً
+    private var bodyIndex: Int { changes.isEmpty ? 0 : 1 }
+    private var infoIndex: Int { bodyIndex + (item.body.isEmpty ? 0 : 1) }
+
+    var body: some View {
+        DSComposer(
+            title: item.title,
+            subtitle: categoryTitle,
+            icon: style.icon,
+            tint: headerTint,
+            actionTitle: "",
+            showsAction: false,
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: false,
+            onSubmit: {},
+            onCancel: { dismiss() }
+        ) {
+            // «ما تغيّر» — سبب فتح السجل، فيتصدّر
+            if !changes.isEmpty { changesSection }
+            if !item.body.isEmpty { bodySection }
+            infoSection
         }
-        .padding(.vertical, DS.Spacing.xs + 1)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private var changesSection: some View {
+        DSComposerSection(title: L10n.t("ما تغيّر", "What changed"), icon: "arrow.left.arrow.right",
+                          tint: DS.Color.accent, trailing: "\(changes.count)", index: 0) {
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(changes) { ch in changeLine(ch) }
+            }
+        }
+    }
+
+    private var bodySection: some View {
+        DSComposerSection(title: L10n.t("التفاصيل", "Details"), icon: "text.alignright",
+                          tint: DS.Color.primary, index: bodyIndex) {
+            Text(item.body)
+                .font(DS.Font.plex(14))
+                .foregroundColor(DS.Color.fieldValue)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .dsRowBox()
+        }
+    }
+
+    /// معلومات السجل — كل الحقول ظاهرة بصفوف موحّدة
+    private var infoSection: some View {
+        DSComposerSection(title: L10n.t("معلومات السجل", "Record info"), icon: "info.circle.fill",
+                          tint: DS.Color.textSecondary, index: infoIndex) {
+            VStack(spacing: DS.Spacing.sm) {
+                infoRow(icon: category?.icon ?? "square.grid.2x2.fill",
+                        tint: category?.color ?? DS.Color.accent,
+                        L10n.t("التصنيف", "Category"), categoryTitle)
+                infoRow(icon: "calendar.badge.clock", tint: DS.Color.warning,
+                        L10n.t("الوقت", "Time"), fullDate)
+                if let subject {
+                    infoRow(icon: "person.fill", tint: DS.Color.primary,
+                            L10n.t("تخصّ", "About"), subject.shortFullName)
+                }
+                if let actor {
+                    infoRow(icon: "person.fill.checkmark", tint: DS.Color.success,
+                            L10n.t("نفّذها", "By"), actor.shortFullName)
+                }
+            }
+        }
+    }
+
+    /// صف معلومة: أيقونة الحقل + العنوان الغامق + القيمة — نفس صفوف المربّعات
+    private func infoRow(icon: String, tint: Color, _ label: String, _ value: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: tint)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+                Text(value)
+                    .font(DS.Font.plex(14.5))
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
     }
 
     /// مصغّرة صورة داخل تفاصيل التغيير — تُظهر الصورة الفعلية قبل/بعد
@@ -711,6 +841,7 @@ private struct ActivityDetailSheet: View {
                     .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
             )
             .opacity(faded ? 0.55 : 1)
+            .accessibilityHidden(true)   // المصغّرة للعين — «قبل/بعد» يُقرأ من النص تحتها
 
             Text(label)
                 .font(DS.Font.scaled(11, weight: .semibold))
@@ -725,45 +856,56 @@ private struct ActivityDetailSheet: View {
             if t.isEmpty { return L10n.t("بلا", "None") }
             return t
         }
-        return VStack(alignment: .leading, spacing: 5) {
-            Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(DS.Color.textSecondary)
+        // صف بنفس صفوف المربّعات: أيقونة الحقل + اسم الحقل + القيمة قبل ← بعد
+        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: isPhoto ? "photo.fill" : "pencil", tint: DS.Color.accent)
+                .accessibilityHidden(true)
 
-            if isPhoto {
-                // الصور تُعرض فعلاً — النص «صورة ← صورة» كان بلا فائدة
-                HStack(spacing: DS.Spacing.md) {
-                    photoThumb(ch.before, label: L10n.t("قبل", "Before"), faded: true)
-                    Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                    photoThumb(ch.after, label: L10n.t("بعد", "After"), faded: false)
-                    Spacer(minLength: 0)
-                }
-            } else {
-                HStack(spacing: 6) {
-                    Text(display(ch.before))
-                        .font(DS.Font.scaled(12))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(display(ch.after))
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
+                    .font(DS.Font.plex(12, weight: .heavy))
+                    .foregroundColor(DS.Color.fieldLabel)
+
+                if isPhoto {
+                    // الصور تُعرض فعلاً — النص «صورة ← صورة» كان بلا فائدة
+                    HStack(spacing: DS.Spacing.md) {
+                        photoThumb(ch.before, label: L10n.t("قبل", "Before"), faded: true)
+                        Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .accessibilityHidden(true)
+                        photoThumb(ch.after, label: L10n.t("بعد", "After"), faded: false)
+                        Spacer(minLength: 0)
+                    }
+                } else {
+                    HStack(spacing: 6) {
+                        Text(display(ch.before))
+                            .font(DS.Font.plex(13))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DS.Color.textTertiary)
+                            .accessibilityHidden(true)
+                        Text(display(ch.after))
+                            .font(DS.Font.plex(13, weight: .bold))
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    // الشطب والسهم لا يُسمعان — القارئ الصوتي يقرأ «قبل: … بعد: …»
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.t("قبل: \(display(ch.before))، بعد: \(display(ch.after))",
+                                               "Before: \(display(ch.before)), after: \(display(ch.after))"))
                 }
             }
+
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 5)
-        .padding(.horizontal, DS.Spacing.sm)
-        .background(DS.Color.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .dsRowBox()
     }
 }

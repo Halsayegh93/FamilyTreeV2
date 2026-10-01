@@ -170,8 +170,11 @@ class NotificationViewModel: ObservableObject {
     var unreadNotificationsCount: Int {
         let myId = currentUser?.id
         let admin = canModerate
+        let blocked = BlockedMembersStore.shared
         return notifications.filter { n in
             guard !n.read else { return false }
+            // تعليق/إعجاب من عضو محظور لا يظهر في المركز — فلا يُحسب في الجرس
+            if blocked.hidesNotification(kind: n.kind, createdBy: n.createdBy, body: n.body) { return false }
             return Self.isVisibleToUser(n, myId: myId, isAdmin: admin)
         }.count
     }

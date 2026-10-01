@@ -25,9 +25,11 @@
 		<string>remote-notification</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>يحتاج التطبيق للوصول إلى مكتبة الصور لاختيار صور الملف الشخصي والأخبار</string>
+	<string>يستخدم التطبيق الصور التي تختارها بنفسك فقط لإضافتها، مثل صورتك الشخصية أو صور الأخبار والمشاريع ومكتبة العائلة.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>لحفظ الصور التي تختار حفظها من التطبيق في ألبوم صورك، مثل رمز QR الخاص بك أو صور مكتبة العائلة.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صور الملف الشخصي ومسح الباركود</string>
+	<string>يستخدم التطبيق الكاميرا لمسح رمز QR الخاص بأحد أفراد العائلة ومعرفة صلة القرابة بينكما.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

@@ -536,6 +536,9 @@ class AuthViewModel: ObservableObject {
 
         Log.info("[AUTH] ربط البروفايل: \(oldId) → \(newId)")
 
+        /// رقم البروفايل القديم مُسح (خطوة ٢) — يُعاد إن فشل ما بعده قبل اكتمال الربط
+        var phoneCleared = false
+        var oldPhone: String?
         do {
             // 1) جلب بيانات البروفايل القديم
             let oldProfiles: [FamilyMember] = try await supabase
@@ -550,6 +553,13 @@ class AuthViewModel: ObservableObject {
                 Log.warning("[AUTH] لم يُعثر على البروفايل القديم أثناء الربط")
                 return
             }
+            // حساب المالك ثابت المعرّف — لا يُنسخ ولا يُحذف من التطبيق أبداً (كان المسح
+            // التالي يُفرغ رقمه ثم يُرفض إنشاء النسخة فيبقى بلا رقم ← شاشة التسجيل)
+            guard oldProfile.role != .owner else {
+                Log.warning("[AUTH] تخطّي ربط حساب المالك بمعرّف دخول مختلف")
+                return
+            }
+            oldPhone = oldProfile.phoneNumber
 
             // 2) مسح رقم التلفون من البروفايل القديم مؤقتاً
             //    (لتجنب unique constraint عند إنشاء البروفايل الجديد بنفس الرقم)
@@ -558,6 +568,7 @@ class AuthViewModel: ObservableObject {
                 .update(["phone_number": AnyEncodable(Optional<String>.none)])
                 .eq("id", value: oldId)
                 .execute()
+            phoneCleared = true
 
             // 3) إنشاء البروفايل الجديد بـ auth UUID الجديد + كل البيانات
             var payload: [String: AnyEncodable] = [
@@ -653,7 +664,19 @@ class AuthViewModel: ObservableObject {
             Log.info("[AUTH] ✅ تم ربط البروفايل بنجاح: \(oldProfile.fullName) → auth.uid: \(newId)")
         } catch {
             Log.error("[AUTH] ❌ فشل ربط البروفايل: \(error.localizedDescription)")
-            // في حالة الفشل، نستمر بالبروفايل الأصلي — لا نوقف عملية الدخول
+            // في حالة الفشل، نستمر بالبروفايل الأصلي — لا نوقف عملية الدخول.
+            // أعد رقمه إن كان قد مُسح: بدونه لا يجده الدخول القادم فيُفتح «تسجيل جديد»
+            if phoneCleared, let oldPhone, !oldPhone.isEmpty {
+                do {
+                    try await supabase.from("profiles")
+                        .update(["phone_number": AnyEncodable(oldPhone)])
+                        .eq("id", value: oldId)
+                        .execute()
+                    Log.info("[AUTH] أُعيد رقم البروفايل القديم بعد فشل الربط")
+                } catch {
+                    Log.error("[AUTH] ❌ تعذّرت إعادة رقم البروفايل القديم: \(error.localizedDescription)")
+                }
+            }
         }
     }
     
@@ -1061,6 +1084,8 @@ class AuthViewModel: ObservableObject {
             normalizedSessionPhone = ""
         }
         Log.info("[AUTH] Session found. UUID: \(user.id), Phone: \(Log.masked(normalizedSessionPhone))")
+        /// خطأ شبكة/مؤقت أثناء البحث — ليس دليلاً على عدم وجود الحساب
+        var lookupFailed = false
 
         // فحص الحظر — حماية مزدوجة
         if !normalizedSessionPhone.isEmpty, await isPhoneBanned(normalizedSessionPhone) {
@@ -1100,7 +1125,8 @@ class AuthViewModel: ObservableObject {
                 let existingPhone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 
                 // المدير حذف الرقم من البروفايل → مباشرة لشاشة التسجيل
-                if existingPhone.isEmpty && profile.status != .frozen && profile.status != .deleted {
+                if existingPhone.isEmpty && profile.status != .frozen && profile.status != .deleted
+                    && profile.role != .owner {
                     Log.info("[AUTH] البروفايل بدون رقم (المدير حذفه) — توجيه مباشر للتسجيل الجديد")
                     self.status = .authenticatedNoProfile
                     return
@@ -1114,6 +1140,7 @@ class AuthViewModel: ObservableObject {
         } catch {
             guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             Log.error("[AUTH] خطأ في جلب البروفايل بـ UUID: \(error.localizedDescription)")
+            lookupFailed = true
         }
 
         // المحاولة 2: البحث بالرقم
@@ -1164,7 +1191,8 @@ class AuthViewModel: ObservableObject {
             if let retryProfile = retryResponse.first {
                 let retryPhone = retryProfile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 // المدير حذف الرقم → مباشرة للتسجيل
-                if retryPhone.isEmpty && retryProfile.status != .frozen && retryProfile.status != .deleted {
+                if retryPhone.isEmpty && retryProfile.status != .frozen && retryProfile.status != .deleted
+                    && retryProfile.role != .owner {
                     Log.info("[AUTH] بروفايل بدون رقم في المحاولة 4 — توجيه مباشر للتسجيل")
                     self.status = .authenticatedNoProfile
                     return
@@ -1177,11 +1205,45 @@ class AuthViewModel: ObservableObject {
         } catch {
             guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             Log.warning("[AUTH] Retry check failed: \(error.localizedDescription)")
+            lookupFailed = true
         }
 
         guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
+
+        // تعثّر الاتصال ≠ «لا يوجد حساب» (شكوى المالك ٢٠٢٦-٠٩-٢٨): كان أي خطأ مؤقت لحظة
+        // الرجوع للتطبيق يفتح شاشة التسجيل ويمسح الكاش — كأن الحساب انحذف وبياناته راحت.
+        if lookupFailed {
+            if currentUser != nil {
+                Log.warning("[AUTH] تعذّر التحقق من البروفايل (خطأ مؤقت) — نُبقي الحالة الحالية")
+                return
+            }
+            if let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
+               let profile = cached.first(where: { $0.id == user.id }) {
+                Log.info("[AUTH] خطأ مؤقت — استعادة المستخدم من الكاش: \(profile.fullName)")
+                self.currentUser = profile
+                self.isAuthenticated = true
+                self.status = self.resolveAuthAccess(for: profile)
+                return
+            }
+            // لا كاش: شاشة البداية مع إعادة المحاولة بعد لحظات — لا شاشة تسجيل خاطئة
+            Log.warning("[AUTH] خطأ مؤقت بلا كاش — إعادة المحاولة بعد ٣ ثوانٍ")
+            self.status = .checking
+            scheduleProfileRecheck(generation: generation)
+            return
+        }
+
         Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(Log.masked(normalizedSessionPhone)), UUID: \(userIdString)")
         self.status = .authenticatedNoProfile
+    }
+
+    /// إعادة فحص البروفايل بعد خطأ مؤقت (بلا كاش) — ما دامت الجلسة نفسها على شاشة البداية
+    private func scheduleProfileRecheck(generation: UUID) {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let self, generation == self.sessionGeneration, !self.isEndingSession,
+                  self.status == .checking else { return }
+            await self.checkUserProfile()
+        }
     }
 
     // MARK: - Banned Phones (حظر الأرقام)
@@ -1298,7 +1360,9 @@ class AuthViewModel: ObservableObject {
         defer { isEndingSession = false }
         await notificationVM?.unregisterPushToken()
         clearLocalSession()
-        _ = try? await supabase.auth.signOut()
+        // هذا الجهاز فقط — الافتراضي .global كان يُخرج العضو من كل أجهزته
+        // (الأندرويد والآيباد…) عند خروج واحد أو إزالة جهاز واحد من الإدارة.
+        _ = try? await supabase.auth.signOut(scope: .local)
         // Also invalidate saves queued by any work that finished during signOut.
         CacheManager.shared.clearAll()
         SharedSessionStore.clear()

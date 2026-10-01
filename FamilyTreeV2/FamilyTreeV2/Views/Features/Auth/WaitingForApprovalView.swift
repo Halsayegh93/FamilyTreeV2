@@ -8,11 +8,14 @@ struct WaitingForApprovalView: View {
     @State private var pulseOpacity: CGFloat = 0.6
     @State private var ringRotation: Double = 0
     @State private var dotPhase: CGFloat = 0
-    @State private var cardAppeared = false
     @State private var contentOpacity: CGFloat = 0
     @State private var iconBounce: CGFloat = 0
-    @State private var buttonsAppeared = false
     @State private var showContactSheet = false
+    /// حذف الحساب متاح لمن ينتظر الموافقة أيضاً (Guideline 5.1.1(v))
+    @State private var confirmDeletion = false
+    @State private var deletingAccount = false
+    /// «تقليل الحركة» (توصية أبل): بلا دوران ولا نبض ولا قفز متكرر
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -31,27 +34,27 @@ struct WaitingForApprovalView: View {
                 VStack(spacing: DS.Spacing.xxl) {
                     Spacer().frame(height: DS.Spacing.xl)
 
-                    // أيقونة الانتظار مع الحركة
+                    // أيقونة الانتظار مع الحركة («تقليل الحركة»: تلاشٍ بلا تكبير)
                     waitingIcon
                         .opacity(contentOpacity)
-                        .scaleEffect(contentOpacity)
+                        .scaleEffect(reduceMotion ? 1 : contentOpacity)
 
                     // نقاط التحميل — تحت الدائرة
                     animatedDots
                         .opacity(contentOpacity)
 
+                    // بعد الأيقونة تدخل البطاقة ثم الأزرار واحداً بعد الآخر (dsStaggerIn)
                     // بطاقة المعلومات
                     infoCard
-                        .opacity(cardAppeared ? 1 : 0)
-                        .offset(y: cardAppeared ? 0 : 30)
+                        .dsStaggerIn(0)
 
                     // الأزرار
                     actionButtons
-                        .opacity(buttonsAppeared ? 1 : 0)
-                        .offset(y: buttonsAppeared ? 0 : 20)
 
                     Spacer().frame(height: DS.Spacing.xxl)
                 }
+                // الأقسام تبدأ بعد الأيقونة (نفس «بعد الرأس» في المربّعات)
+                .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
                 }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -59,26 +62,31 @@ struct WaitingForApprovalView: View {
         .onAppear {
             startAnimations()
         }
-        .sheet(isPresented: $showContactSheet) {
-            NavigationStack {
-                MemberContactFormView()
-                    .navigationTitle(L10n.t("تواصل مع الإدارة", "Contact Admin"))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                            Button { showContactSheet = false } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(DS.Font.scaled(22, weight: .medium))
-                                    .foregroundStyle(DS.Color.textTertiary)
-                                    .symbolRenderingMode(.hierarchical)
-                            }
-                            .accessibilityLabel(L10n.t("إغلاق", "Close"))
-                        }
-                    }
+        // مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك) — العنوان و«إلغاء» داخل المربّع
+        .dsCenterBox(isPresented: $showContactSheet) {
+            MemberContactFormView()
+                .environmentObject(authVM)
+        }
+        .dsAlert(L10n.t("حذف الحساب", "Delete Account"), isPresented: $confirmDeletion) {
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            Button(L10n.t("حذف نهائي", "Delete Permanently"), role: .destructive) {
+                Task {
+                    deletingAccount = true
+                    _ = await authVM.deleteAccount()
+                    deletingAccount = false
+                }
             }
-            .environmentObject(authVM)
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .presentationDragIndicator(.visible)
+        } message: {
+            Text(L10n.t("سيُحذف حسابك وطلب انضمامك وبياناتك نهائياً. لا يمكن التراجع عن هذا الإجراء.",
+                        "Your account, join request and data will be permanently deleted. This cannot be undone."))
+        }
+        .dsAlert(L10n.t("خطأ", "Error"), isPresented: .init(
+            get: { authVM.deleteAccountError != nil },
+            set: { if !$0 { authVM.deleteAccountError = nil } }
+        )) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(authVM.deleteAccountError ?? "")
         }
     }
 
@@ -205,6 +213,7 @@ struct WaitingForApprovalView: View {
                 Task { await authVM.checkUserProfile() }
             }
             .padding(.horizontal, DS.Spacing.xl)
+            .dsStaggerIn(1)
 
             DSSecondaryButton(
                 L10n.t("تعديل البيانات", "Edit Info"),
@@ -213,6 +222,7 @@ struct WaitingForApprovalView: View {
                 authVM.status = .authenticatedNoProfile
             }
             .padding(.horizontal, DS.Spacing.xl)
+            .dsStaggerIn(2)
 
             DSSecondaryButton(
                 L10n.t("تواصل مع الإدارة", "Contact Admin"),
@@ -221,6 +231,7 @@ struct WaitingForApprovalView: View {
                 showContactSheet = true
             }
             .padding(.horizontal, DS.Spacing.xl)
+            .dsStaggerIn(3)
 
             DSSecondaryButton(
                 L10n.t("تسجيل الخروج", "Sign Out"),
@@ -230,26 +241,45 @@ struct WaitingForApprovalView: View {
                 Task { await authVM.signOut() }
             }
             .padding(.horizontal, DS.Spacing.xl)
+            .dsStaggerIn(4)
+
+            // حذف الحساب — زر هادئ في الأسفل (نفس أسلوب الإعدادات)
+            Button { confirmDeletion = true } label: {
+                HStack(spacing: DS.Spacing.xs) {
+                    if deletingAccount {
+                        ProgressView().tint(DS.Color.error)
+                    } else {
+                        Image(systemName: "trash")
+                            .font(DS.Font.scaled(13, weight: .bold))
+                            .accessibilityHidden(true)   // زخرفة — النص يكفي
+                    }
+                    Text(L10n.t("حذف الحساب", "Delete Account"))
+                        .font(DS.Font.plex(14, weight: .bold))
+                }
+                .foregroundColor(DS.Color.error)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(DS.Color.error.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .disabled(deletingAccount)
+            .padding(.horizontal, DS.Spacing.xl)
             .padding(.bottom, DS.Spacing.xl)
+            .dsStaggerIn(5)
         }
     }
 
     // MARK: - Animations
     private func startAnimations() {
-        // ظهور المحتوى
-        withAnimation(DS.Anim.elastic.delay(0.2)) {
+        // ظهور المحتوى — «تقليل الحركة»: تلاشٍ قصير بدل النابض
+        // (البطاقة والأزرار تدخل تباعاً بعدها عبر dsStaggerIn)
+        withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.elastic.delay(0.2)) {
             contentOpacity = 1.0
         }
 
-        // ظهور البطاقة
-        withAnimation(DS.Anim.elastic.delay(0.5)) {
-            cardAppeared = true
-        }
-
-        // ظهور الأزرار
-        withAnimation(DS.Anim.smooth.delay(0.7)) {
-            buttonsAppeared = true
-        }
+        // تقليل الحركة: تبقى الحلقة والأيقونة والنقاط ثابتة
+        guard !reduceMotion else { return }
 
         // دوران الحلقة
         withAnimation(

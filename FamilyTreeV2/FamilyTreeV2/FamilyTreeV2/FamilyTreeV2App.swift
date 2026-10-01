@@ -63,7 +63,11 @@ struct FamilyTreeV2App: App {
                 // preferredColorScheme وحده لا يصل للشيتات والتنبيهات المقدَّمة من UIKit،
                 // فنفرض النمط على النافذة نفسها ليشمل كل ما يُعرض فوقها.
                 .onChange(of: appearanceMode) { _ in applyWindowStyle() }
-                .onAppear { applyWindowStyle() }
+                .onAppear {
+                    applyWindowStyle()
+                    // الضغط في أي مكان يُخفي لوحة المفاتيح (طلب المالك)
+                    KeyboardDismisser.shared.install()
+                }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                     Task {
                         try? await UNUserNotificationCenter.current().setBadgeCount(0)
@@ -108,9 +112,9 @@ struct FamilyTreeV2App: App {
                         return
                     }
 
-                    // باقي أنواع الطلبات: موافقة مباشرة كالسابق
+                    // باقي أنواع الطلبات: موافقة كاملة تطبّق التعديل (لا تغيير الحالة فقط)
                     Task {
-                        let ok = await self.appState.notificationVM.approveRequest(requestId: requestId, requestType: requestType)
+                        let ok = await self.appState.adminRequestVM.approveFromPush(requestId: requestId, requestType: requestType)
                         if ok {
                             async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
                             async let m: () = self.appState.memberVM.fetchAllMembers(force: true)

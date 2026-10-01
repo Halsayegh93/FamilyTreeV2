@@ -8,6 +8,15 @@ enum DS {
     enum Color {
         // Brand — كحلي ملكي رسمي (أفتح في الداكن ليبقى مقروءاً)
         static let primary       = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#7FA8D6") // Royal Navy
+        /// كحلي الأزرار الممتلئة (منتصف gradientPrimary) — لا يفتح في الداكن مثل primary
+        static let actionNavy    = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#173A5E")
+        /// الكلمة المتغيّرة في تعديل البيانات — كبسولة خضراء خفيفة جداً بلا إطار (طلب المالك)
+        static let changedBg     = SwiftUI.Color.adaptive(light: "#EEF8F1", dark: "#1C3327")
+        static let changedFg     = SwiftUI.Color.adaptive(light: "#3C9A63", dark: "#9FE3B8")
+        /// عنوان الحقل في تعديل البيانات — أغمق من القيمة ليتميّز عنها (طلب المالك)
+        static let fieldLabel    = SwiftUI.Color.adaptive(light: "#03070F", dark: "#FFFFFF")
+        /// قيمة الحقل — أهدى قليلاً من العنوان
+        static let fieldValue    = SwiftUI.Color.adaptive(light: "#414958", dark: "#C4CAD6")
         static let primaryDark   = SwiftUI.Color.adaptive(light: "#14365A", dark: "#2B5F90") // Deep Navy
         static let primaryLight  = SwiftUI.Color.adaptive(light: "#5B84AE", dark: "#A9C4E4") // Soft Navy
         static let secondary     = SwiftUI.Color.adaptive(light: "#2E6B4F", dark: "#6FB394") // Forest Green
@@ -29,7 +38,7 @@ enum DS {
         static let gradientPrimary = LinearGradient(
             colors: [
                 SwiftUI.Color.adaptive(light: "#102B47", dark: "#0E2238"),
-                SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#173A5E"),
+                actionNavy,
                 SwiftUI.Color.adaptive(light: "#2C6396", dark: "#23507D")
             ],
             startPoint: .bottomTrailing, endPoint: .topLeading
@@ -1003,40 +1012,31 @@ struct DSSectionHeader: View {
     var trailing: String? = nil
     var iconColor: Color = DS.Color.primary
 
+    // نفس عناوين أقسام مربّعات الإضافة (DSComposerSection) — تصميم موحّد في
+    // كل التطبيق (طلب المالك ٢٠٢٦-٠٩-٢٦): أيقونة في دائرة ملوّنة + عنوان غامق،
+    // والتلميح الثانوي في الطرف
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.sm) {
-                HStack(spacing: DS.Spacing.xs) {
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(12, weight: .bold))
-                            .foregroundColor(iconColor)
-                    }
-                    Text(title)
-                        .font(DS.Font.scaled(13, weight: .semibold))
-                        .foregroundColor(iconColor)
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs + 2)
-                .background(iconColor.opacity(0.08))
-                .clipShape(Capsule())
-
-                if let trailing {
-                    // تلميح ثانوي — لا ينافس عنوان القسم في اللون ولا الحجم
-                    Text(trailing)
-                        .font(DS.Font.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-
-                Spacer()
+        HStack(spacing: 7) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundColor(iconColor)
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(iconColor.opacity(0.13)))
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.sm)
-
-            DSDivider()
+            Text(title)
+                .font(DS.Font.plex(12.5, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
+            Spacer(minLength: 0)
+            if let trailing {
+                Text(trailing)
+                    .font(DS.Font.plex(11, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
         }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.top, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.sm)
     }
 }
 
@@ -1202,6 +1202,7 @@ struct DSFloatingButton: View {
     var action: () -> Void
 
     @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var debouncedAction: () -> Void {
         let key = "DSFloating_\(icon ?? "")_\(label ?? "")"
@@ -1230,11 +1231,12 @@ struct DSFloatingButton: View {
         }
         // شفّاف عادةً، ولونه الطبيعي عند الضغط (طلب المالك)
         .buttonStyle(FloatingButtonStyle(gradient: gradient, color: color))
-        .scaleEffect(appeared ? 1 : 0.3)
+        .scaleEffect(appeared || reduceMotion ? 1 : 0.3)
         .opacity(appeared ? 1 : 0)
         .onAppear {
             guard !appeared else { return }
-            withAnimation(DS.Anim.elastic.delay(0.4)) { appeared = true }
+            // «تقليل الحركة»: يظهر بتلاشٍ فقط بلا قفزة
+            withAnimation(reduceMotion ? .easeOut(duration: 0.2) : DS.Anim.elastic.delay(0.4)) { appeared = true }
         }
     }
 }

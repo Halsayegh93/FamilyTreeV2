@@ -1,8 +1,16 @@
 import SwiftUI
 import UIKit
 
+// MARK: - مركز التقارير (تصميم صفحات الإدارة الموحّد — طلب المالك ٢٠٢٦-٠٩-٢٧)
+//
+// من الأعلى: بطاقة رأس بلون بلاطة «تقارير PDF» في لوحة الإدارة وأرقامها الحيّة ← «تصفية»: بحث
+// وفلاتر الحالة بعددها (+ نطاق العمر عند اختيار حقل «العمر») ← «معلومات التقرير» (العنوان والفرع)
+// ← «الحقول» ← «نتائج التقرير» (تحديد الأعضاء) ← شريط سفلي ثابت: النطاق + «إنشاء تقرير PDF» بالكحلي.
+// كل الحسابات والتصفية والتحديد وإنشاء الـ PDF ومشاركته (`ActivityView`) كما كانت تماماً.
+// (اختيار «نوع التقرير» لم يكن معروضاً في الصفحة، فالتقرير يبقى «الأسماء» كما كان.)
 struct AdminReportsView: View {
     @EnvironmentObject private var memberVM: MemberViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum ReportType: String, CaseIterable {
         case family
@@ -63,6 +71,17 @@ struct AdminReportsView: View {
             case .withoutPhone: return L10n.t("بدون هاتف", "No phone")
             }
         }
+
+        /// أيقونة الخيار في شريط فلاتر الحالة
+        var icon: String {
+            switch self {
+            case .all: return "person.3.fill"
+            case .alive: return "heart.fill"
+            case .deceased: return "leaf.fill"
+            case .withPhone: return "phone.fill"
+            case .withoutPhone: return "phone.down.fill"
+            }
+        }
     }
 
     /// الحقول الديناميكية المتاحة للتقرير
@@ -83,6 +102,22 @@ struct AdminReportsView: View {
             case .status: return "الحالة"
             case .gender: return "الجنس"
             case .married: return "متزوج"
+            }
+        }
+
+        /// عنوان الحقل في الواجهة — `label` يبقى للـ PDF (عناوين أعمدته عربية دائماً)
+        var title: String {
+            switch self {
+            case .fullName: return L10n.t("الاسم الكامل", "Full name")
+            case .firstName: return L10n.t("الاسم الأول", "First name")
+            case .phone: return L10n.t("رقم الهاتف", "Phone")
+            case .age: return L10n.t("العمر", "Age")
+            case .birthDate: return L10n.t("تاريخ الميلاد", "Birth date")
+            case .deathDate: return L10n.t("تاريخ الوفاة", "Death date")
+            case .role: return L10n.t("الدور", "Role")
+            case .status: return L10n.t("الحالة", "Status")
+            case .gender: return L10n.t("الجنس", "Gender")
+            case .married: return L10n.t("متزوج", "Married")
             }
         }
 
@@ -119,7 +154,6 @@ struct AdminReportsView: View {
     }
 
     @State private var selectedReport: ReportType = .family
-    @State private var highlightedReport: ReportType = .family
     @State private var searchText = ""
     @State private var minAgeText = ""
     @State private var maxAgeText = ""
@@ -136,7 +170,12 @@ struct AdminReportsView: View {
     @State private var customTitle: String = "تقرير عائلة المحمدعلي"
     @State private var selectedFields: Set<ReportField> = [.fullName, .phone, .age]
 
-    private let reportColumns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    /// لون بلاطة «تقارير PDF» في لوحة الإدارة — رأس الصفحة يطابق البلاطة التي ضُغطت
+    private let pageTint = DS.Color.composerLibrary
+
+    /// حقلا نطاق العمر — الضغط حول الحقل (مساحة ٤٤ نقطة) يفتح الكتابة فيه
+    private enum AgeBound: Hashable { case min, max }
+    @FocusState private var focusedAge: AgeBound?
 
     private var ageRangeInvalid: Bool {
         let minVal = Int(minAgeText) ?? 0
@@ -211,7 +250,7 @@ struct AdminReportsView: View {
             members = members.filter { normalizedPhone(for: $0).isEmpty && $0.isDeceased != true }
         }
 
-        if selectedReport == .age || selectedReport == .phone {
+        if needsAgeFilter {
             let minAgeVal = Int(minAgeText) ?? 0
             let maxAgeVal = Int(maxAgeText) ?? 0
             if minAgeVal > 0 || maxAgeVal > 0 {
@@ -249,15 +288,16 @@ struct AdminReportsView: View {
         return members
     }
 
-    private var visibleMembers: [FamilyMember] {
-        Array(filteredMembers.prefix(displayLimit))
+    /// أول `displayLimit` من النتائج — `members` هي `filteredMembers` محسوبة مرة واحدة في `body`
+    private func visibleMembers(of members: [FamilyMember]) -> [FamilyMember] {
+        Array(members.prefix(displayLimit))
     }
 
     private var activeFilterCount: Int {
         var count = 0
         if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { count += 1 }
         if statusFilter != .all { count += 1 }
-        if (selectedReport == .age || selectedReport == .phone) &&
+        if needsAgeFilter &&
             ((Int(minAgeText) ?? 0) > 0 || (Int(maxAgeText) ?? 0) > 0) {
             count += 1
         }
@@ -265,39 +305,108 @@ struct AdminReportsView: View {
         return count
     }
 
-    private var selectedCount: Int {
-        selectedMemberIds.isEmpty ? filteredMembers.count : filteredMembers.filter { selectedMemberIds.contains($0.id) }.count
+    /// النطاق: المحدّدون من النتائج، أو كل النتائج إن لم يُحدَّد أحد — `members` = `filteredMembers`
+    private func selectedCount(in members: [FamilyMember]) -> Int {
+        selectedMemberIds.isEmpty ? members.count : members.filter { selectedMemberIds.contains($0.id) }.count
     }
 
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-            // الوضع الأفقي: الإعدادات/النتائج/التصدير على عمودين
-            AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
-                settingsCard
-                resultsSection
-                exportSection
+    /// عدد أعضاء التقرير لكل خيار حالة (لشريط الفلاتر) — نفس شروط `filteredMembers` تماماً
+    /// (الفرع، البحث، نطاق العمر ونوع التقرير) بلا فرز، وبمرور واحد على الأعضاء.
+    private func statusCounts() -> [StatusFilter: Int] {
+        var pool = activeMembers
+
+        if let rootId = branchRootId {
+            let ids = descendantIds(of: rootId)
+            pool = pool.filter { ids.contains($0.id) }
+        }
+
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedSearch.isEmpty {
+            pool = pool.filter {
+                $0.fullName.localizedCaseInsensitiveContains(trimmedSearch) ||
+                $0.firstName.localizedCaseInsensitiveContains(trimmedSearch) ||
+                normalizedPhone(for: $0).contains(trimmedSearch)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xxxxl)
-            // ⚠️ مهم: نعلّق sheet الفرع على VStack الداخلي عشان لا يتزاحم
-            // مع sheet المشاركة المعلّق على الـScrollView. SwiftUI لا يدعم
-            // sheet متعدد على نفس الـView — يتم تجاهل الـsheet الثاني.
-            .sheet(isPresented: $branchPickerOpen) {
-                BranchPickerSheet(
-                    allMembers: memberVM.allMembers,
-                    onSelect: { id in
-                        branchRootId = id
-                        branchPickerOpen = false
-                        displayLimit = 20
-                    }
-                )
+        }
+
+        let minAgeVal = Int(minAgeText) ?? 0
+        let maxAgeVal = Int(maxAgeText) ?? 0
+        let usesAgeRange = needsAgeFilter && (minAgeVal > 0 || maxAgeVal > 0)
+
+        var counts: [StatusFilter: Int] = [:]
+        for member in pool {
+            let noPhone = normalizedPhone(for: member).isEmpty
+            let deceased = member.isDeceased == true
+
+            // نطاق العمر — يطبَّق متى ظهر حقلاه (حقل «العمر» مختار) لا لنوع تقرير مخفي
+            if usesAgeRange {
+                guard let age = ageForMember(member) else { continue }
+                if minAgeVal > 0 && age < minAgeVal { continue }
+                if maxAgeVal > 0 && age > maxAgeVal { continue }
+            }
+
+            // شروط نوع التقرير
+            switch selectedReport {
+            case .family:
+                break
+            case .age:
+                guard !deceased, !normalizedBirth(for: member).isEmpty,
+                      let age = ageForMember(member), age > 0 else { continue }
+            case .phone:
+                if noPhone { continue }
+            case .missingPhone:
+                if !noPhone { continue }
+            }
+
+            counts[.all, default: 0] += 1
+            if deceased {
+                counts[.deceased, default: 0] += 1
+            } else {
+                counts[.alive, default: 0] += 1
+                counts[noPhone ? .withoutPhone : .withPhone, default: 0] += 1
+            }
+        }
+        return counts
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        // نتائج التقرير تُحسب مرة واحدة لكل رسم (كانت تُعاد مع كل استخدام) — نفس `filteredMembers`
+        let members = filteredMembers
+        let loaded = !memberVM.allMembers.isEmpty
+
+        return ScrollView(showsIndicators: false) {
+            pageContent(members: members, loaded: loaded)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xxxl)
+                // ⚠️ مهم: نعلّق مربّع الفرع على المحتوى الداخلي عشان لا يتزاحم
+                // مع sheet المشاركة المعلّق على الـScrollView. SwiftUI لا يدعم
+                // sheet متعدد على نفس الـView — يتم تجاهل الـsheet الثاني.
+                .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
+                    BranchPickerSheet(
+                        allMembers: memberVM.allMembers,
+                        selectedId: branchRootId,
+                        onSelect: { id in
+                            branchRootId = id
+                            branchPickerOpen = false
+                            displayLimit = 20
+                        }
+                    )
+                }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        // التصدير مثبّت أسفل الصفحة (مثل شريط أزرار المربّعات) — النطاق يتحدّث مع التصفية والتحديد
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if loaded {
+                exportBar(members: members)
             }
         }
         .background(DS.Color.background.ignoresSafeArea())
-        .navigationTitle("مركز التقارير")
+        .navigationTitle(L10n.t("مركز التقارير", "Reports Center"))
         .navigationBarTitleDisplayMode(.inline)
-        .environment(\.layoutDirection, .rightToLeft)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             if memberVM.allMembers.isEmpty {
                 await memberVM.fetchAllMembers()
@@ -308,560 +417,554 @@ struct AdminReportsView: View {
                 cleanupShareState()
             }
         }
-        .dsAlert("خطأ", isPresented: $showErrorAlert) {
-            Button("موافق", role: .cancel) {}
+        .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
+            Button(L10n.t("موافق", "OK"), role: .cancel) {}
         } message: {
             Text(errorMessage)
         }
     }
 
-    // MARK: - كرت الإعدادات (موحّد)
+    // MARK: - هيكل الصفحة
 
-    private var settingsCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // رأس
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-                Text("إعدادات التقرير")
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.primary)
-                Spacer()
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.sm)
+    private func pageContent(members: [FamilyMember], loaded: Bool) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            hero(members: members, loaded: loaded)
 
-            Divider().opacity(0.5)
+            if loaded {
+                filtersBlock
 
-            // (1) معلومات التقرير: عنوان + فرع
-            innerSection(icon: "doc.text", title: "معلومات التقرير") {
-                VStack(spacing: DS.Spacing.sm) {
-                    // عنوان
-                    TextField("عنوان التقرير", text: $customTitle)
-                        .font(DS.Font.callout)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, 10)
-                        .background(DS.Color.background)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-                        )
-
-                    // فرع
-                    branchFilterRow
-                }
-            }
-
-            Divider().opacity(0.4).padding(.horizontal, DS.Spacing.md)
-
-            // (2) تصفية الأعضاء + بحث
-            innerSection(icon: "person.crop.circle.badge.checkmark", title: "تصفية") {
-                VStack(spacing: DS.Spacing.sm) {
-                    // فلتر الحالة
-                    Picker("", selection: $statusFilter) {
-                        ForEach(StatusFilter.allCases, id: \.self) { s in
-                            Text(s.label).tag(s)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: statusFilter) { _ in displayLimit = 20 }
-
-                    // نطاق العمر (إن لزم)
-                    if needsAgeFilter {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "calendar")
-                                .font(DS.Font.scaled(11, weight: .semibold))
-                                .foregroundColor(DS.Color.warning)
-                            Text("العمر:")
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                            TextField("من", text: $minAgeText)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.center)
-                                .font(DS.Font.callout)
-                                .frame(width: 56, height: 32)
-                                .background(DS.Color.background)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                                        .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.5) : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                                )
-                                .onChange(of: minAgeText) { _ in displayLimit = 20 }
-                            Text("→")
-                                .font(DS.Font.caption2)
-                                .foregroundColor(DS.Color.textTertiary)
-                            TextField("إلى", text: $maxAgeText)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.center)
-                                .font(DS.Font.callout)
-                                .frame(width: 56, height: 32)
-                                .background(DS.Color.background)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                                        .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.5) : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                                )
-                                .onChange(of: maxAgeText) { _ in displayLimit = 20 }
-                            if ageRangeInvalid {
-                                Text("غلط")
-                                    .font(DS.Font.caption2)
-                                    .foregroundColor(DS.Color.error)
-                            }
-                            Spacer()
-                        }
-                    }
-
-                    // البحث
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(DS.Color.textTertiary)
-                        TextField("بحث بالاسم أو الرقم...", text: $searchText)
-                            .font(DS.Font.callout)
-                            .onChange(of: searchText) { _ in displayLimit = 20 }
-                        if !searchText.isEmpty {
-                            Button {
-                                searchText = ""
-                                displayLimit = 20
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, 10)
-                    .background(DS.Color.background)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-                    )
-                }
-            }
-
-            Divider().opacity(0.4).padding(.horizontal, DS.Spacing.md)
-
-            // (3) الحقول
-            innerSection(
-                icon: "list.bullet.rectangle",
-                title: "الحقول",
-                trailing: "\(selectedFields.count) مختارة"
-            ) {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: 6)],
-                          alignment: .leading,
-                          spacing: 6) {
-                    ForEach(ReportField.allCases) { field in
-                        fieldChip(field)
+                // الوضع الأفقي: الأقسام على عمودين
+                AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
+                    infoSection
+                    fieldsSection
+                    if members.isEmpty {
+                        noResultsCard
+                    } else {
+                        resultsSection(members: members)
                     }
                 }
+            } else {
+                membersStateCard
+                    .padding(.top, DS.Spacing.xs)
+                    .dsStaggerIn(1)
             }
-            .padding(.bottom, DS.Spacing.md)
         }
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.primary.opacity(0.12), lineWidth: 1)
+    }
+
+    // MARK: - بطاقة الرأس
+
+    /// ٣ أرقام حيّة من بيانات الصفحة نفسها (بلا طلبات جديدة): الأعضاء المتاحون للتقارير، ومن سيدخل
+    /// الملف الآن (النطاق)، وعدد الحقول المختارة — «—» قبل تحميل الأعضاء.
+    private func hero(members: [FamilyMember], loaded: Bool) -> some View {
+        DSPageHero(
+            title: L10n.t("مركز التقارير", "Reports Center"),
+            subtitle: L10n.t("اختر الأعضاء والحقول، ثم صدّر ملف PDF للطباعة أو المشاركة",
+                             "Pick members and fields, then export a PDF to print or share"),
+            icon: "doc.text.fill",
+            tint: pageTint,
+            stats: [
+                DSHeroStat(value: loaded ? "\(activeMembers.count)" : "—",
+                           label: L10n.t("الأعضاء", "Members"), icon: "person.3.fill"),
+                DSHeroStat(value: loaded ? "\(selectedCount(in: members))" : "—",
+                           label: L10n.t("في التقرير", "In report"), icon: "doc.richtext.fill"),
+                DSHeroStat(value: "\(selectedFields.count)",
+                           label: L10n.t("الحقول", "Fields"), icon: "list.bullet.rectangle.fill")
+            ]
         )
     }
 
-    /// قسم فرعي داخل كرت الإعدادات
+    // MARK: - حالة الأعضاء (قبل التحميل)
+
+    /// لا أعضاء محمّلين بعد: فشل التحميل (مع إعادة نفس الجلب) · جارٍ التحميل
     @ViewBuilder
-    private func innerSection<Content: View>(
-        icon: String,
-        title: String,
-        trailing: String? = nil,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textSecondary)
-                Text(title)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-                if let trailing {
-                    Text(trailing)
-                        .font(DS.Font.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-            }
-            content()
+    private var membersStateCard: some View {
+        if memberVM.membersLoadFailed {
+            SysStateCard(icon: "wifi.exclamationmark",
+                         title: L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
+                         hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                         tint: DS.Color.error,
+                         actionTitle: L10n.t("إعادة المحاولة", "Retry"),
+                         action: { Task { await memberVM.fetchAllMembers(force: true) } })
+        } else {
+            SysStateCard(icon: "doc.text.fill",
+                         title: L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"),
+                         tint: pageTint,
+                         isLoading: true)
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
     }
 
-    private func fieldChip(_ field: ReportField) -> some View {
-        let active = selectedFields.contains(field)
-        return Button {
-            if active {
-                if selectedFields.count > 1 {
-                    selectedFields.remove(field)
-                }
-            } else {
-                selectedFields.insert(field)
-            }
-        } label: {
-            Text(field.label)
-                .font(DS.Font.caption2)
-                .fontWeight(active ? .bold : .semibold)
-                .foregroundColor(active ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(active ? DS.Color.primary : Color.clear)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(
-                        active ? Color.clear : DS.Color.textTertiary.opacity(0.25),
-                        lineWidth: 0.8
-                    )
-                )
-        }
-        .buttonStyle(.plain)
-    }
+    // MARK: - التصفية
 
-    // متى نظهر نطاق العمر
-    private var needsAgeFilter: Bool {
-        selectedReport == .age || selectedReport == .phone || selectedFields.contains(.age)
-    }
-
-    // MARK: - بطاقة قسم موحّدة (مستخدمة للنتائج/التصدير فقط)
-
+    /// بحث + فلاتر الحالة بعددها (+ نطاق العمر) — نفس خيارات «تصفية» السابقة
     @ViewBuilder
-    private func sectionCard<Content: View>(
-        icon: String,
-        title: String,
-        color: Color,
-        trailing: String? = nil,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(color)
-                Text(title)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer()
-                if let trailing {
-                    Text(trailing)
-                        .font(DS.Font.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(DS.Color.surface))
-                        .overlay(
-                            Capsule().stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 0.8)
-                        )
-                }
-            }
-            content()
+    private var filtersBlock: some View {
+        SysSectionTitle(title: L10n.t("تصفية", "Filter"),
+                        icon: "person.crop.circle.badge.checkmark",
+                        tint: pageTint,
+                        trailing: activeFilterCount > 0
+                            ? L10n.t("\(activeFilterCount) مفعّلة", "\(activeFilterCount) active")
+                            : nil)
+            .dsStaggerIn(1)
+
+        DSSearchField(text: $searchText,
+                      placeholder: L10n.t("بحث بالاسم أو الرقم…", "Search by name or number…"),
+                      tint: pageTint)
+            .onChange(of: searchText) { _ in displayLimit = 20 }
+            .dsStaggerIn(1)
+
+        statusChips
+            .dsStaggerIn(1)
+
+        if needsAgeFilter {
+            ageRangeRow
+                .dsStaggerIn(1)
         }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(color.opacity(0.15), lineWidth: 1)
+    }
+
+    /// فلتر الحالة (كان شريطاً مقسّماً) — العدد = من سيدخل التقرير بهذا الخيار، ويظهر إن كان أكبر من صفر
+    private var statusChips: some View {
+        let counts = statusCounts()
+        return DSFilterChips(
+            options: StatusFilter.allCases.map { status in
+                let n = counts[status] ?? 0
+                return DSFilterOption(id: status, title: status.label, icon: status.icon,
+                                      count: n > 0 ? n : nil)
+            },
+            selection: $statusFilter,
+            tint: pageTint
         )
+        .onChange(of: statusFilter) { _ in displayLimit = 20 }
     }
 
-
-    private var resultsSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: "نتائج التقرير",
-                icon: selectedReport.icon,
-                trailing: "\(filteredMembers.count) عضو",
-                iconColor: selectedReport.tint
-            )
-
-            if filteredMembers.isEmpty {
-                VStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "person.2.slash")
-                        .font(DS.Font.scaled(34))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text("لا يوجد أعضاء")
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                .padding(.vertical, DS.Spacing.xl)
-            } else {
-                VStack(spacing: DS.Spacing.sm) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        miniActionButton(title: "تحديد الكل", icon: "checkmark.circle.fill", tint: selectedReport.tint) {
-                            selectedMemberIds = Set(filteredMembers.map(\.id))
-                        }
-
-                        miniActionButton(title: "إلغاء التحديد", icon: "xmark.circle.fill", tint: .red) {
-                            selectedMemberIds.removeAll()
-                        }
-
-                        if activeFilterCount > 0 {
-                            miniActionButton(title: "إعادة ضبط", icon: "arrow.counterclockwise", tint: selectedReport.tint) {
-                                resetFilters()
-                            }
-                        }
-
-                        Spacer()
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                    ForEach(Array(visibleMembers.enumerated()), id: \.element.id) { _, member in
-                        Button {
-                            toggleSelection(member.id)
-                        } label: {
-                            memberRow(member: member)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, DS.Spacing.lg)
-                    }
-
-                    if displayLimit < filteredMembers.count {
-                        Button {
-                            displayLimit += 20
-                        } label: {
-                            Text("عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)")
-                                .font(DS.Font.caption1)
-                                .foregroundColor(selectedReport.tint)
-                                .padding(.vertical, DS.Spacing.sm)
-                        }
-                    }
-                }
-                .padding(.bottom, DS.Spacing.md)
+    /// نطاق العمر (من → إلى) بإطار حقل البحث — يحمرّ مع «غلط» إن كان «من» أكبر من «إلى»
+    private var ageRangeRow: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: "calendar", tint: DS.Color.warning)
+                .accessibilityHidden(true)
+            Text(L10n.t("العمر", "Age"))
+                .font(DS.Font.plex(13.5, weight: .bold))
+                .foregroundColor(DS.Color.fieldLabel)
+                .lineLimit(1)
+            Spacer(minLength: DS.Spacing.xs)
+            ageField(.min)
+                .onChange(of: minAgeText) { _ in displayLimit = 20 }
+            Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityHidden(true)
+            ageField(.max)
+                .onChange(of: maxAgeText) { _ in displayLimit = 20 }
+            if ageRangeInvalid {
+                SysStatusChip(text: L10n.t("غلط", "Invalid"),
+                              icon: "exclamationmark.triangle.fill",
+                              tint: DS.Color.error)
+                    .fixedSize()
             }
+        }
+        .padding(.horizontal, DS.Spacing.sm + 2)
+        .frame(minHeight: 52)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.surface))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .strokeBorder(ageRangeInvalid ? DS.Color.error.opacity(0.45) : DS.Color.textTertiary.opacity(0.15),
+                          lineWidth: 1))
+    }
+
+    private func ageField(_ bound: AgeBound) -> some View {
+        let isMin = bound == .min
+        let focused = focusedAge == bound
+        return TextField(isMin ? L10n.t("من", "From") : L10n.t("إلى", "To"),
+                         text: isMin ? $minAgeText : $maxAgeText)
+            .keyboardType(.numberPad)
+            .multilineTextAlignment(.center)
+            .font(DS.Font.plex(14.5, weight: .semibold))
+            .foregroundColor(DS.Color.textPrimary)
+            .monospacedDigit()
+            .focused($focusedAge, equals: bound)
+            .frame(width: 60, height: 36)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).fill(DS.Color.background))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                .strokeBorder(ageRangeInvalid ? DS.Color.error.opacity(0.5)
+                                              : (focused ? pageTint.opacity(0.65) : DS.Color.textTertiary.opacity(0.2)),
+                              lineWidth: focused ? 1.5 : 1))
+            .padding(.vertical, 4)   // مساحة ضغط ٤٤ نقطة
+            .contentShape(Rectangle())
+            .onTapGesture { focusedAge = bound }
+            .accessibilityLabel(isMin ? L10n.t("العمر من", "Minimum age") : L10n.t("العمر إلى", "Maximum age"))
+    }
+
+    // MARK: - معلومات التقرير
+
+    private var infoSection: some View {
+        DSComposerSection(title: L10n.t("معلومات التقرير", "Report info"),
+                          icon: "doc.text",
+                          tint: pageTint,
+                          index: 2) {
+            // الفارغ يُنشأ بالعنوان الافتراضي — فيظهر هو كنص إرشادي
+            DSComposerField(icon: "textformat",
+                            label: L10n.t("عنوان التقرير", "Report title"),
+                            placeholder: "تقرير عائلة المحمدعلي",
+                            text: $customTitle,
+                            tint: pageTint)
+
+            branchFilterRow
         }
     }
 
-    private var exportSection: some View {
-        DSCard {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                Text("التصدير")
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-
-                Text("النطاق: \(selectedCount) عضو")
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-
-                DSPrimaryButton(L10n.t("إنشاء تقرير PDF", "Generate PDF Report"), icon: "doc.richtext.fill", isLoading: isGenerating) {
-                    Task { await generatePDF() }
-                }
-                .disabled(isGenerating || filteredMembers.isEmpty || ageRangeInvalid)
-            }
-        }
-    }
-
+    /// حصر التقرير على فرع: صف يفتح مربّع الفروع، وبعد الاختيار اسم الفرع وعدده + «تغيير» و«إزالة»
     private var branchFilterRow: some View {
         Group {
             if let m = branchRootMember {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "tree.fill")
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(selectedReport.tint)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("فرع: \(m.displayFullName)")
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(selectedReport.tint)
-                            .lineLimit(1)
-                        Text("\(descendantIds(of: m.id).count) عضو في الفرع")
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    Spacer()
-                    Button { branchPickerOpen = true } label: {
-                        Text("تغيير")
-                            .font(DS.Font.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(selectedReport.tint)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(selectedReport.tint.opacity(0.12)))
-                    }
-                    Button {
-                        branchRootId = nil
-                        displayLimit = 20
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(DS.Color.error)
+                let count = descendantIds(of: m.id).count
+                SysRow(icon: "tree.fill", tint: pageTint,
+                       title: L10n.t("فرع: \(m.displayFullName)", "Branch: \(m.displayFullName)"),
+                       subtitle: L10n.t("\(count) عضو في الفرع", "\(count) members in branch")) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        toolButton(title: L10n.t("تغيير", "Change"), icon: nil, tint: pageTint) {
+                            branchPickerOpen = true
+                        }
+                        Button {
+                            branchRootId = nil
+                            displayLimit = 20
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(DS.Color.error)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, -6)
+                        .accessibilityLabel(L10n.t("إزالة الفرع", "Remove branch"))
                     }
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(selectedReport.tint.opacity(0.08))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(selectedReport.tint.opacity(0.2), lineWidth: 1)
-                )
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(pageTint.opacity(0.4), lineWidth: 1.2))
             } else {
-                Button { branchPickerOpen = true } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "tree")
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                        Text("حصر على فرع معيّن")
-                            .font(DS.Font.caption1)
-                            .fontWeight(.semibold)
-                        Spacer()
-                        Image(systemName: "chevron.forward")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .opacity(0.5)
+                Button {
+                    branchPickerOpen = true
+                } label: {
+                    SysRow(icon: "tree", tint: DS.Color.textSecondary,
+                           title: L10n.t("حصر على فرع معيّن", "Filter by branch"),
+                           subtitle: L10n.t("كل الفروع", "All branches")) {
+                        SysChevron()
                     }
-                    .foregroundColor(DS.Color.textSecondary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.surface)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                    )
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(DSScaleButtonStyle())
             }
         }
     }
 
-    private func reportQuickChip(_ report: ReportType) -> some View {
-        let selected = highlightedReport == report
-        return Button {
-            withAnimation(DS.Anim.snappy) {
-                highlightedReport = report
-                selectedReport = report
-                selectedMemberIds.removeAll()
-                displayLimit = 20
-            }
-        } label: {
-            VStack(spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: report.icon)
-                    Text(report.label)
-                    if selected {
-                        Spacer(minLength: 0)
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                    }
+    // MARK: - الحقول
+
+    private var fieldsSection: some View {
+        DSComposerSection(title: L10n.t("الحقول", "Fields"),
+                          icon: "list.bullet.rectangle",
+                          tint: pageTint,
+                          trailing: L10n.t("\(selectedFields.count) مختارة", "\(selectedFields.count) selected"),
+                          index: 3) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: DS.Spacing.sm)],
+                      alignment: .leading,
+                      spacing: DS.Spacing.xs) {
+                ForEach(ReportField.allCases) { field in
+                    fieldChip(field)
                 }
-                .font(DS.Font.scaled(12, weight: .bold))
-                .frame(maxWidth: .infinity)
             }
-            .foregroundColor(selected ? DS.Color.textOnPrimary : report.tint)
-            .frame(maxWidth: .infinity, minHeight: 52)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 4)
-            .background(selected ? report.tint : report.tint.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(selected ? report.tint.opacity(0.95) : report.tint.opacity(0.35), lineWidth: selected ? 2 : 1.2)
-            )
-            .shadow(color: report.tint.opacity(selected ? 0.28 : 0.08), radius: selected ? 10 : 3, y: 3)
         }
-        .buttonStyle(.plain)
     }
 
-    private func memberRow(member: FamilyMember) -> some View {
+    /// حقل يُضاف للتقرير أو يُزال (يبقى حقل واحد على الأقل) — المختار بلون الصفحة وعلامة ✓
+    private func fieldChip(_ field: ReportField) -> some View {
+        let active = selectedFields.contains(field)
+        return Button {
+            withAnimation(reduceMotion ? nil : DS.Anim.quick) {
+                if active {
+                    if selectedFields.count > 1 {
+                        selectedFields.remove(field)
+                    }
+                } else {
+                    selectedFields.insert(field)
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: active ? "checkmark.circle.fill" : field.icon)
+                    .font(.system(size: 11.5, weight: .bold))
+                    .foregroundColor(active ? pageTint : DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+                Text(field.title)
+                    .font(DS.Font.plex(12, weight: .bold))
+                    .foregroundColor(active ? DS.Color.fieldLabel : DS.Color.fieldValue)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(active ? pageTint.opacity(0.12) : DS.Color.background))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(active ? pageTint.opacity(0.5) : DS.Color.textTertiary.opacity(0.15),
+                              lineWidth: active ? 1.5 : 1))
+            .padding(.vertical, 2)   // مساحة ضغط ٤٤ نقطة
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(field.title)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    // MARK: - نتائج التقرير
+
+    private func resultsSection(members: [FamilyMember]) -> some View {
+        DSComposerSection(title: L10n.t("نتائج التقرير", "Report results"),
+                          icon: selectedReport.icon,
+                          tint: pageTint,
+                          trailing: resultsTrailing(members: members),
+                          index: 4) {
+            resultsTools(members: members)
+
+            LazyVStack(spacing: DS.Spacing.sm) {
+                ForEach(visibleMembers(of: members)) { member in
+                    memberRow(member)
+                }
+            }
+
+            if displayLimit < members.count {
+                loadMoreButton(remaining: members.count - displayLimit)
+            }
+        }
+    }
+
+    /// «٢٥ عضو» — ومع التحديد «٣ محدّد · ٢٥ عضو»
+    private func resultsTrailing(members: [FamilyMember]) -> String {
+        let total = members.count
+        guard !selectedMemberIds.isEmpty else { return L10n.t("\(total) عضو", "\(total) members") }
+        let picked = selectedCount(in: members)
+        return L10n.t("\(picked) محدّد · \(total) عضو", "\(picked) selected · \(total) members")
+    }
+
+    /// تحديد الكل · إلغاء التحديد · إعادة ضبط (مع تصفية مفعّلة) — نفس الأزرار السابقة
+    private func resultsTools(members: [FamilyMember]) -> some View {
+        HStack(spacing: 6) {
+            toolButton(title: L10n.t("تحديد الكل", "Select all"), icon: "checkmark.circle.fill",
+                       tint: DS.Color.primary) {
+                selectedMemberIds = Set(members.map(\.id))
+            }
+
+            toolButton(title: L10n.t("إلغاء التحديد", "Clear selection"), icon: "xmark.circle.fill",
+                       tint: DS.Color.error) {
+                selectedMemberIds.removeAll()
+            }
+
+            if activeFilterCount > 0 {
+                toolButton(title: L10n.t("إعادة ضبط", "Reset"), icon: "arrow.counterclockwise",
+                           tint: pageTint) {
+                    resetFilters()
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// كبسولة إجراء صغيرة — مساحة ضغط ٤٤ نقطة والشكل كما هو
+    private func toolButton(title: String, icon: String?, tint: Color,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .bold))
+                        .accessibilityHidden(true)
+                }
+                Text(title)
+                    .font(DS.Font.plex(12, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundColor(tint)
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .frame(height: 30)
+            .background(tint.opacity(0.10), in: Capsule())
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+            .padding(.vertical, -7)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    /// صف عضو بإطار صفوف المربّعات: الصورة + الاسم (وورقة للمتوفى) + العمر/الهاتف كما كانت
+    /// + دائرة التحديد. الضغط يحدّده للتقرير أو يلغيه — والمحدّد بإطار كحلي أوضح.
+    private func memberRow(_ member: FamilyMember) -> some View {
         let selected = selectedMemberIds.contains(member.id)
         let phone = normalizedPhone(for: member)
+        let deceased = member.isDeceased == true
+        let age: Int? = needsAgeFilter
+            ? ageForMember(member).flatMap { $0 > 0 ? $0 : nil }
+            : nil
+        let missingPhone = phone.isEmpty && selectedReport == .missingPhone
 
-        return HStack(spacing: DS.Spacing.md) {
-            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                .font(DS.Font.scaled(20))
-                .foregroundStyle(
-                    selected ? AnyShapeStyle(DS.Color.gradientPrimary) : AnyShapeStyle(DS.Color.textTertiary)
-                )
+        return Button {
+            toggleSelection(member.id)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                DSMemberAvatar(name: member.fullName,
+                               avatarUrl: member.avatarUrl,
+                               size: 36,
+                               roleColor: deceased ? DS.Color.textTertiary : member.roleColor)
 
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                HStack(spacing: DS.Spacing.xs) {
-                    Text(member.displayFullName)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-
-                    if member.isDeceased == true {
-                        Image(systemName: "leaf.fill")
-                            .font(DS.Font.scaled(11))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
-
-                HStack(spacing: DS.Spacing.sm) {
-                    if selectedReport == .age || selectedReport == .phone {
-                        if let age = ageForMember(member), age > 0 {
-                            detailBadge(icon: "calendar", text: "\(age) سنة")
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 4) {
+                        Text(member.displayFullName)
+                            .font(DS.Font.plex(13.5, weight: .bold))
+                            .foregroundColor(DS.Color.fieldLabel)
+                            .lineLimit(1)
+                        if deceased {
+                            Image(systemName: "leaf.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(DS.Color.textTertiary)
                         }
                     }
 
-                    if !phone.isEmpty {
-                        detailBadge(icon: "phone.fill", text: KuwaitPhone.display(phone))
-                    } else if selectedReport == .missingPhone {
-                        detailBadge(icon: "exclamationmark.triangle.fill", text: "رقم ناقص", tint: DS.Color.warning)
+                    if age != nil || !phone.isEmpty || missingPhone {
+                        HStack(spacing: DS.Spacing.sm) {
+                            if let age {
+                                detailText(icon: "calendar", text: L10n.t("\(age) سنة", "\(age) yrs"))
+                            }
+                            if !phone.isEmpty {
+                                detailText(icon: "phone.fill", text: KuwaitPhone.display(phone))
+                            } else if missingPhone {
+                                SysStatusChip(text: L10n.t("رقم ناقص", "Missing number"),
+                                              icon: "exclamationmark.triangle.fill",
+                                              tint: DS.Color.warning)
+                            }
+                        }
                     }
                 }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textTertiary.opacity(0.7))
             }
-
-            Spacer()
-
-            Image(systemName: "chevron.forward")
-                .font(DS.Font.scaled(12, weight: .bold))
-                .foregroundColor(selected ? selectedReport.tint : DS.Color.textTertiary)
-        }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(selected ? selectedReport.tint.opacity(0.08) : DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(selected ? selectedReport.tint.opacity(0.35) : Color.gray.opacity(0.12), lineWidth: 1)
-        )
-    }
-
-    private func detailBadge(icon: String, text: String, tint: Color = DS.Color.textSecondary) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(11))
-            Text(text)
-                .font(DS.Font.caption2)
-        }
-        .foregroundColor(tint)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(tint.opacity(0.08))
-        .clipShape(Capsule())
-    }
-
-    private func miniActionButton(title: String, icon: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(11))
-                Text(title)
-                    .font(DS.Font.scaled(11, weight: .bold))
+            .frame(minHeight: 36)
+            .dsRowBox()
+            .overlay {
+                if selected {
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .strokeBorder(DS.Color.primary.opacity(0.55), lineWidth: 1.5)
+                }
             }
-            .foregroundColor(tint)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(tint.opacity(0.1))
-            .clipShape(Capsule())
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(rowAccessibilityLabel(member, phone: phone, age: age, missingPhone: missingPhone))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func detailText(icon: String, text: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 9.5, weight: .semibold))
+            Text(text)
+                .font(DS.Font.plex(12))
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .foregroundColor(DS.Color.fieldValue)
+    }
+
+    private func rowAccessibilityLabel(_ member: FamilyMember, phone: String, age: Int?,
+                                       missingPhone: Bool) -> String {
+        var parts = [member.displayFullName]
+        if member.isDeceased == true { parts.append(L10n.t("متوفى", "Deceased")) }
+        if let age { parts.append(L10n.t("\(age) سنة", "\(age) years")) }
+        if !phone.isEmpty {
+            parts.append(KuwaitPhone.display(phone))
+        } else if missingPhone {
+            parts.append(L10n.t("رقم ناقص", "Missing number"))
+        }
+        return parts.joined(separator: "، ")
+    }
+
+    private func loadMoreButton(remaining: Int) -> some View {
+        Button {
+            displayLimit += 20
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 12.5, weight: .bold))
+                    .accessibilityHidden(true)
+                Text(L10n.t("عرض المزيد (\(remaining) متبقي)", "Show more (\(remaining) remaining)"))
+                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .monospacedDigit()
+            }
+            .foregroundColor(pageTint)
+            .padding(.horizontal, DS.Spacing.lg)
+            .frame(minHeight: 40)
+            .background(Capsule().fill(pageTint.opacity(0.10)))
+            .overlay(Capsule().strokeBorder(pageTint.opacity(0.22), lineWidth: 1))
+            .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+    }
+
+    /// لا أحد يطابق — ومع تصفية مفعّلة «إعادة ضبط» (نفس زر أدوات النتائج)
+    private var noResultsCard: some View {
+        let filtered = activeFilterCount > 0
+        let reset: (() -> Void)? = filtered ? { resetFilters() } : nil
+        return SysStateCard(icon: "person.2.slash",
+                            title: L10n.t("لا يوجد أعضاء", "No members"),
+                            hint: filtered
+                                ? L10n.t("لا أحد يطابق التصفية الحالية", "No one matches the current filters")
+                                : nil,
+                            tint: DS.Color.textTertiary,
+                            actionTitle: filtered ? L10n.t("إعادة ضبط", "Reset") : nil,
+                            actionIcon: "arrow.counterclockwise",
+                            action: reset)
+            .dsStaggerIn(4)
+    }
+
+    // MARK: - التصدير
+
+    /// شريط سفلي ثابت: «إنشاء تقرير PDF» بالكحلي الموحّد (يمين) + النطاق (يسار) — نفس شرط التعطيل
+    private func exportBar(members: [FamilyMember]) -> some View {
+        let scope = selectedCount(in: members)
+        return HStack(spacing: DS.Spacing.md) {
+            SysActionButton(title: L10n.t("إنشاء تقرير PDF", "Generate PDF Report"),
+                            icon: "doc.richtext.fill",
+                            isBusy: isGenerating,
+                            enabled: !(isGenerating || members.isEmpty || ageRangeInvalid)) {
+                Task { await generatePDF() }
+            }
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(selectedMemberIds.isEmpty
+                     ? L10n.t("النطاق: الكل", "Scope: all")
+                     : L10n.t("النطاق: المحدّدون", "Scope: selected"))
+                    .font(DS.Font.plex(10.5, weight: .semibold))
+                    .foregroundColor(DS.Color.fieldValue)
+                Text(L10n.t("\(scope) عضو", "\(scope) members"))
+                    .font(DS.Font.plex(15, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .monospacedDigit()
+            }
+            .fixedSize()
+            .accessibilityElement(children: .combine)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.sm)
+        .dsGlass(Rectangle())
+        .overlay(Divider(), alignment: .top)
+    }
+
+    // متى نظهر نطاق العمر — ومتى نطبّقه (كان يظهر مع حقل «العمر» ولا يصفّي شيئاً: نوع التقرير ثابت «الأسماء»)
+    private var needsAgeFilter: Bool {
+        selectedReport == .age || selectedReport == .phone || selectedFields.contains(.age)
     }
 
     private func toggleSelection(_ id: UUID) {
@@ -981,7 +1084,7 @@ struct AdminReportsView: View {
         guard !sourceMembers.isEmpty else {
             await MainActor.run {
                 isGenerating = false
-                errorMessage = "لا يوجد أعضاء لإنشاء التقرير."
+                errorMessage = L10n.t("لا يوجد أعضاء لإنشاء التقرير.", "No members to include in the report.")
                 showErrorAlert = true
             }
             return
@@ -990,7 +1093,7 @@ struct AdminReportsView: View {
         var filters: [String] = []
         let minAgeVal = Int(minAgeText) ?? 0
         let maxAgeVal = Int(maxAgeText) ?? 0
-        if selectedReport == .age || selectedReport == .phone {
+        if needsAgeFilter {
             if minAgeVal > 0 && maxAgeVal > 0 {
                 filters.append("العمر: \(minAgeVal) - \(maxAgeVal)")
             } else if minAgeVal > 0 {
@@ -1046,7 +1149,7 @@ struct AdminReportsView: View {
         } catch {
             await MainActor.run {
                 isGenerating = false
-                errorMessage = "فشل إنشاء التقرير."
+                errorMessage = L10n.t("فشل إنشاء التقرير.", "Couldn't create the report.")
                 showErrorAlert = true
             }
         }

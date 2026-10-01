@@ -475,6 +475,7 @@ class AdminRequestViewModel: ObservableObject {
             do {
                 let resolvedAction = payload?.resolvedAction
                 var notifBody = L10n.t("تم قبول طلب تعديل الشجرة", "Your tree edit request was approved")
+                var deathToAnnounce: DeathAnnouncementTarget?
 
                 if let payload = payload, let action = resolvedAction {
                     let memberName = payload.targetMemberName ?? request.member?.fullName ?? ""
@@ -523,11 +524,21 @@ class AdminRequestViewModel: ObservableObject {
                             if let dateStr = payload.deathDate, !dateStr.isEmpty {
                                 update["death_date"] = AnyEncodable(dateStr)
                             }
+                            let targetUUID = UUID(uuidString: targetId)
+                            let before = targetUUID.flatMap { self.memberVM?.member(byId: $0) }
                             try await self.supabase
                                 .from("profiles")
                                 .update(update)
                                 .eq("id", value: targetId)
                                 .execute()
+                            // وفاة جديدة (كان حياً) → مربّع «إعلان وفاة» بعد إتمام القبول
+                            if let targetUUID, before?.isDeceased != true {
+                                deathToAnnounce = DeathAnnouncementTarget(
+                                    id: targetUUID,
+                                    name: memberName.isEmpty ? (before?.fullName ?? "") : memberName,
+                                    isFemale: before?.isFemale ?? false,
+                                    deathDate: payload.deathDate)
+                            }
                             let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
                             let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"
                             notifBody = L10n.t(
@@ -714,6 +725,10 @@ class AdminRequestViewModel: ObservableObject {
                 )
 
                 Log.info("[TreeEdit] Approved: \(payload?.action ?? request.newValue ?? "")")
+                if let deathToAnnounce {
+                    let canAnnounce = self.authVM?.canApproveTreeRequests == true
+                    Task { await DeathAnnouncementPresenter.offer(deathToAnnounce, canAnnounce: canAnnounce) }
+                }
             } catch {
                 Log.error("[TreeEdit] Approve failed: \(error)")
             }
@@ -729,6 +744,46 @@ class AdminRequestViewModel: ObservableObject {
                 }
             }
         })
+    }
+
+    /// زر «قبول» في إشعار الجوال: موافقة كاملة تطبّق التعديل كما في «طلبات المراجعة».
+    /// كان يغيّر حالة الطلب إلى «مقبول» فقط فلا يُطبَّق شيء — مثل طلب وفاة يُقبل ويبقى
+    /// صاحبه «حياً» في الشجرة. الأنواع التي تحتاج مراجعة بالشاشة (تغيير الهاتف، إضافة ابن…)
+    /// تبقى معلّقة لتُعتمد من «طلبات المراجعة» بدل قبول لا يطبّق شيئاً.
+    func approveFromPush(requestId: UUID, requestType: String) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let tree = authVM?.canApproveTreeRequests == true
+        let content = authVM?.canModerateContent == true
+        do {
+            let rows: [AdminRequest] = try await supabase
+                .from("admin_requests")
+                .select("*, member:members_masked!member_id(*)")
+                .eq("id", value: requestId.uuidString)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
+                .limit(1)
+                .execute()
+                .value
+            guard let request = rows.first else { return false }
+            switch request.requestType {
+            case RequestType.treeEdit.rawValue where tree:
+                await approveTreeEditRequest(request: request)
+            case RequestType.deceasedReport.rawValue where tree:
+                await approveDeceasedRequest(request: request)
+            case RequestType.nameChange.rawValue where tree:
+                await approveNameChangeRequest(request: request)
+            case RequestType.photoSuggestion.rawValue where tree:
+                await approvePhotoSuggestion(request: request)
+            case RequestType.newsReport.rawValue where content:
+                await approveNewsReport(request: request)
+            default:
+                Log.info("[PushApprove] يبقى معلّقاً للمراجعة من الشاشة: \(request.requestType)")
+                return false
+            }
+            return true
+        } catch {
+            Log.error("[PushApprove] فشل جلب الطلب: \(error.localizedDescription)")
+            return false
+        }
     }
 
     /// تسجيل تعديل أدمن مباشر في admin_requests كسجل audit (status='approved' فوراً).
@@ -925,11 +980,21 @@ class AdminRequestViewModel: ObservableObject {
         let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             do {
+                let before = self?.memberVM?.member(byId: request.memberId)
                 try await self?.supabase
                     .from("profiles")
                     .update(["is_deceased": AnyEncodable(true)])
                     .eq("id", value: request.memberId.uuidString)
                     .execute()
+                // وفاة جديدة (كان حياً) → مربّع «إعلان وفاة»
+                if before?.isDeceased != true {
+                    let target = DeathAnnouncementTarget(
+                        id: request.memberId,
+                        name: memberName.isEmpty ? (before?.fullName ?? "") : memberName,
+                        isFemale: before?.isFemale ?? false)
+                    let canAnnounce = self?.authVM?.canApproveTreeRequests == true
+                    Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
+                }
 
                 try await self?.supabase
                     .from("admin_requests")

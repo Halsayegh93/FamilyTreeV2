@@ -4,6 +4,7 @@ import SwiftUI
 // منشورات الإدارة تلبس هوية الهيدر (درع متدرّج + خيط علوي)،
 // والتصويت بأشرطة نسب حيّة بدل أرقام صمّاء.
 struct HomeNewsCardView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.colorScheme) private var colorScheme
@@ -38,6 +39,9 @@ struct HomeNewsCardView: View {
     let onMemberTap: (FamilyMember) -> Void
     /// تاريخ النشر — ما مضى عليه أكثر من شهرين يظهر بتاريخه أسفل البطاقة يساراً
     var postDate: Date? = nil
+    /// «حظر العضو» في قائمة «…» — لغير صاحب الخبر (Guideline 1.2)
+    var canBlock: Bool = false
+    var onBlockTap: () -> Void = {}
 
     // Double-tap like animation
     @State private var showDoubleTapHeart = false
@@ -190,14 +194,19 @@ struct HomeNewsCardView: View {
                     .overlay(Capsule().stroke(DS.Color.warning.opacity(0.30), lineWidth: 1))
             }
 
-            // قائمة «…»: تعديل/حذف للإدارة وصاحب الخبر، و«إبلاغ» لغير صاحبه (طلب المالك)
-            if canDelete || canEdit || canReport {
+            // قائمة «…»: تعديل/حذف للإدارة وصاحب الخبر، و«إبلاغ» و«حظر» لغير صاحبه (طلب المالك)
+            if canDelete || canEdit || canReport || canBlock {
                 Menu {
                     if canEdit {
                         Button(action: onEditTap) { Label(L10n.t("تعديل", "Edit"), systemImage: "pencil") }
                     }
                     if canReport {
                         Button(action: onReportTap) { Label(L10n.t("إبلاغ", "Report"), systemImage: "flag") }
+                    }
+                    if canBlock {
+                        Button(role: .destructive, action: onBlockTap) {
+                            Label(L10n.t("حظر العضو", "Block Member"), systemImage: "hand.raised.fill")
+                        }
                     }
                     if canDelete {
                         Button(role: .destructive, action: onDeleteTap) { Label(L10n.t("حذف", "Delete"), systemImage: "trash") }
@@ -210,6 +219,7 @@ struct HomeNewsCardView: View {
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
                 }
+                .accessibilityLabel(L10n.t("خيارات الخبر", "Post options"))
             }
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -296,7 +306,7 @@ struct HomeNewsCardView: View {
                     .font(DS.Font.scaled(60, weight: .bold))
                     .foregroundStyle(DS.Color.textOnPrimary)
                     .dsCardShadow()
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
@@ -307,7 +317,7 @@ struct HomeNewsCardView: View {
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             if !isLiked { onLikeTap() }
-            withAnimation(DS.Anim.bouncy) {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.15) : DS.Anim.bouncy) {
                 showDoubleTapHeart = true
             }
             Task {

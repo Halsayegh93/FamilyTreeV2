@@ -1,7 +1,8 @@
 import SwiftUI
 
 // MARK: - QRCodeSheet
-// شيت عرض الرمز التعريفي
+// مربّع عرض الرمز التعريفي — بتصميم المربّعات الموحّد (طلب المالك):
+// رأس ملوّن + بطاقة الرمز + الماسح، و«مشاركة الرمز» كحلي يمين و«إغلاق» يسار.
 
 struct QRCodeSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
@@ -20,93 +21,35 @@ struct QRCodeSheet: View {
     }
 
     @Environment(\.verticalSizeClass) private var vSizeClass
-    /// الوضع الأفقي — نضغط المقاسات ونسمح بالتمرير
+    /// الوضع الأفقي — رمز أصغر (المربّع يتمرّر عند الحاجة)
     private var isLandscape: Bool { vSizeClass == .compact }
 
     var body: some View {
-        VStack(spacing: isLandscape ? DS.Spacing.sm : DS.Spacing.lg) {
-            // هيدر
-            HStack {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(DS.Font.scaled(28))
-                        .foregroundStyle(DS.Color.textTertiary)
-                }
-                Spacer()
-                Text(L10n.t("رمز QR", "QR Code"))
-                    .font(DS.Font.headline)
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer()
-                Image(systemName: "xmark.circle.fill")
-                    .font(DS.Font.scaled(28))
-                    .foregroundStyle(.clear)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.sm)
+        DSComposer(
+            title: L10n.t("رمز QR", "QR Code"),
+            subtitle: L10n.t("رمزك التعريفي في شجرة العائلة", "Your ID code in the family tree"),
+            icon: "qrcode",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("مشاركة الرمز", "Share Code"),
+            actionIcon: "square.and.arrow.up",
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: qrImage != nil,
+            onSubmit: { showShareSheet = true },
+            onCancel: { dismiss() }
+        ) {
+            codeSection
 
+            // زر فتح الماسح
+            scanButton
+                .dsStaggerIn(1)
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        // المشاركة (وفيها حفظ الصورة) — ورقة النظام كما كانت
+        .sheet(isPresented: $showShareSheet) {
             if let qrImage {
-                // الباركود — أصغر في الوضع الأفقي حتى يظهر كل المحتوى
-                Image(uiImage: qrImage)
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: isLandscape ? 130 : 200, height: isLandscape ? 130 : 200)
-
-                // الاسم
-                Text(lineage)
-                    .font(DS.Font.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                // زر فتح الماسح
-                Button {
-                    showScanner = true
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "camera.viewfinder")
-                            .font(DS.Font.scaled(14, weight: .semibold))
-                        Text(L10n.t("امسح رمز QR لمعرفة صلة القرابة", "Scan QR to discover kinship"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.primary.opacity(0.08))
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(DSScaleButtonStyle())
-
-                // زر المشاركة
-                Button {
-                    showShareSheet = true
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(DS.Font.scaled(15, weight: .bold))
-                        Text(L10n.t("مشاركة الرمز", "Share Code"))
-                            .font(DS.Font.calloutBold)
-                    }
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.gradientPrimary)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                }
-                .buttonStyle(DSScaleButtonStyle())
-                .padding(.horizontal, DS.Spacing.xl)
-                .sheet(isPresented: $showShareSheet) {
-                    ShareSheet(items: [qrImage, lineage])
-                }
-            } else {
-                ProgressView()
-                    .tint(DS.Color.primary)
+                ShareSheet(items: [qrImage, lineage])
             }
         }
-        .padding(.bottom, isLandscape ? DS.Spacing.md : DS.Spacing.xl)
-        .modifier(LandscapeScrollWrapper(isLandscape: isLandscape))
         .fullScreenCover(isPresented: $showScanner) {
             QRScannerView(selectedTab: $selectedTab)
         }
@@ -120,6 +63,70 @@ struct QRCodeSheet: View {
             }.value
             qrImage = image
         }
+    }
+
+    /// الرمز على بطاقة بيضاء (يُقرأ في الوضع الداكن أيضاً) + الاسم تحته
+    private var codeSection: some View {
+        let side: CGFloat = isLandscape ? 130 : 200
+        return DSComposerSection(title: L10n.t("الرمز التعريفي", "ID Code"),
+                                 icon: "qrcode",
+                                 tint: DS.Color.primary,
+                                 index: 0) {
+            VStack(spacing: DS.Spacing.md) {
+                ZStack {
+                    if let qrImage {
+                        // الباركود — أصغر في الوضع الأفقي حتى يظهر كل المحتوى
+                        Image(uiImage: qrImage)
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            // القارئ الصوتي: صورة الرمز بلا اسم كانت تُقرأ «صورة» فقط
+                            .accessibilityLabel(L10n.t("رمز QR الخاص بك", "Your QR code"))
+                    } else {
+                        ProgressView()
+                            .tint(DS.Color.primary)
+                    }
+                }
+                .frame(width: side, height: side)
+                .padding(DS.Spacing.md)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(Color.white))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+
+                // الاسم
+                Text(lineage)
+                    .font(DS.Font.plex(15, weight: .bold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.Spacing.xs)
+        }
+    }
+
+    /// فتح الماسح — لمعرفة صلة القرابة من رمز فرد آخر
+    private var scanButton: some View {
+        Button {
+            showScanner = true
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "camera.viewfinder", tint: DS.Color.primary)
+                    .accessibilityHidden(true)   // زخرفة
+                Text(L10n.t("امسح رمز QR لمعرفة صلة القرابة", "Scan QR to discover kinship"))
+                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(DS.Color.textTertiary)
+                    .accessibilityHidden(true)   // زخرفة
+            }
+            .dsRowBox()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 }
 

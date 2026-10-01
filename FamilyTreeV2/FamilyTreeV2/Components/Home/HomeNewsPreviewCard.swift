@@ -11,16 +11,27 @@ import SwiftUI
 struct HomeNewsPreviewCard: View {
     @EnvironmentObject private var newsVM: NewsViewModel
     @EnvironmentObject private var memberVM: MemberViewModel
+    /// أخبار من حظرهم المستخدم لا تظهر في المعاينة (Guideline 1.2)
+    @ObservedObject private var blockedStore = BlockedMembersStore.shared
 
     /// يُستدعى عند الضغط على البطاقة لفتح صفحة الأخبار
     let onTap: () -> Void
+
+    /// الأخبار بلا منشورات المحظورين (منشور الإدارة بلا كاتب لا يُخفى)
+    private var visibleNews: [NewsPost] {
+        guard !blockedStore.entries.isEmpty else { return newsVM.allNews }
+        return newsVM.allNews.filter { news in
+            guard let authorId = news.author_id else { return true }
+            return !blockedStore.isBlocked(id: authorId, name: news.author_name)
+        }
+    }
 
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 header
                 content
-                if newsVM.allNews.count > 3 { showAllButton }
+                if visibleNews.count > 3 { showAllButton }
             }
             .padding(DS.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -70,7 +81,7 @@ struct HomeNewsPreviewCard: View {
 
     /// عدد الأخبار المنشورة اليوم
     private var todayCount: Int {
-        newsVM.allNews.filter { Calendar.current.isDateInToday($0.timestamp) }.count
+        visibleNews.filter { Calendar.current.isDateInToday($0.timestamp) }.count
     }
 
     private var todayBadge: some View {
@@ -93,7 +104,7 @@ struct HomeNewsPreviewCard: View {
                 }
             }
             .padding(.vertical, DS.Spacing.sm)
-        } else if newsVM.allNews.isEmpty {
+        } else if visibleNews.isEmpty {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "newspaper")
                     .font(DS.Font.scaled(18))
@@ -134,7 +145,7 @@ struct HomeNewsPreviewCard: View {
 
     /// أحدث مناسبة خلال آخر 30 يوماً — إن وُجدت
     private var latestOccasion: NewsPost? {
-        newsVM.allNews.first {
+        visibleNews.first {
             Self.occasionTypes.contains($0.type)
                 && HomeDates.isWithinLastDays($0.timestamp, days: 30)
         }
@@ -143,7 +154,7 @@ struct HomeNewsPreviewCard: View {
     /// أحدث الأخبار للمعاينة، بلا تكرار المناسبة المعروضة أعلاه
     private var previewPosts: [NewsPost] {
         let excluded = latestOccasion?.id
-        return Array(newsVM.allNews.filter { $0.id != excluded }.prefix(latestOccasion == nil ? 3 : 2))
+        return Array(visibleNews.filter { $0.id != excluded }.prefix(latestOccasion == nil ? 3 : 2))
     }
 
     private var showAllButton: some View {
