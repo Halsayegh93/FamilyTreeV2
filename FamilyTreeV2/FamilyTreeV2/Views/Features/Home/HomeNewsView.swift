@@ -43,6 +43,9 @@ struct HomeNewsView: View {
     @State private var appeared = false
     /// دخول بطاقات صفحة الأخبار — يُصفَّر قبل كل فتح للصفحة فتتوالى البطاقات مع كل دخول
     @State private var newsAppeared = false
+    /// خبر ضُغط عليه في مربّع الرئيسية — تنزل إليه صفحة الأخبار وتبرزه لحظة (طلب المالك)
+    @State private var focusNewsId: UUID?
+    @State private var highlightedNewsId: UUID?
 
     private enum HomeSubPage: Hashable {
         case archive, projects, contact, news
@@ -205,14 +208,20 @@ struct HomeNewsView: View {
         ZStack {
             VStack(spacing: 0) {
                 // شريط التصنيفات والبحث أُزيل (طلب المالك) — القائمة مباشرة
-                ScrollView(showsIndicators: false) {
-                    newsFeedSection
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
-                        // بطاقات الأخبار تتوالى مع دخول الصفحة (نمط الأخبار والديوانيات)
-                        .onAppear { newsAppeared = true }
+                ScrollViewReader { proxy in
+                    ScrollView(showsIndicators: false) {
+                        newsFeedSection
+                            .padding(.top, DS.Spacing.sm)
+                            .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
+                            // بطاقات الأخبار تتوالى مع دخول الصفحة (نمط الأخبار والديوانيات)
+                            .onAppear {
+                                newsAppeared = true
+                                scrollToFocusedNews(proxy)
+                            }
+                    }
+                    .refreshable { await refreshNews(notifyIfNew: true, force: true) }
+                    .onChange(of: focusNewsId) { _ in scrollToFocusedNews(proxy) }
                 }
-                .refreshable { await refreshNews(notifyIfNew: true, force: true) }
             }
 
             if authVM.currentUser?.role != .pending {
@@ -242,8 +251,8 @@ struct HomeNewsView: View {
         .transaction { t in
             if showingAddNews { t.disablesAnimations = true }
         }
-        // التعليقات مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
-        .dsTallBox(item: $selectedNewsForComments) { news in   // محادثة — مربّع طويل (توصية أبل)
+        // التعليقات نصف الشاشة من الأسفل بزر إغلاق أعلاه (طلب المالك ٢٠٢٦-١٠-٠١)
+        .dsHalfBox(item: $selectedNewsForComments) { news in
             NewsCommentsSheet(news: news)
         }
         .dsCenterBox(item: $postToEdit) { news in
@@ -742,13 +751,44 @@ struct HomeNewsView: View {
     /// مربع الأخبار — بنية مستقلة (HomeNewsPreviewCard) وليست جسماً داخل هذه
     /// الصفحة، حتى يبقى عمق نوع الواجهة منخفضاً.
     private var newsBentoCard: some View {
-        HomeNewsPreviewCard {
-            // تصفير دخول بطاقات الصفحة قبل فتحها (الصفحة غير ظاهرة بعد) — فتتوالى مع كل فتح
-            if activeSubPage != .news { newsAppeared = false }
-            activeSubPage = .news
-        }
+        HomeNewsPreviewCard(
+            onTap: { openNewsPage() },
+            onOpenNews: { id in
+                focusNewsId = id
+                openNewsPage()
+            }
+        )
         // آخر بطاقات الرئيسية دخولاً
         .dsCardCascade(6, appeared: appeared)
+    }
+
+    private func openNewsPage() {
+        // تصفير دخول بطاقات الصفحة قبل فتحها (الصفحة غير ظاهرة بعد) — فتتوالى مع كل فتح
+        if activeSubPage != .news { newsAppeared = false }
+        activeSubPage = .news
+    }
+
+    /// ينزل للخبر المختار من مربّع الرئيسية بعد دخول البطاقات، ويبرزه لحظة
+    private func scrollToFocusedNews(_ proxy: ScrollViewProxy) {
+        guard let id = focusNewsId else { return }
+        focusNewsId = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            withAnimation(DS.Anim.smooth) { proxy.scrollTo(id, anchor: .top) }
+            withAnimation(.easeOut(duration: 0.25)) { highlightedNewsId = id }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                withAnimation(.easeOut(duration: 0.6)) {
+                    if highlightedNewsId == id { highlightedNewsId = nil }
+                }
+            }
+        }
+    }
+
+    /// إطار يبرز الخبر المفتوح من الرئيسية
+    private func focusOutline(for news: NewsPost) -> some View {
+        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(DS.Color.primary, lineWidth: 2)
+            .opacity(highlightedNewsId == news.id ? 1 : 0)
+            .allowsHitTesting(false)
     }
 
     // MARK: - News Feed Section
@@ -885,6 +925,7 @@ struct HomeNewsView: View {
                                         onDelete: { postToDelete = news },
                                         onReport: { postToReport = news }
                                     )
+                            .overlay(focusOutline(for: news))
                             .dsCardCascade(index, appeared: newsAppeared)
                     }
                 }
@@ -901,6 +942,7 @@ struct HomeNewsView: View {
                                 onDelete: { postToDelete = news },
                                 onReport: { postToReport = news }
                             )
+                            .overlay(focusOutline(for: news))
                             // أول ٧ بطاقات تتوالى مع دخول الصفحة، وما يُبنى بالتمرير يظهر مباشرة
                             .dsCardCascade(index, appeared: newsAppeared)
                     }

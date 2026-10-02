@@ -129,7 +129,7 @@ struct ProfileView: View {
                                             .padding(.top, DS.Spacing.md)
                                             .dsCardCascade(0, appeared: appeared)
 
-                                        // Personal Info section
+                                        // معلوماتي — وفيه صلة القرابة (طلب المالك ٢٠٢٦-١٠-٠٢)
                                         personalInfoSection(user: currentUser)
                                             .dsCardCascade(1, appeared: appeared)
 
@@ -438,64 +438,24 @@ struct ProfileView: View {
         let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
         return DSCard(padding: 0) {
-            // هيدر مخصص مع أزرار QR
-            VStack(spacing: 0) {
+            // «معلوماتي» — عنوان الأقسام الموحّد، وزرّا الرمز (للقرابة) بجانبه (طلب المالك ٢٠٢٦-١٠-٠٢)
+            HStack(spacing: DS.Spacing.sm) {
+                DSSectionHeader(
+                    title: L10n.t("معلوماتي", "My info"),
+                    icon: "person.text.rectangle.fill",
+                    iconColor: DS.Color.primary
+                )
                 HStack(spacing: DS.Spacing.sm) {
-                    // عنوان القسم
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "info.circle.fill")
-                            .font(DS.Font.scaled(12, weight: .bold))
-                            .foregroundColor(DS.Color.textSecondary)
-                        Text(L10n.t("المعلومات الشخصية", "Personal Info"))
-                            .font(DS.Font.scaled(13, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs + 2)
-                    .background(DS.Color.textSecondary.opacity(0.08))
-                    .clipShape(Capsule())
-
-                    Spacer()
-
-                    // زر مسح QR
-                    Button(action: { showQRScanner = true }) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "camera.viewfinder")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                            Text(L10n.t("مسح", "Scan"))
-                                .font(DS.Font.scaled(11, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.accent)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.accent.opacity(0.1))
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityLabel(L10n.t("مسح رمز QR", "Scan QR Code"))
-
-                    // زر عرض QR
-                    Button(action: { showQRCode = true }) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "qrcode")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                            Text(L10n.t("رمز QR", "QR Code"))
-                                .font(DS.Font.scaled(11, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.secondary)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.secondary.opacity(0.1))
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityLabel(L10n.t("عرض رمز QR", "Show QR Code"))
+                    qrCapsule(icon: "camera.viewfinder", title: L10n.t("مسح رمز", "Scan"),
+                              tint: DS.Color.accent) { showQRScanner = true }
+                        .accessibilityLabel(L10n.t("مسح رمز QR", "Scan QR Code"))
+                    qrCapsule(icon: "qrcode", title: L10n.t("رمزي", "My code"),
+                              tint: DS.Color.secondary) { showQRCode = true }
+                        .accessibilityLabel(L10n.t("عرض رمز QR", "Show QR Code"))
                 }
-                .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.sm)
-
-                DSDivider()
+                .padding(.trailing, DS.Spacing.md)
             }
 
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
@@ -506,6 +466,29 @@ struct ProfileView: View {
             .padding(DS.Spacing.md)
         }
         .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    /// زر كبسولة صغير — نفس شكل زرّي الرمز القديمين
+    private func qrCapsule(icon: String, title: String, tint: Color,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: icon)
+                    .font(DS.Font.scaled(11, weight: .bold))
+                Text(title)
+                    .font(DS.Font.scaled(11, weight: .bold))
+            }
+            .foregroundColor(tint)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xs)
+            .background(tint.opacity(0.1))
+            .clipShape(Capsule())
+            // مساحة ضغط مريحة دون تغيير حجم الكبسولة
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .padding(.vertical, -8)
+        }
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     private struct InfoItem {
@@ -1110,7 +1093,7 @@ struct ProfileView: View {
                         DSFieldIcon(name: "eye.slash.fill", tint: DS.Color.accent)
                             .accessibilityHidden(true)
                         Text(L10n.t("إخفاؤها من الشجرة", "Hide from the tree"))
-                            .font(DS.Font.plex(13.5, weight: .bold))
+                            .dsFieldFont(13.5, weight: .bold)
                             .foregroundColor(DS.Color.fieldLabel)
                             .accessibilityHidden(true)   // يُقرأ اسماً للمفتاح نفسه
                         Spacer(minLength: DS.Spacing.sm)
@@ -1288,7 +1271,7 @@ struct ProfileView: View {
                                 HStack(spacing: DS.Spacing.sm) {
                                     wifePickerAvatar(m)
                                     Text(shownName)
-                                        .font(DS.Font.plex(14, weight: .semibold))
+                                        .dsFieldFont(14, weight: .semibold)
                                         .foregroundColor(DS.Color.fieldValue)
                                         .multilineTextAlignment(.leading)
                                     Spacer(minLength: 0)
@@ -1317,7 +1300,7 @@ struct ProfileView: View {
                 .foregroundColor(DS.Color.textTertiary)
                 .accessibilityHidden(true)   // زخرفة
             Text(title)
-                .font(DS.Font.plex(14, weight: .bold))
+                .dsFieldFont(14, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .multilineTextAlignment(.center)
             Text(detail)
@@ -1793,7 +1776,7 @@ struct WomanMemberEditSheet: View {
                     DSFieldIcon(name: "eye.slash.fill", tint: DS.Color.textSecondary)
                         .accessibilityHidden(true)
                     Text(L10n.t("إخفاؤها من الشجرة", "Hide from tree"))
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFieldFont(13.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .accessibilityHidden(true)   // يُقرأ اسماً للمفتاح نفسه
                     Spacer(minLength: 0)

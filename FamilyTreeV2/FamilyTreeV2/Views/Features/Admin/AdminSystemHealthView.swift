@@ -19,7 +19,7 @@ struct SystemHealthSectionHeader: View {
                 .font(DS.Font.plex(19, weight: .bold))
                 .foregroundColor(DS.Color.fieldLabel)
             Text(subtitle)
-                .font(DS.Font.plex(12))
+                .dsFieldFont(12)
                 .foregroundColor(DS.Color.fieldValue)
         }
         .accessibilityElement(children: .combine)
@@ -86,14 +86,14 @@ struct SysStateCard: View {
             .accessibilityHidden(true)
 
             Text(title)
-                .font(DS.Font.plex(14.5, weight: .bold))
+                .dsFieldFont(14.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let hint {
                 Text(hint)
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -139,12 +139,12 @@ struct SysRow<Trailing: View>: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .fixedSize(horizontal: false, vertical: true)
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -219,7 +219,7 @@ struct SysSectionTitle: View {
                 .background(Circle().fill(tint.dsReadableGlyph.opacity(0.13)))
                 .accessibilityHidden(true)
             Text(title)
-                .font(DS.Font.plex(12.5, weight: .bold))
+                .dsFieldFont(12.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
             Spacer(minLength: 0)
             if let trailing {

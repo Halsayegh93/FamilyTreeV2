@@ -542,7 +542,7 @@ struct AdminReportsView: View {
             DSFieldIcon(name: "calendar", tint: DS.Color.warning)
                 .accessibilityHidden(true)
             Text(L10n.t("العمر", "Age"))
-                .font(DS.Font.plex(13.5, weight: .bold))
+                .dsFieldFont(13.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
             Spacer(minLength: DS.Spacing.xs)
@@ -576,7 +576,7 @@ struct AdminReportsView: View {
                          text: isMin ? $minAgeText : $maxAgeText)
             .keyboardType(.numberPad)
             .multilineTextAlignment(.center)
-            .font(DS.Font.plex(14.5, weight: .semibold))
+            .dsFieldFont(14.5, weight: .semibold)
             .foregroundColor(DS.Color.textPrimary)
             .monospacedDigit()
             .focused($focusedAge, equals: bound)
@@ -693,7 +693,7 @@ struct AdminReportsView: View {
                     .foregroundColor(active ? pageTint : DS.Color.textTertiary)
                     .accessibilityHidden(true)
                 Text(field.title)
-                    .font(DS.Font.plex(12, weight: .bold))
+                    .dsFieldFont(12, weight: .bold)
                     .foregroundColor(active ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -817,7 +817,7 @@ struct AdminReportsView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 4) {
                         Text(member.displayFullName)
-                            .font(DS.Font.plex(13.5, weight: .bold))
+                            .dsFieldFont(13.5, weight: .bold)
                             .foregroundColor(DS.Color.fieldLabel)
                             .lineLimit(1)
                         if deceased {

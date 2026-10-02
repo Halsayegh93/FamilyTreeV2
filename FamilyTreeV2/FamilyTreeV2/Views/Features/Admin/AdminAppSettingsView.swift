@@ -182,7 +182,7 @@ struct AdminAppSettingsView: View {
                 "لغة التطبيق لكل الأعضاء. من يغيّر لغته من «الإعدادات» تبقى لغته هو.",
                 "The app language for all members. Anyone who picks a language in Settings keeps their own."
             ))
-            .font(DS.Font.plex(11.5))
+            .dsFieldFont(11.5)
             .foregroundColor(DS.Color.fieldValue)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -365,13 +365,13 @@ struct AdminAppSettingsView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("وضع القراءة فقط", "Read-only mode"))
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t(
                     "تقدر تتصفّح الإعدادات. التعديل متاح للمالك فقط.",
                     "You can browse settings. Editing is owner-only."
                 ))
-                .font(DS.Font.plex(12))
+                .dsFieldFont(12)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -486,12 +486,12 @@ struct AdminAppSettingsView: View {
             DSFieldIcon(name: icon, tint: DS.Color.actionNavy)
                 .accessibilityHidden(true)
             Text(label)
-                .font(DS.Font.plex(12.5, weight: .semibold))
+                .dsFieldFont(12.5, weight: .semibold)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(1)
             Spacer(minLength: DS.Spacing.sm)
             Text(value)
-                .font(DS.Font.plex(13, weight: .bold))
+                .dsFieldFont(13, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .monospacedDigit()
                 .lineLimit(1)

@@ -49,13 +49,63 @@ struct DSFormCard<Content: View, Trailing: View>: View {
     }
 }
 
+// MARK: - خط الحقول داخل المربّعات بالمنتصف (طلب المالك ٢٠٢٦-١٠-٠١)
+// «بكل المربعات بالمنتصف نبي نخلي بيانات الحقول شوي اقل و قيمة الحقول ايضا»:
+// المربّع يعلن أنه مربّع (`dsInCenterBox`)، فعناوين الحقول وقيمها بداخله أصغر بنقطة.
+// الصفحات لا تتأثر — نفس أحجامها السابقة.
+
+private struct DSInCenterBoxKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// داخل مربّع بالمنتصف (الإضافة والتعديل والتفاصيل والتنبيهات)
+    var dsInCenterBox: Bool {
+        get { self[DSInCenterBoxKey.self] }
+        set { self[DSInCenterBoxKey.self] = newValue }
+    }
+}
+
+enum DSFieldFont {
+    /// كم تصغر عناوين الحقول وقيمها داخل المربّعات
+    static let boxReduction: CGFloat = 1
+}
+
+/// صناديق الحقول داخل المربّعات أصغر قليلاً أيضاً (طلب المالك: «وحتى المربعات بعد شوي»)
+enum DSFieldMetrics {
+    /// كم يقصر صندوق الحقل داخل المربّعات
+    static let boxHeightReduction: CGFloat = 4
+    /// الحشوة الرأسية لصندوق الحقل/الصف داخل المربّعات (بدل ٨)
+    static let boxVerticalPadding: CGFloat = 6
+    /// أيقونة الحقل داخل المربّعات (بدل ٣٢)
+    static let boxIconSize: CGFloat = 28
+}
+
+private struct DSFieldFontModifier: ViewModifier {
+    let size: CGFloat
+    let weight: Font.Weight
+    @Environment(\.dsInCenterBox) private var inBox
+
+    func body(content: Content) -> some View {
+        content.font(DS.Font.plex(inBox ? size - DSFieldFont.boxReduction : size, weight: weight))
+    }
+}
+
+extension View {
+    /// خط عنوان حقل أو قيمته: حجمه كما هو في الصفحات، وأصغر قليلاً داخل المربّعات بالمنتصف
+    func dsFieldFont(_ size: CGFloat, weight: Font.Weight = .regular) -> some View {
+        modifier(DSFieldFontModifier(size: size, weight: weight))
+    }
+}
+
 /// إطار المربّع الموحّد للحقول داخل البطاقات
 struct DSFieldChrome: ViewModifier {
     var minHeight: CGFloat = 46
+    @Environment(\.dsInCenterBox) private var inBox
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, DS.Spacing.md)
-            .frame(minHeight: minHeight)
+            .frame(minHeight: inBox ? minHeight - DSFieldMetrics.boxHeightReduction : minHeight)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(DS.Color.background, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
@@ -85,10 +135,10 @@ struct DSFieldBox<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label)
-                .font(DS.Font.plex(12, weight: .heavy))
+                .dsFieldFont(12, weight: .heavy)
                 .foregroundColor(DS.Color.fieldLabel)
             content()
-                .font(DS.Font.plex(14.5))
+                .dsFieldFont(14.5)
                 .foregroundColor(DS.Color.textPrimary)
                 .dsFieldChrome()
         }
@@ -104,7 +154,7 @@ struct DSToggleBox: View {
     var body: some View {
         Toggle(isOn: $isOn.animation(DS.Anim.snappy)) {
             Text(title)
-                .font(DS.Font.plex(14, weight: .medium))
+                .dsFieldFont(14, weight: .medium)
                 .foregroundColor(DS.Color.textPrimary)
         }
         .tint(tint)
@@ -117,7 +167,7 @@ struct DSFieldLabel: View {
     let text: String
     var body: some View {
         Text(text)
-            .font(DS.Font.plex(12, weight: .heavy))
+            .dsFieldFont(12, weight: .heavy)
             .foregroundColor(DS.Color.fieldLabel)
     }
 }
@@ -146,7 +196,7 @@ struct DSDateRow: View {
             Button(action: action) {
                 HStack(spacing: DS.Spacing.sm) {
                     Text(date.map(DSDateText.display) ?? L10n.t("بدون تاريخ", "No date"))
-                        .font(DS.Font.plex(14.5, weight: date == nil ? .regular : .semibold))
+                        .dsFieldFont(14.5, weight: date == nil ? .regular : .semibold)
                         .foregroundColor(date == nil ? DS.Color.textTertiary : DS.Color.textPrimary)
                     Spacer(minLength: 0)
                     Image(systemName: "pencil")
@@ -252,6 +302,7 @@ struct DSLifeDatesBox: View {
 
     /// رمادي هادئ لحالة الوفاة (طلب المالك)
     private let deceasedTint = DS.Color.textSecondary
+    @Environment(\.dsInCenterBox) private var inBox
 
     var body: some View {
         // كل حقل في مربّع منفصل (طلب المالك)
@@ -266,13 +317,13 @@ struct DSLifeDatesBox: View {
                 HStack(spacing: DS.Spacing.sm) {
                     rowIcon("heart.text.square.fill", tint: deceasedTint)
                     Text(deceasedTitle)
-                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .dsFieldFont(14.5, weight: .bold)
                         .foregroundColor(deceasedTint)
                 }
             }
             .tint(deceasedTint)
             .padding(.horizontal, DS.Spacing.md)
-            .frame(minHeight: 52)
+            .frame(minHeight: inBox ? 52 - DSFieldMetrics.boxHeightReduction : 52)
             .modifier(BoxChrome(fill: deceasedTint.opacity(isDeceased ? 0.14 : 0.07),
                                 stroke: deceasedTint.opacity(0.35)))
 
@@ -316,11 +367,11 @@ struct DSLifeDatesBox: View {
             Button { pick(title: title, has: has, date: date) } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(DS.Font.plex(12.5, weight: .bold))
+                        .dsFieldFont(12.5, weight: .bold)
                         .foregroundColor(DS.Color.textPrimary)
                     Text(has.wrappedValue ? DSDateText.display(date.wrappedValue)
                                           : L10n.t("بدون تاريخ", "No date"))
-                        .font(DS.Font.plex(14, weight: has.wrappedValue ? .semibold : .regular))
+                        .dsFieldFont(14, weight: has.wrappedValue ? .semibold : .regular)
                         .foregroundColor(has.wrappedValue ? DS.Color.textPrimary : DS.Color.textTertiary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -355,7 +406,7 @@ struct DSLifeDatesBox: View {
             .buttonStyle(DSScaleButtonStyle())
         }
         .padding(.horizontal, DS.Spacing.md)
-        .frame(minHeight: 58)
+        .frame(minHeight: inBox ? 58 - DSFieldMetrics.boxHeightReduction : 58)
     }
 
     private func pick(title: String, has: Binding<Bool>, date: Binding<Date>) {
@@ -373,6 +424,7 @@ struct DSLifeDatesBox: View {
 
 struct DSGenderPicker: View {
     @Binding var selection: String
+    @Environment(\.dsInCenterBox) private var inBox
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -395,14 +447,14 @@ struct DSGenderPicker: View {
                 Image(systemName: icon)
                     .font(DS.Font.plex(16, weight: .bold))
                 Text(title)
-                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .dsFieldFont(14.5, weight: .bold)
                 Spacer(minLength: 0)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .font(DS.Font.plex(15, weight: .semibold))
             }
             .foregroundColor(selected ? tint : DS.Color.textSecondary)
             .padding(.horizontal, DS.Spacing.md)
-            .frame(height: 50)
+            .frame(height: inBox ? 50 - DSFieldMetrics.boxHeightReduction : 50)
             .background(selected ? tint.opacity(0.12) : DS.Color.background,
                         in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(

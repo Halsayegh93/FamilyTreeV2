@@ -165,7 +165,7 @@ struct AdminPushHealthView: View {
                 .frame(width: 18)
                 .accessibilityHidden(true)
             Text(label)
-                .font(DS.Font.plex(12, weight: .semibold))
+                .dsFieldFont(12, weight: .semibold)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -234,7 +234,7 @@ struct AdminPushHealthView: View {
 
     private func relativeValue(_ date: Date?) -> some View {
         Text(formatRelative(date))
-            .font(DS.Font.plex(12.5, weight: .bold))
+            .dsFieldFont(12.5, weight: .bold)
             .foregroundColor(DS.Color.fieldLabel)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
@@ -309,11 +309,11 @@ struct AdminPushHealthView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(owner.fullName)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                 Text("\(owner.deviceName) · \(formatRelative(owner.updatedAt))")
-                    .font(DS.Font.plex(11.5))
+                    .dsFieldFont(11.5)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
             }
@@ -342,12 +342,12 @@ struct AdminPushHealthView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(member.displayFullName)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                 HStack(spacing: DS.Spacing.xs) {
                     Text(member.roleName)
-                        .font(DS.Font.plex(11.5))
+                        .dsFieldFont(11.5)
                         .foregroundColor(DS.Color.fieldValue)
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         Text("·")
@@ -385,7 +385,7 @@ struct AdminPushHealthView: View {
                 "اختبر استلام إشعار على جهازك الحالي. النتيجة تظهر فوراً.",
                 "Test push delivery to your current device. Result shows instantly."
             ))
-            .font(DS.Font.plex(12))
+            .dsFieldFont(12)
             .foregroundColor(DS.Color.fieldValue)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -412,7 +412,7 @@ struct AdminPushHealthView: View {
                 "يحذف رموز التسجيل التالفة فقط (الفاضية أو الناقصة). أجهزة الأعضاء الخاملين تبقى حتى تصلهم الإشعارات.",
                 "Removes broken (empty or truncated) tokens only. Idle members' devices are kept so they still get notifications."
             ))
-            .font(DS.Font.plex(12))
+            .dsFieldFont(12)
             .foregroundColor(DS.Color.fieldValue)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -437,7 +437,7 @@ struct AdminPushHealthView: View {
                 .foregroundColor(color)
                 .accessibilityHidden(true)
             Text(message)
-                .font(DS.Font.plex(12, weight: .semibold))
+                .dsFieldFont(12, weight: .semibold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)

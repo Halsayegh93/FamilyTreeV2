@@ -213,12 +213,12 @@ struct AdminNotificationsView: View {
                         "\(count) إشعار مجدول بانتظار الإرسال",
                         "\(count) scheduled — pending send"
                     ))
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     Text(L10n.t("تُرسل تلقائياً في موعدها", "Sent automatically on time"))
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -297,7 +297,7 @@ struct AdminNotificationsView: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("العنوان", "Title"))
-                            .font(DS.Font.plex(12, weight: .heavy))
+                            .dsFieldFont(12, weight: .heavy)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(title.isEmpty ? L10n.t("اختر عنواناً", "Choose a title") : title)
                             .font(DS.Font.plex(14.5))
@@ -329,7 +329,7 @@ struct AdminNotificationsView: View {
                         .fill(bodyFocused ? pageTint : pageTint.opacity(0.12)))
                     .accessibilityHidden(true)
                 Text(L10n.t("التفاصيل", "Details"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(bodyFocused ? pageTint : DS.Color.fieldLabel)
                 Spacer(minLength: 0)
                 Text("\(bodyText.count)/500")
@@ -350,7 +350,7 @@ struct AdminNotificationsView: View {
                 }
                 TextEditor(text: $bodyText)
                     .focused($bodyFocused)
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(DS.Color.textPrimary)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 64, maxHeight: 140)
@@ -460,7 +460,7 @@ struct AdminNotificationsView: View {
                 .foregroundColor(searchFocused ? pageTint : DS.Color.textTertiary)
                 .accessibilityHidden(true)
             TextField(L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."), text: $searchText)
-                .font(DS.Font.plex(14.5))
+                .dsFieldFont(14.5)
                 .foregroundColor(DS.Color.textPrimary)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -578,7 +578,7 @@ struct AdminNotificationsView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(member.displayFullName)
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFieldFont(13.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
 
@@ -589,7 +589,7 @@ struct AdminNotificationsView: View {
                                 .accessibilityHidden(true)
                             Text(Self.isolatedLTR(KuwaitPhone.display(phone)))
                         }
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                     }
                 }
@@ -896,10 +896,10 @@ private struct ScheduleComposerSheet: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("سيُرسل", "Sends"))
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(summaryDateText)
-                        .font(DS.Font.plex(14.5))
+                        .dsFieldFont(14.5)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -928,7 +928,7 @@ private struct ScheduleComposerSheet: View {
                                 .fill(DS.Color.warning.opacity(0.6))
                                 .frame(width: 6, height: 6)
                             Text(item.title)
-                                .font(DS.Font.plex(13))
+                                .dsFieldFont(13)
                                 .foregroundColor(DS.Color.fieldValue)
                                 .lineLimit(1)
                             Spacer(minLength: 0)
@@ -1014,13 +1014,13 @@ private struct ScheduledNotificationsSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // العنوان
                     Text(item.title)
-                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .dsFieldFont(14.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .fixedSize(horizontal: false, vertical: true)
                     // النص (إن اختلف عن العنوان)
                     if !item.body.isEmpty && item.body != item.title {
                         Text(item.body)
-                            .font(DS.Font.plex(13))
+                            .dsFieldFont(13)
                             .foregroundColor(DS.Color.fieldValue)
                             .fixedSize(horizontal: false, vertical: true)
                     }

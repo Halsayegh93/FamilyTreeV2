@@ -691,10 +691,10 @@ private struct WomanDetailSheet: View {
                 .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("صلة القرابة", "Kinship"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(text)
-                    .font(DS.Font.plex(14.5, weight: .semibold))
+                    .dsFieldFont(14.5, weight: .semibold)
                     .foregroundColor(DS.Color.fieldValue)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -798,10 +798,10 @@ private struct WomanDetailSheet: View {
                 .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .font(DS.Font.plex(14))
+                    .dsFieldFont(14)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
@@ -832,7 +832,7 @@ private struct WomanDetailSheet: View {
         let daughters = kids.filter { $0.isFemale }
         return VStack(spacing: DS.Spacing.sm) {
             Text(L10n.t("الأبناء", "Children") + " · \(kids.count)")
-                .font(DS.Font.plex(12, weight: .heavy))
+                .dsFieldFont(12, weight: .heavy)
                 .foregroundColor(DS.Color.fieldLabel)
                 .frame(maxWidth: .infinity)
             if !sons.isEmpty {
@@ -970,7 +970,7 @@ private struct WomanDetailSheet: View {
                     .frame(width: 42, height: 42)
                     .background(Circle().fill(action.color.opacity(0.14)))
                 Text(action.title)
-                    .font(DS.Font.plex(12, weight: .bold))
+                    .dsFieldFont(12, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -1154,7 +1154,7 @@ private struct WomanDetailSheet: View {
             DSFieldIcon(name: icon, tint: iconTint)
                 .accessibilityHidden(true)   // زخرفة
             Text(title)
-                .font(DS.Font.plex(13.5, weight: .bold))
+                .dsFieldFont(13.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .accessibilityHidden(true)   // يُقرأ اسماً للمفتاح نفسه
             Spacer(minLength: 0)
@@ -1174,10 +1174,10 @@ private struct WomanDetailSheet: View {
                     .accessibilityHidden(true)   // زخرفة
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("تاريخ الميلاد", "Birth date"))
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(DSDateText.display(birthDateDraft))
-                        .font(DS.Font.plex(14.5))
+                        .dsFieldFont(14.5)
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: 0)

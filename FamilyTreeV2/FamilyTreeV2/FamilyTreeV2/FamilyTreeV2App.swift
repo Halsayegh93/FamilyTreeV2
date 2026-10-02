@@ -193,10 +193,10 @@ struct FamilyTreeV2App: App {
                     pathIds.append(currentUser.id)
                     pathIds.append(member.id)
 
-                    // مهلة قصيرة حتى تجهز الشجرة قبل إبراز المسار
+                    // مهلة قصيرة حتى تجهز الواجهة — ثم تاب الشجرة يفتح ويرسم المسار
                     try? await Task.sleep(nanoseconds: 500_000_000)
                     NotificationCenter.default.post(
-                        name: .showKinshipPath,
+                        name: .requestKinshipPath,
                         object: nil,
                         userInfo: [
                             "memberId": member.id,

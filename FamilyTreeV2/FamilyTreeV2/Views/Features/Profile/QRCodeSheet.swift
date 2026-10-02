@@ -114,7 +114,7 @@ struct QRCodeSheet: View {
                 DSFieldIcon(name: "camera.viewfinder", tint: DS.Color.primary)
                     .accessibilityHidden(true)   // زخرفة
                 Text(L10n.t("امسح رمز QR لمعرفة صلة القرابة", "Scan QR to discover kinship"))
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)

@@ -188,7 +188,7 @@ struct BlockedMembersSection: View {
                 .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)

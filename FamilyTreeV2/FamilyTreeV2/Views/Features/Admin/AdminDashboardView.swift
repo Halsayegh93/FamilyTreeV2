@@ -535,7 +535,7 @@ struct AdminDashboardView: View {
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(reviews > 0 ? L10n.t("بانتظار قرارك", "Awaiting your decision")
                                          : L10n.t("لا شيء بانتظارك", "Nothing waiting"))
-                            .font(DS.Font.plex(12))
+                            .dsFieldFont(12)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: DS.Spacing.sm)
@@ -599,7 +599,7 @@ struct AdminDashboardView: View {
                         .font(DS.Font.plex(16, weight: .bold))
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(caption)
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: DS.Spacing.sm)
@@ -677,7 +677,7 @@ struct AdminDashboardView: View {
                     Text(total > 0 ? L10n.t("من \(total) من الأحياء", "Of \(total) living members")
                          : isInitialLoading ? L10n.t("جارٍ التحميل…", "Loading…")
                          : L10n.t("غير متاح الآن — اسحب للتحديث", "Unavailable — pull to refresh"))
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: 0)
@@ -696,7 +696,7 @@ struct AdminDashboardView: View {
                             Circle().fill(seg.color).frame(width: 9, height: 9)
                                 .accessibilityHidden(true)
                             Text(seg.label)
-                                .font(DS.Font.plex(12.5, weight: .semibold))
+                                .dsFieldFont(12.5, weight: .semibold)
                                 .foregroundColor(DS.Color.fieldLabel)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
@@ -781,7 +781,7 @@ struct AdminDashboardView: View {
                             .font(DS.Font.plex(16, weight: .bold))
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(L10n.t("التطبيق والأمان", "App & security"))
-                            .font(DS.Font.plex(12))
+                            .dsFieldFont(12)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: 0)
@@ -940,11 +940,11 @@ struct AdminDashboardView: View {
                     SysGradientIcon(name: guide.icon, tint: domainTint, size: 34)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(L10n.t("نطاق الصلاحيات · \(guide.title)", "Your scope · \(guide.title)"))
-                            .font(DS.Font.plex(13, weight: .bold))
+                            .dsFieldFont(13, weight: .bold)
                             .foregroundColor(DS.Color.fieldLabel)
                             .lineLimit(rowTextLines)
                         Text(guide.mandate)
-                            .font(DS.Font.plex(11.5))
+                            .dsFieldFont(11.5)
                             .foregroundColor(DS.Color.fieldValue)
                             .lineLimit(rowTextLines)
                             .minimumScaleFactor(0.85)
@@ -997,7 +997,7 @@ struct AdminDashboardView: View {
                 .padding(.top, 2)
                 .accessibilityHidden(true)
             Text(text)
-                .font(DS.Font.plex(12, weight: .medium))
+                .dsFieldFont(12, weight: .medium)
                 .foregroundColor(allowed ? DS.Color.fieldLabel : DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -1186,13 +1186,13 @@ struct AdminTile<Destination: View>: View {
             SysGradientIcon(name: icon, tint: color, size: 34)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 if let detail {
                     Text(detail)
-                        .font(DS.Font.plex(11, weight: .semibold))
+                        .dsFieldFont(11, weight: .semibold)
                         .foregroundColor(DS.Color.fieldValue)
                         .monospacedDigit()
                         .lineLimit(1)
@@ -1222,7 +1222,7 @@ struct AdminTile<Destination: View>: View {
                     }
                 }
             Text(title)
-                .font(DS.Font.plex(11.5, weight: .bold))
+                .dsFieldFont(11.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .multilineTextAlignment(.center)
                 .lineLimit(2, reservesSpace: true)

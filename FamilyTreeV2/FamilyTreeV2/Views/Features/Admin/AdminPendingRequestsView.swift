@@ -885,7 +885,7 @@ struct LinkToExistingMemberSheet: View {
                     .font(DS.Font.plex(11, weight: .semibold))
                     .foregroundColor(ring.dsReadableGlyph)
                 Text(name)
-                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .dsFieldFont(14.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -970,7 +970,7 @@ struct LinkToExistingMemberSheet: View {
                 }
                 .accessibilityHidden(true)
                 Text(member.displayFullName)
-                    .font(DS.Font.plex(14.5, weight: isSelected ? .bold : .regular))
+                    .dsFieldFont(14.5, weight: isSelected ? .bold : .regular)
                     .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
@@ -1088,7 +1088,7 @@ struct PendingMemberPhoneSheet: View {
                     // الرقم معزول باتجاه LTR — بدونه يظهر في السطر العربي «50011223 965+»
                     Text(L10n.t("الرقم الحالي: ", "Current: ")
                          + "\u{2066}" + KuwaitPhone.display(member.phoneNumber) + "\u{2069}")
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: 0)

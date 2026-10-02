@@ -316,6 +316,7 @@ struct DSComposer<Content: View>: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) { content() }
                     .environment(\.dsBoxTint, tint)      // تنسيق الألوان: ما بداخل المربّع بلونه
+                    .environment(\.dsInCenterBox, true) // حقول المربّعات أصغر قليلاً (طلب المالك)
                     .padding(.horizontal, contentPadding)
                     .padding(.top, DS.Spacing.md)
                     .padding(.bottom, DS.Spacing.sm)
@@ -778,22 +779,23 @@ struct DSComposerField: View {
     @State private var iconPop = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dsBoxTint) private var boxTint
+    @Environment(\.dsInCenterBox) private var inBox
 
     var body: some View {
         // داخل مربّع: لون الحقل = لون المربّع (تنسيق)
         let tint = self.tint.dsHarmonized(with: boxTint)
         return HStack(alignment: multiline ? .top : .center, spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: inBox ? 12 : 13, weight: .semibold))
                 .foregroundColor(focused ? .white : tint)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .frame(width: inBox ? DSFieldMetrics.boxIconSize : 32, height: inBox ? DSFieldMetrics.boxIconSize : 32)
+                .background(RoundedRectangle(cornerRadius: inBox ? 8 : 9, style: .continuous)
                     .fill(focused ? tint : tint.opacity(0.12)))
                 .scaleEffect(iconPop ? 1.08 : 1)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(label)
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(focused ? tint : DS.Color.fieldLabel)
                     Spacer(minLength: 0)
                     if let limit, focused || !text.isEmpty {
@@ -810,7 +812,7 @@ struct DSComposerField: View {
                         TextField(placeholder, text: $text)
                     }
                 }
-                .font(DS.Font.plex(14.5))
+                .dsFieldFont(14.5)
                 .foregroundColor(DS.Color.textPrimary)
                 .keyboardType(keyboard)
                 .autocorrectionDisabled(ltr && !ltrKeepsAutocorrect)
@@ -820,7 +822,7 @@ struct DSComposerField: View {
             }
         }
         .padding(.horizontal, DS.Spacing.sm + 2)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.vertical, inBox ? DSFieldMetrics.boxVerticalPadding : DS.Spacing.sm)
         .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
             .strokeBorder(focused ? tint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
@@ -881,25 +883,22 @@ struct DSFieldIcon: View {
     let name: String
     var tint: Color = DS.Color.primary
     @Environment(\.dsBoxTint) private var boxTint
+    @Environment(\.dsInCenterBox) private var inBox
     var body: some View {
         let glyph = tint.dsHarmonized(with: boxTint).dsReadableGlyph
+        let side = inBox ? DSFieldMetrics.boxIconSize : 32
         Image(systemName: name)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: inBox ? 12 : 13, weight: .semibold))
             .foregroundColor(glyph)
-            .frame(width: 32, height: 32)
-            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(glyph.opacity(0.12)))
+            .frame(width: side, height: side)
+            .background(RoundedRectangle(cornerRadius: inBox ? 8 : 9, style: .continuous).fill(glyph.opacity(0.12)))
     }
 }
 
 extension View {
     /// صف داخل قسم في صندوق بنفس إطار حقول المربّعات
     func dsRowBox() -> some View {
-        self
-            .padding(.horizontal, DS.Spacing.sm + 2)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+        modifier(DSRowBoxModifier())
     }
 }
 
@@ -1389,7 +1388,34 @@ private struct DSTallBoxStyle: ViewModifier {
     }
 }
 
+/// نصف الشاشة من الأسفل (طلب المالك ٢٠٢٦-١٠-٠١: التعليقات «نص شاشة» بزر إغلاق) — يفتح
+/// بالنصف ويُسحب للأعلى عند الحاجة، والتمرير يحرّك المحتوى لا الورقة.
+private struct DSHalfBoxStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        let styled = content
+            .background(DS.Color.background.ignoresSafeArea())
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        if #available(iOS 16.4, *) {
+            styled
+                .presentationCornerRadius(DS.Radius.xxl)
+                .presentationContentInteraction(.scrolls)
+        } else {
+            styled
+        }
+    }
+}
+
 extension View {
+    /// نصف الشاشة من الأسفل — يفتح بالنصف ويُسحب للأعلى
+    func dsHalfBox<Item: Identifiable, Box: View>(item: Binding<Item?>,
+                                                  onDismiss: (() -> Void)? = nil,
+                                                  @ViewBuilder content: @escaping (Item) -> Box) -> some View {
+        sheet(item: item, onDismiss: onDismiss) { value in
+            content(value).modifier(DSHalfBoxStyle())
+        }
+    }
+
     /// مربّع طويل من الأسفل (بدل `dsCenterBox`) للمحتوى الطويل — يُغلق بالسحب أو بزره
     func dsTallBox<Box: View>(isPresented: Binding<Bool>,
                               onDismiss: (() -> Void)? = nil,
@@ -1406,5 +1432,18 @@ extension View {
         sheet(item: item, onDismiss: onDismiss) { value in
             content(value).modifier(DSTallBoxStyle())
         }
+    }
+}
+
+/// صندوق صف داخل قسم — أقصر قليلاً داخل المربّعات بالمنتصف (طلب المالك)
+private struct DSRowBoxModifier: ViewModifier {
+    @Environment(\.dsInCenterBox) private var inBox
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, DS.Spacing.sm + 2)
+            .padding(.vertical, inBox ? DSFieldMetrics.boxVerticalPadding : DS.Spacing.sm)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
     }
 }

@@ -26,6 +26,10 @@ struct TreeTabContainer: View {
             guard !chromeAppeared else { return }
             chromeAppeared = true
         }
+        // طلب صلة القرابة يُرسم في شجرة العائلة — من تبويب النساء نرجع لها أولاً
+        .onReceive(NotificationCenter.default.publisher(for: .requestKinshipPath)) { _ in
+            if treeTab != 0 { treeTab = 0 }
+        }
     }
 }
 

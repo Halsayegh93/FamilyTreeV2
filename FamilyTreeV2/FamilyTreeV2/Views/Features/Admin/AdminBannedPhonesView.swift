@@ -236,7 +236,7 @@ struct AdminBannedPhonesView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(Self.isolatedLTR(formatPhoneDisplay(banned.phoneNumber)))
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -244,7 +244,7 @@ struct AdminBannedPhonesView: View {
 
                 if let reason = banned.reason, !reason.isEmpty {
                     Text(reason)
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -436,7 +436,7 @@ struct AddBanSheet: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("رقم الهاتف", "Phone Number"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 DSPhoneField(
                     country: $selectedPhoneCountry,

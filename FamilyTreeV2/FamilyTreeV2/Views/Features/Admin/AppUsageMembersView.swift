@@ -210,7 +210,7 @@ struct AppUsageMembersView: View {
                 DSFieldIcon(name: category.icon, tint: category.color)
                     .accessibilityHidden(true)
                 Text(category.explanation)
-                    .font(DS.Font.plex(12.5, weight: .medium))
+                    .dsFieldFont(12.5, weight: .medium)
                     .foregroundColor(DS.Color.fieldValue)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -242,11 +242,11 @@ struct AppUsageMembersView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(2)
                 Text(lastSeenText(member))
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
             }

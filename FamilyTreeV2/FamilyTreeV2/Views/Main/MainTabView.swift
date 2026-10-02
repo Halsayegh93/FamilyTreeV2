@@ -142,6 +142,17 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
             withAnimation { selectedTab = 0 }
         }
+        // صلة القرابة من أي مكان (تفاصيل العضو، الرابط، الرمز): تاب الشجرة ← شجرة العائلة ← المسار.
+        // كان الطلب يضيع خارج تاب الشجرة أو في تبويب النساء (طلب المالك ٢٠٢٦-١٠-٠٢)
+        .onReceive(NotificationCenter.default.publisher(for: .requestKinshipPath)) { note in
+            let info = note.userInfo
+            let alreadyOnTree = selectedTab == 1
+            withAnimation { selectedTab = 1 }
+            // داخل تاب الشجرة: بلا انتظار يُذكر (مثل السابق) — من تاب آخر: حتى تُبنى الشجرة
+            DispatchQueue.main.asyncAfter(deadline: .now() + (alreadyOnTree ? 0.15 : 0.6)) {
+                NotificationCenter.default.post(name: .showKinshipPath, object: nil, userInfo: info)
+            }
+        }
         }
         // الحظر والموافقة على الشروط لكل مستخدم — تُربط بالحساب الحالي
         .onAppear { refreshUserSafetyState() }
@@ -224,6 +235,8 @@ struct MainTabView: View {
 
 extension Notification.Name {
     static let didReselectTab       = Notification.Name("didReselectTab")
+    /// يعرض صلة القرابة في الشجرة من أي مكان — نفس userInfo لـ `showKinshipPath`
+    static let requestKinshipPath   = Notification.Name("requestKinshipPath")
     /// زر التحديد في هيدر الصفحة الفرعية — userInfo: ["page": "archive" | "projects"]
     static let subPageStartSelection = Notification.Name("subPageStartSelection")
     static let openAdminRequests    = Notification.Name("openAdminRequests")

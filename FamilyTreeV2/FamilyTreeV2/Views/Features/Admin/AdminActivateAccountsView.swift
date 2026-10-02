@@ -669,7 +669,7 @@ struct AdminActivateAccountsView: View {
                     "\(min(stationCursor + 1, stationPool.count)) من \(stationPool.count)",
                     "\(min(stationCursor + 1, stationPool.count)) of \(stationPool.count)"
                 ))
-                .font(DS.Font.plex(12, weight: .bold))
+                .dsFieldFont(12, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .monospacedDigit()
                 Spacer()
@@ -782,7 +782,7 @@ struct AdminActivateAccountsView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(member.displayFullName)
-                    .font(DS.Font.plex(11.5))
+                    .dsFieldFont(11.5)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -827,7 +827,7 @@ struct AdminActivateAccountsView: View {
                     .background(Circle().fill(color.opacity(disabled ? 0.06 : 0.13)))
                     .overlay(Circle().strokeBorder(color.opacity(disabled ? 0.08 : 0.22), lineWidth: 1))
                 Text(title)
-                    .font(DS.Font.plex(11.5, weight: .semibold))
+                    .dsFieldFont(11.5, weight: .semibold)
                     .foregroundColor(disabled ? DS.Color.textTertiary : DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1466,7 +1466,7 @@ struct LinkFatherSheet: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(father.displayFullName)
-                        .font(DS.Font.plex(14, weight: isSelected ? .bold : .medium))
+                        .dsFieldFont(14, weight: isSelected ? .bold : .medium)
                         .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
                         .lineLimit(1)
                     if father.isDeceased == true {
@@ -1745,7 +1745,7 @@ struct EditGenderSheet: View {
                     .accessibilityHidden(true)
 
                 Text(label)
-                    .font(DS.Font.plex(14.5, weight: isOn ? .bold : .medium))
+                    .dsFieldFont(14.5, weight: isOn ? .bold : .medium)
                     .foregroundColor(isOn ? DS.Color.textPrimary : DS.Color.fieldValue)
 
                 Spacer(minLength: 0)

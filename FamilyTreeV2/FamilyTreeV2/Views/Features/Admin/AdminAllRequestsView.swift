@@ -1091,7 +1091,7 @@ struct AdminAllRequestsView: View {
                     .scaleEffect(isSelected && !reduceMotion ? 1.06 : 1)
                     .accessibilityHidden(true)
                 Text(title)
-                    .font(DS.Font.plex(11.5, weight: .bold))
+                    .dsFieldFont(11.5, weight: .bold)
                     .foregroundColor(isSelected ? tint : DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -2013,7 +2013,7 @@ struct AdminAllRequestsView: View {
                                 .font(DS.Font.plex(11))
                                 .foregroundColor(DS.Color.textTertiary)
                             Text(newDisplay)
-                                .font(DS.Font.plex(12, weight: .bold))
+                                .dsFieldFont(12, weight: .bold)
                                 .foregroundColor(DS.Color.fieldLabel)
                                 .lineLimit(1)
                         }
@@ -2427,7 +2427,7 @@ struct AdminAllRequestsView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(member.displayFullName)
-                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .dsFieldFont(14.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -2600,7 +2600,7 @@ struct AdminAllRequestsView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(match.member.displayFullName)
-                    .font(DS.Font.plex(13, weight: .bold))
+                    .dsFieldFont(13, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
 
@@ -2609,7 +2609,7 @@ struct AdminAllRequestsView: View {
                         "\(match.matchCount) من \(totalParts) أسماء متطابقة",
                         "\(match.matchCount) of \(totalParts) names match"
                     ))
-                    .font(DS.Font.plex(11))
+                    .dsFieldFont(11)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -3199,7 +3199,7 @@ struct AdminAllRequestsView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
                     .font(DS.Font.plex(14.5))
@@ -3354,7 +3354,7 @@ struct AdminAllRequestsView: View {
                 .frame(width: 14)
                 .accessibilityHidden(true)
             Text(text)
-                .font(DS.Font.plex(12))
+                .dsFieldFont(12)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(2)
         }
@@ -3367,7 +3367,7 @@ struct AdminAllRequestsView: View {
                 .font(DS.Font.plex(10.5, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary)
             Text(text)
-                .font(DS.Font.plex(12.5))
+                .dsFieldFont(12.5)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -3406,12 +3406,12 @@ struct AdminAllRequestsView: View {
     private func rowTitles(title: String, subtitle: String?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(DS.Font.plex(13.5, weight: .bold))
+                .dsFieldFont(13.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
             }
@@ -3452,7 +3452,7 @@ struct AdminAllRequestsView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
             Text(trimmed)
-                .font(DS.Font.plex(12))
+                .dsFieldFont(12)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -3464,7 +3464,7 @@ struct AdminAllRequestsView: View {
         HStack(spacing: DS.Spacing.xs) {
             if let old {
                 Text(old)
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .strikethrough(true, color: DS.Color.error.opacity(0.5))
                     .monospacedDigit()
@@ -3647,7 +3647,7 @@ struct AdminAllRequestsView: View {
                                       : L10n.t("سجّل من الموقع · \u{2066}@\(uname)\u{2069}", "Website · @\(uname)"))
                      : L10n.t("سجّل من التطبيق برقم الجوال", "Signed up in the app by phone"))
             }
-            .font(DS.Font.plex(12, weight: .semibold))
+            .dsFieldFont(12, weight: .semibold)
             .foregroundColor(fromWeb ? DS.Color.info.dsReadableGlyph : DS.Color.fieldValue)
         }
         .frame(maxWidth: .infinity)
@@ -3701,7 +3701,7 @@ struct AdminAllRequestsView: View {
                     DSFieldIcon(name: "person.badge.plus", tint: DS.Color.warning)
                     Text(L10n.t("لا يوجد اسم مطابق في الشجرة — عند «ربط بالشجرة» يُضاف عضواً جديداً.",
                                 "No matching name in the tree — linking adds them as a new member."))
-                        .font(DS.Font.plex(12.5, weight: .medium))
+                        .dsFieldFont(12.5, weight: .medium)
                         .foregroundColor(DS.Color.fieldValue)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
@@ -3728,7 +3728,7 @@ struct AdminAllRequestsView: View {
                     .font(DS.Font.plex(11, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(value)
-                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .dsFieldFont(14.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -4247,10 +4247,10 @@ struct AdminAllRequestsView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
             }
@@ -4271,10 +4271,10 @@ struct AdminAllRequestsView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label)
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(value)
-                        .font(DS.Font.plex(14.5))
+                        .dsFieldFont(14.5)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -4307,7 +4307,7 @@ struct AdminAllRequestsView: View {
                 DSFieldIcon(name: icon, tint: DS.Color.primary)
                     .accessibilityHidden(true)
                 Text(label)
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Spacer(minLength: 0)
             }
@@ -4331,10 +4331,10 @@ struct AdminAllRequestsView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(oldLabel)
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(oldValue)
-                        .font(DS.Font.plex(14.5))
+                        .dsFieldFont(14.5)
                         .foregroundColor(DS.Color.fieldValue)
                         .strikethrough(true, color: DS.Color.error.opacity(0.5))
                         .fixedSize(horizontal: false, vertical: true)
@@ -4710,7 +4710,7 @@ struct AdminAllRequestsView: View {
                 DSFieldIcon(name: "photo.on.rectangle", tint: DS.Color.accent)
                     .accessibilityHidden(true)
                 Text(L10n.t("الصور", "Images"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Spacer(minLength: 0)
             }

@@ -1444,7 +1444,7 @@ struct EditProjectView: View {
                     .accessibilityHidden(true)   // الحرف الأول زخرفة — الاسم كاملاً يُقرأ
 
                 Text(m.displayFullName)
-                    .font(DS.Font.plex(14.5, weight: isSelected ? .bold : .regular))
+                    .dsFieldFont(14.5, weight: isSelected ? .bold : .regular)
                     .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)

@@ -1025,7 +1025,7 @@ struct DSSectionHeader: View {
                     .background(Circle().fill(iconColor.opacity(0.13)))
             }
             Text(title)
-                .font(DS.Font.plex(12.5, weight: .bold))
+                .dsFieldFont(12.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
             Spacer(minLength: 0)
             if let trailing {

@@ -326,7 +326,7 @@ struct EditProfileView: View {
             DSFieldIcon(name: "heart.fill", tint: DS.Color.primary)
                 .accessibilityHidden(true)   // زخرفة
             Text(L10n.t("الحالة الاجتماعية", "Marital Status"))
-                .font(DS.Font.plex(12, weight: .heavy))
+                .dsFieldFont(12, weight: .heavy)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -406,7 +406,7 @@ struct EditProfileView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("الاسم الكامل", "Full Name"))
-                            .font(DS.Font.plex(12, weight: .heavy))
+                            .dsFieldFont(12, weight: .heavy)
                             .foregroundColor(DS.Color.fieldLabel)
                         // آخر الاسم = العائلة المختارة — يتحدّث فوراً عند تغيير العائلة
                         // الاسم الكامل كله يظهر بلا قصّ (طلب المالك)
@@ -449,14 +449,14 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("العائلة", "Family"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 // المعدَّل يظهر مكان القديم بلا ملاحظة (طلب المالك)
                 if let chosen = pendingFamilyRequest {
                     ChangedWordText(word: chosen, changed: true)
                 } else {
                     Text(familyName.isEmpty ? L10n.t("لم تُحدَّد", "Not set") : familyName)
-                        .font(DS.Font.plex(14.5))
+                        .dsFieldFont(14.5)
                         .foregroundColor(familyName.isEmpty ? DS.Color.textTertiary : DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -560,7 +560,7 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
                     .font(DS.Font.plex(14.5))
@@ -582,10 +582,10 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 TextField(placeholder, text: text)
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(DS.Color.fieldValue)
             }
             Spacer()
@@ -601,7 +601,7 @@ struct EditProfileView: View {
             DSLabeledFieldRow(icon: "envelope.fill", iconColor: DS.Color.info,
                               label: L10n.t("البريد الإلكتروني", "Email")) {
                 TextField("name@example.com", text: $email)
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(DS.Color.fieldValue)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
@@ -645,10 +645,10 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("رقم الهاتف", "Phone Number"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(appliedPhoneDisplay ?? KuwaitPhone.display(member.phoneNumber))
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(DS.Color.fieldValue)
                     .monospacedDigit()
                     .environment(\.layoutDirection, .leftToRight)
@@ -692,10 +692,10 @@ struct EditProfileView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(birthDateProvided ? birthDateText(birthDate) : L10n.t("لم يُحدَّد", "Not set"))
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(birthDateProvided ? DS.Color.fieldValue : DS.Color.textTertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1393,7 +1393,7 @@ private struct NameRequestCard: View {
                 .frame(maxWidth: .infinity)
 
             TextField(L10n.t("اسمك الرباعي", "Your full name"), text: $name, axis: .vertical)
-                .font(DS.Font.plex(15))
+                .dsFieldFont(15)
                 .lineLimit(1...3)
                 .padding(DS.Spacing.md)
                 .background(DS.Color.mutedBackground.opacity(0.6),
@@ -1823,7 +1823,7 @@ struct BioEditCard: View {
                     get: { station.wrappedValue.year ?? "" },
                     set: { station.wrappedValue.year = $0.isEmpty ? nil : String($0.filter(\.isNumber).prefix(4)) }
                 ))
-                .font(DS.Font.plex(12, weight: .bold))
+                .dsFieldFont(12, weight: .bold)
                 .foregroundColor(DS.Color.textSecondary)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.center)
@@ -1831,7 +1831,7 @@ struct BioEditCard: View {
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm).fill(DS.Color.mutedBackground.opacity(0.7)))
 
                 TextField(t("العنوان", "Title"), text: station.title)
-                    .font(DS.Font.plex(13.5, weight: .semibold))
+                    .dsFieldFont(13.5, weight: .semibold)
                     .foregroundColor(DS.Color.textPrimary)
 
                 Button {
@@ -1854,7 +1854,7 @@ struct BioEditCard: View {
             }
 
             TextField(t("التفاصيل (اختياري)", "Details (optional)"), text: station.details, axis: .vertical)
-                .font(DS.Font.plex(12.5, weight: .regular))
+                .dsFieldFont(12.5, weight: .regular)
                 .foregroundColor(DS.Color.textSecondary)
                 .lineLimit(1...3)
         }

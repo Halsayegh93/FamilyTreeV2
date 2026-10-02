@@ -1030,7 +1030,7 @@ struct AddProjectView: View {
                 }
 
                 Text(member.displayFullName)
-                    .font(DS.Font.plex(14.5, weight: isSelected ? .bold : .regular))
+                    .dsFieldFont(14.5, weight: isSelected ? .bold : .regular)
                     .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)

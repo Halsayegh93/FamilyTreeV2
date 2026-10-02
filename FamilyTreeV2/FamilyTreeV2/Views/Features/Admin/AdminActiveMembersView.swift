@@ -197,7 +197,7 @@ struct AdminActiveMembersView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
 
@@ -207,7 +207,7 @@ struct AdminActiveMembersView: View {
                         .foregroundColor(iconTint)
                         .accessibilityHidden(true)
                     Text(detail)
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -299,7 +299,7 @@ struct AdminActiveMembersView: View {
                 .background(Circle().fill(DS.Color.textTertiary.opacity(0.12)))
                 .accessibilityHidden(true)
             Text(text)
-                .font(DS.Font.plex(12, weight: .medium))
+                .dsFieldFont(12, weight: .medium)
                 .foregroundColor(DS.Color.fieldValue)
                 .multilineTextAlignment(.center)
         }

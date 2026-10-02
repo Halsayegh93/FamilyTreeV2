@@ -355,7 +355,7 @@ struct SettingsView: View {
                 .background(Circle().fill(DS.Color.primary.opacity(0.13)))
                 .accessibilityHidden(true)   // زخرفة
             Text(title)
-                .font(DS.Font.plex(12.5, weight: .bold))
+                .dsFieldFont(12.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
             Spacer(minLength: 0)
         }
@@ -710,7 +710,7 @@ struct NotificationsAndPrivacyView: View {
                     Text(on ? t("الإشعارات شغّالة", "Notifications are on")
                             : (systemBlocked ? t("موقوفة من إعدادات الجهاز", "Blocked in device settings")
                                              : t("الإشعارات موقوفة", "Notifications are off")))
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFieldFont(13.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(on ? t("توصلك تنبيهات العائلة على هذا الجهاز", "Family alerts reach this device")
                             : t("ما توصلك تنبيهات على هذا الجهاز", "No alerts on this device"))
@@ -808,7 +808,7 @@ struct NotificationsAndPrivacyView: View {
                 .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(subtitle)
                     .font(DS.Font.plex(11))
@@ -976,7 +976,7 @@ struct AppearanceSettingsView: View {
                     .background(Circle().fill(selected ? tint : tint.opacity(0.14)))
                     .accessibilityHidden(true)   // زخرفة — الاسم يكفي
                 Text(option.title)
-                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .dsFieldFont(12.5, weight: .bold)
                     .foregroundColor(selected ? DS.Color.fieldLabel : DS.Color.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1217,10 +1217,10 @@ struct AboutView: View {
                 .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(desc)
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1339,7 +1339,7 @@ struct PrivacyPolicyView: View {
                                     .frame(width: 6, height: 6)
                                     .padding(.top, 7)
                                 Text(point)
-                                    .font(DS.Font.plex(13))
+                                    .dsFieldFont(13)
                                     .foregroundColor(DS.Color.fieldValue)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)
@@ -1374,7 +1374,7 @@ struct PrivacyPolicyView: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     Text(t("لأي استفسار أو بلاغ، استخدم «التواصل» في الصفحة الرئيسية داخل التطبيق، أو راسلنا على البريد الرسمي.",
                            "For any question or report, use “Contact” on the Home screen inside the app, or email us."))
-                        .font(DS.Font.plex(13))
+                        .dsFieldFont(13)
                         .foregroundColor(DS.Color.fieldValue)
                         .fixedSize(horizontal: false, vertical: true)
                     SafetyLinkRow(icon: "envelope.fill", tint: DS.Color.info,
@@ -1448,13 +1448,13 @@ struct LinkedDevicesSettingsSheet: View {
                 .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("الحد الأقصى", "Limit"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(t(
                     "\(notificationVM.linkedDevices.count) من \(maxDevices) أجهزة",
                     "\(notificationVM.linkedDevices.count) of \(maxDevices) devices"
                 ))
-                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .dsFieldFont(14.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldValue)
             }
             Spacer(minLength: 0)
@@ -1484,7 +1484,7 @@ struct LinkedDevicesSettingsSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: DS.Spacing.xs + 2) {
                     Text(device.displayName)
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFieldFont(13.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -1501,7 +1501,7 @@ struct LinkedDevicesSettingsSheet: View {
                 }
 
                 Text(formattedDate(device.updatedAt))
-                    .font(DS.Font.plex(12.5))
+                    .dsFieldFont(12.5)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)

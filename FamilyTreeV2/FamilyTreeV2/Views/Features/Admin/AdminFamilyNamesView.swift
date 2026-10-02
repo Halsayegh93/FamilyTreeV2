@@ -110,10 +110,10 @@ struct AdminFamilyNamesView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("اسم العائلة", "Family name"))
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(addFocused ? tint : DS.Color.fieldLabel)
                     TextField(L10n.t("أضف اسم عائلة", "Add a family name"), text: $newName)
-                        .font(DS.Font.plex(14.5))
+                        .dsFieldFont(14.5)
                         .foregroundColor(DS.Color.textPrimary)
                         .focused($addFocused)
                         .submitLabel(.done)
@@ -229,7 +229,7 @@ struct AdminFamilyNamesView: View {
                 .accessibilityHidden(true)
 
             Text(option.name)
-                .font(DS.Font.plex(13.5, weight: .bold))
+                .dsFieldFont(13.5, weight: .bold)
                 .foregroundColor(option.isActive ? DS.Color.fieldLabel : DS.Color.textTertiary)
                 .lineLimit(2)
 

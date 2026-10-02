@@ -103,7 +103,7 @@ struct MemberContactFormView: View {
                     .background(Circle().fill(selected ? Color.white.opacity(0.2) : cat.color.opacity(0.13)))
                     .accessibilityHidden(true)
                 Text(cat.title)
-                    .font(DS.Font.plex(12, weight: .bold))
+                    .dsFieldFont(12, weight: .bold)
                     .foregroundColor(selected ? .white : DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -164,7 +164,7 @@ struct MemberContactFormView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(L10n.t("نص الرسالة *", "Message *"))
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(messageFocused ? tint : DS.Color.fieldLabel)
                     Spacer(minLength: 0)
                     Text("\(message.count)/\(maxLength)")
@@ -188,7 +188,7 @@ struct MemberContactFormView: View {
                     }
                     TextEditor(text: $message)
                         .focused($messageFocused)
-                        .font(DS.Font.plex(14.5))
+                        .dsFieldFont(14.5)
                         .foregroundColor(DS.Color.textPrimary)
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: 130, maxHeight: 220)
@@ -230,10 +230,10 @@ struct MemberContactFormView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("البريد الإلكتروني", "Email"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(replyFocused ? tint : DS.Color.fieldLabel)
                 TextField(L10n.t("بريدك للرد (اختياري)", "Your email for a reply (optional)"), text: $preferredContact)
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(DS.Color.textPrimary)
                     .keyboardType(.emailAddress)
                     .textContentType(.emailAddress)

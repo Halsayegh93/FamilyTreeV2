@@ -16,6 +16,12 @@ struct HomeNewsPreviewCard: View {
 
     /// يُستدعى عند الضغط على البطاقة لفتح صفحة الأخبار
     let onTap: () -> Void
+    /// يفتح صفحة الأخبار على خبر بعينه (الضغط على صف الخبر) — بدونه يفتح الصفحة نفسها
+    var onOpenNews: ((UUID) -> Void)? = nil
+
+    private func open(_ news: NewsPost) {
+        if let onOpenNews { onOpenNews(news.id) } else { onTap() }
+    }
 
     /// الأخبار بلا منشورات المحظورين (منشور الإدارة بلا كاتب لا يُخفى)
     private var visibleNews: [NewsPost] {
@@ -27,25 +33,25 @@ struct HomeNewsPreviewCard: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                header
-                content
-                if visibleNews.count > 3 { showAllButton }
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            Button(action: onTap) { header.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+            content
+            if visibleNews.count > 3 {
+                Button(action: onTap) { showAllButton }
+                    .buttonStyle(DSScaleButtonStyle())
             }
-            .padding(DS.Spacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .strokeBorder(DS.Color.cardBorder.opacity(0.8), lineWidth: 0.75)
-            )
-            // ظل ناعم منتشر بدل الظل الأزرق الثقيل
-            .shadow(color: .black.opacity(0.05), radius: 14, x: 0, y: 6)
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .padding(DS.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .strokeBorder(DS.Color.cardBorder.opacity(0.8), lineWidth: 0.75)
+        )
+        // ظل ناعم منتشر بدل الظل الأزرق الثقيل
+        .shadow(color: .black.opacity(0.05), radius: 14, x: 0, y: 6)
     }
 
     // MARK: - الهيدر
@@ -119,7 +125,8 @@ struct HomeNewsPreviewCard: View {
             VStack(spacing: DS.Spacing.sm) {
                 // آخر مناسبة (زواج/مولود/وفاة) أولاً — هي ما يهم العائلة أكثر
                 if let occasion = latestOccasion {
-                    HomeOccasionRow(news: occasion)
+                    Button { open(occasion) } label: { HomeOccasionRow(news: occasion) }
+                        .buttonStyle(DSScaleButtonStyle())
                 }
                 ForEach(Array(previewPosts.enumerated()), id: \.element.id) { idx, news in
                     if idx > 0 {
@@ -129,13 +136,17 @@ struct HomeNewsPreviewCard: View {
                             .frame(height: 0.5)
                             .padding(.leading, 42)
                     }
-                    HomeNewsPreviewRow(
-                        news: news,
-                        member: news.author_id.flatMap { memberVM.member(byId: $0) },
-                        likes: newsVM.likesCountByPost[news.id] ?? 0,
-                        comments: newsVM.commentsCountByPost[news.id] ?? 0
-                    )
-                    .padding(.vertical, 2)
+                    Button { open(news) } label: {
+                        HomeNewsPreviewRow(
+                            news: news,
+                            member: news.author_id.flatMap { memberVM.member(byId: $0) },
+                            likes: newsVM.likesCountByPost[news.id] ?? 0,
+                            comments: newsVM.commentsCountByPost[news.id] ?? 0
+                        )
+                        .padding(.vertical, 2)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
                 }
             }
         }

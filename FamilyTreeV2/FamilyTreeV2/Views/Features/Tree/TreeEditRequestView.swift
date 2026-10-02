@@ -301,7 +301,7 @@ struct TreeEditRequestView: View {
                     .frame(width: 24)
 
                 TextField(placeholder, text: text)
-                    .font(DS.Font.plex(15))
+                    .dsFieldFont(15)
                     .foregroundColor(DS.Color.textPrimary)
                     .focused($isPrimaryFieldFocused)
 
@@ -391,7 +391,7 @@ struct TreeEditRequestView: View {
                         .fill(DS.Color.primary.opacity(0.08)))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t(country.nameArabic, country.isoCode))
-                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .dsFieldFont(14.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                     // علامة اتجاه (LRM) حتى يظهر «+965» لا «965+» في العربي
                     Text("\u{200E}" + country.dialingCode)
@@ -455,7 +455,7 @@ struct TreeEditRequestView: View {
                     .frame(minHeight: notesRequired ? 56 : 38)
                     .focused($isDetailsFocused)
                     .scrollContentBackground(.hidden)
-                    .font(DS.Font.plex(14))
+                    .dsFieldFont(14)
                     // القارئ الصوتي: مربّع الكتابة بلا اسم — العنوان اسمه والتلميح وصفه
                     .accessibilityLabel(notesLabel)
                     .accessibilityHint(notesPlaceholder)

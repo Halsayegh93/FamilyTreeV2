@@ -113,10 +113,10 @@ struct TermsHighlightRow: View {
                 .accessibilityHidden(true)   // زخرفة — العنوان والنص يكفيان
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(item.text)
-                    .font(DS.Font.plex(12.5))
+                    .dsFieldFont(12.5)
                     .foregroundColor(DS.Color.fieldValue)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -157,7 +157,7 @@ struct TermsConsentRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L10n.t("أوافق على شروط الاستخدام وسياسة الخصوصية، وأتعهّد بعدم نشر أي محتوى مسيء.",
                                 "I agree to the Terms of Use and Privacy Policy, and I won't post any objectionable content."))
-                        .font(DS.Font.plex(13, weight: .bold))
+                        .dsFieldFont(13, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .fixedSize(horizontal: false, vertical: true)
                         .onTapGesture(perform: toggle)
@@ -228,7 +228,7 @@ struct SafetyLinkRow: View {
                     .accessibilityHidden(true)   // زخرفة
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFieldFont(13.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)

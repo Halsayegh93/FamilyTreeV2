@@ -354,7 +354,7 @@ struct AdminInboxView: View {
     private var deleteBar: some View {
         HStack(spacing: DS.Spacing.md) {
             Text(L10n.t("\(selectedIDs.count) محدّدة", "\(selectedIDs.count) selected"))
-                .font(DS.Font.plex(13.5, weight: .bold))
+                .dsFieldFont(13.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldValue)
                 .monospacedDigit()
             Spacer()
@@ -478,7 +478,7 @@ struct AdminInboxView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.xs) {
                     // الاسم بخط IBM Plex وعلى سطرين (طلب المالك)
                     Text(msg.member?.displayFullName ?? L10n.t("عضو", "Member"))
-                        .font(DS.Font.plex(13.5, weight: isUnread ? .bold : .semibold))
+                        .dsFieldFont(13.5, weight: isUnread ? .bold : .semibold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -494,7 +494,7 @@ struct AdminInboxView: View {
 
                 if !preview.isEmpty {
                     Text(preview)
-                        .font(DS.Font.plex(12, weight: isUnread ? .medium : .regular))
+                        .dsFieldFont(12, weight: isUnread ? .medium : .regular)
                         .foregroundColor(isUnread ? DS.Color.fieldLabel : DS.Color.fieldValue)
                         .lineLimit(1)
                         .multilineTextAlignment(.leading)
@@ -536,7 +536,7 @@ struct AdminInboxView: View {
             DSFieldIcon(name: "envelope.badge.fill", tint: DS.Color.primary)
                 .accessibilityHidden(true)
             Text(L10n.t("\(unread) رسالة جديدة", "\(unread) new messages"))
-                .font(DS.Font.plex(13, weight: .bold))
+                .dsFieldFont(13, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -682,7 +682,7 @@ private struct MessageDetailSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                     if !phone.isEmpty {
                         Text(phone)
-                            .font(DS.Font.plex(12))
+                            .dsFieldFont(12)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                 }
@@ -790,10 +790,10 @@ private struct MessageDetailSheet: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("وسيلة التواصل", "Preferred contact"))
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(preferred)
-                        .font(DS.Font.plex(14.5))
+                        .dsFieldFont(14.5)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .environment(\.layoutDirection, .leftToRight)
@@ -1036,7 +1036,7 @@ private struct OfficialReplySheet: View {
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
                     Text(to)
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .environment(\.layoutDirection, .leftToRight)
@@ -1119,11 +1119,11 @@ private struct ReplyComposerField: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(focused ? tint : DS.Color.fieldLabel)
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(6...12)
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(DS.Color.textPrimary)
                     .focused($focused)
             }

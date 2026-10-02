@@ -350,14 +350,14 @@ struct AdminModeratorsView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(member.displayFullName)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let scope = RoleGuide.forRole(shownRole)?.mandate {
                     Text(scope)
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -476,7 +476,7 @@ struct AdminModeratorsView: View {
                 .background(Circle().fill(domain.color.opacity(0.13)))
                 .accessibilityHidden(true)
             Text(domain.title)
-                .font(DS.Font.plex(11, weight: .bold))
+                .dsFieldFont(11, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .multilineTextAlignment(.center)
                 .lineLimit(2, reservesSpace: true)
@@ -505,10 +505,10 @@ struct AdminModeratorsView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(guide.title)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(guide.mandate)
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -817,13 +817,13 @@ struct AddModeratorSheet: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(member.displayFullName)
-                        .font(DS.Font.plex(14, weight: .bold))
+                        .dsFieldFont(14, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
 
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         Text(KuwaitPhone.display(phone))
-                            .font(DS.Font.plex(12))
+                            .dsFieldFont(12)
                             .foregroundColor(DS.Color.fieldValue)
                             .monospacedDigit()
                     }
@@ -942,11 +942,11 @@ struct ChangeRoleSheet: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(member.displayFullName)
-                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .dsFieldFont(14.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                     Text(L10n.t("دوره الحالي: ", "Current role: ") + roleTitle(member.role))
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: 0)
@@ -1004,10 +1004,10 @@ struct ChangeRoleSheet: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(guide.title)
-                        .font(DS.Font.plex(13.5, weight: .heavy))
+                        .dsFieldFont(13.5, weight: .heavy)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(guide.mandate)
-                        .font(DS.Font.plex(12.5))
+                        .dsFieldFont(12.5)
                         .foregroundColor(DS.Color.fieldValue)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1096,7 +1096,7 @@ private struct RoleScopeLineRow: View {
                 .foregroundColor(allowed ? DS.Color.success : DS.Color.textTertiary.opacity(0.8))
                 .padding(.top, 2)
             Text(text)
-                .font(DS.Font.plex(12.5))
+                .dsFieldFont(12.5)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -1119,10 +1119,10 @@ private struct RoleScopeRowBox: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(guide.title)
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(guide.mandate)
-                        .font(DS.Font.plex(13.5))
+                        .dsFieldFont(13.5)
                         .foregroundColor(DS.Color.fieldValue)
                         .fixedSize(horizontal: false, vertical: true)
                 }

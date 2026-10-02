@@ -210,7 +210,7 @@ struct CategoriesManagerView: View {
                 .padding(.top, 2)
                 .accessibilityHidden(true)
             Text(footerText)
-                .font(DS.Font.plex(11.5))
+                .dsFieldFont(11.5)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -306,7 +306,7 @@ struct CategoriesManagerView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(category.nameAr)
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFieldFont(13.5, weight: .bold)
                         .foregroundColor(category.isActive ? DS.Color.fieldLabel : DS.Color.textTertiary)
                         .lineLimit(1)
                     // عدد العناصر — رقم فقط جنب الاسم (طلب المالك)
@@ -315,7 +315,7 @@ struct CategoriesManagerView: View {
                         .accessibilityLabel(L10n.t("\(count) عنصر", count == 1 ? "1 item" : "\(count) items"))
                 }
                 Text(category.nameEn)
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
             }
@@ -559,7 +559,7 @@ struct CategoryEditSheet: View {
                 Toggle(isOn: $isActive) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("ظاهر للأعضاء", "Visible to members"))
-                            .font(DS.Font.plex(13.5, weight: .bold))
+                            .dsFieldFont(13.5, weight: .bold)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(L10n.t("الإخفاء يشيله من الاختيارات، والمحتوى القديم يبقى بتصنيفه",
                                     "Hiding removes it from choices; existing content keeps it"))

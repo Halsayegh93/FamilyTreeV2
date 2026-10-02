@@ -589,7 +589,7 @@ struct MemberDetailsView: View {
                     if !children.isEmpty {
                         VStack(spacing: DS.Spacing.sm) {
                             Text(L10n.t("الأبناء", "Children") + " · \(children.count)")
-                                .font(DS.Font.plex(12, weight: .heavy))
+                                .dsFieldFont(12, weight: .heavy)
                                 .foregroundColor(DS.Color.fieldLabel)
                                 .frame(maxWidth: .infinity)
                             VStack(spacing: 4) {
@@ -715,10 +715,10 @@ struct MemberDetailsView: View {
                 .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: 2) {
                 Text(tile.label)
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(tile.value)
-                    .font(DS.Font.plex(14))
+                    .dsFieldFont(14)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
@@ -1335,10 +1335,10 @@ struct MemberDetailsView: View {
                 .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t(actionLabelAr, actionLabelEn))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("قيد المراجعة", "Under review"))
-                    .font(DS.Font.plex(12.5))
+                    .dsFieldFont(12.5)
                     .foregroundColor(DS.Color.fieldValue)
             }
             Spacer(minLength: 0)
@@ -1499,7 +1499,7 @@ struct MemberDetailsView: View {
                     .frame(width: 42, height: 42)
                     .background(Circle().fill(tint.opacity(0.14)))
                 Text(editActionLabel(for: action))
-                    .font(DS.Font.plex(12, weight: .bold))
+                    .dsFieldFont(12, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -1716,8 +1716,7 @@ struct MemberDetailsView: View {
 
     private func showKinshipPath() {
         guard let currentUser = authVM.currentUser else { return }
-        let lookup = memberVM._memberById
-        let result = KinshipCalculator.calculate(from: currentUser, to: member, lookup: lookup)
+        let result = KinshipCalculator.calculate(from: currentUser, to: member, lookup: memberVM._memberById)
 
         var pathIds = result.pathA.map(\.id) + result.pathB.map(\.id)
         if let ancestor = result.commonAncestor {
@@ -1726,9 +1725,10 @@ struct MemberDetailsView: View {
 
         dismiss()
 
+        // الطلب المركزي: تاب الشجرة ← شجرة العائلة ← المسار — يعمل من الرئيسية والإشعارات أيضاً
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             NotificationCenter.default.post(
-                name: .showKinshipPath,
+                name: .requestKinshipPath,
                 object: nil,
                 userInfo: [
                     "memberId": member.id,

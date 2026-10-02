@@ -271,7 +271,7 @@ struct AddNewsView: View {
                         .focused($contentFocused)
                         .frame(minHeight: 104, maxHeight: 190)
                         .scrollContentBackground(.hidden)
-                        .font(DS.Font.plex(15))
+                        .dsFieldFont(15)
                         .foregroundColor(DS.Color.textPrimary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)

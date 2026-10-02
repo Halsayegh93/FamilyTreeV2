@@ -708,7 +708,7 @@ struct NotificationsCenterView: View {
                 } header: {
                     HStack(spacing: DS.Spacing.sm) {
                         Text(section)
-                            .font(DS.Font.plex(12.5, weight: .bold))
+                            .dsFieldFont(12.5, weight: .bold)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text("\(items.count)")
                             .font(DS.Font.plex(11, weight: .bold))
@@ -786,7 +786,7 @@ struct NotificationsCenterView: View {
                     // العنوان + الوقت
                     HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
                         Text(item.title)
-                            .font(DS.Font.plex(13.5, weight: isUnread ? .bold : .semibold))
+                            .dsFieldFont(13.5, weight: isUnread ? .bold : .semibold)
                             .foregroundColor(isUnread ? DS.Color.fieldLabel : DS.Color.fieldValue)
                             .lineLimit(2)
                         Spacer(minLength: DS.Spacing.xs)
@@ -1171,7 +1171,7 @@ struct NotificationsCenterView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(fourPartName(member))
-                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .dsFieldFont(14.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -1259,10 +1259,10 @@ struct NotificationsCenterView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("التاريخ", "Date"))
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(fullDateTime(date))
-                        .font(DS.Font.plex(14))
+                        .dsFieldFont(14)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
@@ -1584,7 +1584,7 @@ struct NotificationsCenterView: View {
     private func detailChangeRow(_ change: AppNotification.NotificationDetails.ChangeEntry) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(AppNotification.NotificationDetails.localizedFieldName(change.field))
-                .font(DS.Font.plex(12, weight: .heavy))
+                .dsFieldFont(12, weight: .heavy)
                 .foregroundColor(DS.Color.fieldLabel)
 
             if AppNotification.NotificationDetails.isOpaqueField(change.field) {
@@ -1613,7 +1613,7 @@ struct NotificationsCenterView: View {
                     .foregroundColor(color)
             }
             Text(value)
-                .font(DS.Font.plex(13.5))
+                .dsFieldFont(13.5)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
@@ -1896,7 +1896,7 @@ struct NotificationsCenterView: View {
                     "لا توجد مطابقات في الشجرة — قد يكون عضو جديد",
                     "No matches found in the tree — may be a new member"
                 ))
-                .font(DS.Font.plex(12.5, weight: .medium))
+                .dsFieldFont(12.5, weight: .medium)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -1936,7 +1936,7 @@ struct NotificationsCenterView: View {
             .accessibilityHidden(true)   // الصورة زخرفة — الاسم يُقرأ بعدها
 
             Text(chainFourNames(candidate))
-                .font(DS.Font.plex(13, weight: .semibold))
+                .dsFieldFont(13, weight: .semibold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
                 .truncationMode(.tail)

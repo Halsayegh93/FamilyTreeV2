@@ -66,6 +66,8 @@ struct NewsCommentsSheet: View {
                              subtitle: countText,
                              icon: "bubble.left.and.bubble.right.fill",
                              tint: tint)
+                // «إغلاق» أعلى الرأس يساراً (قاعدة التطبيق) — بدل الزر المكرّر بجانب الحقل (طلب المالك)
+                .overlay(alignment: .topTrailing) { closeButton }
                 .readHeight($headerH)
 
             ScrollView(showsIndicators: false) {
@@ -204,7 +206,7 @@ struct NewsCommentsSheet: View {
                     .background(Circle().fill(DS.Color.primary.opacity(0.13)))
                     .accessibilityHidden(true)
                 Text(comment.author_name)
-                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .dsFieldFont(12.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                 Spacer(minLength: 0)
@@ -251,7 +253,7 @@ struct NewsCommentsSheet: View {
             }
 
             Text(comment.content)
-                .font(DS.Font.plex(14.5))
+                .dsFieldFont(14.5)
                 .foregroundColor(DS.Color.fieldValue)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -262,13 +264,33 @@ struct NewsCommentsSheet: View {
             .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
     }
 
-    // MARK: - الشريط السفلي: حقل الإدخال + إرسال (كحلي) + «إغلاق» (رمادي، يسار)
+    // MARK: - زر الإغلاق أعلى الرأس
+
+    private var closeButton: some View {
+        Button {
+            if hasUnsentDraft { confirmDiscard = true } else { dismiss() }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(Color.white.opacity(0.22)))
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .padding(.top, DS.Spacing.lg)
+        .padding(.horizontal, DS.Spacing.lg)
+        .accessibilityLabel(L10n.t("إغلاق", "Close"))
+    }
+
+    // MARK: - الشريط السفلي: حقل الإدخال + إرسال (كحلي)
 
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: DS.Spacing.sm) {
             TextField(L10n.t("اكتب تعليقك...", "Write a comment..."), text: $commentInput, axis: .vertical)
                 .lineLimit(1...3)
-                .font(DS.Font.plex(14.5))
+                .dsFieldFont(14.5)
                 .foregroundColor(DS.Color.textPrimary)
                 .focused($inputFocused)
                 .padding(.horizontal, DS.Spacing.md)
@@ -312,20 +334,6 @@ struct NewsCommentsSheet: View {
             }
             .disabled(isSendingComment || commentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel(L10n.t("إرسال", "Send"))
-
-            Button {
-                if hasUnsentDraft { confirmDiscard = true } else { dismiss() }
-            } label: {
-                Text(L10n.t("إغلاق", "Close"))
-                    .font(DS.Font.plex(15, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, DS.Spacing.md + 2)
-                    .frame(height: 46)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .fill(DS.Color.mutedBackground.opacity(0.8)))
-            }
         }
         .buttonStyle(DSScaleButtonStyle())
         .padding(.horizontal, DS.Spacing.lg)

@@ -220,10 +220,10 @@ struct AdminRegisterMemberView: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                            .font(DS.Font.plex(12, weight: .heavy))
+                            .dsFieldFont(12, weight: .heavy)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(DSDateText.display(birthDate))
-                            .font(DS.Font.plex(14.5, weight: .semibold))
+                            .dsFieldFont(14.5, weight: .semibold)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: 0)

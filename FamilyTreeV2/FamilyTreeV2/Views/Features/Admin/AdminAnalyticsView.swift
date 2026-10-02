@@ -285,7 +285,7 @@ struct AdminAnalyticsView: View {
             HStack(spacing: 5) {
                 Circle().fill(color).frame(width: 7, height: 7)
                 Text(title)
-                    .font(DS.Font.plex(12, weight: .bold))
+                    .dsFieldFont(12, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
             }
             Text(value)
@@ -295,7 +295,7 @@ struct AdminAnalyticsView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(share)
-                .font(DS.Font.plex(11, weight: .semibold))
+                .dsFieldFont(11, weight: .semibold)
                 .foregroundColor(DS.Color.fieldValue)
                 .monospacedDigit()
         }
@@ -703,7 +703,7 @@ struct AdminAnalyticsView: View {
                 .frame(width: 18)
                 .accessibilityHidden(true)
             Text(label)
-                .font(DS.Font.plex(12, weight: .semibold))
+                .dsFieldFont(12, weight: .semibold)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -764,7 +764,7 @@ private struct AnalyticsBarRow: View {
 
         HStack(spacing: DS.Spacing.sm) {
             Text(label)
-                .font(DS.Font.plex(12.5, weight: .bold))
+                .dsFieldFont(12.5, weight: .bold)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -786,7 +786,7 @@ private struct AnalyticsBarRow: View {
             // الرقم بخط واضح + النسبة تحته
             VStack(alignment: .trailing, spacing: 0) {
                 Text(count.formatted())
-                    .font(DS.Font.plex(14, weight: .bold))
+                    .dsFieldFont(14, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                 Text(share)
@@ -826,7 +826,7 @@ private struct AnalyticsGrowthColumns: View {
                 let isCurrent = index == months.count - 1
                 VStack(spacing: DS.Spacing.xs) {
                     Text(month.count.formatted())
-                        .font(DS.Font.plex(11, weight: .bold))
+                        .dsFieldFont(11, weight: .bold)
                         .foregroundColor(isCurrent ? tint : DS.Color.fieldValue)
                         .monospacedDigit()
                         .lineLimit(1)

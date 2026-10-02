@@ -260,7 +260,7 @@ struct OverLimitDevicesSheet: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("الحد الأقصى", "Limit"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(over
                      ? t("أزل \(excessCount == 1 ? "جهازاً" : "\(excessCount) أجهزة") للمتابعة", "Remove \(excessCount) device\(excessCount == 1 ? "" : "s") to continue")
@@ -429,7 +429,7 @@ struct LinkedDevicesSheet: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(t("الحد الأقصى", "Limit"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(t(
                     "\(notificationVM.linkedDevices.count) من \(maxDevices) أجهزة",
@@ -550,7 +550,7 @@ fileprivate struct DeviceNameText: View {
     let name: String
     var body: some View {
         Text(name)
-            .font(DS.Font.plex(13.5, weight: .bold))
+            .dsFieldFont(13.5, weight: .bold)
             .foregroundColor(DS.Color.fieldLabel)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
@@ -562,7 +562,7 @@ fileprivate struct DeviceLastSeenText: View {
     let text: String
     var body: some View {
         Text(text)
-            .font(DS.Font.plex(12.5))
+            .dsFieldFont(12.5)
             .foregroundColor(DS.Color.fieldValue)
             .lineLimit(1)
             .minimumScaleFactor(0.8)

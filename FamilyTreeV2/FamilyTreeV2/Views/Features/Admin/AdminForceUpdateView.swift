@@ -111,7 +111,7 @@ struct AdminForceUpdateView: View {
                  ? L10n.t("أي نسخة رقمها أقل من الحد تنقفل بشاشة «حدّث التطبيق» لين يحدّث العضو. 0 = بلا إجبار.",
                           "Any build below the minimum is blocked until the member updates. 0 = off.")
                  : L10n.t("للقراءة فقط — التعديل للمالك.", "Read only — the owner edits this."))
-                .font(DS.Font.plex(12))
+                .dsFieldFont(12)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -160,12 +160,12 @@ struct AdminForceUpdateView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(urlTitle)
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(12, weight: .heavy)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     TextField(urlTitle, text: urlDraft)
-                        .font(DS.Font.plex(13.5))
+                        .dsFieldFont(13.5)
                         .foregroundColor(DS.Color.textPrimary)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
@@ -219,7 +219,7 @@ struct AdminForceUpdateView: View {
                     .accessibilityHidden(true)
                 TextField(L10n.t("مثال: نسخة جديدة فيها حماية أكثر لبياناتك", "e.g. New version with better privacy"),
                           text: $messageDraft, axis: .vertical)
-                    .font(DS.Font.plex(13.5))
+                    .dsFieldFont(13.5)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1...3)
                 saveButton {

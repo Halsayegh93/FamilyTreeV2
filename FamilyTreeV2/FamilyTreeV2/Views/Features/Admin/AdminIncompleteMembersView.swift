@@ -389,7 +389,7 @@ struct AdminIncompleteMembersView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(member.displayFullName)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(2)
 

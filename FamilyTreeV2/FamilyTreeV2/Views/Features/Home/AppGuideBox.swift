@@ -493,7 +493,7 @@ private struct GuidePageView: View {
                 .opacity(shown ? 1 : 0)
 
             Text(page.text)
-                .font(DS.Font.plex(14, weight: .semibold))
+                .dsFieldFont(14, weight: .semibold)
                 .foregroundColor(DS.Color.fieldValue)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -584,7 +584,7 @@ private struct GuideWelcomeView: View {
                     .font(DS.Font.plex(19, weight: .bold))
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("اختر الواجهة التي تريد التعرّف عليها", "Choose the screen you want to learn"))
-                    .font(DS.Font.plex(13.5))
+                    .dsFieldFont(13.5)
                     .foregroundColor(DS.Color.fieldValue)
             }
             .multilineTextAlignment(.center)
@@ -629,10 +629,10 @@ private struct GuideWelcomeView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(chapter.title)
-                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .dsFieldFont(14.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(L10n.t("\(chapter.pages.count) نقاط", "\(chapter.pages.count) points"))
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: 0)
@@ -737,7 +737,7 @@ private struct GuideDoneView: View {
                                             "Next: «\($0)» — or pick from «All chapters»") }
                      ?? L10n.t("صرت تعرف أساسيات التطبيق — استمتع به",
                                "You know the app basics now — enjoy it"))
-                    .font(DS.Font.plex(14))
+                    .dsFieldFont(14)
                     .foregroundColor(DS.Color.fieldValue)
                     .multilineTextAlignment(.center)
             }
@@ -937,12 +937,12 @@ private struct GuideToolbarScene: View {
                         look(item.look)
                             .frame(height: 40)
                         Text(item.title)
-                            .font(DS.Font.plex(13, weight: .bold))
+                            .dsFieldFont(13, weight: .bold)
                             .foregroundColor(DS.Color.fieldLabel)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                         Text(item.detail)
-                            .font(DS.Font.plex(11.5))
+                            .dsFieldFont(11.5)
                             .foregroundColor(DS.Color.fieldValue)
                             .multilineTextAlignment(.center)
                             .lineLimit(2)

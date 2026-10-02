@@ -475,7 +475,7 @@ struct AdminActivityLogView: View {
             .buttonStyle(.plain)
 
             Text(L10n.t("\(selectedIds.count) محدّد", "\(selectedIds.count) selected"))
-                .font(DS.Font.plex(12, weight: .semibold))
+                .dsFieldFont(12, weight: .semibold)
                 .foregroundColor(DS.Color.fieldValue)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -553,13 +553,13 @@ struct AdminActivityLogView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 if !item.body.isEmpty {
                     Text(item.body)
-                        .font(DS.Font.plex(12))
+                        .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -763,7 +763,7 @@ private struct ActivityDetailSheet: View {
         DSComposerSection(title: L10n.t("التفاصيل", "Details"), icon: "text.alignright",
                           tint: DS.Color.primary, index: bodyIndex) {
             Text(item.body)
-                .font(DS.Font.plex(14))
+                .dsFieldFont(14)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -800,10 +800,10 @@ private struct ActivityDetailSheet: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -863,7 +863,7 @@ private struct ActivityDetailSheet: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
 
                 if isPhoto {

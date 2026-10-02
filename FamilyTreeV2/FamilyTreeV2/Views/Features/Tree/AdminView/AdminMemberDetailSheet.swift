@@ -1402,10 +1402,10 @@ struct FatherPickerSheet: View {
                         .accessibilityHidden(true)   // زخرفة
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("بدون أب", "No Father"))
-                            .font(DS.Font.plex(12, weight: .heavy))
+                            .dsFieldFont(12, weight: .heavy)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(L10n.t("رأس شجرة", "Tree root"))
-                            .font(DS.Font.plex(14.5, weight: checked ? .bold : .regular))
+                            .dsFieldFont(14.5, weight: checked ? .bold : .regular)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: 0)
@@ -1471,7 +1471,7 @@ private struct FatherPickerRow: View, Equatable {
                     .accessibilityHidden(true)   // الحرف الأول زخرفة — الاسم بجانبه
 
                 Text(member.displayFullName)
-                    .font(DS.Font.plex(14.5, weight: isSelected ? .bold : .regular))
+                    .dsFieldFont(14.5, weight: isSelected ? .bold : .regular)
                     .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .lineLimit(1)
                     .truncationMode(.tail)

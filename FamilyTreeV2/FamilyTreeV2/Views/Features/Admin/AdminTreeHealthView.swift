@@ -468,7 +468,7 @@ struct AdminTreeHealthView: View {
         return HStack(spacing: DS.Spacing.md) {
             SysRing(progress: score, tint: ringTint, lineWidth: 6, size: 56) {
                 Text(L10n.t("\(pct)٪", "\(pct)%"))
-                    .font(DS.Font.plex(13, weight: .bold))
+                    .dsFieldFont(13, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -478,11 +478,11 @@ struct AdminTreeHealthView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("سلامة الشجرة", "Tree integrity"))
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("بلا ملاحظات: \(cachedCleanCount) من \(cachedCheckedCount)",
                             "No issues: \(cachedCleanCount) of \(cachedCheckedCount)"))
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .monospacedDigit()
                     .fixedSize(horizontal: false, vertical: true)
@@ -548,7 +548,7 @@ struct AdminTreeHealthView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // Name
                     Text(displayName.isEmpty ? L10n.t("بدون اسم", "No Name") : displayName)
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFieldFont(13.5, weight: .bold)
                         .foregroundColor(displayName.isEmpty ? DS.Color.textTertiary : DS.Color.fieldLabel)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -556,7 +556,7 @@ struct AdminTreeHealthView: View {
                     // Phone
                     if hasPhone {
                         Text(phone)
-                            .font(DS.Font.plex(12))
+                            .dsFieldFont(12)
                             .foregroundColor(DS.Color.fieldValue)
                             .monospacedDigit()
                             .lineLimit(1)
@@ -722,10 +722,10 @@ struct EditNameSheet: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("رقم الهاتف", "Phone Number"))
-                    .font(DS.Font.plex(12, weight: .heavy))
+                    .dsFieldFont(12, weight: .heavy)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(phone)
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(14.5)
                     .foregroundColor(DS.Color.fieldValue)
                     .monospacedDigit()
                     .environment(\.layoutDirection, .leftToRight)

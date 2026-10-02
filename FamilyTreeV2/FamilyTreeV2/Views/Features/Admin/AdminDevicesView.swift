@@ -218,7 +218,7 @@ struct AdminDevicesView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(group.member?.displayFullName ?? t("عضو غير معروف", "Unknown Member"))
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFieldFont(13.5, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
 
@@ -284,11 +284,11 @@ struct AdminDevicesView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.displayName)
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                 Text(formattedDate(device.updatedAt))
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
             }

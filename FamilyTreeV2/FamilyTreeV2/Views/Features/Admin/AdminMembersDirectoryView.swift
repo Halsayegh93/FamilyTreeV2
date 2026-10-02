@@ -533,7 +533,7 @@ struct AdminMembersDirectoryView: View {
                 // سطران: الاسم، ثم شارة العضو والهاتف — بلا تكرار الاسم
                 VStack(alignment: .leading, spacing: 4) {
                     Text(member.shortFullName)
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFieldFont(13.5, weight: .bold)
                         .foregroundColor(muted ? DS.Color.textTertiary : DS.Color.fieldLabel)
                         .lineLimit(1)
 

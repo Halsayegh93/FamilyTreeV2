@@ -322,7 +322,7 @@ struct AdminMembersManagementView: View {
         return HStack(spacing: DS.Spacing.md) {
             SysRing(progress: statsReady ? completeness : 0, tint: ringTint, lineWidth: 6, size: 56) {
                 Text(statsReady ? L10n.t("\(pct)٪", "\(pct)%") : "—")
-                    .font(DS.Font.plex(13, weight: .bold))
+                    .dsFieldFont(13, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -332,11 +332,11 @@ struct AdminMembersManagementView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("اكتمال البيانات", "Data completeness"))
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(13.5, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("الميلاد والجنس وصور الحسابات وتواريخ الوفاة",
                             "Birth dates, gender, account photos and death dates"))
-                    .font(DS.Font.plex(12))
+                    .dsFieldFont(12)
                     .foregroundColor(DS.Color.fieldValue)
                     .fixedSize(horizontal: false, vertical: true)
             }

@@ -206,6 +206,7 @@ struct DSCenterCard<Content: View>: View {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 content()
             }
+            .environment(\.dsInCenterBox, true)
             // نفس لغة المربّعات: البطاقة تكبر، ثم محتواها يصعد بهدوء داخلها
             .dsEntrance(delay: 0.05, y: 8, animation: DSMotion.text, active: animatesContent)
             .padding(DS.Spacing.xl)
@@ -258,6 +259,7 @@ struct DSCenterPanel<Content: View>: View {
                     .onTapGesture { onBackgroundTap?() }
 
                 content()
+                    .environment(\.dsInCenterBox, true)
                     .onPreferenceChange(SheetContentHeightKey.self) { h in
                         guard h > 0 else { return }
                         contentHeight = h
@@ -367,6 +369,7 @@ struct DSExpandableCenterPanel<Content: View>: View {
                 VStack(spacing: 0) {
                     // بلا مقبض ولا ×: التوسيع بزر داخل المحتوى، والإغلاق بالضغط خارجه (طلب المالك)
                     content()
+                        .environment(\.dsInCenterBox, true)
                         .onPreferenceChange(SheetContentHeightKey.self) { h in
                             if h > 0 { contentHeight = h }
                         }
@@ -482,7 +485,7 @@ final class DSPopupPresenter {
             ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
         else { return id }
         if window == nil { previousKey = scene.windows.first(where: \.isKeyWindow) }
-        let host = UIHostingController(rootView: AnyView(view))
+        let host = UIHostingController(rootView: AnyView(view.environment(\.dsInCenterBox, true)))
         host.view.backgroundColor = .clear
         let w = window ?? UIWindow(windowScene: scene)
         w.windowLevel = .alert + 1
