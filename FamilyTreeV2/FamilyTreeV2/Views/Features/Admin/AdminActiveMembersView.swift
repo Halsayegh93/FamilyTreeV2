@@ -92,7 +92,7 @@ struct AdminActiveMembersView: View {
 
     // MARK: - بطاقة الرأس
     /// نفس أرقام المربّعات الثلاثة السابقة (طلب المالك: أصغر وأرتب). «الأعضاء
-    /// الفعّالون» موجودة أصلاً في «استخدام التطبيق» بإعدادات النظام، فلا تتكرر هنا.
+    /// الفعّالون» موجودة أصلاً في «استخدام التطبيق» بتبويب «الأعضاء»، فلا تتكرر هنا.
 
     private var appCount: Int {
         nowRows.filter { $0.source == "app" }.count + recentRows.filter { $0.source == "app" }.count

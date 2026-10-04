@@ -197,8 +197,8 @@ private struct WomenLoadingView: View {
 /// تفاصيل امرأة — مربّع بمنتصف الشاشة قابل للتوسّع بنفس تصميم تفاصيل العضو
 /// (MemberDetailsView، طلب المالك):
 /// المصغّر: صورة + اسم + صلة القرابة + العمر.
-/// «عرض التفاصيل» يوسّعه: العائلة (الأم/الزوج/الأبناء) + الإدارة.
-/// شريط أزرار ثابت أسفله: «تعديل البيانات» كحلي يمين (للإدارة) و«إغلاق» يسار.
+/// «عرض التفاصيل» يوسّعه: العائلة (الأم/الزوج/الأبناء).
+/// شريط أزرار ثابت أسفله: «الإدارة» كحلي يمين (يفتح مربّع الإدارة) و«إغلاق» يسار.
 private struct WomanDetailSheet: View {
     let woman: FamilyMember
     let allWomen: [FamilyMember]
@@ -250,7 +250,8 @@ private struct WomanDetailSheet: View {
     @State private var showWifeNav = false
     @State private var showWifePicker = false
     @State private var showHusbandPicker = false
-    @State private var showChildGender = false
+    /// مربّع الإدارة — يفتح كمربّع جديد فوق التفاصيل (طلب المالك ٢٠٢٦-١٠-٠٣)
+    @State private var showAdminBox = false
     @State private var wifeSearch = ""
     @State private var orderedChildren: [FamilyMember] = []
 
@@ -323,7 +324,7 @@ private struct WomanDetailSheet: View {
     private var hasRelations: Bool { mother != nil || !wives.isEmpty || showHusband }
     /// هل في التفاصيل ما يُعرض؟ — بلا شيء لا يظهر زر «عرض التفاصيل»
     private var hasDetails: Bool {
-        hasRelations || !children.isEmpty || canEdit
+        hasRelations || !children.isEmpty
     }
 
     var body: some View {
@@ -335,14 +336,33 @@ private struct WomanDetailSheet: View {
 
     // MARK: - المربّع وما يُفتح منه
 
-    /// المحتوى + كل ما يُفتح منه (نماذج وقوائم بمنتصف الشاشة، اختيارات، تأكيد الحذف)
+    /// التفاصيل + مربّع الإدارة (يفتح كمربّع جديد) + ما يخصّ العرض وحده
     private var detailsStack: some View {
-        withPickers
+        detailsLayout
+            // مربّع الإدارة — كل إجراءات الإدارة فيه (طلب المالك ٢٠٢٦-١٠-٠٣)
+            .dsCenterBox(isPresented: $showAdminBox) { adminBox }
+            // فتح بروفايل إحدى الزوجات (عند تعدّدهن)
+            .confirmationDialog(L10n.t("الزوجات", "Wives"),
+                                isPresented: $showWifeNav, titleVisibility: .visible) {
+                ForEach(wives) { w in
+                    Button(w.fullName.isEmpty ? w.firstName : w.fullName) { onOpenMember?(w.id) }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+            }
+            // اختيار زوج من العائلة (لعقدة أنثى)
+            .dsCenterBox(isPresented: $showHusbandPicker) {
+                familyPickerBox(title: L10n.t("اختيار زوج من العائلة", "Choose husband"),
+                                icon: "person.fill",
+                                emptyMsg: L10n.t("لا يوجد ذكور في الشجرة", "No family men"),
+                                candidates: husbandCandidates, selectedId: woman.husbandId,
+                                onPick: { linkHusband($0) },
+                                onCancel: { showHusbandPicker = false; wifeSearch = "" })
+            }
     }
 
-    /// إضافة/تعديل/ترتيب — مربّعات بمنتصف الشاشة (بدل الأوراق السفلية) + تأكيد الحذف
-    private var withForms: some View {
-        detailsLayout
+    /// نوافذ الإدارة تُفتح فوق مربّع الإدارة نفسه (لا من التفاصيل) — فـ«إلغاء» يرجع إليه
+    private func withAdminPresentations<Box: View>(_ box: Box) -> some View {
+        box
             // إضافة (ابن/بنت/زوجة/أم)
             .dsCenterBox(isPresented: Binding(
                 get: { addKind != nil },
@@ -356,7 +376,7 @@ private struct WomanDetailSheet: View {
                     onConfirm: performAdd
                 )
             }
-            // تعديل البيانات (الإجراء الكحلي في الشريط السفلي)
+            // تعديل البيانات (الإجراء الكحلي أسفل مربّع الإدارة)
             .dsCenterBox(isPresented: $showEditName) {
                 memberFormBox(
                     title: L10n.t("تعديل البيانات", "Edit details"),
@@ -370,6 +390,15 @@ private struct WomanDetailSheet: View {
             }
             // ترتيب الأبناء
             .dsCenterBox(isPresented: $showReorder) { reorderBox }
+            // اختيار زوجة موجودة من العائلة (لعقدة ذكر)
+            .dsCenterBox(isPresented: $showWifePicker) {
+                familyPickerBox(title: L10n.t("اختيار زوجة من العائلة", "Choose wife"),
+                                icon: "heart.fill",
+                                emptyMsg: L10n.t("لا توجد إناث متاحات في الشجرة", "No available family women"),
+                                candidates: wifeCandidates, selectedId: nil,
+                                onPick: { linkWife($0) },
+                                onCancel: { showWifePicker = false; wifeSearch = "" })
+            }
             // حذف
             .dsAlert(L10n.t("حذف العضو؟", "Delete member?"), isPresented: $showDelete) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) { performDelete() }
@@ -377,11 +406,6 @@ private struct WomanDetailSheet: View {
             } message: {
                 Text(L10n.t("سيُحذف نهائيًا من شجرة النساء.", "This removes them from the women tree."))
             }
-    }
-
-    /// الاختيارات السريعة كما كانت: الأم، جنس الابن، مصدر الزوجة، الزوجات
-    private var withDialogs: some View {
-        withForms
             // اختيار الأم من زوجات الأب
             .confirmationDialog(L10n.t("اختيار الأم", "Choose mother"),
                                 isPresented: $showMotherPicker, titleVisibility: .visible) {
@@ -396,50 +420,12 @@ private struct WomanDetailSheet: View {
             } message: {
                 Text(L10n.t("اختر أمّ العضو من زوجات الأب", "Pick the mother from the father's wives"))
             }
-            // اختيار جنس الابن المُضاف: ذكر أو أنثى (زر واحد مدمج)
-            .confirmationDialog(L10n.t("إضافة ابن", "Add child"),
-                                isPresented: $showChildGender, titleVisibility: .visible) {
-                Button(L10n.t("ذكر", "Male")) { addName = ""; addKind = .son }
-                Button(L10n.t("أنثى", "Female")) { addName = ""; addKind = .daughter }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
-            }
             // مصدر إضافة الزوجة: عادية (بالاسم) أو من العائلة
             .confirmationDialog(L10n.t("إضافة زوجة", "Add wife"),
                                 isPresented: $showWifeSource, titleVisibility: .visible) {
-                Button(L10n.t("إضافة بالاسم", "Add by name")) { addName = ""; addKind = .wife }
+                Button(L10n.t("إضافة بالاسم", "Add by name")) { startAdd(.wife) }
                 Button(L10n.t("اختيار من العائلة", "Choose from family")) { showWifePicker = true }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
-            }
-            // فتح بروفايل إحدى الزوجات (عند تعدّدهن)
-            .confirmationDialog(L10n.t("الزوجات", "Wives"),
-                                isPresented: $showWifeNav, titleVisibility: .visible) {
-                ForEach(wives) { w in
-                    Button(w.fullName.isEmpty ? w.firstName : w.fullName) { onOpenMember?(w.id) }
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
-            }
-    }
-
-    /// اختيار زوجة/زوج من العائلة — مربّع بمنتصف الشاشة مع بحث
-    private var withPickers: some View {
-        withDialogs
-            // اختيار زوجة موجودة من العائلة (لعقدة ذكر)
-            .dsCenterBox(isPresented: $showWifePicker) {
-                familyPickerBox(title: L10n.t("اختيار زوجة من العائلة", "Choose wife"),
-                                icon: "heart.fill",
-                                emptyMsg: L10n.t("لا توجد إناث متاحات في الشجرة", "No available family women"),
-                                candidates: wifeCandidates, selectedId: nil,
-                                onPick: { linkWife($0) },
-                                onCancel: { showWifePicker = false; wifeSearch = "" })
-            }
-            // اختيار زوج من العائلة (لعقدة أنثى)
-            .dsCenterBox(isPresented: $showHusbandPicker) {
-                familyPickerBox(title: L10n.t("اختيار زوج من العائلة", "Choose husband"),
-                                icon: "person.fill",
-                                emptyMsg: L10n.t("لا يوجد ذكور في الشجرة", "No family men"),
-                                candidates: husbandCandidates, selectedId: woman.husbandId,
-                                onPick: { linkHusband($0) },
-                                onCancel: { showHusbandPicker = false; wifeSearch = "" })
             }
     }
 
@@ -552,18 +538,13 @@ private struct WomanDetailSheet: View {
         .buttonStyle(DSScaleButtonStyle())
     }
 
-    /// جسم التفاصيل: العائلة ← الإدارة (تدخل تباعاً عند «عرض التفاصيل») — بلا تواريخ
-    /// كما كان شيت النساء أصلاً (العمر في الحبّة فقط)
+    /// جسم التفاصيل: العائلة (تدخل عند «عرض التفاصيل») — بلا تواريخ كما كان شيت النساء
+    /// أصلاً (العمر في الحبّة فقط). الإدارة صارت مربّعاً مستقلاً من الشريط السفلي.
     private var detailsBody: some View {
         let open = isExpanded
         return VStack(spacing: DS.Spacing.md) {
             familySection
                 .dsStaggerWhen(0, active: open)
-
-            if canEdit {
-                adminSection
-                    .dsStaggerWhen(1, active: open)
-            }
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
@@ -897,7 +878,16 @@ private struct WomanDetailSheet: View {
                             + (c.isDeceased == true ? L10n.t("، متوفّى", ", deceased") : ""))
     }
 
-    // MARK: - الإدارة (إضافة/ترتيب/وفاة/حذف)
+    // MARK: - مربّع الإدارة (يفتح كمربّع جديد — طلب المالك ٢٠٢٦-١٠-٠٣)
+    //
+    // مربّعات بسيطة لا قائمة (طلب المالك): ثلاثة في كل سطر بنفس مربّعات «اختر نوع الطلب» —
+    // أيقونة بدائرة وتحتها اسم الإجراء، والحذف آخرها بالأحمر. «تعديل البيانات» الإجراء
+    // الكحلي أسفل المربّع. كل نافذة تُفتح فوقه (والمربّع يتقلّص خلفها قليلاً)، فـ«إلغاء» يرجع إليه.
+
+    /// مربّع آخر مفتوح فوق مربّع الإدارة — يتقلّص خلفه قليلاً (نفس المربّعات الإضافية)
+    private var adminHasBoxOnTop: Bool {
+        addKind != nil || showEditName || showReorder || showWifePicker
+    }
 
     private struct AdminAction: Identifiable {
         let id: String
@@ -907,22 +897,31 @@ private struct WomanDetailSheet: View {
         let run: () -> Void
     }
 
-    /// أزرار الإدارة بنفس ترتيبها — «تعديل البيانات» صار الإجراء الكحلي في الشريط السفلي
+    /// الأم تُختار من زوجات الأب فقط — بلا زوجات للأب ولا أمّ محدّدة لا يظهر مربّعها
+    /// (كان يفتح قائمة فارغة)
+    private var canPickMother: Bool { mother != nil || !fatherWives.isEmpty }
+
+    /// الإجراءات بالترتيب: الإضافة، الأم والترتيب، ثم الوفاة والحذف
     private var adminActions: [AdminAction] {
         var list: [AdminAction] = [
-            AdminAction(id: "child", title: L10n.t("ابن", "Child"),
-                        icon: "person.badge.plus", color: DS.Color.primary) { showChildGender = true }
+            AdminAction(id: "son", title: L10n.t("إضافة ابن", "Add son"),
+                        icon: "figure.stand", color: DS.Color.primary) { startAdd(.son) },
+            AdminAction(id: "daughter", title: L10n.t("إضافة بنت", "Add daughter"),
+                        icon: "figure.stand.dress", color: DS.Color.female) { startAdd(.daughter) }
         ]
         if !woman.isFemale {
-            list.append(AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"),
-                                    icon: "heart", color: DS.Color.female) { showWifeSource = true })
+            list.append(AdminAction(id: "wife", title: L10n.t("إضافة زوجة", "Add wife"),
+                                    icon: "heart.fill", color: DS.Color.female) { showWifeSource = true })
         }
-        list.append(AdminAction(id: "mother", title: L10n.t("أم", "Mother"),
-                                icon: "figure.stand.dress", color: DS.Color.accent) { showMotherPicker = true })
+        if canPickMother {
+            list.append(AdminAction(id: "mother", title: L10n.t("الأم", "Mother"),
+                                    icon: "figure.and.child.holdinghands", color: DS.Color.accent) {
+                showMotherPicker = true
+            })
+        }
         let kids = children
         if !kids.isEmpty {
             // neonBlue = كحلي primaryDark نفسه في الفاتح، وأزرق فاتح يُقرأ في الداكن
-            // (primaryDark الداكن كان باهتاً على خلفية الزر السوداء)
             list.append(AdminAction(id: "reorder", title: L10n.t("ترتيب الأبناء", "Reorder"),
                                     icon: "arrow.up.arrow.down", color: DS.Color.neonBlue) {
                 orderedChildren = kids
@@ -930,37 +929,61 @@ private struct WomanDetailSheet: View {
             })
         }
         list.append(AdminAction(id: "deceased",
-                                title: woman.isDeceased == true ? L10n.t("إلغاء الوفاة", "Living")
-                                                                : L10n.t("متوفّى", "Deceased"),
+                                title: woman.isDeceased == true ? L10n.t("إلغاء الوفاة", "Mark living")
+                                                                : L10n.t("تسجيل وفاة", "Deceased"),
                                 icon: "heart.slash", color: DS.Color.warning) { toggleDeceased() })
         list.append(AdminAction(id: "delete", title: L10n.t("حذف", "Delete"),
                                 icon: "trash", color: DS.Color.error) { showDelete = true })
         return list
     }
 
-    private var adminSection: some View {
+    private func startAdd(_ kind: AddKind) {
+        addName = ""
+        addKind = kind
+    }
+
+    private var adminBox: some View {
         let actions = adminActions
-        return DSComposerSection(title: L10n.t("الإدارة", "Manage"),
-                                 icon: "square.grid.2x2.fill",
-                                 tint: DS.Color.primary) {
-            // صفوف عادية لا LazyVGrid — الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً فيُقصّ آخر صف
-            VStack(spacing: DS.Spacing.sm) {
-                ForEach(Array(stride(from: 0, to: actions.count, by: 3)), id: \.self) { start in
-                    let end = min(start + 3, actions.count)
-                    HStack(spacing: DS.Spacing.sm) {
-                        ForEach(actions[start..<end]) { adminTile($0) }
-                        ForEach(0..<(3 - (end - start)), id: \.self) { _ in
-                            Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+        return withAdminPresentations(
+            DSComposer(
+                title: L10n.t("الإدارة", "Manage"),
+                subtitle: displayName(woman),
+                icon: "person.badge.shield.checkmark.fill",
+                tint: woman.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
+                actionTitle: L10n.t("تعديل البيانات", "Edit details"),
+                actionIcon: "pencil",
+                cancelTitle: L10n.t("إغلاق", "Close"),
+                canSubmit: true,
+                isBusy: busy,
+                isBehindExtra: adminHasBoxOnTop,
+                onSubmit: openEditForm,
+                onCancel: { showAdminBox = false }
+            ) {
+                DSComposerSection(title: L10n.t("الإجراءات", "Actions"),
+                                  icon: "square.grid.2x2.fill",
+                                  tint: DS.Color.primary,
+                                  index: 0) {
+                    // ثلاثة في كل سطر — صفوف عادية لا LazyVGrid (الشبكة الكسولة تُبلِّغ
+                    // ارتفاعاً ناقصاً فيُقصّ آخر صف)
+                    VStack(spacing: DS.Spacing.sm) {
+                        ForEach(Array(stride(from: 0, to: actions.count, by: 3)), id: \.self) { start in
+                            let end = min(start + 3, actions.count)
+                            HStack(spacing: DS.Spacing.sm) {
+                                ForEach(actions[start..<end]) { adminTile($0) }
+                                ForEach(0..<(3 - (end - start)), id: \.self) { _ in
+                                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                                }
+                            }
                         }
                     }
                 }
+                .disabled(busy)
             }
-            .overlay(busy ? ProgressView().tint(DS.Color.primary) : nil)
-            .disabled(busy)
-        }
+        )
     }
 
-    /// زر إدارة — مثل مربّعات نوع الطلب في تفاصيل العضو: أيقونة بدائرة + تسمية
+    /// مربّع إجراء — نفس مربّعات «اختر نوع الطلب»: أيقونة بدائرة + اسم الإجراء
+    /// (الحذف اسمه أحمر — إجراء لا رجعة فيه)
     private func adminTile(_ action: AdminAction) -> some View {
         Button(action: action.run) {
             VStack(spacing: 6) {
@@ -969,15 +992,17 @@ private struct WomanDetailSheet: View {
                     .foregroundColor(action.color)
                     .frame(width: 42, height: 42)
                     .background(Circle().fill(action.color.opacity(0.14)))
+                    .accessibilityHidden(true)   // زخرفة — الاسم تحتها يكفي
                 Text(action.title)
                     .dsFieldFont(12, weight: .bold)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .foregroundColor(action.color == DS.Color.error ? DS.Color.error : DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, DS.Spacing.xs)
             .dsRowBox()
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(action.title)
@@ -985,18 +1010,19 @@ private struct WomanDetailSheet: View {
 
     // MARK: - الشريط السفلي (نفس شريط تفاصيل العضو)
 
-    /// شريط ثابت أسفل المربّع: «تعديل البيانات» كحلي يمين (للإدارة)، «إغلاق» يسار
+    /// شريط ثابت أسفل المربّع: «الإدارة» كحلي يمين (يفتح مربّع الإدارة)، «إغلاق» يسار
     private var panelFooter: some View {
         HStack(spacing: DS.Spacing.sm) {
             if canEdit {
-                Button(action: openEditForm) {
+                Button { showAdminBox = true } label: {
                     HStack(spacing: 7) {
                         if busy {
                             ProgressView().tint(.white).scaleEffect(0.85)
                         } else {
-                            Image(systemName: "pencil").font(.system(size: 14, weight: .bold))
+                            Image(systemName: "person.badge.shield.checkmark.fill")
+                                .font(.system(size: 14, weight: .bold))
                         }
-                        Text(L10n.t("تعديل البيانات", "Edit details"))
+                        Text(L10n.t("الإدارة", "Manage"))
                             .font(DS.Font.plex(15, weight: .bold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -1388,7 +1414,7 @@ private struct WomanDetailSheet: View {
 
     /// ربط أنثى موجودة كزوجة لهذه العقدة (لعقدة ذكر).
     private func linkWife(_ womanId: UUID) {
-        showWifePicker = false; wifeSearch = ""; busy = true
+        showWifePicker = false; showAdminBox = false; wifeSearch = ""; busy = true
         Task {
             try? await WomenStore.setHusbandId(womanId: womanId, husbandId: woman.id)
             await onChanged?()
@@ -1429,7 +1455,7 @@ private struct WomanDetailSheet: View {
         let name = addName.trimmingCharacters(in: .whitespaces)
         let birth = formBirthDateValue
         let married = formIsMarried
-        addName = ""; addKind = nil; busy = true
+        addName = ""; addKind = nil; showAdminBox = false; busy = true
         Task {
             do {
                 switch kind {
@@ -1453,7 +1479,7 @@ private struct WomanDetailSheet: View {
         guard !name.isEmpty else { return }
         let birth = formBirthDateValue
         let married = formIsMarried
-        busy = true
+        showAdminBox = false; busy = true
         Task {
             try? await WomenStore.update(id: woman.id, fullName: name,
                                          isDeceased: woman.isDeceased == true,
@@ -1478,7 +1504,7 @@ private struct WomanDetailSheet: View {
     }
 
     private func toggleDeceased() {
-        busy = true
+        showAdminBox = false; busy = true
         let becomingDeceased = !(woman.isDeceased == true)
         let name = woman.fullName.isEmpty ? woman.firstName : woman.fullName
         Task {
@@ -1501,7 +1527,7 @@ private struct WomanDetailSheet: View {
     }
 
     private func performDelete() {
-        busy = true
+        showAdminBox = false; busy = true
         Task {
             try? await WomenStore.delete(id: woman.id)
             await onChanged?()
@@ -1511,7 +1537,7 @@ private struct WomanDetailSheet: View {
 
     /// تعيين أمّ العضو (من زوجات الأب) أو إزالتها.
     private func setMother(_ motherId: UUID?) {
-        busy = true
+        showAdminBox = false; busy = true
         Task {
             try? await WomenStore.setMotherId(childId: woman.id, motherId: motherId)
             await onChanged?()
@@ -1521,7 +1547,7 @@ private struct WomanDetailSheet: View {
 
     private func performReorder() {
         let ids = orderedChildren.map(\.id)
-        showReorder = false; busy = true
+        showReorder = false; showAdminBox = false; busy = true
         Task {
             try? await WomenStore.reorder(orderedIds: ids)
             await onChanged?()

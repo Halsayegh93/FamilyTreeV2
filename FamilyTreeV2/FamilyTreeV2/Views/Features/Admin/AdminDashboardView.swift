@@ -14,7 +14,8 @@ enum AdminReviewDestination: Hashable {
 //   ١. «المطلوب مني» (الافتراضي): ما ينتظر المشاهد فقط — صف كبير لكل نوع بعدده الأحمر،
 //      أو «لا توجد مهام معلّقة» — ثم «أفراد العائلة» (لمن يرى الإحصائيات) و«نطاق الصلاحيات» (المراقب والمشرف).
 //   ٢. «الأعضاء والشجرة»: أدوات الشجرة والأعضاء المتاحة للمشاهد.
-//   ٣. «المحتوى والنظام»: الرسائل والإحصائيات والتقارير وإعدادات النظام.
+//   ٣. «النظام»: مربّعات الإعدادات نفسها بمجموعات — الفريق والأمان · الإشعارات · التطبيق ·
+//      التقارير؛ كل مربّع يفتح صفحته مباشرة، بلا صفحة وسطية وبلا رقم مكرّر (طلب المالك ٢٠٢٦-١٠-٠٢).
 // كل أداة في قسم واحد، وكل صف بشكل واحد (أيقونة بمربّع فاتح، عنوان، تلميح، عدد، سهم) داخل
 // بطاقة واحدة بفواصل — بلا تدرّج ولا ظل. الصلاحيات والوجهات والروابط العميقة كما كانت تماماً.
 
@@ -380,8 +381,10 @@ struct AdminDashboardView: View {
 
     /// وجهة كل بطاقة
     private enum DashTarget {
-        case requests, inbox, members, activity, analytics, pdfReports, system, deaths
+        case requests, inbox, members, activity, analytics, pdfReports, deaths
         case usage(AppUsageCategory)
+        // «النظام» — كل مربّع يفتح صفحته مباشرة (كانت داخل صفحة «إعدادات النظام» الوسطية)
+        case team, liveActivity, devices, bannedPhones, messaging, pushHealth, appSettings, forceUpdate
     }
 
     @ViewBuilder
@@ -393,10 +396,16 @@ struct AdminDashboardView: View {
         case .activity:            AdminActivityLogView()
         case .analytics:           AdminAnalyticsView()
         case .pdfReports:          AdminReportsView()
-        // الفريق والإشعارات وتحديثات التطبيق و«صحة النظام» كلها بالداخل
-        case .system:              AdminSecuritySettingsView()
         case .usage(let category): AppUsageMembersView(category: category)
         case .deaths:              DeathAnnouncementsPage()
+        case .team:                AdminModeratorsView()
+        case .liveActivity:        AdminActiveMembersView()
+        case .devices:             AdminDevicesView()
+        case .bannedPhones:        AdminBannedPhonesView()
+        case .messaging:           AdminMessagingHubView()
+        case .pushHealth:          AdminPushHealthView()
+        case .appSettings:         AdminAppSettingsView()
+        case .forceUpdate:         AdminForceUpdateView()
         }
     }
 
@@ -404,7 +413,7 @@ struct AdminDashboardView: View {
     private var visibleSections: [DashSection] {
         var sections: [DashSection] = [.pending]
         if !memberTiles.isEmpty || canSeeStats { sections.append(.members) }
-        if !systemTiles.isEmpty || authVM.canViewSystemSettings { sections.append(.system) }
+        if !systemGroups.isEmpty { sections.append(.system) }
         return sections
     }
 
@@ -462,12 +471,18 @@ struct AdminDashboardView: View {
                 }
                 .transition(sectionSwap)
             case .system:
-                VStack(spacing: DS.Spacing.md) {
-                    if authVM.canViewSystemSettings {
-                        settingsCard
-                            .dsCardCascade(0, appeared: tilesAppeared)
+                // المربّعات نفسها بمجموعات — كل مربّع يفتح صفحته (بلا صفحة وسطية)
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    ForEach(systemGroups) { group in
+                        VStack(alignment: .leading, spacing: 0) {
+                            DSSectionHeader(title: group.title, icon: group.icon,
+                                            trailing: group.trailing,
+                                            iconColor: group.tint.dsReadableGlyph)
+                                .accessibilityAddTraits(.isHeader)
+                                .dsCardCascade(group.start, appeared: tilesAppeared)
+                            tilesGrid(group.tiles, columns: 2, startIndex: group.start + 1)
+                        }
                     }
-                    tilesGrid(systemTiles, columns: 2, startIndex: 1)
                 }
                 .transition(sectionSwap)
             }
@@ -667,6 +682,8 @@ struct AdminDashboardView: View {
     private var usageCard: some View {
         let segments = usageSegments
         let total = segments.reduce(0) { $0 + $1.value }
+        // كل من دخل التطبيق: فعّال + خامل + دخل بلا جهاز
+        let totalUsers = usageStats.map { $0.active + $0.idle + $0.loginNoDevice } ?? 0
         return VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.md) {
                 SysGradientIcon(name: "iphone.gen3", tint: DS.Color.success, size: 44)
@@ -674,11 +691,16 @@ struct AdminDashboardView: View {
                     Text(L10n.t("استخدام التطبيق", "App usage"))
                         .font(DS.Font.plex(16, weight: .bold))
                         .foregroundColor(DS.Color.fieldLabel)
-                    Text(total > 0 ? L10n.t("من \(total) من الأحياء", "Of \(total) living members")
+                    // «إجمالي المستخدمين» هنا وحده (كان في صفحة «إعدادات النظام» الوسطية)
+                    Text(total > 0
+                         ? L10n.t("إجمالي المستخدمين \(totalUsers) · من \(total) من الأحياء",
+                                  "\(totalUsers) users · of \(total) living members")
                          : isInitialLoading ? L10n.t("جارٍ التحميل…", "Loading…")
                          : L10n.t("غير متاح الآن — اسحب للتحديث", "Unavailable — pull to refresh"))
                         .dsFieldFont(12)
                         .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
             }
@@ -761,78 +783,106 @@ struct AdminDashboardView: View {
         return list
     }
 
-    // MARK: - «النظام»: الإعدادات + الإحصائيات والتقارير
+    // MARK: - «النظام»: مربّعات الإعدادات بمجموعات (طلب المالك ٢٠٢٦-١٠-٠٢)
+    //
+    // «الفريق والأمان · الإشعارات · التطبيق · التقارير» — كل مربّع يفتح صفحته مباشرة (كانت
+    // داخل صفحة «إعدادات النظام» الوسطية)، وبلا رقم مكرّر: عدد الفريق في مربّعه وحده،
+    // و«استخدام التطبيق» في «الأعضاء» وحده. الصلاحيات كما كانت: الإعدادات للمالك والمدير
+    // (المدير للقراءة فيما يعدّله المالك وحده)، والإحصائيات والتقارير لهما.
 
-    private var settingsCard: some View {
-        let tint = DS.Color.actionNavy
-        let parts: [(String, String)] = [
-            ("person.badge.shield.checkmark.fill",
-             isInitialLoading ? L10n.t("الفريق", "Team") : L10n.t("الفريق \(moderatorCount)", "Team \(moderatorCount)")),
-            ("iphone.gen3", L10n.t("الأجهزة", "Devices")),
-            ("bell.badge.fill", L10n.t("الإشعارات", "Notifications")),
-            ("arrow.down.app.fill", L10n.t("التحديث الإجباري", "Force update"))
-        ]
-        return NavigationLink { destinationView(.system) } label: {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack(spacing: DS.Spacing.md) {
-                    SysGradientIcon(name: "lock.shield.fill", tint: tint, size: 46)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("الإعدادات", "Settings"))
-                            .font(DS.Font.plex(16, weight: .bold))
-                            .foregroundColor(DS.Color.fieldLabel)
-                        Text(L10n.t("التطبيق والأمان", "App & security"))
-                            .dsFieldFont(12)
-                            .foregroundColor(DS.Color.fieldValue)
-                    }
-                    Spacer(minLength: 0)
-                    SysChevron()
-                }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)],
-                          alignment: .leading, spacing: 6) {
-                    ForEach(parts, id: \.1) { icon, label in
-                        HStack(spacing: 5) {
-                            Image(systemName: icon)
-                                .font(.system(size: 10.5, weight: .bold))
-                                .accessibilityHidden(true)
-                            Text(label)
-                                .font(DS.Font.plex(11.5, weight: .semibold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Spacer(minLength: 0)
-                        }
-                        .foregroundColor(tint.dsReadableGlyph)
-                        .padding(.horizontal, 9)
-                        .frame(height: 30)
-                        .background(Capsule().fill(tint.dsReadableGlyph.opacity(0.10)))
-                    }
-                }
-            }
-            .padding(DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(cardBackground(tint))
-            .overlay(cardBorder(highlight: false))
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        }
-        .buttonStyle(DSPressStyle())
-        .accessibilityLabel(L10n.t("الإعدادات: الفريق والأجهزة والإشعارات والتحديث الإجباري",
-                                   "Settings: team, devices, notifications, force update"))
+    private struct SystemGroup: Identifiable {
+        let id: String
+        let title: String
+        let icon: String
+        let tint: Color
+        /// تلميح بطرف العنوان — «للقراءة» للمدير فيما يعدّله المالك وحده
+        var trailing: String? = nil
+        let tiles: [DashTile]
+        /// ترتيب أول عنصر في دخول المربّعات تباعاً عبر التبويب كله
+        var start = 0
     }
 
-    private var systemTiles: [DashTile] {
-        var list: [DashTile] = []
-        if authVM.isAdmin {
-            list.append(DashTile(id: "system.analytics",
-                                 title: L10n.t("الإحصائيات", "Analytics"),
-                                 caption: L10n.t("الأعمار والنمو", "Ages & growth"),
-                                 icon: "chart.bar.xaxis", tint: DS.Color.composerProject,
-                                 target: .analytics))
-            list.append(DashTile(id: "system.reports",
-                                 title: L10n.t("التقارير", "Reports"),
-                                 caption: L10n.t("ملفات للطباعة", "Printable files"),
-                                 icon: "doc.text.fill", tint: DS.Color.composerLibrary,
-                                 target: .pdfReports))
+    private var systemGroups: [SystemGroup] {
+        var groups: [SystemGroup] = []
+        let readOnly = authVM.canManageSettings ? nil : L10n.t("للقراءة", "Read-only")
+        if authVM.canViewSystemSettings {
+            groups.append(SystemGroup(
+                id: "group.team", title: L10n.t("الفريق والأمان", "Team & security"),
+                icon: "person.badge.shield.checkmark.fill", tint: DS.Color.actionNavy, trailing: readOnly,
+                tiles: [
+                    // عدد الفريق هنا وحده — نص هادئ لا شارة حمراء (ليس شيئاً ينتظرك)
+                    DashTile(id: "system.team",
+                             title: L10n.t("فريق الإدارة", "Admin team"),
+                             caption: isInitialLoading
+                                 ? L10n.t("الأدوار والصلاحيات", "Roles & permissions")
+                                 : L10n.t("\(moderatorCount) في الفريق", "\(moderatorCount) on the team"),
+                             icon: "person.3.fill", tint: DS.Color.actionNavy, target: .team),
+                    // «النشاط الآن» جنب «فريق الإدارة» (طلب المالك)
+                    DashTile(id: "system.live",
+                             title: L10n.t("النشاط الآن", "Live activity"),
+                             caption: L10n.t("الدخول وآخر نشاط", "Sign-ins & activity"),
+                             icon: "person.2.fill", tint: DS.Color.composerProject, target: .liveActivity),
+                    DashTile(id: "system.devices",
+                             title: L10n.t("الأجهزة", "Devices"),
+                             caption: L10n.t("المرتبطة بالحسابات", "Linked to accounts"),
+                             icon: "iphone.gen3", tint: DS.Color.actionNavy, target: .devices),
+                    DashTile(id: "system.banned",
+                             title: L10n.t("الأرقام المحظورة", "Banned numbers"),
+                             caption: L10n.t("منع التسجيل برقم", "Block sign-up by number"),
+                             icon: "phone.down.fill", tint: DS.Color.error, target: .bannedPhones)
+                ]))
+            groups.append(SystemGroup(
+                id: "group.notify", title: L10n.t("الإشعارات", "Notifications"),
+                icon: "bell.badge.fill", tint: DS.Color.composerDiwaniya,
+                tiles: [
+                    // «إرسال إشعارات» + «تحديثات التطبيق» صفحة واحدة
+                    DashTile(id: "system.messaging",
+                             title: L10n.t("الإشعارات والتحديثات", "Notifications & updates"),
+                             caption: L10n.t("إشعار للأعضاء أو تحديث", "Notify members or announce"),
+                             icon: "bell.badge.fill", tint: DS.Color.composerDiwaniya, target: .messaging),
+                    DashTile(id: "system.push",
+                             title: L10n.t("حالة الإشعارات", "Push status"),
+                             caption: L10n.t("جاهزية الإرسال والاختبار", "Readiness & testing"),
+                             icon: "bell.and.waves.left.and.right.fill", tint: DS.Color.composerDiwaniya,
+                             target: .pushHealth)
+                ]))
+            groups.append(SystemGroup(
+                id: "group.app", title: L10n.t("التطبيق", "App"),
+                icon: "gearshape.fill", tint: DS.Color.actionNavy, trailing: readOnly,
+                tiles: [
+                    DashTile(id: "system.settings",
+                             title: L10n.t("إعدادات التطبيق", "App settings"),
+                             caption: L10n.t("اللغة · التسجيل · الميزات", "Language · sign-up · features"),
+                             icon: "gearshape.fill", tint: DS.Color.actionNavy, target: .appSettings),
+                    DashTile(id: "system.forceUpdate",
+                             title: L10n.t("التحديث الإجباري", "Force update"),
+                             caption: L10n.t("إيقاف النسخ القديمة", "Block old versions"),
+                             icon: "arrow.down.app.fill", tint: DS.Color.actionNavy, target: .forceUpdate)
+                ]))
         }
-        return list
+        if authVM.isAdmin {
+            groups.append(SystemGroup(
+                id: "group.reports", title: L10n.t("التقارير", "Reports"),
+                icon: "doc.text.fill", tint: DS.Color.composerLibrary,
+                tiles: [
+                    DashTile(id: "system.analytics",
+                             title: L10n.t("الإحصائيات", "Analytics"),
+                             caption: L10n.t("الأعمار والنمو", "Ages & growth"),
+                             icon: "chart.bar.xaxis", tint: DS.Color.composerProject,
+                             target: .analytics),
+                    DashTile(id: "system.reports",
+                             title: L10n.t("مركز التقارير", "Reports center"),
+                             caption: L10n.t("ملفات للطباعة", "Printable files"),
+                             icon: "doc.text.fill", tint: DS.Color.composerLibrary,
+                             target: .pdfReports)
+                ]))
+        }
+        var next = 0
+        for i in groups.indices {
+            groups[i].start = next
+            next += groups[i].tiles.count + 1
+        }
+        return groups
     }
 
     // MARK: - مربّعات صغيرة (شكل واحد)
@@ -1146,7 +1196,7 @@ private struct DashRowPressStyle: ButtonStyle {
 
 // MARK: - بلاطة قسم
 
-/// بلاطة قسم إداري — تُستعمل في «إعدادات النظام» (وكانت في لوحة الإدارة قبل فكرة الأقسام).
+/// بلاطة قسم إداري — تُستعمل في صفحات الإدارة الداخلية (الأعضاء، الإحصائيات، حالة الإشعارات…).
 /// الكاملة: أيقونة متدرّجة بلون المجال + عنوان + وصف + رقم حيّ + شارة حمراء لما ينتظر.
 /// المضغوطة (إعدادات النظام، ثلاثة أعمدة — طلب المالك): أيقونة + عنوان فقط.
 struct AdminTile<Destination: View>: View {

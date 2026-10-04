@@ -99,7 +99,7 @@ struct AdminMembersManagementView: View {
                     .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register new member"))
                 }
             }
-            // «الأرقام المحظورة» انتقلت إلى «إعدادات النظام ← الأمان والوصول»
+            // «الأرقام المحظورة» انتقلت إلى «النظام ← الفريق والأمان» في لوحة الإدارة
         }
         .navigationDestination(isPresented: $showRegisterMember) {
             AdminRegisterMemberView()
@@ -130,7 +130,7 @@ struct AdminMembersManagementView: View {
                 accountsSection
 
                 // ملاحظة: «الملفات الناقصة» و«النشاط» و«الأجهزة» لا تتكرّر هنا —
-                // الناقصة هي نفسها محطة «الحسابات»، والنشاط والأجهزة في «إعدادات النظام».
+                // الناقصة هي نفسها محطة «الحسابات»، والنشاط والأجهزة في تبويب «النظام».
                 dataQualitySection
 
                 // نفس زر الشريط العلوي — ظاهر هنا لأنه أكثر إجراء يُطلب من هذه الصفحة
