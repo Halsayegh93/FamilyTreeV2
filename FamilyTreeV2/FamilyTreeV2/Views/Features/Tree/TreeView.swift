@@ -40,30 +40,15 @@ private struct FamilyLayout {
     var depth: [UUID: Int] = [:]
     var heights: [UUID: CGFloat] = [:]       // ارتفاع صندوق كل عقدة
     var childRows: [UUID: [[UUID]]] = [:]     // صفوف أبناء كل أب (لرسم خطوط الربط)
+    var connectors: [ConnectorGroup] = []     // خطوط كل أب مع أبنائه — تُبنى مرة مع التخطيط
     var size: CGSize = .zero
 }
 
-/// وصلة قصيرة تحت أب مفتوح — النمط الأصلي البسيط.
-private struct ConnectorStub: Identifiable {
-    let id: UUID
-    let x: CGFloat
-    let y: CGFloat
-    let kinship: Bool
-}
-
-/// خط ربط حقيقي بين أسفل شارة الأب وأعلى دائرة الابن (يُرسم كمنحنى بيزيه في Canvas).
-private struct ConnectorLink {
-    let from: CGPoint   // أسفل شارة الأب
-    let to: CGPoint     // أعلى دائرة الابن
-    let kinship: Bool   // جزء من مسار القرابة — لون ذهبي وسماكة أكبر
-}
-
-/// قوس بين الأب وصفّ أبنائه الأول (من الابن الأول إلى الثالث) — للآباء بأكثر من ٤ أبناء.
-private struct ConnectorArc {
-    let from: CGPoint     // أعلى دائرة أول ابن في الصف الأول
-    let control: CGPoint  // نقطة التحكم — أسفل شارة الأب (قمة القوس بين الأب والأبناء)
-    let to: CGPoint       // أعلى دائرة آخر ابن في الصف الأول
-    let kinship: Bool
+/// خطوط أب واحد مع كل أبنائه (كل الصفوف) — تُبنى مرة مع التخطيط بعد المرآة لا كل إطار.
+private struct ConnectorGroup {
+    var path = Path()          // الخطوط العادية
+    var kinPath = Path()       // طريق القرابة — ذهبي وأسمك
+    var dots: [CGPoint] = []   // نقاط تفرّع الأبناء عن الخط الأفقي
 }
 
 /// قرصة التكبير مع تثبيت النقطة تحت الأصابع (iOS 17+) — نسخة شجرة العائلة.
@@ -146,7 +131,10 @@ struct TreeView: View {
     private let LIFE_H: CGFloat = 20         // سطر سنوات المتوفّى
     private let H_GAP: CGFloat = 14          // بين الإخوة أفقيًا
     private let V_GAP: CGFloat = 48          // بين الأب وأبنائه عموديًا (عُوّضت مساحة شريحة التوسيع المحذوفة)
-    private let ROW_GAP: CGFloat = 14        // بين صفوف الأبناء الملتفّة
+    private let ROW_GAP: CGFloat = 34        // بين صفوف الأبناء الملتفّة — يتّسع لخط الصف فوقه
+    private let SPINE_ROOM: CGFloat = 18     // مساحة العمود على جانبي الأبناء الملتفّين (يبقى التمركز)
+    private let SPINE_OUT: CGFloat = 12      // بُعد العمود عن حافة أبعد ابن
+    private let LINE_CORNER: CGFloat = 10    // استدارة زوايا الخطوط
     private let CANVAS_PAD: CGFloat = 60     // هامش حول الشجرة
     /// أبناء لكل صف قبل الالتفاف — عمودياً ٣، وأفقياً يُحسب تلقائياً من عرض
     /// الشاشة ليتوسّع الإخوة جنب بعض بدل التكديس (طلب المالك)
@@ -277,46 +265,27 @@ struct TreeView: View {
                             .frame(width: geometry.size.width, height: geometry.size.height)
                             .overlay(alignment: .topLeading) {
                                 ZStack(alignment: .topLeading) {
-                                    // خطوط الربط الحقيقية بين الأب وأبنائه (صف واحد ≤3 أبناء) — قوس عميق
+                                    // خطوط الأب وأبنائه — كل الصفوف موصولة (طلب المالك ٢٠٢٦-١٠-٠٤:
+                                    // كان الخط يصل الصف الأول فقط). المسارات مبنية مع التخطيط.
                                     Canvas { ctx, _ in
-                                        for link in connectorLinks {
-                                            var p = Path()
-                                            p.move(to: link.from)
-                                            let dy = link.to.y - link.from.y
-                                            // نقاط تحكم بعيدة (80%) — قوس مقوّس واضح بدل الخط شبه المستقيم
-                                            p.addCurve(to: link.to,
-                                                       control1: CGPoint(x: link.from.x, y: link.from.y + dy * 0.8),
-                                                       control2: CGPoint(x: link.to.x, y: link.to.y - dy * 0.8))
-                                            ctx.stroke(p,
-                                                       with: .color(link.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.45)),
-                                                       style: StrokeStyle(lineWidth: link.kinship ? 3.5 : 2, lineCap: .round))
-                                        }
-                                        // قوس الآباء الملتفّة صفوفهم (>٣ أبناء مهما كثروا) — من أول ابن
-                                        // لثالث ابن، بقمة فيها كسرة خفيفة تحت الأب (منحنيان يلتقيان بزاوية)
-                                        for arc in connectorArcs {
-                                            var p = Path()
-                                            let apex = arc.control
-                                            p.move(to: arc.from)
-                                            p.addQuadCurve(to: apex,
-                                                           control: CGPoint(x: arc.from.x + (apex.x - arc.from.x) * 0.5,
-                                                                            y: arc.from.y))
-                                            p.addQuadCurve(to: arc.to,
-                                                           control: CGPoint(x: apex.x + (arc.to.x - apex.x) * 0.5,
-                                                                            y: arc.to.y))
-                                            ctx.stroke(p,
-                                                       with: .color(arc.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.45)),
-                                                       style: StrokeStyle(lineWidth: arc.kinship ? 3.5 : 2, lineCap: .round, lineJoin: .round))
+                                        let line = DS.Color.primary.opacity(0.45)
+                                        let dot = DS.Color.primary.opacity(0.6)
+                                        for g in layout.connectors {
+                                            ctx.stroke(g.path, with: .color(line),
+                                                       style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                                            for d in g.dots {
+                                                ctx.fill(Path(ellipseIn: CGRect(x: d.x - 3, y: d.y - 3, width: 6, height: 6)),
+                                                         with: .color(dot))
+                                            }
+                                            if !g.kinPath.isEmpty {
+                                                ctx.stroke(g.kinPath, with: .color(DS.Color.warning),
+                                                           style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+                                            }
                                         }
                                     }
                                     .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
                                     .allowsHitTesting(false)
-                                    // وصلة قصيرة تحت الأب المفتوح (للآباء بأكثر من 3 أبناء — الشجرة الكبيرة ما تنرسم بخطوط)
-                                    ForEach(connectorStubs) { stub in
-                                        RoundedRectangle(cornerRadius: 2)
-                                            .fill(stub.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.6))
-                                            .frame(width: stub.kinship ? 5 : 2.5, height: 16)
-                                            .position(x: stub.x, y: stub.y)
-                                    }
+                                    .accessibilityHidden(true)
                                     // العُقد — نفس شكل TreeMemberNode الدائري (بلا تغيير)
                                     ForEach(cachedVisibleMembers.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
                                         canvasNode(m)
@@ -1043,6 +1012,8 @@ struct TreeView: View {
                 w = max(w, rowW); h += (i > 0 ? ROW_GAP : 0) + rowH
                 i += perRow(for: boxes.count)
             }
+            // صفوف ملتفّة: مساحة العمود على الجانبين (بالتساوي فيبقى التمركز كما هو)
+            if boxes.count > perRow(for: boxes.count) { w += SPINE_ROOM * 2 }
             return CGSize(width: w, height: h)
         }
         func measure(_ id: UUID) -> CGSize {
@@ -1092,60 +1063,127 @@ struct TreeView: View {
         // مرآة أفقية → ترتيب الإخوة يمين‑لليسار (RTL) مثل تبويب النساء
         for (id, p) in L.positions { L.positions[id] = CGPoint(x: width - p.x - NODE_W, y: p.y) }
         L.size = CGSize(width: width, height: height)
+        L.connectors = buildConnectors(L)
         return L
     }
 
-    /// نقاط خطوط الربط الحقيقية — فقط للآباء بصف واحد (≤3 أبناء ظاهرين).
-    /// أكثر من ذلك تبقى الوصلة القصيرة (طلب صريح سابق من المالك — الشجرة الكبيرة ما تنرسم بخطوط).
-    private var connectorLinks: [ConnectorLink] {
-        layout.childRows.flatMap { pid, rows -> [ConnectorLink] in
-            guard rows.count == 1, let kids = rows.first, !kids.isEmpty, kids.count <= 3,
-                  let pp = layout.positions[pid] else { return [] }
-            let ph = layout.heights[pid] ?? NODE_H_DEFAULT
-            let start = CGPoint(x: pp.x + NODE_W / 2, y: pp.y + ph - 2)
-            return kids.compactMap { cid in
-                guard let cp = layout.positions[cid] else { return nil }
-                let end = CGPoint(x: cp.x + NODE_W / 2, y: cp.y + 4)
-                let kin = kinshipHighlightedIds.contains(pid) && kinshipHighlightedIds.contains(cid)
-                return ConnectorLink(from: start, to: end, kinship: kin)
+    /// خطوط كل أب مع أبنائه — تُبنى مرة مع التخطيط بعد المرآة (الأكبر يميناً)، لا كل إطار.
+    /// اختيار المالك ٢٠٢٦-١٠-٠٤ (كان الخط يصل الصف الأول وحده):
+    ///  • صف واحد بثلاثة أبناء أو أقل: الأقواس القديمة من أسفل الأب إلى كل ابن.
+    ///  • صف واحد أطول (أفقياً): خط أفقي في منتصف الفجوة ونزول لكل ابن.
+    ///  • صفوف ملتفّة — «العمود»: خط أفقي فوق كل صف، وعمود على جهة الأكبر يصل الصفوف بخط الأب.
+    private func buildConnectors(_ L: FamilyLayout) -> [ConnectorGroup] {
+        typealias Kid = (id: UUID, x: CGFloat, top: CGFloat)
+        let r = LINE_CORNER
+        var groups: [ConnectorGroup] = []
+        for (pid, ids) in L.childRows {
+            guard let pp = L.positions[pid] else { continue }
+            let fx = pp.x + NODE_W / 2
+            let fy = pp.y + (L.heights[pid] ?? NODE_H_DEFAULT) - 2
+            // كل صف: مركز كل ابن وأعلى دائرته، يساراً→يميناً
+            let rows: [[Kid]] = ids.map { row in
+                row.compactMap { id in L.positions[id].map { (id: id, x: $0.x + NODE_W / 2, top: $0.y + 4) } }
+                    .sorted { $0.x < $1.x }
+            }.filter { !$0.isEmpty }
+            guard let first = rows.first else { continue }
+            let kinFather = kinshipHighlightedIds.contains(pid)
+            func isKin(_ id: UUID) -> Bool { kinFather && kinshipHighlightedIds.contains(id) }
+            // خط كل صف: الأول في منتصف الفجوة بين الأب والصف، والتالية في منتصف الفجوة فوق صفّها
+            let bus: [CGFloat] = rows.enumerated().map { i, row in
+                let rowTop = (row.map(\.top).min() ?? fy) - 4
+                return i == 0 ? (fy + rowTop) / 2 : rowTop - ROW_GAP / 2
             }
-        }
-    }
+            let last = rows.count - 1
+            var g = ConnectorGroup()
+            func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
+            /// نزول ابن من خطّ صفّه + نقطة التفرّع
+            func drop(_ k: Kid, _ y: CGFloat) {
+                g.path.move(to: p(k.x, y)); g.path.addLine(to: p(k.x, k.top)); g.dots.append(p(k.x, y))
+            }
+            /// آخر الطريق: على خط الصف إلى الابن ثم نزول مدوّر إليه
+            func land(_ path: inout Path, _ k: Kid, _ y: CGFloat) {
+                path.addArc(tangent1End: p(k.x, y), tangent2End: p(k.x, k.top), radius: r)
+                path.addLine(to: p(k.x, k.top))
+            }
 
-    /// أقواس الآباء الملتفّة صفوفهم (أكثر من ٣ أبناء — حتى ٦ وأكثر): قوس يمتد من أول
-    /// ابن إلى ثالث ابن في الصف الأول، وقمته أسفل شارة الأب (بين الأب والأبناء).
-    private var connectorArcs: [ConnectorArc] {
-        layout.childRows.compactMap { pid, rows -> ConnectorArc? in
-            let total = rows.reduce(0) { $0 + $1.count }
-            guard total > 3, let firstRow = rows.first, firstRow.count >= 2,
-                  let pp = layout.positions[pid],
-                  let firstId = firstRow.first, let lastId = firstRow.last,
-                  let fp = layout.positions[firstId], let lp = layout.positions[lastId]
-            else { return nil }
-            let ph = layout.heights[pid] ?? NODE_H_DEFAULT
-            return ConnectorArc(
-                from: CGPoint(x: fp.x + NODE_W / 2, y: fp.y + 4),
-                control: CGPoint(x: pp.x + NODE_W / 2, y: pp.y + ph - 2),
-                to: CGPoint(x: lp.x + NODE_W / 2, y: lp.y + 4),
-                kinship: kinshipHighlightedIds.contains(pid)
-            )
-        }
-    }
+            // صف واحد بثلاثة أبناء أو أقل: الأقواس القديمة (نقاط تحكم بعيدة ٨٠٪ — قوس واضح)
+            if rows.count == 1, first.count <= 3 {
+                for k in first {
+                    var c = Path()
+                    let dy = k.top - fy
+                    c.move(to: p(fx, fy))
+                    c.addCurve(to: p(k.x, k.top), control1: p(fx, fy + dy * 0.8), control2: p(k.x, k.top - dy * 0.8))
+                    g.path.addPath(c)
+                    if isKin(k.id) { g.kinPath.addPath(c) }
+                }
+                groups.append(g); continue
+            }
+            // نزول الأب إلى خط الصف الأول
+            g.path.move(to: p(fx, fy)); g.path.addLine(to: p(fx, bus[0]))
 
-    /// وصلات قصيرة تحت الآباء المفتوحين — فقط لمن تجاوز أبناؤه حدّ رسم الخطوط (صف ملتفّ).
-    private var connectorStubs: [ConnectorStub] {
-        layout.childRows.compactMap { pid, rows in
-            guard !rows.isEmpty, let pp = layout.positions[pid] else { return nil }
-            // الآباء بصف واحد (≤3) لهم خطوط ربط حقيقية — لا وصلة قصيرة
-            if rows.count == 1, let kids = rows.first, kids.count <= 3 { return nil }
-            // الآباء الملتفّة صفوفهم لهم قوس يصل للأب — الوصلة القصيرة تصير زائدة
-            if let firstRow = rows.first, firstRow.count >= 2 { return nil }
-            let ph = layout.heights[pid] ?? NODE_H_DEFAULT
-            return ConnectorStub(id: pid,
-                                 x: pp.x + NODE_W / 2,
-                                 y: pp.y + ph + 10,
-                                 kinship: kinshipHighlightedIds.contains(pid))
+            if rows.count == 1 {
+                // صف واحد أطول (أفقياً): خط أفقي بطرفين مدوّرين ينزلان لطرفي الصف، والوسط نزول مستقيم
+                let a = first.first!, b = first.last!
+                g.path.move(to: p(a.x, a.top))
+                g.path.addArc(tangent1End: p(a.x, bus[0]), tangent2End: p(b.x, bus[0]), radius: r)
+                land(&g.path, b, bus[0])
+                for k in first.dropFirst().dropLast() { drop(k, bus[0]) }
+                for k in first where isKin(k.id) {
+                    g.kinPath.move(to: p(fx, fy))
+                    if abs(k.x - fx) < 1 { g.kinPath.addLine(to: p(k.x, k.top)) }
+                    else { g.kinPath.addLine(to: p(fx, bus[0] - r)); g.kinPath.addArc(tangent1End: p(fx, bus[0]), tangent2End: p(k.x, bus[0]), radius: r); land(&g.kinPath, k, bus[0]) }
+                }
+                groups.append(g); continue
+            }
+
+            // صفوف ملتفّة — «العمود» على جهة الأكبر (أول ابن في ترتيب التخطيط)
+            let eldestX = ids.first?.first.flatMap { L.positions[$0] }.map { $0.x + NODE_W / 2 } ?? fx
+            let eldestRight = eldestX >= fx
+            let allX = rows.flatMap { $0.map(\.x) }
+            let sx = eldestRight ? (allX.max() ?? fx) + NODE_W / 2 + SPINE_OUT
+                                 : (allX.min() ?? fx) - NODE_W / 2 - SPINE_OUT
+            // الابن الأبعد عن العمود في كل صف: إليه ينتهي خط الصف بانعطافة
+            func far(_ row: [Kid]) -> Kid { eldestRight ? row.first! : row.last! }
+            // الصف الأول ← العمود ← الصف الأخير
+            let f0 = far(first), fl = far(rows[last])
+            g.path.move(to: p(f0.x, f0.top))
+            g.path.addArc(tangent1End: p(f0.x, bus[0]), tangent2End: p(sx, bus[0]), radius: r)
+            g.path.addArc(tangent1End: p(sx, bus[0]), tangent2End: p(sx, bus[last]), radius: r)
+            g.path.addArc(tangent1End: p(sx, bus[last]), tangent2End: p(fl.x, bus[last]), radius: r)
+            land(&g.path, fl, bus[last])
+            // الصفوف الوسطى: تفرّع من العمود
+            if last > 1 {
+                for i in 1..<last {
+                    let fi = far(rows[i])
+                    g.path.move(to: p(sx, bus[i]))
+                    land(&g.path, fi, bus[i])
+                }
+            }
+            for (i, row) in rows.enumerated() {
+                let fi = far(row)
+                for k in row where k.id != fi.id { drop(k, bus[i]) }
+            }
+            // طريق القرابة: الأب ← (العمود) ← خط الصف ← الابن
+            for (i, row) in rows.enumerated() {
+                for k in row where isKin(k.id) {
+                    g.kinPath.move(to: p(fx, fy))
+                    if i == 0 {
+                        if abs(k.x - fx) < 1 { g.kinPath.addLine(to: p(k.x, k.top)); continue }
+                        g.kinPath.addLine(to: p(fx, bus[0] - r))
+                        g.kinPath.addArc(tangent1End: p(fx, bus[0]), tangent2End: p(k.x, bus[0]), radius: r)
+                    } else {
+                        g.kinPath.addLine(to: p(fx, bus[0] - r))
+                        g.kinPath.addArc(tangent1End: p(fx, bus[0]), tangent2End: p(sx, bus[0]), radius: r)
+                        g.kinPath.addArc(tangent1End: p(sx, bus[0]), tangent2End: p(sx, bus[i]), radius: r)
+                        g.kinPath.addArc(tangent1End: p(sx, bus[i]), tangent2End: p(k.x, bus[i]), radius: r)
+                    }
+                    land(&g.kinPath, k, bus[i])
+                }
+            }
+
+            groups.append(g)
         }
+        return groups
     }
 
     /// عقدة واحدة بشكل TreeMemberNode الدائري، موضوعة بإحداثيات مطلقة.

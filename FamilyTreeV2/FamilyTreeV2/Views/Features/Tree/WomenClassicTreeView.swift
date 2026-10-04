@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// خطوط أب واحد مع أبنائه (كل المجموعات والصفوف) — تُبنى مرة مع التخطيط لا كل إطار.
+private struct WomenConnector {
+    var path = Path()
+    var dots: [CGPoint] = []   // نقاط تفرّع الأبناء عن الخط الأفقي
+}
+
 /// شجرة النساء بالتصميم المحسّن (يطابق الويب):
 ///  - الأب/العضو في المركز، الزوجات دوائر وردية جنبه (تظهر فقط عند فتح أبنائه).
 ///  - كل الأبناء تحته، مع فصل الجنسين (الذكور مجموعة، الإناث مجموعة).
@@ -25,8 +31,11 @@ struct WomenClassicTreeView: View {
     private let H_GAP: CGFloat = 6          // بين الإخوة جنب بعض (جنس واحد)
     private let V_GAP: CGFloat = 22    // بين الأب وأبنائه — مساحة أوسع عند التوسع (طلب المالك)
     private let ROW_GAP: CGFloat = 3        // بين الأبناء المكدّسين عموديًا
+    private let WRAP_GAP: CGFloat = 16      // بين صفوف الإخوة الملتفّة — يتّسع لخط الصف فوقه
+    private let SPINE_ROOM: CGFloat = 10    // مساحة العمود على جانبي المجموعة الملتفّة (يبقى التمركز)
+    private let SPINE_OUT: CGFloat = 6      // بُعد العمود عن حافة أبعد ابن
+    private let LINE_CORNER: CGFloat = 6    // استدارة زوايا الخطوط
     private let MAX_PER_ROW = 3             // صفوف أفقية عند وجود جنس واحد فقط
-    private let STUB: CGFloat = 11
     private let PAD: CGFloat = 32
     /// بين كتلة الذكور وكتلة الإناث — خفيفة عمودياً، وأوسع في الوضع الأفقي
     /// ليتميّز الجنسان مع اتساع الشاشة (طلب المالك)
@@ -101,7 +110,9 @@ struct WomenClassicTreeView: View {
     private struct Layout {
         var positions: [UUID: CGPoint] = [:]
         var depth: [UUID: Int] = [:]
-        var stubs: Set<UUID> = []   // آباء لديهم أبناء ظاهرون (لرسم الوصلة)
+        /// أبناء كل أب: مجموعات (الذكور/الإناث) → صفوف → معرّفات — لرسم الخطوط
+        var childGroups: [UUID: [[[UUID]]]] = [:]
+        var connectors: [WomenConnector] = []
         var heights: [UUID: CGFloat] = [:]   // ارتفاع صندوق كل عقدة (متغيّر)
         var size: CGSize = .zero
     }
@@ -164,7 +175,7 @@ struct WomenClassicTreeView: View {
         // فجوة الصفوف: أي كتلة إخوة تلتف لأكثر من سطر (ذكوراً أو إناثاً)
         // تأخذ مسافة أوسع بين سطورها (طلب المالك)
         func rowGapFor(_ list: [FamilyMember], _ per: Int) -> CGFloat {
-            list.count > per ? ROW_GAP + 3 : ROW_GAP
+            list.count > per ? WRAP_GAP : ROW_GAP
         }
         func blockDims(_ boxes: [CGSize], _ per: Int, _ gap: CGFloat) -> CGSize {
             var w: CGFloat = 0, h: CGFloat = 0
@@ -176,6 +187,8 @@ struct WomenClassicTreeView: View {
                 w = max(w, rowW); h += (i > 0 ? gap : 0) + rowH
                 i += per
             }
+            // مجموعة ملتفّة: مساحة العمود على الجانبين (بالتساوي فيبقى التمركز)
+            if boxes.count > per { w += SPINE_ROOM * 2 }
             return CGSize(width: w, height: h)
         }
         // ارتفاع صندوق العقدة نفسها (بلا الأبناء) — متغيّر.
@@ -222,7 +235,9 @@ struct WomenClassicTreeView: View {
         }
 
         var placed = Set<UUID>()
-        func placeBlock(_ pid: UUID, _ list: [FamilyMember], _ cx: CGFloat, _ top: CGFloat, _ d: Int, _ per: Int) {
+        @discardableResult
+        func placeBlock(_ pid: UUID, _ list: [FamilyMember], _ cx: CGFloat, _ top: CGFloat, _ d: Int, _ per: Int) -> [[UUID]] {
+            var rows: [[UUID]] = []
             var rowTop = top
             let gap = rowGapFor(list, per)
             var i = 0
@@ -236,9 +251,11 @@ struct WomenClassicTreeView: View {
                     place(k.id, x + rowBoxes[j].width / 2, rowTop, d)
                     x += rowBoxes[j].width + H_GAP
                 }
+                rows.append(rowKids.map(\.id))
                 rowTop += rowH + gap
                 i += per
             }
+            return rows
         }
         func place(_ id: UUID, _ cx: CGFloat, _ top: CGFloat, _ d: Int) {
             if placed.contains(id) { return }
@@ -248,34 +265,35 @@ struct WomenClassicTreeView: View {
             L.heights[id] = boxH(id)
             let kids = visibleChildren(id, cOf)
             if kids.isEmpty { return }
-            L.stubs.insert(id)
             let rowTop = top + boxH(id) + V_GAP
             let males = kids.filter { !$0.isFemale }
             let females = kids.filter { $0.isFemale }
+            var groups: [[[UUID]]] = []
             switch arrange(males.count, females.count) {
             case .single:
                 let list = males.isEmpty ? females : males
-                placeBlock(id, list, cx, rowTop, d + 1, perRowH(list.count))
+                groups.append(placeBlock(id, list, cx, rowTop, d + 1, perRowH(list.count)))
             case .stacked:
                 // الأكبر أفقيًا فوق، والأقلية أفقيًا تحته — متمركزين.
                 let mB = cachedBlock(males, perRowH(males.count))
-                placeBlock(id, males, cx, rowTop, d + 1, perRowH(males.count))
-                placeBlock(id, females, cx, rowTop + mB.height + stackGap, d + 1, perRowH(females.count))
+                groups.append(placeBlock(id, males, cx, rowTop, d + 1, perRowH(males.count)))
+                groups.append(placeBlock(id, females, cx, rowTop + mB.height + stackGap, d + 1, perRowH(females.count)))
             case .sideBySide:
                 let pm = perRowV(males.count), pf = perRowV(females.count)
                 let mW = cachedBlock(males, pm).width, fW = cachedBlock(females, pf).width
                 let totalW = mW + GENDER_GAP + fW
                 var bx = cx - totalW / 2
-                placeBlock(id, males, bx + mW / 2, rowTop, d + 1, pm); bx += mW + GENDER_GAP
-                placeBlock(id, females, bx + fW / 2, rowTop, d + 1, pf)
+                groups.append(placeBlock(id, males, bx + mW / 2, rowTop, d + 1, pm)); bx += mW + GENDER_GAP
+                groups.append(placeBlock(id, females, bx + fW / 2, rowTop, d + 1, pf))
             case .pair:
                 let pm = max(1, males.count), pf = max(1, females.count)
                 let mW = cachedBlock(males, pm).width, fW = cachedBlock(females, pf).width
                 let totalW = mW + pairGap + fW
                 var bx = cx - totalW / 2
-                placeBlock(id, males, bx + mW / 2, rowTop, d + 1, pm); bx += mW + pairGap
-                placeBlock(id, females, bx + fW / 2, rowTop, d + 1, pf)
+                groups.append(placeBlock(id, males, bx + mW / 2, rowTop, d + 1, pm)); bx += mW + pairGap
+                groups.append(placeBlock(id, females, bx + fW / 2, rowTop, d + 1, pf))
             }
+            L.childGroups[id] = groups.filter { !$0.isEmpty }
         }
 
         let rootBox = measure(root)
@@ -286,7 +304,108 @@ struct WomenClassicTreeView: View {
         // الذكور يمين · الإناث يسار — مطابق للمعتمد سابقًا.
         for (id, p) in L.positions { L.positions[id] = CGPoint(x: width - p.x - NODE_W, y: p.y) }
         L.size = CGSize(width: width, height: height)
+        L.connectors = buildConnectors(L)
         return L
+    }
+
+    /// خطوط كل أب مع أبنائه بعد المرآة (الذكور يمين · الإناث يسار) — اختيار المالك ٢٠٢٦-١٠-٠٤:
+    ///  • صف واحد بثلاثة أبناء أو أقل: أقواس من أسفل الأب إلى كل ابن/بنت.
+    ///  • غير ذلك: خط أفقي في منتصف الفجوة يمرّ على الصف الأول، وكل مجموعة ملتفّة صفوفها
+    ///    لها عمود على جهتها الخارجية (مجموعة واحدة: جهة الأكبر) يصل خطوط صفوفها بالخط الأول.
+    private func buildConnectors(_ L: Layout) -> [WomenConnector] {
+        typealias Kid = (id: UUID, x: CGFloat, top: CGFloat)
+        let r = LINE_CORNER
+        var out: [WomenConnector] = []
+        for (pid, groupIds) in L.childGroups {
+            guard let pp = L.positions[pid] else { continue }
+            let fx = pp.x + NODE_W / 2
+            let fy = pp.y + (L.heights[pid] ?? NODE_H) - 2
+            let groups: [[[Kid]]] = groupIds.map { g in
+                g.map { row in
+                    row.compactMap { id in L.positions[id].map { (id: id, x: $0.x + NODE_W / 2, top: $0.y + 3) } }
+                        .sorted { $0.x < $1.x }
+                }.filter { !$0.isEmpty }
+            }.filter { !$0.isEmpty }
+            guard !groups.isEmpty else { continue }
+            var c = WomenConnector()
+            func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
+            func drop(_ k: Kid, _ y: CGFloat) {
+                c.path.move(to: p(k.x, y)); c.path.addLine(to: p(k.x, k.top)); c.dots.append(p(k.x, y))
+            }
+            func land(_ k: Kid, _ y: CGFloat) {
+                c.path.addArc(tangent1End: p(k.x, y), tangent2End: p(k.x, k.top), radius: r)
+                c.path.addLine(to: p(k.x, k.top))
+            }
+            let firstRow = groups.flatMap { $0[0] }.sorted { $0.x < $1.x }
+            let total = groups.reduce(0) { $0 + $1.reduce(0) { $0 + $1.count } }
+            // عائلة صغيرة: أقواس (نقاط تحكم بعيدة ٨٠٪)
+            if !groups.contains(where: { $0.count > 1 }), total <= 3 {
+                for k in firstRow {
+                    let dy = k.top - fy
+                    c.path.move(to: p(fx, fy))
+                    c.path.addCurve(to: p(k.x, k.top), control1: p(fx, fy + dy * 0.8), control2: p(k.x, k.top - dy * 0.8))
+                }
+                out.append(c); continue
+            }
+            let bus0 = (fy + (firstRow.map(\.top).min() ?? fy) - 3) / 2
+            /// عمود مجموعة ملتفّة: جهته، موضعه، وخط كل صف من صفوفها
+            struct Spine { let right: Bool; let x: CGFloat; let rows: [[Kid]]; let bus: [CGFloat] }
+            var spines: [Spine] = []
+            for g in groups where g.count > 1 {
+                let xs = g.flatMap { $0.map(\.x) }
+                let center = ((xs.min() ?? fx) + (xs.max() ?? fx)) / 2
+                let right = groups.count == 1 || center >= fx
+                let x = right ? (xs.max() ?? fx) + NODE_W / 2 + SPINE_OUT : (xs.min() ?? fx) - NODE_W / 2 - SPINE_OUT
+                let bus = g.enumerated().map { i, row in i == 0 ? bus0 : (row.map(\.top).min() ?? fy) - 3 - WRAP_GAP / 2 }
+                spines.append(Spine(right: right, x: x, rows: g, bus: bus))
+            }
+            let leftSpine = spines.first { !$0.right }, rightSpine = spines.first { $0.right }
+            /// الابن الأبعد عن العمود في صفّ: إليه ينتهي خط الصف بانعطافة
+            func far(_ row: [Kid], _ s: Spine) -> Kid { s.right ? row.first! : row.last! }
+            let rightEndX = rightSpine?.x ?? firstRow.last!.x
+
+            // نزول الأب إلى الخط الأول
+            c.path.move(to: p(fx, fy)); c.path.addLine(to: p(fx, bus0))
+            // الطرف الأيسر: ابن ينعطف إليه الخط، أو عمود المجموعة اليسرى من آخر صفوفها
+            if let s = leftSpine {
+                let lastRow = s.rows[s.rows.count - 1], lb = s.bus[s.bus.count - 1], fk = far(lastRow, s)
+                c.path.move(to: p(fk.x, fk.top))
+                c.path.addArc(tangent1End: p(fk.x, lb), tangent2End: p(s.x, lb), radius: r)
+                c.path.addArc(tangent1End: p(s.x, lb), tangent2End: p(s.x, bus0), radius: r)
+                c.path.addArc(tangent1End: p(s.x, bus0), tangent2End: p(rightEndX, bus0), radius: r)
+            } else {
+                let k = firstRow.first!
+                c.path.move(to: p(k.x, k.top))
+                c.path.addArc(tangent1End: p(k.x, bus0), tangent2End: p(rightEndX, bus0), radius: r)
+            }
+            // الطرف الأيمن: ابن ينعطف الخط إليه، أو عمود المجموعة اليمنى حتى آخر صفوفها
+            if let s = rightSpine {
+                let lastRow = s.rows[s.rows.count - 1], lb = s.bus[s.bus.count - 1], fk = far(lastRow, s)
+                c.path.addArc(tangent1End: p(s.x, bus0), tangent2End: p(s.x, lb), radius: r)
+                c.path.addArc(tangent1End: p(s.x, lb), tangent2End: p(fk.x, lb), radius: r)
+                land(fk, lb)
+            } else {
+                land(firstRow.last!, bus0)
+            }
+            // الصف الأول: نزول لكل ابن لم ينعطف إليه الخط
+            let leftEndId = leftSpine == nil ? firstRow.first!.id : nil
+            let rightEndId = rightSpine == nil ? firstRow.last!.id : nil
+            for k in firstRow where k.id != leftEndId && k.id != rightEndId { drop(k, bus0) }
+            // صفوف كل مجموعة ملتفّة بعد الأول: الأوسط يتفرّع من العمود، وكل صف ينعطف لأبعد ابن
+            for s in spines {
+                let lastIdx = s.rows.count - 1
+                for i in 1...lastIdx {
+                    let fk = far(s.rows[i], s)
+                    if i < lastIdx {
+                        c.path.move(to: p(s.x, s.bus[i]))
+                        land(fk, s.bus[i])
+                    }
+                    for k in s.rows[i] where k.id != fk.id { drop(k, s.bus[i]) }
+                }
+            }
+            out.append(c)
+        }
+        return out
     }
 
     var body: some View {
@@ -299,41 +418,23 @@ struct WomenClassicTreeView: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .overlay(alignment: .topLeading) {
                         ZStack(alignment: .topLeading) {
-                            // الوصلات — قوس بكسرة خفيفة من أول لآخر ابن بالصف الأول
-                            // (مثل شجرة العائلة)، وخط قصير عند ابن ظاهر واحد فقط
+                            // خطوط الأب وأبنائه — كل الصفوف موصولة (اختيار المالك ٢٠٢٦-١٠-٠٤، مثل
+                            // شجرة العائلة: أقواس للعائلة الصغيرة، و«العمود» للمجموعات الملتفّة)
                             Canvas { ctx, _ in
-                                for pid in layout.stubs {
-                                    guard let a = layout.positions[pid] else { continue }
-                                    let ph = layout.heights[pid] ?? NODE_H
-                                    let pts = visibleChildren(pid, cChildrenOf)
-                                        .compactMap { layout.positions[$0.id] }
-                                    let minY = pts.map(\.y).min() ?? 0
-                                    let topRow = pts.filter { abs($0.y - minY) < 1 }.sorted { $0.x < $1.x }
-                                    if topRow.count >= 2, let f = topRow.first, let l = topRow.last {
-                                        let apex = CGPoint(x: a.x + NODE_W / 2, y: a.y + ph - 2)
-                                        let from = CGPoint(x: f.x + NODE_W / 2, y: f.y + 3)
-                                        let to = CGPoint(x: l.x + NODE_W / 2, y: l.y + 3)
-                                        var p = Path()
-                                        p.move(to: from)
-                                        p.addQuadCurve(to: apex,
-                                                       control: CGPoint(x: from.x + (apex.x - from.x) * 0.5, y: from.y))
-                                        p.addQuadCurve(to: to,
-                                                       control: CGPoint(x: apex.x + (to.x - apex.x) * 0.5, y: to.y))
-                                        ctx.stroke(p, with: .color(DS.Color.primary.opacity(0.45)),
-                                                   style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-                                    } else {
-                                        var p = Path()
-                                        let x = a.x + NODE_W / 2
-                                        let top = a.y + ph + (V_GAP - STUB) / 2
-                                        p.move(to: CGPoint(x: x, y: top))
-                                        p.addLine(to: CGPoint(x: x, y: top + STUB))
-                                        ctx.stroke(p, with: .color(DS.Color.primary.opacity(0.5)),
-                                                   style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                let line = DS.Color.primary.opacity(0.45)
+                                let dot = DS.Color.primary.opacity(0.6)
+                                for c in layout.connectors {
+                                    ctx.stroke(c.path, with: .color(line),
+                                               style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                                    for d in c.dots {
+                                        ctx.fill(Path(ellipseIn: CGRect(x: d.x - 2, y: d.y - 2, width: 4, height: 4)),
+                                                 with: .color(dot))
                                     }
                                 }
                             }
                             .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
                             .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                             // العُقد
                             ForEach(members.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
                                 nodeView(m, at: layout.positions[m.id]!)
