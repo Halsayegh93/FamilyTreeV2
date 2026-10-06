@@ -6,6 +6,7 @@ import SwiftUI
 /// بنية مستقلة حتى لا تُثقل نوع واجهة الرئيسية (سبب انهيار سابق).
 struct HomeGreetingRow: View {
     @EnvironmentObject private var authVM: AuthViewModel
+    @AppStorage(ArtTrial.storageKey) private var artTrialRaw = ArtTrial.emblem.rawValue   // TMP-ART-TRIAL
 
     let onOpenProfile: () -> Void
     /// ضغطة مطوّلة للمطوّر (DEBUG) — تُمرَّر من الرئيسية إن وُجدت
@@ -19,9 +20,8 @@ struct HomeGreetingRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     // التحية بلون الوقت — كبسولة صغيرة واضحة فوق الاسم
                     HStack(spacing: 5) {
-                        Image(systemName: greetingSymbol)
-                            .font(.system(size: 12, weight: .semibold))
-                            .symbolRenderingMode(.hierarchical)
+                        // رمز الوقت المرسوم (شمس طالعة · شمس الظهر · شمس على البحر · هلال) يتحرّك بهدوء
+                        TrialGreetingGlyph(hour: hour, tint: timeAccent)   // TMP-ART-TRIAL (كان FTGreetingGlyph)
                         Text(timeBasedGreeting)
                             .font(DS.Font.plex(13, weight: .semibold))
                     }
@@ -33,8 +33,11 @@ struct HomeGreetingRow: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                 }
+                .layoutPriority(1)
 
-                Spacer(minLength: DS.Spacing.sm)
+                // بطاقة بسيطة بلا منظر (طلب المالك ٢٠٢٦-١٠-٠٥ «شيل خله ابسط بكثير»):
+                // الصورة · رمز الوقت والتحية · الاسم · السهم
+                Spacer(minLength: 8)
 
                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
                     .font(.system(size: 12, weight: .bold))
@@ -45,8 +48,15 @@ struct HomeGreetingRow: View {
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm + 2)
             .background(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .fill(DS.Color.surface)
+                ZStack {
+                    RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                        .fill(DS.Color.surface)
+                    if let deco = ArtDispatch.greetingBackground(ArtTrial(rawValue: artTrialRaw) ?? .emblem,
+                                                                 tint: timeAccent) {   // TMP-ART-TRIAL
+                        deco
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
@@ -94,21 +104,19 @@ struct HomeGreetingRow: View {
 
     private var hour: Int { Calendar.current.component(.hour, from: Date()) }
 
-    private var greetingSymbol: String {
-        if hour < 12 { return "sun.and.horizon.fill" }
-        else if hour < 17 { return "sun.max.fill" }
-        else { return "moon.stars.fill" }
-    }
+    /// الصباح من ٤ الفجر — بعد منتصف الليل يبقى «مساء الخير» بالهلال (كان «صباح الخير» بشمس طالعة)
+    private var isMorning: Bool { (4..<12).contains(hour) }
+    private var isAfternoon: Bool { (12..<17).contains(hour) }
 
     private var timeAccent: Color {
-        if hour < 12 { return DS.Color.secondary }
-        else if hour < 17 { return DS.Color.primary }
+        if isMorning { return DS.Color.secondary }
+        else if isAfternoon { return DS.Color.primary }
         else { return DS.Color.accent }
     }
 
     private var timeBasedGreeting: String {
-        if hour < 12 { return L10n.t("صباح الخير", "Good morning") }
-        else if hour < 17 { return L10n.t("مساء الخير", "Good afternoon") }
+        if isMorning { return L10n.t("صباح الخير", "Good morning") }
+        else if isAfternoon { return L10n.t("مساء الخير", "Good afternoon") }
         else { return L10n.t("مساء الخير", "Good evening") }
     }
 

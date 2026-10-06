@@ -12,6 +12,9 @@ struct AdminMemberDetailSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
+    /// لون القسم الذي فُتح منه (الشجرة، الإدارة، حسابي…) — كحلي «الإطار» يتبعه
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     let member: FamilyMember
 
@@ -371,7 +374,7 @@ struct AdminMemberDetailSheet: View {
     // MARK: - البيانات الأساسية: الاسم، العائلة، الرقم، الجنس
     private var basicsCard: some View {
         adminCard(L10n.t("البيانات الأساسية", "Basic Info"),
-                  icon: "person.text.rectangle.fill", color: DS.Color.primary) {
+                  icon: "person.text.rectangle.fill", color: chromeInk) {
             fieldBox(L10n.t("الاسم الكامل", "Full Name")) {
                 TextField(L10n.t("الاسم الكامل", "Full Name"), text: $fullName, axis: .vertical)
                     .lineLimit(1...3)
@@ -439,7 +442,7 @@ struct AdminMemberDetailSheet: View {
     private var isSortingChildren: Bool { editMode == .active }
 
     private var lineageCard: some View {
-        adminCard(L10n.t("النسب", "Lineage"), icon: "link", color: DS.Color.primary) {
+        adminCard(L10n.t("النسب", "Lineage"), icon: "link", color: chromeInk) {
             // الأب — لا يظهر لرأس الشجرة (طلب المالك)
             if !isFamilyRoot {
                 VStack(alignment: .leading, spacing: 6) {
@@ -501,7 +504,7 @@ struct AdminMemberDetailSheet: View {
                     } label: {
                         Text(isSortingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"))
                             .font(DS.Font.plex(12.5, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
+                            .foregroundColor(chromeInk)
                             // مساحة ضغط ~٤٤ نقطة (حد أبل) في الفراغ حول الكلمة (فوقها ١٤ وتحتها
                             // ١٠ = المسافة للصفوف) — مكانها وحجمها كما هما، بلا تداخل مع الصفوف
                             .padding(.top, 14)
@@ -526,10 +529,10 @@ struct AdminMemberDetailSheet: View {
                                                 : L10n.t("إضافة ابن آخر", "Add Another Child"),
                           systemImage: "plus.circle.fill")
                         .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(chromeInk)
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
-                        .background(DS.Color.primary.opacity(0.08),
+                        .background(chromeInk.opacity(0.08),
                                     in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 }
                 .buttonStyle(DSScaleButtonStyle())
@@ -555,14 +558,19 @@ struct AdminMemberDetailSheet: View {
     /// ابن واحد داخل مربّع. وضع «ترتيب»: أسهم للأعلى/الأسفل وزر حذف.
     private func childRow(child: FamilyMember, index: Int) -> some View {
         let isChildDeceased = child.isDeceased ?? false
-        let tint = isChildDeceased ? DS.Color.error : DS.Color.primary
+        // الكحلي يتبع لون القسم (كان يبقى كحلياً داخل الشجرة)؛ الأحمر للوفاة يبقى بمعناه
+        let tint = isChildDeceased ? DS.Color.error : chromeInk
 
         return HStack(spacing: DS.Spacing.sm) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: isChildDeceased ? "person.fill.xmark" : "person.fill",
+                                                    tint: tint, size: 30) }) {   // TMP-ART-TRIAL
             Image(systemName: isChildDeceased ? "person.fill.xmark" : "person.fill")
                 .font(DS.Font.plex(13, weight: .bold))
                 .foregroundColor(tint)
                 .frame(width: 30, height: 30)
                 .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+                .frame(width: 30, height: 30)
                 // القارئ الصوتي: الأيقونة زخرفة، إلا علامة الوفاة فتُقرأ كلمةً
                 .accessibilityLabel(L10n.t("متوفى", "Deceased"))
                 .accessibilityHidden(!isChildDeceased)
@@ -642,9 +650,9 @@ struct AdminMemberDetailSheet: View {
         Button { withAnimation(DS.Anim.snappy) { action() } } label: {
             Image(systemName: icon)
                 .font(DS.Font.plex(12, weight: .bold))
-                .foregroundColor(enabled ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
+                .foregroundColor(enabled ? chromeInk : DS.Color.textTertiary.opacity(0.4))
                 .frame(width: 30, height: 30)
-                .background(DS.Color.primary.opacity(enabled ? 0.10 : 0.04), in: Circle())
+                .background(chromeInk.opacity(enabled ? 0.10 : 0.04), in: Circle())
                 .padding(.leading, hitLeading)
                 .padding(.trailing, hitTrailing)
                 .padding(.vertical, 7)
@@ -1180,6 +1188,9 @@ struct FatherPickerSheet: View {
     /// (عشان ما يصير حلقة: ابن يصير أب لأبيه)
     var editingMemberId: UUID? = nil
     @Environment(\.dismiss) var dismiss
+    /// لون القسم الذي فُتح منه (الشجرة، الإدارة، حسابي…) — كحلي «الإطار» يتبعه
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
     @State private var searchText = ""
     @State private var debouncedSearch = ""
     @State private var debounceTask: Task<Void, Never>? = nil
@@ -1340,7 +1351,7 @@ struct FatherPickerSheet: View {
         .onChange(of: memberVM.allMembers) { _ in
             rebuildPrepared()
         }
-        .tint(DS.Color.primary)
+        .tint(chromeInk)
         .dsAlert(
             L10n.t("تأكيد اختيار الأب", "Confirm Father Selection"),
             isPresented: Binding(
@@ -1414,12 +1425,12 @@ struct FatherPickerSheet: View {
                         // قرصاً غامقاً لا يُرى على صف الداكن (مثل علامة «ربط الأب»)
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 18))
-                            .foregroundStyle(DS.Color.primary)
+                            .foregroundStyle(chromeInk)
                             .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
                             .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
                     }
                 }
-                .fatherPickerRowBox(selected: checked)
+                .fatherPickerRowBox(selected: checked, tint: chromeInk)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1451,6 +1462,8 @@ private struct FatherPickerRow: View, Equatable {
     let onTap: () -> Void
     /// «تقليل الحركة» (توصية أبل): علامة الاختيار تظهر بتلاشٍ فقط بلا تكبير
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     static func == (lhs: FatherPickerRow, rhs: FatherPickerRow) -> Bool {
         lhs.member.id == rhs.member.id
@@ -1464,10 +1477,10 @@ private struct FatherPickerRow: View, Equatable {
                 // الحرف الأول في مربّع أيقونة الحقل — نفس صفوف المربّعات
                 Text(String(member.fullName.prefix(1)))
                     .font(DS.Font.plex(13, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(chromeInk)
                     .frame(width: 32, height: 32)
                     .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(DS.Color.primary.opacity(0.12)))
+                        .fill(chromeInk.opacity(0.12)))
                     .accessibilityHidden(true)   // الحرف الأول زخرفة — الاسم بجانبه
 
                 Text(member.displayFullName)
@@ -1481,12 +1494,12 @@ private struct FatherPickerRow: View, Equatable {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundStyle(DS.Color.primary)
+                        .foregroundStyle(chromeInk)
                         .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
                         .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
                 }
             }
-            .fatherPickerRowBox(selected: isSelected)
+            .fatherPickerRowBox(selected: isSelected, tint: chromeInk)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1496,11 +1509,11 @@ private struct FatherPickerRow: View, Equatable {
 
 private extension View {
     /// صف اختيار الأب: صندوق صفوف المربّعات + إطار بلون التطبيق للمختار (مثل الحقل النشط)
-    func fatherPickerRowBox(selected: Bool) -> some View {
+    func fatherPickerRowBox(selected: Bool, tint: Color) -> some View {
         dsRowBox()
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(selected ? 0.6 : 0), lineWidth: 1.5)
+                    .strokeBorder(tint.opacity(selected ? 0.6 : 0), lineWidth: 1.5)
             )
     }
 }

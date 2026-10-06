@@ -41,6 +41,11 @@ struct HomeNewsView: View {
     /// دخول بطاقات الرئيسية تباعاً مرة عند ظهورها — نمط الأخبار والديوانيات
     /// (طلب المالك ٢٠٢٦-٠٩-٢٧: «طبّقه على البقية»)
     @State private var appeared = false
+    /// TMP-ART-TRIAL — الاتجاه المختار في شريط التجربة
+    @AppStorage(ArtTrial.storageKey) private var artTrialRaw = ArtTrial.emblem.rawValue
+    private var artTrial: ArtTrial { ArtTrial(rawValue: artTrialRaw) ?? .emblem }
+    @AppStorage(ArtTrial.libraryKey) private var artLibraryVariant = 0
+    @AppStorage(ArtTrial.projectsKey) private var artProjectsVariant = 0
     /// دخول بطاقات صفحة الأخبار — يُصفَّر قبل كل فتح للصفحة فتتوالى البطاقات مع كل دخول
     @State private var newsAppeared = false
     /// خبر ضُغط عليه في مربّع الرئيسية — تنزل إليه صفحة الأخبار وتبرزه لحظة (طلب المالك)
@@ -72,6 +77,8 @@ struct HomeNewsView: View {
 
                         ScrollView(showsIndicators: false) {
                             bentoSection
+                                // الرسوم خلف مربّع الخبر المفتوح تتوقّف (لا تُثقل الكتابة والنشر)
+                                .environment(\.ftAnimationsPaused, showingAddNews || postToEdit != nil)
                                 // البطاقات تتوالى مرة عند الظهور (الترحيب ← المربّعات ← الأخبار) —
                                 // إزاحة وشفافية عند الرسم فقط، فلا يتغيّر القياس ولا التخطيط
                                 .padding(.top, DS.Spacing.md)
@@ -198,7 +205,7 @@ struct HomeNewsView: View {
             case .archive: FamilyArchiveView()
             case .projects: FamilyProjectsView()
             case .contact: MemberContactFormView()
-            case .news: newsFullPage
+            case .news: newsFullPage.dsSectionPage(.news)   // بلون قسم الأخبار مثل إضافة/تعديل الخبر والتعليقات
             }
         }
     }
@@ -332,18 +339,10 @@ struct HomeNewsView: View {
 
         return VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
-                // الرجوع مكان أيقونة القسم (طلب المالك) — بلا علامة ×
-                Button {
+                // الرجوع مكان أيقونة القسم (طلب المالك) — بلا علامة ×، بنفس زر الرجوع الموحّد
+                DSBackButton(context: .onColor, compact: isLandscape) {
                     activeSubPage = nil
-                } label: {
-                    Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                        .font(DS.Font.scaled(isLandscape ? 16 : 19, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: isLandscape ? 38 : 48, height: isLandscape ? 38 : 48)
-                        .dsHeaderGlassCircle()
                 }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("رجوع", "Back"))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -385,17 +384,26 @@ struct HomeNewsView: View {
             .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
 
             // شريط سدو زخرفي — يحلّ محل الخط الفاصل بلا زيادة ارتفاع تُذكر
-            saduStrip
+            // TMP-ART-TRIAL: زخرفة الاتجاه المختار بلون قسم الصفحة الفرعية، وإلا السدو الحالي
+            let sec: AppSection = page == .archive ? .library : page == .projects ? .projects : page == .contact ? .admin : .news
+            TrialArt(make: { ArtDispatch.tabHeaderOrnament($0, section: "\(sec)", tint: sec.fill)
+                                .map { AnyView($0.padding(.horizontal, DS.Spacing.xl).padding(.bottom, DS.Spacing.xs)) } }) {
+                saduStrip
+            }
         }
         .frame(maxWidth: .infinity)
         .background(
             ZStack {
-                DS.Color.gradientPrimary
+                // بلون قسم الصفحة (طلب المالك ٢٠٢٦-١٠-٠٥ «خل الرأس بلون القسم»): المكتبة · المشاريع · التواصل · الأخبار
+                (page == .archive ? AppSection.library : page == .projects ? AppSection.projects
+                    : page == .contact ? AppSection.admin : AppSection.news).gradient
                 // نفس طبقة MainHeaderView — بدونها يطلع الهيدر أفتح
                 DS.Color.headerVeil
             }
             .ignoresSafeArea(edges: .top)
         )
+        // نص شريط الحالة أبيض فوق الرأس الملوّن
+        .dsLightStatusBar()
     }
 
     // MARK: - Bento Section — الترتيب الجديد
@@ -411,6 +419,7 @@ struct HomeNewsView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingRow
+                        ArtTrialBar()   // TMP-ART-TRIAL
                         primaryTilesRow(tileHeight: max(66, layout.tileHeight - 18))
                         quickAccessGrid(tileHeight: max(66, layout.tileHeight - 18))
                         Spacer(minLength: 0)
@@ -424,6 +433,7 @@ struct HomeNewsView: View {
                 // فراغات أقل بين المربّعات (طلب المالك)
                 VStack(spacing: DS.Spacing.sm) {
                     greetingRow
+                    ArtTrialBar()   // TMP-ART-TRIAL
                     primaryTilesRow(tileHeight: layout.tileHeight + 12)
                     quickAccessGrid(tileHeight: layout.tileHeight + 6)
                     newsBentoCard
@@ -494,8 +504,8 @@ struct HomeNewsView: View {
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "books.vertical.fill",
-                color: DS.Color.tileLibrary,
-                deep: DS.Color.tileLibraryDeep,
+                color: AppSection.HomeTile.library.fill,
+                deep: AppSection.HomeTile.library.deep,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -505,9 +515,9 @@ struct HomeNewsView: View {
             if projectsOn {
                 unifiedTile(
                     title: L10n.t("مشاريع العائلة", "Family Projects"),
-                    icon: "briefcase.fill",
-                    color: DS.Color.tileProjects,
-                    deep: DS.Color.tileProjectsDeep,
+                    icon: "storefront.fill",
+                    color: AppSection.HomeTile.projects.fill,
+                    deep: AppSection.HomeTile.projects.deep,
                     imageURL: projectImageURL,
                     count: projectsVM.projects.count,
                     height: tileHeight,
@@ -547,7 +557,8 @@ struct HomeNewsView: View {
             action()
         }) {
             ZStack(alignment: .bottomLeading) {
-                tileBackground(color: color, deep: deep, imageURL: imageURL, icon: icon)
+                tileBackground(color: color, deep: deep, imageURL: imageURL, icon: icon,
+                               badge: (count ?? 0) > 0)
 
                 LinearGradient(
                     stops: [
@@ -559,43 +570,78 @@ struct HomeNewsView: View {
                     endPoint: .bottom
                 )
 
-                // أيقونة دائرية أكبر + عدّاد
-                VStack {
-                    HStack {
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(15, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 36 * layout.scale, height: 36 * layout.scale)
-                            .dsGlass(Circle())
-                            .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
-
-                        Spacer()
-
-                        if let count, count > 0 {
-                            Text("\(count)")
-                                .font(DS.Font.scaled(11, weight: .black))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .dsGlass(Capsule())
-                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-                        }
-                    }
-                    Spacer()
+                // TMP-ART-TRIAL — المجسّمات والزجاج والذهبي فوق طبقة التعتيم (لا تبهت أسفل المربّع)
+                if imageURL == nil, !ArtDispatch.underOverlay(artTrial), let place = ArtTrial.place(for: icon),
+                   let art = ArtDispatch.tile(artTrial, place: place, badge: (count ?? 0) > 0,
+                                              animateOnce: !HomeTileEntrance.played) {
+                    art.id("trial-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
                 }
-                .padding(9)
 
-                // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
-                Text(title)
-                    .font(DS.Font.scaled(13, weight: .black))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.7)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
-                    .padding(8)
+                // TMP-ART-TRIAL: «مجسّمات» — تكوين بالوسط (طلب المالك ٢٠٢٦-١٠-٠٥ «بالنص بشكل مرتب و ابداعي»):
+                // المجسّم في وسط المربّع وتحته الاسم، ضوء ناعم خلفه ونسخة شفافة منه في الخلفية، بلا عدد — «الحالي» كما هو
+                if artTrial == .soft3d, let place = ArtTrial.place(for: icon),
+                   let centerArt = ArtDispatch.tileIcon(artTrial, place: place) {
+                    TrialCenteredTile(art: centerArt, title: title, count: count, scale: layout.scale)
+                        .id("tc-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
+                } else {
+                    // أيقونة دائرية أكبر + عدّاد
+                    VStack {
+                        HStack {
+                            if !ArtDispatch.showsTileIcon(artTrial), let count, count > 0 {   // TMP-ART-TRIAL: العدد مكان الأيقونة
+                                Text("\(count)")
+                                    .font(DS.Font.scaled(11, weight: .black))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .dsGlass(Capsule())
+                                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                            }
+                            if ArtDispatch.showsTileIcon(artTrial) {
+                            // TMP-ART-TRIAL: «مجسّمات» — المجسّم مكان الأيقونة بحجم واحد في كل المربّعات (الاسم تحته)
+                            if let place = ArtTrial.place(for: icon),
+                               let art = ArtDispatch.tileIcon(artTrial, place: place) {
+                                art
+                                    .frame(width: 44 * layout.scale, height: 44 * layout.scale)
+                                    .id("ti-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
+                            } else {
+                            Image(systemName: icon)
+                                .font(DS.Font.scaled(15, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 36 * layout.scale, height: 36 * layout.scale)
+                                .dsGlass(Circle())
+                                .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                                .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
+                            }
+                            }
+
+                            Spacer()
+
+                            if ArtDispatch.showsTileIcon(artTrial), let count, count > 0 {
+                                Text("\(count)")
+                                    .font(DS.Font.scaled(11, weight: .black))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .dsGlass(Capsule())
+                                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(9)
+
+                    // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
+                    Text(title)
+                        .font(DS.Font.scaled(13, weight: .black))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
+                        .padding(8)
+                        .padding(.trailing, artTrial == .sadu ? 50 : 0)   // TMP-ART-TRIAL: بعيد عن حاشية السدو
+                }
             }
             .frame(maxWidth: .infinity)
             .frame(height: height ?? layout.tileHeight)
@@ -616,35 +662,83 @@ struct HomeNewsView: View {
 
     /// خلفية المربّع — صورة من رابط أو gradient بلون الفئة مع زخارف.
     @ViewBuilder
-    private func tileBackground(color: Color, deep: Color, imageURL: String?, icon: String) -> some View {
+    private func tileBackground(color: Color, deep: Color, imageURL: String?, icon: String,
+                                badge: Bool = false) -> some View {
         if let urlStr = imageURL, let url = URL(string: urlStr) {
             CachedAsyncImage(url: url) { img in
                 img.resizable().scaledToFill()
             } placeholder: {
-                gradientBackground(color: color, deep: deep, icon: icon)
+                gradientBackground(color: color, deep: deep, icon: icon, badge: badge)
             }
         } else {
-            gradientBackground(color: color, deep: deep, icon: icon)
+            gradientBackground(color: color, deep: deep, icon: icon, badge: badge)
         }
     }
 
-    private func gradientBackground(color: Color, deep: Color, icon: String) -> some View {
-        ZStack {
+    /// رمز المربّع ← مشهده (وإلا nil — تبقى الأيقونة)
+    private static func tileSceneKind(for icon: String) -> FTTileScenes.Kind? {
+        switch icon {
+        case "tree.fill": return .tree
+        case "map.fill": return .diwaniya
+        case "books.vertical.fill": return .library
+        case "briefcase.fill", "storefront.fill": return .projects
+        case "envelope.fill": return .contact
+        default: return nil
+        }
+    }
+
+    private func gradientBackground(color baseColor: Color, deep baseDeep: Color, icon: String, badge: Bool = false) -> some View {
+        // TMP-ART-TRIAL: «الحالي» = ألوان المربّعات قبل أسبوع
+        let legacy = artTrial == .emblem ? LegacyTileColors.pair(for: icon) : nil
+        let color = legacy?.0 ?? baseColor, deep = legacy?.1 ?? baseDeep
+        return ZStack {
             LinearGradient(
                 colors: [color.opacity(0.92), color, deep],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            // زخرفة خفيفة — مقيّدة في صندوق ثابت ومثبّتة أسفل-يمين حتى
-            // تبقى في نفس المكان لكل الأيقونات مهما اختلف ارتفاع الرمز
-            // (مثلاً tree.fill الطويلة كانت تطلع فوق مقارنةً بـ map.fill)
-            Image(systemName: icon)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 78, height: 78)
-                .foregroundColor(.white.opacity(0.17))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .offset(x: 16, y: 12)
+            // شعار المربّع (طلب المالك ٢٠٢٦-١٠-٠٥ «أبسط وأقوى وباعتدال»): رسمة مصمتة واحدة بيضاء بدرجتين
+            // ولمسة ذهبية — غافة، دلّة وفنجان، كتاب على رحل، دكان، ظرف بختم. تظهر بهدوء مرة واحدة ثم تتنفّس.
+            // مع كبسولة العدد لا تُرسم (المربّع: أيقونة + عدد + عنوان).
+            if artTrial != .emblem {   // TMP-ART-TRIAL: تحت طبقة التعتيم إن طلبها الاتجاه، وإلا فوقها في unifiedTile
+                if ArtDispatch.underOverlay(artTrial), let place = ArtTrial.place(for: icon),
+                   let art = ArtDispatch.tile(artTrial, place: place, badge: badge, animateOnce: !HomeTileEntrance.played) {
+                    art.id("trial-u-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
+                }
+                // «مجسّمات»: نفس مجسّم المربّع كبير شفاف في خلفيته عند الطرف — مثل علامة «الحالي»
+                // (طلب المالك ٢٠٢٦-١٠-٠٥ «حط خلفيات ور الايقونات بنفس المجسمات بس شفافة بالرئيسية»)
+                if artTrial == .soft3d, let place = ArtTrial.place(for: icon),
+                   let ghost = ArtDispatch.tileIcon(artTrial, place: place) {
+                    ghost
+                        .frame(width: 86 * layout.scale, height: 86 * layout.scale)
+                        .opacity(0.22)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .offset(x: 16, y: 12)
+                        .id("tw-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
+                }
+            } else if artTrial == .emblem {
+                // «الحالي» = قبل أسبوع: رمز المربّع كبير شفاف أسفل الطرف
+                Image(systemName: icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 78, height: 78)
+                    .foregroundColor(.white.opacity(0.17))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .offset(x: 16, y: 12)
+            } else if let kind = Self.tileSceneKind(for: icon) {
+                FTTileSceneView(kind: kind, playsEntrance: !HomeTileEntrance.played, badge: badge)
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { HomeTileEntrance.played = true }
+                    }
+            } else {
+                Image(systemName: icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 78, height: 78)
+                    .foregroundColor(.white.opacity(0.17))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .offset(x: 16, y: 12)
+            }
         }
         .clipped()
     }
@@ -732,7 +826,7 @@ struct HomeNewsView: View {
             title: L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali"),
             subtitle: L10n.t("تطبيق العائلة", "Family App"),
             icon: "tree.fill",
-            backgroundGradient: DS.Color.gradientPrimary,
+            backgroundGradient: AppSection.home.gradient,
             hideNotificationBell: true
         ) {
             // الجرس ثم علامة «عن التطبيق» بعده (طلب المالك)
@@ -1017,9 +1111,13 @@ struct HomeNewsView: View {
     private var emptyNewsView: some View {
         DSCard(padding: 0) {
             VStack(spacing: DS.Spacing.md) {
-                Image(systemName: "newspaper")
-                    .font(DS.Font.scaled(40))
-                    .foregroundColor(DS.Color.textTertiary)
+                // TMP-ART-TRIAL: رسم الاتجاه المختار بلون الأخبار، وإلا الأيقونة الحالية
+                TrialArt(make: { ArtDispatch.empty($0, place: nil, icon: "newspaper", tint: AppSection.news.ink)
+                                    .map { AnyView($0.frame(width: 130, height: 130)) } }) {
+                    Image(systemName: "newspaper")
+                        .font(DS.Font.scaled(40))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
 
                 Text(L10n.t("لا توجد أخبار حديثة", "No recent news"))
                     .font(DS.Font.title3)
@@ -1034,14 +1132,14 @@ struct HomeNewsView: View {
                                 .font(DS.Font.caption1)
                                 .fontWeight(.bold)
                         }
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(AppSection.news.ink)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.primary.opacity(0.1))
+                        .background(AppSection.news.ink.opacity(0.1))
                         .clipShape(Capsule())
                         .overlay(
                             Capsule()
-                                .strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1)
+                                .strokeBorder(AppSection.news.ink.opacity(0.25), lineWidth: 1)
                         )
                     }
                     .buttonStyle(DSBoldButtonStyle())
@@ -1116,4 +1214,9 @@ private struct NoBounceIfAvailable: ViewModifier {
             content
         }
     }
+}
+
+/// تفتّح مشاهد مربّعات الرئيسية مرة واحدة لكل تشغيل (لا يتكرر مع كل رجوع للرئيسية)
+enum HomeTileEntrance {
+    static var played = false
 }

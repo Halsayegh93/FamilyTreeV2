@@ -114,7 +114,7 @@ struct LoginView: View {
                         icon: "lock.shield.fill",
                         title: L10n.t("رمز التحقق", "Verification Code"),
                         subtitle: L10n.t("أدخل الرمز المرسل لجوالك", "Enter the code sent to your phone"),
-                        actionIcon: L10n.isArabic ? "arrow.right" : "arrow.left",
+                        actionIcon: DSBackButton.symbol,   // سهم الرجوع الموحّد
                         action: {
                             withAnimation(DS.Anim.smooth) {
                                 authVM.isOtpSent = false
@@ -247,6 +247,18 @@ struct LoginView: View {
                 endPoint: .center
             )
             .ignoresSafeArea()
+            // خلفية هادئة رسمية (طلب المالك ٢٠٢٦-١٠-٠٥): نجوم وهلال، هالة تتنفّس خلف الشعار، وأفق الكويت
+            // والخليج فوق تذييل الشروط — ظلال ≤ ١٤٪. الأفقي بلا مشهد (التخطيط مختلف)
+            if !isLandscape {
+                GeometryReader { g in
+                    TrialArt(make: { ArtDispatch.loginBackdrop($0, logoCenterY: g.size.height * 0.3) }) {   // TMP-ART-TRIAL
+                        FTSceneCanvas { ctx, size, t, dark in
+                            FTPlaceScenes.drawLoginBackdrop(in: &ctx, size: size, t: t, dark: dark)
+                        }
+                    }
+                }
+                .ignoresSafeArea()
+            }
         }
     }
 

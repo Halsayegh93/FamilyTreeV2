@@ -46,6 +46,8 @@ struct AdminNotificationsView: View {
     @FocusState private var bodyFocused: Bool
     @State private var showSendConfirm = false
     @State private var showSendError = false
+    /// الشريحة المختارة بلا أعضاء — لا يُرسل شيء (كانت تتحوّل إرسالاً للجميع — ب-٩)
+    @State private var showEmptyAudience = false
     /// انتهى تحميل الفتح — قبله بطاقة «جارٍ تحميل الأعضاء» بدل «لا يوجد أعضاء» المضلِّلة
     @State private var hasLoaded = false
     /// جلب الأعضاء جارٍ (عند الفتح أو «إعادة المحاولة»)
@@ -175,7 +177,30 @@ struct AdminNotificationsView: View {
         } message: {
             Text(L10n.t("حدث خطأ أثناء الإرسال. حاول مرة أخرى.", "Something went wrong. Please try again."))
         }
+        .dsAlert(L10n.t("لا يوجد مستلمون", "No Recipients"), isPresented: $showEmptyAudience) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("لا يوجد أعضاء في هذه الدولة، فلم يُرسل الإشعار لأحد. اختر دولة أخرى أو «الكل».",
+                        "There are no members in this country, so nothing was sent. Pick another country or “All”."))
+        }
     }
+
+    /// المستلمون الفعليون: `nil` = إعلان للجميع، وقائمة = هؤلاء فقط. مع تصفية الدولة لا يُستخدم
+    /// البثّ العام (nil) إطلاقاً — وإلا خرج الإشعار خارج الشريحة المختارة.
+    private var sendTargetIds: [UUID]? {
+        // إذا كل الأعضاء محددين، نرسل broadcast (nil) بدل إرسال كل الـ IDs
+        let activeMemberIds = Set(activeMembers.map(\.id))
+        if countryFilter != nil {
+            return selectedMemberIds.isEmpty ? Array(activeMemberIds) : Array(selectedMemberIds)
+        } else if selectedMemberIds.isEmpty || selectedMemberIds == activeMemberIds {
+            return nil
+        } else {
+            return Array(selectedMemberIds)
+        }
+    }
+
+    /// شريحة بلا أحد (دولة بلا أعضاء) — رسالة واضحة ولا إرسال، لا تحويل للجميع (ب-٩)
+    private var isEmptyAudience: Bool { sendTargetIds?.isEmpty == true }
 
     /// هل الإرسال بثّ للجميع (تحديد فارغ أو كل النشطين).
     private var isBroadcastSend: Bool {
@@ -672,7 +697,8 @@ struct AdminNotificationsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Button {
                     scheduleEnabled = false
-                    showSendConfirm = true
+                    // شريحة بلا أعضاء: رسالة واضحة بدل تأكيد «إرسال للجميع (٠)» (ب-٩)
+                    if isEmptyAudience { showEmptyAudience = true } else { showSendConfirm = true }
                 } label: {
                     HStack(spacing: 7) {
                         if notificationVM.isLoading {
@@ -694,7 +720,7 @@ struct AdminNotificationsView: View {
                 .disabled(noTitle)
 
                 Button {
-                    showScheduleComposer = true
+                    if isEmptyAudience { showEmptyAudience = true } else { showScheduleComposer = true }
                 } label: {
                     HStack(spacing: 7) {
                         Image(systemName: "clock.badge")
@@ -785,17 +811,12 @@ struct AdminNotificationsView: View {
         let trimmedBody = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalBody = trimmedBody.isEmpty ? title : trimmedBody
 
-        // إذا كل الأعضاء محددين، نرسل broadcast (nil) بدل إرسال كل الـ IDs
-        let activeMemberIds = Set(activeMembers.map(\.id))
-        // مهم: البثّ العام (nil) يصل لكل الأعضاء — فلا يُستخدم إطلاقاً عند
-        // تفعيل تصفية الدولة، وإلا خرج الإشعار خارج الشريحة المختارة.
-        let targetIds: [UUID]?
-        if countryFilter != nil {
-            targetIds = selectedMemberIds.isEmpty ? Array(activeMemberIds) : Array(selectedMemberIds)
-        } else if selectedMemberIds.isEmpty || selectedMemberIds == activeMemberIds {
-            targetIds = nil
-        } else {
-            targetIds = Array(selectedMemberIds)
+        // مهم: البثّ العام (nil) يصل لكل الأعضاء — فلا يُستخدم إطلاقاً عند تفعيل تصفية الدولة،
+        // وشريحة فاضية لا تُرسل شيئاً (كانت قائمة فارغة = «الجميع» — ب-٩)
+        let targetIds = sendTargetIds
+        if let targetIds, targetIds.isEmpty {
+            showEmptyAudience = true
+            return
         }
 
         if scheduleEnabled {
@@ -872,7 +893,7 @@ private struct ScheduleComposerSheet: View {
 
     private var timeSection: some View {
         DSComposerSection(title: L10n.t("وقت الإرسال", "Send time"), icon: "calendar.badge.clock",
-                          tint: DS.Color.primary, index: 0) {
+                          tint: AppSection.admin.ink, index: 0) {
             // عجلة واحدة (تاريخ + وقت) — الشكل السابق المرتّب (طلب المالك)
             DatePicker(
                 "",
@@ -882,7 +903,7 @@ private struct ScheduleComposerSheet: View {
             )
             .datePickerStyle(.wheel)
             .labelsHidden()
-            .tint(DS.Color.primary)
+            .tint(AppSection.admin.ink)
             .environment(\.locale, LanguageManager.shared.locale)
             .frame(maxWidth: .infinity)
             .frame(maxHeight: 190)
@@ -892,7 +913,7 @@ private struct ScheduleComposerSheet: View {
 
             // ملخّص الوقت المختار — صف هادئ بنفس صفوف المربّعات
             HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: "paperplane.fill", tint: DS.Color.primary)
+                DSFieldIcon(name: "paperplane.fill", tint: AppSection.admin.ink)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("سيُرسل", "Sends"))
@@ -1030,7 +1051,7 @@ private struct ScheduledNotificationsSheet: View {
 
             // الوقت + الجمهور
             HStack(spacing: DS.Spacing.sm) {
-                metaChip(icon: "calendar", text: timeText(item), color: DS.Color.primary)
+                metaChip(icon: "calendar", text: timeText(item), color: AppSection.admin.ink)
                 metaChip(
                     icon: item.isBroadcast ? "person.3.fill" : "person.2.fill",
                     text: item.isBroadcast

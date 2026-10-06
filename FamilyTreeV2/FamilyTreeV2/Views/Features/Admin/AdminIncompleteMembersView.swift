@@ -220,7 +220,7 @@ struct AdminIncompleteMembersView: View {
                                         } label: {
                                             Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
                                         }
-                                        .tint(DS.Color.primary)
+                                        .tint(AppSection.admin.ink)
                                     }
                                 }
                             }
@@ -258,7 +258,8 @@ struct AdminIncompleteMembersView: View {
                              ? L10n.t("إلغاء", "Cancel")
                              : L10n.t("تحديد", "Select"))
                             .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.primary)
+                            // «إلغاء» بالأحمر مثل بقية أزرار إلغاء التحديد، و«تحديد» بحبر القسم
+                            .foregroundColor(isSelectionMode ? DS.Color.error : AppSection.admin.ink)
                     }
                 }
             }

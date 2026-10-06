@@ -24,15 +24,22 @@ struct DSFormCard<Content: View, Trailing: View>: View {
         self.content = content
     }
 
+    /// الكحلي (الافتراضي) يتبع لون القسم — وألوان المعاني كما هي
+    @Environment(\.dsSection) private var section
+
     // نفس شكل أقسام مربّعات الإضافة (DSComposerSection) — تصميم موحّد (طلب المالك)
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm + 2) {
+        let c = color.dsChrome(in: section).dsReadableGlyph
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm + 2) {
             HStack(spacing: 7) {
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: c, size: 22) }) {   // TMP-ART-TRIAL
                 Image(systemName: icon)
                     .font(.system(size: 10.5, weight: .bold))
-                    .foregroundColor(color)
+                    .foregroundColor(c)
                     .frame(width: 22, height: 22)
-                    .background(Circle().fill(color.opacity(0.13)))
+                    .background(Circle().fill(c.opacity(0.13)))
+                }
+                .frame(width: 22, height: 22)
                 Text(title)
                     .font(DS.Font.plex(12.5, weight: .bold))
                     .foregroundColor(DS.Color.fieldLabel)
@@ -46,6 +53,7 @@ struct DSFormCard<Content: View, Trailing: View>: View {
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
     }
 }
 
@@ -150,6 +158,7 @@ struct DSToggleBox: View {
     let title: String
     @Binding var isOn: Bool
     var tint: Color = DS.Color.primary
+    @Environment(\.dsSection) private var section
 
     var body: some View {
         Toggle(isOn: $isOn.animation(DS.Anim.snappy)) {
@@ -157,7 +166,7 @@ struct DSToggleBox: View {
                 .dsFieldFont(14, weight: .medium)
                 .foregroundColor(DS.Color.textPrimary)
         }
-        .tint(tint)
+        .tint(tint.dsChrome(in: section))
         .dsFieldChrome()
     }
 }
@@ -189,6 +198,9 @@ struct DSDateRow: View {
     let title: String
     let date: Date?
     let action: () -> Void
+    @Environment(\.dsSection) private var section
+    /// قلم التعديل بحبر القسم (كحلي خارج التبويبات)
+    private var accent: Color { DS.Color.primary.dsChrome(in: section) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -201,9 +213,9 @@ struct DSDateRow: View {
                     Spacer(minLength: 0)
                     Image(systemName: "pencil")
                         .font(DS.Font.plex(13, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(accent)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(DS.Color.primary.opacity(0.10)))
+                        .background(Circle().fill(accent.opacity(0.10)))
                 }
                 .dsFieldChrome(minHeight: 48)
                 .contentShape(Rectangle())
@@ -303,6 +315,7 @@ struct DSLifeDatesBox: View {
     /// رمادي هادئ لحالة الوفاة (طلب المالك)
     private let deceasedTint = DS.Color.textSecondary
     @Environment(\.dsInCenterBox) private var inBox
+    @Environment(\.dsSection) private var section
 
     var body: some View {
         // كل حقل في مربّع منفصل (طلب المالك)
@@ -347,15 +360,20 @@ struct DSLifeDatesBox: View {
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .stroke(stroke, lineWidth: 1)
                 )
+                .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
         }
     }
 
+    // لون الصف كما هو (الرمادي = متوفى، الكهرماني = الميلاد) — رسم الاتجاه بنفس الحجم
     private func rowIcon(_ name: String, tint: Color) -> some View {
+        TrialArt(make: { ArtDispatch.stateIcon($0, icon: name, tint: tint, size: 28) }) {   // TMP-ART-TRIAL
         Image(systemName: name)
             .font(DS.Font.plex(12, weight: .bold))
             .foregroundColor(tint)
             .frame(width: 28, height: 28)
             .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .frame(width: 28, height: 28)
     }
 
     /// صف تاريخ: العنوان والقيمة، ثم زر «بدون تاريخ» وقلم التعديل داخل الصف
@@ -389,9 +407,9 @@ struct DSLifeDatesBox: View {
                     .padding(.horizontal, DS.Spacing.sm + 2)
                     .frame(height: 30)
                     .background(
-                        // المختار كحلي (واضح بالوضعين) بدل الرمادي الباهت بالداكن
+                        // المختار كحلي (واضح بالوضعين) بدل الرمادي الباهت بالداكن — بلون القسم
                         Capsule().fill(has.wrappedValue ? DS.Color.mutedBackground.opacity(0.7)
-                                                        : DS.Color.actionNavy)
+                                                        : DS.Color.actionNavy.dsChromeFill(in: section))
                     )
             }
             .buttonStyle(DSScaleButtonStyle())
@@ -399,9 +417,9 @@ struct DSLifeDatesBox: View {
             Button { pick(title: title, has: has, date: date) } label: {
                 Image(systemName: has.wrappedValue ? "pencil" : "plus")
                     .font(DS.Font.plex(13, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(DS.Color.primary.dsChrome(in: section))
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(DS.Color.primary.opacity(0.10)))
+                    .background(Circle().fill(DS.Color.primary.dsChrome(in: section).opacity(0.10)))
             }
             .buttonStyle(DSScaleButtonStyle())
         }
@@ -431,7 +449,7 @@ struct DSGenderPicker: View {
             DSFieldLabel(text: L10n.t("الجنس", "Gender"))
             HStack(spacing: DS.Spacing.sm) {
                 option("male", title: L10n.t("ذكر", "Male"),
-                       icon: "figure.stand", tint: DS.Color.primary)
+                       icon: "figure.stand", tint: DS.Color.male)
                 option("female", title: L10n.t("أنثى", "Female"),
                        icon: "figure.stand.dress", tint: DS.Color.likeAction)
             }
@@ -472,6 +490,8 @@ struct DSGenderPicker: View {
 // MARK: - تعبئة أزرار الإجراء (طلب المالك)
 
 /// نفس تدرّج زر «طلب تعديل» — كحلي عميق في الوضع الداكن بدل الأزرق الفاتح.
+/// «كل قسم بلونه»: التدرّج بلون قسم التبويب الذي يُرسم فيه الزر (iOS 17+ يُقرأ من البيئة
+/// عند الرسم — بلا أي تعديل في أماكن الاستخدام)، وكحلي العلامة خارج التبويبات.
 /// `enabled: false` يخفّته للزر المعطّل.
 enum DSActionFill {
     /// شفافية الزر المعطّل (التعبئة ثم النص) — المربّعات تطبّقها على الطبقة فيتحرّك
@@ -479,12 +499,29 @@ enum DSActionFill {
     static let disabledOpacity: Double = 0.45
     static let labelDisabledOpacity: Double = 0.5
 
-    static func style(enabled: Bool = true) -> some ShapeStyle {
-        DS.Color.gradientPrimary.opacity(enabled ? 1 : disabledOpacity)
+    static func style(enabled: Bool = true) -> AnyShapeStyle {
+        let opacity = enabled ? 1 : disabledOpacity
+        // بلا بيئة قسم (نافذة مستقلّة مثلاً): القسم المختار، وإلا كحلي العلامة
+        let fallback = AppSection.current?.gradient ?? DS.Color.gradientPrimary
+        if #available(iOS 17.0, *) {
+            return AnyShapeStyle(DSSectionActionStyle(fallback: fallback, opacity: opacity))
+        }
+        return AnyShapeStyle(fallback.opacity(opacity))
     }
 
     /// نص الزر الكحلي — يخفت مع التعطيل؛ بالوضع الداكن كان الأبيض الكامل يوحي أنه مفعّل
     static func label(enabled: Bool = true) -> Color {
         .white.opacity(enabled ? 1 : labelDisabledOpacity)
+    }
+}
+
+/// تدرّج الإجراء يُحلّ عند الرسم من بيئة الزر (`dsActionGradient` يضعه `.dsSection`)
+@available(iOS 17.0, *)
+nonisolated private struct DSSectionActionStyle: ShapeStyle {
+    let fallback: LinearGradient
+    let opacity: Double
+
+    func resolve(in environment: EnvironmentValues) -> some ShapeStyle {
+        (environment.dsActionGradient ?? fallback).opacity(opacity)
     }
 }

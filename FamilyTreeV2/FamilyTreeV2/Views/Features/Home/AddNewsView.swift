@@ -72,17 +72,25 @@ struct AddNewsView: View {
         var text = ""
     }
 
-    /// لون القسم يتبع نوع الخبر المختار (الإعلان كحلي رسمي)
-    private var headerTint: Color {
-        if isPoll { return DS.Color.newsVote }
-        return selectedType == "إعلان" ? DS.Color.actionNavy : NewsTypeHelper.color(for: selectedType)
+    /// «خبر» العادي (أو نوع بلا لون خاص) — إطار المربّع بلون قسم الأخبار لا بكحلي العلامة
+    /// (طلب المالك ٢٠٢٦-١٠-٠٥ «وحتى الاخبار»). الأنواع ذات المعنى (إعلان، زواج، وفاة…) بلونها.
+    private var isPlainNewsType: Bool {
+        selectedType != "إعلان" && NewsTypeHelper.color(for: selectedType) == DS.Color.brand
     }
 
-    /// لون أيقونات الأقسام وإطار الكتابة — مثل الرأس، لكن «إعلان» بـ primary: نفس الكحلي
+    /// لون القسم يتبع نوع الخبر المختار (الإعلان كحلي رسمي ثابت — معنى لا يتبع لون التبويب)
+    private var headerTint: Color {
+        if isPoll { return DS.Color.newsVote }
+        if isPlainNewsType { return AppSection.news.fill }
+        return selectedType == "إعلان" ? DS.Color.brandFill : NewsTypeHelper.color(for: selectedType)
+    }
+
+    /// لون أيقونات الأقسام وإطار الكتابة — مثل الرأس، لكن «إعلان» بـ brand: نفس الكحلي
     /// في الفاتح، وأزرق فاتح في الداكن (كحلي الرأس الغامق كان يختفي على بطاقات الداكن)
     private var sectionTint: Color {
         if isPoll { return DS.Color.newsVote }
-        return selectedType == "إعلان" ? DS.Color.primary : NewsTypeHelper.color(for: selectedType)
+        if isPlainNewsType { return AppSection.news.ink }
+        return selectedType == "إعلان" ? DS.Color.brand : NewsTypeHelper.color(for: selectedType)
     }
 
     private var headerIcon: String {
@@ -119,6 +127,8 @@ struct AddNewsView: View {
             guard !items.isEmpty else { return }
             loadImages(from: items)
         }
+        // مربّع الأخبار بلون قسم الأخبار (زر النشر، النشر باسم، التصويت، الرسائل)
+        .dsSectionPage(.news)
     }
 
     // MARK: - التصنيف
@@ -144,17 +154,29 @@ struct AddNewsView: View {
 
     private func categoryTile(_ type: String) -> some View {
         let selected = !isPoll && selectedType == type
-        // الإعلان: primary (كحلي في الفاتح، أزرق فاتح يُقرأ في الداكن)
-        let c = type == "إعلان" ? DS.Color.primary : NewsTypeHelper.color(for: type)
+        // الإعلان: brand ثابت (معنى؛ كحلي في الفاتح، أزرق فاتح يُقرأ في الداكن)
+        let typeColor = NewsTypeHelper.color(for: type)
+        // «خبر» العادي بلون قسم الأخبار — مثل رأس المربّع
+        let c = type == "إعلان" ? DS.Color.brand
+              : (typeColor == DS.Color.brand ? AppSection.news.ink : typeColor)
         return Button {
             guard selectedType != type else { return }
             withAnimation(.spring(response: 0.38, dampingFraction: 0.68)) { selectedType = type }
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: NewsTypeHelper.icon(for: type))
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(selected ? .white : c)
+                // شارة النوع المتحرّكة — اختيار النوع يشغّل حكايته فوراً (طلب المالك ٢٠٢٦-١٠-٠٥)
+                Group {
+                    if FTNewsBadges.hasArt(for: type, currentIcon: NewsTypeHelper.icon(for: type)) {
+                        FTNewsBadge(type: type, tint: c, seed: abs(type.hashValue % 89),
+                                    style: selected ? .onColor : .soft, beatOnAppear: selected)
+                            .id(selected)
+                    } else {
+                        Image(systemName: NewsTypeHelper.icon(for: type))
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(selected ? .white : c)
+                    }
+                }
                     .frame(width: 38, height: 38)
                     .background(Circle().fill(selected ? AnyShapeStyle(LinearGradient(colors: [c, c.opacity(0.75)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(c.opacity(0.13))))
                     .shadow(color: selected ? c.opacity(0.45) : .clear, radius: 8, y: 3)
@@ -174,6 +196,7 @@ struct AddNewsView: View {
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .strokeBorder(selected ? c.opacity(0.55) : DS.Color.textTertiary.opacity(0.12),
                               lineWidth: selected ? 1.5 : 1))
+            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -219,7 +242,7 @@ struct AddNewsView: View {
                     } else {
                         // المختار على حبّة كحلية — الحرف الأبيض يُقرأ (الكحلي كان يختفي في الفاتح)
                         DSMemberAvatar(name: myName, avatarUrl: authVM.currentUser?.avatarUrl,
-                                       size: 28, roleColor: selected ? .white : DS.Color.primary)
+                                       size: 28, roleColor: selected ? .white : AppSection.news.ink)
                     }
                 }
                 .frame(width: 28, height: 28)
@@ -243,7 +266,7 @@ struct AddNewsView: View {
                     Capsule()
                         .fill(DSActionFill.style())
                         .matchedGeometryEffect(id: "identity-pill", in: identityNS)
-                        .shadow(color: DS.Color.actionNavy.opacity(0.35), radius: 6, y: 2)
+                        .shadow(color: AppSection.news.fill.opacity(0.35), radius: 6, y: 2)
                 }
             }
             .contentShape(Capsule())
@@ -289,6 +312,7 @@ struct AddNewsView: View {
                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .strokeBorder(contentFocused ? sectionTint.opacity(0.6) : DS.Color.textTertiary.opacity(0.15),
                                   lineWidth: contentFocused ? 1.5 : 1))
+                .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
                 .animation(.easeInOut(duration: 0.2), value: contentFocused)
 
                 if !selectedImages.isEmpty {
@@ -507,8 +531,11 @@ struct AddNewsView: View {
             isLoadingPhotos = true
             var loaded: [UIImage] = []
             for item in items {
+                // فكّ مصغّر خارج الخيط الرئيسي (كان يعلّق عند إضافة الصور — ٢٠٢٦-١٠-٠٥)
                 if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
+                   let image = await Task.detached(priority: .userInitiated, operation: {
+                       ImageProcessor.downsampled(data)
+                   }).value {
                     loaded.append(image)
                 }
             }

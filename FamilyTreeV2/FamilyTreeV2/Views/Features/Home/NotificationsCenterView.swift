@@ -198,16 +198,8 @@ struct NotificationsCenterView: View {
     private var notificationsHeader: some View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Spacing.md) {
-                // الرجوع مكان أيقونة الصفحة (طلب المالك) — بلا علامة ×
-                Button { dismiss() } label: {
-                    Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                        .font(DS.Font.scaled(19, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 48, height: 48)
-                        .dsHeaderGlassCircle()
-                }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("رجوع", "Back"))
+                // الرجوع مكان أيقونة الصفحة (طلب المالك) — بلا علامة × — الزر الموحّد فوق الرأس الملوّن
+                DSBackButton(context: .onColor) { dismiss() }
 
                 Text(L10n.t("الإشعارات", "Notifications"))
                     .font(DS.Font.plex(19, weight: .bold))
@@ -840,6 +832,7 @@ struct NotificationsCenterView: View {
                               : (isUnread ? iconInfo.color.dsReadableGlyph.opacity(0.35)
                                           : DS.Color.textTertiary.opacity(0.12)),
                               lineWidth: isSelected ? 1.5 : 1))
+            .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
             .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -874,7 +867,16 @@ struct NotificationsCenterView: View {
                 hint: isActivity
                     ? L10n.t("نشاط النظام يظهر هنا", "System activity appears here")
                     : L10n.t("الإشعارات الموجهة لك تظهر هنا", "Notifications for you appear here"),
-                tint: DS.Color.primary
+                tint: DS.Color.primary,
+                // جرس ساكن على قرص بلون القسم يتنفّس، وكرته الذهبية تتوهّج بهدوء (طلب المالك ٢٠٢٦-١٠-٠٥)
+                art: isActivity ? nil : AnyView(
+                    TrialArt(make: { ArtDispatch.notificationsEmpty($0) }) {   // TMP-ART-TRIAL
+                        FTSceneCanvas { ctx, size, t, dark in
+                            FTPlaceScenes.drawQuietPigeon(in: &ctx, size: size, t: t, dark: dark)
+                        }
+                    }
+                    .frame(width: 120, height: 120)
+                )
             )
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.md)

@@ -230,7 +230,7 @@ struct AdminDevicesView: View {
                             text: t("\(group.devices.count) جهاز",
                                     "\(group.devices.count) device\(group.devices.count == 1 ? "" : "s")"),
                             icon: "iphone.gen3",
-                            tint: group.devices.count > 1 ? DS.Color.warning : DS.Color.primary
+                            tint: group.devices.count > 1 ? DS.Color.warning : AppSection.admin.ink
                         )
                     }
                 }

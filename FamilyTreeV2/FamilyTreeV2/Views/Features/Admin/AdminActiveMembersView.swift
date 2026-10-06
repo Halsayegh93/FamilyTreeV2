@@ -292,11 +292,14 @@ struct AdminActiveMembersView: View {
     /// حالة فارغة داخل القسم: أيقونة بدائرة + سطر
     private func inlineEmpty(text: String) -> some View {
         VStack(spacing: 6) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: "moon.zzz.fill", tint: DS.Color.textTertiary, size: 38) }) {   // TMP-ART-TRIAL
             Image(systemName: "moon.zzz.fill")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(DS.Color.textTertiary)
                 .frame(width: 38, height: 38)
                 .background(Circle().fill(DS.Color.textTertiary.opacity(0.12)))
+            }
+                .frame(width: 38, height: 38)
                 .accessibilityHidden(true)
             Text(text)
                 .dsFieldFont(12, weight: .medium)
@@ -325,13 +328,13 @@ struct AdminActiveMembersView: View {
 
     private func actionColor(_ kind: String, source: String? = nil) -> Color {
         switch kind {
-        case "screen_visit":           return source == "web" ? DS.Color.accent : DS.Color.primary
-        case "news_add":               return DS.Color.primary
+        case "screen_visit":           return source == "web" ? DS.Color.accent : AppSection.admin.ink
+        case "news_add":               return AppSection.admin.ink
         case "news_comment":           return DS.Color.info
         case "news_like":              return DS.Color.error
         case "poll_vote":              return DS.Color.warning
         case "web_session":            return DS.Color.accent
-        case "device_active":          return DS.Color.primary
+        case "device_active":          return AppSection.admin.ink
         default:
             if kind.hasPrefix("request_") { return DS.Color.warning }
             return DS.Color.textSecondary

@@ -33,7 +33,8 @@ struct NewsCommentsSheet: View {
     @State private var appeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let tint = DS.Color.actionNavy
+    /// تعليقات الأخبار بلون قسم الأخبار (طلب المالك ٢٠٢٦-١٠-٠٥ «وحتى الاخبار»)
+    private let tint = AppSection.news.fill
 
     /// تعليقات الخبر بلا تعليقات من حظرهم المستخدم
     private var postComments: [NewsCommentRecord] {
@@ -141,6 +142,8 @@ struct NewsCommentsSheet: View {
             Text(L10n.t("يحتوي تعليقك على ألفاظ غير لائقة، ولا يُسمح بنشرها في التطبيق. عدّل التعليق ثم أرسله.",
                         "Your comment contains inappropriate language, which isn't allowed in the app. Please edit it and send again."))
         }
+        // زر الإرسال والرسائل بلون قسم الأخبار ما دامت الورقة ظاهرة
+        .dsSectionPage(.news)
     }
 
     // MARK: - المحتوى: تحميل / تعليقات / لا يوجد
@@ -149,7 +152,7 @@ struct NewsCommentsSheet: View {
     private var commentsContent: some View {
         if isLoadingComments {
             VStack(spacing: DS.Spacing.md) {
-                ProgressView().tint(tint)
+                ProgressView().tint(AppSection.news.ink)
                 Text(L10n.t("جاري تحميل التعليقات...", "Loading comments..."))
                     .font(DS.Font.plex(13))
                     .foregroundColor(DS.Color.textSecondary)
@@ -199,11 +202,15 @@ struct NewsCommentsSheet: View {
         let canBlockThis = !isMine && comment.author_id != nil
         return VStack(alignment: .leading, spacing: DS.Spacing.sm - 2) {
             HStack(spacing: 7) {
-                Image(systemName: "person.fill")
-                    .font(.system(size: 10.5, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الحالية
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "person.fill", tint: AppSection.news.ink, size: 22) }) {
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .foregroundColor(AppSection.news.ink)
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(AppSection.news.ink.opacity(0.13)))
+                }
                     .frame(width: 22, height: 22)
-                    .background(Circle().fill(DS.Color.primary.opacity(0.13)))
                     .accessibilityHidden(true)
                 Text(comment.author_name)
                     .dsFieldFont(12.5, weight: .bold)
@@ -262,26 +269,18 @@ struct NewsCommentsSheet: View {
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
     }
 
     // MARK: - زر الإغلاق أعلى الرأس
 
     private var closeButton: some View {
-        Button {
+        // زر الإغلاق الموحّد فوق الرأس الملوّن (DSNavButtons)
+        DSCloseButton(context: .onColor) {
             if hasUnsentDraft { confirmDiscard = true } else { dismiss() }
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(Color.white.opacity(0.22)))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-                .contentShape(Circle())
         }
-        .buttonStyle(DSScaleButtonStyle())
         .padding(.top, DS.Spacing.lg)
         .padding(.horizontal, DS.Spacing.lg)
-        .accessibilityLabel(L10n.t("إغلاق", "Close"))
     }
 
     // MARK: - الشريط السفلي: حقل الإدخال + إرسال (كحلي)
@@ -298,7 +297,7 @@ struct NewsCommentsSheet: View {
                 .frame(minHeight: 46)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(inputFocused ? tint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
+                    .strokeBorder(inputFocused ? AppSection.news.ink.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
                                   lineWidth: inputFocused ? 1.5 : 1))
                 .animation(.easeInOut(duration: 0.2), value: inputFocused)
 

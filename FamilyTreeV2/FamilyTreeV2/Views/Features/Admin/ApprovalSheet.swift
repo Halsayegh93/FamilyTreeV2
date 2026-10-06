@@ -37,7 +37,7 @@ struct ApprovalSheet: View {
                     // Header icon — gradient circle with person.badge.plus
                     ZStack {
                         Circle()
-                            .fill(DS.Color.gradientPrimary)
+                            .fill(AppSection.admin.gradient)
                             .frame(width: 66, height: 66)
                         Image(systemName: "person.badge.plus")
                             .font(DS.Font.scaled(28, weight: .semibold))
@@ -69,7 +69,7 @@ struct ApprovalSheet: View {
                     HStack(spacing: DS.Spacing.md) {
                         ZStack {
                             Circle()
-                                .fill(DS.Color.gradientPrimary)
+                                .fill(AppSection.admin.gradient)
                                 .frame(width: 32, height: 32)
                             Image(systemName: "magnifyingglass")
                                 .font(DS.Font.scaled(12, weight: .semibold))
@@ -86,7 +86,7 @@ struct ApprovalSheet: View {
                     .cornerRadius(DS.Radius.md)
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(isSearchFocused ? DS.Color.primary : DS.Color.inactiveBorder, lineWidth: isSearchFocused ? 2 : 1)
+                            .stroke(isSearchFocused ? AppSection.admin.ink : DS.Color.inactiveBorder, lineWidth: isSearchFocused ? 2 : 1)
                     )
                     .animation(.easeInOut(duration: 0.2), value: isSearchFocused)
                 }
@@ -97,7 +97,7 @@ struct ApprovalSheet: View {
                         if selectedFather?.id == father.id {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(DS.Font.scaled(20))
-                                .foregroundStyle(DS.Color.gradientPrimary)
+                                .foregroundStyle(AppSection.admin.gradient)
                         } else {
                             Image(systemName: "circle")
                                 .font(DS.Font.scaled(20))

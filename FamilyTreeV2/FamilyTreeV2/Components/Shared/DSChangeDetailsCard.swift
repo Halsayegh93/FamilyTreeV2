@@ -3,6 +3,7 @@ import SwiftUI
 /// Admin-only card that renders a structured "what changed" summary for an
 /// admin-edit notification. Shown inside `NotificationsCenterView` detail sheet.
 struct DSChangeDetailsCard: View {
+    @Environment(\.dsSection) private var dsSectionEnv
     let details: AppNotification.NotificationDetails
 
     var body: some View {
@@ -31,6 +32,7 @@ struct DSChangeDetailsCard: View {
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
         )
+        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
         .dsSubtleShadow()
     }
 
@@ -108,7 +110,7 @@ struct DSChangeDetailsCard: View {
     private func opaqueSummary(for change: AppNotification.NotificationDetails.ChangeEntry) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Rectangle()
-                .fill(DS.Color.primary.opacity(0.55))
+                .fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.55))
                 .frame(width: 2.5)
                 .clipShape(Capsule())
 

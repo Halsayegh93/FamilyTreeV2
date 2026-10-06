@@ -40,7 +40,7 @@ struct AdminReportsView: View {
             switch self {
             case .family: return DS.Color.accent
             case .age: return DS.Color.secondary
-            case .phone: return DS.Color.primary
+            case .phone: return AppSection.admin.ink
             case .missingPhone: return DS.Color.warning
             }
         }
@@ -748,7 +748,7 @@ struct AdminReportsView: View {
     private func resultsTools(members: [FamilyMember]) -> some View {
         HStack(spacing: 6) {
             toolButton(title: L10n.t("تحديد الكل", "Select all"), icon: "checkmark.circle.fill",
-                       tint: DS.Color.primary) {
+                       tint: AppSection.admin.ink) {
                 selectedMemberIds = Set(members.map(\.id))
             }
 
@@ -847,14 +847,14 @@ struct AdminReportsView: View {
 
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 21, weight: .semibold))
-                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textTertiary.opacity(0.7))
+                    .foregroundColor(selected ? AppSection.admin.ink : DS.Color.textTertiary.opacity(0.7))
             }
             .frame(minHeight: 36)
             .dsRowBox()
             .overlay {
                 if selected {
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(DS.Color.primary.opacity(0.55), lineWidth: 1.5)
+                        .strokeBorder(AppSection.admin.ink.opacity(0.55), lineWidth: 1.5)
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))

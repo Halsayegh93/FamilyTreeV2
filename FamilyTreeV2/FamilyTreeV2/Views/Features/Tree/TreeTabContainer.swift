@@ -46,8 +46,11 @@ extension EnvironmentValues {
 }
 
 /// تبويب علوي كبسولي [شجرة العائلة / النساء] — مطابق للأندرويد و iOS الأصلي.
+/// المختار بلون تبويب الشجرة (AppSection.tree) — النص الأبيض واضح في الوضعين.
 struct FamilyTreeTabBar: View {
     @Binding var selection: Int
+    /// TMP-ART-TRIAL: لمسة الاتجاه على الشريحة المختارة («الحالي» بلا تغيير)
+    @AppStorage(ArtTrial.storageKey) private var artRaw = ArtTrial.emblem.rawValue
 
     var body: some View {
         HStack(spacing: 2) {
@@ -56,7 +59,7 @@ struct FamilyTreeTabBar: View {
         }
         .padding(3)
         .background(DS.Color.surface.opacity(0.8), in: Capsule())   // أغمق (طلب المالك)
-        .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
+        .overlay(Capsule().strokeBorder(AppSection.tree.ink.opacity(0.25), lineWidth: 1))
         .dsSubtleShadow()
         .dynamicTypeSize(.large)
     }
@@ -71,7 +74,9 @@ struct FamilyTreeTabBar: View {
                 .lineLimit(1)
                 .padding(.horizontal, DS.Spacing.sm)
                 .frame(minHeight: 30)                       // مقاس مدمّج أصغر للبار العلوي
-                .background(Capsule().fill(selection == idx ? DS.Color.primary : Color.clear))
+                .background(Capsule().fill(selection == idx ? AppSection.tree.fill : Color.clear))
+                .modifier(TreeArtSkin(art: selection == idx ? (ArtTrial(rawValue: artRaw) ?? .emblem) : .emblem,
+                                      onFill: true, compact: true))   // TMP-ART-TRIAL
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)

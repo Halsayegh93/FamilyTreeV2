@@ -155,14 +155,17 @@ struct TreeSearchOverlay: View {
 
     private var searchBar: some View {
         HStack(spacing: DS.Spacing.sm) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: "magnifyingglass", tint: AppSection.tree.ink, size: 32) }) {   // TMP-ART-TRIAL
             ZStack {
                 Circle()
-                    .fill(DS.Color.primary.opacity(0.12))
+                    .fill(AppSection.tree.ink.opacity(0.12))
                     .frame(width: 32, height: 32)
                 Image(systemName: "magnifyingglass")
                     .font(DS.Font.scaled(14, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(AppSection.tree.ink)
             }
+            }
+            .frame(width: 32, height: 32)
 
             TextField(L10n.t("ابحث بالاسم أو الهاتف...", "Search by name or phone..."), text: $searchText, onEditingChanged: { focused in
                 isSearchFocused = focused
@@ -176,8 +179,10 @@ struct TreeSearchOverlay: View {
             // زر داخل المربع: يمسح النص إذا فيه نص، وإلا يغلق لوحة البحث (إن توفّر onClose).
             if !searchText.isEmpty {
                 Button(action: { searchText = "" }) { searchTrailingIcon }
+                    .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
             } else if onClose != nil {
                 Button(action: { onClose?() }) { searchTrailingIcon }
+                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
             }
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -187,7 +192,7 @@ struct TreeSearchOverlay: View {
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(
-                    isSearchFocused ? DS.Color.primary.opacity(0.4) : DS.Color.inactiveBorder,
+                    isSearchFocused ? AppSection.tree.ink.opacity(0.4) : DS.Color.inactiveBorder,
                     lineWidth: isSearchFocused ? 1.5 : 1
                 )
         )
@@ -195,15 +200,15 @@ struct TreeSearchOverlay: View {
     }
 
     /// أيقونة الزر داخل المربع (✕) — تُستخدم للمسح والإغلاق.
+    /// نفس × مسح البحث في بقية الحقول (رمادي خافت) — كانت حمراء، والأحمر للحذف فقط
     private var searchTrailingIcon: some View {
-        ZStack {
-            Circle()
-                .fill(DS.Color.error.opacity(0.12))
-                .frame(width: 28, height: 28)
-            Image(systemName: "xmark")
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(DS.Color.error)
-        }
+        Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 16))
+            .foregroundColor(DS.Color.textTertiary)
+            // مساحة ضغط ٤٤ (توصية أبل) — يشغل في التخطيط ٢٨ مثل الدائرة السابقة، فلا يتغيّر الشريط
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .padding(-8)
     }
 
     // MARK: - Filters Bar (ثابتة طوال البحث — لا تختفي مع غياب النتائج)
@@ -260,10 +265,10 @@ struct TreeSearchOverlay: View {
                                     Text(query)
                                         .font(DS.Font.caption1)
                                 }
-                                .foregroundColor(DS.Color.primary)
+                                .foregroundColor(AppSection.tree.ink)
                                 .padding(.horizontal, DS.Spacing.md)
                                 .padding(.vertical, DS.Spacing.xs + 2)
-                                .background(DS.Color.primary.opacity(0.08))
+                                .background(AppSection.tree.ink.opacity(0.08))
                                 .clipShape(Capsule())
                             }
                         }
@@ -554,7 +559,7 @@ struct TreeSearchOverlay: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(DS.Color.primary))
+                .background(Capsule().fill(AppSection.tree.fill))
             }
             .buttonStyle(DSScaleButtonStyle())
         } else {
@@ -566,11 +571,11 @@ struct TreeSearchOverlay: View {
                     Text(L10n.t("الفرع", "Branch"))
                         .font(DS.Font.scaled(12, weight: .semibold))
                 }
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(AppSection.tree.ink)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
-                .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
+                .background(Capsule().fill(AppSection.tree.ink.opacity(0.10)))
+                .overlay(Capsule().strokeBorder(AppSection.tree.ink.opacity(0.25), lineWidth: 1))
             }
             .buttonStyle(DSScaleButtonStyle())
         }

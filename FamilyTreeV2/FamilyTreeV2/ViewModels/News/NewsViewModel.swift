@@ -487,7 +487,10 @@ class NewsViewModel: ObservableObject {
     // MARK: - Upload News Image
 
     func uploadNewsImage(image: UIImage, for authorId: UUID) async -> String? {
-        guard let imageData = ImageProcessor.process(image, for: .news) else { return nil }
+        // الضغط خارج الخيط الرئيسي — كان زر النشر يبدو معلّقاً لكل صورة
+        guard let imageData = await Task.detached(priority: .userInitiated, operation: {
+            ImageProcessor.process(image, for: .news)
+        }).value else { return nil }
 
         let imageId = UUID()
         // Stable ASCII keys work with Storage and remain attributable after renaming.

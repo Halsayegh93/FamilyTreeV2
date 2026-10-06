@@ -136,6 +136,8 @@ struct BlockedMembersSection: View {
     var index: Int = 0
     @ObservedObject private var store = BlockedMembersStore.shared
     @State private var entryToUnblock: BlockedMembersStore.Entry?
+    // لون القسم الذي يظهر فيه («حسابي» ← الإعدادات) — كحلي «الإطار» يتبعه
+    @Environment(\.dsSection) private var section
 
     var body: some View {
         DSComposerSection(title: L10n.t("الأعضاء المحظورون", "Blocked Members"),
@@ -202,10 +204,10 @@ struct BlockedMembersSection: View {
             Button { entryToUnblock = entry } label: {
                 Text(L10n.t("إلغاء الحظر", "Unblock"))
                     .font(DS.Font.plex(12, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(DS.Color.primary.dsChrome(in: section))
                     .padding(.horizontal, DS.Spacing.md)
                     .frame(height: 32)
-                    .background(Capsule().fill(DS.Color.primary.opacity(0.12)))
+                    .background(Capsule().fill(DS.Color.primary.dsChrome(in: section).opacity(0.12)))
                     // مساحة ضغط ٤٤ نقطة (توصية أبل) — الحبّة كما هي
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())

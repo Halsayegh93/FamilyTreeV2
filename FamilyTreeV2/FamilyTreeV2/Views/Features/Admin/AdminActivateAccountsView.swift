@@ -288,7 +288,8 @@ struct AdminActivateAccountsView: View {
                              ? L10n.t("إلغاء", "Cancel")
                              : L10n.t("تحديد", "Select"))
                             .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.primary)
+                            // «إلغاء» بالأحمر مثل بقية أزرار إلغاء التحديد، و«تحديد» بحبر القسم
+                            .foregroundColor(isSelectionMode ? DS.Color.error : AppSection.admin.ink)
                     }
                 }
             }
@@ -307,6 +308,16 @@ struct AdminActivateAccountsView: View {
                 "تفعيل حساب \(member.fullName)؟",
                 "Activate \(member.fullName)'s account?"
             ))
+        }
+        // رفض تفعيل حساب خارج الشجرة (من activateAccount) — يُعرض سببه بدل لا شيء
+        .dsAlert(
+            L10n.t("تعذّر التفعيل", "Couldn't activate"),
+            isPresented: Binding(get: { adminRequestVM.errorMessage != nil },
+                                 set: { if !$0 { adminRequestVM.errorMessage = nil } })
+        ) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) { adminRequestVM.errorMessage = nil }
+        } message: {
+            Text(adminRequestVM.errorMessage ?? "")
         }
         .dsAlert(
             L10n.t("تأكيد تحديث الجنس", "Confirm Gender Update"),
@@ -441,7 +452,7 @@ struct AdminActivateAccountsView: View {
                                         } label: {
                                             Label(L10n.t("هاتف", "Phone"), systemImage: "phone.badge.plus")
                                         }
-                                        .tint(DS.Color.primary)
+                                        .tint(AppSection.admin.ink)
                                     }
                                     if isMissingBirthDate(member) {
                                         Button {
@@ -485,7 +496,7 @@ struct AdminActivateAccountsView: View {
                                     "Show more (\(stationPool.count - displayLimit) remaining)"
                                 ))
                                 .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.primary)
+                                .foregroundColor(AppSection.admin.ink)
                                 Spacer()
                             }
                             .padding(.vertical, DS.Spacing.sm)
@@ -522,7 +533,7 @@ struct AdminActivateAccountsView: View {
                     .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(Capsule().fill(isOn ? DS.Color.primary : DS.Color.surface))
+                    .background(Capsule().fill(isOn ? AppSection.admin.fill : DS.Color.surface))
                     .overlay(
                         Capsule().strokeBorder(
                             isOn ? Color.clear : DS.Color.textTertiary.opacity(0.15),
@@ -710,7 +721,7 @@ struct AdminActivateAccountsView: View {
         var items: [StationAction] = []
         if hasNoPhone(member), member.isDeceased != true {
             items.append(StationAction(id: "phone", title: L10n.t("هاتف", "Phone"),
-                                       icon: "phone.badge.plus", color: DS.Color.primary) {
+                                       icon: "phone.badge.plus", color: AppSection.admin.ink) {
                 memberToEditPhone = member
             })
         }
@@ -808,6 +819,7 @@ struct AdminActivateAccountsView: View {
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
         )
+        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
     }
 
     /// زر إجراء أيقوني مع تسمية تحته (دائرة ٥٢ نقطة — فوق حد الضغط)
@@ -820,12 +832,16 @@ struct AdminActivateAccountsView: View {
     ) -> some View {
         Button(action: action) {
             VStack(spacing: 5) {
+                // المعطّل يبقى باهتاً كما هو — وغيره رسم الاتجاه
+                TrialArt(make: { disabled ? nil : ArtDispatch.stateIcon($0, icon: icon, tint: color, size: 52) }) {   // TMP-ART-TRIAL
                 Image(systemName: icon)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(disabled ? DS.Color.textTertiary : color)
                     .frame(width: 52, height: 52)
                     .background(Circle().fill(color.opacity(disabled ? 0.06 : 0.13)))
                     .overlay(Circle().strokeBorder(color.opacity(disabled ? 0.08 : 0.22), lineWidth: 1))
+                }
+                .frame(width: 52, height: 52)
                 Text(title)
                     .dsFieldFont(11.5, weight: .semibold)
                     .foregroundColor(disabled ? DS.Color.textTertiary : DS.Color.fieldValue)
@@ -1061,12 +1077,12 @@ struct AdminActivateAccountsView: View {
         let isSelected = selectedMembers.contains(member.id)
         return ZStack {
             Circle()
-                .stroke(isSelected ? DS.Color.primary : DS.Color.textTertiary, lineWidth: 2)
+                .stroke(isSelected ? AppSection.admin.ink : DS.Color.textTertiary, lineWidth: 2)
                 .frame(width: 24, height: 24)
 
             if isSelected {
                 Circle()
-                    .fill(DS.Color.primary)
+                    .fill(AppSection.admin.fill)
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
                     .font(DS.Font.scaled(12, weight: .bold))
@@ -1097,7 +1113,7 @@ struct AdminActivateAccountsView: View {
                              : L10n.t("تحديد الكل", "Select All"))
                             .font(DS.Font.calloutBold)
                     }
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(AppSection.admin.ink)
                 }
                 .buttonStyle(DSScaleButtonStyle())
 
@@ -1320,7 +1336,7 @@ struct EditPhoneSheet: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.xs)
-                        .background(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? DS.Color.textTertiary : DS.Color.primary)
+                        .background(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? DS.Color.textTertiary : AppSection.admin.fill)
                         .cornerRadius(DS.Radius.lg)
                     }
                     .disabled(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
@@ -1333,15 +1349,8 @@ struct EditPhoneSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(22, weight: .medium))
-                            .foregroundStyle(DS.Color.textTertiary)
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
+                    // زر الإغلاق الموحّد (DSNavButtons)
+                    DSCloseButton(inToolbar: true) { dismiss() }
                 }
             }
         }
@@ -1630,7 +1639,7 @@ private extension View {
 private struct StationPhotoCircle: View {
     @Binding var item: PhotosPickerItem?
     let image: UIImage?
-    var tint: Color = DS.Color.primary
+    var tint: Color = AppSection.admin.ink
     var size: CGFloat = 96
     @State private var spin = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1727,7 +1736,7 @@ struct EditGenderSheet: View {
             StationMemberCard(member: member).dsStaggerIn(0)
 
             DSComposerSection(title: L10n.t("الجنس", "Gender"),
-                              icon: "person.2.fill", tint: DS.Color.primary, index: 1) {
+                              icon: "person.2.fill", tint: AppSection.admin.ink, index: 1) {
                 genderOption("male", L10n.t("ذكر", "Male"), "figure.stand", DS.Color.primary)
                 genderOption("female", L10n.t("أنثى", "Female"), "figure.stand.dress", DS.Color.likeAction)
             }
@@ -1842,7 +1851,7 @@ struct EditDeathDateSheet: View {
                             .foregroundColor(DS.Color.textPrimary)
                     }
                 }
-                .tint(DS.Color.primary)
+                .tint(AppSection.admin.ink)
                 .dsRowBox()
             }
         }
@@ -1901,7 +1910,7 @@ struct EditMemberPhotoSheet: View {
             StationMemberCard(member: member).dsStaggerIn(0)
 
             DSComposerSection(title: L10n.t("الصورة", "Photo"),
-                              icon: "photo.fill", tint: DS.Color.primary, index: 1) {
+                              icon: "photo.fill", tint: AppSection.admin.ink, index: 1) {
                 StationPhotoCircle(item: $pickedItem, image: pickedImage)
                 noPhotoButton
             }

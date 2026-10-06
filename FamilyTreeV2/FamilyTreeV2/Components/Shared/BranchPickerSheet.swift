@@ -6,6 +6,7 @@ import SwiftUI
 /// المستوى الأول: أبناء عبدالله المباشرين (يخفي عبدالله نفسه)
 /// كل ابن يتوسّع ليبين أحفاده (مستوى ثاني)
 struct BranchPickerSheet: View {
+    @Environment(\.dsSection) private var dsSectionEnv
     let allMembers: [FamilyMember]
     /// الفرع المختار حالياً — عليه علامة ✓ (اختياري؛ الاستدعاء بدونه يبقى كما هو)
     var selectedId: UUID? = nil
@@ -53,7 +54,7 @@ struct BranchPickerSheet: View {
                 title: searching ? L10n.t("نتائج البحث", "Search results")
                                  : L10n.t("فروع العائلة", "Family branches"),
                 icon: searching ? "person.2.fill" : "tree.fill",
-                tint: DS.Color.primary,
+                tint: DS.Color.primary.dsChrome(in: dsSectionEnv),
                 trailing: isLoading ? nil : "\(nodes.count)",
                 index: 1
             ) {
@@ -98,7 +99,7 @@ struct BranchPickerSheet: View {
     private func branchList(_ nodes: [BranchNode], searching: Bool) -> some View {
         if isLoading {
             ProgressView()
-                .tint(DS.Color.primary)
+                .tint(DS.Color.primary.dsChrome(in: dsSectionEnv))
                 .scaleEffect(1.2)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DS.Spacing.xl)
@@ -167,7 +168,7 @@ struct BranchPickerSheet: View {
         .padding(.leading, DS.Spacing.lg)
         .overlay(alignment: .leading) {
             Capsule()
-                .fill(DS.Color.primary.opacity(0.2))
+                .fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.2))
                 .frame(width: 2)
                 .padding(.leading, 6)
         }
@@ -188,7 +189,7 @@ struct BranchPickerSheet: View {
                     name: node.member.fullName,
                     avatarUrl: node.member.avatarUrl,
                     size: isTop ? 36 : 32,
-                    roleColor: DS.Color.primary
+                    roleColor: DS.Color.primary.dsChrome(in: dsSectionEnv)
                 )
                 if node.member.isDeceased == true {
                     Image(systemName: "leaf.fill")
@@ -203,14 +204,14 @@ struct BranchPickerSheet: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                 }
                 if canExpand {
                     // مكان سهم التوسعة — الزر نفسه فوق الصف (ضغطته لا تختار الفرع)
                     Color.clear.frame(width: Self.expandButtonSize, height: Self.expandButtonSize)
                 }
             }
-            .branchRowBox(selected: isSelected)
+            .branchRowBox(selected: isSelected, tint: DS.Color.primary.dsChrome(in: dsSectionEnv))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -242,11 +243,11 @@ struct BranchPickerSheet: View {
         } label: {
             Image(systemName: "chevron.down")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                 // الاتجاه يُعكس تلقائياً بالعربي — زاوية واحدة تشير لجهة القراءة باللغتين
                 .rotationEffect(.degrees(isExpanded ? 0 : -90))
                 .frame(width: Self.expandButtonSize, height: Self.expandButtonSize)
-                .background(Circle().fill(DS.Color.primary.opacity(isExpanded ? 0.18 : 0.10)))
+                .background(Circle().fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(isExpanded ? 0.18 : 0.10)))
                 // مساحة ضغط ٤٤ نقطة (حد أبل) حول الدائرة — الصف ٤٨+ فيسعها
                 .frame(width: Self.expandHitSize, height: Self.expandHitSize)
                 .contentShape(Rectangle())
@@ -447,11 +448,11 @@ struct BranchPickerSheet: View {
 
 private extension View {
     /// صف الفرع: صندوق صفوف المربّعات + إطار بلون التطبيق للفرع المختار حالياً
-    func branchRowBox(selected: Bool) -> some View {
+    func branchRowBox(selected: Bool, tint: Color) -> some View {
         dsRowBox()
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(selected ? 0.6 : 0), lineWidth: 1.5)
+                    .strokeBorder(tint.opacity(selected ? 0.6 : 0), lineWidth: 1.5)
             )
     }
 }

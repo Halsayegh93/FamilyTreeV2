@@ -105,7 +105,7 @@ struct AdminForceUpdateView: View {
 
     private var explainer: some View {
         HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: canEdit ? "info.circle.fill" : "eye.fill", tint: DS.Color.primary)
+            DSFieldIcon(name: canEdit ? "info.circle.fill" : "eye.fill", tint: AppSection.admin.ink)
                 .accessibilityHidden(true)
             Text(canEdit
                  ? L10n.t("أي نسخة رقمها أقل من الحد تنقفل بشاشة «حدّث التطبيق» لين يحدّث العضو. 0 = بلا إجبار.",
@@ -118,9 +118,9 @@ struct AdminForceUpdateView: View {
         }
         .padding(DS.Spacing.md)
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .fill(DS.Color.primary.opacity(0.08)))
+            .fill(AppSection.admin.ink.opacity(0.08)))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1))
+            .strokeBorder(AppSection.admin.ink.opacity(0.20), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .dsStaggerIn(0)
     }
@@ -134,14 +134,14 @@ struct AdminForceUpdateView: View {
                           trailing: value == 0 ? L10n.t("بلا إجبار", "Off") : L10n.t("مفعّل", "On"),
                           index: index) {
             // أقل رقم بناء مسموح
-            SysRow(icon: "number", tint: value == 0 ? DS.Color.textTertiary : DS.Color.primary,
+            SysRow(icon: "number", tint: value == 0 ? DS.Color.textTertiary : AppSection.admin.ink,
                    title: L10n.t("أقل رقم بناء", "Minimum build"),
                    subtitle: hint) {
                 HStack(spacing: DS.Spacing.sm) {
                     Text(value == 0 ? L10n.t("بلا", "Off") : "\(value)")
                         .font(DS.Font.plex(17, weight: .bold))
                         .monospacedDigit()
-                        .foregroundColor(value == 0 ? DS.Color.textTertiary : DS.Color.primary)
+                        .foregroundColor(value == 0 ? DS.Color.textTertiary : AppSection.admin.ink)
                         .frame(minWidth: 36)
                         .accessibilityHidden(true)
                     Stepper("", value: Binding(

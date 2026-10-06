@@ -74,7 +74,7 @@ struct ProfileView: View {
                             title: L10n.t("حسابي", "My Profile"),
                             subtitle: L10n.t("الملف الشخصي والإعدادات", "Profile and settings"),
                             icon: "person.fill",
-                            backgroundGradient: DS.Color.gradientPrimary,
+                            backgroundGradient: AppSection.profile.gradient,
                             hideNotificationBell: true
                         ) {
                             // زر الإعدادات — يفتح كل تفضيلات التطبيق
@@ -337,11 +337,11 @@ struct ProfileView: View {
                     .frame(width: 110, height: 110)
                     .dsGlowShadow()
                 
-                // حلقة gradient
+                // حلقة gradient — بلون تبويب «حسابي»
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [DS.Color.primary, DS.Color.secondary, DS.Color.primary],
+                            colors: [AppSection.profile.ink, DS.Color.secondary, AppSection.profile.ink],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         ),
                         lineWidth: 3
@@ -359,7 +359,7 @@ struct ProfileView: View {
                         .overlay(
                             Text(String(user.firstName.first ?? "P"))
                                 .font(DS.Font.scaled(40, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
+                                .foregroundColor(AppSection.profile.ink)
                         )
                 }
             }
@@ -379,7 +379,7 @@ struct ProfileView: View {
                         + Text("  ")
                         + Text(Image(systemName: "pencil.circle.fill"))
                             .font(DS.Font.scaled(20, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
+                            .foregroundColor(AppSection.profile.ink)
                     )
                     .multilineTextAlignment(.center)
                 }
@@ -540,12 +540,15 @@ struct ProfileView: View {
 
     private func infoGridCell(icon: String, color: Color, title: String, value: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: color, size: 36) }) {   // TMP-ART-TRIAL
             Image(systemName: icon)
                 .font(DS.Font.scaled(16, weight: .bold))
                 .foregroundColor(color)
                 .frame(width: 36, height: 36)
                 .background(color.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            }
+            .frame(width: 36, height: 36)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -569,6 +572,7 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(color.opacity(0.15), lineWidth: 1)
         )
+        .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
     }
 
     private static let isoDateFormatter: ISO8601DateFormatter = {
@@ -666,6 +670,7 @@ struct ProfileView: View {
     private func myRequestRow(_ request: AdminRequest) -> some View {
         let info = myRequestDisplay(for: request)
         return HStack(spacing: DS.Spacing.md) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: info.icon, tint: info.color, size: 36) }) {   // TMP-ART-TRIAL
             ZStack {
                 Circle()
                     .fill(info.color.opacity(0.12))
@@ -674,6 +679,8 @@ struct ProfileView: View {
                     .font(DS.Font.scaled(14, weight: .semibold))
                     .foregroundColor(info.color)
             }
+            }
+            .frame(width: 36, height: 36)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(info.title)
@@ -750,7 +757,7 @@ struct ProfileView: View {
                          title: L10n.t("تغيير الاسم", "Name change"),
                          target: request.newValue ?? targetName)
         case RequestType.phoneChange.rawValue:
-            return .init(icon: "phone.arrow.up.right", color: DS.Color.primary,
+            return .init(icon: "phone.arrow.up.right", color: AppSection.profile.ink,
                          title: L10n.t("تغيير رقم الهاتف", "Phone change"), target: targetName)
         case RequestType.deceasedReport.rawValue:
             return .init(icon: "heart.slash", color: DS.Color.textTertiary,
@@ -768,10 +775,10 @@ struct ProfileView: View {
         switch action {
         case .add: return DS.Color.success
         case .editName: return DS.Color.info
-        case .editPhone: return DS.Color.primary
+        case .editPhone: return AppSection.profile.ink
         case .editBirth: return DS.Color.warning
         case .deceased, .addDeathDate: return DS.Color.textTertiary
-        case .addPhoto: return DS.Color.primary
+        case .addPhoto: return AppSection.profile.ink
         case .delete: return DS.Color.error
         case .other: return DS.Color.accent
         case .none: return DS.Color.warning
@@ -810,11 +817,11 @@ struct ProfileView: View {
                                 Text(isReorderingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"))
                                     .font(DS.Font.scaled(11, weight: .bold))
                             }
-                            .foregroundColor(isReorderingChildren ? DS.Color.success : DS.Color.primary)
+                            .foregroundColor(isReorderingChildren ? DS.Color.success : AppSection.profile.ink)
                             .padding(.horizontal, DS.Spacing.md)
                             .padding(.vertical, DS.Spacing.xs + 2)
                             .background(
-                                (isReorderingChildren ? DS.Color.success : DS.Color.primary).opacity(0.1)
+                                (isReorderingChildren ? DS.Color.success : AppSection.profile.ink).opacity(0.1)
                             )
                             .clipShape(Capsule())
                             // مساحة ضغط ٤٤ نقطة (حد أبل): الحشو يوسّع منطقة الضغط والسالب
@@ -855,12 +862,15 @@ struct ProfileView: View {
     private func addFamilyActionCell(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: color, size: 36) }) {   // TMP-ART-TRIAL
                 Image(systemName: icon)
                     .font(DS.Font.scaled(16, weight: .bold))
                     .foregroundColor(color)
                     .frame(width: 36, height: 36)
                     .background(color.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                }
+                    .frame(width: 36, height: 36)
                     .accessibilityHidden(true)   // زخرفة — العنوان يكفي للقارئ الصوتي
                 Text(title).font(DS.Font.caption1).fontWeight(.bold).foregroundColor(color).lineLimit(1)
             }
@@ -872,6 +882,7 @@ struct ProfileView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .stroke(color.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
             )
+            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
         }
         .buttonStyle(DSPressStyle())   // ضغطة ناعمة موحّدة (كانت بلا أي إحساس بالضغط)
     }
@@ -983,17 +994,20 @@ struct ProfileView: View {
                 // إضافة ابن
                 Button { showAddChild = true } label: {
                     HStack(spacing: DS.Spacing.sm) {
+                        TrialArt(make: { ArtDispatch.stateIcon($0, icon: "plus", tint: AppSection.profile.ink, size: 36) }) {   // TMP-ART-TRIAL
                         Image(systemName: "plus")
                             .font(DS.Font.scaled(16, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
+                            .foregroundColor(AppSection.profile.ink)
                             .frame(width: 36, height: 36)
-                            .background(DS.Color.primary.opacity(0.12))
+                            .background(AppSection.profile.ink.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                        }
+                            .frame(width: 36, height: 36)
                             .accessibilityHidden(true)   // زخرفة — العنوان يكفي للقارئ الصوتي
                         Text(L10n.t("إضافة ابن", "Add Child"))
                             .font(DS.Font.caption1)
                             .fontWeight(.bold)
-                            .foregroundColor(DS.Color.primary)
+                            .foregroundColor(AppSection.profile.ink)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1002,8 +1016,9 @@ struct ProfileView: View {
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(DS.Color.primary.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
+                            .stroke(AppSection.profile.ink.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
                     )
+                    .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
                 }
                 .buttonStyle(DSPressStyle())
             }
@@ -1043,6 +1058,7 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(info.color.opacity(0.15), lineWidth: 1)
         )
+        .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
     }
 
     /// أبناء شجرة النساء بالترتيب الحالي (للترتيب).
@@ -1099,7 +1115,7 @@ struct ProfileView: View {
                         Spacer(minLength: DS.Spacing.sm)
                         Toggle("", isOn: $newWifeHidden)
                             .labelsHidden()
-                            .tint(DS.Color.primary)
+                            .tint(AppSection.profile.ink)
                             .accessibilityLabel(L10n.t("إخفاؤها من الشجرة", "Hide from the tree"))
                     }
                     .dsRowBox()
@@ -1317,15 +1333,15 @@ struct ProfileView: View {
         Group {
             if let url = m.avatarUrl ?? m.photoURL, let u = URL(string: url) {
                 CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() }
-                    placeholder: { DS.Color.primary.opacity(0.1) }
+                    placeholder: { AppSection.profile.ink.opacity(0.1) }
             } else {
-                DS.Color.primary.opacity(0.1)
-                    .overlay(Image(systemName: "person.fill").foregroundColor(DS.Color.primary.opacity(0.5)))
+                AppSection.profile.ink.opacity(0.1)
+                    .overlay(Image(systemName: "person.fill").foregroundColor(AppSection.profile.ink.opacity(0.5)))
             }
         }
         .frame(width: 36, height: 36)
         .clipShape(Circle())
-        .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
+        .overlay(Circle().stroke(AppSection.profile.ink.opacity(0.18), lineWidth: 1))
     }
 
     private var womenChildrenList: [WomanMember] {
@@ -1357,7 +1373,7 @@ struct ProfileView: View {
             }
             .frame(width: 36, height: 36)
             .clipShape(Circle())
-            .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
+            .overlay(Circle().strokeBorder(AppSection.profile.ink.opacity(0.12), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 2) {
                 // الاسم وحده هو المستور — الصورة والدور يبقيان ظاهرين
@@ -1393,16 +1409,17 @@ struct ProfileView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(DS.Color.primary.opacity(0.12), lineWidth: 1)
+                .stroke(AppSection.profile.ink.opacity(0.12), lineWidth: 1)
         )
+        .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
     }
 
     private var womanAvatarFallback: some View {
         ZStack {
-            DS.Color.primary.opacity(0.08)
+            AppSection.profile.ink.opacity(0.08)
             Image(systemName: "person.fill")
                 .font(DS.Font.scaled(16, weight: .bold))
-                .foregroundColor(DS.Color.primary.opacity(0.6))
+                .foregroundColor(AppSection.profile.ink.opacity(0.6))
         }
     }
 
@@ -1505,7 +1522,7 @@ struct ProfileView: View {
         }
         .frame(width: 44, height: 44)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.12), lineWidth: 1))
+        .overlay(Circle().strokeBorder(AppSection.profile.ink.opacity(0.12), lineWidth: 1))
     }
 
     /// أسهم أعلى/أسفل موحّدة (≥44pt) مع تسميات وصول — تُستخدم للأبناء والبنات.
@@ -1515,7 +1532,7 @@ struct ProfileView: View {
             Button(action: up) {
                 Image(systemName: "chevron.up")
                     .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(canUp ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
+                    .foregroundColor(canUp ? AppSection.profile.ink : DS.Color.textTertiary.opacity(0.3))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -1525,7 +1542,7 @@ struct ProfileView: View {
             Button(action: down) {
                 Image(systemName: "chevron.down")
                     .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(canDown ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
+                    .foregroundColor(canDown ? AppSection.profile.ink : DS.Color.textTertiary.opacity(0.3))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -1544,7 +1561,7 @@ struct ProfileView: View {
             if isDeceased { return "person.fill.xmark" }
             return isFemale ? "figure.stand.dress" : "person.fill"
         }()
-        let iconColor = isDeceased ? DS.Color.error : (isFemale ? DS.Color.neonPink : DS.Color.primary)
+        let iconColor = isDeceased ? DS.Color.error : (isFemale ? DS.Color.neonPink : DS.Color.male)
         return (iconName, iconColor)
     }
 
@@ -1782,7 +1799,7 @@ struct WomanMemberEditSheet: View {
                     Spacer(minLength: 0)
                     Toggle("", isOn: $isHidden)
                         .labelsHidden()
-                        .tint(DS.Color.primary)
+                        .tint(AppSection.profile.ink)
                         .accessibilityLabel(L10n.t("إخفاؤها من الشجرة", "Hide from tree"))
                 }
                 .dsRowBox()
@@ -1894,7 +1911,7 @@ private struct AvatarPreview: View {
                             DS.Color.surface
                             Text(String(member.firstName.first ?? "?"))
                                 .font(DS.Font.plex(96, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
+                                .foregroundColor(AppSection.profile.ink)
                         }
                         if isUploading {
                             Color.black.opacity(0.35)
@@ -2060,9 +2077,9 @@ private struct AnchoredChoiceRow: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
                     .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(AppSection.profile.ink)
                     .frame(width: 28, height: 28)
-                    .background(DS.Color.primary.opacity(0.10), in: Circle())
+                    .background(AppSection.profile.ink.opacity(0.10), in: Circle())
                 Text(title)
                     .font(DS.Font.plex(14, weight: .semibold))
                     .foregroundColor(DS.Color.textPrimary)
@@ -2170,7 +2187,7 @@ private struct WifeSourceCard: View {
                         .font(DS.Font.plex(13, weight: .semibold))
                         .foregroundColor(DS.Color.textPrimary)
                 }
-                .tint(DS.Color.primary)
+                .tint(AppSection.profile.ink)
                 if hidden {
                     Text(L10n.t("المخفيّة لا تظهر لأي أحد في الشجرة — تبقى مسجّلة عندك فقط.",
                                 "A hidden wife appears to no one in the tree — she stays recorded for you only."))

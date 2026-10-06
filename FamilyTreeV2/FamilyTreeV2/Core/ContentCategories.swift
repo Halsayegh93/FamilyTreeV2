@@ -82,7 +82,7 @@ enum CategoryPalette {
     ]
 
     static func color(_ key: String) -> Color {
-        guard let pair = hex[key] else { return DS.Color.primary }
+        guard let pair = hex[key] else { return DS.Color.brand }   // كحلي ثابت لا يتبع القسم
         return SwiftUI.Color.adaptive(light: pair.light, dark: pair.dark)
     }
 }

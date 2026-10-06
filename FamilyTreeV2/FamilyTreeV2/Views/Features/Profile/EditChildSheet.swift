@@ -313,13 +313,30 @@ struct EditChildSheet: View {
             let newlyDeceased = isDeceased && !wasDeceased
             let deathNeedsApproval = newlyDeceased && !authVM.canEditMembers
 
+            // الرقم يُرسل فقط إذا تغيّر فعلاً (فحص الثغرات ب-٢): رقم الابن المخفي يصل هنا
+            // فارغاً، فكان كل حفظ يمسحه وينقفل الدخول على الابن. لا يُكتب فوقه فراغ أبداً.
+            var phoneToSend: String? = nil
+            if selectedGender == "male" {
+                let entered = KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry,
+                                                               rawLocalDigits: phoneNumber)
+                // رقم مكتوب لكنه غير صالح — لا نحوّله إلى «حذف الرقم» بصمت
+                if !phoneNumber.isEmpty && entered == nil {
+                    isSaving = false
+                    errorMessage = L10n.t("رقم الهاتف غير صحيح. تحقّق من الرقم ورمز الدولة.",
+                                          "Invalid phone number. Check the number and country code.")
+                    showErrorAlert = true
+                    return
+                }
+                let start = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
+                let original = KuwaitPhone.normalizedForStorage(country: start.country,
+                                                                rawLocalDigits: start.localDigits) ?? ""
+                if (entered ?? "") != original { phoneToSend = entered ?? "" }
+            }
+
             let success = await memberVM.updateChildData(
                 member: updatedMember,
                 firstName: cleanFirst,
-                phoneNumber: KuwaitPhone.normalizedForStorage(
-                    country: selectedPhoneCountry,
-                    rawLocalDigits: phoneNumber
-                ) ?? "",
+                phoneNumber: phoneToSend,
                 birthDate: birthDateString,
                 isDeceased: deathNeedsApproval ? wasDeceased : isDeceased,
                 deathDate: deathNeedsApproval ? member.deathDate : deathDateString,

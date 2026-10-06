@@ -39,8 +39,8 @@ struct AdminMembersManagementView: View {
         var color: Color {
             switch self {
             case .overview:   return DS.Color.secondary
-            case .accounts:   return DS.Color.primary
-            case .directory:  return DS.Color.primary
+            case .accounts:   return AppSection.admin.ink
+            case .directory:  return AppSection.admin.ink
             case .families:   return DS.Color.accent
             }
         }

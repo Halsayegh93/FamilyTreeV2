@@ -105,7 +105,23 @@ class AuthViewModel: ObservableObject {
     private var isEndingSession = false
     private var sessionGeneration = UUID()
     @Published var currentUser: FamilyMember? = nil
-    @Published var status: AuthStatus = .checking
+    @Published var status: AuthStatus = .checking {
+        didSet {
+            guard status != oldValue else { return }
+            if status == .checking {
+                armLaunchWatchdog()
+            } else {
+                launchWatchdog?.cancel()
+                launchCheckStalled = false
+            }
+        }
+    }
+    /// شاشة البداية علقت (بلا اتصال، أو الخادم لا يرد) — تعرض «تعذّر الاتصال» و«إعادة المحاولة»
+    /// بدل الدوران بلا نهاية (فحص الثغرات ج-٦). تُصفَّر حين تخرج الحالة من `.checking`.
+    @Published var launchCheckStalled: Bool = false
+    private var launchWatchdog: Task<Void, Never>?
+    /// إعادة فحص البروفايل المجدولة (واحدة فقط في كل لحظة)
+    private var profileRecheckTask: Task<Void, Never>?
     @Published var notificationsFeatureAvailable: Bool = true
     @Published var newsApprovalFeatureAvailable: Bool = true
     @Published var contactMessageError: String?
@@ -297,6 +313,33 @@ class AuthViewModel: ObservableObject {
         activeProfileCheckTask = Task { [weak self] in
             await self?.checkUserProfile()
         }
+        armLaunchWatchdog()
+    }
+
+    /// مهلة شاشة البداية (ج-٦): إن بقيت الحالة «جاري التحقق» ١٢ ثانية (طلب معلّق بلا رد، أو
+    /// بلا اتصال) تظهر رسالة «تعذّر الاتصال» مع «إعادة المحاولة» — والتحقق يستمر بالخلفية.
+    private func armLaunchWatchdog() {
+        launchWatchdog?.cancel()
+        launchWatchdog = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 12_000_000_000)
+            guard !Task.isCancelled, let self, self.status == .checking else { return }
+            self.launchCheckStalled = true
+        }
+    }
+
+    /// «إعادة المحاولة» من شاشة البداية العالقة
+    func retryLaunchCheck() async {
+        launchCheckStalled = false
+        armLaunchWatchdog()
+        await checkUserProfile()
+    }
+
+    /// بلا اتصال ولا نسخة محفوظة للعضو: «تعذّر الاتصال» على شاشة البداية ومحاولة تلقائية كل
+    /// لحظات حتى يعود الاتصال (ج-٦) — كانت الحالة تبقى «جاري التحقق» فتدور الشاشة بلا نهاية.
+    private func showLaunchConnectionProblem(generation: UUID) {
+        guard status == .checking else { return }
+        launchCheckStalled = true
+        scheduleProfileRecheck(generation: generation)
     }
 
     deinit {
@@ -458,225 +501,106 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    private func pickBestProfileId(from rows: [PhoneLookupProfile]) -> UUID? {
-        rows.max { lhs, rhs in
-            func score(_ row: PhoneLookupProfile) -> Int {
-                var value = 0
-                if (row.status ?? "") == "active" { value += 2 }
-                if (row.role ?? "") != "pending" { value += 1 }
-                return value
-            }
-            return score(lhs) < score(rhs)
-        }?.id
-    }
-
-    private func findProfileByPhone(_ rawPhone: String) async -> FamilyMember? {
-        let normalized = digitsOnly(rawPhone)
-        guard normalized.count >= 6 else { return nil }
-        
-        // استخراج الرقم المحلي (8 أرقام) للمقارنة مع التنسيق الكويتي
-        let local8 = KuwaitPhone.localEightDigits(rawPhone)
-        
-        // بناء قائمة المرشحين مع تجنب التكرار
-        var seen = Set<String>()
-        var candidates: [String] = []
-        func addCandidate(_ c: String) {
-            let trimmed = c.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { return }
-            candidates.append(trimmed)
-        }
-        
-        // الصيغ الأساسية
-        addCandidate(rawPhone)                          // الإدخال الأصلي
-        addCandidate(normalized)                        // أرقام فقط
-        if local8.count == 8 {
-            addCandidate(local8)                        // 8 أرقام محلية (التنسيق المخزن للكويت)
-            addCandidate("+965\(local8)")               // E.164 كويتي
-            addCandidate("965\(local8)")                // بدون +
-            addCandidate("00965\(local8)")              // صيغة دولية
-        }
-        // صيغ إضافية إذا كان الرقم يبدأ بكود دولة
-        if normalized != local8 {
-            addCandidate("+\(normalized)")
-            addCandidate("+965\(normalized)")
-            addCandidate("965\(normalized)")
-        }
-        
-        Log.info("[AUTH] findProfileByPhone: phone=\(Log.masked(rawPhone)), candidates=\(candidates.count)")
-        
-        // المطابقة تتم على السيرفر عبر find_profiles_by_phone — لا تُسحب أي أرقام
-        // للجهاز، والدالة تطابق آخر ٨ أرقام فتغطي كل صيغ الإدخال دفعة واحدة.
-        for candidate in candidates {
-            do {
-                let response: [PhoneLookupProfile] = try await supabase
-                    .rpc("find_profiles_by_phone", params: ["p_phone": candidate])
-                    .execute()
-                    .value
-                if let profileId = pickBestProfileId(from: response),
-                   let profile = await loadProfile(by: profileId) {
-                    Log.info("[AUTH] تم العثور على بروفايل بالمطابقة: \(profile.fullName) (candidate: \(candidate))")
-                    return profile
-                }
-            } catch {
-                Log.warning("فشل مطابقة الهاتف \(Log.masked(candidate)): \(error)")
-            }
-        }
-
-        Log.warning("[AUTH] لم يتم العثور على أي مطابقة للهاتف: \(Log.masked(rawPhone))")
-        return nil
-    }
-    
-    /// ربط بروفايل موجود بـ auth.uid الجديد — يُستخدم عندما يُعثر على بروفايل بالرقم بدلاً من UUID
-    /// يتم تحديث المعرف الأساسي + جميع مراجع father_id التي تشير للمعرف القديم
-    private func linkProfileToAuthUser(oldProfileId: UUID, newAuthUserId: UUID) async {
-        guard oldProfileId != newAuthUserId else { return } // لا حاجة إذا كانا متطابقين
-
-        let oldId = oldProfileId.uuidString.lowercased()
-        let newId = newAuthUserId.uuidString.lowercased()
-
-        Log.info("[AUTH] ربط البروفايل: \(oldId) → \(newId)")
-
-        /// رقم البروفايل القديم مُسح (خطوة ٢) — يُعاد إن فشل ما بعده قبل اكتمال الربط
-        var phoneCleared = false
-        var oldPhone: String?
+    /// معرّف ملف هذا الحساب كما يراه السيرفر: `current_profile_id()` = app_metadata.profile_id
+    /// وإلا auth.uid() — مصدر الهوية الوحيد بعد إزالة الربط القديم على الجهاز (فحص الثغرات ب-٦).
+    private func serverProfileId() async -> UUID? {
         do {
-            // 1) جلب بيانات البروفايل القديم
-            let oldProfiles: [FamilyMember] = try await supabase
-                .from("profiles")
-                .select()
-                .eq("id", value: oldId)
+            let id: UUID? = try await supabase.rpc("current_profile_id").execute().value
+            return id
+        } catch {
+            Log.warning("[AUTH] تعذّر قراءة current_profile_id: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// ملفات الشجرة التي تحمل رقم هذا الحساب (السيرفر يطابق آخر ٨ أرقام، ولغير المفعّل برقم حسابه
+    /// فقط) — للقراءة فقط: تُضاف لمطابقات طلب الربط لتربطها الإدارة، ولا يُنقل منها شيء على الجهاز.
+    private func phoneMatchedProfileIds(_ rawPhone: String, excluding ownId: UUID) async -> [UUID] {
+        let digits = digitsOnly(rawPhone)
+        guard digits.count >= 8 else { return [] }
+        do {
+            let rows: [PhoneLookupProfile] = try await supabase
+                .rpc("find_profiles_by_phone", params: ["p_phone": digits])
+                .execute()
+                .value
+            return rows.map(\.id).filter { $0 != ownId }
+        } catch {
+            Log.warning("[AUTH] تعذّر البحث بالرقم لمطابقات الطلب: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    /// ملف حقيقي (عضو شجرة، لا تسجيل معلّق) أرسل صاحبه طلب الانضمام/الربط وينتظر الإدارة —
+    /// يرى شاشة الانتظار بدل فورم التسجيل من جديد (التسجيل لم يعد يكتب فوق ملفه — ب-٤).
+    private func hasPendingJoinRequest(for profile: FamilyMember) async -> Bool {
+        let name = profile.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, profile.role != .pending else { return false }
+        var requesters = [profile.id.uuidString]
+        if let authId = supabase.auth.currentUser?.id, authId != profile.id {
+            requesters.append(authId.uuidString)
+        }
+        struct RequestRow: Decodable { let id: UUID }
+        let rows: [RequestRow] = (try? await supabase
+            .from("admin_requests")
+            .select("id")
+            .in("requester_id", values: requesters)
+            .in("request_type", values: [RequestType.linkRequest.rawValue, RequestType.joinRequest.rawValue])
+            .eq("status", value: ApprovalStatus.pending.rawValue)
+            .limit(1)
+            .execute()
+            .value) ?? []
+        return !rows.isEmpty
+    }
+
+    /// ملف بلا رقم (الإدارة حذفته): فورم التسجيل — أو شاشة الانتظار إن أرسل طلبه للإدارة (ب-٤)
+    private func routeProfileWithoutPhone(_ profile: FamilyMember, normalizedPhone: String, generation: UUID) async {
+        let waiting = await hasPendingJoinRequest(for: profile)
+        guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
+        if waiting {
+            await applyAuthenticatedProfile(profile, normalizedPhone: normalizedPhone)
+        } else {
+            self.status = .authenticatedNoProfile
+        }
+    }
+
+    /// نتيجة طلب الربط: `created` = أُنشئ الآن (تُبلَّغ الإدارة)، `existing` = معلّق أصلاً
+    private enum LinkRequestOutcome { case created, existing }
+
+    /// طلب ربط واحد معلّق فقط لكل حساب (ب-٤: كان كل إرسال للنموذج — ومنه «تعديل البيانات» —
+    /// يضيف صفاً جديداً). الطلب عن الملف نفسه: `member_id = requester_id` كما يشترط حارس السيرفر.
+    /// - Returns: `nil` = فشل (لا طلب).
+    private func ensurePendingLinkRequest(profileId: UUID, details: String) async -> LinkRequestOutcome? {
+        struct RequestRow: Decodable { let id: UUID }
+        do {
+            let existing: [RequestRow] = try await supabase
+                .from("admin_requests")
+                .select("id")
+                .eq("requester_id", value: profileId.uuidString)
+                .in("request_type", values: [RequestType.linkRequest.rawValue, RequestType.joinRequest.rawValue])
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .limit(1)
                 .execute()
                 .value
-
-            guard let oldProfile = oldProfiles.first else {
-                Log.warning("[AUTH] لم يُعثر على البروفايل القديم أثناء الربط")
-                return
+            if !existing.isEmpty {
+                Log.info("[REGISTER] طلب ربط معلّق موجود — لا يُكرَّر")
+                return .existing
             }
-            // حساب المالك ثابت المعرّف — لا يُنسخ ولا يُحذف من التطبيق أبداً (كان المسح
-            // التالي يُفرغ رقمه ثم يُرفض إنشاء النسخة فيبقى بلا رقم ← شاشة التسجيل)
-            guard oldProfile.role != .owner else {
-                Log.warning("[AUTH] تخطّي ربط حساب المالك بمعرّف دخول مختلف")
-                return
-            }
-            oldPhone = oldProfile.phoneNumber
-
-            // 2) مسح رقم التلفون من البروفايل القديم مؤقتاً
-            //    (لتجنب unique constraint عند إنشاء البروفايل الجديد بنفس الرقم)
-            try await supabase
-                .from("profiles")
-                .update(["phone_number": AnyEncodable(Optional<String>.none)])
-                .eq("id", value: oldId)
-                .execute()
-            phoneCleared = true
-
-            // 3) إنشاء البروفايل الجديد بـ auth UUID الجديد + كل البيانات
-            var payload: [String: AnyEncodable] = [
-                "id": AnyEncodable(newId),
-                "full_name": AnyEncodable(oldProfile.fullName),
-                "first_name": AnyEncodable(oldProfile.firstName),
-                "phone_number": AnyEncodable(oldProfile.phoneNumber),
-                "is_deceased": AnyEncodable(oldProfile.isDeceased),
-                "role": AnyEncodable(oldProfile.role.rawValue),
-                "status": AnyEncodable(oldProfile.status?.rawValue ?? "active"),
-                "is_phone_hidden": AnyEncodable(oldProfile.isPhoneHidden),
-                "is_hidden_from_tree": AnyEncodable(oldProfile.isHiddenFromTree),
-                "sort_order": AnyEncodable(oldProfile.sortOrder),
-                "is_married": AnyEncodable(oldProfile.isMarried)
+            let joinRequestData: [String: AnyEncodable] = [
+                "member_id": AnyEncodable(profileId.uuidString),
+                "requester_id": AnyEncodable(profileId.uuidString),
+                "request_type": AnyEncodable(RequestType.linkRequest.rawValue),
+                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
+                "details": AnyEncodable(details)
             ]
-            if let fatherId = oldProfile.fatherId {
-                payload["father_id"] = AnyEncodable(fatherId.uuidString.lowercased())
-            }
-            if let birthDate = oldProfile.birthDate {
-                payload["birth_date"] = AnyEncodable(birthDate)
-            }
-            if let deathDate = oldProfile.deathDate {
-                payload["death_date"] = AnyEncodable(deathDate)
-            }
-            if let avatarUrl = oldProfile.avatarUrl {
-                payload["avatar_url"] = AnyEncodable(avatarUrl)
-            }
-            if let photoURL = oldProfile.photoURL {
-                payload["photo_url"] = AnyEncodable(photoURL)
-            }
-            if let gender = oldProfile.gender {
-                payload["gender"] = AnyEncodable(gender)
-            }
-            if let bio = oldProfile.bio, !bio.isEmpty {
-                let encoder = JSONEncoder()
-                if let bioData = try? encoder.encode(bio),
-                   let bioString = String(data: bioData, encoding: .utf8) {
-                    payload["bio_json"] = AnyEncodable(bioString)
-                }
-            }
-
             try await supabase
-                .from("profiles")
-                .upsert(payload)
+                .from("admin_requests")
+                .insert(joinRequestData)
                 .execute()
-
-            // 4) تحديث كل الجداول المرتبطة من oldId → newId
-            //    (الآن newId موجود في profiles فلا يوجد FK violation)
-            do {
-                try await supabase.from("notifications")
-                    .update(["target_member_id": AnyEncodable(newId)])
-                    .eq("target_member_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث notifications: \(error.localizedDescription)") }
-
-            do {
-                try await supabase.from("device_tokens")
-                    .update(["member_id": AnyEncodable(newId)])
-                    .eq("member_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث device_tokens: \(error.localizedDescription)") }
-
-            do {
-                try await supabase.from("admin_requests")
-                    .update(["member_id": AnyEncodable(newId)])
-                    .eq("member_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث admin_requests: \(error.localizedDescription)") }
-
-            do {
-                try await supabase.from("member_gallery_photos")
-                    .update(["member_id": AnyEncodable(newId)])
-                    .eq("member_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث member_gallery_photos: \(error.localizedDescription)") }
-
-            do {
-                try await supabase.from("news")
-                    .update(["author_id": AnyEncodable(newId)])
-                    .eq("author_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث news: \(error.localizedDescription)") }
-
-            // 5) تحديث father_id للأبناء
-            do {
-                try await supabase.from("profiles")
-                    .update(["father_id": AnyEncodable(newId)])
-                    .eq("father_id", value: oldId).execute()
-            } catch { Log.warning("[AUTH] فشل تحديث father_id: \(error.localizedDescription)") }
-
-            // 6) حذف البروفايل القديم (لا توجد FKs تشير إليه الآن)
-            try await supabase
-                .from("profiles")
-                .delete()
-                .eq("id", value: oldId)
-                .execute()
-
-            Log.info("[AUTH] ✅ تم ربط البروفايل بنجاح: \(oldProfile.fullName) → auth.uid: \(newId)")
+            Log.info("[REGISTER] ✅ تم إنشاء طلب الانضمام في admin_requests")
+            return .created
         } catch {
-            Log.error("[AUTH] ❌ فشل ربط البروفايل: \(error.localizedDescription)")
-            // في حالة الفشل، نستمر بالبروفايل الأصلي — لا نوقف عملية الدخول.
-            // أعد رقمه إن كان قد مُسح: بدونه لا يجده الدخول القادم فيُفتح «تسجيل جديد»
-            if phoneCleared, let oldPhone, !oldPhone.isEmpty {
-                do {
-                    try await supabase.from("profiles")
-                        .update(["phone_number": AnyEncodable(oldPhone)])
-                        .eq("id", value: oldId)
-                        .execute()
-                    Log.info("[AUTH] أُعيد رقم البروفايل القديم بعد فشل الربط")
-                } catch {
-                    Log.error("[AUTH] ❌ تعذّرت إعادة رقم البروفايل القديم: \(error.localizedDescription)")
-                }
-            }
+            Log.error("[REGISTER] ❌ فشل إنشاء طلب الانضمام: \(error.localizedDescription) — memberId=\(profileId.uuidString.prefix(8))")
+            return nil
         }
     }
     
@@ -684,13 +608,20 @@ class AuthViewModel: ObservableObject {
         guard !isEndingSession, !Task.isCancelled, let authUser = supabase.auth.currentUser else { return }
         let generation = sessionGeneration
         CacheManager.shared.beginAccount(authUser.id)
-        let access = self.resolveAuthAccess(for: profile)
+        var access = self.resolveAuthAccess(for: profile)
 
         // إذا العضو ما عنده رقم أو حالته معلقة → تسجيل خروج تلقائي
         if access == .unauthenticated {
             Log.info("[AUTH] العضو \(profile.fullName) غير مصرح له بالدخول → تسجيل خروج")
             await signOut()
             return
+        }
+
+        // عضو شجرة أرسل طلبه وينتظر الإدارة → شاشة الانتظار لا فورم التسجيل مرة أخرى (ب-٤)
+        if access == .authenticatedNoProfile, await hasPendingJoinRequest(for: profile) {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled,
+                  authUser.id == supabase.auth.currentUser?.id else { return }
+            access = .pendingApproval
         }
 
         self.currentUser = profile
@@ -1027,31 +958,38 @@ class AuthViewModel: ObservableObject {
             guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             let errorDesc = error.localizedDescription.lowercased()
             // فقط نعتبره "لا يوجد جلسة" إذا كانت الجلسة فعلاً غير موجودة
+            // جلسة ميتة على السيرفر (رمز تجديد ملغى/مستعمل) = لا جلسة → شاشة الدخول، لا انتظار بلا نهاية (ج-٦)
+            let authCode = (error as? AuthError)?.errorCode
             let isReallyNoSession = errorDesc.contains("session not found")
                 || errorDesc.contains("no session")
                 || errorDesc.contains("not authenticated")
                 || errorDesc.contains("auth session missing")
                 || errorDesc.contains("refresh_token")
+                || authCode == ErrorCode.sessionNotFound || authCode == ErrorCode.sessionExpired
+                || authCode == ErrorCode.refreshTokenNotFound || authCode == ErrorCode.refreshTokenAlreadyUsed
 
             if isReallyNoSession {
                 Log.info("[AUTH] No session found → unauthenticated: \(error.localizedDescription)")
                 clearLocalSession()
-            } else {
-                // خطأ شبكة أو خطأ مؤقت — لا نسجل خروج
-                // لو cold start بدون نت — نحاول نستعيد من الكاش
-                if currentUser == nil,
-                   let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
-                   let sessionUser = try? await supabase.auth.session.user,
-                   let profile = cached.first(where: { $0.id == sessionUser.id }),
-                   generation == sessionGeneration, !isEndingSession, !Task.isCancelled {
-                    Log.info("[AUTH] استعادة المستخدم من الكاش (بدون نت): \(profile.fullName)")
-                    self.currentUser = profile
-                    self.isAuthenticated = true
-                    let access = self.resolveAuthAccess(for: profile)
-                    self.status = access
-                } else {
-                    Log.warning("[AUTH] خطأ مؤقت في جلب الجلسة (لن نسجل خروج): \(error.localizedDescription)")
+            } else if currentUser == nil {
+                // خطأ شبكة أو خطأ مؤقت — لا نسجل خروج. cold start بلا نت والجلسة منتهية: تجديدها
+                // يحتاج الشبكة فيفشل — فنقرأ الجلسة المحفوظة على الجهاز (بلا شبكة) ونستعيد العضو
+                // من كاش حسابه (ج-٦: كان الكاش لا يُقرأ هنا قبل فتح حسابه فتدور شاشة البداية بلا نهاية)
+                if let storedUser = supabase.auth.currentUser {
+                    CacheManager.shared.beginAccount(storedUser.id)
+                    if let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
+                       let profile = cached.first(where: { $0.id == storedUser.id }) {
+                        Log.info("[AUTH] استعادة المستخدم من الكاش (بدون نت): \(profile.fullName)")
+                        self.currentUser = profile
+                        self.isAuthenticated = true
+                        self.status = self.resolveAuthAccess(for: profile)
+                        return
+                    }
                 }
+                Log.warning("[AUTH] خطأ مؤقت في جلب الجلسة بلا كاش: \(error.localizedDescription)")
+                showLaunchConnectionProblem(generation: generation)
+            } else {
+                Log.warning("[AUTH] خطأ مؤقت في جلب الجلسة (لن نسجل خروج): \(error.localizedDescription)")
             }
             return
         }
@@ -1067,6 +1005,8 @@ class AuthViewModel: ObservableObject {
                 self.status = access
             } else {
                 Log.info("[AUTH] بدون اتصال — تخطي جلب البروفايل من السيرفر")
+                // بلا كاش: لا دوران بلا نهاية (ج-٦)
+                showLaunchConnectionProblem(generation: generation)
             }
             return
         }
@@ -1104,6 +1044,7 @@ class AuthViewModel: ObservableObject {
         // بدون نت — لا نحاول جلب البروفايل من السيرفر
         if !NetworkMonitor.shared.isConnected {
             Log.info("[AUTH] بدون اتصال — تخطي جلب البروفايل من السيرفر")
+            showLaunchConnectionProblem(generation: generation)   // لا دوران بلا نهاية (ج-٦)
             return
         }
 
@@ -1124,11 +1065,11 @@ class AuthViewModel: ObservableObject {
                 
                 let existingPhone = profile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 
-                // المدير حذف الرقم من البروفايل → مباشرة لشاشة التسجيل
+                // المدير حذف الرقم من البروفايل → مباشرة لشاشة التسجيل (أو الانتظار إن أرسل طلبه — ب-٤)
                 if existingPhone.isEmpty && profile.status != .frozen && profile.status != .deleted
                     && profile.role != .owner {
                     Log.info("[AUTH] البروفايل بدون رقم (المدير حذفه) — توجيه مباشر للتسجيل الجديد")
-                    self.status = .authenticatedNoProfile
+                    await routeProfileWithoutPhone(profile, normalizedPhone: normalizedSessionPhone, generation: generation)
                     return
                 } else {
                     await applyAuthenticatedProfile(profile, normalizedPhone: normalizedSessionPhone)
@@ -1143,37 +1084,16 @@ class AuthViewModel: ObservableObject {
             lookupFailed = true
         }
 
-        // المحاولة 2: البحث بالرقم
-        if let phoneProfile = await findProfileByPhone(normalizedSessionPhone) {
+        // المحاولة 2: الملف المربوط بهذا الحساب على السيرفر (`current_profile_id()` —
+        // app_metadata.profile_id). لا ربط على الجهاز بعد اليوم (فحص الثغرات ب-٦): البحث بالرقم ثم
+        // نسخ الملف لمعرّف الدخول وحذف القديم كان يفصل الزوجات والبنات ويقص النسب. أول دخول لعضو
+        // الشجرة يتبنّاه السيرفر نفسه (`adopt_tree_profile` عند إنشاء حساب الدخول) فيُوجد بالمعرّف أعلاه،
+        // ومن لا ملف له يكمل التسجيل وتربطه الإدارة بـ «ربط بالشجرة» (دالة سيرفر بحراسها).
+        if let linkedId = await serverProfileId(), linkedId != user.id,
+           let linkedProfile = await loadProfile(by: linkedId) {
             guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
-            Log.info("[AUTH] Found profile by phone: \(phoneProfile.fullName), profileId: \(phoneProfile.id), authUid: \(user.id)")
-            // ربط البروفايل بـ auth.uid الجديد حتى يعمل تسجيل الدخول مستقبلاً بدون بحث
-            await linkProfileToAuthUser(oldProfileId: phoneProfile.id, newAuthUserId: user.id)
-            // إعادة تحميل البروفايل بالمعرف الجديد
-            if let updatedProfile = await loadProfile(by: user.id) {
-                guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
-                await applyAuthenticatedProfile(updatedProfile, normalizedPhone: normalizedSessionPhone)
-            } else {
-                // fallback: استخدام البروفايل الأصلي
-                guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
-                await applyAuthenticatedProfile(phoneProfile, normalizedPhone: normalizedSessionPhone)
-            }
-            return
-        }
-
-        // المحاولة 3: البحث بالرقم المحلي
-        let local8 = KuwaitPhone.localEightDigits(normalizedSessionPhone)
-        if local8.count == 8, let directPhoneProfile = await findProfileByPhone(local8) {
-            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
-            Log.info("[AUTH] Found profile by local phone: \(directPhoneProfile.fullName), profileId: \(directPhoneProfile.id), authUid: \(user.id)")
-            await linkProfileToAuthUser(oldProfileId: directPhoneProfile.id, newAuthUserId: user.id)
-            if let updatedProfile = await loadProfile(by: user.id) {
-                guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
-                await applyAuthenticatedProfile(updatedProfile, normalizedPhone: local8)
-            } else {
-                guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
-                await applyAuthenticatedProfile(directPhoneProfile, normalizedPhone: local8)
-            }
+            Log.info("[AUTH] Found profile linked on the server: \(linkedProfile.fullName)")
+            await applyAuthenticatedProfile(linkedProfile, normalizedPhone: normalizedSessionPhone)
             return
         }
 
@@ -1190,11 +1110,11 @@ class AuthViewModel: ObservableObject {
             guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled, user.id == supabase.auth.currentUser?.id else { return }
             if let retryProfile = retryResponse.first {
                 let retryPhone = retryProfile.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                // المدير حذف الرقم → مباشرة للتسجيل
+                // المدير حذف الرقم → مباشرة للتسجيل (أو الانتظار إن أرسل طلبه — ب-٤)
                 if retryPhone.isEmpty && retryProfile.status != .frozen && retryProfile.status != .deleted
                     && retryProfile.role != .owner {
                     Log.info("[AUTH] بروفايل بدون رقم في المحاولة 4 — توجيه مباشر للتسجيل")
-                    self.status = .authenticatedNoProfile
+                    await routeProfileWithoutPhone(retryProfile, normalizedPhone: normalizedSessionPhone, generation: generation)
                     return
                 } else {
                     Log.info("[AUTH] Found profile on retry by UUID: \(retryProfile.fullName)")
@@ -1238,9 +1158,10 @@ class AuthViewModel: ObservableObject {
 
     /// إعادة فحص البروفايل بعد خطأ مؤقت (بلا كاش) — ما دامت الجلسة نفسها على شاشة البداية
     private func scheduleProfileRecheck(generation: UUID) {
-        Task { [weak self] in
+        profileRecheckTask?.cancel()   // محاولة مجدولة واحدة فقط (لا سلاسل متوازية مع «إعادة المحاولة»)
+        profileRecheckTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard let self, generation == self.sessionGeneration, !self.isEndingSession,
+            guard !Task.isCancelled, let self, generation == self.sessionGeneration, !self.isEndingSession,
                   self.status == .checking else { return }
             await self.checkUserProfile()
         }
@@ -1396,47 +1317,78 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - Registration
     
-    func registerNewUser(firstName: String, familyName: String, birthDate: Date, gender: String, fatherId: UUID? = nil, avatarImage: UIImage? = nil) async {
+    func registerNewUser(firstName: String, familyName: String, birthDate: Date?, gender: String, fatherId: UUID? = nil, avatarImage: UIImage? = nil) async {
         self.isLoading = true
         self.registrationError = nil
-        guard let user = try? await supabase.auth.session.user else { return }
-        
-        let normalizedPhone = user.phone ?? self.phoneNumber
-        // تحقق إذا فيه profile كامل وفعّال — إذا كامل ونشط ما نكمل التسجيل
-        if let existingProfile = await findProfileByPhone(normalizedPhone) {
-            let name = existingProfile.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !name.isEmpty {
-                if existingProfile.status == .active {
-                    // عضو فعّال → أدخل التطبيق مباشرة بدون إعادة تسجيل
-                    Log.info("[REGISTER] بروفايل فعّال موجود — تطبيق مباشر: \(existingProfile.fullName)")
-                    await applyAuthenticatedProfile(existingProfile, normalizedPhone: normalizedPhone)
-                    self.isLoading = false
-                    return
-                }
-                // بروفايل pending أو frozen → أكمل التسجيل لإرسال طلب انضمام جديد
-                Log.info("[REGISTER] بروفايل موجود بحالة \(existingProfile.status?.rawValue ?? "unknown") — سيُعاد إرسال طلب الانضمام")
-            }
+        guard let user = try? await supabase.auth.session.user else {
+            self.registrationError = L10n.t(
+                "تعذّر إكمال التسجيل. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
+                "Registration couldn't be completed. Check your internet connection and try again."
+            )
+            self.isLoading = false
+            return
         }
         
+        let normalizedPhone = user.phone ?? self.phoneNumber
+
+        // ب-٤: التسجيل لا يكتب فوق ملف موجود أبداً — كان الـ upsert يصفّر دور عضو الشجرة وحالته
+        // ويخفيه ويقص نسبه (father_id = nil) ويكرّر طلبات الربط. ملف هذا الحساب (معرّفه = auth.uid،
+        // أو المربوط على السيرفر عبر current_profile_id) يُقرأ بقراءة لا تبتلع الخطأ: «تعذّرت القراءة»
+        // لا تعني «لا يوجد ملف».
+        let ownRows: [FamilyMember]
+        do {
+            ownRows = try await supabase
+                .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
+                .select()
+                .eq("id", value: user.id.uuidString.lowercased())
+                .limit(1)
+                .execute()
+                .value
+        } catch {
+            Log.error("[REGISTER] تعذّرت قراءة ملف الحساب: \(error.localizedDescription)")
+            self.registrationError = L10n.t(
+                "تعذّر إكمال التسجيل. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
+                "Registration couldn't be completed. Check your internet connection and try again."
+            )
+            self.isLoading = false
+            return
+        }
+        var ownProfile = ownRows.first
+        if ownProfile == nil, let linkedId = await serverProfileId(), linkedId != user.id {
+            ownProfile = await loadProfile(by: linkedId)
+        }
         let cleanFamilyName = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
         // الاسم الأخير = العائلة المختارة: لو كتب العضو عائلة في آخر اسمه
         // (نفس المختارة أو غيرها من القائمة) تُحذف ثم تُضاف المختارة — بلا تكرار
         let cleanFirstName = FamilyNameCatalog.stripTrailingFamily(firstName, chosen: cleanFamilyName)
         let fullName = cleanFamilyName.isEmpty ? cleanFirstName : "\(cleanFirstName) \(cleanFamilyName)"
-        
-        // بحث تلقائي عن مطابقات في الشجرة بالاسم الكامل أو أجزاء منه
-        let matchedMemberIds = await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)
 
-        let profileData: [String: AnyEncodable] = [
+        // عضو حقيقي في الشجرة (تبنّاه السيرفر عند الدخول، أو حذفت الإدارة رقمه) → يُستخدم كما هو
+        if let existing = ownProfile,
+           !existing.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           existing.role != .pending {
+            await registerExistingProfile(existing, normalizedPhone: normalizedPhone, typedName: fullName)
+            self.isLoading = false
+            return
+        }
+        // ما بقي يُكتب: لا ملف، أو سجل مبدئي بلا اسم (أنشأه السيرفر عند الدخول)، أو تسجيله المعلّق
+        // هو («تعديل البيانات» من شاشة الانتظار)
+        let hasOwnRow = ownRows.first != nil
+        
+        // بحث تلقائي عن مطابقات في الشجرة بالاسم الكامل أو أجزاء منه — وقبلها ملف شجرة يحمل
+        // رقمه ولم يتبنّه السيرفر: مطابقة تربطها الإدارة («ربط بالشجرة»)، لا نقل على الجهاز (ب-٦)
+        let nameMatchedIds = await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)
+        let phoneMatchedIds = await phoneMatchedProfileIds(normalizedPhone, excluding: user.id).map(\.uuidString)
+        let matchedMemberIds = phoneMatchedIds + nameMatchedIds.filter { !phoneMatchedIds.contains($0) }
+
+        var profileData: [String: AnyEncodable] = [
             "id": AnyEncodable(user.id),
             "full_name": AnyEncodable(fullName),
             "family_name": AnyEncodable(cleanFamilyName),
             "first_name": AnyEncodable(cleanFirstName),
             "phone_number": AnyEncodable(user.phone ?? toE164(dialingCode: dialingCode, localDigits: phoneNumber)),
-            "birth_date": AnyEncodable(DateHelper.format(birthDate)),
             "role": AnyEncodable("pending"),
             "status": AnyEncodable("pending"),
-            "father_id": AnyEncodable(fatherId?.uuidString),
             "gender": AnyEncodable(gender.isEmpty ? nil : gender),
             "is_deceased": AnyEncodable(false),
             "is_married": AnyEncodable(false),
@@ -1444,35 +1396,43 @@ class AuthViewModel: ObservableObject {
             "sort_order": AnyEncodable(0),
             "created_at": AnyEncodable(DateHelper.now)
         ]
+        // الأب يُكتب فقط إن اختير — لا تفريغ لأب موجود
+        if let fatherId { profileData["father_id"] = AnyEncodable(fatherId.uuidString) }
+        // تاريخ الميلاد فقط إن اختاره فعلاً — لا يُحفظ تاريخ «قبل ٢٠ سنة» الافتراضي (٢٠٢٦-١٠-٠٥)
+        if let birthDate { profileData["birth_date"] = AnyEncodable(DateHelper.format(birthDate)) }
         
         do {
-            // تحرير الرقم إذا كان موجوداً في عضو آخر (unique constraint)
-            // يحدث عندما يُحذف المستخدم ثم يُعيد التسجيل بنفس الرقم
-            let phoneToCheck = user.phone ?? toE164(dialingCode: dialingCode, localDigits: phoneNumber) ?? ""
-            if !phoneToCheck.isEmpty {
-                _ = try? await supabase.rpc("free_phone_for_reregistration", params: [
-                    "p_phone": AnyEncodable(phoneToCheck),
-                    "p_new_member_id": AnyEncodable(user.id.uuidString)
-                ]).execute()
-                Log.info("[REGISTER] فحص تعارض الرقم قبل التسجيل: \(Log.masked(phoneToCheck))")
+            // لا «تحرير الرقم» من عضو آخر قبل الحفظ (كان free_phone_for_reregistration يفرّغه ولو كان
+            // ملفاً مربوطاً بحساب): حارس السيرفر عند الحفظ يحرّره من ملف شجرة لم يدخل صاحبه فقط،
+            // ويرفض (phone_in_use) إن كان لأحد الإدارة أو لملف له حساب دخول.
+            if hasOwnRow {
+                // سجل مبدئي أو تسجيله المعلّق — التحديث مشروط بـ «معلّق» فلا يمسّ ملفاً مفعّلاً
+                var updateData = profileData
+                updateData.removeValue(forKey: "id")
+                try await supabase
+                    .from("profiles")
+                    .update(updateData)
+                    .eq("id", value: user.id.uuidString)
+                    .eq("status", value: "pending")
+                    .execute()
+            } else {
+                try await supabase
+                    .from("profiles")
+                    .insert(profileData)
+                    .execute()
             }
-
-            try await supabase
-                .from("profiles")
-                .upsert(profileData)
-                .execute()
 
             // التحقق من نجاح الإنشاء
             let verifyProfile = await loadProfile(by: user.id)
-            let profileVerified = (verifyProfile != nil)
+            let profileVerified = (verifyProfile?.role == .pending)
             if let vp = verifyProfile {
                 Log.info("[REGISTER] ✅ تم إنشاء البروفايل بنجاح: \(vp.fullName), UUID: \(user.id), role: \(vp.role)")
             } else {
-                Log.error("[REGISTER] ⚠️ الـ upsert لم يُنشئ السجل! UUID: \(user.id). قد يكون RLS يمنع الإنشاء.")
+                Log.error("[REGISTER] ⚠️ الحفظ لم يُنشئ السجل! UUID: \(user.id). قد يكون RLS يمنع الإنشاء.")
             }
 
             // رفع الصورة الشخصية إذا اختارها المستخدم
-            if let avatarImage, let imageData = ImageProcessor.process(avatarImage, for: .avatar) {
+            if profileVerified, let avatarImage, let imageData = ImageProcessor.process(avatarImage, for: .avatar) {
                 let fileName = "\(user.id.uuidString.lowercased()).jpg"
                 do {
                     try await supabase.storage
@@ -1506,30 +1466,16 @@ class AuthViewModel: ObservableObject {
                 matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة|matched_ids:\(matchedMemberIds.joined(separator: ","))"
             }
             
-            let joinRequestData: [String: AnyEncodable] = [
-                "member_id": AnyEncodable(user.id.uuidString),
-                "requester_id": AnyEncodable(user.id.uuidString),
-                "request_type": AnyEncodable(RequestType.linkRequest.rawValue),
-                "status": AnyEncodable(ApprovalStatus.pending.rawValue),
-                "details": AnyEncodable(matchInfo)
-            ]
-            
-            var joinRequestSucceeded = false
-            do {
-                _ = try await supabase
-                    .from("admin_requests")
-                    .insert(joinRequestData)
-                    .execute()
-                joinRequestSucceeded = true
-                Log.info("[REGISTER] ✅ تم إنشاء طلب الانضمام في admin_requests")
-            } catch {
-                Log.error("[REGISTER] ❌ فشل إنشاء طلب الانضمام: \(error.localizedDescription) — memberId=\(user.id.uuidString.prefix(8))")
+            // طلب ربط واحد فقط — «تعديل البيانات» لا يكرّره
+            var requestOutcome: LinkRequestOutcome? = nil
+            if profileVerified {
+                requestOutcome = await ensurePendingLinkRequest(profileId: user.id, details: matchInfo)
             }
 
             // فشل إنشاء البروفايل (RLS) أو طلب الانضمام → لا نُجبر شاشة الانتظار: المستخدم
             // سينتظر موافقة لا يمكن أن تصل. نعرض خطأً ونُبقيه في شاشة التسجيل ليعيد المحاولة.
-            guard profileVerified, joinRequestSucceeded else {
-                Log.error("[REGISTER] ⛔️ تسجيل غير مكتمل — profileVerified=\(profileVerified), joinRequestSucceeded=\(joinRequestSucceeded)")
+            guard profileVerified, let requestOutcome else {
+                Log.error("[REGISTER] ⛔️ تسجيل غير مكتمل — profileVerified=\(profileVerified), joinRequest=\(requestOutcome != nil)")
                 self.registrationError = L10n.t(
                     "تعذّر إكمال طلب الانضمام. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
                     "Couldn't complete your join request. Check your internet connection and try again."
@@ -1538,33 +1484,35 @@ class AuthViewModel: ObservableObject {
                 return
             }
 
-            // إشعار المدير مع عدد المطابقات
-            let pushBody: String
-            if matchedMemberIds.isEmpty {
-                pushBody = "\(cleanFirstName) يطلب الانضمام — لا مطابقات."
-            } else {
-                pushBody = "\(cleanFirstName) يطلب الانضمام — \(matchedMemberIds.count) مطابقة."
-            }
-            
-            await notifyAdminsWithPush(
-                title: "طلب انضمام جديد",
-                body: pushBody,
-                kind: NotificationKind.linkRequest.rawValue,
-                requestId: user.id,
-                requestType: RequestType.joinRequest.rawValue
-            )
+            // الإدارة تُبلَّغ مرة واحدة — عند إنشاء الطلب فقط
+            if requestOutcome == .created {
+                let pushBody: String
+                if matchedMemberIds.isEmpty {
+                    pushBody = "\(cleanFirstName) يطلب الانضمام — لا مطابقات."
+                } else {
+                    pushBody = "\(cleanFirstName) يطلب الانضمام — \(matchedMemberIds.count) مطابقة."
+                }
+                
+                await notifyAdminsWithPush(
+                    title: "طلب انضمام جديد",
+                    body: pushBody,
+                    kind: NotificationKind.linkRequest.rawValue,
+                    requestId: user.id,
+                    requestType: RequestType.joinRequest.rawValue
+                )
 
-            // إيميل للإدارة بطلب الانضمام الجديد
-            await sendEventEmail(payload: [
-                "type": AnyEncodable("join_request"),
-                "member_name": AnyEncodable(fullName),
-                "member_phone": AnyEncodable(user.phone ?? toE164(dialingCode: dialingCode, localDigits: phoneNumber))
-            ])
+                // إيميل للإدارة بطلب الانضمام الجديد
+                await sendEventEmail(payload: [
+                    "type": AnyEncodable("join_request"),
+                    "member_name": AnyEncodable(fullName),
+                    "member_phone": AnyEncodable(user.phone ?? toE164(dialingCode: dialingCode, localDigits: phoneNumber))
+                ])
+            }
 
             Log.info("تم تسجيل العضو وإرسال طلب الربط بنجاح")
             AppAnalytics.trackRegister()
 
-            // بعد نجاح الـ upsert — نضمن الانتقال لشاشة الانتظار مباشرة
+            // بعد نجاح الحفظ — نضمن الانتقال لشاشة الانتظار مباشرة
             if let createdProfile = await loadProfile(by: user.id) {
                 await applyAuthenticatedProfile(createdProfile, normalizedPhone: KuwaitPhone.localEightDigits(normalizedPhone))
             } else {
@@ -1576,13 +1524,55 @@ class AuthViewModel: ObservableObject {
             Log.error("خطأ في التسجيل: \(error.localizedDescription)")
             // فشل التسجيل (شبكة/خادم) → أظهر خطأً للمستخدم بدل الطرد الصامت،
             // ثم أعد فحص البروفايل (يُبقيه في شاشة التسجيل إن لم يُنشأ السجل).
-            self.registrationError = L10n.t(
-                "تعذّر إكمال التسجيل. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
-                "Registration couldn't be completed. Check your internet connection and try again."
-            )
+            let raw = "\(error) \(error.localizedDescription)".lowercased()
+            self.registrationError = raw.contains("phone_in_use")
+                ? L10n.t("هذا الرقم مسجّل لعضو آخر. تواصل مع إدارة العائلة.",
+                         "This number is registered to another member. Please contact the family administration.")
+                : L10n.t("تعذّر إكمال التسجيل. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
+                         "Registration couldn't be completed. Check your internet connection and try again.")
             await checkUserProfile()
         }
         self.isLoading = false
+    }
+
+    /// التسجيل وجد ملفاً حقيقياً لهذا الحساب (عضو شجرة تبنّاه السيرفر، أو عضو حذفت الإدارة رقمه):
+    /// لا يُكتب فوقه شيء (ب-٤) — لا إخفاء ولا قص نسب ولا تصفير. المفعّل/المجمّد كما يقرّره ملفه،
+    /// والباقي طلب ربط واحد للإدارة ثم شاشة الانتظار.
+    private func registerExistingProfile(_ existing: FamilyMember, normalizedPhone: String, typedName: String) async {
+        guard resolveAuthAccess(for: existing) == .authenticatedNoProfile else {
+            Log.info("[REGISTER] ملف قائم لهذا الحساب — يُستخدم كما هو: \(existing.fullName)")
+            await applyAuthenticatedProfile(existing, normalizedPhone: normalizedPhone)
+            return
+        }
+        // ما كتبه في النموذج يصل للإدارة للمراجعة فقط — لا يُكتب على ملفه
+        let typed = typedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let details = "طلب انضمام — العضو موجود في الشجرة: \(existing.fullName) — لا يحتاج ربطاً، الموافقة تفعّله"
+            + (typed.isEmpty || typed == existing.fullName ? "" : " (كتب في التسجيل: \(typed))")
+        guard let outcome = await ensurePendingLinkRequest(profileId: existing.id, details: details) else {
+            self.registrationError = L10n.t(
+                "تعذّر إكمال طلب الانضمام. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
+                "Couldn't complete your join request. Check your internet connection and try again."
+            )
+            return
+        }
+        if outcome == .created {
+            await notifyAdminsWithPush(
+                title: "طلب انضمام جديد",
+                body: "\(existing.firstName) يطلب الانضمام — موجود في الشجرة.",
+                kind: NotificationKind.linkRequest.rawValue,
+                requestId: existing.id,
+                requestType: RequestType.joinRequest.rawValue
+            )
+            await sendEventEmail(payload: [
+                "type": AnyEncodable("join_request"),
+                "member_name": AnyEncodable(existing.fullName),
+                "member_phone": AnyEncodable(normalizedPhone)
+            ])
+        }
+        Log.info("[REGISTER] ملف شجرة قائم — بلا كتابة فوقه، والطلب عند الإدارة: \(existing.fullName)")
+        AppAnalytics.trackRegister()
+        // يصل لشاشة الانتظار: الطلب المعلّق يحوّل «التسجيل» إلى «الانتظار» (applyAuthenticatedProfile)
+        await applyAuthenticatedProfile(existing, normalizedPhone: KuwaitPhone.localEightDigits(normalizedPhone))
     }
 
     // MARK: - Contact

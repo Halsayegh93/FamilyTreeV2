@@ -6,10 +6,7 @@ struct WaitingForApprovalView: View {
     // Animation states
     @State private var pulseScale: CGFloat = 1.0
     @State private var pulseOpacity: CGFloat = 0.6
-    @State private var ringRotation: Double = 0
-    @State private var dotPhase: CGFloat = 0
     @State private var contentOpacity: CGFloat = 0
-    @State private var iconBounce: CGFloat = 0
     @State private var showContactSheet = false
     /// حذف الحساب متاح لمن ينتظر الموافقة أيضاً (Guideline 5.1.1(v))
     @State private var confirmDeletion = false
@@ -32,16 +29,17 @@ struct WaitingForApprovalView: View {
 
                 ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.xxl) {
-                    Spacer().frame(height: DS.Spacing.xl)
+                    Spacer().frame(height: DS.Spacing.sm)
 
-                    // أيقونة الانتظار مع الحركة («تقليل الحركة»: تلاشٍ بلا تكبير)
-                    waitingIcon
-                        .opacity(contentOpacity)
-                        .scaleEffect(reduceMotion ? 1 : contentOpacity)
-
-                    // نقاط التحميل — تحت الدائرة
-                    animatedDots
-                        .opacity(contentOpacity)
+                    // ساعة رملية مصمتة على قرص بلون الإدارة، وخيط رمل ذهبي تنساب فيه لمعة كل ٤ ث
+                    // (طلب المالك ٢٠٢٦-١٠-٠٥ «أبسط وأقوى وباعتدال») — بدل الأيقونة والنقاط
+                    TrialArt(make: { ArtDispatch.waiting($0) }) {   // TMP-ART-TRIAL
+                        FTSceneCanvas { ctx, size, t, dark in
+                            FTPlaceScenes.drawWaitingMajlis(in: &ctx, size: size, t: t, dark: dark)
+                        }
+                    }
+                    .frame(width: 140, height: 140)
+                    .opacity(contentOpacity)
 
                     // بعد الأيقونة تدخل البطاقة ثم الأزرار واحداً بعد الآخر (dsStaggerIn)
                     // بطاقة المعلومات
@@ -88,59 +86,6 @@ struct WaitingForApprovalView: View {
         } message: {
             Text(authVM.deleteAccountError ?? "")
         }
-    }
-
-    // MARK: - Waiting Icon
-    private var waitingIcon: some View {
-        ZStack {
-            // حلقة دوارة
-            Circle()
-                .trim(from: 0, to: 0.7)
-                .stroke(
-                    DS.Color.gradientPrimary,
-                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
-                )
-                .frame(width: 130, height: 130)
-                .rotationEffect(.degrees(ringRotation))
-
-            // حلقة نبض
-            Circle()
-                .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1.5)
-                .frame(width: 120, height: 120)
-                .scaleEffect(pulseScale)
-                .opacity(pulseOpacity)
-
-            // الدائرة الرئيسية بتدرج
-            Circle()
-                .fill(DS.Color.gradientPrimary)
-                .frame(width: 100, height: 100)
-                .shadow(color: DS.Color.primary.opacity(0.3), radius: 12, y: 6)
-
-            // أيقونة الانتظار
-            Image(systemName: "hourglass")
-                .font(DS.Font.scaled(40, weight: .semibold))
-                .foregroundColor(.white)
-                .offset(y: iconBounce)
-        }
-    }
-
-    // MARK: - Animated Dots
-    private var animatedDots: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            ForEach(0..<3, id: \.self) { index in
-                Circle()
-                    .fill(DS.Color.primary.opacity(dotPhase == CGFloat(index) ? 1.0 : 0.3))
-                    .frame(width: 7, height: 7)
-                    .scaleEffect(dotPhase == CGFloat(index) ? 1.3 : 0.8)
-                    .animation(
-                        .easeInOut(duration: 0.5)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(index) * 0.2),
-                        value: dotPhase
-                    )
-            }
-        }
-        .padding(.top, DS.Spacing.xs)
     }
 
     // MARK: - Info Card
@@ -278,16 +223,8 @@ struct WaitingForApprovalView: View {
             contentOpacity = 1.0
         }
 
-        // تقليل الحركة: تبقى الحلقة والأيقونة والنقاط ثابتة
+        // تقليل الحركة: تبقى شارة «قيد الانتظار» ثابتة (المشهد يتوقف وحده)
         guard !reduceMotion else { return }
-
-        // دوران الحلقة
-        withAnimation(
-            .linear(duration: 3.0)
-                .repeatForever(autoreverses: false)
-        ) {
-            ringRotation = 360
-        }
 
         // نبض الحلقة
         withAnimation(
@@ -298,18 +235,5 @@ struct WaitingForApprovalView: View {
             pulseOpacity = 0.0
         }
 
-        // حركة الأيقونة
-        withAnimation(
-            .easeInOut(duration: 1.5)
-                .repeatForever(autoreverses: true)
-                .delay(0.3)
-        ) {
-            iconBounce = -4
-        }
-
-        // نقاط التحميل
-        withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
-            dotPhase = 2
-        }
     }
 }

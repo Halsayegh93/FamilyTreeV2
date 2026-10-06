@@ -50,6 +50,7 @@ struct HomeNewsPreviewCard: View {
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .strokeBorder(DS.Color.cardBorder.opacity(0.8), lineWidth: 0.75)
         )
+        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
         // ظل ناعم منتشر بدل الظل الأزرق الثقيل
         .shadow(color: .black.opacity(0.05), radius: 14, x: 0, y: 6)
     }
@@ -58,14 +59,19 @@ struct HomeNewsPreviewCard: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
-            Image(systemName: "newspaper.fill")
-                .font(DS.Font.scaled(16, weight: .semibold))
-                .foregroundColor(DS.Color.primary)
-                .frame(width: 38, height: 38)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.primary.opacity(0.10))
-                )
+            // لون قسم «الأخبار» في الرئيسية — من عائلة اللوحة (AppSection.HomeTile.news)
+            // TMP-ART-TRIAL: رسم بطاقة الأخبار للاتجاه المختار، وإلا الشارة الحالية
+            TrialArt(make: { ArtDispatch.newsCardArt($0, tint: AppSection.HomeTile.news.ink)
+                                .map { AnyView($0.frame(width: 60, height: 44)) } }) {
+                Image(systemName: "newspaper.fill")
+                    .font(DS.Font.scaled(16, weight: .semibold))
+                    .foregroundColor(AppSection.HomeTile.news.ink)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(AppSection.HomeTile.news.ink.opacity(0.10))
+                    )
+            }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(L10n.t("الأخبار والمناسبات", "News & Events"))
@@ -175,12 +181,12 @@ struct HomeNewsPreviewCard: View {
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
                 .font(DS.Font.scaled(11, weight: .bold))
         }
-        .foregroundColor(DS.Color.primary)
+        .foregroundColor(AppSection.HomeTile.news.ink)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.primary.opacity(0.08))
+                .fill(AppSection.HomeTile.news.ink.opacity(0.08))
         )
         .padding(.top, DS.Spacing.xs)
     }
@@ -190,7 +196,7 @@ struct HomeNewsPreviewCard: View {
         ZStack(alignment: .topTrailing) {
             DS.Color.surface
             LinearGradient(
-                colors: [DS.Color.primary.opacity(0.06), .clear],
+                colors: [AppSection.HomeTile.news.ink.opacity(0.06), .clear],
                 startPoint: .top,
                 endPoint: .center
             )
@@ -219,7 +225,7 @@ struct HomeNewsPreviewRow: View {
         case "purple": return DS.Color.adminRole
         case "orange": return DS.Color.supervisorRole
         case "green":  return DS.Color.success
-        default:       return DS.Color.primary
+        default:       return DS.Color.brand   // دور العضو: كحلي ثابت (معنى)
         }
     }
 
@@ -261,9 +267,8 @@ struct HomeNewsPreviewRow: View {
         if isAdminIdentity {
             ZStack {
                 Circle().fill(DS.Color.gradientPrimary)
-                Image(systemName: "megaphone.fill")
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(.white)
+                // مكبّر صوت مصمت ونبضة ذهبية واحدة كل ٨ ث (طلب المالك ٢٠٢٦-١٠-٠٥ «باعتدال»)
+                FTNewsBadge(type: "إعلان", tint: .white, seed: Int(news.id.uuid.0), style: .onColor)
             }
             .frame(width: 32, height: 32)
             .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
@@ -324,6 +329,8 @@ struct HomeNewsPreviewRow: View {
 /// صف «آخر مناسبة» أعلى بطاقة الأخبار — نوع المناسبة بلونه وأيقونته + النص.
 struct HomeOccasionRow: View {
     let news: NewsPost
+    /// هالة الاحتفال الذهبية تحيّي كل مناسبة جديدة مرة واحدة (يُحفظ عند الاختفاء حتى لا تقفز الحركة)
+    @AppStorage("ftCelebratedOccasion") private var celebratedId = ""
 
     private var color: Color { NewsTypeHelper.color(for: news.type) }
 
@@ -331,11 +338,18 @@ struct HomeOccasionRow: View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
             ZStack {
                 Circle().fill(color.opacity(0.16))
-                Image(systemName: NewsTypeHelper.icon(for: news.type))
-                    .font(DS.Font.scaled(14, weight: .bold))
-                    .foregroundColor(color)
+                // شارة متحرّكة للنوع (مهد يتأرجح، خاتمان يلتحمان، ألعاب نارية فوق الأبراج…) — «وفاة» هلال ثابت
+                if FTNewsBadges.hasArt(for: news.type, currentIcon: NewsTypeHelper.icon(for: news.type)) {
+                    FTNewsBadge(type: news.type, tint: color, seed: 0,
+                                celebrate: celebratedId != news.id.uuidString)
+                } else {
+                    Image(systemName: NewsTypeHelper.icon(for: news.type))
+                        .font(DS.Font.scaled(14, weight: .bold))
+                        .foregroundColor(color)
+                }
             }
             .frame(width: 36, height: 36)
+            .onDisappear { celebratedId = news.id.uuidString }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {

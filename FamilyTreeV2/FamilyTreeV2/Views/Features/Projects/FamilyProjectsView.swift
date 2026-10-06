@@ -114,6 +114,7 @@ struct FamilyProjectsView: View {
                     .environmentObject(projectsVM)
                     .environmentObject(authVM)
                     .environmentObject(memberVM)
+                    .dsSectionPage(.projects)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
             }
             .background(ClearPresentationBackground())
         }
@@ -122,7 +123,8 @@ struct FamilyProjectsView: View {
         }
         .dsAlert(
             L10n.t("تم إرسال المشروع", "Project Submitted"),
-            isPresented: $showAddedAlert
+            isPresented: $showAddedAlert,
+            moment: .sentForApproval
         ) {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
@@ -141,6 +143,7 @@ struct FamilyProjectsView: View {
                 EditProjectView(project: project, didEdit: $didEditProject)
                     .environmentObject(projectsVM)
                     .environmentObject(authVM)
+                    .dsSectionPage(.projects)
             }
             .background(ClearPresentationBackground())
         }
@@ -209,6 +212,9 @@ struct FamilyProjectsView: View {
             Text(L10n.t("حذف \(selectedIDs.count) مشروع نهائياً؟",
                        "Permanently delete \(selectedIDs.count) projects?"))
         }
+        // «داخل … المشاريع بعد» (طلب المالك ٢٠٢٦-١٠-٠٥): الصفحة وكل ما يُفتح منها بلون
+        // المشاريع — مثل التبويبات (البيئة + AppSection.current للرسائل ومربّع التاريخ)
+        .dsSectionPage(.projects)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -218,7 +224,7 @@ struct FamilyProjectsView: View {
     private var contentArea: some View {
         if projectsVM.isLoading && projectsVM.projects.isEmpty && projectsVM.myPendingProjects.isEmpty {
             Spacer()
-            ProgressView().tint(DS.Color.primary)
+            ProgressView().tint(AppSection.projects.ink)
             Spacer()
         } else if currentItems.isEmpty {
             Spacer()
@@ -432,13 +438,13 @@ struct FamilyProjectsView: View {
                      ? L10n.t("إلغاء الكل", "Clear all")
                      : L10n.t("تحديد الكل", "Select all"))
                     .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(AppSection.projects.ink)
             }
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm)
         .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md).strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md).strokeBorder(AppSection.projects.ink.opacity(0.18), lineWidth: 1))
     }
 
     private func selectionCheckmark(for id: UUID) -> some View {
@@ -448,7 +454,7 @@ struct FamilyProjectsView: View {
             .foregroundColor(isSelected ? .white : DS.Color.textPrimary.opacity(0.7))
             .background(
                 Circle()
-                    .fill(isSelected ? DS.Color.primary : Color.white.opacity(0.85))
+                    .fill(isSelected ? AppSection.projects.ink : Color.white.opacity(0.85))
                     .frame(width: 22, height: 22)
             )
             .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
@@ -526,9 +532,10 @@ struct FamilyProjectsView: View {
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(project.approvalStatus == "pending"
                         ? DS.Color.warning.opacity(0.30)
-                        : DS.Color.primary.opacity(0.08),
+                        : AppSection.projects.ink.opacity(0.08),
                         lineWidth: 1)
         )
+        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
         .overlay(alignment: .topLeading) {
             if project.approvalStatus == "pending" {
                 statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warning)
@@ -551,11 +558,14 @@ struct FamilyProjectsView: View {
                     img.resizable().scaledToFill()
                 } placeholder: { DS.Color.mutedBackground }
             } else {
-                ZStack {
-                    DS.Color.primary.opacity(0.12)
-                    Image(systemName: "briefcase.fill")
-                        .font(DS.Font.scaled(18, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+                // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الشعار البديل الحالي
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "briefcase.fill", tint: AppSection.projects.ink, size: cardLogoSize) }) {
+                    ZStack {
+                        AppSection.projects.ink.opacity(0.12)
+                        Image(systemName: "briefcase.fill")
+                            .font(DS.Font.scaled(18, weight: .bold))
+                            .foregroundColor(AppSection.projects.ink)
+                    }
                 }
             }
         }
@@ -602,7 +612,7 @@ struct FamilyProjectsView: View {
     private var projectPlaceholderCover: some View {
         ZStack {
             LinearGradient(
-                colors: [DS.Color.primary.opacity(0.30), DS.Color.accent.opacity(0.30)],
+                colors: [AppSection.projects.ink.opacity(0.30), DS.Color.accent.opacity(0.30)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
             Image(systemName: "briefcase.fill")
@@ -615,9 +625,10 @@ struct FamilyProjectsView: View {
 
     private var emptyStateView: some View {
         VStack(spacing: DS.Spacing.md) {
-            Image(systemName: filter == .pending ? "clock.badge" : "briefcase")
-                .font(.system(size: 56, weight: .light))
-                .foregroundColor(DS.Color.textTertiary)
+            // محل بمظلّة تتمايل بلون المشاريع (رسومات متحرّكة — طلب المالك ٢٠٢٦-١٠-٠٤)
+            EmptyStateArt(icon: filter == .pending ? "clock.badge" : "storefront",
+                          tint: AppSection.HomeTile.projects.ink,
+                          kind: filter == .pending ? nil : .projects)
             Text(filter == .pending
                  ? L10n.t("لا توجد طلبات معلَّقة", "No pending requests")
                  : L10n.t("لا توجد مشاريع بعد", "No projects yet"))
@@ -1059,11 +1070,11 @@ struct AddProjectView: View {
     private var memberPlaceholderAvatar: some View {
         ZStack {
             Circle()
-                .fill(DS.Color.primary.opacity(0.10))
+                .fill(AppSection.projects.ink.opacity(0.10))
                 .frame(width: 40, height: 40)
             Image(systemName: "person.fill")
                 .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(AppSection.projects.ink)
         }
         .accessibilityHidden(true)   // زخرفة — الاسم يُقرأ
     }

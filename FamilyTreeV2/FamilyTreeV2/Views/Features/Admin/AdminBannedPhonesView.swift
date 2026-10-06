@@ -82,7 +82,7 @@ struct AdminBannedPhonesView: View {
                     Button(action: { showAddSheet = true }) {
                         Image(systemName: "plus.circle.fill")
                             .font(DS.Font.title3)
-                            .foregroundStyle(DS.Color.primary)
+                            .foregroundStyle(AppSection.admin.ink)
                     }
                     .accessibilityLabel(t("حظر رقم هاتف", "Ban Phone Number"))
                 }

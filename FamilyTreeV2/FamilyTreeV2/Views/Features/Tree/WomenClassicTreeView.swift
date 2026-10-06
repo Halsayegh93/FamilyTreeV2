@@ -44,6 +44,10 @@ struct WomenClassicTreeView: View {
     private let rose = DS.Color.female
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    /// TMP-ART-TRIAL: اتجاه الرسوم — يُقرأ مرة هنا لكل العقد
+    @AppStorage(ArtTrial.storageKey) private var artRaw = ArtTrial.emblem.rawValue
+    private var art: ArtTrial { ArtTrial(rawValue: artRaw) ?? .emblem }   // TMP-ART-TRIAL
+    @Environment(\.colorScheme) private var artScheme   // TMP-ART-TRIAL
 
     @State private var collapsed: Set<UUID> = []
     @State private var initedRoot: UUID? = nil
@@ -420,15 +424,14 @@ struct WomenClassicTreeView: View {
                         ZStack(alignment: .topLeading) {
                             // خطوط الأب وأبنائه — كل الصفوف موصولة (اختيار المالك ٢٠٢٦-١٠-٠٤، مثل
                             // شجرة العائلة: أقواس للعائلة الصغيرة، و«العمود» للمجموعات الملتفّة)
+                            // TMP-ART-TRIAL: طبقات الخط ونقطة التفرّع بحسب الاتجاه («الحالي» كما كان)
+                            let lineLayers = TreeArtLines.layers(art, width: 1.5, dark: artScheme == .dark)
+                            let lineArt = art, lineDark = artScheme == .dark
                             Canvas { ctx, _ in
-                                let line = DS.Color.primary.opacity(0.45)
-                                let dot = DS.Color.primary.opacity(0.6)
                                 for c in layout.connectors {
-                                    ctx.stroke(c.path, with: .color(line),
-                                               style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                                    TreeArtLines.stroke(&ctx, c.path, lineLayers)
                                     for d in c.dots {
-                                        ctx.fill(Path(ellipseIn: CGRect(x: d.x - 2, y: d.y - 2, width: 4, height: 4)),
-                                                 with: .color(dot))
+                                        TreeArtLines.dot(&ctx, at: d, r: 2, art: lineArt, dark: lineDark)
                                     }
                                 }
                             }
@@ -556,6 +559,7 @@ struct WomenClassicTreeView: View {
         .padding(.vertical, 3)
         // مادة مخففة (50%) — نفس بار شجرة العائلة
         .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .modifier(TreeArtSkin(art: art, radius: DS.Radius.lg, compact: true, glassBacked: true))   // TMP-ART-TRIAL
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
@@ -597,6 +601,7 @@ struct WomenClassicTreeView: View {
         }
         .padding(4)
         .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .modifier(TreeArtSkin(art: art, radius: DS.Radius.lg, compact: true, glassBacked: true))   // TMP-ART-TRIAL
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
@@ -613,7 +618,7 @@ struct WomenClassicTreeView: View {
                 .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 5)
                 .frame(minWidth: 40, minHeight: 20)
-                .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
+                .background(Capsule().fill(treeTab.wrappedValue == idx ? AppSection.tree.fill : DS.Color.surface.opacity(0.8)))
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -621,10 +626,10 @@ struct WomenClassicTreeView: View {
     private func toolbarIcon(_ icon: String, compact: Bool = false) -> some View {
         Image(systemName: icon)
             .font(DS.Font.scaled(compact ? 12 : 14, weight: .bold))
-            .foregroundColor(DS.Color.primary)
+            .foregroundColor(AppSection.tree.ink)
             .frame(width: compact ? 27 : 34, height: compact ? 27 : 34)
             .background(DS.Color.surface.opacity(0.8), in: Circle())   // أغمق (طلب المالك)
-            .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.15), lineWidth: 1))
+            .overlay(Circle().strokeBorder(AppSection.tree.ink.opacity(0.15), lineWidth: 1))
             .dsSubtleShadow()
             .contentShape(Circle())
     }
@@ -697,7 +702,7 @@ struct WomenClassicTreeView: View {
         // الإناث وردي ثابت؛ المتوفّاة وردي أغمق (طلب المالك). الذكر المتوفّى يبقى رمادياً.
         let accent: Color = female
             ? (deceased ? DS.Color.femaleDeceased : rose)
-            : (deceased ? DS.Color.textTertiary : DS.Color.primary)
+            : (deceased ? DS.Color.textTertiary : DS.Color.male)   // الذكر: كحلي ثابت (معنى)
         // حافة الأنثى المتوفّاة بلون متناسق مع الوردي الغامق (نبيذي) لتتميّز عن الحيّة — طلب المالك
         let border: Color = (female && deceased) ? DS.Color.femaleDeceasedBorder : accent
         let kids = cChildrenOf[m.id] ?? []
@@ -706,6 +711,7 @@ struct WomenClassicTreeView: View {
         let wives = showWives ? (cWives[m.id] ?? []) : []
 
         let shape = RoundedRectangle(cornerRadius: CORNER, style: .continuous)
+        let noPhotoMale = !female && m.avatarUrl.flatMap { URL(string: $0) } == nil   // TMP-ART-TRIAL
 
         VStack(spacing: 2) {
             ZStack {
@@ -727,7 +733,9 @@ struct WomenClassicTreeView: View {
                     // مربع الابنة بنفس غمقة مربع الزوجة (طلب المالك) — رمادي أنعم قليلاً
                     .overlay(shape.fill(deceased && !female
                         ? DS.Color.textTertiary.opacity(0.5)
-                        : accent))
+                        : accent)
+                        // TMP-ART-TRIAL: الذكر بلا صورة — أرضية فاتحة بلونه والرسم فوقها
+                        .opacity(art != .emblem && noPhotoMale ? 0.16 : 1))
                     .frame(width: CIRCLE, height: CIRCLE)
                     .overlay(
                         Group {
@@ -746,6 +754,10 @@ struct WomenClassicTreeView: View {
                                     .minimumScaleFactor(0.7)
                                     .lineLimit(1)
                                     .foregroundColor(.white)
+                            } else if art != .emblem {
+                                // TMP-ART-TRIAL: رسم الاتجاه بلون الذكر/المتوفّى نفسه
+                                TreeAvatarArt(art: art, tint: accent, size: CIRCLE - 6)
+                                    .equatable()
                             } else {
                                 // الذكور بلا صورة: أيقونة شخص بدل الحرف (طلب المالك)
                                 Image(systemName: "person.fill")
@@ -757,6 +769,7 @@ struct WomenClassicTreeView: View {
                     // حواف متّحدة المركز (طلب المالك): الأبيض داخل الحافة تماماً، والملوّن خارجها
                     // بنصف قطر أكبر بمقدار المسافة نفسها — فتتطابق الزوايا ولا تتعرّج
                     .overlay(shape.strokeBorder(Color.white, lineWidth: RING))
+                    .modifier(TreeArtSkin(art: female ? art : .emblem, radius: CORNER, onFill: true))   // TMP-ART-TRIAL
                     .overlay(
                         RoundedRectangle(cornerRadius: CORNER + 2.5, style: .continuous)
                             .strokeBorder(border, lineWidth: 2)
@@ -805,7 +818,8 @@ struct WomenClassicTreeView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 4)
                             .frame(minWidth: 16, minHeight: 16)
-                            .background(Capsule().fill(DS.Color.primaryDark))   // أغمق من لون العضو بلا صورة (طلب المالك)
+                            // غامق قسم الشجرة (كان كحلياً ثابتاً) — أغمق من لون العضو بلا صورة (طلب المالك)
+                            .background(Capsule().fill(art == .emblem ? DS.Color.primaryDark : AppSection.tree.deep))   // TMP-ART-TRIAL
                             .overlay(Capsule().stroke(Color.white.opacity(0.9), lineWidth: 1.2))
                             .offset(x: -7, y: -7)
                         }
@@ -850,6 +864,7 @@ struct WomenClassicTreeView: View {
                         .background(Color(hex: "#A62B32"))   // عنّابي بدرجة خفيفة (طلب المالك)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .modifier(TreeArtSkin(art: art, radius: 10, compact: true))   // TMP-ART-TRIAL
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(female ? border.opacity(0.7) : accent.opacity(0.4), lineWidth: 1))
                 .onTapGesture { onSelect?(m) }   // الاسم يفتح تفاصيل العضو (طلب المالك)
@@ -863,6 +878,7 @@ struct WomenClassicTreeView: View {
                     .frame(maxWidth: NODE_W)
                     .frame(height: PILL_H)
                     .background(Capsule().fill(DS.Color.surface))
+                    .modifier(TreeArtSkin(art: art, compact: true))   // TMP-ART-TRIAL
                     .overlay(Capsule().stroke(accent.opacity(0.4), lineWidth: 1))
                     .onTapGesture { onSelect?(m) }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             }

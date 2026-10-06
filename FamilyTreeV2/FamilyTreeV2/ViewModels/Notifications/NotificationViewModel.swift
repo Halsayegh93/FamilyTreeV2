@@ -1044,10 +1044,16 @@ class NotificationViewModel: ObservableObject {
         return false
     }
 
+    /// - targetMemberIds: `nil` = إعلان للجميع. قائمة فارغة = لا أحد — لا يُرسل شيء أبداً
+    ///   (فحص الثغرات ب-٩: شريحة فاضية، مثل دولة بلا أعضاء، كانت تتحوّل إرسالاً للجميع).
     @discardableResult
     func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin") async -> Bool {
         guard authVM?.isAdmin == true, let creator = currentUser?.id else { return false }
         guard notificationsFeatureAvailable else { return false }
+        if let ids = targetMemberIds, ids.isEmpty {
+            Log.warning("[Notif] قائمة مستلمين فارغة — لم يُرسل شيء (لا تحويل للجميع)")
+            return false
+        }
 
         let dedupKey = "T|\(kind)|\(title)|\(body)|\(targetMemberIds?.map { $0.uuidString }.sorted().joined(separator: ",") ?? "ALL")"
         if isDuplicateNotification(dedupKey) {
@@ -1173,6 +1179,11 @@ class NotificationViewModel: ObservableObject {
         kind: String = "admin_broadcast"
     ) async -> Bool {
         guard authVM?.isAdmin == true, let creator = currentUser?.id else { return false }
+        // قائمة فارغة = لا أحد، لا «الجميع» (ب-٩) — NULL في الجدول يعني إعلاناً عاماً
+        if let ids = targetMemberIds, ids.isEmpty {
+            Log.warning("[SCHEDULE] قائمة مستلمين فارغة — لم يُجدول شيء")
+            return false
+        }
         self.isLoading = true
         defer { self.isLoading = false }
 
@@ -1437,10 +1448,11 @@ class NotificationViewModel: ObservableObject {
                     targetMemberIds: [requestId]
                 )
             } else {
-                // بقية الطلبات: تحديث status في admin_requests
+                // بقية الطلبات: تحديث status في admin_requests — مشروط بـ «معلّق» (ب-٧)
                 try await supabase.from("admin_requests")
                     .update(["status": AnyEncodable("approved")])
                     .eq("id", value: requestId.uuidString)
+                    .eq("status", value: ApprovalStatus.pending.rawValue)
                     .execute()
             }
             Log.info("[APPROVE] ✅ تمت الموافقة: requestType=\(requestType), id=\(requestId.uuidString.prefix(8))")
@@ -1541,48 +1553,7 @@ class NotificationViewModel: ObservableObject {
         return await approveRequest(requestId: rid, requestType: rt)
     }
 
-    /// Rejects a request linked to a notification. Looks up the request_id if needed.
-    func rejectRequestFromNotification(_ notification: AppNotification) async -> Bool {
-        guard let (rid, rt) = await lookupPendingRequest(for: notification) else { return false }
-        return await rejectRequest(requestId: rid, requestType: rt)
-    }
-
-    func rejectRequest(requestId: UUID, requestType: String) async -> Bool {
-        guard canModerate else { return false }
-
-        do {
-            if requestType == RequestType.joinRequest.rawValue {
-                _ = try? await supabase
-                    .from("admin_requests")
-                    .delete()
-                    .eq("requester_id", value: requestId.uuidString)
-                    .execute()
-                _ = try? await supabase
-                    .from("admin_requests")
-                    .delete()
-                    .eq("member_id", value: requestId.uuidString)
-                    .execute()
-                _ = try? await supabase
-                    .from("profiles")
-                    .update(["father_id": AnyEncodable(Optional<String>.none)])
-                    .eq("father_id", value: requestId.uuidString)
-                    .execute()
-                try await supabase
-                    .from("profiles")
-                    .delete()
-                    .eq("id", value: requestId.uuidString)
-                    .execute()
-            } else {
-                try await supabase.from("admin_requests")
-                    .update(["status": AnyEncodable(ApprovalStatus.rejected.rawValue)])
-                    .eq("id", value: requestId.uuidString)
-                    .execute()
-            }
-            Log.info("[REJECT] ✅ تم الرفض: requestType=\(requestType), id=\(requestId.uuidString.prefix(8))")
-            return true
-        } catch {
-            Log.error("[REJECT] ❌ فشل: \(error.localizedDescription)")
-            return false
-        }
-    }
+    // (أُزيل «رفض» من الإشعار — فحص الثغرات ب-١: كان يفصل الأبناء ثم يحذف الملف بلا تحقق
+    //  أن الطلب ما زال معلّقاً، ولأي مسؤول بما فيه المراقب والمشرف، بلا تأكيد، والأخطاء مخفية.
+    //  الرفض الآن من «طلبات المراجعة» وحدها عبر AdminRequestViewModel.)
 }

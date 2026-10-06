@@ -211,7 +211,7 @@ struct AdminAppSettingsView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     Text("\(appSettingsVM.settings.maxDevicesPerUser)")
                         .font(DS.Font.plex(17, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(AppSection.admin.ink)
                         .monospacedDigit()
                         .frame(minWidth: 22)
                         .accessibilityHidden(true)
@@ -278,7 +278,7 @@ struct AdminAppSettingsView: View {
                           index: 6) {
             settingToggle(
                 icon: "map.fill",
-                color: DS.Color.primary,
+                color: AppSection.admin.ink,
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 subtitle: L10n.t("إظهار تاب الديوانيات للأعضاء", "Show Diwaniyas tab to members"),
                 isOn: appSettingsVM.settings.diwaniyasEnabled ?? true,
@@ -361,7 +361,7 @@ struct AdminAppSettingsView: View {
     /// شارة "وضع القراءة فقط" — تظهر للمدير غير المالك
     private var readOnlyBanner: some View {
         HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: "eye.fill", tint: DS.Color.primary)
+            DSFieldIcon(name: "eye.fill", tint: AppSection.admin.ink)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("وضع القراءة فقط", "Read-only mode"))
@@ -379,9 +379,9 @@ struct AdminAppSettingsView: View {
         }
         .padding(DS.Spacing.md)
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .fill(DS.Color.primary.opacity(0.08)))
+            .fill(AppSection.admin.ink.opacity(0.08)))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.primary.opacity(0.22), lineWidth: 1))
+            .strokeBorder(AppSection.admin.ink.opacity(0.22), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .dsStaggerIn(0)
     }
@@ -476,7 +476,7 @@ struct AdminAppSettingsView: View {
                 }
             ))
             .labelsHidden()
-            .tint(DS.Color.primary)
+            .tint(AppSection.admin.ink)
             .accessibilityLabel(title)
         }
     }

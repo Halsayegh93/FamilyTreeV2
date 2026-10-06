@@ -698,7 +698,7 @@ struct EditNameSheet: View {
             onCancel: { dismiss() }
         ) {
             DSComposerSection(title: L10n.t("البيانات الأساسية", "Basic Info"),
-                              icon: "person.text.rectangle.fill", tint: DS.Color.primary, index: 0) {
+                              icon: "person.text.rectangle.fill", tint: AppSection.admin.ink, index: 0) {
                 DSComposerField(icon: "person.fill",
                                 label: L10n.t("الاسم الكامل", "Full Name"),
                                 placeholder: L10n.t("أدخل الاسم الكامل...", "Enter full name..."),

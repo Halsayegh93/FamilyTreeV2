@@ -6,6 +6,7 @@ import PhotosUI
 /// ما يطلب وصول لمكتبة الصور بالكامل.
 /// Handles empty state, loading, preview, existing URL, and optional cropping.
 struct DSProfilePhotoPicker: View {
+    @Environment(\.dsSection) private var dsSectionEnv
     /// The selected/cropped UIImage (binding to parent)
     @Binding var selectedImage: UIImage?
     /// Optional existing avatar URL to display when no local image is selected
@@ -44,7 +45,7 @@ struct DSProfilePhotoPicker: View {
             if showCropper, let _ = rawPickedImage {
                 // Inline crop indicator
                 VStack(spacing: DS.Spacing.md) {
-                    ProgressView().tint(DS.Color.primary)
+                    ProgressView().tint(DS.Color.primary.dsChrome(in: dsSectionEnv))
                         .frame(width: avatarSize, height: avatarSize)
                     Text(L10n.t("جاري فتح المحرر...", "Opening editor..."))
                         .font(DS.Font.caption1)
@@ -106,7 +107,7 @@ struct DSProfilePhotoPicker: View {
                         .scaledToFill()
                         .frame(width: avatarSize, height: avatarSize)
                         .clipShape(Circle())
-                        .overlay(Circle().stroke(DS.Color.primary.opacity(0.15), lineWidth: 2.5))
+                        .overlay(Circle().stroke(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.15), lineWidth: 2.5))
                         .dsGlowShadow()
                 } else {
                     Image(uiImage: image)
@@ -116,7 +117,7 @@ struct DSProfilePhotoPicker: View {
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 2.5)
+                                .stroke(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.15), lineWidth: 2.5)
                         )
                         .dsGlowShadow()
                 }
@@ -129,7 +130,7 @@ struct DSProfilePhotoPicker: View {
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 32, height: 32)
-                        .background(DS.Color.primary)
+                        .background(DS.Color.primary.dsChromeFill(in: dsSectionEnv))
                         .clipShape(Circle())
                         .overlay(Circle().stroke(DS.Color.background, lineWidth: 2.5))
                 }
@@ -168,10 +169,10 @@ struct DSProfilePhotoPicker: View {
                         Text(L10n.t("تغيير", "Change"))
                             .font(DS.Font.scaled(13, weight: .bold))
                     }
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.primary.opacity(0.08))
+                    .background(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.08))
                     .clipShape(Capsule())
                 }
 
@@ -245,7 +246,7 @@ struct DSProfilePhotoPicker: View {
                             image.resizable().scaledToFill()
                                 .frame(width: avatarSize, height: avatarSize)
                                 .clipShape(Circle())
-                                .overlay(Circle().stroke(DS.Color.primary.opacity(0.15), lineWidth: 2.5))
+                                .overlay(Circle().stroke(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.15), lineWidth: 2.5))
                                 .dsGlowShadow()
                         } else {
                             image.resizable().scaledToFill()
@@ -253,14 +254,14 @@ struct DSProfilePhotoPicker: View {
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                                        .stroke(DS.Color.primary.opacity(0.15), lineWidth: 2.5)
+                                        .stroke(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.15), lineWidth: 2.5)
                                 )
                                 .dsGlowShadow()
                         }
                     } else if phase.error != nil {
                         emptyCirclePlaceholder
                     } else {
-                        ProgressView().tint(DS.Color.primary)
+                        ProgressView().tint(DS.Color.primary.dsChrome(in: dsSectionEnv))
                             .frame(width: avatarSize, height: avatarSize)
                     }
                 }
@@ -273,7 +274,7 @@ struct DSProfilePhotoPicker: View {
                         .font(DS.Font.scaled(12, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 32, height: 32)
-                        .background(DS.Color.primary)
+                        .background(DS.Color.primary.dsChromeFill(in: dsSectionEnv))
                         .clipShape(Circle())
                         .overlay(Circle().stroke(DS.Color.background, lineWidth: 2.5))
                 }
@@ -318,10 +319,10 @@ struct DSProfilePhotoPicker: View {
                         Text(L10n.t("تغيير", "Change"))
                             .font(DS.Font.scaled(13, weight: .bold))
                     }
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.primary.opacity(0.08))
+                    .background(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.08))
                     .clipShape(Capsule())
                 }
 
@@ -403,7 +404,7 @@ struct DSProfilePhotoPicker: View {
 
     private var loadingState: some View {
         VStack(spacing: DS.Spacing.md) {
-            ProgressView().tint(DS.Color.primary)
+            ProgressView().tint(DS.Color.primary.dsChrome(in: dsSectionEnv))
                 .frame(width: avatarSize, height: avatarSize)
             Text(L10n.t("جاري تحميل الصورة...", "Loading photo..."))
                 .font(DS.Font.caption1)
@@ -429,7 +430,7 @@ struct DSProfilePhotoPicker: View {
                             .font(DS.Font.scaled(12, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .frame(width: 32, height: 32)
-                            .background(DS.Color.primary)
+                            .background(DS.Color.primary.dsChromeFill(in: dsSectionEnv))
                             .clipShape(Circle())
                             .overlay(Circle().stroke(DS.Color.background, lineWidth: 2.5))
                     }
@@ -454,10 +455,10 @@ struct DSProfilePhotoPicker: View {
                         Text(L10n.t("اختر صورة", "Choose Photo"))
                             .font(DS.Font.scaled(13, weight: .bold))
                     }
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.primary.opacity(0.08))
+                    .background(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.08))
                     .clipShape(Capsule())
                 }
                 .buttonStyle(DSBoldButtonStyle())
@@ -478,22 +479,22 @@ struct DSProfilePhotoPicker: View {
         ZStack {
             if cropShape == .circle {
                 Circle()
-                    .fill(DS.Color.primary.opacity(0.06))
+                    .fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.06))
                     .frame(width: avatarSize, height: avatarSize)
-                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 2, dash: [8])))
+                    .overlay(Circle().stroke(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.12), style: StrokeStyle(lineWidth: 2, dash: [8])))
             } else {
                 RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .fill(DS.Color.primary.opacity(0.06))
+                    .fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.06))
                     .frame(width: avatarSize, height: avatarSize)
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                            .stroke(DS.Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 2, dash: [8]))
+                            .stroke(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.12), style: StrokeStyle(lineWidth: 2, dash: [8]))
                     )
             }
 
             Image(systemName: cropShape == .circle ? "person.fill" : "photo.fill")
                 .font(DS.Font.scaled(40, weight: .light))
-                .foregroundColor(DS.Color.primary.opacity(0.25))
+                .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.25))
         }
     }
 
@@ -536,6 +537,7 @@ struct DSProfilePhotoPicker: View {
 
 /// Reusable multi-photo picker with Instagram-style carousel and optional crop.
 struct DSMultiPhotoPicker: View {
+    @Environment(\.dsSection) private var dsSectionEnv
     @Binding var selectedImages: [UIImage]
     var maxCount: Int = 5
     /// Whether to enable cropping for each photo
@@ -605,23 +607,23 @@ struct DSMultiPhotoPicker: View {
             VStack(spacing: DS.Spacing.md) {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(DS.Font.scaled(36, weight: .light))
-                    .foregroundColor(DS.Color.primary.opacity(0.5))
+                    .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.5))
                 Text(L10n.t("اختر صور (اختياري)", "Choose Photos (optional)"))
                     .font(DS.Font.callout)
                     .fontWeight(.medium)
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                 Text(L10n.t("حتى \(maxCount) صور", "Up to \(maxCount) photos"))
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textTertiary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, DS.Spacing.xxl)
-            .background(DS.Color.primary.opacity(0.04))
+            .background(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.04))
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [8]))
-                    .foregroundColor(DS.Color.primary.opacity(0.15))
+                    .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.15))
             )
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -632,7 +634,7 @@ struct DSMultiPhotoPicker: View {
 
     private var loadingState: some View {
         VStack(spacing: DS.Spacing.md) {
-            ProgressView().tint(DS.Color.primary)
+            ProgressView().tint(DS.Color.primary.dsChrome(in: dsSectionEnv))
             Text(L10n.t("جاري تحميل الصور...", "Loading photos..."))
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textSecondary)
@@ -727,7 +729,7 @@ struct DSMultiPhotoPicker: View {
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                                    .stroke(currentIndex == idx ? DS.Color.primary : Color.clear, lineWidth: 2.5)
+                                    .stroke(currentIndex == idx ? DS.Color.primary.dsChrome(in: dsSectionEnv) : Color.clear, lineWidth: 2.5)
                             )
                             .opacity(currentIndex == idx ? 1 : 0.6)
                     }
@@ -744,13 +746,13 @@ struct DSMultiPhotoPicker: View {
                             Text(L10n.t("إضافة", "Add"))
                                 .font(DS.Font.scaled(11, weight: .medium))
                         }
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                         .frame(width: 56, height: 56)
-                        .background(DS.Color.primary.opacity(0.08))
+                        .background(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                                .stroke(DS.Color.primary.opacity(0.2), lineWidth: 1)
+                                .stroke(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.2), lineWidth: 1)
                         )
                     }
                 }

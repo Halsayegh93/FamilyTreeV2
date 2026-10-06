@@ -134,7 +134,7 @@ struct AdminPushHealthView: View {
                 .accessibilityLabel("\(L10n.t("معدل الصحة", "Health Rate")): \(rate)%")
 
                 VStack(spacing: 6) {
-                    healthLine(icon: "iphone", tint: DS.Color.primary,
+                    healthLine(icon: "iphone", tint: AppSection.admin.ink,
                                label: L10n.t("أجهزة", "Devices"), value: stats.totalDevices)
                     healthLine(icon: "checkmark.seal.fill", tint: DS.Color.success,
                                label: L10n.t("رمز صالح", "Valid"), value: stats.validTokens)
@@ -219,7 +219,7 @@ struct AdminPushHealthView: View {
                    title: L10n.t("آخر تسجيل جهاز", "Last device registered")) {
                 relativeValue(stats?.lastDeviceRegisteredAt)
             }
-            SysRow(icon: "bell.badge.fill", tint: DS.Color.primary,
+            SysRow(icon: "bell.badge.fill", tint: AppSection.admin.ink,
                    title: L10n.t("آخر إشعار مرسل", "Last notification sent")) {
                 relativeValue(stats?.lastNotificationSentAt)
             }
@@ -305,7 +305,7 @@ struct AdminPushHealthView: View {
     private func tokenOwnerRow(owner: TokenOwnerEntry) -> some View {
         let sandbox = owner.environment == "sandbox"
         return HStack(spacing: DS.Spacing.sm) {
-            avatar(url: owner.avatarUrl, initial: String(owner.fullName.prefix(1)), tint: DS.Color.primary)
+            avatar(url: owner.avatarUrl, initial: String(owner.fullName.prefix(1)), tint: AppSection.admin.ink)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(owner.fullName)

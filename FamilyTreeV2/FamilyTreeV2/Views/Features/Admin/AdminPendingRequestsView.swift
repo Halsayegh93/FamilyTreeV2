@@ -210,7 +210,8 @@ struct AdminPendingRequestsView: View {
                 }
                 return L10n.t("تم الدمج", "Merge Complete")
             }(),
-            isPresented: $showMergeSuccess
+            isPresented: $showMergeSuccess,
+            moment: { if case .success = adminRequestVM.mergeResult { return .success }; return nil }()
         ) {
             Button(L10n.t("حسناً", "OK")) {
                 adminRequestVM.mergeResult = nil
@@ -286,10 +287,10 @@ struct AdminPendingRequestsView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "at")
                                     .font(DS.Font.scaled(11, weight: .bold))
-                                    .foregroundColor(DS.Color.primary)
+                                    .foregroundColor(AppSection.admin.ink)
                                 Text(uname)
                                     .font(DS.Font.scaled(11, weight: .bold))
-                                    .foregroundColor(DS.Color.primary)
+                                    .foregroundColor(AppSection.admin.ink)
                             }
                         }
 
@@ -451,7 +452,7 @@ struct AdminPendingRequestsView: View {
                                         ))
                                         .font(DS.Font.caption1)
                                     }
-                                    .foregroundColor(DS.Color.primary)
+                                    .foregroundColor(AppSection.admin.ink)
                                     .padding(.top, DS.Spacing.xs)
                                 }
                             }
@@ -505,15 +506,15 @@ struct AdminPendingRequestsView: View {
                             .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(AppSection.admin.ink)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
                     .frame(maxWidth: .infinity)
-                    .background(DS.Color.primary.opacity(0.08))
+                    .background(AppSection.admin.ink.opacity(0.08))
                     .cornerRadius(DS.Radius.md)
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.primary.opacity(0.2), lineWidth: 1)
+                            .stroke(AppSection.admin.ink.opacity(0.2), lineWidth: 1)
                     )
                 }
                 .buttonStyle(DSScaleButtonStyle())
@@ -626,7 +627,7 @@ struct AdminPendingRequestsView: View {
                     .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.gradientPrimary)
+                    .background(AppSection.admin.gradient)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(DSScaleButtonStyle())
@@ -875,9 +876,9 @@ struct LinkToExistingMemberSheet: View {
         HStack(spacing: DS.Spacing.sm) {
             Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)))
                 .font(DS.Font.plex(17, weight: .bold))
-                .foregroundColor(DS.Color.actionNavy.dsReadableGlyph)
+                .foregroundColor(AppSection.admin.ink)
                 .frame(width: 44, height: 44)
-                .background(Circle().fill(DS.Color.actionNavy.dsReadableGlyph.opacity(0.08)))
+                .background(Circle().fill(AppSection.admin.ink.opacity(0.08)))
                 .overlay(Circle().strokeBorder(ring.dsReadableGlyph, lineWidth: 2))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
@@ -919,7 +920,7 @@ struct LinkToExistingMemberSheet: View {
                                         ? L10n.t("كل أعضاء الشجرة", "All tree members")
                                         : L10n.t("أعضاء الشجرة", "Tree Members"),
                                  icon: "person.3.fill",
-                                 tint: DS.Color.primary,
+                                 tint: AppSection.admin.ink,
                                  index: 2) {
             DSComposerField(icon: "magnifyingglass",
                             label: L10n.t("بحث", "Search"),
@@ -965,7 +966,7 @@ struct LinkToExistingMemberSheet: View {
                     if isSelected {
                         DSFieldIcon(name: "checkmark", tint: DS.Color.success)
                     } else {
-                        memberInitialBadge(member.fullName, tint: DS.Color.primary)
+                        memberInitialBadge(member.fullName, tint: AppSection.admin.ink)
                     }
                 }
                 .accessibilityHidden(true)
@@ -1009,7 +1010,7 @@ struct LinkToExistingMemberSheet: View {
                 ))
                 .font(DS.Font.plex(12.5, weight: .bold))
             }
-            .foregroundColor(DS.Color.primary)
+            .foregroundColor(AppSection.admin.ink)
             .frame(maxWidth: .infinity)
             .padding(.vertical, DS.Spacing.xs)
             .frame(minHeight: 44)   // مساحة ضغط ٤٤ (توصية أبل) — النص كما هو

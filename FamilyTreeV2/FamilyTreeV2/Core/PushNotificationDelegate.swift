@@ -10,9 +10,6 @@ extension Notification.Name {
     /// Posted when the admin taps "قبول" on a push notification banner.
     /// userInfo: ["request_id": String, "request_type": String]
     static let didTapApproveRequestAction    = Notification.Name("didTapApproveRequestAction")
-    /// Posted when the admin taps "رفض" on a push notification banner.
-    /// userInfo: ["request_id": String, "request_type": String]
-    static let didTapRejectRequestAction     = Notification.Name("didTapRejectRequestAction")
     /// Posted when the admin taps "فتح الطلب" on a push notification banner.
     /// userInfo: ["request_id": String, "request_type": String]
     static let didTapOpenRequestAction       = Notification.Name("didTapOpenRequestAction")
@@ -22,6 +19,8 @@ extension Notification.Name {
 
 private enum PushAction {
     static let approveRequest = "APPROVE_REQUEST"
+    /// زر «رفض» القديم — أُزيل من الإشعار (فحص الثغرات ب-١): كان يفصل الأبناء ويحذف من
+    /// شاشة القفل بلا تحقق ولا تأكيد. بقي المعرّف فقط ليفتح المراجعة لو وصل من إشعار قديم.
     static let rejectRequest  = "REJECT_REQUEST"
     static let openRequest    = "OPEN_REQUEST"
 }
@@ -45,29 +44,26 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
             title: "قبول ✓",
             options: [.authenticationRequired]
         )
-        let rejectAction = UNNotificationAction(
-            identifier: PushAction.rejectRequest,
-            title: "رفض ✗",
-            options: [.authenticationRequired, .destructive]
-        )
+        // لا «رفض» من شاشة القفل (ب-١): الرفض من شاشة المراجعة فقط — بتحقق أن الطلب
+        // ما زال معلّقاً، وصلاحية الدور، وتأكيد، وأخطاء ظاهرة. «فتح الطلب» يفتحها مباشرة.
         let openAction = UNNotificationAction(
             identifier: PushAction.openRequest,
             title: "فتح الطلب",
             options: [.foreground]
         )
 
-        // فئة طلب الانضمام — قبول + رفض + فتح
+        // فئة طلب الانضمام — قبول + فتح للمراجعة
         let joinCategory = UNNotificationCategory(
             identifier: PushCategory.joinRequest,
-            actions: [approveAction, rejectAction, openAction],
+            actions: [approveAction, openAction],
             intentIdentifiers: [],
             options: []
         )
 
-        // فئة باقي الطلبات — قبول + رفض
+        // فئة باقي الطلبات — قبول + فتح للمراجعة
         let adminCategory = UNNotificationCategory(
             identifier: PushCategory.adminRequest,
-            actions: [approveAction, rejectAction],
+            actions: [approveAction, openAction],
             intentIdentifiers: [],
             options: []
         )
@@ -121,15 +117,8 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
                     userInfo: ["request_id": requestId, "request_type": requestType]
                 )
             }
-        case PushAction.rejectRequest:
-            if let requestId, let requestType {
-                NotificationCenter.default.post(
-                    name: .didTapRejectRequestAction,
-                    object: nil,
-                    userInfo: ["request_id": requestId, "request_type": requestType]
-                )
-            }
-        case PushAction.openRequest:
+        case PushAction.openRequest, PushAction.rejectRequest:
+            // «رفض» من إشعار قديم يفتح المراجعة فقط — لا إجراء هدّام من شاشة القفل (ب-١)
             // كان `as Any` يحوّل nil إلى NSNull → downstream `as? String` يرجع nil
             // حتى لو المفتاح موجود. الآن نُضمن أن المفتاح يطلع فقط لو القيمة موجودة.
             var info: [AnyHashable: Any] = [:]

@@ -34,9 +34,12 @@ struct SysStatusChip: View {
     let text: String
     var icon: String? = nil
     var tint: Color = DS.Color.primary
+    /// الكحلي (معلومة الإطار) ← لون القسم؛ ألوان الحالات كما هي
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        HStack(spacing: 3) {
+        let tint = self.tint.dsChrome(in: section)
+        return HStack(spacing: 3) {
             if let icon {
                 Image(systemName: icon)
                     .font(.system(size: 9.5, weight: .bold))
@@ -66,24 +69,31 @@ struct SysStateCard: View {
     var actionTitle: String? = nil
     var actionIcon: String = "arrow.clockwise"
     var action: (() -> Void)? = nil
+    /// رسمة كبيرة بدل الأيقونة الصغيرة (مثل حمامة الزاجل في الإشعارات الفاضية)
+    var art: AnyView? = nil
 
-    /// الكحلي الغامق لا يُقرأ كأيقونة في الداكن — `dsReadableGlyph` (نفس اللون في الفاتح)
-    private var iconTint: Color { tint.dsReadableGlyph }
+    @Environment(\.dsSection) private var section
+    /// الكحلي الغامق لا يُقرأ كأيقونة في الداكن — `dsReadableGlyph` (نفس اللون في الفاتح)،
+    /// والكحلي ← لون القسم
+    private var iconTint: Color { tint.dsChrome(in: section).dsReadableGlyph }
 
     var body: some View {
         VStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle().fill(iconTint.opacity(0.12))
-                if isLoading {
-                    ProgressView().tint(iconTint)
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(iconTint)
+            if let art, !isLoading {
+                art.accessibilityHidden(true)
+            } else {
+                ZStack {
+                    if isLoading {
+                        Circle().fill(iconTint.opacity(0.12))
+                        ProgressView().tint(iconTint)
+                    } else {
+                        // تطفو بهدوء وحلقتها تنبض (طلب المالك ٢٠٢٦-١٠-٠٤) — ثابتة مع «تقليل الحركة»
+                        FloatingIconArt(icon: icon, tint: iconTint)
+                    }
                 }
+                .frame(width: 52, height: 52)
+                .accessibilityHidden(true)
             }
-            .frame(width: 52, height: 52)
-            .accessibilityHidden(true)
 
             Text(title)
                 .dsFieldFont(14.5, weight: .bold)
@@ -119,6 +129,7 @@ struct SysStateCard: View {
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
         .frame(maxWidth: .infinity)
     }
 }
@@ -176,9 +187,18 @@ struct SysGradientIcon: View {
     var tint: Color = DS.Color.actionNavy
     var size: CGFloat = 40
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dsSection) private var section
 
     var body: some View {
         // أبسط (طلب المالك): خلفية فاتحة بلون القسم وأيقونة بلونه — بلا تدرّج ولا ظل
+        let tint = self.tint.dsChrome(in: section)
+        return TrialArt(make: { ArtDispatch.stateIcon($0, icon: name, tint: tint.dsReadableGlyph, size: size) }) {   // TMP-ART-TRIAL
+            emblem(tint)
+        }
+        .frame(width: size, height: size)
+    }
+
+    private func emblem(_ tint: Color) -> some View {
         Image(systemName: name)
             .font(.system(size: size * 0.42, weight: .bold))
             .foregroundColor(tint.dsReadableGlyph)
@@ -209,9 +229,11 @@ struct SysSectionTitle: View {
     let icon: String
     var tint: Color = DS.Color.primary
     var trailing: String? = nil
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        HStack(spacing: 7) {
+        let tint = self.tint.dsChrome(in: section)
+        return HStack(spacing: 7) {
             Image(systemName: icon)
                 .font(.system(size: 10.5, weight: .bold))
                 .foregroundColor(tint.dsReadableGlyph)

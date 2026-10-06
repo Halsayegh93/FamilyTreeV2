@@ -134,13 +134,22 @@ struct EditNewsView: View {
     /// يفتح في الداكن فيضعف النص الأبيض)
     private var headerTint: Color {
         if isPoll { return DS.Color.newsVote }
-        if selectedType == "إعلان" || selectedType == "خبر" { return DS.Color.actionNavy }
+        if isPlainNewsType { return AppSection.news.fill }
+        if selectedType == "إعلان" || selectedType == "خبر" { return DS.Color.brandFill }   // كحلي ثابت (معنى)
         return NewsTypeHelper.color(for: selectedType)
     }
 
     /// لون الأقسام والأيقونات داخل المربّع — ألوان الأنواع التكيّفية (تُقرأ في الوضعين)
     private var sectionTint: Color {
-        isPoll ? DS.Color.newsVote : NewsTypeHelper.color(for: selectedType)
+        if isPoll { return DS.Color.newsVote }
+        if isPlainNewsType { return AppSection.news.ink }
+        return NewsTypeHelper.color(for: selectedType)
+    }
+
+    /// «خبر» العادي (أو نوع بلا لون خاص) — إطار المربّع بلون قسم الأخبار لا بكحلي العلامة
+    /// (طلب المالك ٢٠٢٦-١٠-٠٥ «وحتى الاخبار»). الأنواع ذات المعنى (إعلان، زواج، وفاة…) بلونها.
+    private var isPlainNewsType: Bool {
+        selectedType != "إعلان" && NewsTypeHelper.color(for: selectedType) == DS.Color.brand
     }
 
     private var headerIcon: String {
@@ -174,6 +183,8 @@ struct EditNewsView: View {
             guard !items.isEmpty else { return }
             loadImages(from: items)
         }
+        // مربّع الأخبار بلون قسم الأخبار (زر الحفظ، التصويت، الرسائل)
+        .dsSectionPage(.news)
     }
 
     // MARK: - التصنيف
@@ -209,16 +220,27 @@ struct EditNewsView: View {
     private func categoryTile(_ type: String) -> some View {
         let selected = !isPoll && selectedType == type
         // الإعلان/الخبر: primary (كحلي في الفاتح، أزرق فاتح يُقرأ في الداكن)
-        let c = NewsTypeHelper.color(for: type)
+        let typeColor = NewsTypeHelper.color(for: type)
+        // «خبر» العادي بلون قسم الأخبار — مثل رأس المربّع (الإعلان يبقى كحلي العلامة)
+        let c = (type != "إعلان" && typeColor == DS.Color.brand) ? AppSection.news.ink : typeColor
         return Button {
             guard selectedType != type else { return }
             withAnimation(DS.Anim.snappy) { selectedType = type }
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: NewsTypeHelper.icon(for: type))
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(selected ? .white : c)
+                // شارة النوع المتحرّكة — اختيار النوع يشغّل حكايته فوراً (طلب المالك ٢٠٢٦-١٠-٠٥)
+                Group {
+                    if FTNewsBadges.hasArt(for: type, currentIcon: NewsTypeHelper.icon(for: type)) {
+                        FTNewsBadge(type: type, tint: c, seed: abs(type.hashValue % 89),
+                                    style: selected ? .onColor : .soft, beatOnAppear: selected)
+                            .id(selected)
+                    } else {
+                        Image(systemName: NewsTypeHelper.icon(for: type))
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(selected ? .white : c)
+                    }
+                }
                     .frame(width: 38, height: 38)
                     .background(Circle().fill(selected ? AnyShapeStyle(LinearGradient(colors: [c, c.opacity(0.75)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(c.opacity(0.13))))
                     .shadow(color: selected ? c.opacity(0.45) : .clear, radius: 8, y: 3)
@@ -238,6 +260,7 @@ struct EditNewsView: View {
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .strokeBorder(selected ? c.opacity(0.55) : DS.Color.textTertiary.opacity(0.12),
                               lineWidth: selected ? 1.5 : 1))
+            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -623,8 +646,11 @@ struct EditNewsView: View {
             isLoadingPhotos = true
             var loaded: [UIImage] = []
             for item in items {
+                // فكّ مصغّر خارج الخيط الرئيسي (كان يعلّق عند إضافة الصور — ٢٠٢٦-١٠-٠٥)
                 if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
+                   let image = await Task.detached(priority: .userInitiated, operation: {
+                       ImageProcessor.downsampled(data)
+                   }).value {
                     loaded.append(image)
                 }
             }

@@ -620,12 +620,16 @@ private struct GuideWelcomeView: View {
     private func chapterRow(_ chapter: GuideChapter, index: Int) -> some View {
         Button { onOpen(index) } label: {
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: chapter.icon)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(chapter.tint.dsReadableGlyph)
+                // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الحالية
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: chapter.icon, tint: chapter.tint.dsReadableGlyph, size: 34) }) {
+                    Image(systemName: chapter.icon)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(chapter.tint.dsReadableGlyph)
+                        .frame(width: 34, height: 34)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(chapter.tint.dsReadableGlyph.opacity(0.13)))
+                }
                     .frame(width: 34, height: 34)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(chapter.tint.dsReadableGlyph.opacity(0.13)))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(chapter.title)
@@ -642,6 +646,7 @@ private struct GuideWelcomeView: View {
             .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
             .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -956,6 +961,7 @@ private struct GuideToolbarScene: View {
                         .fill(DS.Color.background))
                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+                    .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
                     .accessibilityElement(children: .combine)
                 }
             }

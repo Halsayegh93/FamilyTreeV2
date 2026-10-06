@@ -7,6 +7,9 @@ struct DeepLinkKinshipView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
+    /// لون القسم الذي فُتحت منه (إن وُجد) — بدل الكحلي الثابت
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     let member: FamilyMember
 
@@ -25,17 +28,20 @@ struct DeepLinkKinshipView: View {
                 Spacer()
 
                 // أيقونة
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "person.2.fill", tint: chromeInk, size: 80) }) {   // TMP-ART-TRIAL
                 ZStack {
                     Circle()
-                        .fill(DS.Color.primary.opacity(0.1))
+                        .fill(chromeInk.opacity(0.1))
                         .frame(width: 100, height: 100)
                     Circle()
-                        .fill(DS.Color.primary.opacity(0.2))
+                        .fill(chromeInk.opacity(0.2))
                         .frame(width: 80, height: 80)
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(chromeInk)
                 }
+                }
+                .frame(width: 100, height: 100)
 
                 // اسم العضو
                 VStack(spacing: DS.Spacing.sm) {
@@ -63,7 +69,7 @@ struct DeepLinkKinshipView: View {
                             Text(result.relationship)
                                 .font(DS.Font.title2)
                                 .fontWeight(.bold)
-                                .foregroundStyle(DS.Color.gradientPrimary)
+                                .foregroundStyle(section?.gradient ?? DS.Color.gradientPrimary)
                                 .multilineTextAlignment(.center)
 
                             if let ancestor = result.commonAncestor,
@@ -98,11 +104,8 @@ struct DeepLinkKinshipView: View {
                         .font(DS.Font.headline)
                 }
                 ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(22))
-                            .foregroundStyle(DS.Color.textTertiary)
-                    }
+                    // زر الإغلاق الموحّد (DSNavButtons)
+                    DSCloseButton(inToolbar: true) { dismiss() }
                 }
             }
         }

@@ -23,9 +23,14 @@ struct WomenTreeView: View {
                 ZStack {
                     DS.Color.background.ignoresSafeArea()
                     VStack(spacing: DS.Spacing.md) {
-                        Image(systemName: "person.2.slash")
-                            .font(.system(size: 44))
-                            .foregroundColor(DS.Color.textTertiary)
+                        // TMP-ART-TRIAL: رسم الحالة الفارغة بحسب الاتجاه — «الحالي» الرمز القديم كما هو
+                        TrialArt(make: { $0 == .emblem ? nil
+                                         : ArtDispatch.empty($0, place: "tree", icon: "person.2.slash", tint: AppSection.tree.ink)
+                                            .map { AnyView($0.frame(width: 130, height: 130)) } }) {
+                            Image(systemName: "person.2.slash")
+                                .font(.system(size: 44))
+                                .foregroundColor(DS.Color.textTertiary)
+                        }
                         Text(L10n.t("لا توجد بيانات للنساء بعد", "No women data yet"))
                             .font(DS.Font.callout)
                             .foregroundColor(DS.Color.textSecondary)
@@ -43,7 +48,7 @@ struct WomenTreeView: View {
                             title: L10n.t("النساء", "Women"),
                             subtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
                             icon: "leaf.fill",
-                            backgroundGradient: DS.Color.gradientPrimary,
+                            backgroundGradient: AppSection.tree.gradient,
                             subtitleChip: true
                         )
                     }
@@ -154,12 +159,15 @@ private struct WomenLoadingView: View {
                         .frame(width: 110, height: 110)
                         .scaleEffect(reduceMotion ? 1 : (pulse ? 1.15 : 0.85))
                         .opacity(reduceMotion ? 0.5 : (pulse ? 0.3 : 0.7))
-                    Circle().fill(DS.Color.gradientPrimary)
-                        .frame(width: 76, height: 76)
-                        .overlay(Image(systemName: "person.2.fill")
-                            .font(.system(size: 30, weight: .semibold))
-                            .foregroundColor(.white))
-                        .dsGlowShadow()
+                    // TMP-ART-TRIAL: الرمز بحسب الاتجاه (ساكن) — «الحالي» الدائرة القديمة
+                    TrialArt(make: { ArtDispatch.stateIcon($0, icon: "person.2.fill", tint: AppSection.tree.ink, size: 76) }) {
+                        Circle().fill(AppSection.tree.gradient)
+                            .frame(width: 76, height: 76)
+                            .overlay(Image(systemName: "person.2.fill")
+                                .font(.system(size: 30, weight: .semibold))
+                                .foregroundColor(.white))
+                            .dsGlowShadow()
+                    }
                 }
 
                 VStack(spacing: DS.Spacing.xs) {
@@ -174,7 +182,7 @@ private struct WomenLoadingView: View {
                 // نقاط متحرّكة
                 HStack(spacing: 8) {
                     ForEach(0..<3, id: \.self) { i in
-                        Circle().fill(DS.Color.primary)
+                        Circle().fill(AppSection.tree.ink)
                             .frame(width: 9, height: 9)
                             .scaleEffect(pulse || reduceMotion ? 1.0 : 0.5)
                             .opacity(pulse || reduceMotion ? 1 : 0.4)
@@ -757,7 +765,7 @@ private struct WomanDetailSheet: View {
                              })
             } else if showHusband, let husband {
                 relationTile(icon: "person.fill", label: L10n.t("الزوج", "Husband"),
-                             value: shortName(husband), color: DS.Color.primary,
+                             value: shortName(husband), color: DS.Color.male,
                              onTap: { onOpenMember?(husband.id) })
             }
         }
@@ -817,7 +825,7 @@ private struct WomanDetailSheet: View {
                 .foregroundColor(DS.Color.fieldLabel)
                 .frame(maxWidth: .infinity)
             if !sons.isEmpty {
-                childrenGroup(L10n.t("الذكور", "Sons"), sons, DS.Color.primary)
+                childrenGroup(L10n.t("الذكور", "Sons"), sons, DS.Color.male)
             }
             if !daughters.isEmpty {
                 childrenGroup(L10n.t("الإناث", "Daughters"), daughters, DS.Color.female)
@@ -905,7 +913,7 @@ private struct WomanDetailSheet: View {
     private var adminActions: [AdminAction] {
         var list: [AdminAction] = [
             AdminAction(id: "son", title: L10n.t("إضافة ابن", "Add son"),
-                        icon: "figure.stand", color: DS.Color.primary) { startAdd(.son) },
+                        icon: "figure.stand", color: DS.Color.male) { startAdd(.son) },
             AdminAction(id: "daughter", title: L10n.t("إضافة بنت", "Add daughter"),
                         icon: "figure.stand.dress", color: DS.Color.female) { startAdd(.daughter) }
         ]
@@ -987,11 +995,14 @@ private struct WomanDetailSheet: View {
     private func adminTile(_ action: AdminAction) -> some View {
         Button(action: action.run) {
             VStack(spacing: 6) {
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: action.icon, tint: action.color, size: 42) }) {   // TMP-ART-TRIAL
                 Image(systemName: action.icon)
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(action.color)
                     .frame(width: 42, height: 42)
                     .background(Circle().fill(action.color.opacity(0.14)))
+                }
+                    .frame(width: 42, height: 42)
                     .accessibilityHidden(true)   // زخرفة — الاسم تحتها يكفي
                 Text(action.title)
                     .dsFieldFont(12, weight: .bold)
@@ -1186,7 +1197,7 @@ private struct WomanDetailSheet: View {
             Spacer(minLength: 0)
             Toggle("", isOn: isOn.animation(DS.Anim.snappy))
                 .labelsHidden()
-                .tint(DS.Color.primary)
+                .tint(AppSection.tree.ink)
                 .accessibilityLabel(title)
         }
         .dsRowBox()
@@ -1209,9 +1220,9 @@ private struct WomanDetailSheet: View {
                 Spacer(minLength: 0)
                 Image(systemName: "pencil")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(AppSection.tree.ink)
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(DS.Color.primary.opacity(0.10)))
+                    .background(Circle().fill(AppSection.tree.ink.opacity(0.10)))
                     .accessibilityHidden(true)   // الصف كله زر — القلم زخرفة
             }
             .dsRowBox()
@@ -1290,9 +1301,9 @@ private struct WomanDetailSheet: View {
         Button { withAnimation(DS.Anim.snappy) { action() } } label: {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(enabled ? DS.Color.primary : DS.Color.textTertiary.opacity(0.4))
+                .foregroundColor(enabled ? AppSection.tree.ink : DS.Color.textTertiary.opacity(0.4))
                 .frame(width: 30, height: 30)
-                .background(DS.Color.primary.opacity(enabled ? 0.10 : 0.04), in: Circle())
+                .background(AppSection.tree.ink.opacity(enabled ? 0.10 : 0.04), in: Circle())
                 .padding(.leading, hitLeading)
                 .padding(.trailing, hitTrailing)
                 .padding(.vertical, 7)
@@ -1400,7 +1411,7 @@ private struct WomanDetailSheet: View {
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(AppSection.tree.ink)
                 }
             }
             .dsRowBox()
@@ -1563,28 +1574,38 @@ private struct WomanDetailSheet: View {
                 CachedAsyncImage(url: u) { img in
                     img.resizable().scaledToFill()
                 } placeholder: {
-                    fallback(m)
+                    fallback(m, size: size)
                 }
             } else {
-                fallback(m)
+                fallback(m, size: size)
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
     }
 
-    private func fallback(_ m: FamilyMember) -> some View {
+    private func fallback(_ m: FamilyMember, size: CGFloat) -> some View {
+        // TMP-ART-TRIAL: بلا صورة — رسم الاتجاه بلون الجنس نفسه؛ «الحالي» الحرف الأول كما كان
+        let artTint: Color = m.isFemale
+            ? (m.isDeceased == true ? DS.Color.femaleDeceased : DS.Color.female)
+            : (m.isDeceased == true ? DS.Color.textTertiary : DS.Color.male)
+        return TrialArt(make: { ArtDispatch.stateIcon($0, icon: "person.fill", tint: artTint, size: size) }) {
+            fallbackInitial(m)
+        }
+    }
+
+    private func fallbackInitial(_ m: FamilyMember) -> some View {
         GeometryReader { g in
             ZStack {
                 // الإناث بالوردي، والمتوفّاة بوردي أغمق (طلب المالك)؛ الذكور بالكحلي
                 let tint: Color = m.isFemale
                     ? (m.isDeceased == true ? DS.Color.femaleDeceased : DS.Color.female)
-                    : DS.Color.primary
+                    : DS.Color.male
                 if m.isFemale {
                     tint
                 } else {
                     LinearGradient(
-                        colors: [DS.Color.primary.opacity(0.22), DS.Color.accent.opacity(0.14)],
+                        colors: [DS.Color.male.opacity(0.22), DS.Color.accent.opacity(0.14)],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                 }

@@ -19,6 +19,7 @@ struct DeviceLimitView: View {
                 Spacer()
 
                 // Icon — تقفز أولاً مثل أيقونة رأس المربّعات («تقليل الحركة»: تلاشٍ)
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "iphone.gen3.badge.exclamationmark", tint: DS.Color.error, size: 100) }) {   // TMP-ART-TRIAL
                 ZStack {
                     Circle()
                         .fill(DS.Color.error.opacity(0.15))
@@ -28,6 +29,8 @@ struct DeviceLimitView: View {
                         .font(DS.Font.scaled(42, weight: .bold))
                         .foregroundColor(DS.Color.error)
                 }
+                }
+                .frame(width: 100, height: 100)
                 .modifier(DSIconPop())
 
                 // Title & Description
@@ -105,6 +108,7 @@ struct DeviceOverLimitView: View {
                 Spacer()
 
                 // الأيقونة تقفز أولاً مثل أيقونة رأس المربّعات («تقليل الحركة»: تلاشٍ)
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "iphone.gen3.badge.exclamationmark", tint: DS.Color.warning, size: 100) }) {   // TMP-ART-TRIAL
                 ZStack {
                     Circle()
                         .fill(DS.Color.warning.opacity(0.12))
@@ -113,6 +117,8 @@ struct DeviceOverLimitView: View {
                         .font(DS.Font.scaled(42, weight: .bold))
                         .foregroundColor(DS.Color.warning)
                 }
+                }
+                .frame(width: 100, height: 100)
                 .modifier(DSIconPop())
 
                 VStack(spacing: DS.Spacing.md) {

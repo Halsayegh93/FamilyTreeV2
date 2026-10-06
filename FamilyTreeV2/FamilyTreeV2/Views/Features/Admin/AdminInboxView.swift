@@ -147,7 +147,7 @@ struct AdminInboxView: View {
                         }
                     } label: {
                         Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
-                            .foregroundColor(DS.Color.primary)
+                            .foregroundColor(AppSection.admin.ink)
                     }
                     .accessibilityLabel(isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select"))
                 }
@@ -435,7 +435,7 @@ struct AdminInboxView: View {
             if isSelectMode {
                 Image(systemName: picked ? "checkmark.circle.fill" : "circle")
                     .font(DS.Font.scaled(20, weight: .semibold))
-                    .foregroundColor(picked ? DS.Color.primary : DS.Color.textTertiary)
+                    .foregroundColor(picked ? AppSection.admin.ink : DS.Color.textTertiary)
                     .accessibilityHidden(true)
             }
             messageRow(msg, isUnread: isUnread, picked: picked)
@@ -487,7 +487,7 @@ struct AdminInboxView: View {
                     if let date {
                         // الوقت — أزرق للرسالة الجديدة، رمادي لما قُرئ
                         SysStatusChip(text: relativeShort(date),
-                                      tint: isUnread ? DS.Color.primary : DS.Color.textTertiary)
+                                      tint: isUnread ? AppSection.admin.ink : DS.Color.textTertiary)
                             .fixedSize()
                     }
                 }
@@ -518,10 +518,10 @@ struct AdminInboxView: View {
             // المحدّدة بإطار أوضح، والجديدة بإطار أزرق خفيف
             if isSelectMode && picked {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(0.55), lineWidth: 1.5)
+                    .strokeBorder(AppSection.admin.ink.opacity(0.55), lineWidth: 1.5)
             } else if isUnread {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(0.30), lineWidth: 1.2)
+                    .strokeBorder(AppSection.admin.ink.opacity(0.30), lineWidth: 1.2)
             }
         }
         .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
@@ -533,7 +533,7 @@ struct AdminInboxView: View {
     private var markAllReadBar: some View {
         let unread = adminRequestVM.unreadContactMessagesCount
         return HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: "envelope.badge.fill", tint: DS.Color.primary)
+            DSFieldIcon(name: "envelope.badge.fill", tint: AppSection.admin.ink)
                 .accessibilityHidden(true)
             Text(L10n.t("\(unread) رسالة جديدة", "\(unread) new messages"))
                 .dsFieldFont(13, weight: .bold)
@@ -548,7 +548,7 @@ struct AdminInboxView: View {
             } label: {
                 actionCapsule(icon: "envelope.open.fill",
                               title: L10n.t("تحديد الكل كمقروء", "Mark all read"),
-                              tint: DS.Color.primary)
+                              tint: AppSection.admin.ink)
             }
             .buttonStyle(DSScaleButtonStyle())
         }
@@ -586,7 +586,7 @@ struct AdminInboxView: View {
         .overlay(alignment: .topTrailing) {
             if isUnread {
                 Circle()
-                    .fill(DS.Color.primary)
+                    .fill(AppSection.admin.ink)
                     .frame(width: 10, height: 10)
                     .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
             }
@@ -663,7 +663,7 @@ private struct MessageDetailSheet: View {
         let phone = message.member?.phoneNumber ?? ""
         return DSComposerSection(title: L10n.t("المرسل", "Sender"),
                                  icon: "person.fill",
-                                 tint: DS.Color.primary,
+                                 tint: AppSection.admin.ink,
                                  index: 0) {
             HStack(spacing: DS.Spacing.sm) {
                 DSMemberAvatar(
@@ -689,11 +689,14 @@ private struct MessageDetailSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(spacing: 2) {
+                    TrialArt(make: { ArtDispatch.stateIcon($0, icon: info.icon, tint: info.color, size: 32) }) {   // TMP-ART-TRIAL
                     Image(systemName: info.icon)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(info.color)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(info.color.opacity(0.14)))
+                    }
+                        .frame(width: 32, height: 32)
                         .accessibilityHidden(true)   // التصنيف يُقرأ من النص تحته
                     Text(info.title)
                         .font(DS.Font.plex(10.5, weight: .semibold))
@@ -968,7 +971,7 @@ struct ContactCategoryInfo {
         case "اقتراح", "suggestion", "Suggestion":
             return .init(title: L10n.t("اقتراح", "Suggestion"), icon: "lightbulb.fill", color: DS.Color.success)
         case "استفسار", "inquiry", "Inquiry":
-            return .init(title: L10n.t("استفسار", "Inquiry"), icon: "questionmark.bubble.fill", color: DS.Color.primary)
+            return .init(title: L10n.t("استفسار", "Inquiry"), icon: "questionmark.bubble.fill", color: AppSection.admin.ink)
         case "أخرى", "other", "Other":
             return .init(title: L10n.t("أخرى", "Other"), icon: "ellipsis.message.fill", color: DS.Color.accent)
         default:
@@ -1053,7 +1056,7 @@ private struct OfficialReplySheet: View {
     private var replySection: some View {
         DSComposerSection(title: L10n.t("الرد على العضو", "Reply to member"),
                           icon: "arrowshape.turn.up.left.fill",
-                          tint: DS.Color.primary,
+                          tint: AppSection.admin.ink,
                           index: 1) {
             ReplyComposerField(label: L10n.t("نص الرد", "Reply"),
                                placeholder: L10n.t("اكتب ردّك هنا…", "Write your reply…"),
@@ -1105,7 +1108,7 @@ private struct ReplyComposerField: View {
     let label: String
     let placeholder: String
     @Binding var text: String
-    var tint: Color = DS.Color.primary
+    var tint: Color = AppSection.admin.ink
     @FocusState private var focused: Bool
 
     var body: some View {

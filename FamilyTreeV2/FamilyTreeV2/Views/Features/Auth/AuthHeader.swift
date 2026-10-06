@@ -10,6 +10,8 @@ extension View {
         title: String,
         subtitle: String,
         actionIcon: String? = nil,
+        /// نص القارئ الصوتي لزر الإجراء — الرجوع افتراضياً (خطوة الرمز)
+        actionLabel: String = L10n.t("رجوع", "Back"),
         action: (() -> Void)? = nil
     ) -> some View {
         VStack(spacing: 0) {
@@ -38,15 +40,12 @@ extension View {
                 Spacer(minLength: DS.Spacing.xs)
 
                 if let actionIcon, let action {
+                    // نفس زر الرأس الملوّن الموحّد (DSNavButtons) — مثل أزرار MainHeaderView
                     Button(action: action) {
-                        Image(systemName: actionIcon)
-                            .font(DS.Font.scaled(17, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(DS.Color.overlayIcon))
-                            .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
+                        DSNavButtonLabel(symbol: actionIcon, context: .onColor)
                     }
                     .buttonStyle(BounceButtonStyle())
+                    .accessibilityLabel(actionLabel)
                 }
             }
             .padding(.horizontal, DS.Spacing.lg)

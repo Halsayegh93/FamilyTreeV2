@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SplashScreenView: View {
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var logoScale: CGFloat = 0.5
     @State private var logoOpacity: Double = 0
@@ -134,29 +135,35 @@ struct SplashScreenView: View {
 
                 Spacer()
 
-                // مؤشر التحميل
-                VStack(spacing: DS.Spacing.md) {
-                    // Custom dot loader instead of ProgressView
-                    HStack(spacing: 6) {
-                        ForEach(0..<3) { i in
-                            Circle()
-                                .fill(DS.Color.primary)
-                                .frame(width: 8, height: 8)
-                                // Reduce Motion: بلا نبض حجمي — يبقى التبديل على الشفافية فقط
-                                .scaleEffect(reduceMotion ? 1.0 : (dotCount == i + 1 ? 1.3 : 0.7))
-                                .opacity(dotCount == i + 1 ? 1.0 : 0.3)
-                                .animation(reduceMotion ? .easeInOut(duration: 0.25) : DS.Anim.bouncy, value: dotCount)
+                // التحقق علق (بلا اتصال أو الخادم لا يرد) → رسالة و«إعادة المحاولة» بدل الدوران بلا نهاية (ج-٦)
+                if authVM.launchCheckStalled {
+                    connectionProblem
+                        .opacity(textOpacity)
+                } else {
+                    // مؤشر التحميل
+                    VStack(spacing: DS.Spacing.md) {
+                        // Custom dot loader instead of ProgressView
+                        HStack(spacing: 6) {
+                            ForEach(0..<3) { i in
+                                Circle()
+                                    .fill(DS.Color.primary)
+                                    .frame(width: 8, height: 8)
+                                    // Reduce Motion: بلا نبض حجمي — يبقى التبديل على الشفافية فقط
+                                    .scaleEffect(reduceMotion ? 1.0 : (dotCount == i + 1 ? 1.3 : 0.7))
+                                    .opacity(dotCount == i + 1 ? 1.0 : 0.3)
+                                    .animation(reduceMotion ? .easeInOut(duration: 0.25) : DS.Anim.bouncy, value: dotCount)
+                            }
                         }
-                    }
 
-                    Text(L10n.t("جاري التحقق", "Verifying") + String(repeating: ".", count: dotCount))
-                        .font(DS.Font.callout)
-                        .fontWeight(.medium)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .frame(width: 140)
-                        .animation(.none, value: dotCount)
+                        Text(L10n.t("جاري التحقق", "Verifying") + String(repeating: ".", count: dotCount))
+                            .font(DS.Font.callout)
+                            .fontWeight(.medium)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .frame(width: 140)
+                            .animation(.none, value: dotCount)
+                    }
+                    .opacity(textOpacity)
                 }
-                .opacity(textOpacity)
 
                 Spacer()
                     .frame(height: 60)
@@ -215,5 +222,29 @@ struct SplashScreenView: View {
                 dotCount = (dotCount % 3) + 1
             }
         }
+    }
+
+    /// التحقق علق (ج-٦): بلا اتصال والجلسة تحتاج تجديداً، أو الخادم لا يرد — التطبيق يعيد المحاولة
+    /// تلقائياً كل لحظات ويكمل وحده عند عودة الاتصال، وهذا الزر يعيدها فوراً.
+    private var connectionProblem: some View {
+        VStack(spacing: DS.Spacing.md) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(DS.Font.scaled(28, weight: .semibold))
+                .foregroundColor(DS.Color.warning)
+                .accessibilityHidden(true)
+            Text(L10n.t("تعذّر الاتصال", "Can't Connect"))
+                .font(DS.Font.headline)
+                .foregroundColor(DS.Color.textPrimary)
+            Text(L10n.t("تأكّد من اتصالك بالإنترنت — يكمل التطبيق تلقائياً عند عودة الاتصال.",
+                        "Check your internet connection — the app continues automatically once you're back online."))
+                .font(DS.Font.callout)
+                .foregroundColor(DS.Color.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            DSSecondaryButton(L10n.t("إعادة المحاولة", "Try Again"), icon: "arrow.clockwise") {
+                Task { await authVM.retryLaunchCheck() }
+            }
+        }
+        .padding(.horizontal, DS.Spacing.xxl)
     }
 }

@@ -484,7 +484,7 @@ struct CategoryEditSheet: View {
 
     private var namesSection: some View {
         DSComposerSection(title: L10n.t("الاسم", "Name"), icon: "tag.fill",
-                          tint: DS.Color.primary, index: 1) {
+                          tint: AppSection.admin.ink, index: 1) {
             DSComposerField(icon: "textformat",
                             label: L10n.t("الاسم بالعربي", "Arabic name"),
                             placeholder: L10n.t("اسم التصنيف", "Category name"),
@@ -568,7 +568,7 @@ struct CategoryEditSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .tint(DS.Color.primary)
+                .tint(AppSection.admin.ink)
             }
             .dsRowBox()
         }

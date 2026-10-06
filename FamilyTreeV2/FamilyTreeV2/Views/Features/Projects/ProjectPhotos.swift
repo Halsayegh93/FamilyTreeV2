@@ -54,16 +54,16 @@ struct ProjectPhotosEditor: View {
                             Text(L10n.t("إضافة", "Add"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(AppSection.projects.ink)
                         .frame(maxWidth: .infinity)
                         .frame(height: 84)
                         .background(
                             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .fill(DS.Color.primary.opacity(0.08))
+                                .fill(AppSection.projects.ink.opacity(0.08))
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .strokeBorder(DS.Color.primary.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
+                                .strokeBorder(AppSection.projects.ink.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
                         )
                     }
                 }

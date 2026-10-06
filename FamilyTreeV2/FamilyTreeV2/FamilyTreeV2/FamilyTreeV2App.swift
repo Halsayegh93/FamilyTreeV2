@@ -122,23 +122,11 @@ struct FamilyTreeV2App: App {
                         }
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .didTapRejectRequestAction)) { note in
-                    guard let userInfo    = note.userInfo,
-                          let idString    = userInfo["request_id"]   as? String,
-                          let requestId   = UUID(uuidString: idString),
-                          let requestType = userInfo["request_type"] as? String else { return }
-                    Task {
-                        let ok = await self.appState.notificationVM.rejectRequest(requestId: requestId, requestType: requestType)
-                        if ok {
-                            async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
-                            async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
-                            _ = await (n, m)
-                        }
-                    }
-                }
+                // لا «رفض» من شاشة القفل (فحص الثغرات ب-١): كان يفصل الأبناء ثم يحذف بلا تحقق
+                // أن الطلب معلّق، وللمراقب والمشرف، بلا تأكيد، والأخطاء مخفية. الإشعار يفتح المراجعة.
                 .onReceive(NotificationCenter.default.publisher(for: .didTapOpenRequestAction)) { note in
                     // طلبات الانضمام/الربط: نفتح مركز الإشعارات + شيت التفاصيل (لرؤية التطابقات)
-                    // باقي الطلبات: نفتح تاب الإدارة كالسابق
+                    // باقي الطلبات: تاب الإدارة ثم «طلبات المراجعة» نفسها (القبول/الرفض بتأكيد من هناك)
                     let userInfo = note.userInfo ?? [:]
                     let requestType = userInfo["request_type"] as? String
                     let requestIdString = userInfo["request_id"] as? String
@@ -150,6 +138,13 @@ struct FamilyTreeV2App: App {
                         NotificationCenter.default.post(name: .openHomeNotificationsCenter, object: nil)
                     } else {
                         NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+                        // بعد ظهور تاب الإدارة: ادفع شاشة «طلبات المراجعة» (نفس مهلة صلة القرابة)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            NotificationCenter.default.post(
+                                name: .openAdminReviewForKind, object: nil,
+                                userInfo: ["kind": NotificationKind.adminRequest.rawValue]
+                            )
+                        }
                     }
 
                     Task {

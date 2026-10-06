@@ -61,10 +61,10 @@ struct BioStationsEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(t("إلغاء", "Cancel")) {
+                    // زر «إلغاء» الموحّد أعلى الأوراق (أحمر عريض)
+                    DSToolbarCancelButton(title: t("إلغاء", "Cancel")) {
                         dismiss()
                     }
-                    .foregroundColor(DS.Color.error)
                 }
                 ToolbarItem(placement: DSToolbar.confirmPlacement) {
                     if canEdit {

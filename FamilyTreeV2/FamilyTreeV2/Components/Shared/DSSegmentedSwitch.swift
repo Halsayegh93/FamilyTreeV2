@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - مبدّل أقسام كبير مرتّب (طلب المالك ٢٠٢٦-٠٩-٢٧)
 //
-// إطار واضح يضم الأزرار بعرض وارتفاع متساويين: المختار ممتلئ بكحلي الإجراء ونصّه أبيض،
+// إطار واضح يضم الأزرار بعرض وارتفاع متساويين: المختار ممتلئ بتدرّج الإجراء (لون القسم) ونصّه أبيض،
 // والباقي هادئ؛ والعدد شارة صغيرة (حمراء على غير المختار = فيه جديد هناك).
 // يُستخدم في «الإشعارات | المستجدات» وفي علامة المعلومات «عن التطبيق | التعليمات».
 
@@ -19,6 +19,8 @@ struct DSSegmentedSwitch<ID: Hashable>: View {
     @Namespace private var ns
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    /// المختار بتدرّج القسم (DSActionFill) وظلّه بلونه
+    @Environment(\.dsSection) private var section
 
     var body: some View {
         HStack(spacing: 4) {
@@ -69,7 +71,8 @@ struct DSSegmentedSwitch<ID: Hashable>: View {
                 if selected {
                     Capsule()
                         .fill(DSActionFill.style())
-                        .shadow(color: DS.Color.actionNavy.opacity(colorScheme == .dark ? 0 : 0.28), radius: 6, x: 0, y: 3)
+                        .shadow(color: DS.Color.actionNavy.dsChromeFill(in: section).opacity(colorScheme == .dark ? 0 : 0.28),
+                                radius: 6, x: 0, y: 3)
                         .matchedGeometryEffect(id: "thumb", in: ns)
                 }
             }

@@ -8,6 +8,9 @@ struct HomeNewsCardView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.colorScheme) private var colorScheme
+    /// قسم الصفحة (الأخبار) — إطار البطاقة (التحميل، اختيار التصويت) يتبعه
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     let postId: UUID
     let authorName: String
@@ -131,6 +134,7 @@ struct HomeNewsCardView: View {
                 .stroke(isAdminIdentityPost ? Color.clear : DS.Color.textTertiary.opacity(0.15),
                         lineWidth: 0.75)
         )
+        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
     }
 
     // MARK: - هيدر الكرت
@@ -241,13 +245,13 @@ struct HomeNewsCardView: View {
     private var authorAvatar: some View {
         if isAdminIdentityPost {
             ZStack {
-                Circle()
-                    .fill(DS.Color.accent)
-                Image(systemName: "megaphone.fill")
-                    .font(DS.Font.scaled(15, weight: .bold))
-                    .foregroundColor(.white)
+                // كحلي مثل بطاقة الرئيسية — قوس الإعلان الذهبي لا يضيع فوق ذهبي
+                Circle().fill(DS.Color.gradientPrimary)
+                // مكبّر صوت مصمت ونبضة ذهبية واحدة كل ٨ ث (طلب المالك ٢٠٢٦-١٠-٠٥ «باعتدال»)
+                FTNewsBadge(type: "إعلان", tint: .white, seed: abs(authorName.hashValue % 89), style: .onColor)
             }
             .frame(width: 32, height: 32)
+            .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
         } else {
             DSMemberAvatar(name: authorName,
                            avatarUrl: authorMember?.avatarUrl,
@@ -273,7 +277,7 @@ struct HomeNewsCardView: View {
                             } placeholder: {
                                 ZStack {
                                     DS.Color.surface
-                                    ProgressView().tint(DS.Color.primary)
+                                    ProgressView().tint(chromeInk)
                                 }
                             }
                         }
@@ -293,7 +297,7 @@ struct HomeNewsCardView: View {
                 } placeholder: {
                     ZStack {
                         DS.Color.surface
-                        ProgressView().tint(DS.Color.primary)
+                        ProgressView().tint(chromeInk)
                     }
                 }
                 .aspectRatio(2, contentMode: .fit)
@@ -374,7 +378,7 @@ struct HomeNewsCardView: View {
                 if hasVoted {
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(isSelected ? DS.Color.primary.opacity(0.18)
+                            .fill(isSelected ? chromeInk.opacity(0.18)
                                              : DS.Color.textTertiary.opacity(0.10))
                             .frame(width: max(geo.size.width * ratio, ratio > 0 ? 8 : 0))
                             .animation(DS.Anim.smooth, value: ratio)
@@ -384,7 +388,7 @@ struct HomeNewsCardView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(DS.Font.scaled(16, weight: .semibold))
-                        .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
+                        .foregroundColor(isSelected ? chromeInk : DS.Color.textTertiary)
 
                     Text(option)
                         .font(DS.Font.scaled(13, weight: isSelected ? .bold : .regular))
@@ -396,7 +400,7 @@ struct HomeNewsCardView: View {
                     if hasVoted {
                         Text("\(percent)٪")
                             .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
+                            .foregroundColor(isSelected ? chromeInk : DS.Color.textSecondary)
                             .monospacedDigit()
                     }
                 }
@@ -406,7 +410,7 @@ struct HomeNewsCardView: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(isSelected ? DS.Color.primary.opacity(0.40)
+                    .stroke(isSelected ? chromeInk.opacity(0.40)
                                        : DS.Color.textTertiary.opacity(0.15),
                             lineWidth: isSelected ? 1.3 : 1)
             )

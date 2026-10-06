@@ -4,6 +4,9 @@ import Supabase
 
 // MARK: - Main Settings View (iOS-style with semantic groups)
 struct SettingsView: View {
+    /// لون القسم («حسابي») — كحلي «الإطار» يتبعه، وبلا قسم يبقى كحلي العلامة
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
@@ -78,7 +81,7 @@ struct SettingsView: View {
                         }
                         .dsStaggerIn(6)
                         Button { showTerms = true } label: {
-                            valueTile(icon: "doc.text.fill", color: DS.Color.primary,
+                            valueTile(icon: "doc.text.fill", color: chromeInk,
                                       title: t("الخصوصية والشروط", "Privacy & Terms"),
                                       value: t("كيف نحمي بياناتك", "How we protect you"))
                         }
@@ -153,8 +156,8 @@ struct SettingsView: View {
         } message: {
             // مطابق لما يحذفه السيرفر فعلاً (delete-account)
             Text(t(
-                "سيتم حذف نهائياً:\n• حسابك وبيانات تسجيل الدخول\n• صورتك وسيرتك وبياناتك الشخصية\n• أخبارك وتعليقاتك وما أضفته من محتوى\n\nيبقى موضعك في شجرة العائلة باسم «عضو محذوف» حفاظاً على تسلسل النسب. لا يمكن التراجع عن هذا الإجراء.",
-                "This will permanently delete:\n• Your account & login credentials\n• Your photo, life stations and personal details\n• Your posts, comments and other content you added\n\nYour place in the family tree stays as “Deleted member” to keep the lineage intact. This cannot be undone."
+                "سيتم حذف نهائياً:\n• حسابك وبيانات تسجيل الدخول\n• صورتك وسيرتك وبياناتك الشخصية\n• أخبارك وتعليقاتك وما أضفته من محتوى\n\nيبقى اسمك وموضعك في شجرة العائلة حفاظاً على تسلسل النسب. لا يمكن التراجع عن هذا الإجراء.",
+                "This will permanently delete:\n• Your account & login credentials\n• Your photo, life stations and personal details\n• Your posts, comments and other content you added\n\nYour name and place in the family tree stay to keep the lineage intact. This cannot be undone."
             ))
         }
         .overlay {
@@ -292,7 +295,7 @@ struct SettingsView: View {
                 Button { showEditProfile = true } label: {
                     Image(systemName: "pencil")
                         .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(chromeInk)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(Color.white))
                         // مساحة ضغط ٤٤ نقطة (حد أبل) داخل هامش البطاقة — الدائرة ومكانها كما هما
@@ -317,7 +320,7 @@ struct SettingsView: View {
         }
         .background(
             ZStack(alignment: .bottomLeading) {
-                DS.Color.gradientPrimary
+                (section?.gradient ?? DS.Color.gradientPrimary)
                 Circle()
                     .fill(Color.white.opacity(0.10))
                     .frame(width: 170, height: 170)
@@ -333,7 +336,7 @@ struct SettingsView: View {
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
-        .shadow(color: DS.Color.primary.opacity(0.25), radius: 12, y: 6)
+        .shadow(color: chromeInk.opacity(0.25), radius: 12, y: 6)
         .scaleEffect(heroAppeared || reduceMotion ? 1 : 0.94)
         .opacity(heroAppeared ? 1 : 0)
         .onAppear {
@@ -348,11 +351,14 @@ struct SettingsView: View {
     /// عنوان مجموعة صغير بأيقونة — نفس عناوين أقسام المربّعات
     private func sectionTitle(_ title: String, icon: String) -> some View {
         HStack(spacing: 7) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: chromeInk, size: 22) }) {   // TMP-ART-TRIAL
             Image(systemName: icon)
                 .font(.system(size: 10.5, weight: .bold))
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(chromeInk)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(DS.Color.primary.opacity(0.13)))
+                .background(Circle().fill(chromeInk.opacity(0.13)))
+            }
+                .frame(width: 22, height: 22)
                 .accessibilityHidden(true)   // زخرفة
             Text(title)
                 .dsFieldFont(12.5, weight: .bold)
@@ -384,6 +390,7 @@ struct SettingsView: View {
     private func valueTile(icon: String, color: Color, title: String, value: String,
                            liveNumber: Bool = false) -> some View {
         VStack(spacing: 6) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: color, size: 40) }) {   // TMP-ART-TRIAL
             Image(systemName: icon)
                 .font(DS.Font.scaled(16, weight: .semibold))
                 .foregroundColor(.white)
@@ -391,6 +398,8 @@ struct SettingsView: View {
                 .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .fill(LinearGradient(colors: [color, color.opacity(0.75)], startPoint: .top, endPoint: .bottom)))
                 .shadow(color: color.opacity(0.35), radius: 6, y: 3)
+            }
+                .frame(width: 40, height: 40)
                 .accessibilityHidden(true)   // زخرفة — العنوان والقيمة يكفيان
             Text(title)
                 .font(DS.Font.plex(11.5, weight: .bold))
@@ -412,6 +421,7 @@ struct SettingsView: View {
         .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
             .strokeBorder(color.opacity(0.15), lineWidth: 1))
+        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
         .dsSubtleShadow()
     }
 
@@ -523,6 +533,9 @@ private struct SettingsLiveNumber: ViewModifier {
 
 // MARK: 1) Notifications & Privacy (combined)
 struct NotificationsAndPrivacyView: View {
+    /// لون القسم («حسابي») — كحلي «الإطار» يتبعه، وبلا قسم يبقى كحلي العلامة
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
@@ -754,10 +767,10 @@ struct NotificationsAndPrivacyView: View {
                         Text(testLabel)
                     }
                     .font(DS.Font.plex(13, weight: .bold))
-                    .foregroundColor(testState == .failed ? DS.Color.error : DS.Color.primary)
+                    .foregroundColor(testState == .failed ? DS.Color.error : chromeInk)
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
-                    .background((testState == .failed ? DS.Color.error : DS.Color.primary).opacity(0.10),
+                    .background((testState == .failed ? DS.Color.error : chromeInk).opacity(0.10),
                                 in: RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
                 .buttonStyle(DSScaleButtonStyle())
@@ -821,7 +834,7 @@ struct NotificationsAndPrivacyView: View {
             Spacer(minLength: DS.Spacing.sm)
             Toggle("", isOn: isOn)
                 .labelsHidden()
-                .tint(DS.Color.primary)
+                .tint(chromeInk)
                 // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه ووصفه صراحةً
                 .accessibilityLabel(title)
                 .accessibilityHint(subtitle)
@@ -867,6 +880,9 @@ struct NotificationsAndPrivacyView: View {
 /// مربّع بمنتصف الشاشة (طلب المالك): اختيار المظهر واللغة بمربّعات بدل شرائح —
 /// يتطبّق فوراً كما كان، والشريط السفلي «إغلاق».
 struct AppearanceSettingsView: View {
+    /// لون القسم («حسابي») — كحلي «الإطار» يتبعه، وبلا قسم يبقى كحلي العلامة
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
     @ObservedObject var langManager = LanguageManager.shared
     /// للرجوع للغة التطبيق الرسمية
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
@@ -949,10 +965,10 @@ struct AppearanceSettingsView: View {
                             Label(t("الرجوع للغة التطبيق الرسمية", "Use the app's official language"),
                                   systemImage: "arrow.uturn.backward")
                                 .font(DS.Font.plex(13, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
+                                .foregroundColor(chromeInk)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 40)
-                                .background(DS.Color.primary.opacity(0.10),
+                                .background(chromeInk.opacity(0.10),
                                             in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                         }
                         .buttonStyle(DSScaleButtonStyle())
@@ -988,6 +1004,7 @@ struct AppearanceSettingsView: View {
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .strokeBorder(selected ? tint.opacity(0.7) : DS.Color.textTertiary.opacity(0.15),
                               lineWidth: selected ? 1.5 : 1))
+            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
             .overlay(alignment: .topTrailing) {
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
@@ -1085,6 +1102,8 @@ private enum AppVersion {
 /// «عن التطبيق» — مربّع عرض بمنتصف الشاشة بتصميم المربّعات الموحّد (طلب المالك)
 struct AboutView: View {
     @Environment(\.dismiss) var dismiss
+    /// لون القسم الحالي (داخل الملف الشخصي) — بدل الكحلي الثابت
+    @Environment(\.dsSection) private var section
     @Environment(\.openURL) private var openURL
     /// «راسل الإدارة» — نموذج التواصل داخل التطبيق (Guideline 1.5)
     @State private var showContactForm = false
@@ -1187,7 +1206,7 @@ struct AboutView: View {
         VStack(spacing: DS.Spacing.sm) {
             ZStack {
                 Circle()
-                    .fill(DS.Color.gradientPrimary)
+                    .fill(section?.gradient ?? DS.Color.gradientPrimary)
                     .frame(width: 76, height: 76)
                     .dsGlowShadow()
                 Image(systemName: "tree.fill")
@@ -1233,6 +1252,8 @@ struct AboutView: View {
 // MARK: - Privacy Policy & Terms View
 /// «الخصوصية والشروط» — مربّع عرض بمنتصف الشاشة بتصميم المربّعات الموحّد (طلب المالك)
 struct PrivacyPolicyView: View {
+    /// لون القسم («حسابي») — كحلي «الإطار» يتبعه، وبلا قسم يبقى كحلي العلامة
+    @Environment(\.dsSection) private var section
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) private var openURL
     private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
@@ -1257,7 +1278,7 @@ struct PrivacyPolicyView: View {
                     t("نحفظ معرّف جهازك ونوعه لإدارة الأجهزة المرتبطة وإرسال الإشعارات، وآخر نشاط لك داخل التطبيق لأغراض الإدارة وإحصاءات الاستخدام.",
                       "We store your device identifier and model to manage linked devices and deliver notifications, and your last in-app activity for administration and usage statistics."),
                     t("لا نجمع بيانات الموقع أو جهات الاتصال أو سجل التصفح.", "We don't collect location, contacts, or browsing history."),
-                    t("يتم التحقق من هويتك عبر رمز OTP يُرسل لهاتفك.", "Your identity is verified via an OTP code sent to your phone.")
+                    t("يُتحقَّق من هويتك برمز تحقّق يُرسل إلى هاتفك.", "Your identity is verified with a verification code sent to your phone.")
                    ]),
             Policy(icon: "hand.raised.fill", color: DS.Color.accent,
                    title: t("استخدام البيانات", "Data Usage"),
@@ -1278,30 +1299,30 @@ struct PrivacyPolicyView: View {
                    title: t("حذف البيانات", "Data Deletion"),
                    points: [
                     t("يمكنك حذف حسابك في أي وقت من الإعدادات ← «حذف الحساب».", "You can delete your account at any time from Settings → “Delete Account”."),
-                    t("عند الحذف تُحذف من خوادمنا بياناتك الشخصية وصورك وما نشرته من أخبار وتعليقات ومحتوى، ويبقى موضعك في شجرة العائلة باسم «عضو محذوف» حفاظاً على تسلسل النسب.",
-                      "Deletion removes your personal details, photos and the news, comments and content you posted from our servers; your place in the family tree stays as “Deleted member” to keep the lineage intact."),
+                    t("عند الحذف تُحذف من خوادمنا بياناتك الشخصية وصورك وما نشرته من أخبار وتعليقات ومحتوى، ويبقى اسمك وموضعك في شجرة العائلة حفاظاً على تسلسل النسب.",
+                      "Deletion removes your personal details, photos and the news, comments and content you posted from our servers; your name and place in the family tree stay to keep the lineage intact."),
                     t("لا يمكن استرجاع البيانات بعد الحذف النهائي.", "Data cannot be recovered after permanent deletion.")
                    ]),
             Policy(icon: "bell.badge.fill", color: DS.Color.warning,
                    title: t("الإشعارات", "Notifications"),
                    points: [
                     t("نرسل إشعارات عن التعليقات والإعجابات والتحديثات.", "We send alerts for comments, likes, and updates."),
-                    t("تتحكّم بأنواع الإشعارات من إعدادات الخصوصية.", "Control notification types from Privacy settings."),
+                    t("يمكنك التحكم في أنواع الإشعارات من إعدادات الخصوصية.", "You can control notification types from Privacy settings."),
                     t("يمكنك تعطيل الإشعارات بالكامل من الإعدادات.", "You can fully disable notifications from Settings.")
                    ]),
             Policy(icon: "doc.text.fill", color: DS.Color.neonPurple,
                    title: t("شروط الاستخدام", "Terms of Use"),
                    points: [
-                    t("التطبيق مخصص حصرياً لأفراد عائلة آل محمد علي، واستخدامه يعني الموافقة على هذه الشروط.",
-                      "The app is exclusively for Al-Mohammad Ali family members; using it means you agree to these terms."),
-                    t("لا تسامح مطلقاً مع المحتوى المسيء أو المستخدمين المسيئين: يُمنع نشر أي محتوى مسيء أو مهين أو بذيء أو عنصري أو مخالف للآداب، أو التحرّش بأي عضو أو انتحال شخصيته.",
-                      "Zero tolerance for objectionable content or abusive users: posting offensive, insulting, obscene, hateful or indecent content, harassing any member or impersonating anyone is prohibited."),
-                    t("يمكنك الإبلاغ عن أي خبر أو تعليق أو عضو أو محتوى بزر «إبلاغ»، وحظر أي عضو فيختفي عنك محتواه.",
-                      "You can report any post, comment, member or content with the “Report” button, and block any member to hide their content from you."),
-                    t("تراجع الإدارة كل بلاغ خلال ٢٤ ساعة، وتحذف المحتوى المخالف وتوقف حساب صاحبه.",
-                      "Admins review every report within 24 hours, remove the violating content and suspend the account that posted it."),
-                    t("يجب استخدام التطبيق بمسؤولية واحترام خصوصية الآخرين.", "Use the app responsibly and respect others' privacy."),
-                    t("يحق للإدارة تجميد أو حذف الحسابات المخالفة.", "Admins may freeze or delete accounts that violate policies.")
+                    t("التطبيق مخصص حصراً لأفراد عائلة المحمدعلي ومن توافق عليهم إدارة العائلة، ويُعدّ استخدامه موافقةً على هذه الشروط.",
+                      "The app is exclusively for Al-Mohammad Ali family members and those approved by the family administration; using it constitutes acceptance of these terms."),
+                    t("لا تهاون مطلقاً مع المحتوى المسيء أو المستخدمين المسيئين؛ إذ يُحظر نشر أي محتوى مسيء أو مهين أو خادش للحياء أو يحض على الكراهية، كما يُحظر التحرّش بأي عضو أو انتحال شخصيته.",
+                      "Zero tolerance for objectionable content or abusive users: posting offensive, insulting, indecent or hateful content is prohibited, as is harassing any member or impersonating anyone."),
+                    t("يحق لكل عضو الإبلاغ عن أي خبر أو تعليق أو محتوى أو عضو عبر زر «إبلاغ»، وحظر أي عضو فلا يظهر له محتواه.",
+                      "Every member may report any post, comment, content or member with the “Report” button, and block any member so their content no longer appears."),
+                    t("تراجع الإدارة كل بلاغ خلال ٢٤ ساعة، وتحذف المحتوى المخالف، وتوقف حساب ناشره.",
+                      "The administration reviews every report within 24 hours, removes the violating content and suspends the account that posted it."),
+                    t("يلتزم العضو باستخدام التطبيق بمسؤولية، واحترام خصوصية الآخرين، وعدم تداول بياناتهم خارج التطبيق.", "Members must use the app responsibly, respect others' privacy and not share their data outside the app."),
+                    t("يحق للإدارة تجميد الحسابات المخالفة أو حذفها.", "The administration may freeze or delete accounts that violate these terms.")
                    ])
         ]
     }
@@ -1320,8 +1341,8 @@ struct PrivacyPolicyView: View {
             onCancel: { dismiss() }
         ) {
             Text(t(
-                "نحرص على حماية خصوصيتك وبياناتك. تعرّف على سياستنا وشروط الاستخدام.",
-                "We protect your privacy and data. Learn about our policy and terms of use."
+                "نلتزم بحماية خصوصيتك وبياناتك. فيما يلي سياسة الخصوصية وشروط الاستخدام.",
+                "We are committed to protecting your privacy and data. Below are our Privacy Policy and Terms of Use."
             ))
             .font(DS.Font.plex(13))
             .foregroundColor(DS.Color.textSecondary)
@@ -1335,7 +1356,7 @@ struct PrivacyPolicyView: View {
                         ForEach(policy.points, id: \.self) { point in
                             HStack(alignment: .top, spacing: DS.Spacing.sm) {
                                 Circle()
-                                    .fill(policy.color.opacity(0.7))
+                                    .fill(policy.color.dsChrome(in: section).opacity(0.7))
                                     .frame(width: 6, height: 6)
                                     .padding(.top, 7)
                                 Text(point)

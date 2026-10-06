@@ -32,11 +32,11 @@ struct AdminTreeEditRequestsView: View {
         switch action {
         case .add: return DS.Color.success
         case .editName: return DS.Color.info
-        case .editPhone: return DS.Color.primary
+        case .editPhone: return AppSection.admin.ink
         case .editBirth: return DS.Color.warning
         case .deceased: return DS.Color.textTertiary
         case .addDeathDate: return DS.Color.textTertiary
-        case .addPhoto: return DS.Color.primary
+        case .addPhoto: return AppSection.admin.ink
         case .delete: return DS.Color.error
         case .other: return DS.Color.accent
         }
@@ -451,7 +451,7 @@ struct AdminTreeEditRequestsView: View {
             }
             if let newPhone = payload?.newPhone {
                 detailRow(icon: "phone.arrow.up.right", label: L10n.t("الرقم الجديد", "New phone"),
-                          value: Self.isolatedLTR(KuwaitPhone.display(newPhone)), valueColor: DS.Color.primary)
+                          value: Self.isolatedLTR(KuwaitPhone.display(newPhone)), valueColor: AppSection.admin.ink)
             }
 
         case .deceased:
@@ -466,11 +466,11 @@ struct AdminTreeEditRequestsView: View {
 
         case .addPhoto:
             if let photoStr = payload?.newPhotoUrl, let url = URL(string: photoStr) {
-                detailRow(icon: "photo.badge.plus", label: L10n.t("الصورة المقترحة", "Suggested photo"), value: "", valueColor: DS.Color.primary)
+                detailRow(icon: "photo.badge.plus", label: L10n.t("الصورة المقترحة", "Suggested photo"), value: "", valueColor: AppSection.admin.ink)
                 CachedAsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
-                    ProgressView().tint(DS.Color.primary)
+                    ProgressView().tint(AppSection.admin.ink)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 160)

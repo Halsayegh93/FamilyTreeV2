@@ -307,15 +307,20 @@ struct DSComposer<Content: View>: View {
     @State private var openedAt = Date()
     /// «تقليل الحركة» من إعدادات الجهاز (توصية أبل): بلا تصغير ولا نبض
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// قسم التبويب — كحلي المربّع (إطاره) يتبع لونه
+    @Environment(\.dsSection) private var section
+
+    /// لون المربّع الفعلي: الكحلي (إطار المربّع) ← تعبئة القسم، وألوان المعاني كما هي
+    private var boxTint: Color { tint.dsChromeFill(in: section) }
 
     var body: some View {
         VStack(spacing: 0) {
-            DSComposerHeader(title: title, subtitle: subtitle, icon: icon, tint: tint)
+            DSComposerHeader(title: title, subtitle: subtitle, icon: icon, tint: boxTint)
                 .readHeight($headerH)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) { content() }
-                    .environment(\.dsBoxTint, tint)      // تنسيق الألوان: ما بداخل المربّع بلونه
+                    .environment(\.dsBoxTint, boxTint)   // تنسيق الألوان: ما بداخل المربّع بلونه
                     .environment(\.dsInCenterBox, true) // حقول المربّعات أصغر قليلاً (طلب المالك)
                     .padding(.horizontal, contentPadding)
                     .padding(.top, DS.Spacing.md)
@@ -358,7 +363,7 @@ struct DSComposer<Content: View>: View {
             if let progress {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
-                    .tint(tint)
+                    .tint(boxTint.dsReadableGlyph)
                     .transition(.opacity)
             }
             if let note {
@@ -453,24 +458,26 @@ struct DSComposerHeader: View {
     let subtitle: String
     let icon: String
     let tint: Color
-    /// العلامة المائية تظهر بهدوء ثم تطفو، واللمعة تمرّ مرة
-    @State private var markIn = false
-    @State private var shine = false
-    @State private var drift = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [tint, tint.opacity(0.72)],
+        // الكحلي ← لون القسم. طرفا التدرّج لونان مصمتان (الأساسي ← الأفتح) بدل شفافية ٠٫٧٢:
+        // كانت تفتّح الرأس فوق الخلفية البيضاء فينزل الوصف الأبيض الصغير عن ٤٫٥:١
+        let tint = self.tint.dsChromeFill(in: section)
+        return ZStack {
+            LinearGradient(colors: [tint, tint.dsHeroLight],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
             // الداكن: ألوان الأنواع فاتحة فيه — طبقة تعتيم تحفظ وضوح النص الأبيض
             if colorScheme == .dark { Color.black.opacity(0.3) }
 
-            // هالة ناعمة + علامة مائية كبيرة في الطرف الآخر
+            // هالة ناعمة + شعار المربّع في الطرف الآخر (FTBoxMarks: ظهور هادئ مرة ثم تنفّس ٨ ث،
+            // ولمسة ذهبية واحدة — طلب المالك ٢٠٢٦-١٠-٠٥ «أبسط وأقوى وباعتدال»)
             halo
-            watermark
-            shineBand
+            TrialHeaderArt(icon: icon, tint: tint)   // TMP-ART-TRIAL (كان FTBoxMark)
+                .id("wm-\(icon)")
+                .transition(.opacity)
 
             // التسلسل: الأيقونة تقفز ← العنوان ← الوصف (DSMotion)
             HStack(spacing: DS.Spacing.md) {
@@ -488,14 +495,6 @@ struct DSComposerHeader: View {
         .accessibilityAddTraits(.isHeader)
         .animation(.easeInOut(duration: 0.35), value: tint)
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: icon)
-        .onAppear {
-            // تقليل الحركة: العلامة ظاهرة مباشرة بلا طفو ولا لمعة
-            guard !reduceMotion else { markIn = true; return }
-            withAnimation(.easeOut(duration: 0.7).delay(DSMotion.watermarkDelay)) { markIn = true }
-            withAnimation(.easeInOut(duration: 1.1).delay(DSMotion.shineDelay)) { shine = true }
-            // الحركة المتكرّرة الوحيدة في المربّعات: طفو بطيء للعلامة المائية
-            withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) { drift = true }
-        }
     }
 
     private var halo: some View {
@@ -507,41 +506,21 @@ struct DSComposerHeader: View {
             .offset(x: -30, y: -60)
     }
 
-    /// العلامة المائية تطفو ببطء — لمسة حياة خفيفة
-    private var watermark: some View {
-        Image(systemName: icon)
-            .font(.system(size: 96, weight: .bold))
-            .foregroundColor(.white.opacity(0.09))
-            .rotationEffect(.degrees(drift ? -10 : -16))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-            .offset(x: 18, y: drift ? 10 : 20)
-            .opacity(markIn ? 1 : 0)
-            .id("wm-\(icon)")
-            .transition(.opacity)
-    }
-
-    /// لمعة تمرّ مرة واحدة عند الفتح
-    private var shineBand: some View {
-        LinearGradient(colors: [.clear, .white.opacity(0.28), .clear],
-                       startPoint: .leading, endPoint: .trailing)
-            .frame(width: 80)
-            .rotationEffect(.degrees(18))
-            .offset(x: shine ? 320 : -320)
-            .allowsHitTesting(false)
-    }
-
     /// الدائرة الزجاجية: قفزة بنابض لطيف مع دوران صغير يستقر
     private var iconBadge: some View {
-        ZStack {
-            Circle().fill(Color.white.opacity(0.18))
-            Circle().strokeBorder(Color.white.opacity(0.38), lineWidth: 1)
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-                .id(icon)
-                .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
+        // TMP-ART-TRIAL: «مجسّمات» — المجسّم نفسه أيقونة الرأس (بلا تكرار مع رسم الطرف الآخر)
+        TrialHeaderIcon(icon: icon, tint: tint.dsChromeFill(in: section)) {
+            ZStack {
+                Circle().fill(Color.white.opacity(0.18))
+                Circle().strokeBorder(Color.white.opacity(0.38), lineWidth: 1)
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                    .id(icon)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
+            }
+            .frame(width: 48, height: 48)
         }
-        .frame(width: 48, height: 48)
         .modifier(DSIconPop())
     }
 
@@ -684,6 +663,7 @@ struct DSComposerSection<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dsStaggerBase) private var staggerBase
     @Environment(\.dsBoxTint) private var boxTint
+    @Environment(\.dsSection) private var section
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm + 2) {
@@ -714,6 +694,7 @@ struct DSComposerSection<Content: View>: View {
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
         .dsStaggerIn(index)
     }
 
@@ -731,11 +712,16 @@ struct DSComposerSection<Content: View>: View {
     /// عنوان القسم: أيقونة بدائرة + العنوان + نص جانبي (+ سهم للقسم القابل للطي)
     private func headerRow(chevronUp: Bool?) -> some View {
         HStack(spacing: 7) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon,
+                                                    tint: tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph,
+                                                    size: 22) }) {   // TMP-ART-TRIAL
             Image(systemName: icon)
                 .font(.system(size: 10.5, weight: .bold))
-                .foregroundColor(tint.dsHarmonized(with: boxTint).dsReadableGlyph)
+                .foregroundColor(tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(tint.dsHarmonized(with: boxTint).dsReadableGlyph.opacity(0.13)))
+                .background(Circle().fill(tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph.opacity(0.13)))
+            }
+                .frame(width: 22, height: 22)
                 // أيقونة القسم تتفتّح بعد صعود بطاقتها بقليل — نفس لغة أيقونة الرأس
                 .modifier(DSIconPop(delay: DSMotion.staggerDelay(index, base: staggerBase) + 0.08,
                                     fromScale: 0.6, fromAngle: 0))
@@ -780,17 +766,25 @@ struct DSComposerField: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dsBoxTint) private var boxTint
     @Environment(\.dsInCenterBox) private var inBox
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        // داخل مربّع: لون الحقل = لون المربّع (تنسيق)
-        let tint = self.tint.dsHarmonized(with: boxTint)
+        // داخل مربّع: لون الحقل = لون المربّع (تنسيق)، والكحلي ← لون القسم.
+        // `fill` للسطح تحت الأيقونة البيضاء، و`tint` للأيقونة والنص (أفتح في الداكن ليُقرأ)
+        let fill = self.tint.dsHarmonized(with: boxTint, in: section)
+        let tint = fill.dsReadableGlyph
+        let side: CGFloat = inBox ? DSFieldMetrics.boxIconSize : 32
         return HStack(alignment: multiline ? .top : .center, spacing: DS.Spacing.sm) {
+            // عند التركيز تبقى الأيقونة المملوءة الحالية — وإلا رسم الاتجاه
+            TrialArt(make: { focused ? nil : ArtDispatch.stateIcon($0, icon: icon, tint: tint, size: side) }) {   // TMP-ART-TRIAL
             Image(systemName: icon)
                 .font(.system(size: inBox ? 12 : 13, weight: .semibold))
                 .foregroundColor(focused ? .white : tint)
-                .frame(width: inBox ? DSFieldMetrics.boxIconSize : 32, height: inBox ? DSFieldMetrics.boxIconSize : 32)
+                .frame(width: side, height: side)
                 .background(RoundedRectangle(cornerRadius: inBox ? 8 : 9, style: .continuous)
-                    .fill(focused ? tint : tint.opacity(0.12)))
+                    .fill(focused ? fill : tint.opacity(0.12)))
+            }
+                .frame(width: side, height: side)
                 .scaleEffect(iconPop ? 1.08 : 1)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
@@ -827,6 +821,7 @@ struct DSComposerField: View {
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
             .strokeBorder(focused ? tint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
                           lineWidth: focused ? 1.5 : 1))
+        .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
         .animation(.easeInOut(duration: 0.2), value: focused)
@@ -866,17 +861,25 @@ extension EnvironmentValues {
 }
 
 extension Color {
-    /// داخل مربّع: لون المربّع نفسه، إلا الأحمر والكهرماني (دلالة) — وخارجه اللون كما هو
-    func dsHarmonized(with box: Color?) -> Color {
-        guard let box, self != DS.Color.error, self != DS.Color.warning else { return self }
-        return box
+    /// داخل مربّع: لون المربّع نفسه، إلا الأحمر والكهرماني (دلالة) — وخارجه اللون كما هو.
+    /// مع `section`: كحلي المربّع (إطاره) ← تعبئة القسم، وكحلي اللون نفسه خارج المربّعات ← لون القسم.
+    func dsHarmonized(with box: Color?, in section: AppSection? = nil) -> Color {
+        guard let box, self != DS.Color.error, self != DS.Color.warning else { return self.dsChrome(in: section) }
+        return box.dsChromeFill(in: section)
     }
 }
 
 extension Color {
-    /// لون أيقونة/شارة مقروء في الوضعين: الكحلي الغامق (`actionNavy`) يختفي كرمز على بطاقة داكنة،
-    /// فنستعمل `primary` — نفس الكحلي تماماً في الفاتح، وأزرق فاتح مقروء في الداكن. باقي الألوان كما هي.
-    var dsReadableGlyph: Color { self == DS.Color.actionNavy ? DS.Color.primary : self }
+    /// لون أيقونة/شارة مقروء في الوضعين: التعبئات الغامقة تختفي كرمز على بطاقة داكنة، فنستعمل
+    /// حبرها — نفس اللون تماماً في الفاتح، وأفتح مقروء في الداكن: الكحلي (`actionNavy` ← `primary`،
+    /// والثابتان `brandFill` ← `brand` و`maleFill` ← `male`) وتعبئة كل قسم (وأقسام الرئيسية الإضافية)
+    /// ← حبره. باقي الألوان كما هي.
+    var dsReadableGlyph: Color {
+        if self == DS.Color.actionNavy { return DS.Color.primary }
+        if self == DS.Color.brandFill { return DS.Color.brand }
+        if self == DS.Color.maleFill { return DS.Color.male }
+        return dsSectionOfFill?.ink ?? dsHomeTileInk ?? self
+    }
 }
 
 struct DSFieldIcon: View {
@@ -884,14 +887,18 @@ struct DSFieldIcon: View {
     var tint: Color = DS.Color.primary
     @Environment(\.dsBoxTint) private var boxTint
     @Environment(\.dsInCenterBox) private var inBox
+    @Environment(\.dsSection) private var section
     var body: some View {
-        let glyph = tint.dsHarmonized(with: boxTint).dsReadableGlyph
+        let glyph = tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph
         let side = inBox ? DSFieldMetrics.boxIconSize : 32
+        TrialArt(make: { ArtDispatch.stateIcon($0, icon: name, tint: glyph, size: side) }) {   // TMP-ART-TRIAL
         Image(systemName: name)
             .font(.system(size: inBox ? 12 : 13, weight: .semibold))
             .foregroundColor(glyph)
             .frame(width: side, height: side)
             .background(RoundedRectangle(cornerRadius: inBox ? 8 : 9, style: .continuous).fill(glyph.opacity(0.12)))
+        }
+        .frame(width: side, height: side)
     }
 }
 
@@ -915,9 +922,12 @@ struct DSExtraChip: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @Environment(\.dsBoxTint) private var boxTint
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        Button(action: action) {
+        // لون الشارة المملوءة: لون المربّع (والكحلي ← لون القسم) — مقروء في الداكن
+        let tint = self.tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph
+        return Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: summary == nil ? "plus" : icon)
                     .font(.system(size: 11.5, weight: .bold))
@@ -928,12 +938,12 @@ struct DSExtraChip: View {
                     .font(DS.Font.plex(12, weight: .bold))
                     .lineLimit(1)
             }
-            .foregroundColor(summary == nil ? DS.Color.textSecondary : tint.dsHarmonized(with: boxTint))
+            .foregroundColor(summary == nil ? DS.Color.textSecondary : tint)
             .padding(.horizontal, 12)
             .frame(height: 34)
-            .background(Capsule().fill(summary == nil ? Color.clear : tint.dsHarmonized(with: boxTint).opacity(0.12)))
+            .background(Capsule().fill(summary == nil ? Color.clear : tint.opacity(0.12)))
             .overlay(
-                Capsule().strokeBorder(summary == nil ? DS.Color.textTertiary.opacity(0.4) : tint.dsHarmonized(with: boxTint).opacity(0.45),
+                Capsule().strokeBorder(summary == nil ? DS.Color.textTertiary.opacity(0.4) : tint.opacity(0.45),
                                        style: StrokeStyle(lineWidth: 1.2, dash: summary == nil ? [4, 3] : []))
             )
             // مساحة ضغط ٤٤ نقطة (الحد الأدنى عند أبل) والشكل كما هو
@@ -971,6 +981,10 @@ struct DSExtraBox<Content: View>: View {
     @State private var openedAt = Date()
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsSection) private var section
+
+    /// لون المربّع الإضافي: الكحلي ← تعبئة القسم، وألوان المعاني كما هي
+    private var fillTint: Color { tint.dsChromeFill(in: section) }
 
     var body: some View {
         ZStack {
@@ -999,7 +1013,7 @@ struct DSExtraBox<Content: View>: View {
             )
             .overlay(alignment: .top) {
                 // خط لون القسم أعلى المربّع
-                Capsule().fill(tint).frame(width: 44, height: 4).padding(.top, 7)
+                Capsule().fill(fillTint).frame(width: 44, height: 4).padding(.top, 7)
             }
             .shadow(color: .black.opacity(0.3), radius: 26, x: 0, y: 12)
             .padding(.horizontal, DS.Spacing.xl)
@@ -1016,8 +1030,9 @@ struct DSExtraBox<Content: View>: View {
 
     private var headerRow: some View {
         HStack(spacing: DS.Spacing.sm + 2) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: fillTint.dsReadableGlyph, size: 40) }) {   // TMP-ART-TRIAL
             ZStack {
-                Circle().fill(LinearGradient(colors: [tint, tint.opacity(0.75)],
+                Circle().fill(LinearGradient(colors: [fillTint, fillTint.opacity(0.75)],
                                              startPoint: .topLeading, endPoint: .bottomTrailing))
                 Image(systemName: icon)
                     .font(.system(size: 16, weight: .bold))
@@ -1027,7 +1042,9 @@ struct DSExtraBox<Content: View>: View {
             }
             .frame(width: 40, height: 40)
             .animation(.spring(response: 0.35, dampingFraction: 0.7), value: icon)
-            .shadow(color: tint.opacity(0.35), radius: 8, y: 3)
+            .shadow(color: fillTint.opacity(0.35), radius: 8, y: 3)
+            }
+            .frame(width: 40, height: 40)
             .modifier(DSIconPop())
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(DS.Font.plex(16, weight: .bold)).foregroundColor(DS.Color.textPrimary)
@@ -1039,17 +1056,8 @@ struct DSExtraBox<Content: View>: View {
             }
             Spacer(minLength: 0)
             if let onBack {
-                Button(action: onBack) {
-                    Image(systemName: "arrow.uturn.backward")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(DS.Color.textSecondary)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(DS.Color.mutedBackground.opacity(0.8)))
-                        .frame(width: 44, height: 44)   // مساحة ضغط ٤٤ (توصية أبل)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(DSPressStyle())
-                .accessibilityLabel(L10n.t("رجوع", "Back"))
+                // زر الرجوع الموحّد فوق السطح (DSNavButtons)
+                DSBackButton(action: onBack)
             }
         }
     }
@@ -1100,10 +1108,24 @@ extension View {
         item: Binding<Item?>,
         @ViewBuilder content: @escaping (Item) -> C
     ) -> some View {
-        fullScreenCover(item: item) { it in
-            content(it).background(ClearPresentationBackground())
-        }
-        .transaction { t in if item.wrappedValue != nil { t.disablesAnimations = true } }
+        modifier(DSExtraBoxModifier(item: item, box: content))
+    }
+}
+
+/// يحمل لون القسم من الواجهة التي فتحت المربّع إلى المربّع نفسه
+private struct DSExtraBoxModifier<Item: Identifiable, Box: View>: ViewModifier {
+    @Binding var item: Item?
+    let box: (Item) -> Box
+    @Environment(\.dsSection) private var section
+
+    func body(content: Content) -> some View {
+        content
+            .fullScreenCover(item: $item) { it in
+                box(it)
+                    .dsSection(section ?? AppSection.current)
+                    .background(ClearPresentationBackground())
+            }
+            .transaction { t in if item != nil { t.disablesAnimations = true } }
     }
 }
 
@@ -1189,8 +1211,11 @@ struct DSComposerPhotoStrip: View {
             Task {
                 var loaded: [UIImage] = []
                 for item in items {
+                    // فكّ مصغّر خارج الخيط الرئيسي
                     if let data = try? await item.loadTransferable(type: Data.self),
-                       let img = UIImage(data: data) { loaded.append(img) }
+                       let img = await Task.detached(priority: .userInitiated, operation: {
+                           ImageProcessor.downsampled(data)
+                       }).value { loaded.append(img) }
                 }
                 await MainActor.run {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -1321,11 +1346,14 @@ private struct DSCenterBoxModifier<Box: View>: ViewModifier {
     var onDismiss: (() -> Void)?
     var onBackgroundTap: (() -> Void)?
     let box: () -> Box
+    /// لون قسم الواجهة التي فتحت المربّع — يُعاد وضعه داخل المربّع
+    @Environment(\.dsSection) private var section
 
     func body(content: Content) -> some View {
         content
             .fullScreenCover(isPresented: $isPresented, onDismiss: onDismiss) {
                 DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true) { box() }
+                    .dsSection(section ?? AppSection.current)
                     .background(ClearPresentationBackground())
             }
             .transaction { t in if isPresented { t.disablesAnimations = true } }
@@ -1337,11 +1365,14 @@ private struct DSCenterBoxItemModifier<Item: Identifiable, Box: View>: ViewModif
     var onDismiss: (() -> Void)?
     var onBackgroundTap: (() -> Void)?
     let box: (Item) -> Box
+    /// لون قسم الواجهة التي فتحت المربّع — يُعاد وضعه داخل المربّع
+    @Environment(\.dsSection) private var section
 
     func body(content: Content) -> some View {
         content
             .fullScreenCover(item: $item, onDismiss: onDismiss) { value in
                 DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true) { box(value) }
+                    .dsSection(section ?? AppSection.current)
                     .background(ClearPresentationBackground())
             }
             .transaction { t in if item != nil { t.disablesAnimations = true } }
@@ -1411,26 +1442,48 @@ extension View {
     func dsHalfBox<Item: Identifiable, Box: View>(item: Binding<Item?>,
                                                   onDismiss: (() -> Void)? = nil,
                                                   @ViewBuilder content: @escaping (Item) -> Box) -> some View {
-        sheet(item: item, onDismiss: onDismiss) { value in
-            content(value).modifier(DSHalfBoxStyle())
-        }
+        modifier(DSSheetItemBoxModifier(item: item, onDismiss: onDismiss, style: DSHalfBoxStyle(), box: content))
     }
 
     /// مربّع طويل من الأسفل (بدل `dsCenterBox`) للمحتوى الطويل — يُغلق بالسحب أو بزره
     func dsTallBox<Box: View>(isPresented: Binding<Bool>,
                               onDismiss: (() -> Void)? = nil,
                               @ViewBuilder content: @escaping () -> Box) -> some View {
-        sheet(isPresented: isPresented, onDismiss: onDismiss) {
-            content().modifier(DSTallBoxStyle())
-        }
+        modifier(DSTallBoxModifier(isPresented: isPresented, onDismiss: onDismiss, box: content))
     }
 
     /// نفس `dsTallBox(isPresented:)` لكن بعنصر
     func dsTallBox<Item: Identifiable, Box: View>(item: Binding<Item?>,
                                                   onDismiss: (() -> Void)? = nil,
                                                   @ViewBuilder content: @escaping (Item) -> Box) -> some View {
-        sheet(item: item, onDismiss: onDismiss) { value in
-            content(value).modifier(DSTallBoxStyle())
+        modifier(DSSheetItemBoxModifier(item: item, onDismiss: onDismiss, style: DSTallBoxStyle(), box: content))
+    }
+}
+
+/// المربّعات من الأسفل تحمل لون قسم الواجهة التي فتحتها (الورقة نافذة عرض مستقلّة)
+private struct DSTallBoxModifier<Box: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    var onDismiss: (() -> Void)?
+    let box: () -> Box
+    @Environment(\.dsSection) private var section
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented, onDismiss: onDismiss) {
+            box().modifier(DSTallBoxStyle()).dsSection(section ?? AppSection.current)
+        }
+    }
+}
+
+private struct DSSheetItemBoxModifier<Item: Identifiable, Box: View, Style: ViewModifier>: ViewModifier {
+    @Binding var item: Item?
+    var onDismiss: (() -> Void)?
+    let style: Style
+    let box: (Item) -> Box
+    @Environment(\.dsSection) private var section
+
+    func body(content: Content) -> some View {
+        content.sheet(item: $item, onDismiss: onDismiss) { value in
+            box(value).modifier(style).dsSection(section ?? AppSection.current)
         }
     }
 }
@@ -1445,5 +1498,6 @@ private struct DSRowBoxModifier: ViewModifier {
             .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
     }
 }

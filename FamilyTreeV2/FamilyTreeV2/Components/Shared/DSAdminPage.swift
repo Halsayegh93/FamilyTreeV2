@@ -32,18 +32,24 @@ struct DSPageHero: View {
     @State private var drift = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        // الكحلي (إطار الصفحة) ← لون القسم؛ ألوان المجالات (أخضر الأعضاء، ذهبي المحتوى…) كما هي
+        let tint = self.tint.dsChromeFill(in: section)
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.md) {
-                ZStack {
-                    Circle().fill(Color.white.opacity(0.18))
-                    Circle().strokeBorder(Color.white.opacity(0.38), lineWidth: 1)
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
+                // TMP-ART-TRIAL: «مجسّمات» — المجسّم أيقونة البطاقة (بلا تكرار)
+                TrialHeaderIcon(icon: icon, tint: tint) {
+                    ZStack {
+                        Circle().fill(Color.white.opacity(0.18))
+                        Circle().strokeBorder(Color.white.opacity(0.38), lineWidth: 1)
+                        Image(systemName: icon)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: 48, height: 48)
                 }
-                .frame(width: 48, height: 48)
                 .scaleEffect(appeared || reduceMotion ? 1 : 0.5)
                 .accessibilityHidden(true)
 
@@ -93,10 +99,13 @@ struct DSPageHero: View {
         .padding(DS.Spacing.lg)
         .background(
             ZStack {
-                LinearGradient(colors: [tint, tint.opacity(0.72)],
+                // طرفان مصمتان (الأساسي ← الأفتح) — الوصف الأبيض ١٢ نقطة يبقى ≥ ٤٫٥:١
+                LinearGradient(colors: [tint, tint.dsHeroLight],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
                 if colorScheme == .dark { Color.black.opacity(0.3) }
                 // أبسط (طلب المالك): بلا علامة مائية ولا لمعة ولا حركة
+                // TMP-ART-TRIAL: رسم الاتجاه المختار في الطرف الآخر
+                TrialArt(make: { ArtDispatch.pageHeroArt($0, icon: icon, tint: tint) }) { EmptyView() }
             }
             .accessibilityHidden(true)
         )
@@ -121,6 +130,7 @@ struct DSStatTile: View {
     /// شارة تنبيه صغيرة (مثل «جديد») — nil = بلا شارة
     var badge: String? = nil
     var action: (() -> Void)? = nil
+    @Environment(\.dsSection) private var section
 
     var body: some View {
         Group {
@@ -141,12 +151,13 @@ struct DSStatTile: View {
                 DSFieldIcon(name: icon, tint: tint)
                 Spacer(minLength: 0)
                 if let badge {
+                    let glyph = tint.dsChrome(in: section).dsReadableGlyph
                     Text(badge)
                         .font(DS.Font.plex(10.5, weight: .bold))
-                        .foregroundColor(tint)
+                        .foregroundColor(glyph)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, 2)
-                        .background(tint.opacity(0.14), in: Capsule())
+                        .background(glyph.opacity(0.14), in: Capsule())
                 }
             }
             Text(value)
@@ -166,6 +177,7 @@ struct DSStatTile: View {
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
         .contentShape(Rectangle())
     }
 }
@@ -178,9 +190,12 @@ struct DSSearchField: View {
     var placeholder: String = L10n.t("بحث…", "Search…")
     var tint: Color = DS.Color.primary
     @FocusState private var focused: Bool
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        HStack(spacing: DS.Spacing.sm) {
+        // الكحلي ← حبر القسم (الإطار والعدسة عند الكتابة)
+        let tint = self.tint.dsChrome(in: section).dsReadableGlyph
+        return HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(focused ? tint : DS.Color.textTertiary)
@@ -230,9 +245,12 @@ struct DSFilterChips<ID: Hashable>: View {
     var tint: Color = DS.Color.primary
     @Namespace private var ns
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        // المختار ممتلئ بتدرّج القسم (DSActionFill)، وعدد غير المختار بحبره
+        let tint = self.tint.dsChrome(in: section).dsReadableGlyph
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.sm) {
                 ForEach(options) { option in
                     let selected = option.id == selection

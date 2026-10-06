@@ -62,6 +62,7 @@ struct FrozenAccountView: View {
                 Spacer()
 
                 // أيقونة التجميد
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "lock.shield.fill", tint: DS.Color.warning, size: 110) }) {   // TMP-ART-TRIAL
                 ZStack {
                     Circle()
                         .fill(DS.Color.warning.opacity(0.15))
@@ -71,6 +72,8 @@ struct FrozenAccountView: View {
                         .font(DS.Font.scaled(48, weight: .bold))
                         .foregroundStyle(DS.Color.warning)
                 }
+                }
+                .frame(width: 110, height: 110)
                 .scaleEffect(reduceMotion ? 1 : iconScale)
                 .opacity(iconOpacity)
 

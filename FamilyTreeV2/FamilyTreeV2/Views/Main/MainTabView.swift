@@ -2,6 +2,8 @@ import SwiftUI
 import UserNotifications
 
 struct MainTabView: View {
+    /// TMP-ART-TRIAL: تغيير التصميم يعيد بناء التبويبات حتى تتبدّل ألوان الأقسام فوراً
+    @AppStorage(ArtTrial.storageKey) private var artTrialRaw = ArtTrial.emblem.rawValue
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var langManager = LanguageManager.shared
@@ -36,20 +38,27 @@ struct MainTabView: View {
         verticalSizeClass == .compact ? "" : L10n.t(ar, en)
     }
 
+    /// «كل قسم بلونه» (طلب المالك ٢٠٢٦-١٠-٠٤): قسم التبويب المختار — أرقام التبويبات
+    /// نفس ترتيب AppSection (٠ الرئيسية … ٤ الإدارة)
+    private var selectedSection: AppSection { AppSection(rawValue: selectedTab) ?? .home }
+
     /// iOS 18+: واجهة Tab الحديثة — تأخذ شكل شريط iOS 26/27 الكامل (زجاج سائل عائم
     /// بفقاعة اختيار). الأقدم: tabItem كما كان.
     @ViewBuilder
     private var tabs: some View {
         if #available(iOS 18.0, *) {
             TabView(selection: tabSelection) {
+                // كل تبويب يلوّن ما بداخله بلونه (البيئة + tint) — حتى الصفحات المدفوعة والمربّعات
                 Tab(value: 0) {
                     HomeNewsView(selectedTab: $selectedTab)
+                        .dsSection(.home)
                 } label: {
                     Label(tabTitle("الرئيسية", "Home"), systemImage: "house.fill")
                 }
 
                 Tab(value: 1) {
                     TreeTabContainer(selectedTab: $selectedTab)
+                        .dsSection(.tree)
                 } label: {
                     Label(tabTitle("الشجرة", "Tree"), systemImage: "tree.fill")
                 }
@@ -57,6 +66,7 @@ struct MainTabView: View {
                 if appSettingsVM.settings.diwaniyasEnabled ?? true {
                     Tab(value: 2) {
                         DiwaniyasView(selectedTab: $selectedTab)
+                            .dsSection(.diwaniyas)
                     } label: {
                         Label(tabTitle("الديوانيات", "Diwaniyas"), systemImage: "map.fill")
                     }
@@ -64,6 +74,7 @@ struct MainTabView: View {
 
                 Tab(value: 3) {
                     ProfileView(selectedTab: $selectedTab)
+                        .dsSection(.profile)
                 } label: {
                     Label(tabTitle("حسابي", "Profile"), systemImage: "person.crop.circle.fill")
                 }
@@ -71,6 +82,7 @@ struct MainTabView: View {
                 if authVM.canModerate {
                     Tab(value: 4) {
                         AdminDashboardView(selectedTab: $selectedTab)
+                            .dsSection(.admin)
                     } label: {
                         Label(tabTitle("الإدارة", "Admin"), systemImage: "gearshape.2.fill")
                     }
@@ -79,6 +91,7 @@ struct MainTabView: View {
         } else {
         TabView(selection: tabSelection) {
             HomeNewsView(selectedTab: $selectedTab)
+                .dsSection(.home)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? "house.fill" : "house")
                     Text(verticalSizeClass == .compact ? "" : L10n.t("الرئيسية", "Home"))
@@ -87,6 +100,7 @@ struct MainTabView: View {
 
             // مغلّف يسمح بالتبديل بين الواجهة الكلاسيكية والتجربة الجديدة
             TreeTabContainer(selectedTab: $selectedTab)
+                .dsSection(.tree)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? "tree.fill" : "tree")
                     Text(verticalSizeClass == .compact ? "" : L10n.t("الشجرة", "Tree"))
@@ -95,6 +109,7 @@ struct MainTabView: View {
 
             if appSettingsVM.settings.diwaniyasEnabled ?? true {
                 DiwaniyasView(selectedTab: $selectedTab)
+                    .dsSection(.diwaniyas)
                     .tabItem {
                         Image(systemName: selectedTab == 2 ? "map.fill" : "map")
                         Text(verticalSizeClass == .compact ? "" : L10n.t("الديوانيات", "Diwaniyas"))
@@ -103,6 +118,7 @@ struct MainTabView: View {
             }
 
             ProfileView(selectedTab: $selectedTab)
+                .dsSection(.profile)
                 .tabItem {
                     Image(systemName: selectedTab == 3 ? "person.crop.circle.fill" : "person.crop.circle")
                     Text(verticalSizeClass == .compact ? "" : L10n.t("حسابي", "Profile"))
@@ -111,6 +127,7 @@ struct MainTabView: View {
 
             if authVM.canModerate {
                 AdminDashboardView(selectedTab: $selectedTab)
+                    .dsSection(.admin)
                     .tabItem {
                         Image(systemName: selectedTab == 4 ? "gearshape.2.fill" : "gearshape.2")
                         Text(verticalSizeClass == .compact ? "" : L10n.t("الإدارة", "Admin"))
@@ -124,7 +141,9 @@ struct MainTabView: View {
     var body: some View {
         ZStack(alignment: .bottomLeading) {
         tabs
-        .tint(DS.Color.primary)
+        .id(artTrialRaw)   // TMP-ART-TRIAL
+        // أيقونة التبويب المختار بلون قسمه
+        .tint(selectedSection.ink)
         .dsTabBarBackground()
         .overlay(alignment: .top) {
             OfflineBanner()
@@ -153,6 +172,14 @@ struct MainTabView: View {
                 NotificationCenter.default.post(name: .showKinshipPath, object: nil, userInfo: info)
             }
         }
+        }
+        // القسم المختار لما يُعرض في نافذة مستقلّة (الرسائل، مربّع التاريخ، النعي) — ولا قسم خارج
+        // التبويبات: عند الخروج (الدخول، الانتظار، التجميد) يرجع كحلي العلامة. لا نصفّره إن اختفت
+        // التبويبات تحت مربّع يغطي الشاشة فقط (الحساب ما زال داخلاً)
+        .onAppear { AppSection.current = selectedSection }
+        .onChange(of: selectedTab) { _ in AppSection.current = selectedSection }
+        .onDisappear {
+            if authVM.status != .fullyAuthenticated { AppSection.current = nil }
         }
         // الحظر والموافقة على الشروط لكل مستخدم — تُربط بالحساب الحالي
         .onAppear { refreshUserSafetyState() }

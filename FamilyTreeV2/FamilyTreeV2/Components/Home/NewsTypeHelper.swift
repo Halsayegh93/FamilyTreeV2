@@ -22,7 +22,7 @@ enum NewsTypeHelper {
         case "تهنئة": return DS.Color.newsCongrats
         case "تذكير": return DS.Color.newsReminder
         case "دعوة": return DS.Color.newsInvitation
-        default: return DS.Color.primary
+        default: return DS.Color.brand   // «خبر» والافتراضي: كحلي ثابت لا يتبع القسم
         }
     }
 

@@ -185,7 +185,7 @@ struct AdminDashboardView: View {
                         title: L10n.t("الإدارة", "Admin Dashboard"),
                         subtitle: L10n.t("المراجعة والإعدادات والتقارير", "Review, settings and reports"),
                         icon: "shield.lefthalf.filled",
-                        backgroundGradient: DS.Color.gradientPrimary,
+                        backgroundGradient: AppSection.admin.gradient,
                         hasDropShadow: false
                     )
 
@@ -310,11 +310,12 @@ struct AdminDashboardView: View {
     }
 
     /// لون مجال المشاهد: المراقب = الشجرة والأعضاء، المشرف = المحتوى والبلاغات، والإدارة = النظام
+    /// (بلون تبويب الإدارة — «كل قسم بلونه»)
     private var domainTint: Color {
         switch authVM.currentUser?.role {
         case .monitor:    return DS.Color.composerProject
         case .supervisor: return DS.Color.composerLibrary
-        default:          return DS.Color.actionNavy
+        default:          return AppSection.admin.fill
         }
     }
 
@@ -358,7 +359,8 @@ struct AdminDashboardView: View {
         .padding(DS.Spacing.lg)
         .background(
             ZStack {
-                LinearGradient(colors: [domainTint, domainTint.opacity(0.72)],
+                // طرفان مصمتان (الأساسي ← الأفتح) — النص الأبيض الصغير يبقى ≥ ٤٫٥:١
+                LinearGradient(colors: [domainTint, domainTint.dsHeroLight],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
                 // دائرتان ناعمتان للعمق (ثابتتان — بلا حركة)
                 Circle().fill(Color.white.opacity(0.07))
@@ -387,27 +389,33 @@ struct AdminDashboardView: View {
         case team, liveActivity, devices, bannedPhones, messaging, pushHealth, appSettings, forceUpdate
     }
 
-    @ViewBuilder
+    /// وجهات اللوحة — كل صفحة في صندوق (AnyView) وتُبنى عند فتحها فقط (LazyAdminPage):
+    /// كانت كلها تُنسخ في مكدّس اللوحة فيطفح في نسخة التطوير وينغلق التطبيق عند فتح «الإدارة» (٢٠٢٦-١٠-٠٥)
     private func destinationView(_ target: DashTarget) -> some View {
+        LazyAdminPage { Self.page(for: target) }
+    }
+
+    private static func page(for target: DashTarget) -> AnyView {
         switch target {
-        case .requests:            AdminAllRequestsView()
-        case .inbox:               AdminInboxView()
-        case .members:             AdminMembersManagementView()
-        case .activity:            AdminActivityLogView()
-        case .analytics:           AdminAnalyticsView()
-        case .pdfReports:          AdminReportsView()
-        case .usage(let category): AppUsageMembersView(category: category)
-        case .deaths:              DeathAnnouncementsPage()
-        case .team:                AdminModeratorsView()
-        case .liveActivity:        AdminActiveMembersView()
-        case .devices:             AdminDevicesView()
-        case .bannedPhones:        AdminBannedPhonesView()
-        case .messaging:           AdminMessagingHubView()
-        case .pushHealth:          AdminPushHealthView()
-        case .appSettings:         AdminAppSettingsView()
-        case .forceUpdate:         AdminForceUpdateView()
+        case .requests: return AnyView(AdminAllRequestsView())
+        case .inbox: return AnyView(AdminInboxView())
+        case .members: return AnyView(AdminMembersManagementView())
+        case .activity: return AnyView(AdminActivityLogView())
+        case .analytics: return AnyView(AdminAnalyticsView())
+        case .pdfReports: return AnyView(AdminReportsView())
+        case .usage(let category): return AnyView(AppUsageMembersView(category: category))
+        case .deaths: return AnyView(DeathAnnouncementsPage())
+        case .team: return AnyView(AdminModeratorsView())
+        case .liveActivity: return AnyView(AdminActiveMembersView())
+        case .devices: return AnyView(AdminDevicesView())
+        case .bannedPhones: return AnyView(AdminBannedPhonesView())
+        case .messaging: return AnyView(AdminMessagingHubView())
+        case .pushHealth: return AnyView(AdminPushHealthView())
+        case .appSettings: return AnyView(AdminAppSettingsView())
+        case .forceUpdate: return AnyView(AdminForceUpdateView())
         }
     }
+
 
     /// الأقسام الظاهرة — قسم بلا محتوى لهذا الدور لا يظهر
     private var visibleSections: [DashSection] {
@@ -568,6 +576,7 @@ struct AdminDashboardView: View {
             .padding(DS.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(cardBackground(tint))
+            .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL — قبل الإطار ليبقى إطار التنبيه الأحمر ظاهراً
             .overlay(cardBorder(highlight: reviews > 0))
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
         }
@@ -624,6 +633,7 @@ struct AdminDashboardView: View {
             .padding(DS.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(cardBackground(tint))
+            .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL — قبل الإطار ليبقى إطار التنبيه الأحمر ظاهراً
             .overlay(cardBorder(highlight: unread > 0))
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
         }
@@ -637,12 +647,13 @@ struct AdminDashboardView: View {
         if loading {
             ProgressView().scaleEffect(0.8)
         } else if alert > 0 {
+            // أصغر (طلب المالك ٢٠٢٦-١٠-٠٥ «الرقم الأحمر اصغر»)
             Text(Self.countText(alert))
-                .font(DS.Font.plex(15, weight: .bold))
+                .font(DS.Font.plex(12, weight: .bold))
                 .monospacedDigit()
                 .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .frame(minWidth: 34, minHeight: 28)
+                .padding(.horizontal, 7)
+                .frame(minWidth: 24, minHeight: 20)
                 .background(Capsule().fill(DS.Color.error))
                 .contentTransition(.numericText())
                 .accessibilityHidden(true)
@@ -744,6 +755,7 @@ struct AdminDashboardView: View {
         .padding(DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cardBackground(DS.Color.success))
+        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL — قبل الإطار ليبقى إطار التنبيه الأحمر ظاهراً
         .overlay(cardBorder(highlight: false))
     }
 
@@ -776,7 +788,7 @@ struct AdminDashboardView: View {
             list.append(DashTile(id: "members.activity",
                                  title: L10n.t("سجل النشاط", "Activity"),
                                  caption: L10n.t("التعديلات", "Changes"),
-                                 icon: "clock.arrow.circlepath", tint: DS.Color.actionNavy,
+                                 icon: "clock.arrow.circlepath", tint: AppSection.admin.fill,
                                  alert: notificationVM.unreadActivityLogCount,
                                  target: .activity))
         }
@@ -808,7 +820,7 @@ struct AdminDashboardView: View {
         if authVM.canViewSystemSettings {
             groups.append(SystemGroup(
                 id: "group.team", title: L10n.t("الفريق والأمان", "Team & security"),
-                icon: "person.badge.shield.checkmark.fill", tint: DS.Color.actionNavy, trailing: readOnly,
+                icon: "person.badge.shield.checkmark.fill", tint: AppSection.admin.fill, trailing: readOnly,
                 tiles: [
                     // عدد الفريق هنا وحده — نص هادئ لا شارة حمراء (ليس شيئاً ينتظرك)
                     DashTile(id: "system.team",
@@ -816,7 +828,7 @@ struct AdminDashboardView: View {
                              caption: isInitialLoading
                                  ? L10n.t("الأدوار والصلاحيات", "Roles & permissions")
                                  : L10n.t("\(moderatorCount) في الفريق", "\(moderatorCount) on the team"),
-                             icon: "person.3.fill", tint: DS.Color.actionNavy, target: .team),
+                             icon: "person.3.fill", tint: AppSection.admin.fill, target: .team),
                     // «النشاط الآن» جنب «فريق الإدارة» (طلب المالك)
                     DashTile(id: "system.live",
                              title: L10n.t("النشاط الآن", "Live activity"),
@@ -825,7 +837,7 @@ struct AdminDashboardView: View {
                     DashTile(id: "system.devices",
                              title: L10n.t("الأجهزة", "Devices"),
                              caption: L10n.t("المرتبطة بالحسابات", "Linked to accounts"),
-                             icon: "iphone.gen3", tint: DS.Color.actionNavy, target: .devices),
+                             icon: "iphone.gen3", tint: AppSection.admin.fill, target: .devices),
                     DashTile(id: "system.banned",
                              title: L10n.t("الأرقام المحظورة", "Banned numbers"),
                              caption: L10n.t("منع التسجيل برقم", "Block sign-up by number"),
@@ -848,16 +860,16 @@ struct AdminDashboardView: View {
                 ]))
             groups.append(SystemGroup(
                 id: "group.app", title: L10n.t("التطبيق", "App"),
-                icon: "gearshape.fill", tint: DS.Color.actionNavy, trailing: readOnly,
+                icon: "gearshape.fill", tint: AppSection.admin.fill, trailing: readOnly,
                 tiles: [
                     DashTile(id: "system.settings",
                              title: L10n.t("إعدادات التطبيق", "App settings"),
                              caption: L10n.t("اللغة · التسجيل · الميزات", "Language · sign-up · features"),
-                             icon: "gearshape.fill", tint: DS.Color.actionNavy, target: .appSettings),
+                             icon: "gearshape.fill", tint: AppSection.admin.fill, target: .appSettings),
                     DashTile(id: "system.forceUpdate",
                              title: L10n.t("التحديث الإجباري", "Force update"),
                              caption: L10n.t("إيقاف النسخ القديمة", "Block old versions"),
-                             icon: "arrow.down.app.fill", tint: DS.Color.actionNavy, target: .forceUpdate)
+                             icon: "arrow.down.app.fill", tint: AppSection.admin.fill, target: .forceUpdate)
                 ]))
         }
         if authVM.isAdmin {
@@ -918,7 +930,10 @@ struct AdminDashboardView: View {
         } label: {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .top) {
-                    SysGradientIcon(name: tile.icon, tint: tile.tint, size: compact ? 38 : 42)
+                    TrialArt(make: { ArtDispatch.dashTileArt($0, icon: tile.icon, tint: tile.tint) }) {   // TMP-ART-TRIAL
+                        SysGradientIcon(name: tile.icon, tint: tile.tint, size: compact ? 38 : 42)
+                    }
+                    .frame(width: compact ? 38 : 42, height: compact ? 38 : 42)
                     Spacer(minLength: 2)
                     if tile.alert > 0 {
                         Text(Self.countText(tile.alert))
@@ -946,6 +961,7 @@ struct AdminDashboardView: View {
             .padding(compact ? DS.Spacing.sm + 2 : DS.Spacing.md)
             .frame(maxWidth: .infinity, minHeight: compact ? 108 : 116, alignment: .topLeading)
             .background(cardBackground(tile.tint))
+            .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL — قبل الإطار ليبقى إطار التنبيه الأحمر ظاهراً
             .overlay(cardBorder(highlight: tile.alert > 0))
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
         }
@@ -1299,4 +1315,10 @@ struct AdminTile<Destination: View>: View {
             .background(Capsule().fill(DS.Color.error))
             .accessibilityHidden(true)
     }
+}
+
+/// يبني الصفحة عند ظهورها فقط (لا عند بناء اللوحة)
+private struct LazyAdminPage: View {
+    let make: () -> AnyView
+    var body: some View { make() }
 }

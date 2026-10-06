@@ -82,6 +82,9 @@ struct EditProfileView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @ObservedObject private var network = NetworkMonitor.shared
     @Environment(\.dismiss) var dismiss
+    /// لون القسم («حسابي»، وتعديل السجل من الإدارة/الشجرة) — كحلي «الإطار» يتبعه
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     @State var member: FamilyMember
 
@@ -195,7 +198,7 @@ struct EditProfileView: View {
                     systemImage: pendingAvatarDelete ? "trash.fill" : "camera.fill"
                 )
                 .font(DS.Font.plex(12.5))
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(chromeInk)
             }
             .dsStaggerIn(0)
 
@@ -266,7 +269,8 @@ struct EditProfileView: View {
             .dsAlert(
                 savedItems.isEmpty ? L10n.t("تم إرسال الطلب", "Request Sent")
                                    : L10n.t("تم حفظ التغييرات", "Changes Saved"),
-                isPresented: $showRequestSentAlert
+                isPresented: $showRequestSentAlert,
+                moment: savedItems.isEmpty ? .sentForApproval : .success
             ) {
                 Button(L10n.t("حسناً", "OK")) { dismiss() }
             } message: {
@@ -289,7 +293,7 @@ struct EditProfileView: View {
                 systemImage: pendingAvatarDelete ? "trash.fill" : "camera.fill"
             )
             .font(DS.Font.plex(12.5))
-            .foregroundColor(DS.Color.primary)
+            .foregroundColor(chromeInk)
         }
     }
 
@@ -475,9 +479,9 @@ struct EditProfileView: View {
     private var requestChip: some View {
         Image(systemName: "pencil")
             .font(DS.Font.scaled(13, weight: .bold))
-            .foregroundColor(DS.Color.primary)
+            .foregroundColor(chromeInk)
             .frame(width: 32, height: 32)
-            .background(Circle().fill(DS.Color.primary.opacity(0.10)))
+            .background(Circle().fill(chromeInk.opacity(0.10)))
             // مساحة ضغط ٤٤ نقطة (حد أبل): الحشو يوسّع منطقة الضغط داخل هامش الصف،
             // والسالب يعيد الحجم كما كان — الدائرة وارتفاع الصف بلا تغيير
             .padding(6)
@@ -777,10 +781,10 @@ struct EditProfileView: View {
                         Button { openBioPopup() } label: {
                             Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
                                 .font(DS.Font.plex(14.5, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
+                                .foregroundColor(chromeInk)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, DS.Spacing.sm)
-                                .background(DS.Color.primary.opacity(0.08))
+                                .background(chromeInk.opacity(0.08))
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                         }
                         .buttonStyle(.plain)
@@ -824,12 +828,12 @@ struct EditProfileView: View {
                     .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, 3)
-                    .background(DS.Color.primary)
+                    .background(DS.Color.primary.dsChromeFill(in: section))
                     .clipShape(Capsule())
                     .fixedSize()
             } else {
                 Circle()
-                    .fill(DS.Color.primary.opacity(0.3))
+                    .fill(chromeInk.opacity(0.3))
                     .frame(width: 8, height: 8)
             }
 
@@ -1295,6 +1299,8 @@ struct EditProfileView: View {
 /// مربّع «طلب تغيير العائلة» بمنتصف الشاشة (طلب المالك): العوائل المعتمدة، اختيار
 /// واحدة، ثم «إرسال» — الطلب يعتمده المالك/المدير/المراقب.
 private struct FamilyRequestCard: View {
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
     let options: [String]
     /// عائلته المحفوظة — تُعلَّم «عائلتك»
     let current: String
@@ -1328,14 +1334,14 @@ private struct FamilyRequestCard: View {
                                 }
                                 Spacer()
                                 Image(systemName: selected == name ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(selected == name ? DS.Color.primary : DS.Color.textTertiary)
+                                    .foregroundColor(selected == name ? chromeInk : DS.Color.textTertiary)
                                     .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
                             }
                             .padding(.horizontal, DS.Spacing.md)
                             .frame(height: 44)
                             .background(
                                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .fill(selected == name ? DS.Color.primary.opacity(0.10) : DS.Color.mutedBackground.opacity(0.6))
+                                    .fill(selected == name ? chromeInk.opacity(0.10) : DS.Color.mutedBackground.opacity(0.6))
                             )
                         }
                         .buttonStyle(.plain)
@@ -1435,6 +1441,8 @@ private struct NameRequestCard: View {
 /// مربّع «طلب تغيير الرقم» بمنتصف الشاشة (طلب المالك): الرقم الجديد ثم رمز التحقق.
 /// أول ٣ تغييرات تُحفظ مباشرة بعد الرمز، وبعدها يُرسل الطلب للإدارة.
 private struct PhoneRequestCard: View {
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
     let member: FamilyMember
     /// التحقق فقط — الحفظ أو الطلب يتم عند الضغط على «حفظ» في الشاشة
     let onVerified: (String, KuwaitPhone.Country, String, String) -> Void
@@ -1527,11 +1535,14 @@ private struct PhoneRequestCard: View {
     // MARK: الصفحة ٢ — إدخال رمز التحقق
     private var otpPage: some View {
         VStack(spacing: DS.Spacing.md) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: "lock.shield.fill", tint: chromeInk, size: 56) }) {   // TMP-ART-TRIAL
             Image(systemName: "lock.shield.fill")
                 .font(DS.Font.plex(24, weight: .bold))
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(chromeInk)
                 .frame(width: 56, height: 56)
-                .background(DS.Color.primary.opacity(0.12), in: Circle())
+                .background(chromeInk.opacity(0.12), in: Circle())
+            }
+                .frame(width: 56, height: 56)
                 .accessibilityHidden(true)   // زخرفة
 
             VStack(spacing: 4) {
@@ -1567,7 +1578,7 @@ private struct PhoneRequestCard: View {
                 } label: {
                     Text(t("إعادة إرسال الرمز", "Resend code"))
                         .font(DS.Font.plex(12.5, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(chromeInk)
                         // مساحة ضغط ~٤٤ نقطة (حد أبل) داخل الفراغ حول النص — مكانه وحجمه كما هما
                         .padding(.vertical, 12)
                         .padding(.horizontal, DS.Spacing.sm)
@@ -1741,6 +1752,8 @@ private struct PhoneRequestCard: View {
 /// التعديل هنا محلي فقط: لا شيء يُحفظ إلا بالضغط على «حفظ» في شاشة التعديل.
 /// مشترك: تعديل البيانات + التعديل المباشر (طلب المالك)
 struct BioEditCard: View {
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
     let initial: [FamilyMember.BioStation]
     let goesToAdmins: Bool
     let remaining: Int
@@ -1781,9 +1794,9 @@ struct BioEditCard: View {
             } label: {
                 Label(t("إضافة حدث", "Add entry"), systemImage: "plus.circle.fill")
                     .font(DS.Font.plex(13, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(chromeInk)
                     .frame(maxWidth: .infinity).frame(height: 38)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.primary.opacity(0.10)))
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(chromeInk.opacity(0.10)))
                     // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير ارتفاع الزر الظاهر
                     .padding(.vertical, 3)
                     .contentShape(Rectangle())

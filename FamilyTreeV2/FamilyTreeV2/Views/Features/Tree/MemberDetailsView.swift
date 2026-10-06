@@ -7,6 +7,12 @@ struct MemberDetailsView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @Environment(\.dismiss) var dismiss
+    // لون القسم الذي فُتحت منه التفاصيل (الشجرة، الرئيسية، الإدارة، حسابي) — كحلي «الإطار» يتبعه،
+    // وكذلك صورة العضو الافتراضية وفقاعات الأب والأبناء (طلب المالك ٢٠٢٦-١٠-٠٥: «تتلوّن بلون القسم»)؛
+    // ألوان المعاني (تنبيه، خطأ، متوفّى) كما هي
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
+    private var chromeGradient: LinearGradient { section?.gradient ?? DS.Color.gradientPrimary }
 
     private let initialMember: FamilyMember
     @State private var currentMemberId: UUID
@@ -338,6 +344,9 @@ struct MemberDetailsView: View {
     private var deletedMemberView: some View {
         VStack(spacing: DS.Spacing.xxl) {
             Spacer(minLength: 80)
+            // TMP-ART-TRIAL: رسم الاتجاه المختار — «الحالي» الدائرة القديمة نفسها
+            TrialArt(make: { $0 == .emblem ? nil
+                             : ArtDispatch.empty($0, place: nil, icon: "person.slash.fill", tint: DS.Color.textTertiary) }) {
             ZStack {
                 Circle()
                     .fill(DS.Color.textTertiary.opacity(0.15))
@@ -345,6 +354,7 @@ struct MemberDetailsView: View {
                 Image(systemName: "person.slash.fill")
                     .font(DS.Font.scaled(36))
                     .foregroundColor(DS.Color.textTertiary)
+            }
             }
             .accessibilityHidden(true)   // زخرفة — النص تحتها يشرح
             Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
@@ -375,6 +385,7 @@ struct MemberDetailsView: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .frame(height: 38)
                 .background(DSActionFill.style(), in: Capsule())
+                .trialCardSkin(radius: 19)   // TMP-ART-TRIAL
                 // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير الحبّة ولا ارتفاع المربّع المصغّر
                 .padding(.vertical, 3)
                 .contentShape(Rectangle())
@@ -393,8 +404,8 @@ struct MemberDetailsView: View {
                         .clipShape(Circle())
                         // المتوفّى بالأبيض والأسود (طلب المالك)
                         .grayscale(member.isDeceased == true ? 1 : 0)
-                        // إطار دائري خفيف جداً بلا توهّج (طلب المالك)
-                        .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                        // إطار دائري خفيف جداً بلا توهّج (طلب المالك) — TMP-ART-TRIAL: حلقة الاتجاه المختار
+                        .modifier(MemberTrialRing(side: 130, plain: DS.Color.textTertiary.opacity(0.25), plainWidth: 1))
                         .scaleEffect(heroIn || reduceMotion ? 1 : 0.6)
                         .opacity(heroIn ? 1 : 0)
                         .onTapGesture { showAvatarPreview = true }
@@ -471,8 +482,7 @@ struct MemberDetailsView: View {
                 let age = end - byInt
                 let color = isDeceased ? DS.Color.textSecondary : DS.Color.info
                 HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: isDeceased ? "heart.slash.fill" : "timelapse")
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                    pillGlyph(isDeceased ? "heart.slash.fill" : "timelapse", tint: color)
                         .accessibilityHidden(true)   // زخرفة
                     Text("\(age) " + L10n.t("سنة", "yrs"))
                         .font(DS.Font.scaled(12, weight: .bold))
@@ -486,6 +496,7 @@ struct MemberDetailsView: View {
                 .padding(.vertical, DS.Spacing.xs + 2)
                 .background(color.opacity(0.12))
                 .clipShape(Capsule())
+                .trialCardSkin(radius: Self.pillRadius)   // TMP-ART-TRIAL
                 .accessibilityElement(children: .combine)   // الحبّة تُقرأ جملةً واحدة
             }
         }
@@ -497,11 +508,20 @@ struct MemberDetailsView: View {
         return String(s[r])
     }
 
+    /// TMP-ART-TRIAL: رمز الحبّة — رسم الاتجاه المختار، و«الحالي» رمز النظام كما كان
+    private static let pillRadius: CGFloat = 16
+    private func pillGlyph(_ icon: String, tint: Color) -> some View {
+        TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: tint, size: 20)
+                            .map { AnyView($0.frame(width: 20, height: 20)) } }) {
+            Image(systemName: icon)
+                .font(DS.Font.scaled(11, weight: .semibold))
+        }
+    }
+
     private func quickPill(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                pillGlyph(icon, tint: color)
                     .accessibilityHidden(true)   // زخرفة — النص يكفي
                 Text(label)
                     .font(DS.Font.scaled(12, weight: .bold))
@@ -511,6 +531,7 @@ struct MemberDetailsView: View {
             .padding(.vertical, DS.Spacing.xs + 2)
             .background(color.opacity(0.12))
             .clipShape(Capsule())
+            .trialCardSkin(radius: Self.pillRadius)   // TMP-ART-TRIAL
             // مساحة ضغط ٤٤ نقطة (حد أبل): الحشو يوسّع منطقة الضغط والسالب يعيد الحجم
             // كما كان — الحبّة وارتفاع المربّع المصغّر بلا تغيير
             .padding(.vertical, 8)
@@ -573,7 +594,7 @@ struct MemberDetailsView: View {
                     // الأب بالمنتصف بخلفية خفيفة بعرض القسم (طلب المالك)
                     if let father {
                         Button { openMemberInTree(father.id) } label: {
-                            familyBubble(father, size: 50, ring: DS.Color.warning,
+                            familyBubble(father, size: 50, ring: chromeInk,
                                          caption: L10n.t("الأب", "Father"))
                                 .padding(.vertical, DS.Spacing.sm)
                                 .frame(maxWidth: .infinity)
@@ -597,7 +618,7 @@ struct MemberDetailsView: View {
                                     HStack(alignment: .top, spacing: DS.Spacing.md) {
                                         ForEach(children[start..<min(start + 4, children.count)]) { child in
                                             Button { openMemberInTree(child.id) } label: {
-                                                familyBubble(child, size: 42, ring: DS.Color.primary.opacity(0.35),
+                                                familyBubble(child, size: 42, ring: chromeInk.opacity(0.35),
                                                              caption: nil)
                                             }
                                             .buttonStyle(DSScaleButtonStyle())
@@ -627,34 +648,35 @@ struct MemberDetailsView: View {
         return parts.joined(separator: " · ")
     }
 
-    /// صورة دائرية بحلقة + الاسم الأول تحتها (+ وصف فوق الاسم للأب)
+    /// صورة دائرية بحلقة + الاسم الأول تحتها (+ وصف فوق الاسم للأب) — بلون القسم
     private func familyBubble(_ m: FamilyMember, size: CGFloat, ring: Color, caption: String?) -> some View {
         VStack(spacing: 4) {
             ZStack {
                 if let url = m.avatarUrl, let imgUrl = URL(string: url) {
                     CachedAsyncImage(url: imgUrl) { img in img.resizable().scaledToFill() }
-                    placeholder: { Circle().fill(DS.Color.primary.opacity(0.10)) }
+                    placeholder: { Circle().fill(chromeInk.opacity(0.10)) }
                     .frame(width: size, height: size)
                     .clipShape(Circle())
                 } else {
                     Circle()
-                        .fill(DS.Color.primary.opacity(0.10))
+                        .fill(chromeInk.opacity(0.10))
                         .frame(width: size, height: size)
                         .overlay(
                             Text(String(m.firstName.prefix(1)))
                                 .font(DS.Font.plex(size * 0.36, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
+                                .foregroundColor(chromeInk)
                         )
                 }
             }
-            .overlay(Circle().stroke(ring, lineWidth: 1.5).padding(-2))
+            // TMP-ART-TRIAL: حلقة الاتجاه المختار — «الحالي» الحلقة القديمة بلون القسم
+            .modifier(MemberTrialRing(side: size, plain: ring, plainWidth: 1.5, inset: -2))
             // المتوفّى بالأبيض والأسود (طلب المالك)
             .grayscale(m.isDeceased == true ? 1 : 0)
 
             if let caption {
                 Text(caption)
                     .font(DS.Font.plex(10.5, weight: .bold))
-                    .foregroundColor(DS.Color.warning)
+                    .foregroundColor(chromeInk)
             }
             Text(m.firstName)
                 .font(DS.Font.plex(11.5, weight: .bold))
@@ -1087,22 +1109,22 @@ struct MemberDetailsView: View {
                     CachedAsyncImage(url: imgUrl) { img in
                         img.resizable().scaledToFill()
                     } placeholder: {
-                        Circle().fill(DS.Color.primary.opacity(0.12))
+                        Circle().fill(chromeInk.opacity(0.12))
                     }
                     .frame(width: 38, height: 38)
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
+                    .overlay(Circle().stroke(chromeInk.opacity(0.18), lineWidth: 1))
                 } else {
                     ZStack {
                         Circle()
-                            .fill(DS.Color.primary.opacity(0.12))
+                            .fill(chromeInk.opacity(0.12))
                             .frame(width: 38, height: 38)
                         Text(String(child.firstName.prefix(1)))
                             .font(DS.Font.subheadline)
                             .fontWeight(.bold)
-                            .foregroundColor(DS.Color.primary)
+                            .foregroundColor(chromeInk)
                     }
-                    .overlay(Circle().stroke(DS.Color.primary.opacity(0.18), lineWidth: 1))
+                    .overlay(Circle().stroke(chromeInk.opacity(0.18), lineWidth: 1))
                 }
 
                 if child.isDeceased == true {
@@ -1228,6 +1250,7 @@ struct MemberDetailsView: View {
                             .frame(height: 40)
                             .background(DS.Color.error.opacity(0.08),
                                         in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
                             // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير ارتفاع الزر الظاهر
                             .padding(.vertical, 2)
                             .contentShape(Rectangle())
@@ -1245,16 +1268,16 @@ struct MemberDetailsView: View {
             VStack(spacing: 0) {
                 ZStack {
                     Circle()
-                        .fill(DS.Color.primary.opacity(0.15))
+                        .fill(chromeInk.opacity(0.15))
                         .frame(width: 24, height: 24)
                     Circle()
-                        .fill(DS.Color.gradientPrimary)
+                        .fill(chromeGradient)
                         .frame(width: 10, height: 10)
                 }
 
                 if index < total - 1 {
                     Rectangle()
-                        .fill(DS.Color.primary.opacity(0.2))
+                        .fill(chromeInk.opacity(0.2))
                         .frame(width: 2)
                         .frame(maxHeight: .infinity)
                 }
@@ -1266,10 +1289,10 @@ struct MemberDetailsView: View {
                     Text(year)
                         .font(DS.Font.caption1)
                         .fontWeight(.bold)
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(chromeInk)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, 2)
-                        .background(DS.Color.primary.opacity(0.10))
+                        .background(chromeInk.opacity(0.10))
                         .clipShape(Capsule())
                 }
                 Text(station.title)
@@ -1319,11 +1342,11 @@ struct MemberDetailsView: View {
             switch action {
             case .add: return DS.Color.success
             case .editName: return DS.Color.info
-            case .editPhone: return DS.Color.primary
+            case .editPhone: return chromeInk
             case .editBirth: return DS.Color.warning
             case .deceased: return DS.Color.textTertiary
             case .addDeathDate: return DS.Color.textTertiary
-            case .addPhoto: return DS.Color.primary
+            case .addPhoto: return chromeInk
             case .delete: return DS.Color.error
             case .other: return DS.Color.accent
             case .none: return DS.Color.warning
@@ -1364,7 +1387,7 @@ struct MemberDetailsView: View {
                         circleActionButton(
                             icon: "pencil.and.list.clipboard",
                             label: L10n.t("طلب تعديل", "Request Edit"),
-                            tint: DS.Color.primary,
+                            tint: chromeInk,
                             filled: true
                         ) { showEditActions = true }
 
@@ -1390,7 +1413,7 @@ struct MemberDetailsView: View {
                         circleActionButton(
                             icon: "pencil",
                             label: L10n.t("تعديل مباشر", "Direct Edit"),
-                            tint: DS.Color.primary
+                            tint: chromeInk
                         ) { showAdminControl = true }
                     }
 
@@ -1398,7 +1421,7 @@ struct MemberDetailsView: View {
                         circleActionButton(
                             icon: NewsTypeHelper.icon(for: "وفاة"),
                             label: L10n.t("إعلان وفاة", "Obituary"),
-                            tint: NewsTypeHelper.color(for: "وفاة")
+                            tint: chromeInk
                         ) { openDeathAnnouncement() }
                     }
                 }
@@ -1457,11 +1480,11 @@ struct MemberDetailsView: View {
         switch action {
         case .add: return DS.Color.success
         case .editName: return DS.Color.info
-        case .editPhone: return DS.Color.primary
+        case .editPhone: return chromeInk
         case .editBirth: return DS.Color.warning
         case .deceased: return DS.Color.textTertiary
         case .addDeathDate: return DS.Color.textTertiary
-        case .addPhoto: return DS.Color.primary
+        case .addPhoto: return chromeInk
         case .delete: return DS.Color.error
         case .other: return DS.Color.accent
         }
@@ -1493,11 +1516,14 @@ struct MemberDetailsView: View {
         } label: {
             // مربّع نوع الطلب — مثل مربّعات التصنيف في «خبر جديد»
             VStack(spacing: 6) {
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: action.iconName, tint: tint, size: 42) }) {   // TMP-ART-TRIAL
                 Image(systemName: action.iconName)
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(tint)
                     .frame(width: 42, height: 42)
                     .background(Circle().fill(tint.opacity(0.14)))
+                }
+                .frame(width: 42, height: 42)
                 Text(editActionLabel(for: action))
                     .dsFieldFont(12, weight: .bold)
                     .foregroundColor(DS.Color.fieldLabel)
@@ -1525,13 +1551,18 @@ struct MemberDetailsView: View {
                 ZStack {
                     if filled {
                         Circle()
-                            .fill(DS.Color.gradientPrimary)
+                            .fill(chromeGradient)
                             .frame(width: 62, height: 62)
+                            .trialCardSkin(radius: 31)   // TMP-ART-TRIAL
                             .dsSubtleShadow()
                         Image(systemName: icon)
                             .font(DS.Font.scaled(22, weight: .semibold))
                             .foregroundColor(DS.Color.textOnPrimary)
                     } else {
+                        // TMP-ART-TRIAL: رسم الاتجاه المختار — «الحالي» الدائرة القديمة نفسها
+                        TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: tint, size: 62)
+                                            .map { AnyView($0.frame(width: 62, height: 62)) } }) {
+                        ZStack {
                         Circle()
                             .fill(tint.opacity(0.12))
                             .frame(width: 62, height: 62)
@@ -1539,6 +1570,8 @@ struct MemberDetailsView: View {
                         Image(systemName: icon)
                             .font(DS.Font.scaled(22, weight: .semibold))
                             .foregroundColor(tint)
+                        }
+                        }
                     }
                 }
                 .accessibilityHidden(true)   // زخرفة — التسمية تحتها تكفي
@@ -1572,7 +1605,7 @@ struct MemberDetailsView: View {
     }
 
     private var deathAnnounceButton: some View {
-        let tint = NewsTypeHelper.color(for: "وفاة")
+        let tint = chromeInk // بلون القسم مثل المربّع الذي يفتحه
         return Button { openDeathAnnouncement() } label: {
             HStack(spacing: 7) {
                 Image(systemName: NewsTypeHelper.icon(for: "وفاة"))
@@ -1586,6 +1619,7 @@ struct MemberDetailsView: View {
             .frame(height: 44)
             .background(tint.opacity(0.14),
                         in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
         }
     }
 
@@ -1632,6 +1666,7 @@ struct MemberDetailsView: View {
                     .frame(maxWidth: .infinity).frame(height: 48)
                     .background(DSActionFill.style(),
                                 in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
                 }
             }
             // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
@@ -1643,6 +1678,7 @@ struct MemberDetailsView: View {
                         .frame(width: 48, height: 48)
                         .background(DS.Color.warning.opacity(0.12),
                                     in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
                 }
                 .accessibilityLabel(L10n.t("إبلاغ", "Report"))
             }
@@ -1655,6 +1691,7 @@ struct MemberDetailsView: View {
                         .frame(width: 48, height: 48)
                         .background((isMemberBlocked ? DS.Color.textSecondary : DS.Color.error).opacity(0.12),
                                     in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
                 }
                 .accessibilityLabel(isMemberBlocked ? L10n.t("إلغاء حظر العضو", "Unblock member")
                                                     : L10n.t("حظر العضو", "Block member"))
@@ -1690,21 +1727,8 @@ struct MemberDetailsView: View {
         VStack {
             HStack {
                 Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .frame(width: 38, height: 38)
-                        .dsGlass(Circle())
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 0.5))
-                        .dsSubtleShadow()
-                        // مساحة ضغط ٤٤ نقطة (حد أبل) — الدائرة ومكانها كما هما
-                        .padding(3)
-                        .contentShape(Rectangle())
-                        .padding(-3)
-                }
-                .accessibilityLabel(L10n.t("إغلاق", "Close"))
+                // زر الإغلاق الموحّد فوق السطح (DSNavButtons)
+                DSCloseButton { dismiss() }
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.md)
@@ -1747,18 +1771,28 @@ struct MemberDetailsView: View {
                 CachedAsyncImage(url: imageUrl) { img in
                     img.resizable().scaledToFill()
                 } placeholder: {
-                    ProgressView().tint(DS.Color.primary)
+                    ProgressView().tint(chromeInk)
                 }
             } else {
+                // الصورة الافتراضية بلون القسم (طلب المالك ٢٠٢٦-١٠-٠٥)
                 LinearGradient(
-                    colors: [DS.Color.primary.opacity(0.20), DS.Color.accent.opacity(0.12)],
+                    colors: [chromeInk.opacity(0.20), DS.Color.accent.opacity(0.12)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 .overlay(
-                    Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(50))
-                        .foregroundColor(DS.Color.primary.opacity(0.5))
+                    // TMP-ART-TRIAL: رمز العضو بالاتجاه المختار — «الحالي» رمز النظام كما كان
+                    GeometryReader { g in
+                        let side = min(g.size.width, g.size.height) * 0.58
+                        TrialArt(make: { ArtDispatch.stateIcon($0, icon: "person.fill", tint: chromeInk, size: side)
+                                            .map { AnyView($0.frame(width: side, height: side)) } }) {
+                            Image(systemName: "person.fill")
+                                .font(DS.Font.scaled(50))
+                                .foregroundColor(chromeInk.opacity(0.5))
+                        }
+                        .frame(width: g.size.width, height: g.size.height)
+                    }
+                    .accessibilityHidden(true)
                 )
             }
         }
@@ -1771,9 +1805,9 @@ struct MemberDetailsView: View {
             GeometryReader { _ in
                 avatarContent
                     .frame(width: 300, height: 300)
-                    .background(DS.Color.primary.opacity(0.15))
+                    .background(chromeInk.opacity(0.15))
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(DS.Color.gradientPrimary, lineWidth: 4))
+                    .overlay(Circle().stroke(chromeGradient, lineWidth: 4))
                     .dsGlowShadow()
                     .scaleEffect(avatarPreviewScale, anchor: .center)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -1802,18 +1836,13 @@ struct MemberDetailsView: View {
                 showAvatarPreview = false
             }
 
-            Button {
+            // زر الإغلاق الموحّد فوق عارض الصورة (DSNavButtons)
+            DSCloseButton(context: .onMedia) {
                 avatarPreviewScale = 1
                 lastAvatarPreviewScale = 1
                 showAvatarPreview = false
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(DS.Font.scaled(30))
-                    .foregroundColor(DS.Color.overlayTextFull)
-                    .padding()
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.t("إغلاق", "Close"))
+            .padding()
         }
     }
 }
@@ -1850,7 +1879,81 @@ private struct PanelCloseButton: View {
                 .frame(maxWidth: .infinity).frame(height: 48)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .fill(DS.Color.mutedBackground.opacity(0.8)))
+                .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
         }
         .buttonStyle(DSScaleButtonStyle())
+    }
+}
+
+// MARK: - TMP-ART-TRIAL: حلقة الصور الدائرية (الصورة، الأب، الأبناء) بحسب الاتجاه المختار
+
+/// «الحالي»: الحلقة القديمة نفسها (لونها يُمرَّر). الاتجاهات: طين ناعم، حافة زجاج، خط ذهبي، حاشية سدو — بلون القسم
+private struct MemberTrialRing: ViewModifier {
+    let side: CGFloat
+    let plain: Color
+    var plainWidth: CGFloat = 1
+    /// سالب = الحلقة خارج الصورة (فقاعات العائلة)
+    var inset: CGFloat = 0
+    @AppStorage(ArtTrial.storageKey) private var raw = ArtTrial.emblem.rawValue
+    @Environment(\.dsSection) private var section
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let s = section ?? .home
+        let dark = scheme == .dark
+        let w = max(1.8, side * 0.03)
+        switch ArtTrial(rawValue: raw) ?? .emblem {
+        case .emblem:
+            content.overlay(Circle().stroke(plain, lineWidth: plainWidth).padding(inset))
+        case .soft3d:
+            content
+                .overlay(Circle().strokeBorder(LinearGradient(colors: [.white.opacity(dark ? 0.25 : 0.95), s.ink.opacity(0.35)],
+                                                              startPoint: .top, endPoint: .bottom), lineWidth: w)
+                    .padding(inset))
+                .shadow(color: s.deep.opacity(dark ? 0.40 : 0.18), radius: side * 0.07, x: 0, y: side * 0.035)
+        case .glass:
+            content.overlay(Circle().strokeBorder(LinearGradient(colors: [.white.opacity(dark ? 0.45 : 0.95), s.ink.opacity(0.5),
+                                                                          .white.opacity(dark ? 0.15 : 0.55)],
+                                                                 startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: w)
+                .padding(inset))
+        case .gold:
+            content.overlay(Circle().strokeBorder(LinearGradient(colors: [Color(hex: "#E7C27A"), Color(hex: "#C9973F")],
+                                                                 startPoint: .topLeading, endPoint: .bottomTrailing)
+                                                    .opacity(dark ? 0.85 : 1), lineWidth: w)
+                .padding(inset))
+        case .sadu:
+            content.overlay(MemberSaduRing(deep: s.deep, width: max(4, side * 0.055), count: side >= 100 ? 12 : 6)
+                .padding(inset))
+        }
+    }
+}
+
+/// حلقة سدو: طوق بلون القسم الغامق وعليه عيون كريمية بقلب أحمر
+private struct MemberSaduRing: View {
+    let deep: Color
+    let width: CGFloat
+    let count: Int
+
+    var body: some View {
+        GeometryReader { g in
+            let d = min(g.size.width, g.size.height)
+            let r = d / 2 - width / 2
+            ZStack {
+                Circle().strokeBorder(deep, lineWidth: width)
+                ForEach(0..<count, id: \.self) { i in
+                    let a = Double(i) / Double(count) * 2 * .pi - .pi / 2
+                    ZStack {
+                        Rectangle().fill(Color(hex: "#F3E7CF"))
+                            .frame(width: width * 0.62, height: width * 0.62).rotationEffect(.degrees(45))
+                        Rectangle().fill(Color(hex: "#B3262E"))
+                            .frame(width: width * 0.26, height: width * 0.26).rotationEffect(.degrees(45))
+                    }
+                    .position(x: d / 2 + r * CGFloat(cos(a)), y: d / 2 + r * CGFloat(sin(a)))
+                }
+            }
+            .frame(width: d, height: d)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

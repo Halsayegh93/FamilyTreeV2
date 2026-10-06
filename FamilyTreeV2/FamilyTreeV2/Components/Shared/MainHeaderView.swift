@@ -11,6 +11,8 @@ struct MainHeaderView<TrailingContent: View>: View {
 
     /// الوضع الأفقي (ارتفاع قصير) — هيدر مضغوط حتى يظهر كاملاً بلا اقتصاص
     @Environment(\.verticalSizeClass) private var vSizeClass
+    /// قسم التبويب — لون الهيدر إن لم يُمرَّر تدرّج صريح (وأزرار الهيدر الزجاجية بلونه)
+    @Environment(\.dsSection) private var section
     /// الهيدر يظهر كاملاً في الوضعين — لا نضغطه أفقياً (طلب المالك)
     private var isLandscape: Bool { false }
     /// أفقي فعلاً — للهوامش الجانبية فقط (النوتش)
@@ -205,25 +207,18 @@ struct MainHeaderView<TrailingContent: View>: View {
             .padding(.top, isLandscape ? DS.Spacing.xs : 0)
             .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
 
-            // شريط سدو زخرفي — نفس هوية الرئيسية على كل الواجهات
-            HStack(spacing: 5) {
-                Rectangle()
-                    .fill(DS.Color.textOnPrimary.opacity(0.16))
-                    .frame(height: 1)
-                ForEach(0..<5, id: \.self) { i in
-                    Rectangle()
-                        .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.55 : 0.30))
-                        .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
-                        .rotationEffect(.degrees(45))
-                }
-                Rectangle()
-                    .fill(DS.Color.textOnPrimary.opacity(0.16))
-                    .frame(height: 1)
+            // شريط سدو زخرفي — نفس هوية الرئيسية على كل الواجهات، بحركة هادئة
+            // (طلب المالك ٢٠٢٦-١٠-٠٤: «لا تغيّر السدو، بس حط حركات»)
+            TrialArt(make: { ArtDispatch.tabHeaderOrnament($0, section: "\(section ?? .home)",
+                                                           tint: (section ?? .home).fill) }) {   // TMP-ART-TRIAL
+                SaduOrnament()
             }
-            .padding(.horizontal, DS.Spacing.xl)
-            .padding(.bottom, DS.Spacing.xs)
+                .padding(.horizontal, DS.Spacing.xl)
+                .padding(.bottom, DS.Spacing.xs)
         }
         .background(headerBackground)
+        // نص شريط الحالة أبيض فوق الهيدر الملوّن في كل التبويبات (كان «الشجرة» بوقت أسود)
+        .dsLightStatusBar()
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .confirmationDialog(
             L10n.t("تسجيل الخروج", "Sign Out"),
@@ -246,7 +241,7 @@ struct MainHeaderView<TrailingContent: View>: View {
 
     private var headerBackground: some View {
         ZStack {
-            (backgroundGradient ?? DS.Color.gradientPrimary)
+            (backgroundGradient ?? section?.gradient ?? DS.Color.gradientPrimary)
             DS.Color.headerVeil
         }
         // أفقياً: يمتد من أول الشاشة لآخرها (يتجاوز حواف الأمان الجانبية)

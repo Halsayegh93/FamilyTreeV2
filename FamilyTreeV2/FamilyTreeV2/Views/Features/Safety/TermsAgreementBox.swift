@@ -21,21 +21,21 @@ enum TermsHighlights {
     static var all: [Item] {
         [
             Item(id: 0, icon: "nosign", tint: DS.Color.error,
-                 title: L10n.t("لا تسامح مع الإساءة", "Zero tolerance for abuse"),
-                 text: L10n.t("يُمنع نشر أي محتوى مسيء أو مهين أو بذيء أو عنصري، أو التحرّش بأي عضو أو انتحال شخصيته. المحتوى المخالف يُحذف، ويُوقف حساب صاحبه.",
-                              "Posting offensive, insulting, obscene or hateful content, harassing any member or impersonating anyone is not allowed. Violating content is removed and its author's account is suspended.")),
+                 title: L10n.t("عدم التسامح مع الإساءة", "Zero tolerance for abuse"),
+                 text: L10n.t("يُحظر نشر أي محتوى مسيء أو مهين أو خادش للحياء أو يحض على الكراهية، كما يُحظر التحرّش بأي عضو أو انتحال شخصيته. ويُحذف كل محتوى مخالف، ويُوقف حساب ناشره.",
+                              "Posting offensive, insulting, indecent or hateful content is prohibited, as is harassing any member or impersonating anyone. Any violating content is removed and its author's account is suspended.")),
             Item(id: 1, icon: "flag.fill", tint: DS.Color.warning,
                  title: L10n.t("الإبلاغ والحظر", "Report & block"),
-                 text: L10n.t("تقدر تبلّغ عن أي خبر أو تعليق أو عضو أو محتوى، وتحظر أي عضو يسيء لك فيختفي عنك محتواه.",
-                              "You can report any post, comment, member or content, and block anyone who abuses you so their content is hidden from you.")),
+                 text: L10n.t("يحق لكل عضو الإبلاغ عن أي خبر أو تعليق أو محتوى أو عضو مخالف، وحظر أي عضو يسيء إليه، فلا يظهر له محتواه بعد ذلك.",
+                              "Every member may report any violating post, comment, content or member, and block anyone who abuses them so that member's content no longer appears to them.")),
             Item(id: 2, icon: "checkmark.seal.fill", tint: DS.Color.success,
-                 title: L10n.t("مراجعة خلال ٢٤ ساعة", "Reviewed within 24 hours"),
-                 text: L10n.t("تراجع الإدارة كل بلاغ خلال ٢٤ ساعة، وتحذف المحتوى المخالف وتوقف حساب صاحبه.",
-                              "Admins review every report within 24 hours, remove violating content and suspend the account that posted it.")),
+                 title: L10n.t("مراجعة البلاغات خلال ٢٤ ساعة", "Reports reviewed within 24 hours"),
+                 text: L10n.t("تلتزم إدارة التطبيق بمراجعة كل بلاغ خلال أربع وعشرين ساعة من تقديمه، وحذف المحتوى المخالف، وإيقاف حساب ناشره.",
+                              "The administration reviews every report within twenty-four hours of submission, removes the violating content and suspends the account that posted it.")),
             Item(id: 3, icon: "lock.fill", tint: DS.Color.info,
                  title: L10n.t("خصوصية العائلة", "Family privacy"),
-                 text: L10n.t("التطبيق خاص بأفراد العائلة، وبياناتك لا تُباع ولا تُستخدم للإعلانات أو التتبّع.",
-                              "The app is private to the family; your data is never sold or used for ads or tracking."))
+                 text: L10n.t("التطبيق مخصص لأفراد العائلة المعتمدين فقط، ولا تُباع بيانات الأعضاء، ولا تُستخدم لأغراض الإعلان أو التتبّع.",
+                              "The app is reserved for approved family members only; members' data is never sold or used for advertising or tracking."))
         ]
     }
 }
@@ -53,7 +53,7 @@ struct TermsAgreementBox: View {
     var body: some View {
         DSComposer(
             title: L10n.t("شروط الاستخدام", "Terms of Use"),
-            subtitle: L10n.t("موافقة لمرة واحدة قبل المتابعة", "A one-time agreement before you continue"),
+            subtitle: L10n.t("يُرجى قراءة الشروط والموافقة عليها قبل المتابعة", "Please read and accept the terms before continuing"),
             icon: "checkmark.shield.fill",
             tint: DS.Color.actionNavy,
             actionTitle: L10n.t("أوافق وأتابع", "I Agree"),
@@ -66,7 +66,7 @@ struct TermsAgreementBox: View {
             },
             onCancel: { confirmDecline = true }
         ) {
-            DSComposerSection(title: L10n.t("أهم ما في الشروط", "Key points"),
+            DSComposerSection(title: L10n.t("أبرز بنود الشروط", "Key terms"),
                               icon: "checklist", tint: DS.Color.primary, index: 0) {
                 VStack(spacing: DS.Spacing.sm) {
                     ForEach(TermsHighlights.all) { item in
@@ -97,8 +97,8 @@ struct TermsAgreementBox: View {
             Button(L10n.t("رجوع", "Back"), role: .cancel) {}
             Button(L10n.t("تسجيل الخروج", "Sign Out"), role: .destructive) { onSignOut() }
         } message: {
-            Text(L10n.t("استخدام التطبيق يتطلب الموافقة على شروط الاستخدام. ارجع لقراءتها والموافقة، أو سجّل الخروج.",
-                        "Using the app requires agreeing to the Terms of Use. Go back to read and accept them, or sign out."))
+            Text(L10n.t("لا يمكن استخدام التطبيق دون الموافقة على شروط الاستخدام. يُرجى العودة لقراءتها والموافقة عليها، أو تسجيل الخروج.",
+                        "The app can't be used without accepting the Terms of Use. Please go back to read and accept them, or sign out."))
         }
     }
 }
@@ -151,19 +151,19 @@ struct TermsConsentRow: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.t("أوافق على شروط الاستخدام وسياسة الخصوصية",
-                                           "I agree to the Terms of Use and Privacy Policy"))
+                                           "I accept the Terms of Use and Privacy Policy"))
                 .accessibilityAddTraits(isAccepted ? .isSelected : [])
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.t("أوافق على شروط الاستخدام وسياسة الخصوصية، وأتعهّد بعدم نشر أي محتوى مسيء.",
-                                "I agree to the Terms of Use and Privacy Policy, and I won't post any objectionable content."))
+                    Text(L10n.t("أُقرّ بأنني قرأت شروط الاستخدام وسياسة الخصوصية وأوافق عليهما، وأتعهّد بعدم نشر أي محتوى مسيء.",
+                                "I confirm that I have read and accept the Terms of Use and Privacy Policy, and I pledge not to post any objectionable content."))
                         .dsFieldFont(13, weight: .bold)
                         .foregroundColor(DS.Color.fieldLabel)
                         .fixedSize(horizontal: false, vertical: true)
                         .onTapGesture(perform: toggle)
                         .accessibilityHidden(true)   // نفس نص زر الاختيار
-                    Text(L10n.t("لا تسامح مطلقاً مع المحتوى المسيء أو المستخدمين المسيئين: يُحذف المحتوى ويُوقف الحساب، وتُراجَع البلاغات خلال ٢٤ ساعة.",
-                                "Zero tolerance for objectionable content or abusive users: the content is removed and the account suspended; reports are reviewed within 24 hours."))
+                    Text(L10n.t("لا تهاون مع المحتوى المسيء أو المستخدمين المسيئين؛ إذ يُحذف المحتوى المخالف ويُوقف حساب ناشره، وتُراجَع البلاغات خلال ٢٤ ساعة.",
+                                "Zero tolerance for objectionable content or abusive users: violating content is removed and its author's account suspended; reports are reviewed within 24 hours."))
                         .font(DS.Font.plex(11.5))
                         .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)

@@ -89,7 +89,7 @@ struct AdminRegisterMemberView: View {
         .navigationTitle(L10n.t("تسجيل عضو جديد", "Register New Member"))
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .dsAlert(L10n.t("تم التسجيل", "Registered"), isPresented: $showingSuccess) {
+        .dsAlert(L10n.t("تم التسجيل", "Registered"), isPresented: $showingSuccess, moment: .newMember) {
             Button(L10n.t("حسناً", "OK")) { dismiss() }
         } message: {
             Text(L10n.t("تمت إضافة العضو بنجاح.", "Member added successfully."))

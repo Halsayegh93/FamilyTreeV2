@@ -842,7 +842,8 @@ class MemberViewModel: ObservableObject {
     ) async -> UUID? {
         guard NetworkMonitor.shared.requireOnline() else { return nil }
         self.isLoading = true
-        
+        self.errorMessage = nil
+
         // 1. دالة داخلية تضمن تحويل أي رقم عربي إلى إنجليزي يدوياً لقطع الشك باليقين ✅
         func cleanNumber(_ input: String) -> String {
             let arabicNumbers = ["٠":"0","١":"1","٢":"2","٣":"3","٤":"4","٥":"5","٦":"6","٧":"7","٨":"8","٩":"9"]
@@ -880,7 +881,13 @@ class MemberViewModel: ObservableObject {
         
         let finalFullName = "\(firstNameOnly) \(father.fullName)".trimmingCharacters(in: .whitespaces)
         let newId = UUID()
-        
+
+        // ج-١: السيرفر (prevent_role_self_promotion) يرفض إدراج غير الإدارة بحالة «مفعّل» —
+        // فكان العضو لا يقدر يضيف ابناً أبداً. العضو يُدرج ابنه «معلّقاً» (دور member) ثم يُرسل
+        // طلب child_add فوراً (نفس الجلسة، خلال الساعة كما يشترط حارس الطلبات)، والقبول يفعّله.
+        // الإدارة كما كانت: إدراج مباشر مفعّل.
+        let addedByStaff = canModerate
+
         // 4. بناء المصفوفة بالقيم النظيفة (cleanedBirthDate) ✅
         let storedPhone = KuwaitPhone.normalizeForStorageFromInput(phoneNumber) ?? ""
         var newChild: [String: AnyEncodable] = [
@@ -894,7 +901,7 @@ class MemberViewModel: ObservableObject {
             "is_deceased": AnyEncodable(isDeceased),
             "is_married": AnyEncodable(false),
             "sort_order": AnyEncodable(allMembers.filter { $0.fatherId == fatherId }.count),
-            "status": AnyEncodable("active")
+            "status": AnyEncodable(addedByStaff ? "active" : "pending")
         ]
         
         // إلحاق الجنس إذا كان محدداً
@@ -934,7 +941,7 @@ class MemberViewModel: ObservableObject {
                 isHiddenFromTree: false,
                 sortOrder: allMembers.filter { $0.fatherId == fatherId }.count,
                 bio: nil,
-                status: .active,
+                status: addedByStaff ? .active : .pending,
                 avatarUrl: nil,
                 isMarried: false,
                 gender: gender,
@@ -942,8 +949,9 @@ class MemberViewModel: ObservableObject {
             )
             self.allMembers.append(optimisticChild)
             
-            // تسجيل طلب إداري + إشعار فقط إذا الإضافة من حسابي (وليس من تعديل المدير)
-            if !silent {
+            // تسجيل طلب إداري + إشعار إذا الإضافة من حسابي (وليس من تعديل المدير) — ودائماً لابن
+            // أضافه عضو: بلا الطلب يبقى «معلّقاً» بلا من يعتمده (ج-١)
+            if !silent || !addedByStaff {
                 let requester = currentUser?.id ?? fatherId
                 let details = "تمت إضافة ابن جديد: \(firstNameOnly) (\(isDeceased ? "متوفى" : "حي"))."
                 let childRequestId = UUID()
@@ -956,12 +964,34 @@ class MemberViewModel: ObservableObject {
                     "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                     "details": AnyEncodable(details)
                 ]
+                var requestSent = false
                 do {
                     try await supabase
                         .from("admin_requests")
                         .insert(requestData)
                         .execute()
-
+                    requestSent = true
+                } catch {
+                    Log.warning("لم يتم إدراج طلب child_add في admin_requests: \(error.localizedDescription)")
+                    // انقطاع بعد الحفظ؟ الطلب بمعرّفه نفسه قد يكون وصل — لا نعيد الإدراج (الحارس يرفض المكرّر)
+                    struct RequestIdRow: Decodable { let id: UUID }
+                    let rows: [RequestIdRow] = (try? await supabase
+                        .from("admin_requests")
+                        .select("id")
+                        .eq("id", value: childRequestId.uuidString)
+                        .limit(1)
+                        .execute()
+                        .value) ?? []
+                    requestSent = !rows.isEmpty
+                }
+                if !requestSent && !addedByStaff {
+                    // الابن محفوظ «معلّقاً» (يظهر للإدارة في «تفعيل الحسابات») — نقول الحقيقة للعضو
+                    self.errorMessage = L10n.t(
+                        "حُفظ الابن، لكن تعذّر إرسال طلبه للإدارة. تواصل مع الإدارة لاعتماده.",
+                        "Your son was saved, but the request couldn't reach the administration. Please contact them to approve it."
+                    )
+                }
+                if requestSent {
                     await notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("طلب إضافة ابن", "Child Add Request"),
                         body: L10n.t(
@@ -973,8 +1003,6 @@ class MemberViewModel: ObservableObject {
                         requestType: RequestType.childAdd.rawValue,
                         subjectMemberId: fatherId
                     )
-                } catch {
-                    Log.warning("لم يتم إدراج طلب child_add في admin_requests: \(error.localizedDescription)")
                 }
             }
             
@@ -2007,7 +2035,8 @@ class MemberViewModel: ObservableObject {
                 .eq("id", value: memberId.uuidString)
                 .execute()
             
-            // 2) تفعيل العضو مباشرة بعد إضافة الرقم
+            // 2) تفعيل العضو بعد إضافة الرقم — من «معلّق» فقط (فحص الثغرات ب-٣): كان تعديل
+            //    الرقم يفك تجميد العضو (والمراقب يفكه هكذا). المجمّد والمفعّل لا تتغيّر حالتهما.
             let profileResponse: [FamilyMember] = try await supabase
                 .from("members_masked") // الهاتف المخفي يُفرَّغ من السيرفر
                 .select()
@@ -2015,8 +2044,8 @@ class MemberViewModel: ObservableObject {
                 .limit(1)
                 .execute()
                 .value
-            
-            if let profile = profileResponse.first {
+
+            if let profile = profileResponse.first, profile.status == .pending || profile.status == nil {
                 var activationPayload: [String: AnyEncodable] = [
                     "status": AnyEncodable("active")
                 ]
@@ -2024,13 +2053,14 @@ class MemberViewModel: ObservableObject {
                 if profile.role == .pending {
                     activationPayload["role"] = AnyEncodable("member")
                 }
-                
+
                 try await supabase
                     .from("profiles")
                     .update(activationPayload)
                     .eq("id", value: memberId.uuidString)
+                    .or("status.is.null,status.eq.pending") // لو جُمّد في هذه اللحظة لا يُفك
                     .execute()
-                
+
                 // 3) اعتماد أي طلب انضمام معلق لنفس العضو
                 _ = try? await supabase
                     .from("admin_requests")
@@ -2343,11 +2373,14 @@ class MemberViewModel: ObservableObject {
     
     // MARK: - Update Child Data
     
+    /// - phoneNumber: `nil` = الرقم لم يتغيّر فلا يُرسل أبداً (فحص الثغرات ب-٢): رقم الابن
+    ///   المخفي يصل للأب فارغاً من `members_masked`، فكان كل حفظ من «حسابي» يمسحه وينقفل
+    ///   الدخول على الابن. نص فارغ = حذف مقصود لرقم كان ظاهراً.
     @discardableResult
     func updateChildData(
         member: FamilyMember,
         firstName: String,
-        phoneNumber: String,
+        phoneNumber: String?,
         birthDate: String?,
         isDeceased: Bool,
         deathDate: String?,
@@ -2357,17 +2390,16 @@ class MemberViewModel: ObservableObject {
 
         let safeFirstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalFullName = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(phoneNumber)
-        let storedPhone = normalizedPhone ?? Optional<String>.none
-        
+
         var payload: [String: AnyEncodable] = [
             "first_name": AnyEncodable(safeFirstName),
             "full_name": AnyEncodable(finalFullName),
-            "phone_number": AnyEncodable(storedPhone),
             "birth_date": AnyEncodable(birthDate ?? Optional<String>.none),
             "is_deceased": AnyEncodable(isDeceased)
         ]
+        if let phoneNumber {
+            payload["phone_number"] = AnyEncodable(KuwaitPhone.normalizeForStorageFromInput(phoneNumber))
+        }
 
         if isDeceased {
             payload["death_date"] = AnyEncodable(deathDate ?? Optional<String>.none)

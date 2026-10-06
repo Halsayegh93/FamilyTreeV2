@@ -54,7 +54,7 @@ struct AdminMembersDirectoryView: View {
 
         var color: Color {
             switch self {
-            case .all:      return DS.Color.primary
+            case .all:      return AppSection.admin.ink
             case .living:   return DS.Color.success
             case .deceased: return DS.Color.textTertiary
             }
@@ -385,7 +385,7 @@ struct AdminMembersDirectoryView: View {
                                     } label: {
                                         Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
                                     }
-                                    .tint(DS.Color.primary)
+                                    .tint(AppSection.admin.ink)
                                 }
                             }
                     }

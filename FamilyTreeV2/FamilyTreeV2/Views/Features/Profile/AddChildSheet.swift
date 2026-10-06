@@ -4,6 +4,7 @@ import UIKit
 
 struct AddChildSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.dismiss) private var dismiss
 
     let member: FamilyMember
@@ -20,6 +21,10 @@ struct AddChildSheet: View {
     @State private var deathDate: Date = Date()
     @State private var selectedUIImage: UIImage? = nil
     @State private var showSuccessAlert = false
+    /// ابن أضافه عضو (غير الإدارة) — يُحفظ معلّقاً ويُرسل للإدارة للموافقة (ج-١)
+    @State private var sentForApproval = false
+    /// حُفظ الابن لكن طلبه لم يصل للإدارة — رسالة صادقة بدل «تمت الإضافة»
+    @State private var approvalRequestWarning: String? = nil
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
     @State private var sheetHeight: CGFloat = 520
@@ -47,10 +52,11 @@ struct AddChildSheet: View {
                 .dsStaggerIn(1)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .dsAlert(L10n.t("تمت الإضافة", "Added Successfully"), isPresented: $showSuccessAlert) {
+        .dsAlert(successTitle, isPresented: $showSuccessAlert,
+                 moment: approvalRequestWarning != nil ? nil : (sentForApproval ? .sentForApproval : .newMember)) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
-            Text(L10n.t("تمت الإضافة بنجاح.", "Added successfully."))
+            Text(successMessage)
         }
         .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
             Button(L10n.t("حسناً", "OK")) {}
@@ -62,6 +68,21 @@ struct AddChildSheet: View {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
             }
         }
+    }
+
+    /// رسالة الحفظ صادقة (ج-١): ابن العضو ينتظر موافقة الإدارة، لا «تمت الإضافة»
+    private var successTitle: String {
+        if approvalRequestWarning != nil { return L10n.t("تنبيه", "Notice") }
+        return sentForApproval ? L10n.t("أُرسل للموافقة", "Sent for Approval")
+                               : L10n.t("تمت الإضافة", "Added Successfully")
+    }
+
+    private var successMessage: String {
+        if let approvalRequestWarning { return approvalRequestWarning }
+        return sentForApproval
+            ? L10n.t("أُضيف ابنك وأُرسل للإدارة للموافقة.",
+                     "Your son was added and sent to the administration for approval.")
+            : L10n.t("تمت الإضافة بنجاح.", "Added successfully.")
     }
 
     /// أي إدخال (اسم، رقم، صورة، تاريخ، جنس، وفاة) — «إلغاء» يسأل قبل تجاهله (توصية أبل).
@@ -116,7 +137,7 @@ struct AddChildSheet: View {
                         HStack(spacing: DS.Spacing.xs) {
                             // actionNavy: نفس الكحلي في الفاتح، وكحلي غامق في الداكن يُقرأ عليه النص الأبيض
                             // (primary الداكن أزرق فاتح — «ذكر» الأبيض كان باهتاً عليه)
-                            genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.actionNavy)
+                            genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.maleFill)
                             genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
                         }
                     }
@@ -258,6 +279,9 @@ struct AddChildSheet: View {
                     showErrorAlert = true
                     return
                 }
+                // غير الإدارة: الابن «معلّق» وطلبه عند الإدارة (ج-١) — أو حُفظ وطلبه لم يصل
+                sentForApproval = !authVM.canModerate
+                approvalRequestWarning = memberVM.errorMessage
                 if let image = selectedUIImage {
                     await memberVM.uploadAvatar(image: image, for: childId)
                 }

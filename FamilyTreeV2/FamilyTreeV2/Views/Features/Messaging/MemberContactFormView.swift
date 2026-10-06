@@ -21,6 +21,17 @@ struct MemberContactFormView: View {
     @Environment(\.colorScheme) private var colorScheme
     /// «تقليل الحركة» (توصية أبل): تلاشٍ بدل التكبير
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// قسم الواجهة التي فتحت المربّع — nil خارج التبويبات (الانتظار، التجميد)
+    @Environment(\.dsSection) private var openerSection
+
+    /// «تواصل بعد» (طلب المالك ٢٠٢٦-١٠-٠٥): المربّع بلون التواصل من أي تبويب = لون الإدارة
+    /// (رسائل الإدارة، نفس مربّعه في الرئيسية `tileContact`). خارج التبويبات يبقى كحلي العلامة.
+    private var contactSection: AppSection? { openerSection == nil ? nil : .admin }
+
+    /// لون نوع الرسالة: «استفسار» (الكحلي) يتبع لون التواصل، والباقي ألوان معانٍ ثابتة
+    private func categoryTint(_ cat: ContactCategory) -> Color {
+        cat.color.dsChrome(in: contactSection)
+    }
 
     private let maxLength = 1000
 
@@ -58,6 +69,8 @@ struct MemberContactFormView: View {
             }
         }
         .animation(DS.Anim.smooth, value: didSend)
+        // زر الإرسال والرسائل ومربّعات النافذة المستقلّة بلون التواصل ما دام المربّع ظاهراً
+        .dsSectionPage(contactSection)
     }
 
     /// زر الإجراء: «إرسال» ← «جارٍ الإرسال…» ← بعد الإرسال «إرسال رسالة أخرى»
@@ -79,7 +92,7 @@ struct MemberContactFormView: View {
     private var categorySection: some View {
         DSComposerSection(title: L10n.t("نوع الرسالة", "Message Type"),
                           icon: "square.grid.2x2.fill",
-                          tint: selectedCategory.color,
+                          tint: categoryTint(selectedCategory),
                           index: 0) {
             HStack(spacing: DS.Spacing.sm) {
                 ForEach(ContactCategory.allCases, id: \.self) { cat in
@@ -96,11 +109,15 @@ struct MemberContactFormView: View {
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
             VStack(spacing: 5) {
-                Image(systemName: cat.icon)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(selected ? .white : cat.color)
+                // TMP-ART-TRIAL: أيقونة الاتجاه المختار لغير المحدّد، وإلا الحالية
+                TrialArt(make: { selected ? nil : ArtDispatch.stateIcon($0, icon: cat.icon, tint: categoryTint(cat), size: 34) }) {
+                    Image(systemName: cat.icon)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(selected ? .white : categoryTint(cat))
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(selected ? Color.white.opacity(0.2) : categoryTint(cat).opacity(0.13)))
+                }
                     .frame(width: 34, height: 34)
-                    .background(Circle().fill(selected ? Color.white.opacity(0.2) : cat.color.opacity(0.13)))
                     .accessibilityHidden(true)
                 Text(cat.title)
                     .dsFieldFont(12, weight: .bold)
@@ -113,7 +130,7 @@ struct MemberContactFormView: View {
             .background {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .fill(selected
-                          ? AnyShapeStyle(LinearGradient(colors: [cat.color, cat.color.opacity(0.8)],
+                          ? AnyShapeStyle(LinearGradient(colors: [categoryTint(cat), categoryTint(cat).opacity(0.8)],
                                                          startPoint: .top, endPoint: .bottom))
                           : AnyShapeStyle(DS.Color.background))
                     // الداكن: ألوان التصنيفات فاتحة فيه والنص أبيض — طبقة تعتيم تحفظ وضوحه
@@ -125,7 +142,7 @@ struct MemberContactFormView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
             )
-            .shadow(color: selected ? cat.color.opacity(0.3) : .clear, radius: 6, y: 2)
+            .shadow(color: selected ? categoryTint(cat).opacity(0.3) : .clear, radius: 6, y: 2)
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -137,20 +154,20 @@ struct MemberContactFormView: View {
     private var messageSection: some View {
         DSComposerSection(title: L10n.t("الرسالة", "Message"),
                           icon: "text.bubble.fill",
-                          tint: selectedCategory.color,
+                          tint: categoryTint(selectedCategory),
                           index: 1) {
             DSComposerField(icon: "text.cursor",
                             label: L10n.t("العنوان", "Subject"),
                             placeholder: L10n.t("عنوان الرسالة (اختياري)", "Subject (optional)"),
                             text: $subject,
-                            tint: selectedCategory.color)
+                            tint: categoryTint(selectedCategory))
             messageEditor
         }
     }
 
     /// نص الرسالة — نفس شكل حقول المربّعات، مع عدّاد ثابت (يحمرّ فوق الحد)
     private var messageEditor: some View {
-        let tint = selectedCategory.color
+        let tint = categoryTint(selectedCategory)
         return HStack(alignment: .top, spacing: DS.Spacing.sm) {
             Image(systemName: "text.alignright")
                 .font(.system(size: 13, weight: .semibold))
@@ -209,7 +226,7 @@ struct MemberContactFormView: View {
     private var replySection: some View {
         DSComposerSection(title: L10n.t("بريد الرد", "Reply Email"),
                           icon: "at",
-                          tint: emailIsValid ? DS.Color.success : selectedCategory.color,
+                          tint: emailIsValid ? DS.Color.success : categoryTint(selectedCategory),
                           trailing: L10n.t("اختياري", "Optional"),
                           index: 2) {
             replyField
@@ -218,7 +235,7 @@ struct MemberContactFormView: View {
 
     /// حقل البريد — نفس شكل حقول المربّعات، ويتلوّن بالأخضر مع علامة ✓ حين يبدو صالحاً
     private var replyField: some View {
-        let tint = emailIsValid ? DS.Color.success : selectedCategory.color
+        let tint = emailIsValid ? DS.Color.success : categoryTint(selectedCategory)
         return HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "at")
                 .font(.system(size: 13, weight: .semibold))
@@ -299,16 +316,20 @@ struct MemberContactFormView: View {
 
     private var successState: some View {
         VStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.success.opacity(0.10))
-                    .frame(width: 104, height: 104)
-                Circle()
-                    .fill(DS.Color.success.opacity(0.16))
-                    .frame(width: 76, height: 76)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(DS.Color.success)
+            // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الدائرتان الحاليتان
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: "checkmark", tint: DS.Color.success, size: 76)
+                                .map { AnyView($0.frame(width: 104, height: 104)) } }) {
+                ZStack {
+                    Circle()
+                        .fill(DS.Color.success.opacity(0.10))
+                        .frame(width: 104, height: 104)
+                    Circle()
+                        .fill(DS.Color.success.opacity(0.16))
+                        .frame(width: 76, height: 76)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(DS.Color.success)
+                }
             }
             .accessibilityHidden(true)   // زخرفة — «وصلت رسالتك» تُقرأ
 
@@ -342,6 +363,7 @@ struct MemberContactFormView: View {
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
     }
 
     // MARK: - Actions

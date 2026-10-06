@@ -14,6 +14,8 @@ struct RegistrationView: View {
     @State private var manualFamilyText = ""
 
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
+    /// اختار تاريخه فعلاً؟ — وإلا لا يُحفظ تاريخ «قبل ٢٠ سنة» الافتراضي كأنه تاريخ ميلاده (حدث ٢٠٢٦-١٠-٠٥)
+    @State private var birthDateChosen = false
     @State private var selectedGender: String = "male"
     @State private var selectedImage: UIImage? = nil
 
@@ -344,7 +346,7 @@ struct RegistrationView: View {
     private var birthDateSection: some View {
         DSDateField(
             label: L10n.t("تاريخ الميلاد", "Birth Date"),
-            date: $birthDate,
+            date: Binding(get: { birthDate }, set: { birthDate = $0; birthDateChosen = true }),
             range: ...Date(),
             // نفس مقاسات نصوص حقلي الاسم والعائلة
             labelFont: DS.Font.caption1,
@@ -440,7 +442,7 @@ struct RegistrationView: View {
                         await authVM.registerNewUser(
                             firstName: trimmedFull,
                             familyName: trimmedFamily,
-                            birthDate: birthDate,
+                            birthDate: birthDateChosen ? birthDate : nil,
                             gender: selectedGender,
                             avatarImage: selectedImage
                         )

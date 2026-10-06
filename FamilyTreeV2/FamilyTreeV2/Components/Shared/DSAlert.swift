@@ -22,7 +22,7 @@ extension EnvironmentValues {
     }
 }
 
-/// أزرار المربّع: الأساسي كحلي، الحذف أحمر، الإلغاء رمادي — وكل ضغطة تنفّذ
+/// أزرار المربّع: الأساسي بتدرّج القسم (كحلي خارج التبويبات)، الحذف أحمر، الإلغاء رمادي — وكل ضغطة تنفّذ
 /// إجراء الزر ثم تغلق المربّع.
 ///
 /// ملاحظة مهمة: كانت الإغلاقة إيماءة لمس داخل ButtonStyle، وإيماءة الابن تتقدّم
@@ -243,6 +243,8 @@ struct DSCenterPanel<Content: View>: View {
     @State private var appeared = false
     @State private var contentHeight: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
+    /// لون القسم داخل المربّع — من الواجهة التي فتحته، واحتياطاً القسم المختار
+    @Environment(\.dsSection) private var section
 
     /// ارتفاع اللوح: على قدر المحتوى (+ شريط العنوان) وبحدّ أقصى 86% من الشاشة
     private func panelHeight(_ geo: GeometryProxy) -> CGFloat {
@@ -260,6 +262,7 @@ struct DSCenterPanel<Content: View>: View {
 
                 content()
                     .environment(\.dsInCenterBox, true)
+                    .dsSection(section ?? AppSection.current)
                     .onPreferenceChange(SheetContentHeightKey.self) { h in
                         guard h > 0 else { return }
                         contentHeight = h
@@ -350,6 +353,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
     /// ارتفاع الرأس فقط (`DSPanelCollapsedHeightKey`) — للمصغّر؛ المحتوى يبقى ويُقصّ
     @State private var collapsedHeight: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
+    /// لون القسم داخل المربّع — من الواجهة التي فتحته، واحتياطاً القسم المختار
+    @Environment(\.dsSection) private var section
 
     var body: some View {
         GeometryReader { geo in
@@ -370,6 +375,7 @@ struct DSExpandableCenterPanel<Content: View>: View {
                     // بلا مقبض ولا ×: التوسيع بزر داخل المحتوى، والإغلاق بالضغط خارجه (طلب المالك)
                     content()
                         .environment(\.dsInCenterBox, true)
+                        .dsSection(section ?? AppSection.current)
                         .onPreferenceChange(SheetContentHeightKey.self) { h in
                             if h > 0 { contentHeight = h }
                         }
@@ -428,10 +434,18 @@ private struct DSAlertBody<A: View, M: View>: View {
     let actions: A
     let message: M?
     let onDismiss: () -> Void
+    /// لحظة فرح فوق العنوان (طلب المالك ٢٠٢٦-١٠-٠٥) — nil = الرسالة كما كانت
+    var moment: FTMoments.Moment? = nil
+    @Environment(\.dsSection) private var section
 
     var body: some View {
         // نفس لغة المربّعات: البطاقة تكبر ← العنوان ← النص ← الأزرار آخراً
         DSCenterCard(onBackgroundTap: nil, animatesContent: false) {
+            if let moment {
+                FTMomentView(moment: moment, tint: section?.fill ?? DS.Color.actionNavy)
+                    .frame(height: 112)
+                    .frame(maxWidth: .infinity)
+            }
             Text(title)
                 .font(DS.Font.plex(17, weight: .bold))
                 .foregroundColor(DS.Color.textPrimary)
@@ -476,7 +490,13 @@ final class DSPopupPresenter {
     /// النافذة الرئيسية قبل العرض — تعود «مفتاحاً» بعد الإغلاق (للوحة المفاتيح والتركيز)
     private weak var previousKey: UIWindow?
 
+    /// يعرض في النافذة المستقلّة بلون القسم المختار (`AppSection.current`)
     func show<V: View>(_ view: V) -> UUID {
+        show(view, section: AppSection.current)
+    }
+
+    /// `section`: لون القسم داخل النافذة المستقلّة (لا تصلها بيئة التطبيق)
+    func show<V: View>(_ view: V, section: AppSection?) -> UUID {
         let id = UUID()
         token = id
         guard let scene = UIApplication.shared.connectedScenes
@@ -485,7 +505,7 @@ final class DSPopupPresenter {
             ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
         else { return id }
         if window == nil { previousKey = scene.windows.first(where: \.isKeyWindow) }
-        let host = UIHostingController(rootView: AnyView(view.environment(\.dsInCenterBox, true)))
+        let host = UIHostingController(rootView: AnyView(view.environment(\.dsInCenterBox, true).dsSection(section)))
         host.view.backgroundColor = .clear
         let w = window ?? UIWindow(windowScene: scene)
         w.windowLevel = .alert + 1
@@ -535,10 +555,13 @@ private struct DSAlertModifier<A: View, M: View>: ViewModifier {
     @Binding var isPresented: Bool
     let actions: () -> A
     let message: (() -> M)?
+    var moment: FTMoments.Moment? = nil
     @State private var shownID: UUID?
     /// أحدث نسخة من الأزرار والنص — onChange يلتقط قيم الرسم السابق، فالرسالة
     /// المبنية من بيانات (presenting) كانت تظهر بالعنوان فقط لأن البيانات nil وقتها
     @State private var latest = DSAlertLatest<A, M>()
+    /// زر الإجراء في الرسالة بلون قسم الواجهة التي أظهرتها
+    @Environment(\.dsSection) private var section
 
     func body(content: Content) -> some View {
         latest.actions = actions
@@ -560,9 +583,10 @@ private struct DSAlertModifier<A: View, M: View>: ViewModifier {
             onDismiss: {
                 // بعد ظهور أثر الضغط — ثم تُغلق النافذة عبر onChange
                 DispatchQueue.main.async { binding.wrappedValue = false }
-            }
+            },
+            moment: moment
         )
-        shownID = DSPopupPresenter.shared.show(view)
+        shownID = DSPopupPresenter.shared.show(view, section: section ?? AppSection.current)
     }
 
     private func dismissWindow() {
@@ -577,21 +601,23 @@ extension View {
     func dsAlert<A: View>(
         _ title: String,
         isPresented: Binding<Bool>,
+        moment: FTMoments.Moment? = nil,
         @ViewBuilder actions: @escaping () -> A
     ) -> some View {
         modifier(DSAlertModifier<A, EmptyView>(title: title, isPresented: isPresented,
-                                                actions: actions, message: nil))
+                                                actions: actions, message: nil, moment: moment))
     }
 
     /// بديل `.alert` بتصميم التطبيق الموحّد (عنوان + أزرار + نص)
     func dsAlert<A: View, M: View>(
         _ title: String,
         isPresented: Binding<Bool>,
+        moment: FTMoments.Moment? = nil,
         @ViewBuilder actions: @escaping () -> A,
         @ViewBuilder message: @escaping () -> M
     ) -> some View {
         modifier(DSAlertModifier(title: title, isPresented: isPresented,
-                                 actions: actions, message: message))
+                                 actions: actions, message: message, moment: moment))
     }
 
     /// بديل `.alert(presenting:)` — الأزرار والنص يُبنيان من البيانات المعروضة

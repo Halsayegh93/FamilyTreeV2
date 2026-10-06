@@ -108,7 +108,7 @@ enum DiwaniyaKind: String, CaseIterable, Identifiable {
 
     var tint: SwiftUI.Color {
         switch self {
-        case .diwaniya: return DS.Color.tileDiwaniya
+        case .diwaniya: return AppSection.diwaniyas.fill   // لون تبويب الديوانيات
         case .husseiniya: return DS.Color.composerHusseiniya
         }
     }

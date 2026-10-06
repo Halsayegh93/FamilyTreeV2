@@ -72,7 +72,7 @@ struct FamilyArchiveView: View {
 
                 if archiveVM.isLoading && archiveVM.items.isEmpty {
                     Spacer()
-                    ProgressView().tint(DS.Color.primary)
+                    ProgressView().tint(AppSection.library.ink)
                     Spacer()
                 } else if archiveVM.items(in: selectedCategory).isEmpty {
                     Spacer()
@@ -166,6 +166,7 @@ struct FamilyArchiveView: View {
         .fullScreenCover(isPresented: $showingUpload) {
             DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
                 ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: selectedCategory ?? .documents)
+                    .dsSectionPage(.library)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
             }
             .background(ClearPresentationBackground())
         }
@@ -178,6 +179,7 @@ struct FamilyArchiveView: View {
         .fullScreenCover(item: $itemToEdit) { item in
             DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
                 ArchiveEditSheet(archiveVM: archiveVM, item: item)
+                    .dsSectionPage(.library)
             }
             .background(ClearPresentationBackground())
         }
@@ -270,6 +272,9 @@ struct FamilyArchiveView: View {
             Text(L10n.t("حذف \(selectedIDs.count) عنصر نهائياً من المكتبة؟",
                        "Permanently delete \(selectedIDs.count) items from the archive?"))
         }
+        // «داخل المكتبة نفس الالوان» (طلب المالك ٢٠٢٦-١٠-٠٥): الصفحة وكل ما يُفتح منها بلون
+        // المكتبة — مثل التبويبات (البيئة + AppSection.current للرسائل ومربّع التاريخ)
+        .dsSectionPage(.library)
     }
 
     // MARK: - Selection Mode UI
@@ -294,7 +299,7 @@ struct FamilyArchiveView: View {
                 Text(allInCategorySelected ? L10n.t("إلغاء الكل", "Clear all")
                                            : L10n.t("تحديد الكل", "Select all"))
                     .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(AppSection.library.ink)
             }
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -305,7 +310,7 @@ struct FamilyArchiveView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md)
-                .strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1)
+                .strokeBorder(AppSection.library.ink.opacity(0.18), lineWidth: 1)
         )
     }
 
@@ -316,7 +321,7 @@ struct FamilyArchiveView: View {
             .foregroundColor(isSelected ? .white : DS.Color.textPrimary.opacity(0.7))
             .background(
                 Circle()
-                    .fill(isSelected ? DS.Color.primary : Color.white.opacity(0.85))
+                    .fill(isSelected ? AppSection.library.ink : Color.white.opacity(0.85))
                     .frame(width: 22, height: 22)
             )
             .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
@@ -433,7 +438,7 @@ struct FamilyArchiveView: View {
     // التصميم: حاوية ultraThinMaterial. الفلتر النشط = pill ممتدّ بلون فئته + اسم + عدّاد.
     // البقية = أيقونات دائرية بلون باهت. النقر على أيقونة يبدّل النشط بـ matched geometry.
 
-    private var allCategoryAccent: Color { DS.Color.primary }
+    private var allCategoryAccent: Color { AppSection.library.ink }
     private var allCategoryIcon: String { "square.grid.2x2.fill" }
 
     private func accentColor(for category: ArchiveItem.Category?) -> Color {
@@ -458,13 +463,13 @@ struct FamilyArchiveView: View {
         VStack(spacing: 6) {
             Image(systemName: "doc.text.fill")
                 .font(.system(size: 36, weight: .light))
-                .foregroundColor(DS.Color.primary.opacity(0.85))
+                .foregroundColor(AppSection.library.ink.opacity(0.85))
             Text("PDF")
                 .font(DS.Font.scaled(11, weight: .black))
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(AppSection.library.ink)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 1)
-                .background(Capsule().fill(DS.Color.primary.opacity(0.15)))
+                .background(Capsule().fill(AppSection.library.ink.opacity(0.15)))
         }
     }
 
@@ -625,6 +630,7 @@ struct FamilyArchiveView: View {
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(borderColor(for: item), lineWidth: 1)
         )
+        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
         .opacity(item.approvalStatus == .rejected ? 0.55 : (item.isHidden || item.approvalStatus == .pending ? 0.75 : 1.0))
         .dsSubtleShadow()
     }
@@ -766,7 +772,7 @@ struct FamilyArchiveView: View {
         case .rejected: return DS.Color.error.opacity(0.35)
         case .pending:  return DS.Color.warning.opacity(0.35)
         case .approved: return item.isHidden ? DS.Color.textTertiary.opacity(0.30)
-                                             : DS.Color.primary.opacity(0.08)
+                                             : AppSection.library.ink.opacity(0.08)
         }
     }
 
@@ -786,9 +792,9 @@ struct FamilyArchiveView: View {
 
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.md) {
-            Image(systemName: selectedCategory?.iconName ?? "archivebox")
-                .font(.system(size: 56, weight: .light))
-                .foregroundColor(DS.Color.textTertiary)
+            // كتاب تتقلّب صفحته بلون المكتبة (رسومات متحرّكة — طلب المالك ٢٠٢٦-١٠-٠٤)
+            EmptyStateArt(icon: selectedCategory?.iconName ?? "archivebox",
+                          tint: AppSection.HomeTile.library.ink, kind: .library)
             Text(L10n.t("لا توجد عناصر في هذا القسم بعد",
                        "No items in this section yet"))
                 .font(DS.Font.callout)
@@ -942,16 +948,20 @@ struct ArchiveUploadSheet: View {
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 7) {
-                ZStack {
-                    Circle().fill(tint.opacity(0.14)).frame(width: 56, height: 56)
-                    Circle().strokeBorder(tint.opacity(0.35), lineWidth: 1).frame(width: 56, height: 56)
-                    Image(systemName: icon)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(tint)
-                        .offset(y: floatIcons ? -3 : 2)
-                        .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true).delay(delay),
-                                   value: floatIcons)
+                // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الدائرة الطافية الحالية
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: tint, size: 56) }) {
+                    ZStack {
+                        Circle().fill(tint.opacity(0.14)).frame(width: 56, height: 56)
+                        Circle().strokeBorder(tint.opacity(0.35), lineWidth: 1).frame(width: 56, height: 56)
+                        Image(systemName: icon)
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundColor(tint)
+                            .offset(y: floatIcons ? -3 : 2)
+                            .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true).delay(delay),
+                                       value: floatIcons)
+                    }
                 }
+                .frame(width: 56, height: 56)
                 .accessibilityHidden(true)   // زخرفة — العنوان والوصف يُقرآن
                 Text(title)
                     .font(DS.Font.plex(14, weight: .bold))
@@ -965,6 +975,7 @@ struct ArchiveUploadSheet: View {
             .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.background))
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .strokeBorder(tint.opacity(0.4), style: StrokeStyle(lineWidth: 1.2, dash: [6, 4])))
+            .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -1113,7 +1124,7 @@ struct ArchiveUploadSheet: View {
                 HStack(spacing: 6) {
                     Image(systemName: ArchiveItem.categoryIcon(categoryKey))
                         .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(AppSection.library.ink)
                     Text(ArchiveItem.categoryName(categoryKey))
                         .font(DS.Font.scaled(14))
                         .foregroundColor(DS.Color.textPrimary)
@@ -1326,7 +1337,7 @@ struct ArchiveEditSheet: View {
                 HStack(spacing: 6) {
                     Image(systemName: ArchiveItem.categoryIcon(categoryKey))
                         .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(AppSection.library.ink)
                     Text(ArchiveItem.categoryName(categoryKey))
                         .font(DS.Font.scaled(14))
                         .foregroundColor(DS.Color.textPrimary)
@@ -1411,7 +1422,7 @@ struct ArchiveItemViewer: View {
                         } else {
                             Image(systemName: "square.and.arrow.down")
                                 .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.primary)
+                                .foregroundColor(AppSection.library.ink)
                         }
                     }
                     .disabled(downloading)
@@ -1646,15 +1657,15 @@ private struct PDFThumbnailView: View {
                 VStack(spacing: 6) {
                     Image(systemName: "doc.text.fill")
                         .font(.system(size: 36, weight: .light))
-                        .foregroundColor(DS.Color.primary.opacity(0.85))
+                        .foregroundColor(AppSection.library.ink.opacity(0.85))
                     Text("PDF")
                         .font(DS.Font.scaled(11, weight: .black))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(AppSection.library.ink)
                         .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(Capsule().fill(DS.Color.primary.opacity(0.15)))
+                        .background(Capsule().fill(AppSection.library.ink.opacity(0.15)))
                 }
             } else {
-                ProgressView().tint(DS.Color.primary)
+                ProgressView().tint(AppSection.library.ink)
             }
         }
         .task(id: url) { await load() }

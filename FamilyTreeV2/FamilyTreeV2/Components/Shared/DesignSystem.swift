@@ -10,6 +10,19 @@ enum DS {
         static let primary       = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#7FA8D6") // Royal Navy
         /// كحلي الأزرار الممتلئة (منتصف gradientPrimary) — لا يفتح في الداكن مثل primary
         static let actionNavy    = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#173A5E")
+        // «كل قسم بلونه» (طلب المالك ٢٠٢٦-١٠-٠٤): `primary` و`actionNavy` في المكوّنات المشتركة
+        // صارا «إطار» يتبع لون التبويب (AppSection). ما له معنى يُمرَّر بتوكن ثابت من هنا —
+        // نفس الكحلي تماماً، لكنه نسخة مستقلّة فلا يتبدّل مع القسم:
+        /// كحلي العلامة الثابت: الإعلان، المعلومة، نوع الخبر الافتراضي، الصورة الرمزية الافتراضية
+        static let brand         = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#7FA8D6")
+        /// تعبئة كحلي العلامة الثابتة (رأس مربّع «إعلان»/«خبر») — مثل actionNavy ولا تتبع القسم
+        static let brandFill     = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#173A5E")
+        /// الطرف الفاتح من تدرّج الكحلي (`gradientPrimary`)
+        static let brandLight    = SwiftUI.Color.adaptive(light: "#285D8D", dark: "#1E4B75")
+        /// الذكور/الأبناء وعقدة العضو في الشجرة — كحلي ثابت
+        static let male          = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#7FA8D6")
+        /// تعبئة «ذكر» المختار — كحلي غامق ثابت يُقرأ عليه النص الأبيض
+        static let maleFill      = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#173A5E")
         /// الكلمة المتغيّرة في تعديل البيانات — كبسولة خضراء خفيفة جداً بلا إطار (طلب المالك)
         static let changedBg     = SwiftUI.Color.adaptive(light: "#EEF8F1", dark: "#1C3327")
         static let changedFg     = SwiftUI.Color.adaptive(light: "#3C9A63", dark: "#9FE3B8")
@@ -39,7 +52,7 @@ enum DS {
             colors: [
                 SwiftUI.Color.adaptive(light: "#102B47", dark: "#0E2238"),
                 actionNavy,
-                SwiftUI.Color.adaptive(light: "#2C6396", dark: "#23507D")
+                brandLight
             ],
             startPoint: .bottomTrailing, endPoint: .topLeading
         )
@@ -88,19 +101,18 @@ enum DS {
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
 
-        // MARK: Feature Gradients — موحد
-        static let gradientHome     = gradientPrimary
-        static let gradientTree     = gradientPrimary
-        static let gradientDiwaniya = gradientPrimary
-        static let gradientProfile  = gradientPrimary
-        static let gradientAdmin    = gradientPrimary
+        // MARK: Feature Gradients / Tints — «كل قسم بلونه»: اختصارات لـ AppSection (المصدر الوحيد)
+        static var gradientHome: LinearGradient     { AppSection.home.gradient }
+        static var gradientTree: LinearGradient     { AppSection.tree.gradient }
+        static var gradientDiwaniya: LinearGradient { AppSection.diwaniyas.gradient }
+        static var gradientProfile: LinearGradient  { AppSection.profile.gradient }
+        static var gradientAdmin: LinearGradient    { AppSection.admin.gradient }
 
-        // MARK: Feature Tints — لون واحد موحد
-        static let tintHome     = primary
-        static let tintTree     = primary
-        static let tintDiwaniya = primary
-        static let tintProfile  = primary
-        static let tintAdmin    = primary
+        static var tintHome: SwiftUI.Color     { AppSection.home.ink }
+        static var tintTree: SwiftUI.Color     { AppSection.tree.ink }
+        static var tintDiwaniya: SwiftUI.Color { AppSection.diwaniyas.ink }
+        static var tintProfile: SwiftUI.Color  { AppSection.profile.ink }
+        static var tintAdmin: SwiftUI.Color    { AppSection.admin.ink }
 
         // Surfaces — الكروت لازم تبان فوق الخلفية
         static let background       = SwiftUI.Color(.systemBackground)
@@ -129,7 +141,7 @@ enum DS {
         static let success = SwiftUI.Color.adaptive(light: "#157F3C", dark: "#45BC72") // Emerald — يعدّي AA (~5:1) كنص وكتعبئة
         static let warning = SwiftUI.Color.adaptive(light: "#9A6A0A", dark: "#F0B040") // Amber — يعدّي AA للنص بالوضع الفاتح
         static let error   = SwiftUI.Color.adaptive(light: "#D32F2F", dark: "#EF5350") // أحمر صافي
-        static let info    = primary // كحلي
+        static let info    = brand // كحلي ثابت (معنى: معلومة) — لا يتبع القسم
 
         // Role Colors — باستيل ناعم
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }
@@ -143,9 +155,9 @@ enum DS {
         // News Type Colors
         static let newsWedding      = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
         static let newsBirth        = SwiftUI.Color.adaptive(light: "#2E8B57", dark: "#5FBF8A") // Sea Green
-        static let newsDeath        = SwiftUI.Color.adaptive(light: "#8A8A8E", dark: "#A8A8AC") // Muted Gray
+        static let newsDeath        = SwiftUI.Color.adaptive(light: "#68686D", dark: "#8E8E93") // Muted Gray — أغمق ليقرأ الأبيض فوقه
         static let newsVote         = SwiftUI.Color.adaptive(light: "#4A5D78", dark: "#9FB0C8") // Slate
-        static let newsAnnouncement = primary                                                    // Navy
+        static let newsAnnouncement = brand                                                      // Navy ثابت
         static let newsCongrats     = accent                                                     // Gold
         static let newsReminder     = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry
         static let newsInvitation   = SwiftUI.Color.adaptive(light: "#8C2F45", dark: "#C9667D") // Burgundy
@@ -163,25 +175,29 @@ enum DS {
         static let femaleDeceasedBorder = SwiftUI.Color.adaptive(light: "#3B2440", dark: "#D3BCD1")
 
         // Quick Access Grid Colors
-        static let gridTree      = primary
+        static var gridTree: SwiftUI.Color      { AppSection.tree.ink }      // لون تبويب الشجرة
         static let gridAlerts    = error
         static let gridDiwaniya  = secondary
-        static let gridContact   = accent
-        static let gridMessaging = SwiftUI.Color.adaptive(light: "#3D6670", dark: "#86AEB8") // Slate Teal — التواصل
+        static var gridContact: SwiftUI.Color   { AppSection.admin.ink }     // التواصل = رسائل الإدارة
+        static var gridMessaging: SwiftUI.Color { AppSection.admin.ink }     // التواصل = رسائل الإدارة
 
-        // مربّعات الرئيسية — هوية رسمية: كل قسم بلون عميق هادئ من نفس العائلة اللونية
-        static let tileTree     = secondary                                                 // أخضر غابي
-        static let tileDiwaniya = primary                                                   // كحلي
-        static let tileLibrary  = SwiftUI.Color.adaptive(light: "#7A2E3A", dark: "#A8505E") // عنّابي
-        static let tileProjects = accent                                                    // ذهبي
-        static let tileContact  = SwiftUI.Color.adaptive(light: "#3D6670", dark: "#5E8A95") // رمادي مزرق
+        // مربّعات الرئيسية — «كل قسم بلونه» وكلها من عائلة لوحة واحدة (طلب المالك ٢٠٢٦-١٠-٠٤):
+        // الشجرة والديوانيات بلون تبويبيهما، و«التواصل» (رسائل الإدارة) بلون الإدارة، والمكتبة
+        // والمشاريع بدرجتين إضافيتين من AppSection.HomeTile (بين درجات الأقسام وبنفس العمق).
+        static var tileTree: SwiftUI.Color     { AppSection.tree.fill }                 // لون الشجرة
+        static var tileDiwaniya: SwiftUI.Color { AppSection.diwaniyas.fill }            // لون الديوانيات
+        /// لون المكتبة في صفحاتها ومربّعاتها (سطح المربّع في الرئيسية: `AppSection.HomeTile.library.fill`)
+        static var tileLibrary: SwiftUI.Color  { AppSection.HomeTile.library.accent }
+        /// لون المشاريع في صفحاتها ومربّعاتها (سطح المربّع في الرئيسية: `AppSection.HomeTile.projects.fill`)
+        static var tileProjects: SwiftUI.Color { AppSection.HomeTile.projects.accent }
+        static var tileContact: SwiftUI.Color  { AppSection.admin.fill }                // لون الإدارة
 
         // الطرف الغامق من تدرّج كل مربّع
-        static let tileTreeDeep     = secondaryDark
-        static let tileDiwaniyaDeep = primaryDark
-        static let tileLibraryDeep  = SwiftUI.Color.adaptive(light: "#561F29", dark: "#7A2E3A")
-        static let tileProjectsDeep = accentDark
-        static let tileContactDeep  = SwiftUI.Color.adaptive(light: "#284850", dark: "#3D6670")
+        static var tileTreeDeep: SwiftUI.Color     { AppSection.tree.deep }
+        static var tileDiwaniyaDeep: SwiftUI.Color { AppSection.diwaniyas.deep }
+        static var tileLibraryDeep: SwiftUI.Color  { AppSection.HomeTile.library.deep }
+        static var tileProjectsDeep: SwiftUI.Color { AppSection.HomeTile.projects.deep }
+        static var tileContactDeep: SwiftUI.Color  { AppSection.admin.deep }
 
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {
@@ -488,17 +504,26 @@ extension View {
     }
 
     /// زر دائري فوق الهيدر الملوّن — زجاج iOS 27 اللامع (طلب المالك):
-    /// زجاج «clear» تفاعلي بلون الهيدر الكحلي، فيلمع ويبقى من لون الهيدر.
+    /// زجاج «clear» تفاعلي بلون الهيدر (لون القسم)، فيلمع ويبقى من لون الهيدر.
     /// الأنظمة الأقدم: دائرة بلون الهيدر وإطار أبيض خفيف.
-    @ViewBuilder
     func dsHeaderGlassCircle() -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(.clear.tint(DS.Color.headerControlFill.opacity(0.55)).interactive(), in: Circle())
-        } else {
-            self
-                .background(Circle().fill(DS.Color.headerControlFill))
-                .overlay(Circle().strokeBorder(SwiftUI.Color.white.opacity(0.18), lineWidth: 1))
-        }
+        modifier(DSHeaderGlassCircle())
+    }
+
+    func dsSubtleShadow() -> some View {
+        self.shadow(color: DS.Shadow.subtle.color,
+                    radius: DS.Shadow.subtle.radius,
+                    x: DS.Shadow.subtle.x,
+                    y: DS.Shadow.subtle.y)
+    }
+
+    /// ظل «التوهّج» — بلمسة لون القسم (كحلي العلامة خارج التبويبات)
+    func dsGlowShadow() -> some View {
+        modifier(DSSectionGlow(style: DS.Shadow.glow, sectionOpacity: 0.16))
+    }
+
+    func dsNeonShadow() -> some View {
+        modifier(DSSectionGlow(style: DS.Shadow.neon, sectionOpacity: 0.14))
     }
 
     /// شريط التبويبات: على iOS 26+ نترك زجاج النظام السائل كما هو
@@ -524,27 +549,6 @@ extension View {
         }
     }
 
-    func dsSubtleShadow() -> some View {
-        self.shadow(color: DS.Shadow.subtle.color,
-                    radius: DS.Shadow.subtle.radius,
-                    x: DS.Shadow.subtle.x,
-                    y: DS.Shadow.subtle.y)
-    }
-
-    func dsGlowShadow() -> some View {
-        self.shadow(color: DS.Shadow.glow.color,
-                    radius: DS.Shadow.glow.radius,
-                    x: DS.Shadow.glow.x,
-                    y: DS.Shadow.glow.y)
-    }
-
-    func dsNeonShadow() -> some View {
-        self.shadow(color: DS.Shadow.neon.color,
-                    radius: DS.Shadow.neon.radius,
-                    x: DS.Shadow.neon.x,
-                    y: DS.Shadow.neon.y)
-    }
-
     func dsAccentGlow() -> some View {
         self.shadow(color: DS.Shadow.glowAccent.color,
                     radius: DS.Shadow.glowAccent.radius,
@@ -565,6 +569,7 @@ extension View {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .stroke(SwiftUI.Color.white.opacity(0.2), lineWidth: 0.5)
             )
+            .trialCardSkin(radius: radius)   // TMP-ART-TRIAL
             .dsCardShadow()
     }
 
@@ -595,6 +600,35 @@ extension View {
     }
 }
 
+/// خلفية زر الرأس الدائري بلون القسم (`AppSection.control`)، وكحلي العلامة خارج التبويبات
+private struct DSHeaderGlassCircle: ViewModifier {
+    @Environment(\.dsSection) private var section
+
+    func body(content: Content) -> some View {
+        let fill = section?.control ?? DS.Color.headerControlFill
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.clear.tint(fill.opacity(0.55)).interactive(), in: Circle())
+        } else {
+            content
+                .background(Circle().fill(fill))
+                .overlay(Circle().strokeBorder(SwiftUI.Color.white.opacity(0.18), lineWidth: 1))
+        }
+    }
+}
+
+/// ظل ملوّن بنفس شفافية `DS.Shadow` — بغامق القسم بدل الكحلي الثابت
+private struct DSSectionGlow: ViewModifier {
+    let style: DS.ShadowStyle
+    /// شفافية لون القسم — نفس شفافية الكحلي في `style`
+    let sectionOpacity: Double
+    @Environment(\.dsSection) private var section
+
+    func body(content: Content) -> some View {
+        content.shadow(color: section.map { $0.deep.opacity(sectionOpacity) } ?? style.color,
+                       radius: style.radius, x: style.x, y: style.y)
+    }
+}
+
 // MARK: - Reusable Components
 
 /// كرت موحد — Liquid Glass card
@@ -607,6 +641,9 @@ struct DSCard<Content: View>: View {
         self.padding = padding
     }
 
+    /// الكحلي في الدائرة الزخرفية يتبع لون القسم
+    @Environment(\.dsSection) private var section
+
     var body: some View {
         VStack(spacing: 0) { content }
             .padding(padding)
@@ -615,7 +652,7 @@ struct DSCard<Content: View>: View {
                     RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                         .fill(DS.Color.cardBackground)
                     Circle()
-                        .fill(DS.Color.primary.opacity(0.06))
+                        .fill(DS.Color.primary.dsChrome(in: section).opacity(0.06))
                         .frame(width: 200, height: 200)
                         .blur(radius: 55)
                         .offset(x: 120, y: -80)
@@ -632,6 +669,7 @@ struct DSCard<Content: View>: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             // منطقة اللمس = حدود البطاقة فقط
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
             .dsCardShadow()
     }
 }
@@ -735,6 +773,8 @@ struct DSPrimaryButton: View {
     let action: () -> Void
     var useGradient: Bool = true
     var color: Color = DS.Color.primary
+    /// الكحلي الافتراضي يتبع لون القسم (تدرّجه وتعبئته)
+    @Environment(\.dsSection) private var section
 
     init(_ title: String, icon: String? = nil, isLoading: Bool = false, useGradient: Bool = true, color: Color = DS.Color.primary, action: @escaping () -> Void) {
         self.title = title
@@ -754,7 +794,8 @@ struct DSPrimaryButton: View {
     }
 
     var body: some View {
-        Button(action: debouncedAction) {
+        let color = self.color.dsChromeFill(in: section)
+        return Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
                 if isLoading {
                     ProgressView().tint(.white)
@@ -782,7 +823,7 @@ struct DSPrimaryButton: View {
                     RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                         .fill(
                             useGradient
-                                ? AnyShapeStyle(DS.Color.gradientPrimary)
+                                ? AnyShapeStyle(section?.gradient ?? DS.Color.gradientPrimary)
                                 : AnyShapeStyle(isLoading ? color.opacity(0.7) : color)
                         )
                     RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
@@ -860,9 +901,12 @@ struct DSTextField: View {
     var hint: String? = nil
 
     @FocusState private var isFocused: Bool
+    /// الكحلي الافتراضي يتبع لون القسم
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        HStack(spacing: DS.Spacing.md) {
+        let iconColor = self.iconColor.dsChrome(in: section)
+        return HStack(spacing: DS.Spacing.md) {
             DSIcon(icon, color: iconColor)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -926,7 +970,12 @@ struct DSIcon: View {
         self.iconSize = iconSize
     }
 
+    /// الكحلي (الافتراضي) يتبع لون القسم — وألوان المعاني كما هي
+    @Environment(\.dsSection) private var section
+
     var body: some View {
+        let color = self.color.dsChrome(in: section).dsReadableGlyph
+        return TrialArt(make: { ArtDispatch.stateIcon($0, icon: name, tint: color, size: size) }) {   // TMP-ART-TRIAL
         Image(systemName: name)
             .font(DS.Font.scaled(iconSize, weight: .bold))
             .foregroundColor(color)
@@ -939,6 +988,8 @@ struct DSIcon: View {
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+        }
+        .frame(width: size, height: size)
     }
 }
 
@@ -1011,18 +1062,24 @@ struct DSSectionHeader: View {
     var icon: String? = nil
     var trailing: String? = nil
     var iconColor: Color = DS.Color.primary
+    @Environment(\.dsSection) private var section
 
     // نفس عناوين أقسام مربّعات الإضافة (DSComposerSection) — تصميم موحّد في
     // كل التطبيق (طلب المالك ٢٠٢٦-٠٩-٢٦): أيقونة في دائرة ملوّنة + عنوان غامق،
     // والتلميح الثانوي في الطرف
     var body: some View {
-        HStack(spacing: 7) {
+        // الكحلي الافتراضي ← حبر القسم
+        let iconColor = self.iconColor.dsChrome(in: section).dsReadableGlyph
+        return HStack(spacing: 7) {
             if let icon {
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: iconColor, size: 22) }) {   // TMP-ART-TRIAL
                 Image(systemName: icon)
                     .font(.system(size: 10.5, weight: .bold))
                     .foregroundColor(iconColor)
                     .frame(width: 22, height: 22)
                     .background(Circle().fill(iconColor.opacity(0.13)))
+                }
+                .frame(width: 22, height: 22)
             }
             Text(title)
                 .dsFieldFont(12.5, weight: .bold)
@@ -1050,19 +1107,19 @@ struct DSSheetHeader: View {
     var showBackground: Bool = true
     var onCancel: () -> Void
     var onConfirm: () -> Void
+    @Environment(\.dsSection) private var section
 
     var body: some View {
-        VStack(spacing: 0) {
+        let accent = DS.Color.primary.dsChrome(in: section)
+        return VStack(spacing: 0) {
             Capsule()
                 .fill(Color.secondary.opacity(0.4))
                 .frame(width: 40, height: 5)
                 .padding(.top, DS.Spacing.sm)
 
             HStack {
-                Button(cancelTitle, action: onCancel)
-                    .font(DS.Font.callout)
-                    .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.textSecondary)
+                // «إلغاء» أعلى الورقة بالأحمر العريض — نفس زر شريط الأوراق الموحّد
+                DSToolbarCancelButton(title: cancelTitle, action: onCancel)
 
                 Spacer()
 
@@ -1073,11 +1130,11 @@ struct DSSheetHeader: View {
 
                 Button(action: onConfirm) {
                     if isLoading {
-                        ProgressView().tint(DS.Color.primary)
+                        ProgressView().tint(accent)
                     } else {
                         Text(confirmTitle)
                             .font(DS.Font.calloutBold)
-                            .foregroundColor(confirmDisabled ? DS.Color.textTertiary : DS.Color.primary)
+                            .foregroundColor(confirmDisabled ? DS.Color.textTertiary : accent)
                     }
                 }
                 .disabled(confirmDisabled || isLoading)
@@ -1197,12 +1254,14 @@ struct DSFloatingButton: View {
     var icon: String? = nil
     var label: String? = nil
     var color: Color = DS.Color.primary
-    /// تدرّج التعبئة — افتراضياً نفس تدرّج الهيدر
-    var gradient: LinearGradient = DS.Color.gradientPrimary
+    /// تدرّج التعبئة — nil = نفس تدرّج الهيدر (لون القسم)
+    var gradient: LinearGradient? = nil
     var action: () -> Void
 
     @State private var appeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// الكحلي يتبع لون القسم
+    @Environment(\.dsSection) private var section
 
     private var debouncedAction: () -> Void {
         let key = "DSFloating_\(icon ?? "")_\(label ?? "")"
@@ -1230,7 +1289,8 @@ struct DSFloatingButton: View {
             .frame(width: label == nil ? 56 : nil, height: label == nil ? 56 : nil)
         }
         // شفّاف عادةً، ولونه الطبيعي عند الضغط (طلب المالك)
-        .buttonStyle(FloatingButtonStyle(gradient: gradient, color: color))
+        .buttonStyle(FloatingButtonStyle(gradient: gradient ?? section?.gradient ?? DS.Color.gradientPrimary,
+                                         color: color.dsChrome(in: section)))
         .scaleEffect(appeared || reduceMotion ? 1 : 0.3)
         .opacity(appeared ? 1 : 0)
         .onAppear {
@@ -1307,7 +1367,8 @@ struct DSApproveRejectButtons: View {
     var approveTitle: String
     var rejectTitle: String
     var isLoading: Bool = false
-    var approveGradient: LinearGradient = DS.Color.gradientPrimary
+    /// nil = تدرّج القسم (كحلي العلامة خارج التبويبات)
+    var approveGradient: LinearGradient? = nil
     var showReject: Bool = true
     /// عند true تكون الأزرار بحواف دائرية كاملة (capsule) بدل المستطيل المُدوّر
     var useCapsule: Bool = false
@@ -1318,6 +1379,7 @@ struct DSApproveRejectButtons: View {
 
     @State private var showApproveConfirm = false
     @State private var showRejectConfirm = false
+    @Environment(\.dsSection) private var section
 
     private var cornerRadius: CGFloat { useCapsule ? DS.Radius.full : DS.Radius.md }
 
@@ -1369,7 +1431,7 @@ struct DSApproveRejectButtons: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DS.Spacing.md)
-                .background(approveGradient)
+                .background(approveGradient ?? section?.gradient ?? DS.Color.gradientPrimary)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .dsGlowShadow()
             }
@@ -1501,6 +1563,8 @@ struct DSTextButton: View {
     let icon: String?
     var color: Color = DS.Color.primary
     let action: () -> Void
+    /// الكحلي الافتراضي يتبع لون القسم (`dsChrome`)، وأي لون معنى آخر كما هو
+    @Environment(\.dsSection) private var dsSectionEnv
 
     init(_ title: String, icon: String? = nil, color: Color = DS.Color.primary, action: @escaping () -> Void) {
         self.title = title
@@ -1525,7 +1589,7 @@ struct DSTextButton: View {
                 Text(title).fontWeight(.semibold)
             }
             .font(DS.Font.callout)
-            .foregroundColor(color)
+            .foregroundColor(color.dsChrome(in: dsSectionEnv))
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xs)
             .contentShape(Rectangle())
@@ -1592,7 +1656,8 @@ struct DSMemberAvatar: View {
     let name: String
     let avatarUrl: String?
     var size: CGFloat = 44
-    var roleColor: Color = DS.Color.primary
+    /// افتراضياً كحلي ثابت (معنى: عضو) — لا يتبع لون القسم
+    var roleColor: Color = DS.Color.brand
 
     var body: some View {
         ZStack {
@@ -1640,8 +1705,12 @@ struct DSEmptyState: View {
     var style: Style = .simple
     /// أيقونة زر الإجراء — "arrow.clockwise" لإعادة المحاولة مثلاً
     var buttonIcon: String = "plus.circle.fill"
-    /// لون الأيقونة — استخدم DS.Color.success لحالات "كل شيء تمام"
+    /// لون الأيقونة — استخدم DS.Color.success لحالات "كل شيء تمام" (الكحلي يتبع لون القسم)
     var tint: SwiftUI.Color = DS.Color.primary
+    @Environment(\.dsSection) private var section
+
+    /// لون الحالة الفعلي: الكحلي ← حبر القسم، والباقي كما هو
+    private var shownTint: SwiftUI.Color { tint.dsChrome(in: section).dsReadableGlyph }
 
     var body: some View {
         VStack(spacing: DS.Spacing.xl) {
@@ -1679,11 +1748,11 @@ struct DSEmptyState: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// خلفية زر الإجراء: التدرّج الافتراضي للحالات العادية، لون صلب لحالات الخطأ/المخصصة
+    /// خلفية زر الإجراء: تدرّج القسم للحالات العادية (الكحلي أو لون القسم)، لون صلب لحالات الخطأ/المخصصة
     @ViewBuilder
     private var buttonBackground: some View {
-        if tint == DS.Color.primary {
-            DS.Color.gradientPrimary
+        if tint == DS.Color.primary || tint == DS.Color.actionNavy || tint.dsSectionOfFill != nil {
+            tint.dsSectionOfFill?.gradient ?? section?.gradient ?? DS.Color.gradientPrimary
         } else {
             tint
         }
@@ -1693,24 +1762,18 @@ struct DSEmptyState: View {
     private var iconArea: some View {
         switch style {
         case .simple:
-            ZStack {
-                Circle()
-                    .fill(tint.opacity(0.08))
-                    .frame(width: 100, height: 100)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(36, weight: .medium))
-                    .foregroundColor(tint.opacity(0.5))
-            }
+            // رسمة متحرّكة هادئة (طلب المالك ٢٠٢٦-١٠-٠٤) — ثابتة مع «تقليل الحركة»
+            EmptyStateArt(icon: icon, tint: shownTint)
         case .halo:
             ZStack {
                 Circle()
-                    .fill(tint.opacity(0.06))
+                    .fill(shownTint.opacity(0.06))
                     .frame(width: 130, height: 130)
                 Circle()
-                    .fill(tint.opacity(0.10))
+                    .fill(shownTint.opacity(0.10))
                     .frame(width: 95, height: 95)
                 Circle()
-                    .fill(tint)
+                    .fill(tint.dsChromeFill(in: section))
                     .frame(width: 64, height: 64)
                 Image(systemName: icon)
                     .font(DS.Font.scaled(28, weight: .bold))
@@ -1839,12 +1902,24 @@ extension View {
                 if isLoading {
                     ProgressView()
                 } else {
-                    Button(confirm, action: onConfirm)
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(disabled ? DS.Color.textTertiary : DS.Color.primary)
-                        .disabled(disabled)
+                    DSToolbarConfirmButton(title: confirm, disabled: disabled, action: onConfirm)
                 }
             }
         }
+    }
+}
+
+/// زر التأكيد أعلى الورقة — بحبر القسم (كحلي خارج التبويبات)
+private struct DSToolbarConfirmButton: View {
+    let title: String
+    let disabled: Bool
+    let action: () -> Void
+    @Environment(\.dsSection) private var section
+
+    var body: some View {
+        Button(title, action: action)
+            .font(DS.Font.calloutBold)
+            .foregroundColor(disabled ? DS.Color.textTertiary : DS.Color.primary.dsChrome(in: section))
+            .disabled(disabled)
     }
 }

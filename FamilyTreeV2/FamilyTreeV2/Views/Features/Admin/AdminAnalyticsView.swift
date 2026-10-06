@@ -257,7 +257,7 @@ struct AdminAnalyticsView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.sm) {
                     // عدد الذكور معروف دائماً (من الأعضاء) — النسبة فقط تنتظر شجرة النساء
                     genderBlock(title: L10n.t("ذكور", "Males"), count: males, total: total,
-                                color: DS.Color.primary, alignment: .leading,
+                                color: DS.Color.male, alignment: .leading,
                                 countKnown: true, shareKnown: known)
                     Spacer(minLength: 0)
                     genderBlock(title: L10n.t("إناث", "Females"), count: females, total: total,
@@ -267,7 +267,7 @@ struct AdminAnalyticsView: View {
                 // لمحة النسبة — بعد معرفة أرقام شجرة النساء (قبلها تبدو ١٠٠٪ ذكوراً)
                 if known {
                     SysDistributionBar(segments: [
-                        .init(id: "male", value: males, tint: DS.Color.primary),
+                        .init(id: "male", value: males, tint: DS.Color.male),
                         .init(id: "female", value: females, tint: DS.Color.female)
                     ], height: 12)
                 }
@@ -443,7 +443,7 @@ struct AdminAnalyticsView: View {
                 DSStatTile(value: leaves.formatted(), label: L10n.t("بدون أبناء", "No children"),
                            icon: "leaf.fill", tint: DS.Color.success)
                 DSStatTile(value: totalChildren.formatted(), label: L10n.t("روابط نسب", "Parent links"),
-                           icon: "arrow.triangle.branch", tint: DS.Color.primary)
+                           icon: "arrow.triangle.branch", tint: AppSection.admin.ink)
             }
         }
         .dsStaggerIn(6)
@@ -652,7 +652,7 @@ struct AdminAnalyticsView: View {
 
             LazyVGrid(columns: tileColumns(3), spacing: DS.Spacing.sm) {
                 DSStatTile(value: totalNews.formatted(), label: L10n.t("إجمالي", "Total"),
-                           icon: "newspaper.fill", tint: DS.Color.primary)
+                           icon: "newspaper.fill", tint: AppSection.admin.ink)
                 DSStatTile(value: approvedNews.formatted(), label: L10n.t("منشور", "Published"),
                            icon: "checkmark.seal.fill", tint: DS.Color.success)
                 DSStatTile(value: pendingNews.formatted(), label: L10n.t("معلق", "Pending"),

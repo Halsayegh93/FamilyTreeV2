@@ -406,15 +406,8 @@ struct GalleryAlbumDetailView: View {
 
     private var header: some View {
         HStack(spacing: DS.Spacing.md) {
-            DSIconButton(
-                icon: "chevron.backward",
-                iconColor: DS.Color.textPrimary,
-                fillColor: DS.Color.surface,
-                borderColor: DS.Color.primary.opacity(0.08),
-                borderWidth: 1
-            ) {
-                dismiss()
-            }
+            // زر الرجوع الموحّد فوق السطح (DSNavButtons)
+            DSBackButton { dismiss() }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(currentAlbum.title)
@@ -586,17 +579,8 @@ struct GalleryPhotoViewer: View {
                         .padding(.top, DS.Spacing.sm)
                     }
                     Spacer()
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 38, height: 38)
-                            .background(Circle().fill(Color.black.opacity(0.4)))
-                            .dsGlass(Circle())
-                    }
-                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
+                    // زر الإغلاق الموحّد فوق عارض الصور (DSNavButtons)
+                    DSCloseButton(context: .onMedia) { dismiss() }
                     .padding(.trailing, DS.Spacing.lg)
                     .padding(.top, DS.Spacing.sm)
                 }

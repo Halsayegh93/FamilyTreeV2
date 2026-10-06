@@ -39,7 +39,7 @@ struct DiwaniyasView: View {
                         subtitle: L10n.t("ديوانيات وحسينيات · \(cachedVisibleDiwaniyas.count)",
                                          "Diwaniyas & husseiniyas · \(cachedVisibleDiwaniyas.count)"),
                         icon: "map.fill",
-                        backgroundGradient: DS.Color.gradientPrimary
+                        backgroundGradient: AppSection.diwaniyas.gradient
                     )
 
                     kindFilterBar
@@ -235,7 +235,7 @@ struct DiwaniyasView: View {
     private var kindFilterBar: some View {
         HStack(spacing: 6) {
             filterChip(nil, title: L10n.t("الكل", "All"), icon: "square.grid.2x2.fill",
-                       count: cachedVisibleDiwaniyas.count, tint: DS.Color.actionNavy)
+                       count: cachedVisibleDiwaniyas.count, tint: AppSection.diwaniyas.fill)
             ForEach(DiwaniyaKind.allCases) { k in
                 filterChip(k, title: k.plural, icon: k.icon,
                            count: cachedVisibleDiwaniyas.filter { k == .husseiniya ? $0.isHusseiniya : !$0.isHusseiniya }.count,
@@ -261,7 +261,7 @@ struct DiwaniyasView: View {
                 Text("\(count)")
                     .font(DS.Font.plex(10.5, weight: .bold))
                     .padding(.horizontal, 5).padding(.vertical, 1)
-                    .background(Capsule().fill(selected ? Color.white.opacity(0.22) : tint.opacity(0.12)))
+                    .background(Capsule().fill(selected ? Color.white.opacity(0.22) : tint.dsReadableGlyph.opacity(0.12)))
             }
             .foregroundColor(selected ? .white : DS.Color.textSecondary)
             .frame(maxWidth: .infinity)
@@ -283,28 +283,8 @@ struct DiwaniyasView: View {
     private var emptyStateView: some View {
         VStack(spacing: DS.Spacing.xl) {
             Spacer()
-            ZStack {
-                Circle()
-                    .fill(DS.Color.gridDiwaniya.opacity(0.10))
-                    .frame(width: 120, height: 120)
-
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                DS.Color.gridDiwaniya.opacity(0.20),
-                                DS.Color.primary.opacity(0.10)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 96, height: 96)
-
-                Image(systemName: "mappin.slash")
-                    .font(DS.Font.scaled(40, weight: .bold))
-                    .foregroundColor(DS.Color.gridDiwaniya)
-            }
+            // دلّة يتصاعد بخارها بلون تبويب الديوانيات (طلب المالك ٢٠٢٦-١٠-٠٤: رسومات متحرّكة)
+            EmptyStateArt(icon: "mappin.slash", tint: AppSection.diwaniyas.ink)
 
             VStack(spacing: DS.Spacing.sm) {
                 Text(kindFilter == .husseiniya ? L10n.t("لا توجد حسينيات", "No Husseiniyas Yet")
@@ -328,7 +308,8 @@ struct DiwaniyasView: View {
     private func diwaniyaCard(for item: Diwaniya) -> some View {
         let isClosed = item.isClosed == true
         let isPending = item.approvalStatus == "pending"
-        let kindTint = item.isHusseiniya ? DS.Color.composerHusseiniya : DS.Color.gridDiwaniya
+        // الديوانية بلون تبويبها (حبر القسم)، والحسينية بأخضرها الثابت
+        let kindTint = item.isHusseiniya ? DS.Color.composerHusseiniya : AppSection.diwaniyas.ink
         let cardColor = isPending ? DS.Color.warning : (isClosed ? DS.Color.textTertiary : kindTint)
 
         return DSCard(padding: 0) {
@@ -349,7 +330,9 @@ struct DiwaniyasView: View {
 
                 // شريط علوي ملون
                 HStack(spacing: DS.Spacing.md) {
-                    // أيقونة بتدرج
+                    // أيقونة بتدرج — TMP-ART-TRIAL: رسم الاتجاه المختار، والحالي بديلاً
+                    TrialArt(make: { ArtDispatch.stateIcon($0, icon: item.isHusseiniya ? DiwaniyaKind.husseiniya.icon : (item.imageUrl ?? "map.fill"),
+                                                            tint: cardColor, size: DS.Icon.size) }) {   // TMP-ART-TRIAL
                     ZStack {
                         Circle()
                             .fill(
@@ -358,7 +341,7 @@ struct DiwaniyasView: View {
                                         ? [DS.Color.warning.opacity(0.2), DS.Color.warning.opacity(0.1)]
                                         : (isClosed
                                             ? [DS.Color.textTertiary.opacity(0.3), DS.Color.textTertiary.opacity(0.1)]
-                                            : [kindTint.opacity(0.2), DS.Color.primary.opacity(0.1)]),
+                                            : [kindTint.opacity(0.2), kindTint.opacity(0.1)]),
                                     startPoint: .topLeading, endPoint: .bottomTrailing
                                 )
                             )
@@ -367,6 +350,8 @@ struct DiwaniyasView: View {
                             .font(DS.Font.scaled(22, weight: .bold))
                             .foregroundColor(cardColor)
                     }
+                    }
+                    .frame(width: DS.Icon.size, height: DS.Icon.size)
 
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         HStack(spacing: DS.Spacing.sm) {
@@ -482,7 +467,7 @@ struct DiwaniyasView: View {
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.md)
                                 .padding(.vertical, 8)
-                                .background(DS.Color.gradientPrimary, in: Capsule())
+                                .background(AppSection.diwaniyas.gradient, in: Capsule())
                             }
                             .buttonStyle(DSBoldButtonStyle())
                         }
@@ -671,7 +656,7 @@ private struct DiwaniyaComposerForm: View {
                 if !daysDisplayText.isEmpty {
                     Text(daysDisplayText)
                         .font(DS.Font.plex(11.5, weight: .semibold))
-                        .foregroundColor(kind.tint)
+                        .foregroundColor(kind.tint.dsReadableGlyph)
                         .transition(.opacity)
                 }
                 DSExtraChip(icon: "clock.fill", title: L10n.t("الوقت", "Time"), tint: kind.tint,
@@ -694,12 +679,16 @@ private struct DiwaniyaComposerForm: View {
             if let isClosed {
                 DSComposerSection(title: L10n.t("الحالة", "Status"), icon: "power", tint: kind.tint, index: 4) {
                     HStack(spacing: DS.Spacing.sm) {
+                        TrialArt(make: { ArtDispatch.stateIcon($0, icon: isClosed.wrappedValue ? "lock.fill" : "lock.open.fill",
+                                                                tint: isClosed.wrappedValue ? DS.Color.error : DS.Color.success, size: 32) }) {   // TMP-ART-TRIAL
                         Image(systemName: isClosed.wrappedValue ? "lock.fill" : "lock.open.fill")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(isClosed.wrappedValue ? DS.Color.error : DS.Color.success)
                             .frame(width: 32, height: 32)
                             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
                                 .fill((isClosed.wrappedValue ? DS.Color.error : DS.Color.success).opacity(0.12)))
+                        }
+                            .frame(width: 32, height: 32)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(isClosed.wrappedValue ? L10n.t("متوقفة حالياً", "Currently closed")
@@ -745,12 +734,16 @@ private struct DiwaniyaComposerForm: View {
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
             HStack(spacing: DS.Spacing.sm) {
+                // TMP-ART-TRIAL: رسم الاتجاه لغير المختار فقط (المختار يبقى أبيض على لونه)
+                TrialArt(make: { selected ? nil : ArtDispatch.stateIcon($0, icon: k.icon, tint: k.tint.dsReadableGlyph, size: 32) }) {
                 Image(systemName: k.icon)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(selected ? .white : k.tint)
+                    .foregroundColor(selected ? .white : k.tint.dsReadableGlyph)
                     .frame(width: 32, height: 32)
-                    .background(Circle().fill(selected ? Color.white.opacity(0.2) : k.tint.opacity(0.12)))
+                    .background(Circle().fill(selected ? Color.white.opacity(0.2) : k.tint.dsReadableGlyph.opacity(0.12)))
                     .rotationEffect(.degrees(selected || reduceMotion ? 0 : -12))
+                }
+                    .frame(width: 32, height: 32)
                     .accessibilityHidden(true)
                 Text(k.title)
                     .font(DS.Font.plex(14, weight: .bold))

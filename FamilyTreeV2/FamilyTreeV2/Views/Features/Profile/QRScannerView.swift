@@ -20,6 +20,11 @@ struct QRScannerView: View {
     @State private var scannedMember: FamilyMember?
     @State private var cameraPermissionDenied = false
 
+    /// الكاميرا ظاهرة (نفس شرط العرض في body) — يحدّد لون زر الإغلاق
+    private var showsCamera: Bool {
+        !(kinshipResult != nil && scannedMember != nil) && !cameraPermissionDenied
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -62,11 +67,9 @@ struct QRScannerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(24))
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
+                    // زر الإغلاق الموحّد: أبيض فوق الكاميرا، وبلون النص فوق النتيجة وشاشة الإذن
+                    // (كان أبيض دائماً فيختفي فوق الخلفية الفاتحة)
+                    DSCloseButton(context: showsCamera ? .onMedia : .surface, inToolbar: true) { dismiss() }
                 }
                 ToolbarItem(placement: .principal) {
                     if kinshipResult == nil {
@@ -106,14 +109,14 @@ struct QRScannerView: View {
             // أيقونة النجاح
             ZStack {
                 Circle()
-                    .fill(DS.Color.primary.opacity(0.1))
+                    .fill(AppSection.profile.ink.opacity(0.1))
                     .frame(width: 100, height: 100)
                 Circle()
-                    .fill(DS.Color.primary.opacity(0.2))
+                    .fill(AppSection.profile.ink.opacity(0.2))
                     .frame(width: 80, height: 80)
                 Image(systemName: "person.2.fill")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(AppSection.profile.ink)
             }
 
             // اسم العضو
@@ -140,7 +143,7 @@ struct QRScannerView: View {
                     Text(result.relationship)
                         .font(DS.Font.title2)
                         .fontWeight(.bold)
-                        .foregroundStyle(DS.Color.gradientPrimary)
+                        .foregroundStyle(AppSection.profile.gradient)
                         .multilineTextAlignment(.center)
 
                     if let ancestor = result.commonAncestor, ancestor.id != member.id {
@@ -177,7 +180,7 @@ struct QRScannerView: View {
                 .foregroundColor(DS.Color.textOnPrimary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(DS.Color.gradientPrimary)
+                .background(AppSection.profile.gradient)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -201,7 +204,7 @@ struct QRScannerView: View {
                 }
             }
             .font(DS.Font.calloutBold)
-            .foregroundColor(DS.Color.primary)
+            .foregroundColor(AppSection.profile.ink)
             Spacer()
         }
     }

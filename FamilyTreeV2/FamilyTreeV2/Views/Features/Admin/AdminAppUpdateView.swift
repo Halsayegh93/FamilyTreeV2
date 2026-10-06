@@ -11,6 +11,8 @@ struct AdminAppUpdateView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @Environment(\.dismiss) private var dismiss
+    /// يُفتح من الإدارة ومن إشعارات الرئيسية — كحلي «الإطار» يتبع القسم
+    @Environment(\.dsSection) private var section
 
     /// مضمّنة في صفحة أخرى لها رأسها — بلا بطاقة رأس
     private let embedded: Bool
@@ -176,7 +178,7 @@ struct AdminAppUpdateView: View {
                                     "Type, version and what's new — review, then publish")) {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(DS.Color.primary.dsChrome(in: section))
                     .accessibilityHidden(true)
             }
             .contentShape(Rectangle())

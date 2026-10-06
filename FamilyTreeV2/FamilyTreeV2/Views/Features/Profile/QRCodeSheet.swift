@@ -84,7 +84,7 @@ struct QRCodeSheet: View {
                             .accessibilityLabel(L10n.t("رمز QR الخاص بك", "Your QR code"))
                     } else {
                         ProgressView()
-                            .tint(DS.Color.primary)
+                            .tint(AppSection.profile.ink)
                     }
                 }
                 .frame(width: side, height: side)

@@ -438,6 +438,8 @@ struct ProjectContactTiles: View {
     @Binding var twitter: String
     @Binding var website: String
     @Binding var location: String
+    /// مربّع الحساب في نافذة مستقلّة — بلون قسم الواجهة التي فتحته (المشاريع)
+    @Environment(\.dsSection) private var section
 
     private struct Item {
         let platform: SocialPlatform
@@ -493,7 +495,7 @@ struct ProjectContactTiles: View {
                 Text(filled ? item.value.wrappedValue.trimmingCharacters(in: .whitespaces)
                             : L10n.t("إضافة", "Add"))
                     .font(DS.Font.plex(10))
-                    .foregroundColor(filled ? DS.Color.textSecondary : DS.Color.primary)
+                    .foregroundColor(filled ? DS.Color.textSecondary : AppSection.projects.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .environment(\.layoutDirection, filled ? .leftToRight : LanguageManager.shared.layoutDirection)
@@ -523,7 +525,8 @@ struct ProjectContactTiles: View {
                             keyboard: item.keyboard,
                             initial: Self.isFilled(item.value.wrappedValue) ? item.value.wrappedValue : "",
                             onSave: { v in item.value.wrappedValue = v; close() },
-                            onCancel: close)
+                            onCancel: close),
+            section: section ?? AppSection.current
         )
     }
 }
@@ -657,6 +660,9 @@ struct ProjectSectionBackdrop: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+
+            // TMP-ART-TRIAL: رسم الاتجاه المختار في طرف الغلاف (الحالي: لا شيء)
+            TrialArt(make: { ArtDispatch.pageHeroArt($0, icon: "briefcase.fill", tint: DS.Color.tileProjects) }) { EmptyView() }
         }
     }
 }
@@ -778,7 +784,7 @@ struct ProjectDetailView: View {
                     ToolbarItem(placement: DSToolbar.confirmPlacement) {
                         Button(L10n.t("تعديل", "Edit")) { showEditSheet = true }
                             .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.primary)
+                            .foregroundColor(AppSection.projects.ink)
                     }
                 }
             }
@@ -789,6 +795,7 @@ struct ProjectDetailView: View {
                 EditProjectView(project: project, didEdit: $didEdit)
                     .environmentObject(projectsVM)
                     .environmentObject(authVM)
+                    .dsSectionPage(.projects)
             }
             .dsAlert(
                 L10n.t("حذف المشروع", "Delete Project"),
@@ -872,15 +879,18 @@ struct ProjectDetailView: View {
                     DS.Color.mutedBackground
                 }
             } else {
-                ZStack {
-                    LinearGradient(
-                        colors: [DS.Color.primary.opacity(0.25), DS.Color.accent.opacity(0.20)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    Image(systemName: "briefcase.fill")
-                        .font(DS.Font.scaled(32, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
+                // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الشعار البديل الحالي
+                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "briefcase.fill", tint: AppSection.projects.ink, size: logoSize) }) {
+                    ZStack {
+                        LinearGradient(
+                            colors: [AppSection.projects.ink.opacity(0.25), DS.Color.accent.opacity(0.20)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        Image(systemName: "briefcase.fill")
+                            .font(DS.Font.scaled(32, weight: .bold))
+                            .foregroundColor(AppSection.projects.ink)
+                    }
                 }
             }
         }
@@ -905,12 +915,12 @@ struct ProjectDetailView: View {
                 .font(DS.Font.plex(12, weight: .bold))
                 .lineLimit(1)
         }
-        .foregroundColor(DS.Color.primary)
+        .foregroundColor(AppSection.projects.ink)
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)
-        .background(DS.Color.primary.opacity(0.10))
+        .background(AppSection.projects.ink.opacity(0.10))
         .clipShape(Capsule())
-        .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1))
+        .overlay(Capsule().strokeBorder(AppSection.projects.ink.opacity(0.18), lineWidth: 1))
     }
 
     // MARK: - إجراءات سريعة
@@ -966,13 +976,13 @@ struct ProjectDetailView: View {
     private func descriptionSection(_ text: String) -> some View {
         HStack(alignment: .top, spacing: DS.Spacing.md) {
             Capsule()
-                .fill(DS.Color.primary.opacity(0.7))
+                .fill(AppSection.projects.ink.opacity(0.7))
                 .frame(width: 4)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 Text(L10n.t("نبذة عن المشروع", "About"))
                     .font(DS.Font.plex(12, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
+                    .foregroundColor(AppSection.projects.ink)
                 Text(text)
                     .font(DS.Font.body)
                     .foregroundColor(DS.Color.textPrimary)
@@ -983,6 +993,7 @@ struct ProjectDetailView: View {
         .padding(DS.Spacing.lg)
         .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
         .dsSubtleShadow()
     }
 
@@ -1055,6 +1066,7 @@ struct ProjectDetailView: View {
             .padding(.vertical, DS.Spacing.md)
             .background(DS.Color.mutedBackground.opacity(0.45))
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())

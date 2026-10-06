@@ -5,6 +5,9 @@ import SwiftUI
 struct TreeEditRequestView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) private var dismiss
+    // لون القسم الذي فُتح منه الطلب (الشجرة، الرئيسية، الإدارة…) — الكحلي «إطار» يتبعه
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
     @FocusState private var isDetailsFocused: Bool
     @FocusState private var isPrimaryFieldFocused: Bool
 
@@ -32,11 +35,11 @@ struct TreeEditRequestView: View {
         switch action {
         case .add: return DS.Color.success
         case .editName: return DS.Color.info
-        case .editPhone: return DS.Color.primary
+        case .editPhone: return chromeInk
         case .editBirth: return DS.Color.warning
         case .deceased: return DS.Color.textTertiary
         case .addDeathDate: return DS.Color.textTertiary
-        case .addPhoto: return DS.Color.primary
+        case .addPhoto: return chromeInk
         case .delete: return DS.Color.error
         case .other: return DS.Color.accent
         }
@@ -105,7 +108,7 @@ struct TreeEditRequestView: View {
             primaryFieldSection.dsStaggerIn(1)
             notesSection.dsStaggerIn(2)
         }
-            .dsAlert(L10n.t("تم الإرسال", "Request Sent"), isPresented: $showSuccessAlert) {
+            .dsAlert(L10n.t("تم الإرسال", "Request Sent"), isPresented: $showSuccessAlert, moment: .sentForApproval) {
                 Button(L10n.t("حسناً", "OK")) { dismiss() }
             } message: {
                 Text(L10n.t(
@@ -171,6 +174,7 @@ struct TreeEditRequestView: View {
 
     private var memberCard: some View {
         HStack(spacing: DS.Spacing.md) {
+            TrialArt(make: { ArtDispatch.stateIcon($0, icon: action.iconName, tint: actionColor, size: 56) }) {   // TMP-ART-TRIAL
             ZStack {
                 Circle()
                     .fill(actionColor.opacity(0.12))
@@ -179,6 +183,8 @@ struct TreeEditRequestView: View {
                     .font(DS.Font.plex(20, weight: .semibold))
                     .foregroundColor(actionColor)
             }
+            }
+            .frame(width: 56, height: 56)
             .accessibilityHidden(true)   // زخرفة — نوع الطلب مكتوب بجانبها
 
             VStack(alignment: .leading, spacing: 2) {
@@ -328,7 +334,7 @@ struct TreeEditRequestView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg)
                     .stroke(
-                        isPrimaryFieldFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
+                        isPrimaryFieldFocused ? chromeInk.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
                         lineWidth: isPrimaryFieldFocused ? 1.5 : 1
                     )
             )
@@ -388,7 +394,7 @@ struct TreeEditRequestView: View {
                     .font(DS.Font.scaled(20))
                     .frame(width: 32, height: 32)
                     .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(DS.Color.primary.opacity(0.08)))
+                        .fill(chromeInk.opacity(0.08)))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t(country.nameArabic, country.isoCode))
                         .dsFieldFont(14.5, weight: .bold)
@@ -402,14 +408,14 @@ struct TreeEditRequestView: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(chromeInk)
                         .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
                 }
             }
             .dsRowBox()
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5)
+                    .strokeBorder(chromeInk.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5)
             )
             .contentShape(Rectangle())
         }
@@ -478,7 +484,7 @@ struct TreeEditRequestView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg)
                     .stroke(
-                        isDetailsFocused ? DS.Color.primary.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
+                        isDetailsFocused ? chromeInk.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
                         lineWidth: isDetailsFocused ? 1.5 : 1
                     )
             )

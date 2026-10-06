@@ -112,6 +112,8 @@ enum DeathAnnouncementPresenter {
             DeathAnnouncementBox(target: target, onClose: { close() })
         }
         .environment(\.locale, LanguageManager.shared.locale)
+        // نافذة مستقلّة لا تصلها بيئة التطبيق — لون القسم المختار (أزرار الإجراء)
+        .dsSection(AppSection.current)
         let host = UIHostingController(rootView: root)
         host.view.backgroundColor = .clear
         let w = UIWindow(windowScene: scene)
@@ -159,7 +161,9 @@ struct DeathAnnouncementBox: View {
             : "انتقل إلى رحمة الله تعالى \(target.name)\nتغمّده الله بواسع رحمته وأسكنه فسيح جناته\nإنا لله وإنا إليه راجعون"
     }
 
-    private var tint: Color { NewsTypeHelper.color(for: "وفاة") }
+    /// إطار المربّع بلون القسم (طلب المالك ٢٠٢٦-١٠-٠٥ «ابى مربع المتوفي يدخل بالألوان»):
+    /// DSComposer يحوّل actionNavy إلى تعبئة القسم. الرمادي يبقى لون معنى «وفاة» في الشارات فقط.
+    private var tint: Color { DS.Color.actionNavy }
 
     var body: some View {
         DSComposer(
@@ -221,7 +225,6 @@ struct DeathAnnouncementBox: View {
                 Spacer(minLength: 0)
                 Toggle("", isOn: $notifyAll)
                     .labelsHidden()
-                    .tint(DS.Color.primary)
                     .accessibilityLabel(L10n.t("إرسال إشعار لكل الأعضاء", "Notify all members"))
             }
             .dsRowBox()
@@ -320,7 +323,8 @@ struct DeathAnnouncementsPage: View {
     @State private var loaded = false
     @State private var query = ""
 
-    private var tint: Color { NewsTypeHelper.color(for: "وفاة") }
+    /// بلون القسم مثل المربّع؛ «أُعلن عنهم» تبقى بلون النجاح (لون معنى)
+    private var tint: Color { DS.Color.primary }
     private var icon: String { NewsTypeHelper.icon(for: "وفاة") }
 
     /// وفيات آخر ٣٠ يوماً فقط — الأحدث أولاً (المتوفون سابقاً لا يظهرون — طلب المالك)
@@ -350,7 +354,7 @@ struct DeathAnnouncementsPage: View {
                         subtitle: L10n.t("وفيات آخر ٣٠ يوماً — اختر لنشر الخبر وإشعار الأعضاء",
                                          "Deaths in the last 30 days — pick one to post and notify"),
                         icon: icon,
-                        tint: tint,
+                        tint: DS.Color.actionNavy,
                         stats: [
                             DSHeroStat(value: "\(deceased.count)",
                                        label: L10n.t("وفيات حديثة", "Recent deaths"), icon: "person.fill"),
@@ -446,7 +450,7 @@ struct DeathAnnouncementsPage: View {
                     .foregroundColor(isDone ? DS.Color.success : .white)
                     .padding(.horizontal, 12)
                     .frame(height: 28)
-                    .background(Capsule().fill(isDone ? DS.Color.success.opacity(0.12) : DS.Color.actionNavy))
+                    .background(Capsule().fill(isDone ? DS.Color.success.opacity(0.12) : AppSection.admin.fill))
             }
         }
         .buttonStyle(.plain)

@@ -8,6 +8,9 @@ struct AddSonByAdminSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
+    /// لون القسم الذي فُتح منه (الإدارة، الشجرة، حسابي) — كحلي «الإطار» يتبعه
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     let parent: FamilyMember
     let editingChild: FamilyMember?
@@ -159,9 +162,9 @@ struct AddSonByAdminSheet: View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: isEditMode ? "pencil" : "person.badge.plus")
                 .font(DS.Font.plex(13, weight: .bold))
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(chromeInk)
                 .frame(width: 32, height: 32)
-                .background(DS.Color.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .background(chromeInk.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .accessibilityHidden(true)   // زخرفة — النص بجانبها يكفي
 
             VStack(alignment: .leading, spacing: 2) {
@@ -185,7 +188,7 @@ struct AddSonByAdminSheet: View {
     // MARK: - البيانات الأساسية: الاسم، الجنس، الرقم
     private var basicsCard: some View {
         DSFormCard(L10n.t("البيانات الأساسية", "Basic Info"),
-                   icon: "person.text.rectangle.fill", color: DS.Color.primary) {
+                   icon: "person.text.rectangle.fill", color: chromeInk) {
             DSFieldBox(L10n.t("الاسم الأول", "First Name")) {
                 TextField(L10n.t("اسم الابن الأول", "Child's first name"), text: $firstName)
                     .onChange(of: firstName) { _ in
@@ -269,7 +272,8 @@ struct AddSonByAdminSheet: View {
                 await vm.updateChildData(
                     member: child,
                     firstName: capturedFirstName,
-                    phoneNumber: capturedPhone,
+                    // الرقم فقط إن تغيّر (ب-٢) — لا يُعاد كتابته مع كل تعديل
+                    phoneNumber: phoneChanged ? capturedPhone : nil,
                     birthDate: capturedBirthDate,
                     isDeceased: capturedIsDeceased,
                     deathDate: capturedDeathDate,

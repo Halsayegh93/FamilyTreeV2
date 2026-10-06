@@ -55,6 +55,7 @@ struct DSDatePickerSheet: View {
 /// صف اختيار تاريخ موحّد — يعرض التاريخ المختار، وعند الضغط يفتح شيت سفلي للاختيار.
 /// استخدم هذا في كل التطبيق بدل عرض العجلة مضمّنة.
 struct DSDateField: View {
+    @Environment(\.dsSection) private var dsSectionEnv
     let label: String
     @Binding var date: Date
     var icon: String = "calendar"
@@ -90,7 +91,7 @@ struct DSDateField: View {
                     Spacer()
                     Text(formatted)
                         .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                 }
                 .contentShape(Rectangle())
             } else if labelAbove {
@@ -103,7 +104,7 @@ struct DSDateField: View {
                         HStack(spacing: DS.Spacing.xs) {
                             Text(formatted)
                                 .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.primary)
+                                .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                             Image(systemName: "chevron.up.chevron.down")
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textTertiary)
@@ -124,7 +125,7 @@ struct DSDateField: View {
                     Spacer()
                     Text(formatted)
                         .font(valueFont)
-                        .foregroundColor(DS.Color.primary)
+                        .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                     Image(systemName: "chevron.up.chevron.down")
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textTertiary)

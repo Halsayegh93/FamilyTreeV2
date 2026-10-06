@@ -63,7 +63,7 @@ struct AdminActivityLogView: View {
         }
         var color: Color {
             switch self {
-            case .all:     return DS.Color.primary
+            case .all:     return AppSection.admin.ink
             case .members: return DS.Color.warning
             case .women:   return DS.Color.female
             case .content: return DS.Color.info
@@ -233,7 +233,7 @@ struct AdminActivityLogView: View {
                     } label: {
                         // التحديد علامة بدل النص (طلب المالك)
                         Image(systemName: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
-                            .foregroundColor(DS.Color.primary)
+                            .foregroundColor(AppSection.admin.ink)
                     }
                     .accessibilityLabel(isSelecting ? L10n.t("إلغاء التحديد", "Cancel selection")
                                                     : L10n.t("تحديد", "Select"))
@@ -470,7 +470,7 @@ struct AdminActivityLogView: View {
             } label: {
                 selectionCapsule(icon: "checkmark.circle.fill",
                                  title: L10n.t("تحديد الكل", "Select all"),
-                                 tint: DS.Color.primary)
+                                 tint: AppSection.admin.ink)
             }
             .buttonStyle(.plain)
 
@@ -545,7 +545,7 @@ struct AdminActivityLogView: View {
             if isSelecting {
                 Image(systemName: picked ? "checkmark.circle.fill" : "circle")
                     .font(DS.Font.scaled(20))
-                    .foregroundColor(picked ? DS.Color.primary : DS.Color.textTertiary)
+                    .foregroundColor(picked ? AppSection.admin.ink : DS.Color.textTertiary)
                     .accessibilityHidden(true)
             }
 
@@ -569,7 +569,7 @@ struct AdminActivityLogView: View {
 
             // الوقت — كحلي للحركة الجديدة، رمادي لما قُرئ
             SysStatusChip(text: relativeTime(item.createdDate),
-                          tint: isNew ? DS.Color.primary : DS.Color.textTertiary)
+                          tint: isNew ? AppSection.admin.ink : DS.Color.textTertiary)
                 .fixedSize()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -577,7 +577,7 @@ struct AdminActivityLogView: View {
         .overlay {
             if isSelecting && picked {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(0.55), lineWidth: 1.5)
+                    .strokeBorder(AppSection.admin.ink.opacity(0.55), lineWidth: 1.5)
             }
         }
         .contentShape(Rectangle())
@@ -605,7 +605,7 @@ struct AdminActivityLogView: View {
             .overlay(alignment: .topTrailing) {
                 if isNew {
                     Circle()
-                        .fill(DS.Color.primary)
+                        .fill(AppSection.admin.ink)
                         .frame(width: 9, height: 9)
                         .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
                         .offset(x: L10n.isArabic ? -3 : 3, y: -3)
@@ -641,7 +641,7 @@ struct AdminActivityLogView: View {
         if Self.contentKinds.contains(kind) {
             if kind.contains("news") { return ("newspaper.fill", DS.Color.info) }
             if kind.contains("gallery") { return ("photo.stack.fill", DS.Color.info) }
-            if kind.contains("diwaniya") { return ("map.fill", DS.Color.primary) }
+            if kind.contains("diwaniya") { return ("map.fill", AppSection.admin.ink) }
             if kind.contains("project") { return ("briefcase.fill", DS.Color.warning) }
             return ("doc.fill", DS.Color.info)
         }
@@ -761,7 +761,7 @@ private struct ActivityDetailSheet: View {
 
     private var bodySection: some View {
         DSComposerSection(title: L10n.t("التفاصيل", "Details"), icon: "text.alignright",
-                          tint: DS.Color.primary, index: bodyIndex) {
+                          tint: AppSection.admin.ink, index: bodyIndex) {
             Text(item.body)
                 .dsFieldFont(14)
                 .foregroundColor(DS.Color.fieldValue)
@@ -782,7 +782,7 @@ private struct ActivityDetailSheet: View {
                 infoRow(icon: "calendar.badge.clock", tint: DS.Color.warning,
                         L10n.t("الوقت", "Time"), fullDate)
                 if let subject {
-                    infoRow(icon: "person.fill", tint: DS.Color.primary,
+                    infoRow(icon: "person.fill", tint: AppSection.admin.ink,
                             L10n.t("تخصّ", "About"), subject.shortFullName)
                 }
                 if let actor {
