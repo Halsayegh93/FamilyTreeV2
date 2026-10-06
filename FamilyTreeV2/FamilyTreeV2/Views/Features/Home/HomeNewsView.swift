@@ -579,10 +579,17 @@ struct HomeNewsView: View {
 
                 // TMP-ART-TRIAL: «مجسّمات» — تكوين بالوسط (طلب المالك ٢٠٢٦-١٠-٠٥ «بالنص بشكل مرتب و ابداعي»):
                 // المجسّم في وسط المربّع وتحته الاسم، ضوء ناعم خلفه ونسخة شفافة منه في الخلفية، بلا عدد — «الحالي» كما هو
-                if artTrial == .soft3d, let place = ArtTrial.place(for: icon),
+                if artTrial != .emblem, let place = ArtTrial.place(for: icon),
                    let centerArt = ArtDispatch.tileIcon(artTrial, place: place) {
-                    TrialCenteredTile(art: centerArt, title: title, count: count, scale: layout.scale)
-                        .id("tc-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
+                    // ضلع المجسّم يتبع ارتفاع المربّع: أكبر في الصفّ الأول، ويترك سطرين للاسم
+                    TrialCenteredTile(art: centerArt, title: title, count: count, scale: layout.scale,
+                                      artSide: min(64, max(44, (height ?? layout.tileHeight) * 0.56)),
+                                      stagger: Double(cascade), entrance: !HomeTileEntrance.played)
+                        .onAppear {
+                            // الظهور الأول مرة لكل تشغيل — بعده المجسّمات تظهر مباشرة
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { HomeTileEntrance.played = true }
+                        }
+                        .id("tc-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
                 } else {
                     // أيقونة دائرية أكبر + عدّاد
                     VStack {
@@ -707,14 +714,14 @@ struct HomeNewsView: View {
                 }
                 // «مجسّمات»: نفس مجسّم المربّع كبير شفاف في خلفيته عند الطرف — مثل علامة «الحالي»
                 // (طلب المالك ٢٠٢٦-١٠-٠٥ «حط خلفيات ور الايقونات بنفس المجسمات بس شفافة بالرئيسية»)
-                if artTrial == .soft3d, let place = ArtTrial.place(for: icon),
+                if ArtDispatch.ghostOpacity(artTrial) > 0, let place = ArtTrial.place(for: icon),
                    let ghost = ArtDispatch.tileIcon(artTrial, place: place) {
                     ghost
                         .frame(width: 86 * layout.scale, height: 86 * layout.scale)
-                        .opacity(0.22)
+                        .opacity(ArtDispatch.ghostOpacity(artTrial))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .offset(x: 16, y: 12)
-                        .id("tw-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
+                        .id("tw-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
                 }
             } else if artTrial == .emblem {
                 // «الحالي» = قبل أسبوع: رمز المربّع كبير شفاف أسفل الطرف

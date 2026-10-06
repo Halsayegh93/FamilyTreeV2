@@ -1,23 +1,19 @@
 import SwiftUI
 
-// MARK: - FT5S — «مجسّمات صقيلة» (الجولة ٧، ٢٠٢٦-١٠-٠٥)
+// MARK: - FT5S — «مجسّمات» طين مطفأ (الجولة ٨، ٢٠٢٦-١٠-٠٦)
 //
-// طلب المالك: «المجسمات نبيها تصير شكل ثاني بجميع الفئات اعادة تصميم» — واختار «أشكال جديدة وأسلوب جديد»،
-// مع شروطه السابقة: «بسيط وخفيف»، «بسيط وقوي ومرتب وباعتدال»، بلا مشاهد مزدحمة ولا علامات باهتة.
+// طلب المالك (٢٠٢٦-١٠-٠٦): «الأشكال ممكن تكون أحلى بكثير… أحلى وأكثر ترتيب، وترتيب الألوان مع الأشكال متناسق».
+// الأسلوب «طين مطفأ»: كتل مجسّمة مطفأة اللمعان بثلاث قيم من صبغة مربّعها نفسه (FT5SHue للقسم) + ضوء حافة أبيض
+// رفيع من أعلى اليسار + لمسة ذهبية صغيرة واحدة، وظلّ تلامس ناعم واحد — بلا أي صبغة غريبة عن المربّع.
+// الترتيب: كل مجسّمات الرئيسية في صندوق تصميم واحد (البُعد الأكبر ٩٠٪، الأصغر ≥ ٦٠٪، القاعدة عند ٩٥٪،
+// المركز البصري في الوسط) ويُرسم الصندوق كما هو في مربّع الرئيسية (أيقونة الوسط ٤٨ نقطة والعلامة الشفافة ٨٦).
+// الرموز: غافة العائلة (تاج بثلاثة فصوص وأفراد موصولون، الجدّ ذهبي) · الدلّة والفنجان للديوانيات (القمّة ذهبية) ·
+// الظرف المختوم للتواصل (الختم ذهبي) · المكتبة: كتاب مفتوح / مخطوطة / صندوق أرشيف · المشاريع: واجهة محلّ /
+// سهم النموّ / صاروخ انطلاق · وتبقى بقية المجسّمات (صحيفة، مكبّر، بيدقان، خزنة، ختم، مفتاح، هلال، جرس، ساعة) صقيلة.
 //
-// الأسلوب «صقيل»: أيقونات مجسّمة حديثة بأحجام جريئة بسيطة —
-//  • وجه بتدرّج واضح من الضوء (أعلى الجهة الخارجية) + سُمك أغمق تحته يعطي الحجم (بلا أي ضبابية)،
-//  • لمعة واحدة حادّة الحافة على الحجم الرئيسي، وظلّ تلامس ناعم واحد تحته،
-//  • ألوان مشتقّة من لون كل قسم (درجات أفتح منه حتى يقرأ المجسّم فوق مربّعه الملوّن) + لمسة دافئة واحدة
-//    (ذهبي/رملي) + أبيض الورق. على الأسطح الفاتحة تنزل الدرجات خطوة حتى لا يبهت المجسّم.
-// الرموز: شجرة مستديرة ثمارها أفراد العائلة · مبخرة الديوانية · فقاعتا حوار للتواصل ·
-// المكتبة: كتاب مفتوح / مخطوطة / صندوق أرشيف · المشاريع: واجهة محلّ / سهم النموّ / صاروخ انطلاق ·
-// صحيفة مطويّة ومكبّر صوت للأخبار · بيدقان للأعضاء · خزنة وختم موثّق للأمان · مفتاح تبديل للإعدادات ·
-// هلال ونجمة رماديّان للوفاة (ساكن دائماً، بلا ذهبي) · جرس الإشعارات · ساعة الانتظار.
-//
-// الأداء: كل رسم ساكن ويُرسم مرة واحدة؛ لكل مجسّم ≤ ٨ عمليات تعبئة وبلا أي طبقة ضبابية. لا TimelineView ولا
-// حركة متكرّرة؛ الحركة الوحيدة ظهور واحد بالشفافية (مجسّم مربّع الرئيسية ولحظات التنبيه) ويُلغى مع «تقليل الحركة».
-// الإحداثيات بالعربية (المجسّم في الجهة اليسرى) وتُعكس للإنجليزية — عدا سهم النموّ والصاروخ فيبقيان صاعدين يميناً.
+// الأداء: كل رسم ساكن ويُرسم مرة واحدة؛ لكل مجسّم ≤ ١٠ عمليات تعبئة وبلا أي طبقة ضبابية. لا TimelineView ولا
+// حركة متكرّرة؛ الحركة الوحيدة ظهور واحد بالشفافية ويُلغى مع «تقليل الحركة».
+// الإحداثيات بالعربية (الضوء من أعلى اليسار) وتُعكس للإنجليزية — عدا سهم النموّ والصاروخ فيبقيان صاعدين يميناً.
 
 // MARK: - الواجهة (العقد)
 
@@ -27,6 +23,8 @@ import SwiftUI
     static let showsTileIcon: Bool = true
     /// المجسّم فوق طبقة التعتيم (لا يبهت أسفل المربّع)
     static let tileArtUnderOverlay: Bool = false
+    /// شفافية النسخة الكبيرة من المجسّم في خلفية مربّع الرئيسية
+    static let ghostOpacity: Double = 0.20
 
     static let libraryVariantNames: [String] = ["كتاب مفتوح", "مخطوطة", "صندوق أرشيف"]
     static let projectsVariantNames: [String] = ["واجهة محلّ", "سهم النموّ", "صاروخ انطلاق"]
@@ -126,7 +124,7 @@ import SwiftUI
 
 nonisolated enum FT5SKind: String, Hashable, CaseIterable {
     // مربّعات الرئيسية
-    case familyTree, mabkhara, chat
+    case familyTree, dallah, envelope
     // المكتبة — ثلاثة أشكال
     case openBook, scroll, archiveBox
     // المشاريع — ثلاثة أشكال
@@ -138,6 +136,14 @@ nonisolated enum FT5SKind: String, Hashable, CaseIterable {
 
     /// يبقى باتجاهه في الإنجليزية (الرسم البياني والصاروخ يصعدان يميناً في اللغتين)
     var keepsOrientation: Bool { self == .growth || self == .rocket }
+
+    /// مجسّمات الرئيسية: صندوق تصميم موحّد (٩٠٪) يُرسم كما هو بلا إعادة قياس
+    var isHomeObject: Bool {
+        switch self {
+        case .familyTree, .dallah, .envelope, .openBook, .scroll, .archiveBox, .storefront, .growth, .rocket: return true
+        default: return false
+        }
+    }
 }
 
 nonisolated enum FT5SSlot: Hashable {
@@ -160,10 +166,10 @@ nonisolated enum FT5SArt {
         let v = clampVariant(variant)
         switch place {
         case "tree": return .familyTree
-        case "diwaniya": return .mabkhara
+        case "diwaniya": return .dallah
         case "library": return [FT5SKind.openBook, .scroll, .archiveBox][v]
         case "projects": return [FT5SKind.storefront, .growth, .rocket][v]
-        case "contact": return .chat
+        case "contact": return .envelope
         case "news": return .newspaper
         case "member": return .pawns
         case "security": return .seal
@@ -182,7 +188,7 @@ nonisolated enum FT5SArt {
         if has("newspaper") || has("square.and.pencil") { return .newspaper }
         if has("megaphone") || has("speaker") { return .megaphone }
         if has("map") || has("mappin") || has("cup.and.saucer") || has("tent") || has("building.columns")
-            || has("flame") { return .mabkhara }
+            || has("flame") { return .dallah }
         if has("chart") { return .growth }
         if has("storefront") || has("briefcase") || has("bag") || has("cart") { return placeKind("projects", variant: projects) }
         if has("archivebox") { return .archiveBox }
@@ -191,7 +197,7 @@ nonisolated enum FT5SArt {
         if has("tree") || has("leaf") { return .familyTree }
         if has("person.badge.plus") || has("person.crop.circle.badge.plus") || has("figure") || has("person.2")
             || has("person.3") { return .pawns }
-        if has("envelope") || has("bubble") || has("message") || has("phone") { return .chat }
+        if has("envelope") || has("bubble") || has("message") || has("phone") { return .envelope }
         if has("lock") { return .safe }
         if has("checkmark.shield") || has("checkmark.seal") || has("person.badge.shield") || has("shield") { return .seal }
         if has("gearshape") || has("gear") || has("slider") || has("paintbrush") || has("key") || has("iphone")
@@ -527,6 +533,85 @@ nonisolated enum FT5SGloss {
     }
 }
 
+// MARK: - أدوات «طين مطفأ» (الجولة ٨): ثلاث قيم من صبغة المربّع بحدود ناعمة + ضوء حافة أبيض + ذهبي مطفأ
+
+nonisolated enum FT5SClay {
+    /// تدرّج مدرّج بثلاث قيم (انتقالات قصيرة ناعمة) — مظهر الطين المطفأ بلا لمعان
+    static func steps(_ a: Color, _ b: Color, _ c: Color, _ cut1: CGFloat = 0.42, _ cut2: CGFloat = 0.78,
+                      soft: CGFloat = 0.1) -> Gradient {
+        Gradient(stops: [
+            .init(color: a, location: 0),
+            .init(color: a, location: cut1),
+            .init(color: b, location: cut1 + soft),
+            .init(color: b, location: cut2),
+            .init(color: c, location: cut2 + soft),
+            .init(color: c, location: 1)
+        ])
+    }
+
+    /// كتلة مستديرة: مضاءة من أعلى اليسار وتظلّل نحو الحافة البعيدة
+    static func blob(_ c: inout GraphicsContext, _ p: Path, _ t: FT5SRamp, box b0: CGRect? = nil,
+                     light: UnitPoint = UnitPoint(x: 0.32, y: 0.26), reach: CGFloat = 1.0) {
+        let b = b0 ?? p.boundingRect
+        guard b.width > 0, b.height > 0 else { return }
+        let cp = CGPoint(x: b.minX + b.width * light.x, y: b.minY + b.height * light.y)
+        c.fill(p, with: .radialGradient(steps(t.hi, t.mid, t.lo), center: cp, startRadius: 0,
+                                        endRadius: max(b.width, b.height) * reach))
+    }
+
+    /// وجه مسطّح: قيمتان (مضاء ← وسط) مائلتان من أعلى اليسار
+    static func face(_ c: inout GraphicsContext, _ p: Path, _ t: FT5SRamp, box b0: CGRect? = nil) {
+        let b = b0 ?? p.boundingRect
+        guard b.width > 0, b.height > 0 else { return }
+        c.fill(p, with: .linearGradient(Gradient(stops: [
+            .init(color: t.hi, location: 0), .init(color: t.hi, location: 0.5),
+            .init(color: t.mid, location: 0.64), .init(color: t.mid, location: 1)
+        ]), startPoint: CGPoint(x: b.minX, y: b.minY), endPoint: CGPoint(x: b.maxX, y: b.maxY)))
+    }
+
+    /// الجانب المظلّل (السُّمك) والعمق — لونان مسطّحان
+    static func side(_ c: inout GraphicsContext, _ p: Path, _ t: FT5SRamp) { c.fill(p, with: .color(t.lo)) }
+    static func deep(_ c: inout GraphicsContext, _ p: Path, _ t: FT5SRamp) { c.fill(p, with: .color(t.deep)) }
+
+    /// أسطوانة: شرائط بثلاث قيم (الضوء قرب أوّلها) — أفقية للقائمة، أو رأسية للمستلقية
+    static func barrel(_ c: inout GraphicsContext, _ p: Path, _ t: FT5SRamp, box b0: CGRect? = nil, vertical: Bool = false) {
+        let b = b0 ?? p.boundingRect
+        guard b.width > 0, b.height > 0 else { return }
+        let g = Gradient(stops: [
+            .init(color: t.mid, location: 0), .init(color: t.mid, location: 0.05),
+            .init(color: t.hi, location: 0.14), .init(color: t.hi, location: 0.44),
+            .init(color: t.mid, location: 0.56), .init(color: t.mid, location: 0.76),
+            .init(color: t.lo, location: 0.88), .init(color: t.lo, location: 1)
+        ])
+        let s = vertical ? CGPoint(x: b.midX, y: b.minY) : CGPoint(x: b.minX, y: b.midY)
+        let e = vertical ? CGPoint(x: b.midX, y: b.maxY) : CGPoint(x: b.maxX, y: b.midY)
+        c.fill(p, with: .linearGradient(g, startPoint: s, endPoint: e))
+    }
+
+    /// ضوء الحافة: خطّ أبيض رفيع على الحواف العلوية اليسرى فقط (يتلاشى نحو أسفل اليمين)، مقصوص داخل الشكل
+    static func rim(_ c: GraphicsContext, _ p: Path, width: CGFloat = 2.0, opacity: Double = 0.72, box b0: CGRect? = nil) {
+        let b = b0 ?? p.boundingRect
+        guard b.width > 0, b.height > 0 else { return }
+        var l = c
+        l.clip(to: p)
+        l.stroke(p, with: .linearGradient(Gradient(stops: [
+            .init(color: .white.opacity(opacity), location: 0),
+            .init(color: .white.opacity(opacity * 0.5), location: 0.42),
+            .init(color: .white.opacity(0), location: 0.78)
+        ]), startPoint: CGPoint(x: b.minX, y: b.minY), endPoint: CGPoint(x: b.maxX, y: b.maxY)), lineWidth: width * 2)
+    }
+
+    /// اللمسة الذهبية الواحدة: ذهب مطفأ بقيمتين (#F2C65E ← #D9A23E)
+    static func gold(_ c: inout GraphicsContext, _ p: Path, _ k: FT5SInk, box b0: CGRect? = nil) {
+        let b = b0 ?? p.boundingRect
+        guard b.width > 0, b.height > 0 else { return }
+        c.fill(p, with: .linearGradient(Gradient(stops: [
+            .init(color: k.color(0xF2C65E), location: 0), .init(color: k.color(0xF2C65E), location: 0.42),
+            .init(color: k.color(0xD9A23E), location: 0.58), .init(color: k.color(0xD9A23E), location: 1)
+        ]), startPoint: CGPoint(x: b.minX, y: b.minY), endPoint: CGPoint(x: b.maxX, y: b.maxY)))
+    }
+}
+
 /// مقطع لمسار متناظر (الجهة اليمنى فقط — اليسرى تُعكس تلقائياً)
 nonisolated enum FT5SSeg {
     case line(CGPoint)
@@ -595,25 +680,6 @@ nonisolated enum FT5SObjects {
         return FT5SGloss.poly(pts, [0.8])
     }
 
-    /// فقاعة حوار: مستطيل بزوايا ناعمة وذيل في حافته السفلية بين a و b — محيط واحد متّصل (بلا تداخل)
-    static func bubble(_ r: CGRect, radius q: CGFloat, a: CGFloat, b: CGFloat, tip: CGPoint, c1: CGPoint, c2: CGPoint) -> Path {
-        var p = Path()
-        p.move(to: P(r.minX + q, r.minY))
-        p.addLine(to: P(r.maxX - q, r.minY))
-        p.addQuadCurve(to: P(r.maxX, r.minY + q), control: P(r.maxX, r.minY))
-        p.addLine(to: P(r.maxX, r.maxY - q))
-        p.addQuadCurve(to: P(r.maxX - q, r.maxY), control: P(r.maxX, r.maxY))
-        p.addLine(to: P(b, r.maxY))
-        p.addQuadCurve(to: tip, control: c1)
-        p.addQuadCurve(to: P(a, r.maxY), control: c2)
-        p.addLine(to: P(r.minX + q, r.maxY))
-        p.addQuadCurve(to: P(r.minX, r.maxY - q), control: P(r.minX, r.maxY))
-        p.addLine(to: P(r.minX, r.minY + q))
-        p.addQuadCurve(to: P(r.minX + q, r.minY), control: P(r.minX, r.minY))
-        p.closeSubpath()
-        return p
-    }
-
     /// بيدق (فرد): قاعدة متّسعة وعنق — والرأس كرة منفصلة فوقه
     static func pawnBody(_ cx: CGFloat, _ s: CGFloat, base: CGFloat = 90) -> Path {
         lathe(cx, P(cx, base), [
@@ -627,8 +693,8 @@ nonisolated enum FT5SObjects {
     static func parts(_ kind: FT5SKind, _ k: FT5SInk) -> FT5SParts {
         switch kind {
         case .familyTree: return familyTree(k)
-        case .mabkhara: return mabkhara(k)
-        case .chat: return chat(k)
+        case .dallah: return dallah(k)
+        case .envelope: return envelope(k)
         case .openBook: return openBook(k)
         case .scroll: return scroll(k)
         case .archiveBox: return archiveBox(k)
@@ -648,217 +714,274 @@ nonisolated enum FT5SObjects {
     }
 }
 
-// MARK: - مربّعات الرئيسية: شجرة العائلة، المبخرة، فقاعتا الحوار
+// MARK: - مربّعات الرئيسية (الجولة ٨ «طين مطفأ»): شجرة الرمز، الدلّة والفنجان، الظرف المختوم
+//
+// صندوق التصميم ١٠٠×١٠٠ لكل مجسّمات الرئيسية: البُعد الأكبر = ٩٠ (من ٥ إلى ٩٥) والأصغر ≥ ٦٠، القاعدة عند ٩٥،
+// المركز البصري في الوسط، الضوء من أعلى اليسار، وظلّ تلامس واحد عند y ≈ ٩٥٫٥ داخل الصندوق.
+// الألوان: ثلاث قيم من صبغة المربّع نفسه `k.ramp(hue, shift: 1)` + أبيض/ورق + لمسة ذهبية واحدة — بلا أي صبغة أخرى.
 
 nonisolated extension FT5SObjects {
 
-    /// شجرة العائلة: تاج مستدير واحد على جذع قصير، وعليه ثمار ذهبية = أفراد العائلة (جدّ ← ابنان ← أحفاد)
-    /// موصولة بخيوط ذهبية رفيعة — ٧ عمليات
+    /// أنبوب يرقّ: مضلّع حول منحنى تكعيبي بعرض يتدرّج من w0 عند بدايته إلى w1 عند نهايته، بطرف مستدير (البزبوز)
+    static func taper(_ p0: CGPoint, _ c1: CGPoint, _ c2: CGPoint, _ p3: CGPoint, w0: CGFloat, w1: CGFloat, steps: Int = 18) -> Path {
+        func at(_ t: CGFloat) -> CGPoint {
+            let u = 1 - t
+            return CGPoint(x: u * u * u * p0.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p3.x,
+                           y: u * u * u * p0.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p3.y)
+        }
+        func dir(_ t: CGFloat) -> CGPoint {
+            let u = 1 - t
+            let d = CGPoint(x: 3 * u * u * (c1.x - p0.x) + 6 * u * t * (c2.x - c1.x) + 3 * t * t * (p3.x - c2.x),
+                            y: 3 * u * u * (c1.y - p0.y) + 6 * u * t * (c2.y - c1.y) + 3 * t * t * (p3.y - c2.y))
+            let len = max(0.001, (d.x * d.x + d.y * d.y).squareRoot())
+            return CGPoint(x: d.x / len, y: d.y / len)
+        }
+        var left: [CGPoint] = [], right: [CGPoint] = []
+        for i in 0...steps {
+            let t = CGFloat(i) / CGFloat(steps)
+            let p = at(t), d = dir(t), n = CGPoint(x: -d.y, y: d.x)
+            let w = (w0 * (1 - t) + w1 * t) / 2
+            left.append(CGPoint(x: p.x + n.x * w, y: p.y + n.y * w))
+            right.append(CGPoint(x: p.x - n.x * w, y: p.y - n.y * w))
+        }
+        var path = Path()
+        path.move(to: left[0])
+        for q in left.dropFirst() { path.addLine(to: q) }
+        let tip = at(1), d = dir(1), n = CGPoint(x: -d.y, y: d.x), r = w1 / 2
+        for i in 1..<8 {
+            let a = CGFloat.pi * CGFloat(i) / 8
+            path.addLine(to: CGPoint(x: tip.x + n.x * r * cos(a) + d.x * r * sin(a), y: tip.y + n.y * r * cos(a) + d.y * r * sin(a)))
+        }
+        for q in right.reversed() { path.addLine(to: q) }
+        path.closeSubpath()
+        return path
+    }
+
+    /// الشجرة (شجرة العائلة): هيئة رمز التطبيق نفسه `tree.fill` — تاج بخمسة فصوص وجذع يتفرّع ثلاث أصابع — مرسومة طيناً:
+    /// نسخة عميقة مزاحة تحتها للسُّمك، ثم الحجم داخل الهيئة بثلاث قيم (ضوء أعلى اليسار ← عمق أسفل اليمين)،
+    /// ثم ضوء حافة أبيض على الحواف العلوية اليسرى فقط، ونقطة ذهبية صغيرة واحدة في الفصّ الأعلى — ٥ عمليات
     static func familyTree(_ k: FT5SInk) -> FT5SParts {
-        let leaf = k.ramp(.tree, shift: 1), bark = k.ramp(.sand), gold = k.ramp(.gold, shift: 1)
-        let trunk: Path = {
-            var p = Path()
-            p.move(to: P(42, 90))
-            p.addQuadCurve(to: P(45.8, 80), control: P(45.6, 87.6))
-            p.addLine(to: P(46.4, 60))
-            p.addLine(to: P(53.6, 60))
-            p.addLine(to: P(54.2, 80))
-            p.addQuadCurve(to: P(58, 90), control: P(54.4, 87.6))
-            p.addQuadCurve(to: P(42, 90), control: P(50, 91.4))
-            p.closeSubpath()
-            return p
-        }()
-        let crown: Path = {
-            var p = Path()
-            p.addEllipse(in: E(50, 37, 29, 26.5))
-            p.addEllipse(in: E(31, 51, 18, 15))
-            p.addEllipse(in: E(69, 51, 18, 15))
-            return p
-        }()
-        let nodes: [(CGPoint, CGFloat)] = [
-            (P(50, 24), 5.4), (P(36.5, 39.5), 4.6), (P(63.5, 39.5), 4.6),
-            (P(27.5, 54), 4), (P(45, 55.5), 4), (P(72.5, 54), 4)
-        ]
-        var wires = Path()
-        for (a, b) in [(0, 1), (0, 2), (1, 3), (1, 4), (2, 5)] {
-            wires.move(to: nodes[a].0)
-            wires.addLine(to: nodes[b].0)
-        }
-        let links = wires.strokedPath(StrokeStyle(lineWidth: 2.2, lineCap: .round))
-        var fruit = Path(), shine = Path()
-        for (p, r) in nodes {
-            fruit.addEllipse(in: E(p.x, p.y, r, r))
-            shine.addEllipse(in: E(p.x - r * 0.34, p.y - r * 0.38, r * 0.36, r * 0.26))
-        }
-        let goldFill = GraphicsContext.Shading.linearGradient(Gradient(colors: [gold.mid, gold.lo]),
-                                                              startPoint: P(40, 18), endPoint: P(60, 60))
-        return FT5SParts(outline: [crown, trunk], contact: E(50, 90.8, 25, 3)) { c in
-            FT5SGloss.barrel(&c, trunk, bark, box: CGRect(x: 42, y: 60, width: 16, height: 31))
-            FT5SGloss.orb(&c, crown, leaf, box: CGRect(x: 13, y: 10.5, width: 74, height: 55.5), light: UnitPoint(x: 0.3, y: 0.16))
-            FT5SGloss.glint(c, tilted(E(31.5, 26, 8.5, 3.8), -36), clip: crown)
-            c.fill(links, with: goldFill)
-            c.fill(fruit, with: goldFill)
-            c.fill(shine, with: .color(.white.opacity(0.9)))
+        let leaf = k.ramp(.tree, shift: 1)
+        /// الهيئة الظاهرة في صندوق التصميم: الأكبر ٩٠ (من ٥ إلى ٩٥)، القاعدة عند ٩٥ كبقية مجسّمات الرئيسية
+        let box = CGRect(x: 5.3, y: 5, width: 89.4, height: 90)
+        let thick = CGPoint(x: 1.4, y: 2.6)
+        let fruit = Path(ellipseIn: E(61, 15.5, 3.4, 3.4))
+        return FT5SParts(outline: [Path(box), Path(box.offsetBy(dx: thick.x, dy: thick.y))], contact: E(50, 95.5, 28, 3)) { c in
+            var img = c.resolve(Image(systemName: "tree.fill"))
+            img.shading = .color(.black)
+            // مستطيل الرسم يحفظ نسبة الرمز؛ هيئته الظاهرة تبدأ من أعلاه وتترك أسفله هامشاً ≈ ٢٫٨٪ — فارتفاعه ٩٢٫٦ ليستقرّ عند ٩٥
+            let h: CGFloat = 92.6
+            let w = h * max(0.5, min(2, img.size.width / max(1, img.size.height)))
+            let rect = CGRect(x: 50 - w / 2, y: 5, width: w, height: h)
+            // ١) السُّمك: نسخة بلون العمق مزاحة نحو أسفل اليمين
+            var deep = img
+            deep.shading = .color(leaf.deep)
+            c.draw(deep, in: rect.offsetBy(dx: thick.x, dy: thick.y))
+            // ٢) الحجم: الهيئة قناعاً ثم تدرّج الطين المطفأ من ضوء أعلى اليسار
+            var m = c
+            m.clipToLayer { $0.draw(img, in: rect) }
+            FT5SClay.blob(&m, Path(box), leaf, light: UnitPoint(x: 0.3, y: 0.22), reach: 0.82)
+            // ٣) ضوء الحافة: الهيئة بيضاء متلاشية نحو أسفل اليمين، تُمحى منها نسخة مزاحة فلا يبقى إلا شريط الحواف العلوية اليسرى
+            c.drawLayer { l in
+                var white = img
+                white.shading = .linearGradient(Gradient(stops: [
+                    .init(color: .white.opacity(0.72), location: 0),
+                    .init(color: .white.opacity(0.36), location: 0.42),
+                    .init(color: .white.opacity(0), location: 0.78)
+                ]), startPoint: CGPoint(x: box.minX, y: box.minY), endPoint: CGPoint(x: box.maxX, y: box.maxY))
+                l.draw(white, in: rect)
+                l.blendMode = .destinationOut
+                l.draw(img, in: rect.offsetBy(dx: 1.8, dy: 1.8))
+            }
+            // ٤) اللمسة الذهبية الواحدة: ثمرة صغيرة في الفصّ الأعلى
+            FT5SClay.gold(&c, fruit, k)
         }
     }
 
-    /// المبخرة (الديوانيات): قاعدة مربّعة متدرّجة وساق قصيرة وكأس متّسعة بلون القسم، حافة ذهبية ومسماران
-    /// ذهبيان، ودخان بخور رفيع يتلاشى — ٧ عمليات
-    static func mabkhara(_ k: FT5SInk) -> FT5SParts {
-        let teal = k.ramp(.diwan), gold = k.ramp(.gold, shift: 1)
-        let body = lathe(50, P(50, 90), [
-            .line(P(68, 90)),
-            .quad(P(71, 87), P(71, 90)),
-            .line(P(71, 81)),
-            .quad(P(68, 78), P(71, 78)),
-            .line(P(65.5, 78)),
-            .line(P(65.5, 76)),
-            .quad(P(63, 73.5), P(65.5, 73.5)),
-            .line(P(59.5, 73.5)),
-            .curve(P(58.5, 63.5), P(58, 70), P(58, 66.5)),
-            .line(P(72.5, 50)),
-            .quad(P(74, 48), P(74, 49.5))
+    /// الدلّة والفنجان (الديوانيات): دلّة بخصر وبزبوز طويل مقوّس ومقبض جانبي وغطاء مقبّب بقمّة ذهبية،
+    /// وفنجان صغير تحت البزبوز يتصاعد منه خيط بخار — ١٠ عمليات
+    static func dallah(_ k: FT5SInk) -> FT5SParts {
+        let teal = k.ramp(.diwan, shift: 1)
+        let cx: CGFloat = 53
+        // الجسم: قدم ضيّقة ← بطن ← خصر ← كتف (متناظر)
+        let body = lathe(cx, P(cx, 95), [
+            .line(P(cx + 10, 95)),
+            .quad(P(cx + 12.5, 92.5), P(cx + 12.5, 95)),
+            .quad(P(cx + 11.5, 87), P(cx + 12, 90)),
+            .curve(P(cx + 17.5, 68), P(cx + 13, 82), P(cx + 17.5, 76)),
+            .curve(P(cx + 8, 50), P(cx + 17.5, 59), P(cx + 10, 55)),
+            .quad(P(cx + 12, 42), P(cx + 7.5, 45))
         ])
-        let rim = rr(23.5, 43.5, 53, 6, 3)
-        let mouth = Path(ellipseIn: E(50, 44.4, 21, 2.5))
-        var studs = FT5SGloss.poly([P(50, 52.5), P(54, 57), P(50, 61.5), P(46, 57)], [0.8])
-        studs.addPath(FT5SGloss.poly([P(50, 80.5), P(53.5, 84), P(50, 87.5), P(46.5, 84)], [0.8]))
-        let smoke: Path = {
+        let lid = lathe(cx, P(cx, 42), [
+            .line(P(cx + 14.5, 42)),
+            .quad(P(cx + 14, 37.5), P(cx + 15.5, 39.5)),
+            .curve(P(cx, 22), P(cx + 12.5, 29), P(cx + 7.5, 22))
+        ])
+        var finial = Path(ellipseIn: E(cx, 11.5, 4.5, 4.5))
+        finial.addRoundedRect(in: CGRect(x: cx - 1.8, y: 14, width: 3.6, height: 9.5), cornerSize: CGSize(width: 1.8, height: 1.8))
+        // البزبوز: أنبوب مقوّس يخرج من البطن ويرقّ نحو فوهته المائلة للخارج (عرض ٩٫٥ ← ٤٫٢)
+        let spout = taper(P(cx - 14, 68), P(cx - 28, 68), P(18, 48), P(11, 31), w0: 11, w1: 4.8)
+        let handle: Path = {
+            var p = Path()
+            p.move(to: P(cx + 9, 47))
+            p.addCurve(to: P(cx + 13, 80), control1: P(cx + 38, 43), control2: P(cx + 38, 83))
+            return p.strokedPath(StrokeStyle(lineWidth: 6, lineCap: .round))
+        }()
+        // الفنجان: كأس صغيرة متّسعة الفوهة تحت البزبوز
+        let ux: CGFloat = 16
+        let cup = lathe(ux, P(ux, 95), [
+            .line(P(ux + 5.5, 95)),
+            .quad(P(ux + 7.5, 93), P(ux + 7.5, 95)),
+            .line(P(ux + 9.5, 84.5))
+        ])
+        let mouth = Path(ellipseIn: E(ux, 84.5, 9.5, 2.3))
+        let steam: Path = {
             var s = Path()
-            s.move(to: P(50, 41))
-            s.addCurve(to: P(47, 29.5), control1: P(54.5, 37), control2: P(42.5, 34))
-            s.addCurve(to: P(52, 18), control1: P(51, 25), control2: P(55.5, 22))
-            return s.strokedPath(StrokeStyle(lineWidth: 3.6, lineCap: .round))
+            s.move(to: P(ux + 1, 79.5))
+            s.addCurve(to: P(ux - 1, 71), control1: P(ux + 5, 77), control2: P(ux - 5, 74))
+            s.addCurve(to: P(ux + 1.5, 63), control1: P(ux + 3, 68), control2: P(ux + 4, 66))
+            return s.strokedPath(StrokeStyle(lineWidth: 2.4, lineCap: .round))
         }()
-        let wisp: Color = k.onLight && !k.dark ? FT5SHex.color(0x9AC9D6) : .white
-        return FT5SParts(outline: [body, rim, smoke], contact: E(50, 91, 26, 3)) { c in
-            FT5SGloss.barrel(&c, body, teal, box: CGRect(x: 26, y: 48, width: 48, height: 42))
-            c.fill(studs, with: .linearGradient(Gradient(colors: [gold.hi, gold.lo]), startPoint: P(46, 52), endPoint: P(54, 88)))
-            FT5SGloss.barrel(&c, rim, gold)
-            c.fill(mouth, with: .linearGradient(Gradient(colors: [teal.deep, teal.lo]), startPoint: P(50, 42), endPoint: P(50, 47)))
-            FT5SGloss.glint(c, rr(31.5, 51.5, 3.6, 9, 1.8).applying(rot(-28, about: P(33.3, 56))), clip: body)
-            c.fill(smoke, with: .linearGradient(Gradient(colors: [wisp.opacity(0.9), wisp.opacity(0)]),
-                                                startPoint: P(50, 42), endPoint: P(52, 16)))
+        return FT5SParts(outline: [body, lid, finial, spout, handle, cup], contact: E(50, 95.5, 40, 3)) { c in
+            c.fill(handle, with: .color(teal.lo))
+            FT5SClay.barrel(&c, body, teal, box: CGRect(x: cx - 17.5, y: 42, width: 35, height: 53))
+            FT5SClay.face(&c, spout, teal)
+            FT5SClay.rim(c, spout, width: 1.6)
+            FT5SClay.blob(&c, lid, teal, light: UnitPoint(x: 0.3, y: 0.15))
+            FT5SClay.rim(c, lid, width: 1.6)
+            FT5SClay.gold(&c, finial, k)
+            FT5SClay.barrel(&c, cup, teal)
+            c.fill(mouth, with: .color(teal.deep))
+            c.fill(steam, with: .linearGradient(Gradient(colors: [.white.opacity(0.85), .white.opacity(0)]),
+                                                startPoint: P(ux, 80), endPoint: P(ux, 62)))
         }
     }
 
-    /// التواصل: فقاعتا حوار بسُمك — كبيرة بلون القسم وفيها ثلاث نقاط، وخلفها صغيرة ذهبية — ٧ عمليات
-    static func chat(_ k: FT5SInk) -> FT5SParts {
-        let ink = k.ramp(.contact), gold = k.ramp(.gold)
-        let back = bubble(CGRect(x: 40, y: 14, width: 48, height: 34), radius: 14, a: 60, b: 72,
-                          tip: P(84, 59), c1: P(76, 55), c2: P(67, 53))
-        let front = bubble(CGRect(x: 12, y: 34, width: 60, height: 40), radius: 16, a: 28, b: 42,
-                           tip: P(16, 87), c1: P(33, 82), c2: P(26, 78))
-        var dots = Path()
-        for x in [29, 42, 55] as [CGFloat] { dots.addEllipse(in: E(x, 54, 4.2, 4.2)) }
-        let d: CGFloat = 4.5
-        return FT5SParts(outline: [back, back.offsetBy(dx: 0, dy: 3.5), front, front.offsetBy(dx: 0, dy: d)],
-                         contact: E(44, 92.5, 30, 2.8)) { c in
-            FT5SGloss.slab(&c, back, gold, d: 3.5)
-            FT5SGloss.slab(&c, front, ink, d: d)
-            c.fill(dots, with: .color(ink.deep))
-            FT5SGloss.glint(c, tilted(E(27, 40.2, 9, 2.4), -6), clip: front)
+    /// الظرف المختوم (التواصل): ظرف بلون القسم — داخل مظلّل، جيب أمامي بطيّتين، لسان مطويّ بضوء حافة،
+    /// وختم شمع ذهبي مستدير على طرف اللسان — ٧ عمليات
+    static func envelope(_ k: FT5SInk) -> FT5SParts {
+        let ink = k.ramp(.contact, shift: 1)
+        let r = CGRect(x: 5, y: 34, width: 90, height: 61)
+        let back = Path(roundedRect: r, cornerRadius: 5)
+        let flap = FT5SGloss.poly([P(r.minX, r.minY), P(r.maxX, r.minY), P(50, 73)], [5, 5, 3])
+        let pocket = FT5SGloss.poly([P(r.minX, r.minY + 2), P(50, 81), P(r.maxX, r.minY + 2), P(r.maxX, r.maxY), P(r.minX, r.maxY)],
+                                    [1.5, 3, 1.5, 5, 5])
+        var crease = Path()
+        crease.move(to: P(r.minX, r.minY)); crease.addLine(to: P(50, 73)); crease.addLine(to: P(r.maxX, r.minY))
+        let fold = crease.strokedPath(StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+        let seal = Path(ellipseIn: E(50, 72, 8, 8))
+        let sealRing = Path(ellipseIn: E(50, 72, 4.6, 4.6)).strokedPath(StrokeStyle(lineWidth: 1.5))
+        return FT5SParts(outline: [back], contact: E(50, 95.5, 40, 3)) { c in
+            c.fill(back, with: .color(ink.lo))
+            FT5SClay.face(&c, pocket, ink)
+            c.fill(flap, with: .linearGradient(Gradient(stops: [
+                .init(color: ink.hi, location: 0), .init(color: ink.hi, location: 0.45),
+                .init(color: ink.mid, location: 0.6), .init(color: ink.mid, location: 1)
+            ]), startPoint: P(50, 34), endPoint: P(50, 73)))
+            c.fill(fold, with: .color(ink.lo))
+            FT5SClay.rim(c, flap)
+            FT5SClay.gold(&c, seal, k)
+            c.fill(sealRing, with: .color(k.color(0xB5832A, 0.55)))
         }
     }
 }
 
-// MARK: - المكتبة: ثلاثة أشكال
+// MARK: - المكتبة: ثلاثة أشكال (طين مطفأ بصبغة المكتبة + ورق + ذهبي واحد)
 
 nonisolated extension FT5SObjects {
 
-    /// ٠ — كتاب مفتوح: صفحتان بيضاوان بطيّة في الوسط على غلاف بلون المكتبة، أسطر هادئة وشريط علامة ذهبي — ٦ عمليات
+    /// ٠ — كتاب مفتوح: غلاف بلون المكتبة بسُمك، صفحتان ورقيّتان بطيّة وسطى وأسطر هادئة، وشريط علامة ذهبي — ٧ عمليات
     static func openBook(_ k: FT5SInk) -> FT5SParts {
-        let lilac = k.ramp(.library), paper = k.ramp(.paper), gold = k.ramp(.gold, shift: 1)
-        let pages = lathe(50, P(50, 39), [
-            .curve(P(86, 32), P(61, 31.5), P(75, 29)),
-            .line(P(87.5, 73)),
-            .curve(P(50, 79), P(75, 70), P(60, 72))
+        let plum = k.ramp(.library, shift: 1), paper = k.ramp(.paper)
+        let pages = lathe(50, P(50, 37), [
+            .curve(P(90, 29.5), P(62, 29.5), P(78, 26.5)),
+            .line(P(91.5, 72)),
+            .curve(P(50, 78), P(78, 69), P(60, 71))
         ])
-        let widen = CGAffineTransform(translationX: 50, y: 0).scaledBy(x: 1.08, y: 1).translatedBy(x: -50, y: 0)
-        let cover = pages.applying(widen).offsetBy(dx: 0, dy: 5.5)
+        let widen = CGAffineTransform(translationX: 50, y: 0).scaledBy(x: 1.085, y: 1).translatedBy(x: -50, y: 0)
+        let cover = pages.applying(widen).offsetBy(dx: 0, dy: 5)
+        let coverSide = cover.offsetBy(dx: 0, dy: 5.5)
         var lines = Path()
-        for (y, w) in [(45, 22), (53, 22), (61, 15)] as [(CGFloat, CGFloat)] {
-            lines.move(to: P(44, y + 2.2)); lines.addLine(to: P(44 - w, y))
-            lines.move(to: P(56, y + 2.2)); lines.addLine(to: P(56 + w, y))
+        for (y, w) in [(44, 25), (52, 25), (60, 17)] as [(CGFloat, CGFloat)] {
+            lines.move(to: P(43, y + 2.2)); lines.addLine(to: P(43 - w, y))
+            lines.move(to: P(57, y + 2.2)); lines.addLine(to: P(57 + w, y))
         }
-        let text = lines.strokedPath(StrokeStyle(lineWidth: 2.6, lineCap: .round))
-        let ribbon = FT5SGloss.poly([P(51.6, 74), P(57, 74), P(57, 93), P(54.3, 89.8), P(51.6, 93)], [0.6, 0.6, 0.5, 0.3, 0.5])
-        return FT5SParts(outline: [pages, cover, ribbon], contact: E(50, 92, 37, 3)) { c in
-            FT5SGloss.depth(&c, cover, lilac)
+        let text = lines.strokedPath(StrokeStyle(lineWidth: 2.4, lineCap: .round))
+        let ribbon = FT5SGloss.poly([P(51.5, 72), P(57.5, 72), P(57.5, 95), P(54.5, 91), P(51.5, 95)], [0.6, 0.6, 0.5, 0.3, 0.5])
+        return FT5SParts(outline: [pages, cover, coverSide, ribbon], contact: E(50, 95.5, 42, 3)) { c in
+            FT5SClay.deep(&c, coverSide, plum)
+            FT5SClay.face(&c, cover, plum)
             c.fill(pages, with: .linearGradient(Gradient(stops: [
-                .init(color: paper.mid, location: 0), .init(color: paper.hi, location: 0.28),
-                .init(color: paper.lo, location: 0.5), .init(color: paper.hi, location: 0.6),
-                .init(color: paper.mid, location: 0.86), .init(color: paper.lo, location: 1)
-            ]), startPoint: P(12.5, 50), endPoint: P(87.5, 50)))
-            c.fill(text, with: .color(lilac.lo))
-            FT5SGloss.face(&c, ribbon, gold)
-            FT5SGloss.glint(c, tilted(E(27, 36.4, 10, 1.9), -9), clip: pages)
+                .init(color: paper.hi, location: 0), .init(color: paper.hi, location: 0.42),
+                .init(color: paper.lo, location: 0.5), .init(color: paper.hi, location: 0.58),
+                .init(color: paper.hi, location: 1)
+            ]), startPoint: P(8, 50), endPoint: P(92, 50)))
+            c.fill(text, with: .color(plum.mid))
+            FT5SClay.gold(&c, ribbon, k)
+            FT5SClay.rim(c, cover, width: 1.6)
         }
     }
 
-    /// ١ — مخطوطة: رقّ رملي بين لفافتين بلون المكتبة بأطراف ذهبية، وأسطر قليلة (من اليمين) — ٧ عمليات
+    /// ١ — مخطوطة: رقّ ورقي قائم بين لفافتين بلون المكتبة، أسطر من اليمين، وختم شمع ذهبي صغير — ٦ عمليات
     static func scroll(_ k: FT5SInk) -> FT5SParts {
-        let lilac = k.ramp(.library), parchment = k.ramp(.sand), gold = k.ramp(.gold, shift: 1)
-        let t = rot(-7, about: P(50, 51))
-        let sheet = Path(CGRect(x: 27, y: 21, width: 46, height: 60))
-        let top = rr(21, 14, 58, 11, 5.5)
-        let bottom = rr(21, 76, 58, 11, 5.5)
-        var knobs = Path()
-        for (x, y) in [(18, 19.5), (82, 19.5), (18, 81.5), (82, 81.5)] as [(CGFloat, CGFloat)] {
-            knobs.addEllipse(in: E(x, y, 3.6, 4.4))
-        }
+        let plum = k.ramp(.library, shift: 1), paper = k.ramp(.paper)
+        let sheet = Path(CGRect(x: 22, y: 15, width: 56, height: 70))
+        let top = rr(14, 5, 72, 13, 6.5)
+        let bottom = rr(14, 82, 72, 13, 6.5)
         var lines = Path()
-        for (y, x0) in [(36, 33), (44, 38), (52, 33), (60, 42), (68, 36)] as [(CGFloat, CGFloat)] {
-            lines.move(to: P(x0, y)); lines.addLine(to: P(67, y))
+        for (y, x0) in [(29, 31), (38, 37), (47, 31), (56, 41), (65, 34)] as [(CGFloat, CGFloat)] {
+            lines.move(to: P(x0, y)); lines.addLine(to: P(70, y))
         }
         let text = lines.strokedPath(StrokeStyle(lineWidth: 2.6, lineCap: .round))
-        return FT5SParts(outline: [top, bottom, knobs, sheet].map { $0.applying(t) }, contact: E(50, 92.5, 31, 2.8)) { c in
-            var s = c
-            s.concatenate(t)
-            FT5SGloss.face(&s, sheet, parchment)
-            s.fill(text, with: .color(lilac.lo))
-            FT5SGloss.barrel(&s, top, lilac, vertical: true)
-            FT5SGloss.barrel(&s, bottom, lilac, vertical: true)
-            s.fill(knobs, with: .linearGradient(Gradient(colors: [gold.hi, gold.lo]), startPoint: P(50, 15), endPoint: P(50, 86)))
-            FT5SGloss.glint(s, rr(25, 15.8, 26, 2.4, 1.2), clip: top)
+        let seal = Path(ellipseIn: E(64.5, 74, 5.5, 5.5))
+        return FT5SParts(outline: [top, bottom, sheet], contact: E(50, 95.5, 40, 3)) { c in
+            c.fill(sheet, with: .linearGradient(Gradient(colors: [paper.hi, paper.mid]), startPoint: P(22, 15), endPoint: P(78, 85)))
+            c.fill(text, with: .color(plum.mid))
+            FT5SClay.barrel(&c, top, plum, vertical: true)
+            FT5SClay.barrel(&c, bottom, plum, vertical: true)
+            FT5SClay.rim(c, top, width: 1.4)
+            FT5SClay.gold(&c, seal, k)
         }
     }
 
-    /// ٢ — صندوق أرشيف: صندوق بلون المكتبة يُرى وجهه وسطحه وجانبه، بفاصل غطاء ومقبض وبطاقة بيضاء — ٦ عمليات
+    /// ٢ — صندوق أرشيف: صندوق بلون المكتبة بثلاثة أوجه (أمام مضاء، جانب مظلّل) وغطاء بارز بسطح أفتح،
+    /// بطاقة ورقية وحلقة سحب ذهبية — ٨ عمليات
     static func archiveBox(_ k: FT5SInk) -> FT5SParts {
-        let lilac = k.ramp(.library), paper = k.ramp(.paper)
-        let f = CGRect(x: 15, y: 46, width: 58, height: 42)
-        let o = CGPoint(x: 11, y: -9)
-        let hull = FT5SGloss.poly([P(f.minX, f.minY), P(f.minX + o.x, f.minY + o.y), P(f.maxX + o.x, f.minY + o.y),
-                                   P(f.maxX + o.x, f.maxY + o.y), P(f.maxX, f.maxY), P(f.minX, f.maxY)], [3])
-        let front = FT5SGloss.poly([P(f.minX, f.minY), P(f.maxX, f.minY), P(f.maxX, f.maxY), P(f.minX, f.maxY)], [3.4])
-        var marks = Path()
-        marks.addRoundedRect(in: CGRect(x: f.minX, y: f.minY + 12.5, width: f.width, height: 1.8),
-                             cornerSize: CGSize(width: 0.9, height: 0.9))
-        marks.addRoundedRect(in: CGRect(x: 34, y: 51.5, width: 20, height: 5.2), cornerSize: CGSize(width: 2.6, height: 2.6))
-        let label = rr(32, 67, 24, 13, 2.6)
-        return FT5SParts(outline: [hull], contact: E(47, 90.8, 35, 3)) { c in
-            c.fill(hull, with: .linearGradient(Gradient(stops: [
-                .init(color: lilac.hi, location: 0), .init(color: lilac.mid, location: 0.35), .init(color: lilac.deep, location: 1)
-            ]), startPoint: P(20, 37), endPoint: P(84, 79)))
-            c.fill(front, with: .linearGradient(Gradient(colors: [lilac.mid, lilac.lo]), startPoint: P(30, 46), endPoint: P(50, 88)))
-            c.fill(marks, with: .color(lilac.deep))
-            FT5SGloss.face(&c, label, paper)
-            FT5SGloss.glint(c, FT5SGloss.poly([P(22, 45), P(29, 39.6), P(44, 39.6), P(37, 45)], [0.8]), clip: hull)
+        let plum = k.ramp(.library, shift: 1), paper = k.ramp(.paper)
+        let o = CGPoint(x: 20, y: -13)
+        let f = CGRect(x: 5, y: 44, width: 66, height: 51)
+        let front = FT5SGloss.poly([P(f.minX, f.minY), P(f.maxX, f.minY), P(f.maxX, f.maxY), P(f.minX, f.maxY)], [2])
+        let side = FT5SGloss.poly([P(f.maxX, f.minY), P(f.maxX + o.x, f.minY + o.y), P(f.maxX + o.x, f.maxY + o.y), P(f.maxX, f.maxY)], [2])
+        let l = CGRect(x: f.minX - 2.5, y: f.minY - 7.5, width: f.width + 4, height: 7.5)
+        let lidFront = FT5SGloss.poly([P(l.minX, l.minY), P(l.maxX, l.minY), P(l.maxX, l.maxY), P(l.minX, l.maxY)], [1.5])
+        let lidSide = FT5SGloss.poly([P(l.maxX, l.minY), P(l.maxX + o.x, l.minY + o.y), P(l.maxX + o.x, l.maxY + o.y), P(l.maxX, l.maxY)], [1.5])
+        let lidTop = FT5SGloss.poly([P(l.minX, l.minY), P(l.minX + o.x, l.minY + o.y), P(l.maxX + o.x, l.minY + o.y), P(l.maxX, l.minY)], [1.5])
+        let label = rr(21, 62, 34, 18, 2.5)
+        let ring = Path(ellipseIn: E(38, 53, 4, 4))
+        return FT5SParts(outline: [front, side, lidTop, lidSide], contact: E(50, 95.5, 44, 3)) { c in
+            FT5SClay.face(&c, front, plum)
+            FT5SClay.side(&c, side, plum)
+            FT5SClay.deep(&c, lidSide, plum)
+            FT5SClay.face(&c, lidFront, plum)
+            c.fill(lidTop, with: .color(k.color(FT5SHue.library.t[0])))
+            FT5SClay.rim(c, lidTop, width: 1.4)
+            c.fill(label, with: .color(paper.hi))
+            FT5SClay.gold(&c, ring, k)
         }
     }
 }
 
-// MARK: - المشاريع: ثلاثة أشكال
+// MARK: - المشاريع: ثلاثة أشكال (طين مطفأ بصبغة المشاريع + ورق + ذهبي واحد)
 
 nonisolated extension FT5SObjects {
 
-    /// ٠ — واجهة محلّ: مبنى بلون المشاريع بسُمك، مظلّة مخطّطة (أبيض/ذهبي) بحافة مموّجة، نافذة وباب — ٧ عمليات
+    /// ٠ — واجهة محلّ: مبنى بلون المشاريع بسُمك، مظلّة ورقيّة بخطوط من الصبغة نفسها بحافة مموّجة، نافذة وباب،
+    /// ولوحة ذهبية صغيرة فوق الباب — ٨ عمليات
     static func storefront(_ k: FT5SInk) -> FT5SParts {
-        let green = k.ramp(.projects), paper = k.ramp(.paper), gold = k.ramp(.gold, shift: 1)
-        let body = rr(20, 42, 60, 44, 5)
-        let top: CGFloat = 27, edge: CGFloat = 43, dip: CGFloat = 5.5
-        let l0: CGFloat = 19, r0: CGFloat = 81, l1: CGFloat = 13, r1: CGFloat = 87
+        let green = k.ramp(.projects, shift: 1), paper = k.ramp(.paper)
+        let body = rr(12, 34, 76, 57, 4)
+        let top: CGFloat = 14, edge: CGFloat = 33, dip: CGFloat = 4.5
+        let l0: CGFloat = 12, r0: CGFloat = 88, l1: CGFloat = 5, r1: CGFloat = 95
         let n = 6
         let awning: Path = {
             var p = Path()
@@ -885,83 +1008,87 @@ nonisolated extension FT5SObjects {
             stripes.addLine(to: P(l1 + (r1 - l1) * a, edge + dip * 2))
             stripes.closeSubpath()
         }
-        let window = CGRect(x: 27, y: 56, width: 22, height: 17)
-        var openings = Path()
-        openings.addRoundedRect(in: window, cornerSize: CGSize(width: 3, height: 3))
-        openings.addRoundedRect(in: CGRect(x: 55, y: 57, width: 16, height: 29), cornerSize: CGSize(width: 3, height: 3))
+        let window = rr(19, 56, 25, 20, 3)
+        var mullion = Path()
+        mullion.move(to: P(31.5, 56)); mullion.addLine(to: P(31.5, 76))
+        mullion.move(to: P(19, 66)); mullion.addLine(to: P(44, 66))
+        let bars = mullion.strokedPath(StrokeStyle(lineWidth: 1.8))
+        let door = rr(56, 56, 21, 35, 3)
+        let sign = rr(53.5, 42, 26, 7, 3.5)
         let d: CGFloat = 4
-        return FT5SParts(outline: [awning, body.offsetBy(dx: 0, dy: d)], contact: E(50, 91.6, 35, 3)) { c in
-            FT5SGloss.slab(&c, body, green, d: d)
-            c.fill(openings, with: .linearGradient(Gradient(colors: [green.lo, green.deep]), startPoint: P(50, 56), endPoint: P(50, 86)))
-            FT5SGloss.glint(c, FT5SGloss.poly([P(29, 73), P(37, 56), P(44, 56), P(36, 73)], [0.4]),
-                            clip: Path(roundedRect: window, cornerRadius: 3), opacity: 0.6)
-            FT5SGloss.face(&c, awning, paper)
+        return FT5SParts(outline: [awning, body.offsetBy(dx: 0, dy: d)], contact: E(50, 95.5, 42, 3)) { c in
+            FT5SClay.deep(&c, body.offsetBy(dx: 0, dy: d), green)
+            FT5SClay.face(&c, body, green)
+            c.fill(door, with: .color(green.deep))
+            c.fill(window, with: .color(paper.hi))
+            c.fill(bars, with: .color(green.mid))
+            c.fill(awning, with: .color(paper.hi))
             var s = c
             s.clip(to: awning)
-            s.fill(stripes, with: .linearGradient(Gradient(colors: [gold.hi, gold.lo]), startPoint: P(50, top), endPoint: P(50, edge + dip)))
+            s.fill(stripes, with: .color(green.mid))
+            FT5SClay.gold(&c, sign, k)
         }
     }
 
-    /// ١ — سهم النموّ: ثلاثة أعمدة صاعدة بلون المشاريع (وجه + جانب) وسهم ذهبي — يبقى صاعداً يميناً — ٦ عمليات
+    /// ١ — سهم النموّ: ثلاثة أعمدة صاعدة بلون المشاريع (وجه مضاء وجانب مظلّل وسطح أفتح) وخطّ اتجاه أبيض
+    /// برأس ذهبي — يبقى صاعداً يميناً في اللغتين — ٦ عمليات
     static func growth(_ k: FT5SInk) -> FT5SParts {
-        let green = k.ramp(.projects), gold = k.ramp(.gold)
-        let bars = [CGRect(x: 15, y: 64, width: 17, height: 24), CGRect(x: 37, y: 50, width: 17, height: 38),
-                    CGRect(x: 59, y: 35, width: 17, height: 53)]
-        let o = CGPoint(x: 5, y: -4.5)
-        var sides = Path(), faces = Path(), shine = Path()
+        let green = k.ramp(.projects, shift: 1)
+        let bars = [CGRect(x: 5, y: 63, width: 22, height: 32), CGRect(x: 35, y: 47, width: 22, height: 48),
+                    CGRect(x: 65, y: 31, width: 22, height: 64)]
+        let o = CGPoint(x: 7, y: -5.5)
+        var sides = Path(), tops = Path(), faces = Path()
         for r in bars {
-            sides.addPath(FT5SGloss.poly([P(r.minX, r.minY), P(r.minX + o.x, r.minY + o.y), P(r.maxX + o.x, r.minY + o.y),
-                                          P(r.maxX + o.x, r.maxY + o.y), P(r.maxX, r.maxY), P(r.minX, r.maxY)], [1.8]))
-            faces.addPath(FT5SGloss.poly([P(r.minX, r.minY), P(r.maxX, r.minY), P(r.maxX, r.maxY), P(r.minX, r.maxY)], [2.2]))
-            shine.addRoundedRect(in: CGRect(x: r.minX + 2.6, y: r.minY + 3, width: 2.8, height: min(r.height - 8, 15)),
-                                 cornerSize: CGSize(width: 1.4, height: 1.4))
+            sides.addPath(FT5SGloss.poly([P(r.maxX, r.minY), P(r.maxX + o.x, r.minY + o.y), P(r.maxX + o.x, r.maxY + o.y), P(r.maxX, r.maxY)], [1.5]))
+            tops.addPath(FT5SGloss.poly([P(r.minX, r.minY), P(r.minX + o.x, r.minY + o.y), P(r.maxX + o.x, r.minY + o.y), P(r.maxX, r.minY)], [1.5]))
+            faces.addPath(FT5SGloss.poly([P(r.minX, r.minY), P(r.maxX, r.minY), P(r.maxX, r.maxY), P(r.minX, r.maxY)], [2]))
         }
         var trend = Path()
-        trend.move(to: P(13, 58)); trend.addLine(to: P(33, 44)); trend.addLine(to: P(47, 50)); trend.addLine(to: P(70, 26.5))
-        let line = trend.strokedPath(StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-        let head = FT5SGloss.poly([P(83, 13), P(79, 32), P(63.5, 17.5)], [2.2])
-        let goldFill = GraphicsContext.Shading.linearGradient(Gradient(colors: [gold.hi, gold.mid, gold.lo]),
-                                                              startPoint: P(20, 20), endPoint: P(70, 62))
-        return FT5SParts(outline: [sides, line, head], contact: E(48, 90, 37, 2.8)) { c in
-            c.fill(sides, with: .linearGradient(Gradient(colors: [green.lo, green.deep]), startPoint: P(20, 30), endPoint: P(85, 88)))
-            c.fill(faces, with: .linearGradient(Gradient(colors: [green.hi, green.mid]), startPoint: P(30, 34), endPoint: P(50, 88)))
-            FT5SGloss.glint(c, shine, clip: faces, opacity: 0.85)
-            c.fill(line, with: goldFill)
-            c.fill(head, with: goldFill)
+        trend.move(to: P(11, 52)); trend.addLine(to: P(41, 36)); trend.addLine(to: P(57, 42)); trend.addLine(to: P(82, 18))
+        let line = trend.strokedPath(StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+        let head = FT5SGloss.poly([P(95, 5), P(92.5, 25.5), P(74, 7.5)], [2.2])
+        return FT5SParts(outline: [sides, faces, line, head], contact: E(50, 95.5, 44, 3)) { c in
+            c.fill(sides, with: .color(green.lo))
+            c.fill(tops, with: .color(k.color(FT5SHue.projects.t[0])))
+            FT5SClay.face(&c, faces, green, box: CGRect(x: 5, y: 31, width: 82, height: 64))
+            FT5SClay.rim(c, faces, width: 1.2, opacity: 0.5, box: CGRect(x: 5, y: 31, width: 82, height: 64))
+            c.fill(line, with: .color(.white))
+            FT5SClay.gold(&c, head, k)
         }
     }
 
-    /// ٢ — صاروخ انطلاق: جسم فاتح بلون المشاريع ونافذة بإطار ذهبي وزعانف أعمق ولهب ذهبي — ينطلق يميناً دائماً — ٧ عمليات
+    /// ٢ — صاروخ انطلاق: جسم فاتح بلون المشاريع بزعانف أعمق، نافذة بحلقة ذهبية، ولهب أبيض يتلاشى —
+    /// ينطلق يميناً في اللغتين — ٧ عمليات
     static func rocket(_ k: FT5SInk) -> FT5SParts {
-        let mint = k.ramp(.projects), gold = k.ramp(.gold)
-        let t = rot(40, about: P(50, 52))
-        let body = lathe(50, P(50, 76), [
-            .line(P(59.5, 76)),
-            .curve(P(63.5, 50), P(62, 69), P(63.5, 58)),
-            .curve(P(50, 12), P(63.5, 33), P(57.5, 19))
+        let mint = k.ramp(.projects, shift: 1)
+        let t = rot(38, about: P(50, 50))
+        let body = lathe(50, P(50, 62), [
+            .line(P(60, 62)),
+            .curve(P(64.5, 34), P(62.5, 55), P(64.5, 44)),
+            .curve(P(50, -4), P(64.5, 15), P(58, 2))
         ])
-        var fins = FT5SGloss.poly([P(38, 55), P(27, 70), P(28, 82), P(39.8, 75)], [1.4, 2.6, 2, 1.4])
-        fins.addPath(FT5SGloss.poly([P(62, 55), P(60.2, 75), P(72, 82), P(73, 70)], [1.4, 1.4, 2, 2.6]))
-        let ring = Path(ellipseIn: E(50, 43, 9.2, 9.2))
-        let pane = Path(ellipseIn: E(50, 43, 6, 6))
+        var fins = FT5SGloss.poly([P(38, 42), P(26, 58), P(27, 70), P(39.5, 62)], [1.4, 2.6, 2, 1.4])
+        fins.addPath(FT5SGloss.poly([P(62, 42), P(60.5, 62), P(73, 70), P(74, 58)], [1.4, 1.4, 2, 2.6]))
+        let ring = Path(ellipseIn: E(50, 30, 9.5, 9.5))
+        let pane = Path(ellipseIn: E(50, 30, 5.8, 5.8))
         let flame: Path = {
             var p = Path()
-            p.move(to: P(43, 76))
-            p.addQuadCurve(to: P(50, 97), control: P(41.5, 89))
-            p.addQuadCurve(to: P(57, 76), control: P(58.5, 89))
+            p.move(to: P(42.5, 62))
+            p.addQuadCurve(to: P(50, 100), control: P(40.5, 86))
+            p.addQuadCurve(to: P(57.5, 62), control: P(59.5, 86))
             p.closeSubpath()
             return p
         }()
-        return FT5SParts(outline: [body, fins, flame].map { $0.applying(t) }, contact: E(46, 92.5, 22, 2.4)) { c in
+        return FT5SParts(outline: [body, fins, flame].map { $0.applying(t) }, contact: E(50, 95.5, 32, 3)) { c in
             var r = c
             r.concatenate(t)
-            r.fill(flame, with: .linearGradient(Gradient(colors: [.white, gold.mid, gold.lo.opacity(0)]),
-                                                startPoint: P(50, 76), endPoint: P(50, 97)))
-            r.fill(fins, with: .linearGradient(Gradient(colors: [mint.lo, mint.deep]), startPoint: P(30, 55), endPoint: P(70, 82)))
-            FT5SGloss.barrel(&r, body, mint)
-            FT5SGloss.orb(&r, ring, k.ramp(.gold, shift: 1))
-            r.fill(pane, with: .radialGradient(Gradient(colors: [mint.lo, mint.deep]), center: P(47.5, 40.5), startRadius: 0, endRadius: 8))
-            FT5SGloss.glint(r, rr(40.6, 48, 3.2, 17, 1.6), clip: body)
+            r.fill(flame, with: .linearGradient(Gradient(colors: [.white, mint.hi, mint.hi.opacity(0)]),
+                                                startPoint: P(50, 62), endPoint: P(50, 100)))
+            r.fill(fins, with: .color(mint.lo))
+            FT5SClay.barrel(&r, body, mint, box: CGRect(x: 35.5, y: -4, width: 29, height: 66))
+            FT5SClay.rim(r, body, width: 1.6, box: CGRect(x: 35.5, y: -4, width: 29, height: 66))
+            FT5SClay.gold(&r, ring, k)
+            r.fill(pane, with: .color(mint.deep))
         }
     }
 }
@@ -1270,8 +1397,16 @@ nonisolated enum FT5SScene {
         let p = CGPoint(x: size.width / 2, y: size.height / 2)
         if let kind {
             var c = mirrored(ctx, width: size.width)
-            object(kind, in: &c, target: CGRect(x: p.x - side * 0.46, y: p.y - side * 0.46, width: side * 0.92, height: side * 0.92),
-                   bottom: true, ink: FT5SInk(dark: dark), mirrored: isLTR(ctx))
+            if kind.isHomeObject {
+                // مجسّمات الرئيسية: صندوق التصميم (١٠٠) يملأ الإطار كما هو — حجم وقاعدة موحّدان في كل المربّعات
+                var g = c
+                g.translateBy(x: p.x - side / 2, y: p.y - side / 2)
+                g.scaleBy(x: side / 100, y: side / 100)
+                FT5SArt.drawObject(kind, in: &g, ink: FT5SInk(dark: dark), mirrored: isLTR(ctx))
+            } else {
+                object(kind, in: &c, target: CGRect(x: p.x - side * 0.46, y: p.y - side * 0.46, width: side * 0.92, height: side * 0.92),
+                       bottom: true, ink: FT5SInk(dark: dark), mirrored: isLTR(ctx))
+            }
         } else {
             FT5SGlyph.polished(&ctx, symbol: icon, at: p, size: side * 0.62, tint: tint, onLight: false, dark: dark)
         }

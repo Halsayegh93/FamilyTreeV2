@@ -15,6 +15,10 @@ import SwiftUI
 // مؤقّت ولا blur ولا ظلال. الحركة الوحيدة: (١) مكّوك تحميل الشجرة يتحرّك أفقياً بحركة ضمنية واحدة (إزاحة فقط)،
 // (٢) لحظات النجاح تنفتح مرة واحدة (قناع يتّسع + رقعة تكبر) ثم تسكن. «تقليل الحركة» = الإطار الأخير مباشرة.
 // كل الرسوم مخفيّة عن القارئ الصوتي ولا تلتقط اللمس، وتنعكس للإنجليزية (ما عدا سهم النموّ: يصعد يميناً دائماً).
+//
+// الجولة ٨ (٢٠٢٦-١٠-٠٦): مربّعات الرئيسية صارت «مجسّمات منسوجة» في الوسط (غافة، دلّة وفنجان، ظرف بختم، المكتبة
+// والمشاريع بأشكالها الثلاثة) على شبكة ٢٠×٢٠ مدرّجة: جسم كريمي، تفاصيل بلون القسم العميق، معيّن ذهبي واحد، وظلّ تماس؛
+// والحاشية العريضة صارت حاشية رفيعة (٨ نقاط) على الحافّة العلوية. الرقع والرؤوس والحالات تستعمل الرموز المنسوجة نفسها.
 
 // MARK: - الواجهة (العقد)
 
@@ -27,9 +31,16 @@ import SwiftUI
     static let libraryVariantNames: [String] = ["رف الكتب", "صندوق المبيّت", "الوثيقة"]
     static let projectsVariantNames: [String] = ["حقيبة العمل", "سفينة البوم", "سهم النموّ"]
 
-    /// إضافة غير ملزمة: المسافة التي يتركها عنوان المربّع من الحافّة الخلفية حتى لا يلمس الحاشية
-    static func tileTitleInset(width: CGFloat) -> CGFloat { FT5U.tileStrip(width: width) + 6 }
+    /// لا حاشية جانبية بعد الجولة ٨ — العنوان لا يحتاج مسافة
+    static func tileTitleInset(width: CGFloat) -> CGFloat { 0 }
 
+    /// مجسّم مربّع الرئيسية في مربّع مركزي (المجسّم والاسم بالوسط): الرمز المنسوج يملأ إطاره
+    static func tileIcon(_ place: String, variant: Int) -> AnyView? {
+        guard case .glyph(let g) = FT5U.tileGlyph(place, variant: variant), FT5U.isWoven(g) else { return nil }
+        return AnyView(FT5UObjectArt(glyph: g, deep: ArtPalette.section(for: place).deep))
+    }
+    /// شفافية النسخة الكبيرة من المجسّم في خلفية مربّع الرئيسية (علامة مائية كريمية هادئة)
+    static let ghostOpacity: Double = 0.16
     static func tile(_ place: String, variant: Int, badge: Bool, animateOnce: Bool) -> AnyView {
         AnyView(FT5UTileArt(place: place, variant: variant))
     }
@@ -628,7 +639,17 @@ nonisolated enum FT5U {
                          main: FT5UPaint, accent: FT5UPaint, ink: FT5UInk, ltr: Bool) {
         switch mark {
         case .glyph(let g):
-            drawSym(sym(g), in: &c, center: center, cell: cell, main: main, accent: accent, ltr: ltr)
+            if isWoven(g) {
+                // الرمز المنسوج (الجولة ٨) بألوان الرقعة: الجسم بلون الأرضية، التفاصيل محو، واللمسة بلون اللمسة
+                let side = grid * cell + 2
+                let style = FT5UWovenStyle(body: .paint(main), detail: .erase,
+                                           accent: accent.color.opacity(accent.opacity), accentLight: nil,
+                                           soft: main.color.opacity(main.opacity * 0.6), shadow: nil)
+                drawWoven(g, in: &c, box: CGRect(x: center.x - side / 2, y: center.y - side / 2, width: side, height: side),
+                          style: style, ltr: ltr)
+            } else {
+                drawSym(sym(g), in: &c, center: center, cell: cell, main: main, accent: accent, ltr: ltr)
+            }
         case .sf(let name):
             c.drawLayer { l in
                 drawSF(name, in: &l, center: center, side: grid * cell, color: main.color, ltr: ltr)
@@ -697,14 +718,9 @@ nonisolated enum FT5U {
                  accent: FT5UPaint(color: ink.red), ink: ink, ltr: ltr)
     }
 
+    /// المربّع (الجولة ٨): حاشية رفيعة على الحافّة العلوية فقط — المجسّم والعنوان في الوسط لا يلمسانها
     static func drawTile(_ c: inout GraphicsContext, size: CGSize, place: String, variant: Int) {
-        guard size.width > 1, size.height > 1 else { return }
-        var g = c
-        let ltr = isLTR(c), dark = isDark(c)
-        mirrorForLTR(&g, width: size.width)
-        drawStrip(&g, mark: tileGlyph(place, variant: variant), width: tileStrip(width: size.width), height: size.height,
-                  ground: FT5UPaint(color: tileDeep(place, dark: dark), shade: dark ? 0.12 : 0),
-                  ink: .of(dark: dark), cell: tileCell(width: size.width), mourning: false, ltr: ltr)
+        drawTopBand(&c, size: size, place: place)
     }
 
     static func drawHeader(_ c: inout GraphicsContext, size: CGSize, icon: String, deep: Color) {
@@ -1070,6 +1086,375 @@ nonisolated enum FT5U {
     }
 }
 
+// MARK: - مجسّمات المربّعات (الجولة ٨): رموز منسوجة مدرّجة على شبكة ٢٠×٢٠
+
+/// الرمز المنسوج: جسم كريمي (مسار واحد موحّد)، وتفاصيل داخلية (لون القسم العميق في المربّع، أو محو في الرقع)،
+/// ولمسات كريمية خفيفة فوق الأرضية (بخار، موج)، ومعيّن ذهبي واحد، وخطّ أرض لظلّ التماس
+nonisolated struct FT5UWoven {
+    var body = Path()
+    var detail = Path()
+    var soft = Path()
+    /// المعيّن الذهبي (x, y, r)
+    var gem: (CGFloat, CGFloat, CGFloat)? = nil
+    var baseline: CGFloat = 19
+    var shadowX: CGFloat = 10
+    var shadowHalf: CGFloat = 8
+    /// لا ينعكس في الإنجليزية (سهم النموّ)
+    var fixed = false
+    mutating func b(_ p: Path) { body.addPath(p) }
+    mutating func d(_ p: Path) { detail.addPath(p) }
+    mutating func s(_ p: Path) { soft.addPath(p) }
+}
+
+/// ألوان الرمز المنسوج بحسب موضعه
+nonisolated struct FT5UWovenStyle {
+    enum Body { case light(Color, Color), paint(FT5UPaint) }
+    enum Detail { case paint(Color), erase }
+    var body: Body
+    var detail: Detail
+    var accent: Color
+    var accentLight: Color? = nil
+    var soft: Color
+    var shadow: Color? = nil
+}
+
+extension FT5U {
+    static let wovenGrid: CGFloat = 20
+    static let gold = hex(0xD9A23E)
+    static let goldLight = hex(0xF2C65E)
+    static let wovenKinds: [FT5UGlyph] = [.tree, .dalla, .envelope, .shelf, .chest, .scroll, .briefcase, .dhow, .growth]
+
+    static func isWoven(_ g: FT5UGlyph) -> Bool { wovenKinds.contains(g) }
+
+    // MARK: هندسة الشبكة
+
+    /// صفوف أفقية متراصّة من الأعلى حول المحور `cx`: (نصف العرض، الارتفاع) — الأشكال المدرّجة
+    static func rows(_ cx: CGFloat, _ top: CGFloat, _ r: [(CGFloat, CGFloat)]) -> Path {
+        var p = Path()
+        var y = top
+        for (hw, h) in r {
+            p.addPath(rect(cx - hw, y, 2 * hw, h))
+            y += h
+        }
+        return p
+    }
+
+    /// خطّ مدرّج (سلّم) بسماكة `t` من `a` إلى `b` في `n` درجات
+    static func stairs(_ a: (CGFloat, CGFloat), _ b: (CGFloat, CGFloat), _ n: Int, _ t: CGFloat) -> Path {
+        var p = Path()
+        let h = t / 2
+        for i in 0..<n {
+            let f0 = CGFloat(i) / CGFloat(n), f1 = CGFloat(i + 1) / CGFloat(n)
+            let xa = a.0 + (b.0 - a.0) * f0, xb = a.0 + (b.0 - a.0) * f1
+            let ya = a.1 + (b.1 - a.1) * f0, yb = a.1 + (b.1 - a.1) * f1
+            p.addPath(rect(min(xa, xb) - h, ya - h, abs(xb - xa) + t, t))
+            p.addPath(rect(xb - h, min(ya, yb) - h, t, abs(yb - ya) + t))
+        }
+        return p
+    }
+
+    /// مثلّث قائم بوتر مدرّج: الضلع القائم عند `x0` والدرجات تتّسع نزولاً باتجاه `dir` (+١ يميناً)
+    static func stairTri(_ x0: CGFloat, _ y0: CGFloat, _ w: CGFloat, _ h: CGFloat, _ n: Int, _ dir: CGFloat) -> Path {
+        var p = Path()
+        let rh = h / CGFloat(n)
+        for i in 0..<n {
+            let wi = w * CGFloat(i + 1) / CGFloat(n)
+            p.addPath(rect(dir > 0 ? x0 : x0 - wi, y0 + CGFloat(i) * rh, wi, rh))
+        }
+        return p
+    }
+
+    // MARK: الرموز (شبكة ٢٠: البعد الأكبر ١٨ = ٩٠٪، وخطّ الأرض ١٩)
+
+    /// (الغافة ليست هنا: هي شعار التطبيق `tree.fill` — انظر drawWovenTree)
+    static func woven(_ g: FT5UGlyph) -> FT5UWoven? {
+        var o = FT5UWoven()
+        switch g {
+        case .dalla:
+            // دلّة: غطاء مدرّج بقمّة ذهبية، عنق، بطن، قاعدة مفلطحة؛ صنبور مدرّج يساراً ومقبض يميناً؛ فنجان ببخار
+            o.b(rect(7.5, 2.6, 1, 0.9))
+            o.b(rows(8, 3.2, [(1, 1), (2, 1), (3, 1), (3.6, 0.9), (2, 1.9), (3, 1), (3.6, 1), (4, 5), (3.4, 1), (2.4, 1), (3.6, 1)]))
+            o.b(bar((5.2, 11.9), (2.15, 8.85), 1.7))
+            o.b(rect(1.3, 4.6, 1.7, 4.6))
+            o.b(bar((2.15, 5.0), (1.2, 4.05), 1.4))
+            o.b(rect(11.6, 8, 2.9, 1.3))
+            o.b(rect(13.2, 8, 1.3, 5))
+            o.b(bar((13.85, 12.8), (12.05, 14.6), 1.3))
+            o.b(rows(17.1, 14.4, [(1.8, 1.4), (1.4, 1.2), (1.0, 1.0), (1.9, 1)]))
+            o.s(bar((16.5, 13.3), (17.6, 12.2), 0.75))
+            o.s(bar((17.6, 12.2), (16.5, 11.1), 0.75))
+            o.s(bar((16.5, 11.1), (17.6, 10.0), 0.75))
+            o.d(rect(4.6, 6.35, 6.8, 0.6))
+            o.d(rect(4.3, 11.6, 7.4, 0.55))
+            for x in [6, 8, 10] as [CGFloat] { o.d(diamond(x, 13.3, 0.7)) }
+            o.d(rect(15.5, 15.0, 3.2, 0.55))
+            o.gem = (8, 1.9, 1.2)
+            o.shadowX = 10.2
+        case .envelope:
+            // ظرف مشطوف الزوايا، لسانه خطّان مدرّجان يلتقيان عند ختم ذهبي، وطيّتا الجيب السفلي أقصر
+            o.b(rows(10, 5.5, [(8, 1), (9, 10), (8, 1)]))
+            o.d(stairs((1.7, 6.4), (10, 12.4), 5, 0.75))
+            o.d(stairs((18.3, 6.4), (10, 12.4), 5, 0.75))
+            o.d(stairs((1.7, 16.6), (6.2, 13.3), 3, 0.65))
+            o.d(stairs((18.3, 16.6), (13.8, 13.3), 3, 0.65))
+            o.gem = (10, 12.5, 1.75)
+            o.baseline = 17.5
+        case .shelf:
+            // رف الكتب: ثلاثة كتب قائمة (الأوسط أطولها وعليه المعيّن) وكتابان مسطّحان على لوح بكتيفتين مدرّجتين
+            o.b(rect(1.2, 4, 3.2, 12))
+            o.b(rect(5, 2.4, 3.4, 13.6))
+            o.b(rect(9, 5, 3, 11))
+            o.b(rect(13, 12.6, 5.6, 1.7))
+            o.b(rect(12.6, 14.3, 6.2, 1.7))
+            o.b(rect(1, 16, 18, 1.4))
+            o.b(rows(3.2, 17.4, [(1.0, 0.8), (0.5, 0.8)]))
+            o.b(rows(16.8, 17.4, [(1.0, 0.8), (0.5, 0.8)]))
+            for (x, w, top) in [(1.2, 3.2, 4.0), (5, 3.4, 2.4), (9, 3, 5.0)] as [(CGFloat, CGFloat, CGFloat)] {
+                o.d(rect(x, top + 1.4, w, 0.6))
+                o.d(rect(x, 13.8, w, 0.6))
+            }
+            o.d(rect(13.5, 13.2, 4.6, 0.45))
+            o.d(rect(13.1, 14.9, 5.2, 0.45))
+            o.d(rect(1.6, 16.45, 16.8, 0.45))
+            o.gem = (6.7, 9, 1.3)
+        case .chest:
+            // صندوق المبيّت: غطاء مدرّج، حزامان، خطّ الغطاء وخطّ القاعدة، وقفل: عين عميقة بقلب ذهبي
+            o.b(rows(10, 4.5, [(6, 1), (8, 1), (9, 10.7)]))
+            o.b(rect(2, 17.2, 3, 1.8))
+            o.b(rect(15, 17.2, 3, 1.8))
+            o.d(rect(1, 9, 18, 0.6))
+            o.d(rect(4.4, 5, 1.1, 12.2))
+            o.d(rect(14.5, 5, 1.1, 12.2))
+            o.d(rect(1, 15.8, 18, 0.5))
+            o.d(diamond(10, 12.3, 2.3))
+            o.gem = (10, 12.3, 1.4)
+        case .scroll:
+            // الوثيقة: لفّتان بطرفين، صفحة بثلاثة أسطر (محاذاة عربية) وختم ذهبي أسفل اليسار
+            o.b(rect(2.6, 1, 14.8, 2.6))
+            o.b(rect(1, 1.5, 1.6, 1.6))
+            o.b(rect(17.4, 1.5, 1.6, 1.6))
+            o.b(rect(4, 3.6, 12, 12.8))
+            o.b(rect(2.6, 16.4, 14.8, 2.6))
+            o.b(rect(1, 16.9, 1.6, 1.6))
+            o.b(rect(17.4, 16.9, 1.6, 1.6))
+            o.d(rect(2.6, 3.2, 14.8, 0.5))
+            o.d(rect(2.6, 16.3, 14.8, 0.5))
+            o.d(rect(6.5, 6.2, 8, 0.8))
+            o.d(rect(8.5, 8.6, 6, 0.8))
+            o.d(rect(6.5, 11, 8, 0.8))
+            o.gem = (7.2, 13.9, 1.4)
+            o.shadowHalf = 7.5
+        case .briefcase:
+            // حقيبة العمل: مقبض، جسم مشطوف، حزام الإغلاق بمشبكين عميقين وقفل ذهبي
+            o.b(rect(7, 3, 6, 1.4))
+            o.b(rect(7, 3, 1.4, 3.3))
+            o.b(rect(11.6, 3, 1.4, 3.3))
+            o.b(rows(10, 6, [(8, 1), (9, 11), (8, 1)]))
+            o.d(rect(1, 10.6, 18, 0.7))
+            o.d(diamond(4.6, 10.95, 0.85))
+            o.d(diamond(15.4, 10.95, 0.85))
+            o.gem = (10, 10.95, 1.5)
+        case .dhow:
+            // سفينة البوم: صارٍ بقمّة ذهبية، شراع لاتيني مدرّج وشراع أمامي أصغر، بدن مدرّج، وموج من أسنان كريمية
+            o.b(rect(9.4, 2.4, 1.2, 11.4))
+            o.b(stairTri(10.8, 2.8, 8.2, 10.4, 8, 1))
+            o.b(stairTri(9.2, 5.6, 6.4, 7.6, 6, -1))
+            o.b(rows(10, 13.4, [(9, 1.5), (7.5, 1.1), (5.8, 1.0), (4.2, 0.8)]))
+            for i in 0..<6 {
+                let x = 1 + CGFloat(i) * 3
+                o.s(poly([(x, 19.3), (x + 1.5, 17.9), (x + 3, 19.3)]))
+            }
+            o.d(rect(1.6, 14.2, 16.8, 0.6))
+            o.d(stairs((11.3, 3.9), (17.6, 12.0), 7, 0.7))
+            o.gem = (10, 1.9, 1.2)
+            o.baseline = 19.2
+        case .growth:
+            // سهم النموّ: ثلاثة أعمدة مدرّجة بعيون عميقة وسهم مدرّج يصعد يميناً إلى رأس ذهبي (لا ينعكس)
+            o.fixed = true
+            o.b(rect(1, 13, 4.5, 5))
+            o.b(rect(7.75, 9.5, 4.5, 8.5))
+            o.b(rect(14.5, 6, 4.5, 12))
+            o.b(rect(1, 18, 18, 1))
+            o.b(stairs((1.8, 10.6), (15.2, 2.8), 6, 1.3))
+            o.d(diamond(3.25, 15.5, 0.9))
+            o.d(diamond(10, 13.75, 0.9))
+            o.d(diamond(16.75, 12, 0.9))
+            o.gem = (16.4, 2.6, 1.6)
+        default:
+            return nil
+        }
+        return o
+    }
+
+    // MARK: الرسم
+
+    /// يرسم الرمز المنسوج ليملأ `box` (مربّع): ظلّ التماس، اللمسات الخفيفة، الجسم، التفاصيل، ثم المعيّن
+    static func drawWoven(_ g: FT5UGlyph, in c: inout GraphicsContext, box: CGRect, style: FT5UWovenStyle, ltr: Bool) {
+        if g == .tree {
+            drawWovenTree(in: &c, box: box, style: style)
+            return
+        }
+        guard let o = woven(g), box.width > 2 else { return }
+        let k = box.width / wovenGrid
+        func paint(_ l: inout GraphicsContext) {
+            l.translateBy(x: box.minX, y: box.minY)
+            if o.fixed && ltr {
+                l.translateBy(x: box.width, y: 0)
+                l.scaleBy(x: -1, y: 1)
+            }
+            l.scaleBy(x: k, y: k)
+            if let sh = style.shadow {
+                var s = l
+                s.translateBy(x: o.shadowX, y: o.baseline + 0.35)
+                s.scaleBy(x: 1, y: 0.2)
+                s.fill(circle(0, 0, o.shadowHalf),
+                       with: .radialGradient(Gradient(colors: [sh.opacity(0.6), sh.opacity(0)]),
+                                             center: .zero, startRadius: 0, endRadius: o.shadowHalf))
+            }
+            l.fill(o.soft, with: .color(style.soft))
+            switch style.body {
+            case .light(let a, let b):
+                l.fill(o.body, with: .linearGradient(Gradient(colors: [a, b]), startPoint: .zero,
+                                                     endPoint: CGPoint(x: wovenGrid, y: wovenGrid)))
+            case .paint(let p):
+                fill(&l, o.body, p)
+            }
+            switch style.detail {
+            case .paint(let col):
+                l.fill(o.detail, with: .color(col))
+            case .erase:
+                var e = l
+                e.blendMode = .destinationOut
+                e.fill(o.detail, with: .color(.black))
+            }
+            if let gem = o.gem {
+                let (x, y, r) = gem
+                l.fill(diamond(x, y, r), with: .color(style.accent))
+                if let hi = style.accentLight {
+                    l.fill(poly([(x - r, y), (x, y - r), (x + r, y)]), with: .color(hi))
+                }
+            }
+        }
+        if case .erase = style.detail {
+            c.drawLayer { l in paint(&l) }
+        } else {
+            var l = c
+            paint(&l)
+        }
+    }
+
+    /// الغافة = شجرة شعار التطبيق نفسها (رمز `tree.fill`: تاج بخمسة فصوص وجذع يتفرّع ثلاث أصابع) — قرار المالك.
+    /// تُرسم كريمية بارتفاع ٩٠٪ وخطّ أرض ٩٥٪، ثم تُنسج داخلها (قصّ على طبقتها) خيطا لُحمة وعينان عميقتان وخيط
+    /// سَدى في الجذع، والعين الوسطى ذهبية، وظلّ التماس المعتاد
+    static func drawWovenTree(in c: inout GraphicsContext, box: CGRect, style: FT5UWovenStyle) {
+        let side = box.width
+        var img = c.resolve(Image(systemName: "tree.fill"))
+        let natural = img.size
+        guard side > 2, natural.width > 0, natural.height > 0 else { return }
+        let h = side * 0.9
+        let w = h * natural.width / natural.height
+        let r = CGRect(x: box.midX - w / 2, y: box.minY + side * 0.95 - h, width: w, height: h)
+        func paint(_ l: inout GraphicsContext) {
+            if let sh = style.shadow {
+                var s = l
+                s.translateBy(x: r.midX, y: r.maxY + side * 0.015)
+                s.scaleBy(x: 1, y: 0.2)
+                let hw = side * 0.3
+                s.fill(circle(0, 0, hw), with: .radialGradient(Gradient(colors: [sh.opacity(0.6), sh.opacity(0)]),
+                                                               center: .zero, startRadius: 0, endRadius: hw))
+            }
+            switch style.body {
+            case .light(let a, let b):
+                img.shading = .linearGradient(Gradient(colors: [a, b]), startPoint: CGPoint(x: box.minX, y: box.minY),
+                                              endPoint: CGPoint(x: box.maxX, y: box.maxY))
+            case .paint(let p):
+                img.shading = .color(p.color.opacity(p.opacity))
+            }
+            l.draw(img, in: r)
+            // الداخل: كل ما يلي مقصوص على شكل الشجرة
+            var inner = l
+            inner.clipToLayer { $0.draw(img, in: r) }
+            if case .paint(let p) = style.body, p.shade > 0 {
+                inner.fill(Path(r), with: .color(.black.opacity(p.shade * p.opacity)))
+            }
+            let t = side * 0.03
+            let wy = r.minY + r.height * 0.36
+            var detail = Path()
+            detail.addPath(rect(r.minX, r.minY + r.height * 0.22 - t / 2, r.width, t))
+            detail.addPath(rect(r.minX, wy - t / 2, r.width, t))
+            detail.addPath(rect(r.midX - t / 2, r.minY + r.height * 0.56, t, r.height * 0.44))
+            detail.addPath(diamond(r.midX - r.width * 0.24, wy, side * 0.05))
+            detail.addPath(diamond(r.midX + r.width * 0.24, wy, side * 0.05))
+            switch style.detail {
+            case .paint(let col):
+                inner.fill(detail, with: .color(col))
+            case .erase:
+                var e = inner
+                e.blendMode = .destinationOut
+                e.fill(detail, with: .color(.black))
+            }
+            let gr = side * 0.07
+            l.fill(diamond(r.midX, wy, gr), with: .color(style.accent))
+            if let hi = style.accentLight {
+                l.fill(poly([(r.midX - gr, wy), (r.midX, wy - gr), (r.midX + gr, wy)]), with: .color(hi))
+            }
+        }
+        if case .erase = style.detail {
+            c.drawLayer { l in paint(&l) }
+        } else {
+            var l = c
+            paint(&l)
+        }
+    }
+
+    /// مجسّم مربّع الرئيسية: يملأ الإطار (٩٠٪ من الضلع)، كريمي مضاء من أعلى اليسار، تفاصيله بلون القسم العميق،
+    /// معيّن ذهبي واحد وظلّ تماس بلون القسم — الرسم نفسه في الوسط (٤٨) وكعلامة مائية (٨٦)
+    static func drawTileObject(_ c: inout GraphicsContext, size: CGSize, glyph: FT5UGlyph, deep: Color) {
+        let s = min(size.width, size.height)
+        guard s > 2 else { return }
+        let ltr = isLTR(c), dark = isDark(c)
+        var g = c
+        mirrorForLTR(&g, width: size.width)
+        let box = CGRect(x: (size.width - s) / 2, y: (size.height - s) / 2, width: s, height: s)
+        let cream = hex(dark ? 0xF6ECD8 : 0xFBF5E8)
+        let style = FT5UWovenStyle(body: .light(cream, hex(dark ? 0xDECBA6 : 0xE7D5B0)), detail: .paint(deep),
+                                   accent: gold, accentLight: goldLight, soft: cream.opacity(0.7), shadow: deep)
+        drawWoven(glyph, in: &g, box: box, style: style, ltr: ltr)
+    }
+
+    // MARK: حاشية المربّع العلوية (٨ نقاط)
+
+    static let bandHeight: CGFloat = 8
+
+    /// حاشية رفيعة على الحافّة العلوية للمربّع: أرضية بلون القسم العميق، خيط كريمي وعيون سدو صغيرة كل ١٦ نقطة
+    static func drawTopBand(_ c: inout GraphicsContext, size: CGSize, place: String) {
+        guard size.width > 24, size.height > 24 else { return }
+        let dark = isDark(c), ink = FT5UInk.of(dark: dark)
+        let w = size.width, h = bandHeight, cy = h / 2
+        fill(&c, rect(0, 0, w, h), FT5UPaint(color: tileDeep(place, dark: dark), shade: dark ? 0.12 : 0))
+        c.fill(rect(0, cy - 0.5, w, 1), with: .color(ink.cream.opacity(0.45)))
+        let cx = (w / 2).rounded(), step: CGFloat = 16, a: CGFloat = 2.6
+        var x = cx - step * ((cx + a) / step).rounded(.down)
+        while x <= w + a {
+            var ring = diamond(x, cy, a)
+            ring.addPath(diamond(x, cy, a - 1.1))
+            c.fill(ring, with: .color(ink.cream.opacity(0.85)), style: FillStyle(eoFill: true))
+            x += step
+        }
+    }
+}
+
+/// مجسّم مربّع الرئيسية (الرمز المنسوج يملأ إطاره — يُرسم ٤٨ في الوسط و٨٦ كعلامة مائية)
+struct FT5UObjectArt: View {
+    let glyph: FT5UGlyph
+    let deep: Color
+
+    var body: some View {
+        let glyph = self.glyph, deep = self.deep
+        return FT5UStatic { ctx, size in FT5U.drawTileObject(&ctx, size: size, glyph: glyph, deep: deep) }
+    }
+}
+
 // MARK: - الأغلفة (ساكنة)
 
 /// لوحة ساكنة: تُرسم مرة واحدة، مخفيّة عن القارئ الصوتي، ولا تلتقط اللمس
@@ -1080,6 +1465,7 @@ struct FT5UStatic: View {
 
     var body: some View {
         Canvas(renderer: draw)
+            .font(.system(size: 96))   // رمز الشجرة (tree.fill) يُحلّ كبيراً ليبقى حادّاً في كل مقاس
             .accessibilityHidden(true)
             .allowsHitTesting(false)
     }

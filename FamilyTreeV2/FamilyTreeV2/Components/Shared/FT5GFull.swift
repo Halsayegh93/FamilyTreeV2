@@ -40,20 +40,17 @@ enum FT5GTrial {
 
     // MARK: المربّعات
 
+    /// مجسّم مربّع الرئيسية في مربّع مركزي (المجسّم والاسم بالوسط): زجاج مصنفر بلون المربّع
+    /// (FT5GObjectArt في آخر الملف) — nil = لا مجسّم لهذا المكان فيبقى الشكل السابق
+    static func tileIcon(_ place: String, variant: Int) -> AnyView? {
+        guard FT5GObjectArt.supports(place) else { return nil }
+        return AnyView(FT5GObjectView(place: place, variant: variant))
+    }
+    /// شفافية النسخة الكبيرة من المجسّم في خلفية مربّع الرئيسية (الطيف في الزاوية)
+    static let ghostOpacity: Double = 0.16
+    /// لا رسم على خلفية المربّع (طلب المالك ٢٠٢٦-١٠-٠٦): المجسّم والاسم في الوسط والطيف في الزاوية فقط
     static func tile(_ place: String, variant: Int, badge: Bool, animateOnce: Bool) -> AnyView {
-        guard let kind = FT5GKind.tile(place, variant: variant) else { return AnyView(EmptyView()) }
-        let order: Double
-        switch place {
-        case "tree": order = 0
-        case "diwaniya", "diwaniyas": order = 1
-        case "library": order = 2
-        case "projects": order = 3
-        default: order = 4
-        }
-        // `badge`: كبسولة العدد تأخذ مكان الدائرة (أعلى جهة العنوان) — القطعة في الجهة الأخرى فلا تلتقيان
-        return AnyView(FT5GArtView(kind: kind, placement: .tile,
-                                   spec: .onColor(glow: FT5GPalette.tileGlow(place)),
-                                   glint: animateOnce ? .once(delay: 0.4 + 0.12 * order) : .none))
+        AnyView(EmptyView())
     }
 
     // MARK: رؤوس الصناديق
@@ -62,7 +59,7 @@ enum FT5GTrial {
         let kind = FT5GKind.forSymbol(icon, library: libraryVariant, projects: projectsVariant) ?? .plaque(icon)
         let still = kind == .mourning
         return AnyView(FT5GArtView(kind: kind, placement: .header,
-                                   spec: .onColor(glow: nil, shadow: deep, still: still),
+                                   spec: .onColor(glow: nil, shadow: deep, still: still, tint: tint),
                                    glint: still ? .none : .once(delay: 0.45)))
     }
 
@@ -152,7 +149,7 @@ enum FT5GTrial {
     static func pageHeroArt(icon: String, tint: Color) -> AnyView? {
         let kind = FT5GKind.forSymbol(icon, library: libraryVariant, projects: projectsVariant) ?? .plaque(icon)
         return AnyView(FT5GArtView(kind: kind, placement: .hero,
-                                   spec: .onColor(glow: nil, shadow: tint, still: kind == .mourning)))
+                                   spec: .onColor(glow: nil, shadow: tint, still: kind == .mourning, tint: tint)))
     }
 
     /// قطعة زجاج ملوّنة صغيرة (٤٤×٤٤) لبطاقات لوحة الإدارة — تحلّ محلّ الأيقونة العادية
@@ -412,8 +409,15 @@ nonisolated enum FT5GEngine {
         let ltr = ctx.environment.layoutDirection == .leftToRight
         var c = ctx
         if ltr { c.translateBy(x: size.width, y: 0); c.scaleBy(x: -1, y: 1) }
+        let slot = placement.slot(size, ltr: ltr)
+        if kind == .tree {   // الشجرة = رمز `tree.fill` (قرار المالك ٢٠٢٦-١٠-٠٦)
+            var img = c.resolve(Image(systemName: FT5GObjectArt.treeSymbol))
+            img.shading = .color(.white)
+            c.draw(img, in: FT5GObjectArt.treeRect(in: slot, aspect: img.size.width / max(1, img.size.height)))
+            return
+        }
         let piece = FT5GShapes.piece(kind)
-        for p in placed(piece.layers, piece: piece, slot: placement.slot(size, ltr: ltr), mirrored: ltr) {
+        for p in placed(piece.layers, piece: piece, slot: slot, mirrored: ltr) {
             c.fill(p, with: .color(.white))
         }
     }
@@ -434,6 +438,10 @@ nonisolated enum FT5GEngine {
 
     static func draw(_ kind: FT5GKind, slot: CGRect, spec: FT5GSpec, dark: Bool, mirrored: Bool,
                      in ctx: inout GraphicsContext) {
+        if kind == .tree {   // الشجرة = رمز `tree.fill` بزجاج مصنفر في كل مكان (قرار المالك ٢٠٢٦-١٠-٠٦)
+            FT5GObjectArt.drawTreeGlass(box: slot, spec: spec, dark: dark, in: &ctx)
+            return
+        }
         let piece = FT5GShapes.piece(kind)
         let m = transform(piece, slot: slot, mirrored: mirrored)
         let paths = piece.layers.map { Path($0).applying(m) }
@@ -826,17 +834,18 @@ nonisolated enum FT5GShapes {
 
     static func piece(_ kind: FT5GKind) -> FT5GPiece {
         switch kind {
-        case .tree: return FT5GPiece(layers: tree())
-        case .dallah: return FT5GPiece(layers: dallah())
-        case .envelope: return FT5GPiece(layers: envelope())
+        // الخمسة الكبار من مجسّمات المربّعات (الجولة السادسة) — الشكل واحد في المربّع والرأس والصفحة الفاضية
+        case .tree: return FT5GPiece(layers: [])   // لا يُستعمل: المحرّك يرسم رمز `tree.fill` مباشرة (drawTreeGlass)
+        case .dallah: return FT5GObjectArt.piece("diwaniya", variant: 0)
+        case .envelope: return FT5GObjectArt.piece("contact", variant: 0)
         case .news: return FT5GPiece(layers: news())
         case .megaphone: return megaphone()
-        case .shelf: return shelf()
-        case .photos: return photos()
-        case .folder: return folder()
-        case .briefcase: return briefcase()
-        case .growth: return growth()
-        case .towers: return towers()
+        case .shelf: return FT5GObjectArt.piece("library", variant: 0)
+        case .photos: return FT5GObjectArt.piece("library", variant: 1)
+        case .folder: return FT5GObjectArt.piece("library", variant: 2)
+        case .briefcase: return FT5GObjectArt.piece("projects", variant: 0)
+        case .growth: return FT5GObjectArt.piece("projects", variant: 1)
+        case .towers: return FT5GObjectArt.piece("projects", variant: 2)
         case .member: return member()
         case .family: return family()
         case .shield: return shield()
@@ -860,104 +869,7 @@ nonisolated enum FT5GShapes {
         }
     }
 
-    // MARK: من الجولة الرابعة (أبقاها المالك)
-
-    /// شجرة العائلة: تاج مستدير وأمامه جذع بفرعين
-    static func tree() -> [CGPath] {
-        let lobes: [CGPath] = [G.circle(50, 27, 22), G.circle(30.5, 38, 17), G.circle(69.5, 38, 17),
-                               G.circle(36, 54, 17), G.circle(64, 54, 17), G.circle(50, 46, 20)]
-        let crown = G.union(lobes)
-        let trunk = CGMutablePath()
-        trunk.move(to: G.p(42, 97))
-        trunk.addQuadCurve(to: G.p(47.4, 85), control: G.p(47, 94.5))
-        trunk.addLine(to: G.p(47.7, 67))
-        trunk.addCurve(to: G.p(36.5, 54.5), control1: G.p(46.5, 61.5), control2: G.p(41.5, 57.5))
-        trunk.addQuadCurve(to: G.p(39.6, 51.2), control: G.p(36.4, 51.0))
-        trunk.addCurve(to: G.p(50, 60), control1: G.p(44, 54), control2: G.p(48.3, 56.5))
-        trunk.addCurve(to: G.p(60.4, 48.2), control1: G.p(51.7, 55.5), control2: G.p(56, 51))
-        trunk.addQuadCurve(to: G.p(63.5, 51.5), control: G.p(63.6, 48.0))
-        trunk.addCurve(to: G.p(52.3, 67), control1: G.p(58.5, 55), control2: G.p(53.5, 60.5))
-        trunk.addLine(to: G.p(52.6, 85))
-        trunk.addQuadCurve(to: G.p(58, 97), control: G.p(53, 94.5))
-        trunk.closeSubpath()
-        return [crown, trunk]
-    }
-
-    /// دلّة: الجسم والمقبض والمنقار قطعة واحدة، والغطاء طبقة أمامية
-    static func dallah() -> [CGPath] {
-        let ax: CGFloat = 40
-        typealias Seg = (c1: CGPoint, c2: CGPoint, to: CGPoint)
-        let start = G.p(15, 96)
-        let segs: [Seg] = [
-            (G.p(16, 94), G.p(14, 92), G.p(12.5, 91)),
-            (G.p(21, 88), G.p(25, 78), G.p(22, 69)),
-            (G.p(19.5, 61), G.p(10, 58), G.p(8.2, 52)),
-            (G.p(7, 48), G.p(9, 45), G.p(13.5, 41.5)),
-            (G.p(14.5, 40.6), G.p(14.5, 39.4), G.p(12.5, 39))
-        ]
-        func half(_ p: CGMutablePath, sign: CGFloat, reverse: Bool) {
-            let tx: (CGPoint) -> CGPoint = { CGPoint(x: ax + sign * $0.x, y: $0.y) }
-            if !reverse {
-                p.addLine(to: tx(start))
-                for s in segs { p.addCurve(to: tx(s.to), control1: tx(s.c1), control2: tx(s.c2)) }
-            } else {
-                var pts: [CGPoint] = [start]
-                for s in segs { pts.append(s.to) }
-                for i in stride(from: segs.count - 1, through: 0, by: -1) {
-                    let s = segs[i]
-                    p.addCurve(to: tx(pts[i]), control1: tx(s.c2), control2: tx(s.c1))
-                }
-            }
-        }
-        let body = CGMutablePath()
-        body.move(to: G.p(ax, 96))
-        half(body, sign: 1, reverse: false)
-        body.addLine(to: G.p(ax - 12.5, 39))
-        half(body, sign: -1, reverse: true)
-        body.closeSubpath()
-
-        let spout = CGMutablePath()
-        spout.move(to: G.p(52, 90))
-        spout.addCurve(to: G.p(78, 64), control1: G.p(66, 89), control2: G.p(75, 79))
-        spout.addCurve(to: G.p(87, 36), control1: G.p(80.5, 53), control2: G.p(82, 43))
-        spout.addCurve(to: G.p(96.5, 27.5), control1: G.p(90, 32), control2: G.p(94, 30))
-        spout.addQuadCurve(to: G.p(95, 24.6), control: G.p(98.6, 25.4))
-        spout.addCurve(to: G.p(80.5, 30), control1: G.p(90, 24.6), control2: G.p(84, 26.5))
-        spout.addCurve(to: G.p(70, 58), control1: G.p(76, 38), control2: G.p(73.5, 49))
-        spout.addCurve(to: G.p(54, 70), control1: G.p(67.5, 64.5), control2: G.p(61, 69))
-        spout.closeSubpath()
-
-        let handleLine = CGMutablePath()
-        handleLine.move(to: G.p(ax - 10, 45))
-        handleLine.addCurve(to: G.p(13, 62), control1: G.p(18, 43), control2: G.p(10.5, 52))
-        handleLine.addCurve(to: G.p(ax - 20.5, 76), control1: G.p(15, 69.5), control2: G.p(18, 74))
-        let handle = G.stroke(handleLine, 5.4)
-        let main = body.union(spout).union(handle)
-
-        let lid = CGMutablePath()
-        lid.move(to: G.p(ax - 10.5, 41.5))
-        lid.addCurve(to: G.p(ax - 2.6, 22), control1: G.p(ax - 10.5, 33), control2: G.p(ax - 6, 25.5))
-        lid.addLine(to: G.p(ax + 2.6, 22))
-        lid.addCurve(to: G.p(ax + 10.5, 41.5), control1: G.p(ax + 6, 25.5), control2: G.p(ax + 10.5, 33))
-        lid.closeSubpath()
-        let finial = CGMutablePath()
-        finial.move(to: G.p(ax, 9))
-        finial.addCurve(to: G.p(ax + 3.6, 18.5), control1: G.p(ax + 1.2, 12.5), control2: G.p(ax + 3.6, 15))
-        finial.addCurve(to: G.p(ax, 23.5), control1: G.p(ax + 3.6, 21.5), control2: G.p(ax + 2, 23.5))
-        finial.addCurve(to: G.p(ax - 3.6, 18.5), control1: G.p(ax - 2, 23.5), control2: G.p(ax - 3.6, 21.5))
-        finial.addCurve(to: G.p(ax, 9), control1: G.p(ax - 3.6, 15), control2: G.p(ax - 1.2, 12.5))
-        finial.closeSubpath()
-        return [main, lid.union(finial)]
-    }
-
-    /// ظرف: الجسم، ثم الجيب السفلي، ثم اللسان العلوي
-    static func envelope() -> [CGPath] {
-        let r = CGRect(x: 4, y: 20, width: 92, height: 62)
-        let body = CGPath(roundedRect: r, cornerWidth: 8, cornerHeight: 8, transform: nil)
-        let pocket = G.poly([G.p(r.minX + 1.5, r.maxY - 1.5), G.p(50, 49), G.p(r.maxX - 1.5, r.maxY - 1.5)], r: 6)
-        let flap = G.poly([G.p(r.minX + 1.5, r.minY + 1.5), G.p(r.maxX - 1.5, r.minY + 1.5), G.p(50, 59)], r: 6)
-        return [body, pocket.intersection(body), flap.intersection(body)]
-    }
+    // MARK: الخبر (الشجرة والدلّة والظرف صارت في FT5GObjectArt آخر الملف)
 
     /// خبر: ورقتان — الخلفية مائلة، والأمامية بزاوية مطويّة وأسطر محفورة (محاذاة عربية)
     static func news() -> [CGPath] {
@@ -967,98 +879,6 @@ nonisolated enum FT5GShapes {
         let lines = G.union([G.rrect(34, 42, 30, 6, 3), G.rrect(34, 56, 38, 4, 2),
                              G.rrect(34, 67, 38, 4, 2), G.rrect(34, 78, 24, 4, 2)])
         return [back, sheet.subtracting(fold).subtracting(lines), fold]
-    }
-
-    // MARK: المكتبة (ثلاثة أشكال جديدة)
-
-    /// ١) رف الكتب: ثلاثة كتب قائمة بأطوال مختلفة ورابع مائل يستند إليها، فوق لوح الرف
-    static func shelf() -> FT5GPiece {
-        func book(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> CGPath {
-            let b = G.rrect(x, y, w, h, 3.4)
-            let lw = w - 7.5
-            let bands = G.union([G.rrect(x + 3.75, y + 7, lw, 3, 1.5), G.rrect(x + 3.75, y + h - 13, lw, 3, 1.5)])
-            return b.subtracting(bands)
-        }
-        let a = book(8, 26, 17, 58)
-        let b = book(28, 40, 15, 44)
-        let c = book(46, 14, 20, 70)
-        let d = G.rotate(book(74, 33, 15, 51), -15, 89, 84)
-        let board = G.rrect(3, 82, 94, 10, 5)
-        return FT5GPiece(layers: [a, b, c, d, board])
-    }
-
-    /// ٢) صور العائلة: صورتان متراكبتان، الأمامية بإطار عريض من أسفل وفيها جبل وشمس
-    static func photos() -> FT5GPiece {
-        let back = G.rotate(G.rrect(20, 12, 62, 52, 6), 10, 51, 38)
-        let frameR = G.rrect(12, 30, 72, 62, 6.5)
-        let window = G.rrect(19.5, 37.5, 57, 39, 3.5)
-        let front = G.rotate(frameR.subtracting(window), -5, 48, 61)
-        let hills = G.poly([G.p(17, 82), G.p(36, 56), G.p(48, 69), G.p(57, 59), G.p(80, 82)], r: 3)
-        let sun = G.circle(64, 48, 6.5)
-        let scene = G.rotate(hills.union(sun).intersection(window), -5, 48, 61)
-        return FT5GPiece(layers: [back, front, scene])
-    }
-
-    /// ٣) ملف الوثائق: ملف بلسان، تخرج منه ورقة مسطّرة، وجيبه الأمامي ببطاقة اسم
-    static func folder() -> FT5GPiece {
-        let back = G.union([G.rrect(5, 24, 90, 66, 7), G.rrect(5, 15, 34, 18, 6),
-                            G.poly([G.p(28, 15), G.p(38, 15), G.p(48, 26), G.p(28, 26)], r: 3)])
-        let lines = G.union([G.rrect(30, 19, 34, 4, 2), G.rrect(30, 27, 40, 3.4, 1.7)])
-        let paper = G.rotate(G.rrect(20, 9, 60, 50, 4).subtracting(lines), 4, 50, 34)
-        let pocket = G.rrect(5, 40, 90, 50, 7).subtracting(G.rrect(37, 56, 26, 7, 3.5))
-        return FT5GPiece(layers: [back, paper, pocket])
-    }
-
-    // MARK: المشاريع (ثلاثة أشكال جديدة)
-
-    /// ١) حقيبة العمل: الجسم والمقبض، والغطاء العلوي طبقة، والقفل في الأمام
-    static func briefcase() -> FT5GPiece {
-        let handle = G.stroke(G.path { m in
-            m.move(to: G.p(36, 31)); m.addLine(to: G.p(36, 23))
-            m.addQuadCurve(to: G.p(43, 16), control: G.p(36, 16))
-            m.addLine(to: G.p(57, 16))
-            m.addQuadCurve(to: G.p(64, 23), control: G.p(64, 16))
-            m.addLine(to: G.p(64, 31))
-        }, 6)
-        let body = G.rrect(5, 28, 90, 62, 10).union(handle)
-        let lid = G.path { m in
-            m.move(to: G.p(15, 28)); m.addLine(to: G.p(85, 28))
-            m.addQuadCurve(to: G.p(95, 38), control: G.p(95, 28))
-            m.addLine(to: G.p(95, 56)); m.addLine(to: G.p(5, 56)); m.addLine(to: G.p(5, 38))
-            m.addQuadCurve(to: G.p(15, 28), control: G.p(5, 28))
-            m.closeSubpath()
-        }
-        let clasp = G.rrect(40.5, 49, 19, 15, 4)
-        return FT5GPiece(layers: [body, lid, clasp])
-    }
-
-    /// ٢) سهم النمو: ثلاثة أعمدة تصعد وسهم يرتفع فوقها (يصعد يميناً في اللغتين)
-    static func growth() -> FT5GPiece {
-        let bars = G.union([G.rrect(8, 64, 20, 28, 4.5), G.rrect(35, 50, 20, 42, 4.5), G.rrect(62, 33, 20, 59, 4.5)])
-        let a = G.p(49, 46), b = G.p(80, 17)
-        let dx = b.x - a.x, dy = b.y - a.y, len = (dx * dx + dy * dy).squareRoot()
-        let ux = dx / len, uy = dy / len, nx = -uy, ny = ux
-        let tip = G.p(b.x + ux * 12, b.y + uy * 12)
-        let base = G.p(b.x - ux * 3, b.y - uy * 3)
-        let head = G.poly([tip, G.p(base.x + nx * 11, base.y + ny * 11), G.p(base.x - nx * 11, base.y - ny * 11)], r: 2.4)
-        let shaft = G.line([G.p(7, 56), G.p(31, 35), a, b], 8)
-        return FT5GPiece(layers: [bars, shaft.union(head)], fixedOrientation: true)
-    }
-
-    /// ٣) مبنى الأعمال: برج زجاجي عالٍ بنوافذ شريطية، وأمامه مبنى أقصر بنوافذ وباب
-    static func towers() -> FT5GPiece {
-        var backWin: [CGPath] = []
-        for row in 0..<6 { for col in 0..<2 {
-            backWin.append(G.rrect(54 + CGFloat(col) * 14, 16 + CGFloat(row) * 11, 10, 5.5, 2))
-        } }
-        let back = G.rrect(48, 7, 38, 85, 5).subtracting(G.union(backWin))
-        var frontWin: [CGPath] = []
-        for row in 0..<2 { for col in 0..<2 {
-            frontWin.append(G.rrect(19 + CGFloat(col) * 16, 49 + CGFloat(row) * 11, 12, 6, 2))
-        } }
-        frontWin.append(G.rrect(27, 74, 12, 24, 3))
-        let front = G.rrect(12, 40, 42, 52, 5).subtracting(G.union(frontWin))
-        return FT5GPiece(layers: [back, front])
     }
 
     // MARK: عائلات الرؤوس
@@ -1620,5 +1440,550 @@ nonisolated enum FT5GTime {
             c.fill(Path(roundedRect: CGRect(x: 14 * k, y: 82 * k, width: 72 * k, height: max(1.4, 7 * k)), cornerRadius: 3.5 * k),
                    with: .color(tint.opacity(0.9)))
         }
+    }
+}
+
+// MARK: - مجسّمات مربّعات الرئيسية — زجاج مصنفر بلون المربّع (الجولة السادسة، ٢٠٢٦-١٠-٠٦)
+//
+// TMP-ART-TRIAL — طلب المالك «الأشكال أجمل وأكثر ترتيباً، وألوانها متناسقة مع المربّعات»:
+// خمسة مجسّمات على شبكة ١٠٠×١٠٠ تملأ الصندوق نفسه (البعد الأكبر ٩٠٪ والأصغر ≥ ٦٠٪، وتقف على خط أرض واحد
+// عند ٩٥)، زجاج أبيض مصنفر يسكنه لون المربّع بنسبة ٢٥–٤٠٪، حافة بيضاء حادة بسماكة نقطة واحدة، لمعة واحدة
+// من أعلى اليسار، تفاصيل بدرجة المربّع الداكنة، لمسة ذهبية معدنية واحدة، وظل تماسّ بيضاوي ناعم تحت المجسّم.
+// ساكنة تماماً (بلا TimelineView): تُرسم مرة في Canvas بالحجم الذي يحدّده المستدعي (٤٨ في الوسط، ٨٦ للطيف).
+
+/// طبقة زجاج واحدة وما يُرسم فوقها (الطبقات من الخلف إلى الأمام)
+nonisolated struct FT5GLayer {
+    var glass: CGPath
+    /// تفاصيل بدرجة المربّع الداكنة (نقاط العائلة، النوافذ، أسطر الورق، القهوة)
+    var detail: [CGPath] = []
+    /// أبيض مصمت (البخار، بطاقة الملف، جبال الصورة)
+    var light: [CGPath] = []
+    /// صبغة بيضاء خفيفة (سماء الصورة)
+    var haze: [CGPath] = []
+    /// اللمسة الذهبية الواحدة (معدن مصمت)
+    var gold: [CGPath] = []
+}
+
+/// مجسّم كامل: طبقاته ومكان لمعته الواحدة
+nonisolated struct FT5GObject {
+    var layers: [FT5GLayer]
+    /// الطبقة التي تحمل اللمعة، ومركزها ونصف قطرها على الشبكة
+    var specularLayer = 0
+    var specular = CGPoint(x: 30, y: 25)
+    var specularRadius: CGFloat = 24
+}
+
+/// درجتا لون المربّع — من قيم AppSection نفسها (قاعدة «لون واحد لكل مجسّم»: أبيض + لون مربّعه + ذهبي)
+nonisolated struct FT5GObjectHue {
+    var base: Color
+    var deep: Color
+
+    static func of(_ place: String) -> FT5GObjectHue {
+        func h(_ v: UInt32) -> Color { FT5GPalette.hex(v) }
+        switch place {
+        case "tree": return FT5GObjectHue(base: h(0x1E5950), deep: h(0x0D332D))
+        case "diwaniya", "diwaniyas": return FT5GObjectHue(base: h(0x1E5665), deep: h(0x0D313A))
+        case "library": return FT5GObjectHue(base: h(0x633C6F), deep: h(0x392041))
+        case "projects": return FT5GObjectHue(base: h(0x275B35), deep: h(0x13341C))
+        case "contact": return FT5GObjectHue(base: h(0x47467F), deep: h(0x28274B))
+        default: return FT5GObjectHue(base: h(0x1F4E79), deep: h(0x102B47))
+        }
+    }
+}
+
+nonisolated enum FT5GObjectArt {
+    private typealias G = FT5GGeo
+
+    static let gold = FT5GPalette.hex(0xD9A23E)
+    static let goldHi = FT5GPalette.hex(0xF2C65E)
+    static let goldLo = FT5GPalette.hex(0xB07E2A)
+
+    /// القطعة نفسها للمحرّك القديم (رؤوس الصناديق، الصفحات الفاضية، بطاقات الصفحات، تحميل الشجرة):
+    /// الزجاج وحده — التفاصيل والذهب الداخلي فراغات مقصوصة، وما يقع خارج الزجاج (قمّة الدلّة، رأس السهم،
+    /// البخار، جبال الصورة) يُضمّ إليه — فيبقى الشكل واحداً أينما ظهر
+    static func piece(_ place: String, variant: Int) -> FT5GPiece {
+        guard let o = object(place, variant: variant) else {
+            return FT5GPiece(layers: [G.rrect(10, 10, 80, 80, 22)])
+        }
+        let layers: [CGPath] = o.layers.map { layer in
+            var g = layer.glass
+            for d in layer.detail { g = g.subtracting(d) }
+            for extra in layer.light + layer.gold {
+                let b = extra.boundingBox
+                let inside = g.contains(CGPoint(x: b.midX, y: b.midY))
+                g = inside ? g.subtracting(extra) : g.union(extra)
+            }
+            return g
+        }
+        let growth = place == "projects" && ((variant % 3) + 3) % 3 == 1
+        return FT5GPiece(layers: layers, fixedOrientation: growth)   // سهم النمو يصعد يميناً في اللغتين
+    }
+
+    /// الأماكن التي لها مجسّم
+    static func supports(_ place: String) -> Bool {
+        ["tree", "diwaniya", "diwaniyas", "library", "projects", "contact"].contains(place)
+    }
+
+    /// المجسّم لكل مكان (nil = لا مجسّم لهذا المكان)
+    static func object(_ place: String, variant: Int) -> FT5GObject? {
+        let v = ((variant % 3) + 3) % 3
+        switch place {
+        case "tree": return nil   // الشجرة من رمز `tree.fill` (drawTreeTile)
+        case "diwaniya", "diwaniyas": return dallah()
+        case "library": return v == 0 ? shelf() : (v == 1 ? photos() : folder())
+        case "projects": return v == 0 ? briefcase() : (v == 1 ? growth() : towers())
+        case "contact": return envelope()
+        default: return nil
+        }
+    }
+
+    // MARK: الرسم
+
+    static func draw(_ o: FT5GObject, hue: FT5GObjectHue, in ctx: inout GraphicsContext, size: CGSize) {
+        let s = min(size.width, size.height)
+        guard s > 1, !o.layers.isEmpty else { return }
+        let k = s / 100
+        let m = CGAffineTransform(a: k, b: 0, c: 0, d: k, tx: (size.width - s) / 2, ty: (size.height - s) / 2)
+        let dark = ctx.environment.colorScheme == .dark
+        // الضوء من أعلى اليسار لكل المجسّمات
+        let lit = CGPoint(x: 6, y: 4).applying(m), shade = CGPoint(x: 94, y: 96).applying(m)
+        let glass = o.layers.map { Path($0.glass).applying(m) }
+
+        // ١) ظل التماس: قطع ناقص ناعم عند خط الأرض (٩٥)، داخل المربّع
+        contactShadow(&ctx, box: CGRect(x: m.tx, y: m.ty, width: s, height: s), k: k, hue: hue, dark: dark)
+
+        // ٢) ظل رفع خفيف للمجسّم كله (خارج الزجاج فقط) نحو أسفل اليمين، بعيداً عن الضوء
+        lift(&ctx, glass, color: hue.deep, dx: 0.9 * k, dy: 1.8 * k, blur: 2.6 * k, opacity: dark ? 0.42 : 0.30)
+
+        // ٣) الطبقات من الخلف إلى الأمام: زجاج، لمعة، صبغة، أبيض، تفاصيل، ذهب
+        for (i, layer) in o.layers.enumerated() {
+            let p = glass[i]
+            if i > 0 { lift(&ctx, [p], color: hue.deep, dx: 0.6 * k, dy: 1.2 * k, blur: 1.6 * k, opacity: 0.22) }
+            frosted(&ctx, p, k: k, hue: hue, dark: dark, lit: lit, shade: shade)
+            if i == o.specularLayer { specular(&ctx, p, at: o.specular.applying(m), radius: o.specularRadius * k) }
+            for h in layer.haze { ctx.fill(Path(h).applying(m), with: .color(.white.opacity(dark ? 0.16 : 0.20))) }
+            for l in layer.light { ctx.fill(Path(l).applying(m), with: .color(.white.opacity(0.92))) }
+            for d in layer.detail { ctx.fill(Path(d).applying(m), with: .color(hue.deep.opacity(dark ? 0.80 : 0.86))) }
+            for g in layer.gold { metal(&ctx, Path(g).applying(m)) }
+        }
+    }
+
+    /// ظل التماس: قطع ناقص ناعم عند خط الأرض (٩٥٫٥ من الصندوق)، داخل المربّع
+    static func contactShadow(_ ctx: inout GraphicsContext, box: CGRect, k: CGFloat, hue: FT5GObjectHue, dark: Bool) {
+        var sh = ctx
+        sh.translateBy(x: box.midX, y: box.minY + box.height * 0.955)
+        sh.scaleBy(x: 1, y: 0.10)
+        let r = 40 * k
+        sh.fill(Path(ellipseIn: CGRect(x: -r, y: -r, width: 2 * r, height: 2 * r)),
+                with: .radialGradient(Gradient(stops: [
+                    .init(color: hue.deep.opacity(dark ? 0.62 : 0.48), location: 0),
+                    .init(color: hue.deep.opacity(dark ? 0.28 : 0.20), location: 0.55),
+                    .init(color: hue.deep.opacity(0), location: 1)
+                ]), center: .zero, startRadius: 0, endRadius: r))
+    }
+
+    /// طبقة زجاج مصنفر: جسم أبيض يسكنه لون المربّع (يتجمّع بعيداً عن الضوء)، صنفرة بيضاء عند الحافة من
+    /// الداخل (سماكة الزجاج)، وحافة بيضاء حادة بسماكة نقطة واحدة أسطع جهة الضوء
+    static func frosted(_ ctx: inout GraphicsContext, _ p: Path, k: CGFloat, hue: FT5GObjectHue, dark: Bool,
+                        lit: CGPoint, shade: CGPoint) {
+        ctx.fill(p, with: .linearGradient(Gradient(stops: [
+            .init(color: .white.opacity(dark ? 0.90 : 0.86), location: 0),
+            .init(color: .white.opacity(dark ? 0.76 : 0.70), location: 1)
+        ]), startPoint: lit, endPoint: shade))
+        ctx.fill(p, with: .linearGradient(Gradient(stops: [
+            .init(color: hue.base.opacity(dark ? 0.16 : 0.24), location: 0),
+            .init(color: hue.base.opacity(dark ? 0.32 : 0.42), location: 1)
+        ]), startPoint: lit, endPoint: shade))
+        var c = ctx
+        c.clip(to: p)
+        c.drawLayer { l in
+            l.addFilter(.blur(radius: 1.8 * k))
+            l.stroke(p, with: .color(.white.opacity(0.50)), lineWidth: 3.6 * k)
+        }
+        c.stroke(p, with: .linearGradient(Gradient(stops: [
+            .init(color: .white.opacity(1.0), location: 0),
+            .init(color: .white.opacity(0.78), location: 0.5),
+            .init(color: .white.opacity(0.55), location: 1)
+        ]), startPoint: lit, endPoint: shade), lineWidth: 2.0)   // مقصوصة بالشكل ⇒ نقطة واحدة ظاهرة
+    }
+
+    /// اللمعة الواحدة: بقعة ضوء ناعمة قرب أعلى يسار الجسم الرئيس
+    static func specular(_ ctx: inout GraphicsContext, _ p: Path, at c: CGPoint, radius r: CGFloat) {
+        var cl = ctx
+        cl.clip(to: p)
+        cl.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)),
+                with: .radialGradient(Gradient(stops: [
+                    .init(color: .white.opacity(0.72), location: 0),
+                    .init(color: .white.opacity(0.28), location: 0.45),
+                    .init(color: .white.opacity(0), location: 1)
+                ]), center: c, startRadius: 0, endRadius: r))
+    }
+
+    /// اللمسة الذهبية: معدن مصمت بتدرّج من الضوء إلى الظل وحافة ضوء رفيعة جهة الضوء
+    static func metal(_ ctx: inout GraphicsContext, _ p: Path) {
+        let b = p.boundingRect
+        let a = CGPoint(x: b.minX, y: b.minY), z = CGPoint(x: b.maxX, y: b.maxY)
+        ctx.fill(p, with: .linearGradient(Gradient(stops: [
+            .init(color: goldHi, location: 0),
+            .init(color: gold, location: 0.55),
+            .init(color: goldLo, location: 1)
+        ]), startPoint: a, endPoint: z))
+        var c = ctx
+        c.clip(to: p)
+        c.stroke(p, with: .linearGradient(Gradient(colors: [.white.opacity(0.78), .white.opacity(0.04)]),
+                                          startPoint: a, endPoint: z), lineWidth: 1.4)
+    }
+
+    /// ظل ناعم خارج الأشكال فقط، منزاح نحو أسفل اليمين
+    static func lift(_ ctx: inout GraphicsContext, _ paths: [Path], color: Color, dx: CGFloat, dy: CGFloat,
+                     blur: CGFloat, opacity: Double) {
+        ctx.drawLayer { l in
+            var sh = l
+            sh.opacity = opacity
+            sh.addFilter(.blur(radius: blur))
+            sh.drawLayer { s in
+                s.translateBy(x: dx, y: dy)
+                for p in paths { s.fill(p, with: .color(color)) }
+            }
+            l.blendMode = .destinationOut
+            for p in paths { l.fill(p, with: .color(.black)) }
+        }
+    }
+
+    /// أنبوب يضيق تدريجياً على منحنى بيزييه تكعيبي (منقار الدلّة)
+    static func tube(_ p0: CGPoint, _ p1: CGPoint, _ p2: CGPoint, _ p3: CGPoint,
+                     from w0: CGFloat, to w1: CGFloat, steps: Int = 28) -> CGPath {
+        var a: [CGPoint] = [], b: [CGPoint] = []
+        for i in 0...steps {
+            let t = CGFloat(i) / CGFloat(steps), u = 1 - t
+            let x = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x
+            let y = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y
+            let dx = 3 * u * u * (p1.x - p0.x) + 6 * u * t * (p2.x - p1.x) + 3 * t * t * (p3.x - p2.x)
+            let dy = 3 * u * u * (p1.y - p0.y) + 6 * u * t * (p2.y - p1.y) + 3 * t * t * (p3.y - p2.y)
+            let len = max(0.001, (dx * dx + dy * dy).squareRoot())
+            let nx = -dy / len, ny = dx / len
+            let w = (w0 + (w1 - w0) * t) / 2
+            a.append(CGPoint(x: x + nx * w, y: y + ny * w))
+            b.append(CGPoint(x: x - nx * w, y: y - ny * w))
+        }
+        let m = CGMutablePath()
+        m.move(to: a[0])
+        for q in a.dropFirst() { m.addLine(to: q) }
+        for q in b.reversed() { m.addLine(to: q) }
+        m.closeSubpath()
+        return m
+    }
+
+    // MARK: الشجرة — الظلّية نفسها في أيقونة التطبيق: رمز SF `tree.fill` (تاج بخمسة فصوص وجذع بثلاثة أصابع)،
+    // بلا نقاط عائلة ولا فصوص مرسومة (قرار المالك ٢٠٢٦-١٠-٠٦) — الزجاج المصنفر يُرسم داخل قناع الرمز نفسه،
+    // ونقطة ذهبية صغيرة واحدة في الفصّ الأعلى
+
+    static let treeSymbol = "tree.fill"
+
+    /// إطار الرمز داخل صندوق المجسّم: ارتفاعه ٩٢٫٥٪ من أعلى ٥٪ — وبهامش الرمز السفلي (≈ ٢٫٨٪) يقف على خط الأرض ٩٥
+    static func treeRect(in box: CGRect, aspect: CGFloat) -> CGRect {
+        let h = box.height * 0.925
+        let w = min(h * max(0.3, aspect), box.width * 0.92)
+        return CGRect(x: box.midX - w / 2, y: box.minY + box.height * 0.05, width: w, height: h)
+    }
+
+    /// مجسّم مربّع الشجرة: ظل التماس ثم الرمز بزجاج مصنفر بلون المربّع
+    static func drawTreeTile(in ctx: inout GraphicsContext, size: CGSize) {
+        let s = min(size.width, size.height)
+        guard s > 1 else { return }
+        let k = s / 100
+        let box = CGRect(x: (size.width - s) / 2, y: (size.height - s) / 2, width: s, height: s)
+        let dark = ctx.environment.colorScheme == .dark
+        let hue = FT5GObjectHue.of("tree")
+        contactShadow(&ctx, box: box, k: k, hue: hue, dark: dark)
+        drawSymbolGlass(treeSymbol, box: box, k: k, hue: hue, dark: dark, tinted: false, in: &ctx)
+    }
+
+    /// الشجرة للمحرّك القديم (رؤوس الصناديق، الصفحات الفاضية، تحميل الشجرة): وهج خلفها كبقية القطع ثم الزجاج
+    static func drawTreeGlass(box: CGRect, spec: FT5GSpec, dark: Bool, in ctx: inout GraphicsContext) {
+        let k = box.width / 100
+        let tinted = spec.look == .tinted
+        let tint = spec.tint(dark)
+        let hue = tinted ? FT5GObjectHue(base: tint, deep: tint) : FT5GObjectHue(base: tint, deep: spec.shadow)
+        if !spec.still {
+            let center = CGPoint(x: box.midX, y: box.midY + box.height * 0.04)
+            let gr = box.width * (tinted ? 0.74 : 0.80)
+            let g: Color = tinted ? tint : (spec.glow ?? .white)
+            ctx.fill(Path(ellipseIn: CGRect(x: center.x - gr, y: center.y - gr, width: gr * 2, height: gr * 2)),
+                     with: .radialGradient(Gradient(stops: [
+                        .init(color: g.opacity(tinted ? (dark ? 0.26 : 0.17) : (dark ? 0.16 : 0.22)), location: 0),
+                        .init(color: g.opacity(tinted ? (dark ? 0.10 : 0.06) : (dark ? 0.06 : 0.08)), location: 0.55),
+                        .init(color: g.opacity(0), location: 1)
+                     ]), center: center, startRadius: 0, endRadius: gr))
+        }
+        drawSymbolGlass(treeSymbol, box: box, k: k, hue: hue, dark: dark, tinted: tinted, in: &ctx)
+    }
+
+    /// زجاج مصنفر داخل رمز SF: ظل رفع خارجه، جسم (أبيض يسكنه لون المربّع — أو ملوّن فوق المحايد)، صنفرة
+    /// الحافة من الداخل، حافة ضوء بسماكة نقطة واحدة (الرمز ناقص نسخه المزاحة)، لمعة واحدة، ونقطة ذهبية
+    static func drawSymbolGlass(_ name: String, box: CGRect, k: CGFloat, hue: FT5GObjectHue, dark: Bool, tinted: Bool,
+                                in ctx: inout GraphicsContext) {
+        var img = ctx.resolve(Image(systemName: name))
+        img.shading = .color(.white)
+        let rect = treeRect(in: box, aspect: img.size.width / max(1, img.size.height))
+        let lit = CGPoint(x: box.minX + box.width * 0.06, y: box.minY + box.height * 0.04)
+        let shade = CGPoint(x: box.maxX - box.width * 0.06, y: box.maxY - box.height * 0.04)
+        let offs: [(CGFloat, CGFloat)] = [(1, 0), (-1, 0), (0, 1), (0, -1), (0.7, 0.7), (-0.7, 0.7), (0.7, -0.7), (-0.7, -0.7)]
+        let outer = rect.insetBy(dx: -4 * k, dy: -4 * k)
+
+        // ظل الرفع خارج الرمز، نحو أسفل اليمين
+        ctx.drawLayer { l in
+            var sh = l
+            sh.opacity = tinted ? (dark ? 0.55 : 0.28) : (dark ? 0.42 : 0.30)
+            sh.addFilter(.blur(radius: 2.6 * k))
+            var dsh = img
+            dsh.shading = .color(tinted && dark ? .black : hue.deep)
+            sh.draw(dsh, in: rect.offsetBy(dx: 0.9 * k, dy: 1.8 * k))
+            l.blendMode = .destinationOut
+            l.draw(img, in: rect)
+        }
+
+        ctx.drawLayer { g in
+            g.clipToLayer { $0.draw(img, in: rect) }
+            if tinted {
+                g.fill(Path(outer), with: .linearGradient(Gradient(stops: [
+                    .init(color: hue.base.opacity(dark ? 0.46 : 0.50), location: 0),
+                    .init(color: hue.base.opacity(dark ? 0.84 : 0.88), location: 1)
+                ]), startPoint: lit, endPoint: shade))
+            } else {
+                g.fill(Path(outer), with: .linearGradient(Gradient(stops: [
+                    .init(color: .white.opacity(dark ? 0.90 : 0.86), location: 0),
+                    .init(color: .white.opacity(dark ? 0.76 : 0.70), location: 1)
+                ]), startPoint: lit, endPoint: shade))
+                g.fill(Path(outer), with: .linearGradient(Gradient(stops: [
+                    .init(color: hue.base.opacity(dark ? 0.16 : 0.24), location: 0),
+                    .init(color: hue.base.opacity(dark ? 0.32 : 0.42), location: 1)
+                ]), startPoint: lit, endPoint: shade))
+            }
+            // صنفرة الحافة من الداخل: أبيض يبقى قرب الحافة فقط (الرمز ناقص نسخه المزاحة) ثم يُنعَّم
+            g.drawLayer { f in
+                f.fill(Path(outer), with: .color(.white.opacity(0.50)))
+                var e = f
+                e.blendMode = .destinationOut
+                e.addFilter(.blur(radius: 1.4 * k))
+                let d = 2.6 * k
+                for o in offs { e.draw(img, in: rect.offsetBy(dx: o.0 * d, dy: o.1 * d)) }
+            }
+            // حافة الضوء: نقطة واحدة، أسطع جهة الضوء
+            g.drawLayer { r in
+                r.fill(Path(outer), with: .linearGradient(Gradient(stops: [
+                    .init(color: .white.opacity(1.0), location: 0),
+                    .init(color: .white.opacity(0.78), location: 0.5),
+                    .init(color: .white.opacity(0.55), location: 1)
+                ]), startPoint: lit, endPoint: shade))
+                var e = r
+                e.blendMode = .destinationOut
+                for o in offs { e.draw(img, in: rect.offsetBy(dx: o.0, dy: o.1)) }
+            }
+            // اللمعة الواحدة على أعلى يسار التاج
+            let sp = CGPoint(x: rect.minX + rect.width * 0.32, y: rect.minY + rect.height * 0.22)
+            let sr = rect.width * 0.30
+            g.fill(Path(ellipseIn: CGRect(x: sp.x - sr, y: sp.y - sr, width: 2 * sr, height: 2 * sr)),
+                   with: .radialGradient(Gradient(stops: [
+                    .init(color: .white.opacity(tinted ? 0.50 : 0.72), location: 0),
+                    .init(color: .white.opacity(tinted ? 0.18 : 0.28), location: 0.45),
+                    .init(color: .white.opacity(0), location: 1)
+                   ]), center: sp, startRadius: 0, endRadius: sr))
+        }
+        // نقطة ذهبية صغيرة واحدة في الفصّ الأعلى
+        let gr = rect.width * 0.045
+        metal(&ctx, Path(ellipseIn: CGRect(x: rect.midX - gr, y: rect.minY + rect.height * 0.15 - gr,
+                                            width: 2 * gr, height: 2 * gr)))
+    }
+
+    // MARK: الدلّة والفنجان — منقار طويل، غطاء مقبّب بقمّة ذهبية، مقبض جانبي، وفنجان صغير يتصاعد منه بخار
+
+    static func dallah() -> FT5GObject {
+        let ax: CGFloat = 36
+        typealias Seg = (c1: CGPoint, c2: CGPoint, to: CGPoint)
+        // النصف الأيمن من القاعدة إلى الكتف (إزاحات عن المحور)، والأيسر مرآته
+        let segs: [Seg] = [
+            (G.p(12.5, 92.5), G.p(8.5, 90), G.p(8, 86)),
+            (G.p(7.5, 80), G.p(18, 77), G.p(17.5, 69)),
+            (G.p(17, 62), G.p(11.5, 58), G.p(9, 53)),
+            (G.p(7.5, 50), G.p(7, 47), G.p(7.5, 43))
+        ]
+        let body = G.path { m in
+            m.move(to: G.p(ax - 12.5, 95))
+            m.addLine(to: G.p(ax + 12.5, 95))
+            for s in segs {
+                m.addCurve(to: G.p(ax + s.to.x, s.to.y), control1: G.p(ax + s.c1.x, s.c1.y), control2: G.p(ax + s.c2.x, s.c2.y))
+            }
+            m.addLine(to: G.p(ax - 7.5, 43))
+            let starts = [G.p(12.5, 95)] + segs.dropLast().map { $0.to }
+            for i in stride(from: segs.count - 1, through: 0, by: -1) {
+                let s = segs[i]
+                m.addCurve(to: G.p(ax - starts[i].x, starts[i].y),
+                           control1: G.p(ax - s.c2.x, s.c2.y), control2: G.p(ax - s.c1.x, s.c1.y))
+            }
+            m.closeSubpath()
+        }
+        let spout = tube(G.p(47, 66), G.p(70, 64), G.p(71, 36), G.p(84, 19), from: 11, to: 5.2)
+            .union(G.circle(84, 19, 2.6))
+        let handle = G.stroke(G.path { m in
+            m.move(to: G.p(ax - 7, 47))
+            m.addCurve(to: G.p(ax - 13, 74), control1: G.p(ax - 25, 44), control2: G.p(ax - 25, 72))
+        }, 5.2)
+        let dome = CGPath(ellipseIn: CGRect(x: ax - 11, y: 27, width: 22, height: 28), transform: nil)
+            .intersection(G.rect(ax - 13, 20, 26, 21))
+        let lid = dome.union(G.rrect(ax - 12.5, 39.5, 25, 5, 2.5))
+        let finial = G.path { m in
+            m.move(to: G.p(ax, 7))
+            m.addCurve(to: G.p(ax + 4.6, 15.5), control1: G.p(ax + 2.6, 8.5), control2: G.p(ax + 4.6, 12))
+            m.addCurve(to: G.p(ax + 1.6, 23), control1: G.p(ax + 4.6, 19.5), control2: G.p(ax + 3.2, 22.2))
+            m.addLine(to: G.p(ax + 1.6, 29)); m.addLine(to: G.p(ax - 1.6, 29)); m.addLine(to: G.p(ax - 1.6, 23))
+            m.addCurve(to: G.p(ax - 4.6, 15.5), control1: G.p(ax - 3.2, 22.2), control2: G.p(ax - 4.6, 19.5))
+            m.addCurve(to: G.p(ax, 7), control1: G.p(ax - 4.6, 12), control2: G.p(ax - 2.6, 8.5))
+            m.closeSubpath()
+        }
+        let cup = G.path { m in
+            m.move(to: G.p(73, 79)); m.addLine(to: G.p(93, 79))
+            m.addCurve(to: G.p(88, 95), control1: G.p(93, 86), control2: G.p(92, 95))
+            m.addLine(to: G.p(78, 95))
+            m.addCurve(to: G.p(73, 79), control1: G.p(74, 95), control2: G.p(73, 86))
+            m.closeSubpath()
+        }
+        let coffee = CGPath(ellipseIn: CGRect(x: 74.5, y: 77.3, width: 17, height: 4.4), transform: nil)
+        let steam = G.union([
+            G.stroke(G.path { m in
+                m.move(to: G.p(79.5, 75)); m.addCurve(to: G.p(80.5, 64), control1: G.p(75.5, 71.5), control2: G.p(84.5, 68))
+            }, 2.4),
+            G.stroke(G.path { m in
+                m.move(to: G.p(86.5, 75)); m.addCurve(to: G.p(87.5, 65), control1: G.p(82.5, 72), control2: G.p(91.5, 69))
+            }, 2.4)
+        ])
+        return FT5GObject(layers: [FT5GLayer(glass: handle),
+                                   FT5GLayer(glass: body.union(spout)),
+                                   FT5GLayer(glass: lid, gold: [finial]),
+                                   FT5GLayer(glass: cup, detail: [coffee], light: [steam])],
+                          specularLayer: 1, specular: G.p(30, 62), specularRadius: 18)
+    }
+
+    // MARK: التواصل — ظرف بختم شمع ذهبي مستدير
+
+    static func envelope() -> FT5GObject {
+        let body = G.rrect(5, 27, 90, 68, 7)
+        let pocket = G.poly([G.p(6.5, 93.5), G.p(50, 57), G.p(93.5, 93.5)], r: 5).intersection(body)
+        let flap = G.poly([G.p(6.5, 28.5), G.p(93.5, 28.5), G.p(50, 70)], r: 5).intersection(body)
+        return FT5GObject(layers: [FT5GLayer(glass: body), FT5GLayer(glass: pocket),
+                                   FT5GLayer(glass: flap, gold: [G.circle(50, 65, 10.5)])],
+                          specularLayer: 2, specular: G.p(22, 36), specularRadius: 24)
+    }
+
+    // MARK: المكتبة ١ — رف الكتب: أربعة كتب قائمة بأطوال مختلفة على لوح، شريط ذهبي على أطولها
+
+    static func shelf() -> FT5GObject {
+        func book(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat) -> FT5GLayer {
+            FT5GLayer(glass: G.rrect(x, y, w, 89 - y, 3),
+                      detail: [G.rrect(x + 4, y + 8, w - 8, 3, 1.5), G.rrect(x + 4, 78, w - 8, 2.4, 1.2)])
+        }
+        var tall = book(50, 5, 22)
+        tall.detail = [G.rrect(54, 78, 14, 2.4, 1.2)]
+        tall.gold = [G.rrect(54, 13, 14, 4.6, 2.3)]
+        let board = FT5GLayer(glass: G.rrect(5, 88, 90, 7, 3.5))
+        return FT5GObject(layers: [book(7, 23, 20), book(29.5, 35, 18), tall, book(74.5, 17, 19), board],
+                          specularLayer: 2, specular: G.p(56, 16), specularRadius: 20)
+    }
+
+    // MARK: المكتبة ٢ — صور العائلة: صورتان متراكبتان، الأمامية بإطار ونافذة فيها جبال بيضاء وشمس ذهبية
+
+    static func photos() -> FT5GObject {
+        let back = G.rotate(G.rrect(24, 9, 66, 54, 5), 7, 57, 36)
+        func rot(_ p: CGPath) -> CGPath { G.rotate(p, -4, 44, 59.5) }
+        let frame = G.rrect(9, 26.5, 70, 66, 5)
+        let window = G.rrect(15, 32.5, 58, 44, 3)
+        let hills = G.poly([G.p(15, 76.5), G.p(15, 66), G.p(30, 52), G.p(41, 62), G.p(53, 49), G.p(73, 68), G.p(73, 76.5)], r: 2.5)
+            .intersection(window)
+        let sun = G.circle(61, 43, 5.5)
+        return FT5GObject(layers: [FT5GLayer(glass: back),
+                                   FT5GLayer(glass: rot(frame.subtracting(window)), light: [rot(hills)], haze: [rot(window)], gold: [rot(sun)])],
+                          specularLayer: 1, specular: G.p(17, 33), specularRadius: 22)
+    }
+
+    // MARK: المكتبة ٣ — ملف الوثائق: ملف بلسان، تخرج منه ورقة مسطّرة، وجيبه الأمامي ببطاقة اسم ومشبك ذهبي
+
+    static func folder() -> FT5GObject {
+        let back = G.union([G.rrect(5, 22, 90, 73, 7), G.rrect(62, 12, 33, 20, 6)])
+        func rot(_ p: CGPath) -> CGPath { G.rotate(p, -3, 35, 32) }
+        let paper = rot(G.rrect(10, 7, 50, 50, 4))
+        let lines = rot(G.union([G.rrect(18, 17, 34, 3.2, 1.6), G.rrect(18, 25, 28, 3.2, 1.6), G.rrect(18, 33, 34, 3.2, 1.6)]))
+        let pocket = G.rrect(5, 45, 90, 50, 7)
+        return FT5GObject(layers: [FT5GLayer(glass: back),
+                                   FT5GLayer(glass: paper, detail: [lines]),
+                                   FT5GLayer(glass: pocket, detail: [G.rrect(39, 63, 22, 3, 1.5)],
+                                             light: [G.rrect(33, 59, 34, 11, 3.5)], gold: [G.circle(50, 81, 4.2)])],
+                          specularLayer: 2, specular: G.p(16, 52), specularRadius: 24)
+    }
+
+    // MARK: المشاريع ١ — حقيبة العمل: مقبض خلفي، جسم، غطاء علوي، وقفل ذهبي
+
+    static func briefcase() -> FT5GObject {
+        let handle = G.stroke(G.path { m in
+            m.move(to: G.p(36, 32)); m.addLine(to: G.p(36, 23))
+            m.addQuadCurve(to: G.p(43, 16), control: G.p(36, 16))
+            m.addLine(to: G.p(57, 16))
+            m.addQuadCurve(to: G.p(64, 23), control: G.p(64, 16))
+            m.addLine(to: G.p(64, 32))
+        }, 6)
+        let body = G.rrect(5, 30, 90, 65, 10)
+        let lid = body.intersection(G.rect(0, 0, 100, 56))
+        return FT5GObject(layers: [FT5GLayer(glass: handle), FT5GLayer(glass: body),
+                                   FT5GLayer(glass: lid, gold: [G.rrect(42, 48, 16, 12, 3.5)])],
+                          specularLayer: 2, specular: G.p(22, 40), specularRadius: 22)
+    }
+
+    // MARK: المشاريع ٢ — سهم النمو: ثلاثة أعمدة تصعد وسهم زجاجي يرتفع فوقها برأس ذهبي
+
+    static func growth() -> FT5GObject {
+        let bars = G.union([G.rrect(6, 60, 22, 35, 5), G.rrect(39, 44, 22, 51, 5), G.rrect(72, 28, 22, 67, 5)])
+        let pts = [G.p(10, 50), G.p(34, 31), G.p(54, 39), G.p(84, 12)]
+        let a = pts[2], b = pts[3]
+        let dx = b.x - a.x, dy = b.y - a.y, len = (dx * dx + dy * dy).squareRoot()
+        let ux = dx / len, uy = dy / len, nx = -uy, ny = ux
+        let tip = G.p(b.x + ux * 9, b.y + uy * 9), base = G.p(b.x - ux * 3, b.y - uy * 3)
+        let head = G.poly([tip, G.p(base.x + nx * 8.5, base.y + ny * 8.5), G.p(base.x - nx * 8.5, base.y - ny * 8.5)], r: 1.6)
+        return FT5GObject(layers: [FT5GLayer(glass: bars), FT5GLayer(glass: G.line(pts, 7), gold: [head])],
+                          specularLayer: 0, specular: G.p(76, 34), specularRadius: 18)
+    }
+
+    // MARK: المشاريع ٣ — مبنى الأعمال: برج زجاجي عالٍ بنوافذ (إحداها ذهبية مضاءة) وأمامه مبنى أقصر بباب
+
+    static func towers() -> FT5GObject {
+        var win: [CGPath] = []
+        for row in 0..<6 {
+            for col in 0..<2 where !(row == 1 && col == 1) {
+                win.append(G.rrect(56 + CGFloat(col) * 15, 13 + CGFloat(row) * 12, 10, 6, 2))
+            }
+        }
+        let tower = FT5GLayer(glass: G.rrect(48, 5, 42, 90, 5), detail: [G.union(win)], gold: [G.rrect(71, 25, 10, 6, 2)])
+        var fw: [CGPath] = []
+        for row in 0..<2 {
+            for col in 0..<2 { fw.append(G.rrect(13 + CGFloat(col) * 16, 51 + CGFloat(row) * 12, 12, 6.5, 2)) }
+        }
+        fw.append(G.rrect(24, 78, 12, 17, 3))
+        let front = FT5GLayer(glass: G.rrect(6, 42, 48, 53, 5), detail: [G.union(fw)])
+        return FT5GObject(layers: [tower, front], specularLayer: 0, specular: G.p(56, 14), specularRadius: 18)
+    }
+}
+
+/// مجسّم مربّع الرئيسية: Canvas ساكن يملأ إطاره (٤٨ في الوسط، ٨٦ للطيف)
+struct FT5GObjectView: View {
+    let place: String
+    let variant: Int
+
+    var body: some View {
+        let place = self.place, variant = self.variant
+        Canvas { ctx, size in
+            if place == "tree" { FT5GObjectArt.drawTreeTile(in: &ctx, size: size); return }
+            guard let o = FT5GObjectArt.object(place, variant: variant) else { return }
+            FT5GObjectArt.draw(o, hue: FT5GObjectHue.of(place), in: &ctx, size: size)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

@@ -27,9 +27,17 @@ import SwiftUI
     static let libraryVariantNames: [String] = ["رف كتب", "صور العائلة", "مخطوطة"]
     static let projectsVariantNames: [String] = ["حقيبة عمل", "سفينة البوم", "نموّ"]
 
+    /// TMP-ART-TRIAL: مجسّم مربّع الرئيسية في التكوين الوسطي (المجسّم والاسم بالوسط) — الرسمة الذهبية تملأ مربّعها
+    /// بقواعد موحّدة للخمسة: خط واحد (١/٢٦ من الضلع)، زجاج خفيف بلون المربّع، لمسة ذهبية مصمتة واحدة، ظلّ ملامس واحد
+    static func tileIcon(_ place: String, variant: Int) -> AnyView? {
+        guard let art = FT5D.tileArt(place, variant: variant) else { return nil }
+        return AnyView(FT5DTileIcon(art: art, place: place))
+    }
+    /// شفافية النسخة الكبيرة من المجسّم في خلفية مربّع الرئيسية (علامة مائية ٨٦ نقطة في الزاوية)
+    static let ghostOpacity: Double = 0.18
+    /// التكوين الوسطي حلّ محل الرسمة الجانبية — لا شيء يُرسم على خلفية المربّع
     static func tile(_ place: String, variant: Int, badge: Bool, animateOnce: Bool) -> AnyView {
-        guard let art = FT5D.tileArt(place, variant: variant) else { return AnyView(EmptyView()) }
-        return AnyView(FT5DTileArt(art: art, drawOnAppear: animateOnce))
+        AnyView(EmptyView())
     }
 
     static func header(icon: String, tint: Color, deep: Color) -> AnyView {
@@ -181,6 +189,88 @@ nonisolated enum FT5D {
         var t = CGAffineTransform(translationX: ox, y: oy)
         if mirrored { t = t.translatedBy(x: w, y: 0).scaledBy(x: -1, y: 1) }
         return t.scaledBy(x: s, y: s).translatedBy(x: -box.minX, y: -box.minY)
+    }
+
+    // MARK: مجسّم المربّع (TMP-ART-TRIAL)
+
+    /// درجة فاتحة من لون كل مربّع (= حبر قسمه في الوضع الداكن من AppSection) لتعبئة الزجاج الخفيفة
+    static func tileTint(_ place: String) -> Color {
+        switch place {
+        case "tree": return hex(0x6CB6A8)
+        case "diwaniya", "diwaniyas": return hex(0x6CB2C6)
+        case "library": return hex(0xBE95CA)
+        case "projects": return hex(0x7EB689)
+        case "contact": return hex(0x9E9FDC)
+        case "news": return hex(0x75B2D1)
+        default: return hex(0x7FA8D6)
+        }
+    }
+
+    /// خط المجسّم: شمباني فاتح من أعلى اليسار إلى ذهبي أعمق أسفل اليمين (الضوء من أعلى اليسار)
+    static let tileLine: [Color] = [hex(0xF8E6B8), hex(0xE9C67F), hex(0xCFA049)]
+    /// اللمسة المصمتة: ذهب #D9A23E وبريقه #F2C65E
+    static let tileGold: [Color] = [hex(0xF2C65E), hex(0xD9A23E)]
+
+    /// يرسم المجسّم في مربّع `size`: الصندوق البصري ٩٠٪ وقاعدته عند ٩٥٪، ظلّ ملامس، زجاج، الخط، ثم اللمسة الذهبية
+    static func drawTileObject(_ parts: Parts, in ctx: inout GraphicsContext, size: CGSize,
+                               mirrored: Bool, tint: Color, dark: Bool) {
+        let S = min(size.width, size.height)
+        guard S > 0 else { return }
+        let ox = (size.width - S) / 2, oy = (size.height - S) / 2
+        let target = CGRect(x: ox + 0.05 * S, y: oy + 0.05 * S, width: 0.9 * S, height: 0.9 * S)
+        let t = fit(parts.box, into: target, mirrored: mirrored, align: .bottom)
+        let fitted = parts.box.applying(t)
+        let lw = S / 26
+        let tl = CGPoint(x: fitted.minX, y: fitted.minY), br = CGPoint(x: fitted.maxX, y: fitted.maxY)
+
+        // الظلّ الملامس: قطع ناقص ناعم واحد تحت القاعدة (داخل المربّع)
+        let shW = fitted.width * 0.78, shH = S * 0.06
+        let shadow = Path(ellipseIn: CGRect(x: fitted.midX - shW / 2, y: oy + 0.945 * S - shH / 2, width: shW, height: shH))
+        ctx.drawLayer { l in
+            l.addFilter(.blur(radius: S * 0.02))
+            l.fill(shadow, with: .color(.black.opacity(dark ? 0.42 : 0.30)))
+        }
+
+        // الزجاج: تعبئة خفيفة بدرجة المربّع الفاتحة داخل الأشكال المغلقة، أسطع عند أعلى اليسار
+        let fill = parts.fill.applying(t)
+        if !fill.isEmpty {
+            let a: Double = dark ? 0.30 : 0.24, b: Double = dark ? 0.13 : 0.10
+            ctx.fill(fill, with: .linearGradient(Gradient(colors: [tint.opacity(a), tint.opacity(b)]),
+                                                 startPoint: tl, endPoint: br))
+        }
+
+        // الخط الذهبي الواحد واللمسة المصمتة — مع ظلّ شعري يرفعهما عن المربّع
+        let style = StrokeStyle(lineWidth: lw, lineCap: .round, lineJoin: .round)
+        let line = parts.line.applying(t), mark = parts.mark.applying(t), accent = parts.accent.applying(t)
+        ctx.drawLayer { l in
+            l.addFilter(.shadow(color: .black.opacity(dark ? 0.34 : 0.26), radius: lw * 0.45, x: lw * 0.2, y: lw * 0.35))
+            l.stroke(line, with: .linearGradient(Gradient(colors: tileLine), startPoint: tl, endPoint: br), style: style)
+            if !mark.isEmpty {
+                l.stroke(mark, with: .linearGradient(Gradient(colors: tileGold), startPoint: tl, endPoint: br), style: style)
+            }
+            if !accent.isEmpty {
+                l.fill(accent, with: .linearGradient(Gradient(colors: tileGold), startPoint: tl, endPoint: br),
+                       style: FillStyle(eoFill: parts.eoAccent))
+            }
+        }
+    }
+
+    /// جسم متناظر حول محور عمودي: يُعطى الجانب الأيسر من أعلاه نزولاً (منحنيات تكعيبية)، فيُبنى المسار المغلق:
+    /// الجانب الأيمن مرآةً نزولاً ← القاعدة ← الجانب الأيسر صعوداً ← الغلق عبر القمّة (اتجاه عقارب الساعة كبقية التعبئات)
+    static func lathe(axis: CGFloat, top: CGPoint, segments: [(to: CGPoint, c1: CGPoint, c2: CGPoint)]) -> Path {
+        func m(_ q: CGPoint) -> CGPoint { CGPoint(x: 2 * axis - q.x, y: q.y) }
+        var p = Path()
+        p.move(to: m(top))
+        for s in segments { p.addCurve(to: m(s.to), control1: m(s.c1), control2: m(s.c2)) }
+        guard let last = segments.last else { p.closeSubpath(); return p }
+        p.addLine(to: last.to)
+        for i in stride(from: segments.count - 1, through: 0, by: -1) {
+            let s = segments[i]
+            let start = i == 0 ? top : segments[i - 1].to
+            p.addCurve(to: start, control1: s.c2, control2: s.c1)
+        }
+        p.closeSubpath()
+        return p
     }
 
     // MARK: الأماكن والعائلات
@@ -595,52 +685,28 @@ struct FT5DSymbolSeal: View {
     }
 }
 
-// MARK: - ١) مربّعات الرئيسية
+// MARK: - ١) مربّعات الرئيسية — المجسّم الوسطي (٤٨ نقطة) والعلامة المائية (٨٦ نقطة)
 
-struct FT5DTileArt: View {
+/// TMP-ART-TRIAL: الرسمة الذهبية تملأ إطارها بقواعد موحّدة: الصندوق البصري ٩٠٪ من الضلع والقاعدة عند ٩٥٪،
+/// الخط = الضلع/٢٦، زجاج خفيف بدرجة فاتحة من لون المربّع، لمسة ذهبية مصمتة واحدة، ضوء من أعلى اليسار، وظلّ ملامس واحد.
+/// ثابتة (Canvas بلا مؤقّت) — تُرسم مرة للوسط ومرة للعلامة المائية.
+struct FT5DTileIcon: View {
     let art: FT5D.Art
-    var drawOnAppear: Bool = false
-    var time: Double? = nil
+    let place: String
+    @Environment(\.colorScheme) private var scheme
     @Environment(\.layoutDirection) private var direction
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        // عنوان من سطرين عريضين يمتدّ للطرف الآخر (إنجليزي الشجرة/المشاريع، أو خط كبير جداً) — الرسمة تصعد للشريط العلوي
-        let long = typeSize >= .xxLarge
-            || (direction == .leftToRight && (art == .tree || [.briefcase, .dhow, .growth].contains(art)))
-        GeometryReader { geo in
-            let g = FT5DTileArt.frame(art, tile: geo.size, longTitle: long)
-            if g.size.width > 0 {
-                FT5DArtView(art: art, lineWidth: g.line, drawOnAppear: drawOnAppear, time: time)
-                    .frame(width: g.size.width, height: g.size.height)
-                    .padding(.trailing, g.trailing)
-                    .padding(.top, g.top)
-                    .frame(width: geo.size.width, height: geo.size.height, alignment: .topTrailing)
-            }
+        let parts = FT5D.parts(art)
+        let mirrored = parts.directional && direction == .leftToRight
+        let dark = scheme == .dark
+        let tint = FT5D.tileTint(place)
+        Canvas(opaque: false, colorMode: .nonLinear, rendersAsynchronously: false) { ctx, size in
+            FT5D.drawTileObject(parts, in: &ctx, size: size, mirrored: mirrored, tint: tint, dark: dark)
         }
+        .environment(\.layoutDirection, .leftToRight)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-
-    struct Frame { let size: CGSize; let trailing: CGFloat; let top: CGFloat; let line: CGFloat }
-
-    /// إطار الرسمة في الطرف الآخر من المربّع: العريض بكامل الارتفاع تقريباً، الضيّق أعلى الطرف الآخر فوق سطر العنوان
-    static func frame(_ art: FT5D.Art, tile: CGSize, longTitle: Bool) -> Frame {
-        let W = tile.width, H = tile.height
-        let wide = W / max(H, 1) >= 1.5
-        var top: CGFloat, bottom: CGFloat, maxW: CGFloat
-        if wide {
-            top = H * 0.13; bottom = H * 0.11; maxW = W * 0.50
-            if longTitle { top = H * 0.09; bottom = H * 0.47 }
-        } else {
-            top = H * 0.10; bottom = H * 0.37; maxW = W * 0.54
-            if longTitle { bottom = H * 0.51 }
-        }
-        let h = H - top - bottom
-        if h < 24 { return Frame(size: .zero, trailing: 0, top: 0, line: 0) }
-        let w = min(maxW, h * FT5D.aspect(art))
-        let line: CGFloat = h >= 66 ? 2.3 : (h >= 44 ? 2.1 : 1.9)
-        return Frame(size: CGSize(width: w, height: h), trailing: W * 0.075, top: top, line: line)
     }
 }
 
@@ -732,9 +798,9 @@ struct FT5DTreeLoading: View {
     var body: some View {
         let d: CGFloat = 156
         let glyph = CGRect(x: d * 0.2, y: d * 0.2, width: d * 0.6, height: d * 0.6)
-        // خط الأرض في الغافة (١٨…٨٤ عند ٨٧) بإحداثيات الوسام
+        // خط أرض رفيع تحت جذور الغافة (١٦…٨٤ عند ٩٥ في شبكة الرسمة) بإحداثيات الوسام — الغافة نفسها بلا خط أرض
         let t = FT5D.fit(FT5D.parts(.tree).box, into: glyph, mirrored: false, align: .center)
-        let a = CGPoint(x: 18, y: 87).applying(t), b = CGPoint(x: 84, y: 87).applying(t)
+        let a = CGPoint(x: 16, y: 95).applying(t), b = CGPoint(x: 84, y: 95).applying(t)
         let len = b.x - a.x
         let tint = scheme == .dark ? FT5D.hex(0x24665B) : FT5D.hex(0x1E5950)
         ZStack {
@@ -743,6 +809,10 @@ struct FT5DTreeLoading: View {
                     FT5DArtView(art: .tree, lineWidth: 2.6, align: .center, time: time)
                         .frame(width: glyph.width, height: glyph.height)
                         .offset(x: glyph.minX, y: glyph.minY)
+                    Capsule()
+                        .fill(FT5D.hex(0xE7C27A).opacity(0.55))
+                        .frame(width: len, height: 1.6)
+                        .offset(x: a.x, y: a.y + 1.2)
                     if !reduceMotion {
                         Capsule()
                             .fill(LinearGradient(colors: [.white.opacity(0), FT5D.hex(0xFFF4DC), .white.opacity(0)],
@@ -751,7 +821,7 @@ struct FT5DTreeLoading: View {
                             .offset(x: go ? len - 11 : -11)
                             .frame(width: len, height: 3.2, alignment: .leading)
                             .clipShape(Capsule())
-                            .offset(x: a.x, y: a.y - 1.6)
+                            .offset(x: a.x, y: a.y + 0.4)
                     }
                 }
                 .frame(width: d, height: d, alignment: .topLeading)
@@ -1108,122 +1178,143 @@ nonisolated struct FT5DGlyphShape: Shape {
 
 // MARK: - الرسومات (شبكة ١٠٠؛ الاتجاه للعربي: «الداخل» نحو اليمين)
 
-// ── من الجولة الرابعة (أعجبت المالك): الغافة، الدلّة والفنجان، الظرف بختم، الورقة والريشة ──
+// ── المربّعات (TMP-ART-TRIAL — أعيد رسمها بصندوق بصري واحد: البعد الأكبر ٩٠ والقاعدة عند ٩٥) ──
 
+/// الغافة: ظلّة بثلاثة فصوص مدوّرة وجذع قصير يتّسع جذوراً، وداخل الظلّة «العائلة»: نقطة ذهبية (الجدّ)
+/// ونقطتان زجاجيتان تحتها يصلهما خطّان قصيران — بلا خط أرض (الظلّ الملامس يقوم مقامه)
 nonisolated private let ft5dTree: FT5D.Parts = {
     let P = FT5D.pt
-    func bumps(_ p: inout Path, _ pts: [CGPoint], _ bulge: CGFloat) {
-        for i in 1..<pts.count {
-            let a = pts[i - 1], b = pts[i]
-            let dx = b.x - a.x, dy = b.y - a.y
-            p.addQuadCurve(to: b, control: P((a.x + b.x) / 2 + dy * bulge, (a.y + b.y) / 2 - dx * bulge))
-        }
-    }
     var crown = Path()
-    let top = [P(8, 47), P(15, 35), P(29, 27), P(50, 23.5), P(71, 27), P(85, 35), P(92, 47)]
-    crown.move(to: top[0])
-    bumps(&crown, top, 0.24)
-    bumps(&crown, [P(92, 47), P(71, 50), P(50, 49), P(29, 50), P(8, 47)], 0.12)
+    crown.move(to: P(10, 60))
+    crown.addCurve(to: P(21, 26), control1: P(3, 50), control2: P(12, 26))      // الجانب الأيسر إلى قمّة الفصّ الأيسر
+    crown.addCurve(to: P(35, 32), control1: P(28, 26), control2: P(31, 28.5))   // الغَور الأول
+    crown.addCurve(to: P(50, 19), control1: P(39, 28.5), control2: P(42, 19))   // قمّة الفصّ الأوسط
+    crown.addCurve(to: P(65, 32), control1: P(58, 19), control2: P(61, 28.5))   // الغَور الثاني
+    crown.addCurve(to: P(79, 26), control1: P(69, 28.5), control2: P(72, 26))   // قمّة الفصّ الأيمن
+    crown.addCurve(to: P(90, 60), control1: P(88, 26), control2: P(97, 50))     // الجانب الأيمن نزولاً
+    crown.addCurve(to: P(10, 60), control1: P(72, 65), control2: P(28, 65))     // القاع
     crown.closeSubpath()
 
+    // الجذع: الحافّتان والقاعدة فقط (الحافّة العليا داخل الظلّة) — التعبئة نسخة مغلقة
     var trunk = Path()
-    trunk.move(to: P(39, 87))
-    trunk.addCurve(to: P(46, 74), control1: P(44, 85), control2: P(46, 80))
-    trunk.addCurve(to: P(31, 51), control1: P(46, 64), control2: P(38, 57))
-    trunk.move(to: P(63, 87))
-    trunk.addCurve(to: P(56, 74), control1: P(58, 85), control2: P(56, 80))
-    trunk.addCurve(to: P(70, 51), control1: P(56, 64), control2: P(63, 57))
-    trunk.move(to: P(42, 51))
-    trunk.addCurve(to: P(51, 63), control1: P(46, 54), control2: P(50, 58))
-    trunk.addCurve(to: P(59, 51), control1: P(52, 58), control2: P(55, 54))
-
-    var trunkFill = Path()
-    trunkFill.move(to: P(39, 87))
-    trunkFill.addCurve(to: P(46, 74), control1: P(44, 85), control2: P(46, 80))
-    trunkFill.addCurve(to: P(31, 51), control1: P(46, 64), control2: P(38, 57))
-    trunkFill.addLine(to: P(42, 51))
-    trunkFill.addCurve(to: P(51, 63), control1: P(46, 54), control2: P(50, 58))
-    trunkFill.addCurve(to: P(59, 51), control1: P(52, 58), control2: P(55, 54))
-    trunkFill.addLine(to: P(70, 51))
-    trunkFill.addCurve(to: P(56, 74), control1: P(63, 57), control2: P(56, 64))
-    trunkFill.addCurve(to: P(63, 87), control1: P(56, 80), control2: P(58, 85))
+    trunk.move(to: P(56, 63))
+    trunk.addCurve(to: P(64, 95), control1: P(56.5, 78), control2: P(59, 90))
+    trunk.addLine(to: P(36, 95))
+    trunk.addCurve(to: P(44, 63), control1: P(41, 90), control2: P(43.5, 78))
+    var trunkFill = trunk
     trunkFill.closeSubpath()
 
-    var parts = FT5D.Parts(box: CGRect(x: 4, y: 18, width: 92, height: 72))
-    parts.line.move(to: P(18, 87)); parts.line.addLine(to: P(84, 87))
-    parts.line.addPath(trunk)
+    // العائلة داخل الظلّة
+    let elder = P(50, 31), kids = [P(36, 49), P(64, 49)], r: CGFloat = 5.5
+    var family = Path()
+    for k in kids {
+        family.addPath(FT5D.circle(k, r))
+        let dx = k.x - elder.x, dy = k.y - elder.y, L = (dx * dx + dy * dy).squareRoot()
+        let u = P(dx / L, dy / L)
+        family.move(to: P(elder.x + u.x * (r + 1.5), elder.y + u.y * (r + 1.5)))
+        family.addLine(to: P(k.x - u.x * (r + 1.5), k.y - u.y * (r + 1.5)))
+    }
+
+    var parts = FT5D.Parts(box: CGRect(x: 7, y: 19, width: 86, height: 76))
     parts.line.addPath(crown)
+    parts.line.addPath(trunk)
+    parts.line.addPath(family)
     parts.fill.addPath(crown)
     parts.fill.addPath(trunkFill)
+    parts.accent = FT5D.circle(elder, 5.8)
+    parts.directional = false
     return parts
 }()
 
+/// الدلّة والفنجان: جسم متناظر (رقبة، كتف، خصر، بطن، قاعدة) وغطاء مقبّب بقمّة ذهبية، بُلبُلة طويلة ومقبض،
+/// وفنجان زجاجي بجانبها يتصاعد منه خيط بخار
 nonisolated private let ft5dDallah: FT5D.Parts = {
     let P = FT5D.pt
-    var body = Path()
-    body.move(to: P(31, 86))
-    body.addCurve(to: P(25, 61), control1: P(17, 82), control2: P(15, 67))
-    body.addCurve(to: P(34, 50), control1: P(30, 57), control2: P(34, 54))
-    body.addCurve(to: P(28, 41), control1: P(34, 46), control2: P(30, 44))
-    body.addLine(to: P(52, 41))
-    body.addCurve(to: P(46, 50), control1: P(50, 44), control2: P(46, 46))
-    body.addCurve(to: P(55, 61), control1: P(46, 54), control2: P(50, 57))
-    body.addCurve(to: P(49, 86), control1: P(65, 67), control2: P(63, 82))
-    body.closeSubpath()
+    let body = FT5D.lathe(axis: 36, top: P(28, 30), segments: [
+        (to: P(29, 37), c1: P(28, 33), c2: P(29, 35)),      // الرقبة
+        (to: P(21, 50), c1: P(29, 40), c2: P(21, 44)),      // الكتف
+        (to: P(28, 63), c1: P(21, 56), c2: P(27, 59)),      // الخصر
+        (to: P(18, 80), c1: P(29, 67), c2: P(18, 73)),      // البطن
+        (to: P(25, 95), c1: P(18, 87), c2: P(22, 92))       // القاعدة
+    ])
+    var lid = Path()
+    lid.move(to: P(25, 30))
+    lid.addCurve(to: P(47, 30), control1: P(25, 14), control2: P(47, 14))
+    lid.closeSubpath()
 
-    var line = Path()
-    line.move(to: P(31, 86)); line.addLine(to: P(29, 90)); line.addLine(to: P(51, 90)); line.addLine(to: P(49, 86))
-    line.addPath(body)
-    line.move(to: P(30, 41))
-    line.addCurve(to: P(40, 27), control1: P(30, 34), control2: P(36, 31))
-    line.addCurve(to: P(50, 41), control1: P(44, 31), control2: P(50, 34))
-    line.move(to: P(40, 27)); line.addLine(to: P(40, 23))
-    line.move(to: P(59, 74))
-    line.addCurve(to: P(81, 33), control1: P(72, 68), control2: P(72, 46))
-    line.addCurve(to: P(56, 63), control1: P(70, 42), control2: P(65, 56))
-    line.move(to: P(29, 44))
-    line.addCurve(to: P(22, 67), control1: P(16, 45), control2: P(12, 57))
+    // البُلبُلة: خط مفتوح (داخلي صعوداً، الفم، خارجي نزولاً) — التعبئة نسخة مغلقة
+    var spout = Path()
+    spout.move(to: P(46, 58))
+    spout.addCurve(to: P(70, 22), control1: P(59, 55), control2: P(67, 42))
+    spout.addLine(to: P(76, 27))
+    spout.addCurve(to: P(52, 75), control1: P(74, 48), control2: P(66, 68))
+    var spoutFill = spout
+    spoutFill.closeSubpath()
+
+    var handle = Path()
+    handle.move(to: P(24, 44))
+    handle.addCurve(to: P(26, 68), control1: P(8, 46), control2: P(9, 70))
+
     var cup = Path()
-    cup.move(to: P(69, 79)); cup.addLine(to: P(87, 79))
-    cup.addCurve(to: P(78, 90), control1: P(87, 85), control2: P(83, 90))
-    cup.addCurve(to: P(69, 79), control1: P(73, 90), control2: P(69, 85))
+    cup.move(to: P(68, 79)); cup.addLine(to: P(91, 79))
+    cup.addCurve(to: P(85.5, 95), control1: P(91, 88), control2: P(89, 95))
+    cup.addLine(to: P(73.5, 95))
+    cup.addCurve(to: P(68, 79), control1: P(70, 95), control2: P(68, 88))
     cup.closeSubpath()
-    line.addPath(cup)
-    line.move(to: P(78, 73))
-    line.addCurve(to: P(79, 61), control1: P(74, 69), control2: P(83, 65))
 
-    var parts = FT5D.Parts(box: CGRect(x: 10, y: 10, width: 82, height: 83))
-    parts.line = line
+    var steam = Path()
+    steam.move(to: P(81, 73))
+    steam.addCurve(to: P(79, 61), control1: P(76, 69), control2: P(84, 65))
+
+    // القمّة الذهبية: دمعة مدبّبة فوق القبّة
+    var finial = Path()
+    finial.move(to: P(36, 5))
+    finial.addCurve(to: P(40, 13.5), control1: P(37.5, 8), control2: P(40.5, 10.5))
+    finial.addCurve(to: P(36, 18), control1: P(40, 16.5), control2: P(38.3, 18))
+    finial.addCurve(to: P(32, 13.5), control1: P(33.7, 18), control2: P(32, 16.5))
+    finial.addCurve(to: P(36, 5), control1: P(31.5, 10.5), control2: P(34.5, 8))
+    finial.closeSubpath()
+
+    var parts = FT5D.Parts(box: CGRect(x: 11, y: 5, width: 80, height: 90))
+    parts.line.addPath(body)
+    parts.line.addPath(lid)
+    parts.line.addPath(spout)
+    parts.line.addPath(handle)
+    parts.line.addPath(cup)
+    parts.line.addPath(steam)
     parts.fill.addPath(body)
+    parts.fill.addPath(lid)
+    parts.fill.addPath(spoutFill)
     parts.fill.addPath(cup)
-    parts.accent.move(to: P(40, 13))
-    parts.accent.addCurve(to: P(40, 24), control1: P(42.5, 17), control2: P(44, 21))
-    parts.accent.addCurve(to: P(40, 13), control1: P(36, 21), control2: P(37.5, 17))
-    parts.accent.closeSubpath()
+    parts.accent = finial
     return parts
 }()
 
+/// الظرف: جسم مستدير الزوايا وخطّا الغطاء ينزلان إلى ختم شمعي ذهبي مستدير (حافّة متموّجة ومعيّن مفرّغ)
 nonisolated private let ft5dEnvelope: FT5D.Parts = {
     let P = FT5D.pt
-    var parts = FT5D.Parts(box: CGRect(x: 6, y: 12, width: 88, height: 62))
-    let body = FT5D.rr(10, 16, 80, 54, 5)
+    var parts = FT5D.Parts(box: CGRect(x: 5, y: 25, width: 90, height: 70))
+    let body = FT5D.rr(5, 25, 90, 70, 6)
     parts.line.addPath(body)
-    parts.line.move(to: P(13, 19)); parts.line.addLine(to: P(40.5, 39.6))
-    parts.line.move(to: P(59.5, 39.6)); parts.line.addLine(to: P(87, 19))
+    let c = P(50, 66), rSeal: CGFloat = 12.5
+    for corner in [P(8, 28), P(92, 28)] {
+        let dx = c.x - corner.x, dy = c.y - corner.y, L = (dx * dx + dy * dy).squareRoot()
+        parts.line.move(to: corner)
+        parts.line.addLine(to: P(c.x - dx / L * (rSeal + 1), c.y - dy / L * (rSeal + 1)))
+    }
     parts.fill = body
-    // ختم شمعي بحافة متموّجة ومعيّن مفرّغ
-    let c = P(50, 47), n = 10
+    let n = 11
     for i in 0...(2 * n) {
         let a = Double(i) / Double(2 * n) * 2 * .pi - .pi / 2
-        let r: CGFloat = i % 2 == 0 ? 10.2 : 9.0
+        let r: CGFloat = i % 2 == 0 ? rSeal : rSeal - 1.3
         let p = P(c.x + r * CGFloat(cos(a)), c.y + r * CGFloat(sin(a)))
         if i == 0 { parts.accent.move(to: p) } else {
             let am = (Double(i) - 0.5) / Double(2 * n) * 2 * .pi - .pi / 2
-            parts.accent.addQuadCurve(to: p, control: P(c.x + 9.9 * CGFloat(cos(am)), c.y + 9.9 * CGFloat(sin(am))))
+            parts.accent.addQuadCurve(to: p, control: P(c.x + (rSeal - 0.3) * CGFloat(cos(am)), c.y + (rSeal - 0.3) * CGFloat(sin(am))))
         }
     }
     parts.accent.closeSubpath()
-    parts.accent.addPath(FT5D.poly([P(50, 42.2), P(54.8, 47), P(50, 51.8), P(45.2, 47)]))
+    parts.accent.addPath(FT5D.poly([P(50, 60.9), P(55.1, 66), P(50, 71.1), P(44.9, 66)]))
     parts.eoAccent = true
     parts.directional = false
     return parts
@@ -1255,172 +1346,156 @@ nonisolated private let ft5dQuill: FT5D.Parts = {
     return parts
 }()
 
-// ── المكتبة (جديدة): رف كتب · صور العائلة · مخطوطة ──
+// ── المكتبة: رف كتب · صور العائلة · مخطوطة ──
 
-/// ١) رف كتب: ثلاثة كتب واقفة بأطوال مختلفة وكتاب رابع مائل يستند عليها، فوق لوح الرف — وشريط ذهبي على الأطول
+/// ١) رف كتب: ثلاثة كتب واقفة بأطوال مختلفة وكتاب رابع مائل يستند بزاويته على الأطول، فوق لوح يقف على القاعدة —
+/// الشريط الذهبي على كعب الأطول
 nonisolated private let ft5dShelf: FT5D.Parts = {
     let P = FT5D.pt
-    var parts = FT5D.Parts(box: CGRect(x: 4, y: 15, width: 84, height: 76))
-    let books: [(CGFloat, CGFloat, CGFloat, [CGFloat])] = [
-        (12, 28, 14, [35, 73]),     // x, أعلى، عرض، أشرطة
-        (26, 40, 12, [47, 73]),
-        (38, 20, 16, [27, 73])
+    var parts = FT5D.Parts(box: CGRect(x: 5, y: 11, width: 90, height: 84))
+    let books: [(x: CGFloat, top: CGFloat, w: CGFloat, band: CGFloat?)] = [
+        (9, 23, 17, 32), (28, 33, 14, 42), (44, 11, 19, nil)
     ]
-    for (x, y, w, bands) in books {
-        let r = FT5D.rr(x, y, w, 80 - y, 1.8)
+    for b in books {
+        let r = FT5D.rr(b.x, b.top, b.w, 87 - b.top, 2)
         parts.line.addPath(r)
         parts.fill.addPath(r)
-        for b in bands { parts.line.move(to: P(x + 0.5, b)); parts.line.addLine(to: P(x + w - 0.5, b)) }
+        if let y = b.band { parts.line.move(to: P(b.x, y)); parts.line.addLine(to: P(b.x + b.w, y)) }
     }
-    // الكتاب المائل: قاعدته عند ٦٤ ورأسه يلمس الكتاب الأطول عند ٥٤
-    let h: CGFloat = 44, w: CGFloat = 13
-    let s = (64.0 - 54.0) / h, c = (1 - s * s).squareRoot()
-    let base = P(64, 80)
-    let u = P(-s * h, -c * h), r = P(c * w, -s * w)
-    let pts = [base, P(base.x + r.x, base.y + r.y), P(base.x + r.x + u.x, base.y + r.y + u.y), P(base.x + u.x, base.y + u.y)]
-    parts.line.addPath(FT5D.poly(pts))
-    parts.fill.addPath(FT5D.poly(pts))
-    for f in [CGFloat(7) / h, CGFloat(37) / h] {
-        parts.line.move(to: P(base.x + u.x * f, base.y + u.y * f))
-        parts.line.addLine(to: P(base.x + r.x + u.x * f, base.y + r.y + u.y * f))
-    }
-    // اللوح وكتيفتاه
-    let shelf = FT5D.rr(5, 80, 82, 6, 2)
-    parts.line.addPath(shelf)
-    parts.fill.addPath(shelf)
-    parts.line.move(to: P(16, 86)); parts.line.addLine(to: P(16, 90))
-    parts.line.move(to: P(76, 86)); parts.line.addLine(to: P(76, 90))
-    parts.accent = FT5D.rr(41.5, 37, 9, 12, 1.6)
+    // الكتاب المائل (١٥°): زاويته السفلية اليسرى على اللوح، وزاويته العليا اليسرى تلمس الكتاب الأطول عند ٦٣
+    let s: CGFloat = 0.26, co: CGFloat = 0.9657, h: CGFloat = 50, w: CGFloat = 15
+    let A = P(76, 87)
+    let u = P(-s * h, -co * h), r = P(co * w, -s * w)
+    let TL = P(A.x + u.x, A.y + u.y), TR = P(TL.x + r.x, TL.y + r.y), BR = P(A.x + r.x, A.y + r.y)
+    let lean = FT5D.poly([TL, TR, BR, A])
+    parts.line.addPath(lean)
+    parts.fill.addPath(lean)
+    let f = (h - 9) / h
+    parts.line.move(to: P(A.x + u.x * f, A.y + u.y * f))
+    parts.line.addLine(to: P(A.x + u.x * f + r.x, A.y + u.y * f + r.y))
+    let plank = FT5D.rr(5, 87, 90, 8, 2.5)
+    parts.line.addPath(plank)
+    parts.fill.addPath(plank)
+    parts.accent = FT5D.rr(48.5, 24, 10, 12, 2)
     return parts
 }()
 
-/// ٢) صور العائلة: صورتان قديمتان بإطار أبيض (بولارويد) — الخلفية مائلة، والأمامية فيها كبير وصغير، وزوايا ألبوم ذهبية
+/// ٢) صور العائلة: صورتان بإطار (بولارويد) — الخلفية مائلة تطلّ من أعلى اليسار، والأمامية مستقيمة فيها كبير وصغير،
+/// وتحت الصورة سطر تعليق ذهبي
 nonisolated private let ft5dPhotos: FT5D.Parts = {
     let P = FT5D.pt
-    var parts = FT5D.Parts(box: CGRect(x: 5, y: 10, width: 88, height: 78))
-    let backT = CGAffineTransform(translationX: 39, y: 42).rotated(by: -9 * .pi / 180)
-    let frontT = CGAffineTransform(translationX: 60, y: 59).rotated(by: 6 * .pi / 180)
-    let backOuter = FT5D.transform(FT5D.rectPts(-25, -21, 50, 42), backT)
-    let backInner = FT5D.transform(FT5D.rectPts(-20.5, -16.5, 41, 25), backT)
-    let frontOuter = FT5D.transform(FT5D.rectPts(-27, -24, 54, 48), frontT)
-    let frontInner = FT5D.transform(FT5D.rectPts(-22.5, -19.5, 45, 30), frontT)
-    // الصورة الخلفية: يُرسم منها ما يظهر فقط
+    var parts = FT5D.Parts(box: CGRect(x: 5, y: 14, width: 89, height: 81))
+    let backT = CGAffineTransform(translationX: 34, y: 40).rotated(by: -9 * .pi / 180)
+    let backOuter = FT5D.transform(FT5D.rectPts(-26, -22, 52, 44), backT)
+    let backInner = FT5D.transform(FT5D.rectPts(-18, -14, 36, 24), backT)
+    let frontOuter = FT5D.rectPts(32, 41, 62, 54)
+    // الصورة الخلفية: يُرسم منها ما يظهر خلف الأمامية فقط
     parts.line.addPath(FT5D.outside(backOuter, closed: true, of: frontOuter))
     parts.line.addPath(FT5D.outside(backInner, closed: true, of: frontOuter))
-    parts.line.addPath(FT5D.poly(frontOuter))
-    parts.line.addPath(FT5D.poly(frontInner))
-    // كبير وصغير داخل الصورة الأمامية (إحداثيات محلية، القاعدة = أسفل الصورة الداخلية عند ١٠٫٥)
+    parts.line.addPath(FT5D.rr(32, 41, 62, 54, 1.5))
+    parts.line.addPath(FT5D.rr(40, 48, 46, 30, 1))
+    // كبير وصغير داخل النافذة (القاعدة = أسفل النافذة عند ٧٨)
     var people = Path()
-    people.addPath(FT5D.circle(P(-8, -5), 5.2))
-    people.move(to: P(-18.5, 10.5)); people.addQuadCurve(to: P(2, 10.5), control: P(-8.2, -5.5))
-    people.addPath(FT5D.circle(P(10.5, 1.5), 3.7))
-    people.move(to: P(4.5, 10.5)); people.addQuadCurve(to: P(16.5, 10.5), control: P(10.5, 3.6))
-    parts.line.addPath(people.applying(frontT))
+    people.addPath(FT5D.circle(P(56, 59), 5.5))
+    people.move(to: P(45, 78)); people.addQuadCurve(to: P(67, 78), control: P(56, 55))
+    people.addPath(FT5D.circle(P(76, 64), 4))
+    people.move(to: P(69, 78)); people.addQuadCurve(to: P(84, 78), control: P(76.5, 62))
+    parts.line.addPath(people)
     parts.fill.addPath(FT5D.poly(backOuter))
     parts.fill.addPath(FT5D.poly(frontOuter))
-    // زوايا الألبوم
-    var corners = Path()
-    let k: CGFloat = 8
-    for (x, y, sx, sy) in [(CGFloat(-27), CGFloat(-24), CGFloat(1), CGFloat(1)), (27, -24, -1, 1), (27, 24, -1, -1), (-27, 24, 1, -1)] {
-        corners.addPath(FT5D.poly([P(x - sx * 1.2, y - sy * 1.2), P(x + sx * k, y - sy * 1.2), P(x - sx * 1.2, y + sy * k)]))
-    }
-    parts.accent = corners.applying(frontT)
+    parts.accent = FT5D.rr(52, 84, 22, 4, 2)
     return parts
 }()
 
-/// ٣) مخطوطة: ورقة بين عمودين (أعلى وأسفل) بمقابض، ونجمة ذهبية ثمانية في رأسها، وأسطر بمحاذاة الكتابة العربية
+/// ٣) مخطوطة: ورقة بين عمودين (أعلى وأسفل) ونجمة ذهبية ثمانية في رأسها، وأسطر بمحاذاة الكتابة العربية
 nonisolated private let ft5dScroll: FT5D.Parts = {
     let P = FT5D.pt
-    var parts = FT5D.Parts(box: CGRect(x: 9, y: 8, width: 82, height: 74))
-    let top = FT5D.rr(19, 12, 62, 9, 4.5), bottom = FT5D.rr(19, 69, 62, 9, 4.5)
+    var parts = FT5D.Parts(box: CGRect(x: 12, y: 5, width: 76, height: 90))
+    let top = FT5D.rr(12, 5, 76, 10, 5), bottom = FT5D.rr(12, 85, 76, 10, 5)
     parts.line.addPath(top)
     parts.line.addPath(bottom)
-    for (x, y) in [(CGFloat(15), CGFloat(16.5)), (85, 16.5), (15, 73.5), (85, 73.5)] {
-        parts.line.addPath(FT5D.circle(P(x, y), 3.2))
+    parts.line.move(to: P(23, 15)); parts.line.addLine(to: P(23, 85))
+    parts.line.move(to: P(77, 15)); parts.line.addLine(to: P(77, 85))
+    for (y, x1) in [(CGFloat(44), CGFloat(34)), (CGFloat(54), CGFloat(40)), (CGFloat(64), CGFloat(47))] {
+        parts.line.move(to: P(x1, y)); parts.line.addLine(to: P(68, y))
     }
-    parts.line.move(to: P(26, 21)); parts.line.addLine(to: P(26, 69))
-    parts.line.move(to: P(74, 21)); parts.line.addLine(to: P(74, 69))
-    for (y, x1) in [(CGFloat(43), CGFloat(34)), (CGFloat(51), CGFloat(39)), (CGFloat(59), CGFloat(47))] {
-        parts.line.move(to: P(x1, y)); parts.line.addLine(to: P(66, y))
-    }
-    parts.fill.addPath(FT5D.poly(FT5D.rectPts(26, 21, 48, 48)))
+    parts.fill.addPath(FT5D.poly(FT5D.rectPts(23, 15, 54, 70)))
     parts.fill.addPath(top)
     parts.fill.addPath(bottom)
-    parts.accent = FT5D.star(P(50, 31.5), outer: 6.4, inner: 3.6, points: 8, rotation: -90)
+    parts.accent = FT5D.star(P(50, 29), outer: 7, inner: 3.9, points: 8, rotation: -90)
     return parts
 }()
 
-// ── المشاريع (جديدة): حقيبة عمل · سفينة البوم · نموّ ──
+// ── المشاريع: حقيبة عمل · سفينة البوم · نموّ ──
 
-/// ١) حقيبة عمل: جسم بمقبض، وخط الوسط ينقطع عند قفل ذهبي
+/// ١) حقيبة عمل: جسم بمقبض، وخط الغطاء ينقطع عند قفل ذهبي بثقب مفتاح
 nonisolated private let ft5dBriefcase: FT5D.Parts = {
     let P = FT5D.pt
-    var parts = FT5D.Parts(box: CGRect(x: 6, y: 16, width: 88, height: 70))
-    let body = FT5D.rr(10, 32, 80, 50, 7)
+    var parts = FT5D.Parts(box: CGRect(x: 5, y: 25, width: 90, height: 70))
+    let body = FT5D.rr(5, 33, 90, 62, 7)
     parts.line.addPath(body)
-    parts.line.move(to: P(38, 32)); parts.line.addLine(to: P(38, 25.5))
-    parts.line.addQuadCurve(to: P(42.5, 21), control: P(38, 21))
-    parts.line.addLine(to: P(57.5, 21))
-    parts.line.addQuadCurve(to: P(62, 25.5), control: P(62, 21))
-    parts.line.addLine(to: P(62, 32))
-    parts.line.move(to: P(10.5, 51)); parts.line.addLine(to: P(42, 51))
-    parts.line.move(to: P(58, 51)); parts.line.addLine(to: P(89.5, 51))
+    parts.line.move(to: P(37, 33)); parts.line.addLine(to: P(37, 29.5))
+    parts.line.addQuadCurve(to: P(41.5, 25), control: P(37, 25))
+    parts.line.addLine(to: P(58.5, 25))
+    parts.line.addQuadCurve(to: P(63, 29.5), control: P(63, 25))
+    parts.line.addLine(to: P(63, 33))
+    parts.line.move(to: P(5.5, 55)); parts.line.addLine(to: P(41, 55))
+    parts.line.move(to: P(59, 55)); parts.line.addLine(to: P(94.5, 55))
     parts.fill = body
-    parts.accent = FT5D.rr(42.5, 45, 15, 12, 2.6)
-    parts.accent.addPath(FT5D.rr(48.4, 49, 3.2, 4.8, 1.2))
+    parts.fill.addPath(FT5D.rr(37, 25, 26, 12, 4.5))
+    parts.accent = FT5D.rr(42, 49, 16, 12, 2.8)
+    parts.accent.addPath(FT5D.rr(48.4, 53, 3.2, 4.8, 1.2))
     parts.eoAccent = true
     parts.directional = false
     return parts
 }()
 
-/// ٢) سفينة البوم: بدن كويتي بمقدّمة مرتفعة، وشراع مثلث مائل، وراية ذهبية أعلى الصاري، وموجة واحدة
+/// ٢) سفينة البوم: بدن بمقدّمة مرتفعة وخط ألواح، شراع مثلث، صارٍ يظهر أسفل الشراع وفوقه، راية ذهبية، وموجة واحدة
 nonisolated private let ft5dDhow: FT5D.Parts = {
     let P = FT5D.pt
-    var parts = FT5D.Parts(box: CGRect(x: 4, y: 7, width: 94, height: 83))
+    var parts = FT5D.Parts(box: CGRect(x: 6, y: 5, width: 89, height: 90))
     var hull = Path()
-    hull.move(to: P(10, 57))
-    hull.addLine(to: P(17, 72))
-    hull.addQuadCurve(to: P(72, 74), control: P(42, 79))
-    hull.addCurve(to: P(96, 47), control1: P(84, 70), control2: P(92, 58))
-    hull.addQuadCurve(to: P(10, 57), control: P(56, 64))
+    hull.move(to: P(8, 60))
+    hull.addQuadCurve(to: P(92, 48), control: P(50, 72))                           // السطح
+    hull.addCurve(to: P(84, 80), control1: P(97, 60), control2: P(94, 74))         // المقدّمة
+    hull.addQuadCurve(to: P(16, 76), control: P(50, 90))                           // القاع
+    hull.addCurve(to: P(8, 60), control1: P(10, 72), control2: P(7, 66))           // المؤخّرة
     hull.closeSubpath()
     var sail = Path()
-    sail.move(to: P(80, 49))
-    sail.addLine(to: P(24, 12))
-    sail.addQuadCurve(to: P(30, 50), control: P(13, 33))
-    sail.addQuadCurve(to: P(80, 49), control: P(55, 45))
+    sail.move(to: P(24, 10))
+    sail.addQuadCurve(to: P(84, 50), control: P(66, 18))
+    sail.addQuadCurve(to: P(30, 52), control: P(57, 58))
+    sail.addQuadCurve(to: P(24, 10), control: P(22, 32))
     sail.closeSubpath()
     parts.line.addPath(hull)
-    parts.line.move(to: P(19, 64.5)); parts.line.addQuadCurve(to: P(83, 59.5), control: P(50, 68.5))
+    parts.line.move(to: P(14, 70)); parts.line.addQuadCurve(to: P(88, 59), control: P(50, 80))
     parts.line.addPath(sail)
-    // الصاري: أسفل الشراع وأعلى العارضة فقط (ما خلف الشراع مخفيّ)
-    parts.line.move(to: P(52, 58.2)); parts.line.addLine(to: P(52, 47.6))
-    parts.line.move(to: P(52, 30.5)); parts.line.addLine(to: P(52, 19))
-    // موجة
-    parts.line.move(to: P(14, 85))
-    parts.line.addQuadCurve(to: P(32, 85), control: P(23, 81))
-    parts.line.addQuadCurve(to: P(50, 85), control: P(41, 89))
-    parts.line.addQuadCurve(to: P(68, 85), control: P(59, 81))
-    parts.line.addQuadCurve(to: P(86, 85), control: P(77, 89))
+    parts.line.move(to: P(52, 55)); parts.line.addLine(to: P(52, 63))
+    parts.line.move(to: P(52, 19)); parts.line.addLine(to: P(52, 7))
+    parts.line.move(to: P(10, 91.5))
+    parts.line.addQuadCurve(to: P(30, 91.5), control: P(20, 87.5))
+    parts.line.addQuadCurve(to: P(50, 91.5), control: P(40, 95.5))
+    parts.line.addQuadCurve(to: P(70, 91.5), control: P(60, 87.5))
+    parts.line.addQuadCurve(to: P(90, 91.5), control: P(80, 95.5))
     parts.fill.addPath(hull)
     parts.fill.addPath(sail)
-    parts.accent = FT5D.poly([P(52.6, 18.5), P(65, 22.5), P(52.6, 26.5)])
+    parts.accent = FT5D.poly([P(52.6, 5.5), P(68, 10.5), P(52.6, 15.5)])
     return parts
 }()
 
-/// ٣) نموّ: ثلاثة أعمدة متصاعدة وخط صاعد ينتهي برأس سهم ذهبي (يصعد يميناً في اللغتين)
+/// ٣) نموّ: ثلاثة أعمدة متصاعدة على محور، وخط صاعد ينتهي برأس سهم ذهبي (يصعد يميناً في اللغتين)
 nonisolated private let ft5dGrowth: FT5D.Parts = {
     let P = FT5D.pt
-    var parts = FT5D.Parts(box: CGRect(x: 5, y: 7, width: 90, height: 81))
-    parts.line.move(to: P(8, 84)); parts.line.addLine(to: P(92, 84))
-    for (x, y) in [(CGFloat(16), CGFloat(66)), (40, 52), (64, 36)] {
-        let bar = FT5D.rr(x, y, 16, 84 - y, 2.4)
+    var parts = FT5D.Parts(box: CGRect(x: 5, y: 5, width: 90, height: 90))
+    parts.line.move(to: P(5, 95)); parts.line.addLine(to: P(95, 95))
+    for (x, y) in [(CGFloat(10), CGFloat(66)), (CGFloat(41), CGFloat(50)), (CGFloat(72), CGFloat(32))] {
+        let bar = FT5D.rr(x, y, 18, 95 - y, 2.6)
         parts.line.addPath(bar)
         parts.fill.addPath(bar)
     }
-    parts.line.move(to: P(10, 55)); parts.line.addLine(to: P(30, 37))
-    parts.line.addLine(to: P(46, 45)); parts.line.addLine(to: P(75, 18))
-    let e = P(75, 18), dx: CGFloat = 29, dy: CGFloat = -27
+    parts.line.move(to: P(12, 60)); parts.line.addLine(to: P(34, 44))
+    parts.line.addLine(to: P(50, 50)); parts.line.addLine(to: P(84, 12))
+    let e = P(84, 12), dx: CGFloat = 34, dy: CGFloat = -38
     let L = (dx * dx + dy * dy).squareRoot()
     let u = P(dx / L, dy / L), n = P(-u.y, u.x)
     parts.accent = FT5D.poly([P(e.x + u.x * 9, e.y + u.y * 9),
@@ -1608,11 +1683,11 @@ nonisolated private let ft5dSeal: FT5D.Parts = {
     return parts
 }()
 
-/// عضو جديد: الغافة ولمعة ذهبية جديدة عند تاجها
+/// عضو جديد: الغافة ولمعة ذهبية جديدة عند طرف تاجها (مع نقطة الجدّ الذهبية)
 nonisolated private let ft5dSapling: FT5D.Parts = {
     var parts = ft5dTree
-    parts.box = CGRect(x: 4, y: 8, width: 94, height: 82)
-    parts.accent = FT5D.sparkle(FT5D.pt(88, 17), 8.5)
+    parts.box = CGRect(x: 7, y: 12, width: 93, height: 83)
+    parts.accent.addPath(FT5D.sparkle(FT5D.pt(91, 21), 8.5))
     return parts
 }()
 

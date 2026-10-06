@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // TMP-ART-TRIAL — مؤقت للمقارنة على الجهاز (طلب المالك ٢٠٢٦-١٠-٠٥ «تصميم ثالث بعينات» ثم «كمل على الاقسام كلها»):
 // أربعة اتجاهات رسوم + الحالي، يبدّل المالك بينها من شريط في الرئيسية، وتتبعها كل أماكن الرسوم في التطبيق.
@@ -41,6 +42,23 @@ enum ArtTrial: String, CaseIterable, Identifiable {
         if i.hasPrefix("storefront") || i.hasPrefix("briefcase") || i.hasPrefix("bag") { return "projects" }
         if i.hasPrefix("envelope") { return "contact" }
         return nil
+    }
+}
+
+// MARK: - قسم كل مكان — ألوان المجسّم تُشتقّ من لون مربّعه (طلب المالك ٢٠٢٦-١٠-٠٦ «ترتيب الألوان مع الأشكال متناسق»)
+
+enum ArtPalette {
+    /// المكان (tree/diwaniya/library/projects/contact/news) ← قسمه في AppSection
+    static func section(for place: String) -> AppSection {
+        switch place {
+        case "tree": return .tree
+        case "diwaniya": return .diwaniyas
+        case "library": return .library
+        case "projects": return .projects
+        case "contact": return .admin
+        case "news": return .news
+        default: return .home
+        }
     }
 }
 
@@ -126,8 +144,21 @@ enum ArtTrial: String, CaseIterable, Identifiable {
     static func tileIcon(_ s: ArtTrial, place: String) -> AnyView? {
         let v = place == "library" ? ArtTrial.libraryVariant : (place == "projects" ? ArtTrial.projectsVariant : 0)
         switch s {
+        case .emblem: return nil
         case .soft3d: return FT5STrial.tileIcon(place, variant: v)
-        default: return nil
+        case .glass: return FT5GTrial.tileIcon(place, variant: v)
+        case .gold: return FT5DTrial.tileIcon(place, variant: v)
+        case .sadu: return FT5UTrial.tileIcon(place, variant: v)
+        }
+    }
+    /// شفافية النسخة الكبيرة من المجسّم في خلفية المربّع (٠ = بلا نسخة)
+    static func ghostOpacity(_ s: ArtTrial) -> Double {
+        switch s {
+        case .emblem: return 0
+        case .soft3d: return FT5STrial.ghostOpacity
+        case .glass: return FT5GTrial.ghostOpacity
+        case .gold: return FT5DTrial.ghostOpacity
+        case .sadu: return FT5UTrial.ghostOpacity
         }
     }
     /// أيقونة الرأس بدل الدائرة الزجاجية (الاتجاه الذي يرسم المجسّم مكانها) — nil = الدائرة الزجاجية كما هي
@@ -522,10 +553,73 @@ struct TrialHeaderIcon<Glass: View>: View {
 
     var body: some View {
         if let art = ArtDispatch.headerIcon(ArtTrial(rawValue: raw) ?? .emblem, icon: icon, tint: tint) {
-            art.frame(width: side, height: side).id("hi-\(raw)-\(icon)-\(lv)-\(pv)")
+            art.frame(width: side, height: side)
+                .modifier(TrialObjectMotion(side: side))
+                .id("hi-\(raw)-\(icon)-\(lv)-\(pv)")
         } else {
             glass()
         }
+    }
+}
+
+/// حركة المجسّم (طلب المالك ٢٠٢٦-١٠-٠٦ «وين حركات الانميشن وحركات المجسمات»): ظهور بنبضة مرة واحدة،
+/// تنفّس بطيء دورته ٨ ث، ولمعة ضوء مائلة تعبر المجسّم كل ٨ ث مقصوصة على شكله — تسكن مع «تقليل الحركة»
+/// ومع فتح مربّع فوقها (ftAnimationsPaused). التحويلات على الطبقة فقط، فلا يُعاد رسم الـ Canvas مع كل إطار.
+struct TrialObjectMotion: ViewModifier {
+    let side: CGFloat
+    /// تأخير اللمعة بين المربّعات (ترتيب المربّع) حتى لا تلمع معاً
+    var stagger: Double = 0
+    /// الظهور الأول: نبضة من ٠٫٨٦ إلى ١ (المربّعات: مرة لكل تشغيل)
+    var entrance: Bool = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.ftAnimationsPaused) private var paused
+    @State private var shown = false
+    @State private var breathe = false
+    @State private var glint: CGFloat = -1.4
+    private let ticker = Timer.publish(every: 8, on: .main, in: .common).autoconnect()
+    private var still: Bool { reduceMotion || paused }
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                LinearGradient(colors: [.clear, .white.opacity(0.55), .clear],
+                               startPoint: .leading, endPoint: .trailing)
+                    .frame(width: side * 0.45, height: side * 2.2)
+                    .rotationEffect(.degrees(22))
+                    .offset(x: glint * side)
+                    .mask(content)
+                    .allowsHitTesting(false)
+            )
+            .scaleEffect(breathe ? 1.035 : 1)
+            .scaleEffect(shown ? 1 : 0.86)
+            .opacity(shown ? 1 : 0)
+            .onAppear(perform: start)
+            .onChange(of: paused) { _ in restartBreath() }
+            .onReceive(ticker) { _ in sweep() }
+    }
+
+    private func start() {
+        if still || !entrance {
+            shown = true
+        } else {
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.7).delay(0.12 + stagger * 0.08)) { shown = true }
+        }
+        restartBreath()
+        if !still { DispatchQueue.main.asyncAfter(deadline: .now() + 1.2 + stagger * 0.3) { sweep() } }
+    }
+
+    private func restartBreath() {
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) { breathe = false }
+        guard !still else { return }
+        withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) { breathe = true }
+    }
+
+    private func sweep() {
+        guard !still else { return }
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) { glint = -1.4 }
+        withAnimation(.easeInOut(duration: 1.0).delay(stagger * 0.35)) { glint = 1.4 }
     }
 }
 
@@ -535,19 +629,26 @@ struct TrialCenteredTile: View {
     let title: String
     let count: Int?
     let scale: CGFloat
+    /// ضلع المجسّم بالنقاط — يتبع ارتفاع المربّع (المربّعان الكبيران مجسّمهما أكبر)؛ nil = ٤٨ × المقياس
+    var artSide: CGFloat? = nil
+    /// ترتيب المربّع (لتأخير اللمعة) وهل يُلعب الظهور الأول
+    var stagger: Double = 0
+    var entrance: Bool = true
 
     var body: some View {
+        let side = artSide ?? 48 * scale
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 4) {
                 ZStack {
                     // ضوء ناعم خلف المجسّم — يعطيه عمقاً بلا زخرفة
                     Ellipse()
                         .fill(RadialGradient(colors: [.white.opacity(0.20), .white.opacity(0)],
-                                             center: .center, startRadius: 0, endRadius: 36 * scale))
-                        .frame(width: 76 * scale, height: 58 * scale)
-                    art.frame(width: 48 * scale, height: 48 * scale)
+                                             center: .center, startRadius: 0, endRadius: side * 0.75))
+                        .frame(width: side * 1.58, height: side * 1.2)
+                    art.frame(width: side, height: side)
+                        .modifier(TrialObjectMotion(side: side, stagger: stagger, entrance: entrance))
                 }
-                .frame(height: 50 * scale)
+                .frame(height: side + 2)
                 Text(title)
                     .font(DS.Font.scaled(13, weight: .black))
                     .foregroundColor(.white)
