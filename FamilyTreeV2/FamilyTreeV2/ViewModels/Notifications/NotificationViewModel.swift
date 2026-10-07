@@ -1356,6 +1356,14 @@ class NotificationViewModel: ObservableObject {
         _ = await (push, inApp)
     }
 
+    /// الدفع الخارجي للإدارة وحده (`push-admins`) — الإشعار داخل التطبيق كتبه السيرفر
+    /// (`decide_admin_request` يرجع `admin_push` بعد قرار طلب المراجعة، كما كان `notifyAdminsWithPush`).
+    func pushAdminsExternally(title: String, body: String, kind: String) async {
+        let dedupKey = "P|\(kind)|\(title)|\(body)"
+        if isDuplicateNotification(dedupKey) { return }
+        await sendExternalAdminPush(title: title, body: body, kind: kind)
+    }
+
     /// Broadcast admin notification (push + in-app) with structured change details.
     /// Use this for admin-edit events on member data.
     func notifyAdminsWithChangesAndPush(

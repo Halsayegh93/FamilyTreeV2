@@ -181,58 +181,118 @@ class AdminRequestViewModel: ObservableObject {
                "This request was already handled — nothing was applied.")
     }
 
-    /// يعيد قراءة حالة الطلب من السيرفر لحظة التطبيق: طلب لم يعد معلّقاً لا يُطبَّق ثانيةً
-    /// (كانت موافقتان على «إضافة» تضيفان الابن مرتين). تعذّر التحقق = لا تطبيق.
-    private func requestStillPending(_ requestId: UUID) async -> Bool {
-        struct StatusRow: Decodable { let status: String? }
-        do {
-            let rows: [StatusRow] = try await supabase
-                .from("admin_requests")
-                .select("status")
-                .eq("id", value: requestId.uuidString)
-                .limit(1)
-                .execute()
-                .value
-            guard rows.first?.status == ApprovalStatus.pending.rawValue else {
-                errorMessage = Self.alreadyHandledMessage
-                return false
+    // MARK: - القرار من السيرفر (decide_admin_request — أ-٣، ٢٠٢٦-١٠-٠٧)
+
+    /// نتيجة `decide_admin_request`: السيرفر تحقّق من الصلاحية وقفل الطلب و«معلّق»، وطبّق ما كان
+    /// التطبيق يكتبه، وكتب الإشعارات، وأغلق الطلب — في معاملة واحدة. يبقى للتطبيق ما لا يقدر عليه السيرفر.
+    nonisolated struct DecisionResult: Decodable, Sendable {
+        nonisolated struct AdminPush: Decodable, Sendable { let title: String; let body: String; let kind: String }
+        nonisolated struct Death: Decodable, Sendable {
+            let memberId: UUID
+            let name: String
+            let isFemale: Bool
+            let deathDate: String?
+            enum CodingKeys: String, CodingKey {
+                case name
+                case memberId = "member_id"
+                case isFemale = "is_female"
+                case deathDate = "death_date"
             }
-            return true
-        } catch {
-            errorMessage = L10n.t("تعذّر التحقق من حالة الطلب. حاول مرة أخرى.",
-                                  "Couldn't verify the request status. Please try again.")
-            return false
+        }
+        nonisolated struct Cleanup: Decodable, Sendable { let bucket: String; let paths: [String] }
+        let status: String
+        let requesterNotified: Bool?
+        let adminPush: AdminPush?
+        let deathAnnouncement: Death?
+        let storageCleanup: Cleanup?
+        let newMemberId: UUID?
+        enum CodingKeys: String, CodingKey {
+            case status
+            case requesterNotified = "requester_notified"
+            case adminPush = "admin_push"
+            case deathAnnouncement = "death_announcement"
+            case storageCleanup = "storage_cleanup"
+            case newMemberId = "new_member_id"
         }
     }
 
-    /// يغيّر حالة الطلب فقط إن كان ما زال معلّقاً (`status = pending` شرط في التحديث نفسه) —
-    /// false = سبقك مسؤول آخر، فلا إشعار «قُبل/رُفض» مكرّر أو مناقض.
-    private func closeRequest(_ requestId: UUID, as status: ApprovalStatus) async throws -> Bool {
-        struct IdRow: Decodable { let id: UUID }
-        let rows: [IdRow] = try await supabase
-            .from("admin_requests")
-            .update(["status": AnyEncodable(status.rawValue)])
-            .eq("id", value: requestId.uuidString)
-            .eq("status", value: ApprovalStatus.pending.rawValue)
-            .select("id")
-            .execute()
-            .value
-        guard rows.isEmpty else { return true }
-        // لم يتغيّر صف: إما عالجه غيرك، أو ما زال معلّقاً لكن السيرفر لم يسمح لك
-        // (طلبك أنت يعالجه غيرك، أو نوع خارج مجال دورك — `admin_requests_update_by_scope`)
-        struct StatusRow: Decodable { let status: String? }
-        let current: [StatusRow] = (try? await supabase
-            .from("admin_requests")
-            .select("status")
-            .eq("id", value: requestId.uuidString)
-            .limit(1)
-            .execute()
-            .value) ?? []
-        errorMessage = current.first?.status == ApprovalStatus.pending.rawValue
-            ? L10n.t("لم يُغلق الطلب: طلبك أنت يعالجه مسؤول آخر، أو هو خارج مجال دورك.",
-                     "The request wasn't closed: your own requests are handled by another admin, or it's outside your role.")
-            : Self.alreadyHandledMessage
-        return false
+    /// قبول/رفض طلب مراجعة على السيرفر. بعد النجاح يكمل التطبيق ما بقي له فقط:
+    /// الدفع الخارجي للإدارة (`push-admins` كما كان)، حذف ملف اقتراح الصورة (Storage API)،
+    /// ومربّع «إعلان وفاة». الفشل = لا شيء طُبّق والطلب على حاله، مع رسالة واضحة.
+    /// - silent: القبول الجماعي لإضافة الأبناء بلا إشعارات (كما كان).
+    @discardableResult
+    private func decideOnServer(_ requestId: UUID, approve: Bool, reason: String? = nil, silent: Bool = false) async -> DecisionResult? {
+        nonisolated struct Overrides: Encodable { let silent: Bool }
+        nonisolated struct Params: Encodable {
+            let p_request_id: String
+            let p_decision: String
+            let p_reason: String?
+            let p_overrides: Overrides?
+        }
+        let trimmedReason = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            let result: DecisionResult = try await supabase
+                .rpc("decide_admin_request", params: Params(
+                    p_request_id: requestId.uuidString,
+                    p_decision: approve ? "approve" : "reject",
+                    p_reason: (trimmedReason?.isEmpty ?? true) ? nil : trimmedReason,
+                    p_overrides: silent ? Overrides(silent: true) : nil))
+                .execute()
+                .value
+            if let push = result.adminPush {
+                await notificationVM?.pushAdminsExternally(title: push.title, body: push.body, kind: push.kind)
+            }
+            if let cleanup = result.storageCleanup, !cleanup.paths.isEmpty {
+                _ = try? await supabase.storage.from(cleanup.bucket).remove(paths: cleanup.paths)
+            }
+            if let death = result.deathAnnouncement {
+                let target = DeathAnnouncementTarget(id: death.memberId, name: death.name,
+                                                     isFemale: death.isFemale, deathDate: death.deathDate)
+                let canAnnounce = authVM?.isAdmin == true   // للمالك والمدير (السيرفر 20261007130000)
+                Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
+            }
+            if result.requesterNotified == true {
+                await notificationVM?.fetchNotifications(force: true)
+            }
+            return result
+        } catch {
+            Log.error("[Decide] \(approve ? "قبول" : "رفض") \(requestId) فشل: \(error)")
+            errorMessage = Self.decisionErrorMessage(error)
+            return nil
+        }
+    }
+
+    /// رسائل عربية واضحة لأخطاء `decide_admin_request` (الـ hint = اسم الخطأ)
+    static func decisionErrorMessage(_ error: Error) -> String {
+        let pg = error as? PostgrestError
+        return decisionMessage(forKey: pg?.hint ?? pg?.message ?? "", serverMessage: pg?.message)
+    }
+
+    private static func decisionMessage(forKey key: String, serverMessage: String? = nil) -> String {
+        switch key {
+        case "already_handled", "request_not_found":
+            return alreadyHandledMessage
+        case "own_request":
+            return L10n.t("طلبك يوافق عليه مسؤول آخر.", "Another admin must approve your own request.")
+        case "not_allowed":
+            return L10n.t("هذا الطلب خارج مجال دورك — لم يُطبَّق شيء.",
+                          "This request is outside your role — nothing was applied.")
+        case "phone_in_use":
+            return L10n.t("الرقم مستخدم من عضو آخر — لم يُطبَّق شيء.",
+                          "The number belongs to another member — nothing was applied.")
+        case "bad_payload":
+            return L10n.t("بيانات الطلب غير صالحة فلم يُطبَّق شيء. ارفض الطلب واطلب من العضو إرساله من جديد.",
+                          "The request data is invalid, so nothing was applied. Reject it and ask the member to resend.")
+        case "not_authenticated":
+            return L10n.t("انتهت الجلسة — سجّل الدخول من جديد.", "Your session expired — please sign in again.")
+        case "unsupported_type", "bad_decision":
+            return L10n.t("هذا النوع من الطلبات لا يُعالج من هنا.", "This request type can't be handled here.")
+        case "family_links_protected":
+            return serverMessage ?? L10n.t("لا يمكن الحذف: مرتبط بأفراد في العائلة.", "Can't delete: linked to family members.")
+        default:
+            return L10n.t("تعذّر تنفيذ القرار — لم يُطبَّق شيء. حاول مرة أخرى.",
+                          "Couldn't complete the decision — nothing was applied. Please try again.")
+        }
     }
 
     /// حذف العنصر محلياً فوراً مع أنيميشن ثم تحديث من السيرفر بعد تأخير
@@ -272,16 +332,6 @@ class AdminRequestViewModel: ObservableObject {
     /// Helper to get a member name by ID — fallback to UUID if not found
     private func getSafeMemberName(for memberId: UUID) -> String {
         return memberById(memberId)?.fullName ?? memberId.uuidString
-    }
-
-    /// إشعار للإدارة في "المستجدات" بإجراء تمّ (موافقة/رفض)
-    /// in-app + push — يصل لكل canModerate (broadcast بدون target)
-    private func broadcastCompletedAction(titleAr: String, titleEn: String, bodyAr: String, bodyEn: String, kind: NotificationKind) async {
-        await notificationVM?.notifyAdminsWithPush(
-            title: L10n.t(titleAr, titleEn),
-            body: L10n.t(bodyAr, bodyEn),
-            kind: kind.rawValue
-        )
     }
 
     /// Lookup a member by ID from authVM's member cache
@@ -530,292 +580,16 @@ class AdminRequestViewModel: ObservableObject {
     func approveTreeEditRequest(request: AdminRequest) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         guard canModerate else { Log.warning("قبول طلب التعديل مرفوض: لا صلاحية"); return }
-        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر لا يغلقه، فلا يُطبَّق ما فيه (ب-٧)
+        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر يرفضه أيضاً (own_request)
         guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
         let payload = request.treeEditPayload
 
         optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
-            guard let self = self else { return }
-            // «ما زال معلّقاً» (ب-٧): «إضافة» تحجز الطلب أولاً بتحديث مشروط فلا يضيف الابن إلا
-            // موافق واحد (كانت موافقتان تكرّرانه)، وباقي الأنواع تُعاد قراءة حالتها قبل التطبيق.
-            let isAdd = payload?.resolvedAction == .add
-            var claimed = false
-            do {
-                if isAdd {
-                    guard try await self.closeRequest(request.id, as: .approved) else { return }
-                    claimed = true
-                } else {
-                    guard await self.requestStillPending(request.id) else { return }
-                }
-                let resolvedAction = payload?.resolvedAction
-                var notifBody = L10n.t("تم قبول طلب تعديل الشجرة", "Your tree edit request was approved")
-                var deathToAnnounce: DeathAnnouncementTarget?
-
-                if let payload = payload, let action = resolvedAction {
-                    let memberName = payload.targetMemberName ?? request.member?.fullName ?? ""
-                    switch action {
-                    case .editName:
-                        if let targetId = payload.targetMemberId,
-                           let newName = payload.newName?.trimmingCharacters(in: .whitespacesAndNewlines),
-                           !newName.isEmpty {
-                            let nameParts = newName.split(whereSeparator: \.isWhitespace).map(String.init)
-                            let newFirstName = nameParts.first ?? newName
-                            try await self.supabase
-                                .from("profiles")
-                                .update([
-                                    "full_name": AnyEncodable(newName),
-                                    "first_name": AnyEncodable(newFirstName)
-                                ])
-                                .eq("id", value: targetId)
-                                .execute()
-                            notifBody = L10n.t(
-                                "تم تغيير الاسم إلى: «\(newName)»",
-                                "Name changed to: «\(newName)»"
-                            )
-                            Log.info("[TreeEdit] Name updated: \(newName)")
-                        }
-
-                    case .editPhone:
-                        if let targetId = payload.targetMemberId,
-                           let newPhone = payload.newPhone, !newPhone.isEmpty {
-                            try await self.supabase
-                                .from("profiles")
-                                .update(["phone_number": AnyEncodable(newPhone)])
-                                .eq("id", value: targetId)
-                                .execute()
-                            let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
-                            let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"
-                            notifBody = L10n.t(
-                                "تم تحديث رقم الهاتف\(target)",
-                                "Phone number updated\(targetEn)"
-                            )
-                            Log.info("[TreeEdit] Phone updated for: \(memberName)")
-                        }
-
-                    case .deceased:
-                        if let targetId = payload.targetMemberId {
-                            var update: [String: AnyEncodable] = ["is_deceased": AnyEncodable(true)]
-                            if let dateStr = payload.deathDate, !dateStr.isEmpty {
-                                update["death_date"] = AnyEncodable(dateStr)
-                            }
-                            let targetUUID = UUID(uuidString: targetId)
-                            let before = targetUUID.flatMap { self.memberVM?.member(byId: $0) }
-                            try await self.supabase
-                                .from("profiles")
-                                .update(update)
-                                .eq("id", value: targetId)
-                                .execute()
-                            // وفاة جديدة (كان حياً) → مربّع «إعلان وفاة» بعد إتمام القبول
-                            if let targetUUID, before?.isDeceased != true {
-                                deathToAnnounce = DeathAnnouncementTarget(
-                                    id: targetUUID,
-                                    name: memberName.isEmpty ? (before?.fullName ?? "") : memberName,
-                                    isFemale: before?.isFemale ?? false,
-                                    deathDate: payload.deathDate)
-                            }
-                            let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
-                            let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"
-                            notifBody = L10n.t(
-                                "تم تأكيد حالة الوفاة\(target)",
-                                "Deceased status confirmed\(targetEn)"
-                            )
-                            Log.info("[TreeEdit] Deceased marked: \(memberName)")
-                        }
-
-                    case .delete:
-                        if let targetId = payload.targetMemberId {
-                            try await self.supabase
-                                .from("profiles")
-                                .update(["is_hidden_from_tree": AnyEncodable(true)])
-                                .eq("id", value: targetId)
-                                .execute()
-                            let target = memberName.isEmpty ? "" : " «\(memberName)»"
-                            let targetEn = memberName.isEmpty ? "" : " «\(memberName)»"
-                            notifBody = L10n.t(
-                                "تم قبول طلب حذف\(target) من الشجرة",
-                                "Removal request approved\(targetEn)"
-                            )
-                            Log.info("[TreeEdit] Member hidden from tree: \(memberName)")
-                        }
-
-                    case .add:
-                        if let parentId = payload.parentMemberId,
-                           let newMemberName = payload.newMemberName?.trimmingCharacters(in: .whitespacesAndNewlines),
-                           !newMemberName.isEmpty {
-                            let newId = UUID()
-                            let nameParts = newMemberName.split(whereSeparator: \.isWhitespace).map(String.init)
-                            let firstName = nameParts.first ?? newMemberName
-
-                            let parentMember = self.memberVM?.member(byId: UUID(uuidString: parentId) ?? UUID())
-                            let combinedFullName = parentMember.map { "\(firstName) \($0.fullName)" } ?? newMemberName
-
-                            let sonData: [String: AnyEncodable] = [
-                                "id": AnyEncodable(newId.uuidString),
-                                "first_name": AnyEncodable(firstName),
-                                "full_name": AnyEncodable(combinedFullName),
-                                "father_id": AnyEncodable(parentId),
-                                "role": AnyEncodable("member"),
-                                "status": AnyEncodable("active"),
-                                "is_phone_hidden": AnyEncodable(true),
-                                "sort_order": AnyEncodable(0)
-                            ]
-                            try await self.supabase.from("profiles").insert(sonData).execute()
-
-                            let parentName = payload.parentMemberName ?? parentMember?.fullName ?? ""
-                            notifBody = L10n.t(
-                                "تم إضافة «\(firstName)» تحت «\(parentName)»",
-                                "«\(firstName)» added under «\(parentName)»"
-                            )
-                            Log.info("[TreeEdit] Member added: \(combinedFullName)")
-                        }
-
-                    case .editBirth:
-                        // تاريخ الميلاد الجديد في newBirthDate (مع دعم newName للطلبات القديمة).
-                        if let targetId = payload.targetMemberId,
-                           let newDate = (payload.newBirthDate ?? payload.newName)?
-                               .trimmingCharacters(in: .whitespacesAndNewlines),
-                           !newDate.isEmpty {
-                            try await self.supabase
-                                .from("profiles")
-                                .update(["birth_date": AnyEncodable(newDate)])
-                                .eq("id", value: targetId)
-                                .execute()
-                            notifBody = L10n.t(
-                                "تم تحديث تاريخ الميلاد إلى: «\(newDate)»",
-                                "Birth date updated to: «\(newDate)»"
-                            )
-                            Log.info("[TreeEdit] Birth date updated: \(newDate)")
-                        }
-
-                    case .addDeathDate:
-                        // إضافة تاريخ وفاة لمتوفى — يضبط is_deceased + death_date.
-                        if let targetId = payload.targetMemberId,
-                           let dateStr = payload.deathDate?.trimmingCharacters(in: .whitespacesAndNewlines),
-                           !dateStr.isEmpty {
-                            try await self.supabase
-                                .from("profiles")
-                                .update([
-                                    "is_deceased": AnyEncodable(true),
-                                    "death_date": AnyEncodable(dateStr)
-                                ])
-                                .eq("id", value: targetId)
-                                .execute()
-                            let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
-                            let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"
-                            notifBody = L10n.t(
-                                "تم إضافة تاريخ الوفاة\(target)",
-                                "Death date added\(targetEn)"
-                            )
-                            Log.info("[TreeEdit] Death date added: \(dateStr)")
-                        }
-
-                    case .addPhoto:
-                        // اعتماد صورة مقترحة — تُضبط avatar_url على رابط الصورة المرفوعة.
-                        if let targetId = payload.targetMemberId,
-                           let url = payload.newPhotoUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
-                           !url.isEmpty,
-                           // أمان: لا نقبل إلا رابطاً من تخزين المشروع (bucket avatars)
-                           // — نمنع حقن رابط خارجي يتحوّل لصورة العضو بعد الاعتماد.
-                           url.contains("/storage/v1/object/public/avatars/") {
-                            try await self.supabase
-                                .from("profiles")
-                                .update(["avatar_url": AnyEncodable(url)])
-                                .eq("id", value: targetId)
-                                .execute()
-                            let target = memberName.isEmpty ? "" : " لـ «\(memberName)»"
-                            let targetEn = memberName.isEmpty ? "" : " for «\(memberName)»"
-                            notifBody = L10n.t(
-                                "تم اعتماد الصورة\(target)",
-                                "Photo approved\(targetEn)"
-                            )
-                            Log.info("[TreeEdit] Photo approved for: \(memberName)")
-                        }
-
-                    case .other:
-                        // تعديلات الملف بعد تجاوز حد الـ٣ (reason = profile_*) تُطبَّق تلقائياً
-                        // بالقبول؛ غيرها طلب حر — القبول يُعلِم العضو فقط.
-                        if let targetId = payload.targetMemberId,
-                           let reason = payload.reason, reason.hasPrefix("profile_"),
-                           let value = payload.newName {
-                            switch reason {
-                            case "profile_bio":
-                                let stations = (try? JSONDecoder().decode([FamilyMember.BioStation].self,
-                                                                           from: Data(value.utf8))) ?? []
-                                try await self.supabase.from("profiles")
-                                    .update(["bio_json": AnyEncodable(stations)])
-                                    .eq("id", value: targetId).execute()
-                                notifBody = L10n.t("تم اعتماد تعديل النبذة", "Your bio edit was approved")
-                            case "profile_phone_hidden":
-                                try await self.supabase.from("profiles")
-                                    .update(["is_phone_hidden": AnyEncodable(value == "true")])
-                                    .eq("id", value: targetId).execute()
-                                notifBody = L10n.t("تم اعتماد تعديل إظهار الرقم", "Your phone visibility edit was approved")
-                            case "profile_marital":
-                                try await self.supabase.from("profiles")
-                                    .update(["is_married": AnyEncodable(value == "true")])
-                                    .eq("id", value: targetId).execute()
-                                notifBody = L10n.t("تم اعتماد تعديل الحالة الاجتماعية", "Your marital status edit was approved")
-                            default:
-                                notifBody = L10n.t("تم قبول طلبك", "Your request was approved")
-                            }
-                            Log.info("[TreeEdit] Profile edit approved: \(reason)")
-                        } else {
-                            let target = memberName.isEmpty ? "" : " «\(memberName)»"
-                            let targetEn = memberName.isEmpty ? "" : " «\(memberName)»"
-                            notifBody = L10n.t(
-                                "تم قبول طلبك\(target)",
-                                "Your request\(targetEn) was approved"
-                            )
-                            Log.info("[TreeEdit] Other request approved: \(memberName)")
-                        }
-                    }
-                } else if let legacyAction = payload?.action {
-                    // Backwards compat for v2 strings without resolved action
-                    Log.info("[TreeEdit] Legacy/unmapped action: \(legacyAction)")
-                }
-
-                // التحديث مشروط بـ «معلّق» — إن سبقنا مسؤول آخر لا يُرسل إشعار مكرّر
-                if !isAdd {
-                    guard try await self.closeRequest(request.id, as: .approved) else { return }
-                }
-
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
-                    body: notifBody,
-                    targetMemberIds: [request.requesterId]
-                )
-
-                // إشعار للإدارة في "المستجدات"
-                let memberName = payload?.targetMemberName ?? request.member?.fullName ?? ""
-                let actionAr = payload?.resolvedAction?.arabicLabel ?? "تعديل"
-                let actionEn = payload?.resolvedAction?.englishLabel ?? "edit"
-                await self.broadcastCompletedAction(
-                    titleAr: "تم قبول \(actionAr)",
-                    titleEn: "\(actionEn) Approved",
-                    bodyAr: memberName.isEmpty ? "تم قبول طلب \(actionAr)" : "تم قبول طلب \(actionAr) لـ «\(memberName)»",
-                    bodyEn: memberName.isEmpty ? "\(actionEn) request approved" : "\(actionEn) request for «\(memberName)» approved",
-                    kind: .treeEdit
-                )
-
-                Log.info("[TreeEdit] Approved: \(payload?.action ?? request.newValue ?? "")")
-                if let deathToAnnounce {
-                    let canAnnounce = self.authVM?.isAdmin == true   // للمالك والمدير (السيرفر 20261007130000)
-                    Task { await DeathAnnouncementPresenter.offer(deathToAnnounce, canAnnounce: canAnnounce) }
-                }
-            } catch {
-                Log.error("[TreeEdit] Approve failed: \(error)")
-                if claimed {
-                    // فشلت الإضافة بعد حجز الطلب — يرجع معلّقاً ليُعاد اعتماده (لا «مقبول» بلا ابن)
-                    _ = try? await self.supabase
-                        .from("admin_requests")
-                        .update(["status": AnyEncodable(ApprovalStatus.pending.rawValue)])
-                        .eq("id", value: request.id.uuidString)
-                        .eq("status", value: ApprovalStatus.approved.rawValue)
-                        .execute()
-                }
-                self.errorMessage = L10n.t("تعذّر تنفيذ الموافقة. حاول مرة أخرى.",
-                                           "Couldn't complete the approval. Please try again.")
-            }
+            guard let self else { return }
+            // السيرفر يطبّق التعديل بحسب الإجراء ويغلق الطلب ويكتب الإشعارات في معاملة واحدة
+            // (decide_admin_request — كانت «إضافة» تُحجز ثم تُرجع، وباقي الأنواع تُكتب ثم تُغلق)
+            guard await self.decideOnServer(request.id, approve: true) != nil else { return }
+            Log.info("[TreeEdit] Approved: \(payload?.action ?? request.newValue ?? "")")
         }, refresh: { [weak self] in
             await self?.fetchTreeEditRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
@@ -931,65 +705,16 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
-    /// لاحقة «السبب: …» تُضاف لنص إشعار الرفض إذا كتب المدير سبباً.
-    static func rejectReasonSuffix(_ reason: String?, arabic: Bool) -> String {
-        guard let r = reason?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty else { return "" }
-        return arabic ? "\nالسبب: \(r)" : "\nReason: \(r)"
-    }
-
     func rejectTreeEditRequest(request: AdminRequest, reason: String? = nil) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.canRejectRequests == true else { Log.warning("رفض الطلب مرفوض: الصلاحية للإدارة فقط"); return }
-        let payload = request.treeEditPayload
-        let actionAr = payload?.resolvedAction?.arabicLabel ?? L10n.t("التعديل", "edit")
-        let actionEn = payload?.resolvedAction?.englishLabel ?? "edit"
-        let memberName = payload?.targetMemberName ?? request.member?.fullName ?? ""
+        let actionAr = request.treeEditPayload?.resolvedAction?.arabicLabel ?? "التعديل"
 
         optimisticRemove(from: &treeEditRequests, id: request.id, apiWork: { [weak self] in
             guard let self else { return }
-            do {
-                // مشروط بـ «معلّق» (ب-٧): طلب عالجه غيرك لا يُقلب «مرفوضاً» ولا يُرسل عنه إشعار
-                guard try await self.closeRequest(request.id, as: .rejected) else { return }
-
-                let reasonText = reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let bodyAr: String
-                let bodyEn: String
-                if memberName.isEmpty {
-                    bodyAr = reasonText.isEmpty
-                        ? "تم رفض طلب \(actionAr)"
-                        : "تم رفض طلب \(actionAr)\nالسبب: \(reasonText)"
-                    bodyEn = reasonText.isEmpty
-                        ? "Your \(actionEn) request was rejected"
-                        : "Your \(actionEn) request was rejected\nReason: \(reasonText)"
-                } else {
-                    bodyAr = reasonText.isEmpty
-                        ? "تم رفض طلب \(actionAr)\n«\(memberName)»"
-                        : "تم رفض طلب \(actionAr)\n«\(memberName)»\nالسبب: \(reasonText)"
-                    bodyEn = reasonText.isEmpty
-                        ? "Your \(actionEn) request was rejected\n«\(memberName)»"
-                        : "Your \(actionEn) request was rejected\n«\(memberName)»\nReason: \(reasonText)"
-                }
-
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
-                    body: L10n.t(bodyAr, bodyEn),
-                    targetMemberIds: [request.requesterId],
-                    kind: "request_rejected"
-                )
-
-                // إشعار للإدارة في "المستجدات"
-                await self.broadcastCompletedAction(
-                    titleAr: "تم رفض \(actionAr)",
-                    titleEn: "\(actionEn) Rejected",
-                    bodyAr: memberName.isEmpty ? "تم رفض طلب \(actionAr)" : "تم رفض طلب \(actionAr) لـ «\(memberName)»",
-                    bodyEn: memberName.isEmpty ? "\(actionEn) request rejected" : "\(actionEn) request for «\(memberName)» rejected",
-                    kind: .treeEdit
-                )
-
-                Log.info("[TreeEdit] Rejected: \(actionAr) — \(memberName)")
-            } catch {
-                Log.error("[TreeEdit] Reject failed: \(error)")
-            }
+            // السيرفر يغلق الطلب «مرفوضاً» ويُشعر صاحبه والإدارة (decide_admin_request)
+            guard await self.decideOnServer(request.id, approve: false, reason: reason) != nil else { return }
+            Log.info("[TreeEdit] Rejected: \(actionAr)")
         }, refresh: { [weak self] in
             await self?.fetchTreeEditRequests(force: true)
         })
@@ -1059,49 +784,13 @@ class AdminRequestViewModel: ObservableObject {
     func approveDeceasedRequest(request: AdminRequest) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         guard canModerate else { Log.warning("قبول طلب الوفاة مرفوض: لا صلاحية"); return }
-        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر لا يغلقه، فلا يُطبَّق ما فيه (ب-٧)
+        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر يرفضه أيضاً (own_request)
         guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
-        let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
-            // «ما زال معلّقاً» قبل التطبيق (ب-٧)
-            guard let self, await self.requestStillPending(request.id) else { return }
-            do {
-                let before = self.memberVM?.member(byId: request.memberId)
-                try await self.supabase
-                    .from("profiles")
-                    .update(["is_deceased": AnyEncodable(true)])
-                    .eq("id", value: request.memberId.uuidString)
-                    .execute()
-                // وفاة جديدة (كان حياً) → مربّع «إعلان وفاة»
-                if before?.isDeceased != true {
-                    let target = DeathAnnouncementTarget(
-                        id: request.memberId,
-                        name: memberName.isEmpty ? (before?.fullName ?? "") : memberName,
-                        isFemale: before?.isFemale ?? false)
-                    let canAnnounce = self.authVM?.isAdmin == true   // للمالك والمدير (السيرفر 20261007130000)
-                    Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
-                }
-
-                // التحديث مشروط بـ «معلّق» — إن سبقنا مسؤول آخر لا إشعار مكرّر
-                guard try await self.closeRequest(request.id, as: .approved) else { return }
-
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
-                    body: L10n.t("تم تأكيد حالة الوفاة وتحديث الشجرة", "Deceased status confirmed and tree updated"),
-                    targetMemberIds: [request.requesterId]
-                )
-
-                await self.broadcastCompletedAction(
-                    titleAr: "تم قبول طلب وفاة",
-                    titleEn: "Deceased Status Approved",
-                    bodyAr: memberName.isEmpty ? "تم تأكيد حالة وفاة" : "تم تأكيد وفاة «\(memberName)»",
-                    bodyEn: memberName.isEmpty ? "Deceased status confirmed" : "Deceased status confirmed for «\(memberName)»",
-                    kind: .deceasedReport
-                )
-                Log.info("تم قبول الطلب وتحديث الشجرة بنجاح")
-            } catch {
-                Log.error("فشل في تنفيذ عملية الموافقة: \(error)")
-            }
+            guard let self else { return }
+            // السيرفر يسجّل الوفاة ويغلق ويُشعر؛ وفاة جديدة → مربّع «إعلان وفاة» (decideOnServer)
+            guard await self.decideOnServer(request.id, approve: true) != nil else { return }
+            Log.info("تم قبول الطلب وتحديث الشجرة بنجاح")
         }, refresh: { [weak self] in
             await self?.fetchDeceasedRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
@@ -1112,24 +801,10 @@ class AdminRequestViewModel: ObservableObject {
         guard NetworkMonitor.shared.requireOnline() else { return }
         // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
-        let memberName = request.member?.fullName ?? ""
         optimisticRemove(from: &deceasedRequests, id: request.id, apiWork: { [weak self] in
             guard let self else { return }
-            do {
-                // مشروط بـ «معلّق» (ب-٧): طلب عالجه غيرك لا يُقلب «مرفوضاً» ولا يُرسل عنه إشعار
-                guard try await self.closeRequest(request.id, as: .rejected) else { return }
-
-                await self.broadcastCompletedAction(
-                    titleAr: "تم رفض طلب وفاة",
-                    titleEn: "Deceased Request Rejected",
-                    bodyAr: (memberName.isEmpty ? "تم رفض طلب تأكيد وفاة" : "تم رفض طلب تأكيد وفاة «\(memberName)»") + Self.rejectReasonSuffix(reason, arabic: true),
-                    bodyEn: (memberName.isEmpty ? "Deceased request rejected" : "Deceased request for «\(memberName)» rejected") + Self.rejectReasonSuffix(reason, arabic: false),
-                    kind: .deceasedReport
-                )
-                Log.info("تم رفض طلب تأكيد الوفاة")
-            } catch {
-                Log.error("فشل في رفض طلب الوفاة: \(error)")
-            }
+            guard await self.decideOnServer(request.id, approve: false, reason: reason) != nil else { return }
+            Log.info("تم رفض طلب تأكيد الوفاة")
         }, refresh: { [weak self] in
             await self?.fetchDeceasedRequests(force: true)
         })
@@ -1158,110 +833,36 @@ class AdminRequestViewModel: ObservableObject {
     func rejectChildAddRequest(request: AdminRequest, reason: String? = nil) async {
         // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
-        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر لا يغلقه، فلا يُطبَّق ما فيه (ب-٧)
+        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر يرفضه أيضاً (own_request)
         guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
-        // الطلب عن الأب (member_id) والابن في new_value — كان الاسم يُقرأ من الأب
-        let childName = request.newValue
-            .flatMap(UUID.init(uuidString:))
-            .flatMap { memberVM?.member(byId: $0)?.firstName } ?? ""
         optimisticRemove(from: &childAddRequests, id: request.id, apiWork: { [weak self] in
-            // «ما زال معلّقاً» قبل التطبيق (ب-٧)
-            guard let self, await self.requestStillPending(request.id) else { return }
-            do {
-                if let childId = request.newValue {
-                    try await self.supabase
-                        .from("profiles")
-                        .delete()
-                        .eq("id", value: childId)
-                        .execute()
-                }
-
-                // مشروط بـ «معلّق» (ب-٧): طلب عالجه غيرك لا يُقلب «مرفوضاً» ولا يُرسل عنه إشعار
-                guard try await self.closeRequest(request.id, as: .rejected) else { return }
-
-                await self.broadcastCompletedAction(
-                    titleAr: "تم رفض طلب إضافة ابن",
-                    titleEn: "Child Add Rejected",
-                    bodyAr: (childName.isEmpty ? "تم رفض طلب إضافة ابن" : "تم رفض طلب إضافة «\(childName)»") + Self.rejectReasonSuffix(reason, arabic: true),
-                    bodyEn: (childName.isEmpty ? "Child add request rejected" : "Add request for «\(childName)» rejected") + Self.rejectReasonSuffix(reason, arabic: false),
-                    kind: .childAdd
-                )
-                Log.info("تم رفض طلب إضافة الابن وحذفه من الشجرة")
-            } catch {
-                Log.error("فشل رفض طلب إضافة الابن: \(error)")
-                self.errorMessage = L10n.t("تعذّر رفض الطلب. حاول مرة أخرى.",
-                                           "Couldn't reject the request. Please try again.")
-            }
+            guard let self else { return }
+            // السيرفر يحذف ملف الابن (للمالك والمدير كما كان) ويغلق ويُشعر — حماية روابط العائلة كما هي
+            guard await self.decideOnServer(request.id, approve: false, reason: reason) != nil else { return }
+            Log.info("تم رفض طلب إضافة الابن")
         }, refresh: { [weak self] in
             await self?.fetchChildAddRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
         })
-    }
-
-    /// ابن أضافه عضو يُحفظ «معلّقاً» حتى موافقة الإدارة (ج-١: السيرفر يرفض إدراج غير
-    /// الإدارة بحالة «مفعّل») — القبول يفعّله. ابن أضافته الإدارة مفعّل أصلاً فلا يتغيّر،
-    /// والمجمّد لا يُفك (التحديث مشروط بـ «معلّق»).
-    private func activatePendingChild(of request: AdminRequest) async throws {
-        guard let childId = request.newValue.flatMap(UUID.init(uuidString:)) else { return }
-        try await supabase
-            .from("profiles")
-            .update(["status": AnyEncodable("active")])
-            .eq("id", value: childId.uuidString)
-            .eq("status", value: "pending")
-            .execute()
     }
 
     func acknowledgeChildAddRequest(request: AdminRequest) async {
         // قبول طلبات الشجرة لمجالها: المالك/المدير/المراقب (السيرفر يفرضه أيضاً)
         guard authVM?.canApproveTreeRequests == true else { Log.warning("قبول طلب إضافة الابن مرفوض: لا صلاحية"); return }
-        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر لا يغلقه، فلا يُطبَّق ما فيه (ب-٧)
+        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر يرفضه أيضاً (own_request)
         guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
         optimisticRemove(from: &childAddRequests, id: request.id, apiWork: { [weak self] in
-            // «ما زال معلّقاً» قبل التطبيق (ب-٧)
-            guard let self, await self.requestStillPending(request.id) else { return }
-            do {
-                try await self.activatePendingChild(of: request)
-
-                // مشروط بـ «معلّق» (ب-٧) — إن سبقنا مسؤول آخر لا إشعار مكرّر
-                guard try await self.closeRequest(request.id, as: .approved) else { return }
-
-                // الطلب عن الأب (member_id) والابن في new_value
-                let childFirstName = request.newValue
-                    .flatMap(UUID.init(uuidString:))
-                    .flatMap { self.memberVM?.member(byId: $0)?.firstName } ?? ""
-                let parentName = request.member?.fullName ?? ""
-
-                let childNotifBody = L10n.t(
-                    "تم إضافة الابن: «\(childFirstName)» لـ: «\(parentName)»",
-                    "Son added: «\(childFirstName)» to: «\(parentName)»"
-                )
-
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
-                    body: childNotifBody,
-                    targetMemberIds: [request.requesterId]
-                )
-
-                await self.broadcastCompletedAction(
-                    titleAr: "تم قبول طلب إضافة ابن",
-                    titleEn: "Child Add Approved",
-                    bodyAr: "تم إضافة «\(childFirstName)» لـ «\(parentName)»",
-                    bodyEn: "«\(childFirstName)» added to «\(parentName)»",
-                    kind: .childAdd
-                )
-                Log.info("تم تأكيد طلب إضافة الابن بنجاح")
-            } catch {
-                Log.error("فشل تأكيد طلب إضافة الابن: \(error)")
-                self.errorMessage = L10n.t("تعذّر تنفيذ الموافقة. حاول مرة أخرى.",
-                                           "Couldn't complete the approval. Please try again.")
-            }
+            guard let self else { return }
+            // ابن أضافه عضو يُحفظ «معلّقاً» — السيرفر يفعّله ويغلق ويُشعر (المجمّد لا يُفك)
+            guard await self.decideOnServer(request.id, approve: true) != nil else { return }
+            Log.info("تم تأكيد طلب إضافة الابن بنجاح")
         }, refresh: { [weak self] in
             await self?.fetchChildAddRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
         })
     }
 
-    /// الموافقة على جميع طلبات إضافة الأبناء المعلقة دفعة واحدة
+    /// الموافقة على جميع طلبات إضافة الأبناء المعلقة دفعة واحدة — بلا إشعارات (كما كان)
     func bulkApproveChildAddRequests() async -> Int {
         guard authVM?.canApproveTreeRequests == true else { return 0 }
         self.isLoading = true
@@ -1269,14 +870,8 @@ class AdminRequestViewModel: ObservableObject {
         var successCount = 0
 
         for request in pending {
-            // كل طلب يُعاد فحصه لحظة التطبيق (ب-٧)، والابن المعلّق يُفعَّل (ج-١)
-            guard await requestStillPending(request.id) else { continue }
-            do {
-                try await activatePendingChild(of: request)
-                if try await closeRequest(request.id, as: .approved) { successCount += 1 }
-            } catch {
-                Log.error("فشل قبول طلب إضافة ابن \(request.id): \(error.localizedDescription)")
-            }
+            // كل طلب يُقرَّر على السيرفر وحده (معلّق؟ مجال الدور؟ ليس طلبك؟) — الفاشل يبقى معلّقاً
+            if await decideOnServer(request.id, approve: true, silent: true) != nil { successCount += 1 }
         }
 
         await fetchChildAddRequests(force: true)
@@ -1704,74 +1299,22 @@ class AdminRequestViewModel: ObservableObject {
         }
 
         optimisticRemove(from: &nameChangeRequests, id: request.id, apiWork: { [weak self] in
-            // «ما زال معلّقاً» قبل التطبيق (ب-٧)
-            guard let self, await self.requestStillPending(request.id) else { return }
-            do {
-                let nameParts = newName.split(whereSeparator: \.isWhitespace).map(String.init)
-                let newFirstName = nameParts.first ?? newName
-
-                try await self.supabase
-                    .from("profiles")
-                    .update([
-                        "full_name": AnyEncodable(newName),
-                        "first_name": AnyEncodable(newFirstName)
-                    ])
-                    .eq("id", value: request.memberId.uuidString)
-                    .execute()
-
-                // مشروط بـ «معلّق» (ب-٧) — إن سبقنا مسؤول آخر لا إشعار مكرّر
-                guard try await self.closeRequest(request.id, as: .approved) else { return }
-
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("تم تغيير اسمك", "Your Name Was Changed"),
-                    body: L10n.t("تم اعتماد اسمك الجديد: \(newName)", "Your new name has been approved: \(newName)"),
-                    targetMemberIds: [request.requesterId]
-                )
-
-                let oldName = request.member?.fullName ?? ""
-                await self.broadcastCompletedAction(
-                    titleAr: "تم قبول تغيير اسم",
-                    titleEn: "Name Change Approved",
-                    bodyAr: oldName.isEmpty
-                        ? "وافقت الإدارة — تم اعتماد الاسم الجديد: «\(newName)»"
-                        : "وافقت الإدارة — تغيّر الاسم من «\(oldName)» إلى «\(newName)»",
-                    bodyEn: oldName.isEmpty
-                        ? "Approved by administration — New name: «\(newName)»"
-                        : "Approved by administration — Name changed from «\(oldName)» to «\(newName)»",
-                    kind: .nameChange
-                )
-                Log.info("[NameChange] تم قبول طلب تغيير الاسم → \(newName)")
-            } catch {
-                Log.error("[NameChange] فشل قبول طلب تغيير الاسم: \(error)")
-            }
+            guard let self else { return }
+            // السيرفر يغيّر الاسم ويغلق ويُشعر في معاملة واحدة (decide_admin_request)
+            guard await self.decideOnServer(request.id, approve: true) != nil else { return }
+            Log.info("[NameChange] تم قبول طلب تغيير الاسم → \(newName)")
         }, refresh: { [weak self] in
             await self?.fetchNameChangeRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
         })
     }
 
-    /// اعتماد «تغيير العائلة»: يُطبَّق على العضو وأبنائه (set_family_name_cascade)
+    /// اعتماد «تغيير العائلة»: يُطبَّق على العضو وأبنائه (set_family_name_cascade داخل decide_admin_request)
     private func approveFamilyChange(request: AdminRequest, newFamily: String) async {
         optimisticRemove(from: &nameChangeRequests, id: request.id, apiWork: { [weak self] in
-            // «ما زال معلّقاً» قبل التطبيق (ب-٧)
-            guard let self, await self.requestStillPending(request.id) else { return }
-            do {
-                try await self.supabase
-                    .rpc("set_family_name_cascade",
-                         params: ["p_member_id": AnyEncodable(request.memberId.uuidString),
-                                  "p_family": AnyEncodable(newFamily)])
-                    .execute()
-                // مشروط بـ «معلّق» (ب-٧) — إن سبقنا مسؤول آخر لا إشعار مكرّر
-                guard try await self.closeRequest(request.id, as: .approved) else { return }
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("تم تغيير عائلتك", "Your Family Was Changed"),
-                    body: L10n.t("تم اعتماد عائلتك الجديدة: \(newFamily)", "Your new family has been approved: \(newFamily)"),
-                    targetMemberIds: [request.requesterId]
-                )
-                Log.info("[FamilyChange] تم قبول طلب تغيير العائلة → \(newFamily)")
-            } catch {
-                Log.error("[FamilyChange] فشل قبول طلب تغيير العائلة: \(error)")
-            }
+            guard let self else { return }
+            guard await self.decideOnServer(request.id, approve: true) != nil else { return }
+            Log.info("[FamilyChange] تم قبول طلب تغيير العائلة → \(newFamily)")
         }, refresh: { [weak self] in
             await self?.fetchNameChangeRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
@@ -1783,36 +1326,8 @@ class AdminRequestViewModel: ObservableObject {
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
         optimisticRemove(from: &nameChangeRequests, id: request.id, apiWork: { [weak self] in
             guard let self else { return }
-            do {
-                // مشروط بـ «معلّق» (ب-٧): طلب عالجه غيرك لا يُقلب «مرفوضاً» ولا يُرسل عنه إشعار
-                guard try await self.closeRequest(request.id, as: .rejected) else { return }
-
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
-                    body: L10n.t(
-                        (request.requestType == RequestType.familyChange.rawValue
-                            ? "طلب تغيير العائلة لم تتم الموافقة عليه" : "طلب تغيير الاسم لم تتم الموافقة عليه")
-                            + Self.rejectReasonSuffix(reason, arabic: true),
-                        (request.requestType == RequestType.familyChange.rawValue
-                            ? "Your family change request was not approved" : "Your name change request was not approved")
-                            + Self.rejectReasonSuffix(reason, arabic: false)
-                    ),
-                    targetMemberIds: [request.requesterId],
-                    kind: "request_rejected"
-                )
-
-                let memberName = request.member?.fullName ?? ""
-                await self.broadcastCompletedAction(
-                    titleAr: "تم رفض تغيير اسم",
-                    titleEn: "Name Change Rejected",
-                    bodyAr: memberName.isEmpty ? "تم رفض طلب تغيير الاسم" : "تم رفض طلب تغيير اسم «\(memberName)»",
-                    bodyEn: memberName.isEmpty ? "Name change rejected" : "Name change for «\(memberName)» rejected",
-                    kind: .nameChange
-                )
-                Log.info("[NameChange] تم رفض طلب تغيير الاسم")
-            } catch {
-                Log.error("[NameChange] فشل رفض طلب تغيير الاسم: \(error)")
-            }
+            guard await self.decideOnServer(request.id, approve: false, reason: reason) != nil else { return }
+            Log.info("[NameChange] تم رفض الطلب")
         }, refresh: { [weak self] in
             await self?.fetchNameChangeRequests(force: true)
         })
@@ -1846,47 +1361,21 @@ class AdminRequestViewModel: ObservableObject {
         guard canModerate, let rawPhone = request.newValue, !rawPhone.isEmpty else { return }
         guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
         guard let newPhone = KuwaitPhone.normalizeForStorageFromInput(rawPhone) else { return }
-        // التحقق من تكرار الرقم قبل الموافقة
+        // التحقق من تكرار الرقم قبل الموافقة (السيرفر يفحص أيضاً — phone_in_use — ويشمل الأرقام المخفية)
         if let memberVM = memberVM {
             let check = memberVM.isPhoneDuplicate(newPhone, excludingMemberId: request.memberId)
             if check.isDuplicate {
                 Log.warning("رفض تغيير الرقم: مستخدم من \(check.existingMember?.fullName ?? "")")
+                errorMessage = Self.decisionMessage(forKey: "phone_in_use")
                 return
             }
         }
 
         optimisticRemove(from: &phoneChangeRequests, id: request.id, apiWork: { [weak self] in
-            // «ما زال معلّقاً» قبل التطبيق (ب-٧)
-            guard let self, await self.requestStillPending(request.id) else { return }
-            do {
-                try await self.supabase
-                    .from("profiles")
-                    .update(["phone_number": AnyEncodable(newPhone)])
-                    .eq("id", value: request.memberId.uuidString)
-                    .execute()
-
-                // مشروط بـ «معلّق» (ب-٧) — إن سبقنا مسؤول آخر لا إشعار مكرّر
-                guard try await self.closeRequest(request.id, as: .approved) else { return }
-
-                if let requesterId = request.requesterId {
-                    await self.notificationVM?.sendNotification(
-                        title: L10n.t("تم تغيير رقم هاتفك", "Phone Number Updated"),
-                        body: L10n.t("رقم هاتفك الجديد تم اعتماده بنجاح", "Your new phone number has been approved"),
-                        targetMemberIds: [requesterId]
-                    )
-                }
-
-                let memberName = request.member?.fullName ?? ""
-                await self.broadcastCompletedAction(
-                    titleAr: "تم قبول تغيير رقم",
-                    titleEn: "Phone Change Approved",
-                    bodyAr: memberName.isEmpty ? "تم قبول طلب تغيير رقم" : "تم تغيير رقم «\(memberName)»",
-                    bodyEn: memberName.isEmpty ? "Phone change approved" : "Phone for «\(memberName)» updated",
-                    kind: .phoneChange
-                )
-            } catch {
-                Log.error("خطأ اعتماد تغيير الرقم: \(error.localizedDescription)")
-            }
+            guard let self else { return }
+            // السيرفر يحفظ الرقم موحّداً ويغلق ويُشعر في معاملة واحدة (decide_admin_request)
+            guard await self.decideOnServer(request.id, approve: true) != nil else { return }
+            Log.info("[PhoneChange] تم قبول طلب تغيير الرقم")
         }, refresh: { [weak self] in
             await self?.fetchPhoneChangeRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
@@ -1899,34 +1388,8 @@ class AdminRequestViewModel: ObservableObject {
 
         optimisticRemove(from: &phoneChangeRequests, id: request.id, apiWork: { [weak self] in
             guard let self else { return }
-            do {
-                // مشروط بـ «معلّق» (ب-٧): طلب عالجه غيرك لا يُقلب «مرفوضاً» ولا يُرسل عنه إشعار
-                guard try await self.closeRequest(request.id, as: .rejected) else { return }
-
-                if let requesterId = request.requesterId {
-                    await self.notificationVM?.sendNotification(
-                        title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
-                        body: L10n.t(
-                            "طلب تغيير رقم الهاتف لم تتم الموافقة عليه" + Self.rejectReasonSuffix(reason, arabic: true),
-                            "Your phone change request was not approved" + Self.rejectReasonSuffix(reason, arabic: false)
-                        ),
-                        targetMemberIds: [requesterId],
-                        kind: "request_rejected"
-                    )
-                }
-
-                let memberName = request.member?.fullName ?? ""
-                await self.broadcastCompletedAction(
-                    titleAr: "تم رفض تغيير رقم",
-                    titleEn: "Phone Change Rejected",
-                    bodyAr: memberName.isEmpty ? "تم رفض طلب تغيير رقم" : "تم رفض تغيير رقم «\(memberName)»",
-                    bodyEn: memberName.isEmpty ? "Phone change rejected" : "Phone change for «\(memberName)» rejected",
-                    kind: .phoneChange
-                )
-                Log.info("[PhoneChange] تم رفض طلب تغيير الرقم")
-            } catch {
-                Log.error("خطأ رفض تغيير الرقم: \(error.localizedDescription)")
-            }
+            guard await self.decideOnServer(request.id, approve: false, reason: reason) != nil else { return }
+            Log.info("[PhoneChange] تم رفض طلب تغيير الرقم")
         }, refresh: { [weak self] in
             await self?.fetchPhoneChangeRequests(force: true)
         })
@@ -2389,28 +1852,9 @@ class AdminRequestViewModel: ObservableObject {
         guard authVM?.canModerateContent == true else { Log.warning("قبول البلاغ مرفوض: لا صلاحية"); return }
 
         optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
-            // «ما زال معلّقاً» قبل التطبيق (ب-٧)
-            guard let self, await self.requestStillPending(request.id) else { return }
-            do {
-                if let postIdRaw = request.newValue, let postId = UUID(uuidString: postIdRaw) {
-                    try await self.supabase
-                        .from("news")
-                        .delete()
-                        .eq("id", value: postId.uuidString)
-                        .execute()
-                }
-
-                // مشروط بـ «معلّق» (ب-٧) — إن سبقنا مسؤول آخر لا إشعار مكرّر
-                guard try await self.closeRequest(request.id, as: .approved) else { return }
-
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("تمت مراجعة بلاغك", "Your Report Was Reviewed"),
-                    body: L10n.t("بلاغك تم مراجعته واتخاذ الإجراء المناسب", "Your report was reviewed and appropriate action was taken"),
-                    targetMemberIds: [request.requesterId]
-                )
-            } catch {
-                Log.error("خطأ اعتماد بلاغ الخبر: \(error.localizedDescription)")
-            }
+            guard let self else { return }
+            // السيرفر يحذف الخبر (بلاغ خبر فقط) ويغلق ويُشعر المبلّغ (decide_admin_request)
+            guard await self.decideOnServer(request.id, approve: true) != nil else { return }
         }, refresh: { [weak self] in
             await self?.fetchNewsReportRequests(force: true)
             await self?.newsVM?.fetchNews(force: true)
@@ -2423,12 +1867,7 @@ class AdminRequestViewModel: ObservableObject {
 
         optimisticRemove(from: &newsReportRequests, id: request.id, apiWork: { [weak self] in
             guard let self else { return }
-            do {
-                // مشروط بـ «معلّق» (ب-٧): طلب عالجه غيرك لا يُقلب «مرفوضاً» ولا يُرسل عنه إشعار
-                guard try await self.closeRequest(request.id, as: .rejected) else { return }
-            } catch {
-                Log.error("خطأ رفض بلاغ الخبر: \(error.localizedDescription)")
-            }
+            await self.decideOnServer(request.id, approve: false)
         }, refresh: { [weak self] in
             await self?.fetchNewsReportRequests(force: true)
         })
@@ -2533,7 +1972,7 @@ class AdminRequestViewModel: ObservableObject {
     /// الموافقة على اقتراح صورة — تحديث صورة العضو
     func approvePhotoSuggestion(request: AdminRequest) async {
         guard canModerate else { return }
-        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر لا يغلقه، فلا يُطبَّق ما فيه (ب-٧)
+        // طلبك أنت يعالجه غيرك (إلا المالك) — السيرفر يرفضه أيضاً (own_request)
         guard !isOwnRequest(requesterId: request.requesterId, memberId: request.memberId) else { return }
         guard let photoUrl = request.newValue, !photoUrl.isEmpty else {
             Log.error("[PhotoSuggestion] لا يوجد رابط صورة في الطلب")
@@ -2541,70 +1980,25 @@ class AdminRequestViewModel: ObservableObject {
         }
 
         optimisticRemove(from: &photoSuggestionRequests, id: request.id, apiWork: { [weak self] in
-            // «ما زال معلّقاً» قبل التطبيق (ب-٧)
-            guard let self, await self.requestStillPending(request.id) else { return }
-            do {
-                let timestamp = Int(Date().timeIntervalSince1970)
-                let urlWithCache = photoUrl.contains("?") ? "\(photoUrl)&v=\(timestamp)" : "\(photoUrl)?v=\(timestamp)"
-
-                try await self.supabase
-                    .from("profiles")
-                    .update(["avatar_url": AnyEncodable(urlWithCache)])
-                    .eq("id", value: request.memberId.uuidString)
-                    .execute()
-
-                // مشروط بـ «معلّق» (ب-٧) — إن سبقنا مسؤول آخر لا إشعار مكرّر
-                guard try await self.closeRequest(request.id, as: .approved) else { return }
-
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("تم قبول اقتراحك", "Your Suggestion Was Approved"),
-                    body: L10n.t("الصورة المقترحة تم قبولها وتحديثها", "Your photo suggestion was approved and applied"),
-                    targetMemberIds: [request.requesterId]
-                )
-                Log.info("[PhotoSuggestion] تم قبول اقتراح الصورة وتحديث الملف الشخصي")
-            } catch {
-                Log.error("[PhotoSuggestion] خطأ قبول اقتراح الصورة: \(error.localizedDescription)")
-            }
+            guard let self else { return }
+            // السيرفر يضع الصورة (+ ?v=<وقت>) ويغلق ويُشعر (decide_admin_request)
+            guard await self.decideOnServer(request.id, approve: true) != nil else { return }
+            Log.info("[PhotoSuggestion] تم قبول اقتراح الصورة وتحديث الملف الشخصي")
         }, refresh: { [weak self] in
             await self?.fetchPhotoSuggestionRequests(force: true)
             await self?.memberVM?.fetchAllMembers(force: true)
         })
     }
 
-    /// رفض اقتراح صورة — حذف الصورة من التخزين
+    /// رفض اقتراح صورة — السيرفر يغلق ويُشعر، والتطبيق يحذف ملف الاقتراح (storage_cleanup)
     func rejectPhotoSuggestion(request: AdminRequest, reason: String? = nil) async {
         // المراقب يقدر يرفض حسب CLAUDE.md (المشرف فقط ممنوع من الرفض)
         guard canRejectRequests else { Log.warning("رفض الطلب مرفوض: لا صلاحية"); return }
 
         optimisticRemove(from: &photoSuggestionRequests, id: request.id, apiWork: { [weak self] in
-            // «ما زال معلّقاً» قبل التطبيق (ب-٧)
-            guard let self, await self.requestStillPending(request.id) else { return }
-            do {
-                if let photoUrl = request.newValue,
-                   let url = URL(string: photoUrl),
-                   let range = url.path.range(of: "/storage/v1/object/public/avatars/") {
-                    let storagePath = String(url.path[range.upperBound...])
-                    _ = try? await self.supabase.storage
-                        .from("avatars")
-                        .remove(paths: [storagePath])
-                }
-
-                // مشروط بـ «معلّق» (ب-٧): طلب عالجه غيرك لا يُقلب «مرفوضاً» ولا يُرسل عنه إشعار
-                guard try await self.closeRequest(request.id, as: .rejected) else { return }
-
-                await self.notificationVM?.sendNotification(
-                    title: L10n.t("لم يتم قبول طلبك", "Your Request Was Declined"),
-                    body: L10n.t(
-                        "اقتراح الصورة لم تتم الموافقة عليه" + Self.rejectReasonSuffix(reason, arabic: true),
-                        "Your photo suggestion was not approved" + Self.rejectReasonSuffix(reason, arabic: false)
-                    ),
-                    targetMemberIds: [request.requesterId],
-                    kind: "request_rejected"
-                )
-                Log.info("[PhotoSuggestion] تم رفض اقتراح الصورة")
-            } catch {
-                Log.error("[PhotoSuggestion] خطأ رفض اقتراح الصورة: \(error.localizedDescription)")
-            }
+            guard let self else { return }
+            guard await self.decideOnServer(request.id, approve: false, reason: reason) != nil else { return }
+            Log.info("[PhotoSuggestion] تم رفض اقتراح الصورة")
         }, refresh: { [weak self] in
             await self?.fetchPhotoSuggestionRequests(force: true)
         })
