@@ -214,85 +214,41 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 - **Section colours = `AppSection` (`Components/Shared/AppSection.swift`) — the ONLY place section hex values live.** Palette «البحرية المتقاربة» (اختيار المالك ٢٠٢٦-١٠-٠٤ — «الألوان قريبة من بعض بتنسيق واحد»): home navy #1F4E79 · tree teal-green #1E5950 · diwaniyas petrol #1E5665 · profile cobalt #334C81 · admin indigo #47467F — «الاعتدال» 2026-10-05: one depth for all (OKLCH L≈0.42), chroma capped near brand, dark inks all L≈0.72 (6.8–7.3:1 on #1C1C1E); 12-pt white subtitles pass AA on every header. Each case: `gradient` (header: deep→base→light), `fill` (surfaces with white text), `ink` (icons/text — lighter in dark, ≥4.5:1 on #1C1C1E), `deep`, `light`, `control` (header glass buttons). **Home sections without a tab are cases too (2026-10-05, «داخل المكتبة نفس الالوان و المشاريع بعد و تواصل بعد … وحتى الاخبار»), always AFTER the 5 tabs (MainTabView maps tabs 0–4 with `AppSection(rawValue:)`):** `.library` dusty plum #633C6F (light #71457F, dark ink #BE95CA) · `.projects` forest #275B35 (light #2D673C, dark ink #7EB689) · `.news` #25566F (light #23617F, dark ink #75B2D1) — same OKLCH ladder; «التواصل» = admin messages → uses `.admin` (no own case). `AppSection.HomeTile.library/projects/news` `fill`/`deep`/`ink` ARE those sections' colours (same instances); `accent` (= `DS.Color.tileLibrary`/`tileProjects`, dark #895D97/#488055) stays for standalone surfaces.
 - **How it flows:** `MainTabView` puts `.dsSection(.home/.tree/.diwaniyas/.profile/.admin)` on each tab's content (both TabView code paths) → `@Environment(\.dsSection)` + `.tint(section.ink)`; the tab-bar tint is the selected tab's ink; `AppSection.current` tracks the selected tab for UI in separate windows (`dsAlert`/`DSPopupPresenter`, date picker, death notice). `dsCenterBox` / `dsTallBox` / `dsHalfBox` / `dsExtraBox` / `DSCenterPanel` / `DSExpandableCenterPanel` re-apply the section inside the presentation. Outside the tabs (login, splash, onboarding) the section is nil → brand navy.
 - **Pages/boxes of a section without a tab:** put `.dsSectionPage(.library/.projects/.news/.admin)` on their ROOT (`FamilyArchiveView`, `FamilyProjectsView`, `AddProjectView`/`EditProjectView`, `MemberContactFormView` (→ `.admin` only inside the tabs), `AddNewsView`, `EditNewsView`, `NewsCommentsSheet`, and the boxes they open in a `fullScreenCover`) = `.dsSection` + registers the page while visible, so `AppSection.current` returns it (last open page of the selected tab, else the tab) for separate windows; it unregisters on disappear. Inside those screens use `AppSection.<section>.ink/fill` (or env-mapped `DS.Color.primary.dsChrome(in: section)` in views reused elsewhere). The Home sub-page header (`HomeNewsView.subPageHeader`) must take the page's section gradient, not `AppSection.home`.
-- **Shared components map navy for you:** `DS.Color.primary` → `section.ink`, `DS.Color.actionNavy` → `section.fill` (`Color.dsChrome(in:)` / `dsChromeFill(in:)`); `DSActionFill.style()` resolves the section gradient from the environment at draw time (iOS 17+, iOS 16 falls back to `AppSection.current`); `dsReadableGlyph` maps every section fill to its ink; headers/heroes/boxes (`MainHeaderView`, `DSComposerHeader`, `DSPageHero`, `DSFilterChips`, `DSSegmentedSwitch`, `DSPrimaryButton`, `DSFloatingButton`, `Sys*`…) follow automatically. For chrome pass `DS.Color.primary`/`actionNavy` (or nothing); inside one tab's own screen use `AppSection.<tab>.ink/fill`.
+- **Shared components map navy for you:** `DS.Color.primary` → `section.ink`, `DS.Color.actionNavy` → `section.fill` (`Color.dsChrome(in:)` / `dsChromeFill(in:)`); `DSActionFill.style()` resolves the section gradient from the environment at draw time (iOS 17+, iOS 16 falls back to `AppSection.current`); `dsReadableGlyph` maps every section fill to its ink; headers/heroes/boxes (`MainHeaderView`, `DSComposerHeader`, `DSPageHero`, `DSFilterChips`, `DSSegmentedSwitch`, `DSPrimaryButton`, `DSFloatingButton`, `DSStateKit`…) follow automatically. For chrome pass `DS.Color.primary`/`actionNavy` (or nothing); inside one tab's own screen use `AppSection.<tab>.ink/fill`.
 - **Meaning colours — never section-coloured:** `brand`/`brandFill` (announcement, info, default news type, category fallback, default avatar), `male`/`maleFill` (sons, member node, male stats), `female`, `error`, `warning`, `success`, role pastels, news-type colours, `composerHusseiniya`, `currentLocation`, admin topic colours (`composerProject` green tree/members, `composerDiwaniya` blue messaging, `composerLibrary` gold content, red banned). `brand`/`male` have the same hex as navy but are separate instances, so the mapping never touches them — use them whenever navy *means* something.
 - **Base tokens:** `primary` #1F4E79 (dark #7FA8D6), `actionNavy` #1F4E79 (dark #173A5E), `gradientPrimary` #102B47→#1F4E79→#285D8D, `secondary` forest #2E6B4F, `accent` gold #A07A2C; `success` #157F3C, `warning` #9A6A0A, `error` #D32F2F; `female` #D66F92; `newsDeath` grey #68686D (dark #8E8E93) = the «وفاة» meaning colour on badges only — the death-announcement box itself uses section chrome (`actionNavy`/`primary`). Home tiles: `tileTree`/`tileDiwaniya`/`tileContact` = tree/diwaniyas/admin section colours, library/projects/news from `AppSection.HomeTile`.
 - **Coloured headers:** two solid stops `tint → tint.dsHeroLight` (never `opacity(0.72)` — 12pt white subtitles keep ≥4.5:1); status-bar text forced white over them with `.dsLightStatusBar()` (iOS 27+).
 - **Surfaces / text:** `background`, `surface`, `surfaceElevated`, `textPrimary/Secondary/Tertiary`, `textOnPrimary`. Hex via `Color(hex:)`, light/dark via `Color.adaptive(light:dark:)`.
-- **رسومات وحركات — «الشعار المصمت» (طلب المالك ٢٠٢٦-١٠-٠٥ «أبسط وأقوى وباعتدال»):** لكل مكان رسمة مصمتة واحدة بمستوى أيقونة تطبيق، بيضاء بدرجتين (التفاصيل فراغات مقصوصة) ولمسة ذهبية واحدة ذات معنى؛ ظهور هادئ مرة واحدة (٠٫٩ ث، تلاشٍ وارتفاع ٦ نقاط) ثم تنفّس بطيء دورته ٨ ث، وحركة ثانوية واحدة للذهبي فقط. الأدوات المشتركة `Components/Shared/FTKit.swift` (الدرجات، الذهبي، `FTKitCanvas` ٣٠ إطاراً/ث، `drawSymbolMark`/`drawSymbolPlate`، التنفّس والظهور) — ابدأ منها لأي رسم جديد. `FTTileScenes.swift`: مربّعات الرئيسية (غافة، دلّة وفنجان، كتاب على رحل، دكان، ظرف بختم؛ `FTTileSceneView(kind:playsEntrance:badge:)` — لا رسم مع كبسولة العدد) والصفحات الفاضية (`FTEmptySceneView` داخل `EmptyStateArt`). `FTBoxMarks.swift`: شعار رأس كل مربّع وسطي (`FTBoxMark(icon:tint:)` في `DSComposerHeader` بدل العلامة المائية واللمعة؛ عائلات خاصة: خبر، ديوانية، مشروع، عضو، تواصل، أمان، إعدادات، و«وفاة» هلال ونجمة ساكنان رماديان؛ وغيرها رمزها بدرجة ٠٫١١). `FTPlaceScenes.swift`: تحميل الشجرة (الغافة نفسها ونقطة ذهبية إلى الثمرة)، الانتظار (ساعة رملية)، الإشعارات الفاضية (جرس)، توهّج الدخول، و`FTGreetingGlyph` رمز الوقت الصغير في بطاقة الترحيب (البطاقة بلا منظر). `FTMoments.swift`: شارات أنواع الأخبار (`FTNewsBadge`: نبضة ذهبية واحدة كل ٨ ث، «وفاة» ساكنة) ولحظات الرسائل (`dsAlert(…, moment:)` وسام بلون القسم ١٫٢ ث ثم سكون) — على رسائل النجاح الموجودة فقط. `FamilyArt.swift` = `EmptyStateArt` و`FloatingIconArt` (تنفّس فقط). `SaduOrnament.swift` = زخرفة السدو. كلها Canvas/TimelineView، ثابتة عند t=0 مع «تقليل الحركة»، مخفية عن القارئ الصوتي؛ iOS 16 → لا `Path.subtracting` (استعمل `drawLayer` + `destinationOut`). معاينة بلا محاكي: `ImageRenderer` من سطر الأوامر.
+- **رسومات وحركات (مجسّمات «الطين الصقيل»):** مكتبة المجسّمات `Components/Shared/FT5SFull.swift` (`FT5STrial.stateIcon/headerIcon/empty`، مجسّم القسم `AppSection.artIcon`) وأغلفتها في `Components/Home/ArtTrial.swift` (`DSStateIcon`، `TrialHeaderIcon`، `.trialCardSkin`، `DSClaySkin`). `FTKit.swift` (أدوات الرسم، الذهبي، التنفّس والظهور)، `FTTileScenes.swift` (مربّعات الرئيسية والصفحات الفاضية)، `FTMoments.swift` (`FTNewsBadge` ولحظات `dsAlert(…, moment:)`)، `FamilyArt.swift` = `EmptyStateArt` (داخل `DSEmptyView`). كلها Canvas/TimelineView، ثابتة عند t=0 مع «تقليل الحركة»، مخفية عن القارئ الصوتي؛ iOS 16 → لا `Path.subtracting` (استعمل `drawLayer` + `destinationOut`).
 
-### Typography — `DS.Font`
+### «المكان الواحد» — where every knob lives («أسلوب واحد»، طلب المالك ٢٠٢٦-١٠-٠٧)
 
-- Uses the system font (SF) — `.system(.style, design: .default)`
-- Scale: `hero`, `largeTitle`, `title1`-`title3`, `headline`, `body`, `bodyBold`, `callout`, `calloutBold`, `subheadline`, `footnote`, `caption1`, `caption2`
-- Dynamic Type: use `DS.Font.scaled(size, weight:)` instead of `.system(size:)` — maps sizes to appropriate text styles
+**Rule: no literals at call sites.** A size, font, colour, radius, opacity, spacing or button shape is written ONCE in the
+files below and screens reference the token/component. Value repeats and has no token → add the token there first.
+Meaning colours (error/success/warning, female, news types, deceased grey, `DS.Color.reject`) stay meaning colours.
+Only true drawing code (Canvas art, tree-node geometry, guide illustrations' `GuideMetrics`) keeps local numbers.
 
-### Spacing — `DS.Spacing`
+| Knob | Where | Use |
+|---|---|---|
+| Typeface | ONE family: IBM Plex Sans Arabic. App root sets `.font(DS.Font.body)`; `DS.Font.scaled/body/callout/caption1…` are Plex too (SF only for `.monospaced`) | never `.system(size:)` for text |
+| Text roles | `DS.TextRole` (`DesignSystem.swift`): pageTitle 19 · title 17 · headline 15 · body 14 · rowTitle 13.5 · callout 13 · sectionTitle 12.5 · subtitle 12 · chip 12 · caption/badge/footnote 11 · micro 10 · button 15 …; half-steps `headlineCompact` 14.5 · `bodyCompact` 13.5 · `rowTitleCompact` 13 · `calloutCompact` 12.5 · `chipCompact` 11.5 · `*Compact` 10.5/9.5; weights `bodyStrong/bodySemibold/bodyMedium`, `calloutMedium` | `.dsFont(.role)` · `.dsFieldFont(.role)` (−2 pt inside centre boxes) · `DS.Font.role(.role)` |
+| SF glyphs | `DS.Glyph` micro 9.5 · xs 10.5 · sm 12 · md 14 · lg 16 · xl 18 · xxl 22 (+ `*Compact` −1) | `.dsGlyph(DS.Glyph.md)` |
+| Spacing / radius / opacity / border | `DS.Spacing` (xxs 2 · xs 4 · xsm 6 · sm 8 · md 12 · lg 16 …), `DS.Radius`, `DS.Opacity` (tintFill .12, cardStroke .10, fieldStroke .15, tintStroke .30, selectedStroke .55 …), `DS.Border` | |
+| Icon / avatar sizes | `DS.Icon` (tapTarget 44 · row 32 · rowLarge 36 · state 52 · emptyArt 130 · avatar 40 · avatarRow 36 · memberHero 130 …) | |
+| Card | `.dsCard()` (surface + hairline + clay skin, radius `DS.Card.radius` 12, padding 8); boxes: `DSComposerSection`, rows `.dsRowBox()` | never fill+stroke by hand |
+| Buttons | ONE look, two sizes: `DSBox.buttonHeight` **44** (boxes/pages) · `buttonHeightLarge` **48** (main CTA of full-screen flows). Action = section fill, `.destructive` red, `.cancel` grey, `tint:` meaning colour | `DSButton(…)`, `.buttonStyle(.ds(.cancel, size: .large))`, rows `DSBoxButtons { … }` (cancel on the physical left). `DSPrimaryButton` (48) / `DSSecondaryButton` (44 grey) resolve to the same spec |
+| Box shell | `DSBox` (header 80 / compact 56, section/field metrics, `alertIcon`, `composerIcon`), `DSFieldMetrics` (field/row heights) | `DSComposer`, `dsCenterBox` / `dsTallBox` / `dsHalfBox` / `dsExtraBox` |
+| Sub-page header | `DSSubPageHeader.swift`: section gradient + clay object + white title/subtitle + back/close (`DSBox.pageHeader*`) | page in a NavigationStack: `.dsSubPageHeader(title, subtitle:) { DSHeaderButton(…) }`; own VStack: `DSSubPageHeader(title:subtitle:section:nav:)` (`nav: .back/.close/.none`) |
+| Nav buttons | `DSNavButtons.swift`: `DSHeaderButton` / `DSBackButton` / `DSCloseButton`, `size: DSNavButtonSize` `.regular/.toolbar(34)/.mini(27)` | |
+| State kit | `DSStateKit.swift`: `DSEmptyView(title, message:, style: .page/.card/.compact/.inline)` (section clay object + title + one line) · `DSPageLoader(text, fillsSpace:)` (same object breathing — no bare spinners; a tiny spinner only inside a button/chip) · `DSStateCard` · `DSNoteCard` · `DSOptionTiles` · `DSChipButton(…, size: .regular/.small/.mini, isLoading:)` · `DSStatusChip(…, size: .mini)` · `DSRow` · `DSSectionTitle` · `DSStatsRow` · `DSRing`/`DSDistributionBar` | |
+| Switch / filters | `DSSegmentedSwitch(…, size: .large/.regular/.compact)` · `DSFilterChips` (`DSAdminPage.swift`) | never `pickerStyle(.segmented)` |
+| Member picker | `DSMemberPickerBox` (search + results box; wife/husband/mother pickers) | |
+| Clay objects | `FT5SFull.swift` (art library) + `Components/Home/ArtTrial.swift`: `DSStateIcon(icon, tint:, size:)`, `TrialHeaderIcon`, `.trialCardSkin`, `DSClaySkin`; section object = `AppSection.artIcon` (Diwaniyas «مجلس» `sofa.fill`) | |
+| Landscape | `DS.Landscape` (panel/alert widths, column min width 340, tile/grid widths, empty/loader art, `tabBarClearance`) + `LandscapeLayout.swift`: `@Environment(\.dsLandscape)`, `AdaptiveCardStack`/`AdaptiveLazyStack`, `.dsLandscapeReadable()`, `.dsLandscapeScroll()`, `.dsLandscapeFitScroll()`, `.dsTabBarClearance()` (tab pages' scroll content) | portrait must stay identical |
+| Spinner scale | `DS.Spinner.buttonScale/chipScale` | |
 
-- `xs: 4` | `sm: 8` | `md: 12` | `lg: 16` | `xl: 20` | `xxl: 24` | `xxxl: 32` | `xxxxl: 40`
-
-### Corner Radius — `DS.Radius`
-
-- `sm: 8` | `md: 12` | `lg: 16` | `xl: 20` | `xxl: 24` | `xxxl: 28` | `full: 999`
-
-### Icons — `DS.Icon`
-
-- SF Symbols only. Sizes: `size: 46`, `sizeSm: 38`, `sizeLg: 58`, `opacity: 0.15`
-
-### Shadows — `DS.Shadow`
-
-- `card` (black 0.06, r:10, y:3), `subtle` (black 0.03, r:5, y:2), `glow` (gold 0.15, r:12, y:4), `glowAccent` (green 0.12, r:10, y:4), `neon` (gold 0.15, r:12, y:3), `none`
-
-### Animations — `DS.Anim`
-
-- Spring-based: `bouncy` (0.35/0.6), `snappy` (0.3/0.7), `smooth` (0.5/0.8), `elastic` (0.45/0.55)
-- Timed: `quick` (0.2s easeOut), `medium` (0.35s easeInOut)
-
-## DS Components
-
-IMPORTANT: Always use existing DS components before creating custom views.
-
-| Component | Use For |
-|---|---|
-| `DSCard` | Standard solid card container with border stroke + shadow |
-| `DSGradientCard` | Gradient background card with glass overlay |
-| `DSGlowCard` | Card with colored border accent |
-| `DSPrimaryButton` | Full-width gradient CTA (height: 58), supports `useGradient` and custom `color` |
-| `DSSecondaryButton` | Outlined secondary action (height: 52) |
-| `DSTextField` | Text input with icon, label, focus glow, and secure mode |
-| `DSIcon` | Icon with circular tinted background (customizable size) |
-| `DSActionRow` | Navigable row with icon, subtitle, badge, and RTL-aware chevron |
-| `DSDataRow` | Read-only data display row |
-| `DSSectionHeader` | Uppercase section title with optional icon and trailing text |
-| `DSSheetHeader` | Sheet header with cancel/confirm actions and loading state |
-| `DSPulseBadge` | Animated notification count badge with pulse |
-| `DSStatCard` | Statistics card with circle icon background |
-| `DSFloatingButton` | FAB with gradient capsule and optional label |
-| `DSGradientText` | Text with gradient foreground |
-| `DSRoleBadge` | Colored capsule badge for roles |
-| `DSDivider` | Styled divider with horizontal padding |
-| `DSDecorativeBackground` | Blurred gradient circles for decorative backgrounds |
-| `DSApproveRejectButtons` | Paired approve/reject button row with loading state |
-
-### Backwards Compatibility Components
-
-- `UnifiedTextField` — ViewModifier for basic text field styling
-- `UnifiedButtonStyle` — ButtonStyle matching DSPrimaryButton appearance
-
-## View Modifiers
-
-- `.glassCard(radius:)` — Solid card with border stroke + card shadow
-- `.glassBackground(radius:)` — Solid background with border
-- `.glassPill()` — Capsule shape with border
-- `.dsCardShadow()` / `.dsSubtleShadow()` / `.dsGlowShadow()` / `.dsNeonShadow()` / `.dsAccentGlow()`
-- `.dsGradientBackground()` — Primary gradient background
-- `.dsBoldPress(_)` — Scale 0.95 bounce on press
-- `.languageHorizontalOffset(_:y:)` — RTL-aware horizontal offset (from `DirectionalOffset.swift`)
-
-## Button Styles
-
-- `DSBoldButtonStyle` — Scale 0.95 + opacity 0.9 on press (default for DS buttons)
-- `DSScaleButtonStyle` — Subtle scale 0.97 + opacity 0.9 on press
+Other tokens: `DS.Shadow` (`.dsCardShadow()`, `.dsSubtleShadow()`, `.dsGlowShadow()`), `DS.Anim` / `DSMotion` (press, cascade `dsCardCascade`, `dsStaggerIn`), `DS.Color` + `AppSection` (above). Press styles: `DSPressStyle`, `DSScaleButtonStyle`, `DSBoldButtonStyle`.
+Legacy kit removed 2026-10-07 (`DSCard`, `DSTextField`, `DSIcon`, `DSSectionHeader`, `DSFormRow`, `DSLabeledFieldRow`, `DSDateField`, `DSGradientCard`, `DSGlowCard`, `DSStatCard`, `DSEmptyState`, `DSSheetHeader`, `Unified*`, `Sys*`, `glassCard`…) — do not reintroduce; the table above replaces them.
 
 ## Data Models
 
@@ -437,8 +393,8 @@ When implementing designs from Figma using the Figma MCP server:
 - IMPORTANT: Map Figma colors to `DS.Color` tokens, never hardcode hex values
 - IMPORTANT: Map Figma spacing/padding to `DS.Spacing` tokens
 - IMPORTANT: Map Figma corner radius to `DS.Radius` tokens
-- IMPORTANT: Map Figma typography to `DS.Font` tokens (SF Rounded)
-- Reuse existing DS components (`DSCard`, `DSPrimaryButton`, etc.) instead of creating new ones
+- IMPORTANT: Map Figma typography to `DS.TextRole` roles (IBM Plex Sans Arabic — one typeface)
+- Reuse existing DS components (`.dsCard()`, `DSButton`, `DSStateKit`, `DSSubPageHeader`…) instead of creating new ones
 - Use SF Symbols for icons — match Figma icons to the closest SF Symbol
 - Respect the app's RTL/Arabic layout support
 - Follow MVVM: put business logic in ViewModels, keep Views declarative

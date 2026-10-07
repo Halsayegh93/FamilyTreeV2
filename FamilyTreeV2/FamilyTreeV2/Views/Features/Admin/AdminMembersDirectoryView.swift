@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Admin Members Registry — سجل الأعضاء
 //
 // تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): قائمة واحدة تتمرّر كلها —
-// بطاقة رأس بأرقام حيّة ← بحث ← فلاتر بالعدد ← مسار الفروع ← صفوف `.dsRowBox()`.
+// صفّ أرقام حيّة (العنوان في رأس «إدارة الأعضاء» الملوّن) ← بحث ← فلاتر بالعدد ← مسار الفروع ← صفوف `.dsRowBox()`.
 // بقيت `List` لأجل السحب (تجميد/تفعيل/رقم) والتحميل التدريجي.
 // الضغط على الصف يفتح تفاصيل العضو، وعلى عدّاد الذرّية ينزل داخل الفرع — كما كان.
 struct AdminMembersDirectoryView: View {
@@ -30,6 +30,10 @@ struct AdminMembersDirectoryView: View {
 
     /// لون مجال «الشجرة والأعضاء»
     private let tint = DS.Color.composerProject
+
+    /// الرأس الملوّن الموحّد (`.dsSubPageHeader`) حين تُفتح الصفحة وحدها؛ داخل «إدارة الأعضاء» (تبويب «السجل»)
+    /// رأس تلك الصفحة فوقها فلا يتكرّر — `AdminMembersManagementView` تمرّر false
+    var showsHeader: Bool = true
 
     // MARK: - Filter
 
@@ -196,7 +200,7 @@ struct AdminMembersDirectoryView: View {
     /// شريط المسار — يرجّعك لأي مستوى بضغطة
     private var breadcrumbBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
+            HStack(spacing: DS.Spacing.xs) {
                 crumb(title: L10n.t("الفروع", "Branches"), icon: "house.fill",
                       isCurrent: drillPath.isEmpty) {
                     withAnimation(drillAnimation) { drillPath.removeAll() }
@@ -204,7 +208,7 @@ struct AdminMembersDirectoryView: View {
 
                 ForEach(Array(drillPath.enumerated()), id: \.element.id) { idx, node in
                     Image(systemName: "chevron.forward")
-                        .font(.system(size: 10, weight: .bold))
+                        .dsGlyph(DS.Glyph.xsCompact)
                         .foregroundColor(DS.Color.textTertiary)
                         .accessibilityHidden(true)
                     crumb(title: node.firstName.isEmpty ? node.fullName : node.firstName, icon: nil,
@@ -219,36 +223,11 @@ struct AdminMembersDirectoryView: View {
         }
     }
 
-    /// عنصر في المسار — الحالي كحلي ممتلئ مثل الفلاتر، والسابق بلون القسم
+    /// عنصر في المسار — الشريحة الموحّدة: الحالي ممتلئ بتعبئة القسم، والسابق بلون المجال
     private func crumb(title: String, icon: String?, isCurrent: Bool,
                        action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 10.5, weight: .bold))
-                        .accessibilityHidden(true)
-                }
-                Text(title)
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .lineLimit(1)
-            }
-            .foregroundColor(isCurrent ? .white : tint)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(height: 32)
-            .background {
-                if isCurrent {
-                    Capsule().fill(DSActionFill.style())
-                } else {
-                    Capsule().fill(tint.opacity(0.10))
-                }
-            }
-            // مساحة ضغط ٤٤ نقطة والشكل كما هو
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+        DSChipButton(title, icon: icon, tint: isCurrent ? DS.Color.primary : tint,
+                     isSelected: isCurrent, action: action)
     }
 
     /// صفّ فرع — الضغط على الصف يفتح التفاصيل، وعلى عدّاد الذرّية ينزل داخل الفرع
@@ -264,23 +243,23 @@ struct AdminMembersDirectoryView: View {
                     Button {
                         withAnimation(drillAnimation) { drillPath.append(member) }
                     } label: {
-                        VStack(spacing: 1) {
+                        VStack(spacing: 0) {
                             Text("\(kids)")
-                                .font(DS.Font.plex(13, weight: .bold))
+                                .dsFont(.rowTitleCompact)
                                 .monospacedDigit()
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                             Image(systemName: "chevron.forward")
-                                .font(.system(size: 9.5, weight: .bold))
+                                .dsGlyph(DS.Glyph.micro)
                                 .accessibilityHidden(true)
                         }
                         .foregroundColor(tint)
-                        .frame(width: 44, height: 44)
-                        .background(tint.opacity(0.10),
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                        .background(tint.opacity(DS.Opacity.tintFill),
                                     in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .strokeBorder(tint.opacity(0.22), lineWidth: 1)
+                                .strokeBorder(tint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width)
                         )
                         .contentShape(Rectangle())
                     }
@@ -289,7 +268,7 @@ struct AdminMembersDirectoryView: View {
                                                "\(member.firstName)'s descendants: \(kids)"))
                     .accessibilityHint(L10n.t("يعرض الفرع", "Opens the branch"))
                 } else {
-                    SysChevron()
+                    DSChevron()
                 }
             }
         }
@@ -301,7 +280,7 @@ struct AdminMembersDirectoryView: View {
             NavigationLink(destination: AdminMemberDetailSheet(member: member)) { EmptyView() }
                 .opacity(0)
             memberRow(member: member) {
-                SysChevron()
+                DSChevron()
             }
         }
     }
@@ -322,7 +301,7 @@ struct AdminMembersDirectoryView: View {
                               placeholder: L10n.t("بحث بالاسم أو رقم الهاتف...", "Search by name or phone..."),
                               tint: tint)
                     .onChange(of: searchText) { _ in displayLimit = 20 }
-                    .registryListRow(top: 0, bottom: 2)
+                    .registryListRow(top: 0, bottom: DS.Spacing.xxs)
 
                 // 2) فلتر الحالة (الكل/أحياء/متوفون)
                 filterChips
@@ -330,7 +309,7 @@ struct AdminMembersDirectoryView: View {
 
                 if searchText.isEmpty {
                     breadcrumbBar
-                        .registryListRow(top: 0, bottom: 2, horizontal: 0)
+                        .registryListRow(top: 0, bottom: DS.Spacing.xxs, horizontal: 0)
                 }
 
                 if filteredMembers.isEmpty {
@@ -345,9 +324,8 @@ struct AdminMembersDirectoryView: View {
                             .registryListRow()
                     }
                     if currentLevelMembers.isEmpty {
-                        SysStateCard(icon: "person.2.slash",
-                                     title: L10n.t("ما فيه ذرّية مسجّلة لهذا الفرع", "No descendants recorded for this branch"),
-                                     tint: DS.Color.textTertiary)
+                        DSEmptyView(L10n.t("ما فيه ذرّية مسجّلة لهذا الفرع", "No descendants recorded for this branch"),
+                                    style: .compact)
                             .registryListRow(top: DS.Spacing.sm)
                     }
                 } else {
@@ -426,7 +404,8 @@ struct AdminMembersDirectoryView: View {
                 }
             )
         }
-        .confirmationDialog(
+        // تأكيد التجميد/التفعيل — المربّع الوسطي الموحّد (`dsAlert`) بدل الورقة السفلية
+        .dsAlert(
             memberToFreeze.map {
                 L10n.t("تجميد حساب \($0.fullName)؟", "Freeze \($0.fullName)'s account?")
             } ?? "",
@@ -434,20 +413,18 @@ struct AdminMembersDirectoryView: View {
                 get: { memberToFreeze != nil },
                 set: { if !$0 { memberToFreeze = nil } }
             ),
-            titleVisibility: .visible
-        ) {
-            if let member = memberToFreeze {
-                Button(L10n.t("تجميد الحساب", "Freeze Account"), role: .destructive) {
-                    Task { await memberVM.setMemberStatus(memberId: member.id, status: .frozen) }
-                    memberToFreeze = nil
-                }
+            presenting: memberToFreeze
+        ) { member in
+            Button(L10n.t("تجميد الحساب", "Freeze Account"), role: .destructive) {
+                Task { await memberVM.setMemberStatus(memberId: member.id, status: .frozen) }
+                memberToFreeze = nil
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { memberToFreeze = nil }
-        } message: {
+        } message: { _ in
             Text(L10n.t("لن يتمكن من الدخول للتطبيق.", "They won't be able to access the app."))
         }
         // Activate confirm
-        .confirmationDialog(
+        .dsAlert(
             memberToActivate.map {
                 L10n.t("تفعيل حساب \($0.fullName)؟", "Activate \($0.fullName)'s account?")
             } ?? "",
@@ -455,17 +432,31 @@ struct AdminMembersDirectoryView: View {
                 get: { memberToActivate != nil },
                 set: { if !$0 { memberToActivate = nil } }
             ),
-            titleVisibility: .visible
-        ) {
-            if let member = memberToActivate {
-                Button(L10n.t("تفعيل الحساب", "Activate Account")) {
-                    Task { await memberVM.setMemberStatus(memberId: member.id, status: .active) }
-                    memberToActivate = nil
-                }
+            presenting: memberToActivate
+        ) { member in
+            Button(L10n.t("تفعيل الحساب", "Activate Account")) {
+                Task { await memberVM.setMemberStatus(memberId: member.id, status: .active) }
+                memberToActivate = nil
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { memberToActivate = nil }
-        } message: {
+        } message: { _ in
             Text(L10n.t("سيتمكن من الدخول للتطبيق مجدداً.", "They will be able to access the app again."))
+        }
+        // الرأس الملوّن الموحّد مثل بقية صفحات الإدارة (نفس نمط «إدارة الأعضاء»)
+        .modifier(RegistryHeader(shows: showsHeader))
+    }
+
+    /// رأس «سجل الأعضاء» الملوّن — مرة واحدة فقط (لا يُرسم تحت رأس «إدارة الأعضاء»)
+    private struct RegistryHeader: ViewModifier {
+        let shows: Bool
+        func body(content: Content) -> some View {
+            if shows {
+                content.dsSubPageHeader(L10n.t("سجل الأعضاء", "Members Registry"),
+                                        subtitle: L10n.t("تصفّح الفروع، أو ابحث بالاسم أو الرقم",
+                                                         "Browse branches, or search by name or phone"))
+            } else {
+                content
+            }
         }
     }
 
@@ -482,23 +473,18 @@ struct AdminMembersDirectoryView: View {
         return (total, branches, withPhone)
     }
 
+    /// الأرقام السريعة — العنوان والوصف في رأس «إدارة الأعضاء» الملوّن
     private var hero: some View {
         let n = heroNumbers
         let ready = !memberVM.allMembers.isEmpty
-        return DSPageHero(
-            title: L10n.t("سجل الأعضاء", "Members Registry"),
-            subtitle: L10n.t("تصفّح الفروع، أو ابحث بالاسم أو الرقم", "Browse branches, or search by name or phone"),
-            icon: "person.3.sequence.fill",
-            tint: tint,
-            stats: [
-                DSHeroStat(value: ready ? "\(n.total)" : "—",
-                           label: L10n.t("الأفراد", "Members"), icon: "person.3.fill"),
-                DSHeroStat(value: ready ? "\(n.branches)" : "—",
-                           label: L10n.t("الفروع", "Branches"), icon: "arrow.triangle.branch"),
-                DSHeroStat(value: ready ? "\(n.withPhone)" : "—",
-                           label: L10n.t("لهم رقم", "With phone"), icon: "phone.fill")
-            ]
-        )
+        return DSStatsRow([
+            DSHeroStat(value: ready ? "\(n.total)" : "—",
+                       label: L10n.t("الأفراد", "Members"), icon: "person.3.fill"),
+            DSHeroStat(value: ready ? "\(n.branches)" : "—",
+                       label: L10n.t("الفروع", "Branches"), icon: "arrow.triangle.branch"),
+            DSHeroStat(value: ready ? "\(n.withPhone)" : "—",
+                       label: L10n.t("لهم رقم", "With phone"), icon: "phone.fill")
+        ], tint: tint)
     }
 
     // MARK: - Filter Chips
@@ -531,22 +517,22 @@ struct AdminMembersDirectoryView: View {
                 memberAvatar(member)
 
                 // سطران: الاسم، ثم شارة العضو والهاتف — بلا تكرار الاسم
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     Text(member.shortFullName)
-                        .dsFieldFont(13.5, weight: .bold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(muted ? DS.Color.textTertiary : DS.Color.fieldLabel)
                         .lineLimit(1)
 
-                    HStack(spacing: 6) {
-                        SysStatusChip(text: member.roleName, tint: member.roleColor)
+                    HStack(spacing: DS.Spacing.xsm) {
+                        DSStatusChip(text: member.roleName, tint: member.roleColor)
 
                         if let phone = member.phoneNumber, !phone.isEmpty {
-                            HStack(spacing: 3) {
+                            HStack(spacing: DS.Spacing.xxs) {
                                 Image(systemName: "phone.fill")
-                                    .font(.system(size: 9.5, weight: .semibold))
+                                    .dsGlyph(DS.Glyph.micro, weight: .semibold)
                                     .accessibilityHidden(true)
                                 Text(KuwaitPhone.display(phone))
-                                    .font(DS.Font.plex(12))
+                                    .dsFont(.subtitle)
                                     .monospacedDigit()
                                     .lineLimit(1)
                             }
@@ -564,7 +550,7 @@ struct AdminMembersDirectoryView: View {
 
             trailing()
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: DS.Icon.tapTarget)
         .dsRowBox()
         .contentShape(Rectangle())
     }
@@ -574,7 +560,7 @@ struct AdminMembersDirectoryView: View {
         DSMemberAvatar(
             name: member.fullName,
             avatarUrl: member.avatarUrl,
-            size: 40,
+            size: DS.Icon.avatar,
             roleColor: member.isDeceased == true ? DS.Color.textTertiary : member.roleColor
         )
         .overlay(alignment: .bottomTrailing) {
@@ -588,13 +574,13 @@ struct AdminMembersDirectoryView: View {
     }
 
     private func statusBadge(_ icon: String, _ color: Color) -> some View {
-        Image(systemName: icon)
-            .font(.system(size: 8.5, weight: .bold))
-            .foregroundColor(.white)
-            .frame(width: 17, height: 17)
+        Image(dsSymbol: icon)
+            .dsGlyph(DS.Glyph.microCompact)
+            .foregroundColor(DS.Color.textOnPrimary)
+            .frame(width: DS.Icon.avatarBadge, height: DS.Icon.avatarBadge)
             .background(Circle().fill(color))
-            .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
-            .offset(x: 2, y: 2)
+            .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: DS.Border.widthBold))
+            .offset(x: DS.Spacing.xxs, y: DS.Spacing.xxs)
     }
 
     private func rowAccessibilityLabel(_ member: FamilyMember) -> String {
@@ -605,126 +591,23 @@ struct AdminMembersDirectoryView: View {
         return parts.joined(separator: "، ")
     }
 
+    /// «عرض المزيد» — الشريحة الموحّدة بلون المجال في وسط السطر
     private var loadMoreButton: some View {
-        Button {
+        DSChipButton(L10n.t(
+            "عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)",
+            "Show more (\(filteredMembers.count - displayLimit) remaining)"
+        ), icon: "arrow.down.circle.fill", tint: tint) {
             displayLimit += 20
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 12.5, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(L10n.t(
-                    "عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)",
-                    "Show more (\(filteredMembers.count - displayLimit) remaining)"
-                ))
-                .font(DS.Font.plex(12.5, weight: .bold))
-            }
-            .foregroundColor(tint)
-            .padding(.horizontal, DS.Spacing.lg)
-            .frame(minHeight: 40)
-            .background(Capsule().fill(tint.opacity(0.10)))
-            .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 1))
-            .padding(.vertical, 2)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    // MARK: - Branch Filter Row
-    // (غير معروض حالياً — التصفّح الشجري حلّ محلّه؛ بقي كما هو لو أُعيد)
-
-    private var branchFilterRow: some View {
-        Group {
-            if let m = branchRootMember {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "tree.fill")
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.accent)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("فرع: \(m.displayFullName)", "Branch: \(m.displayFullName)"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(DS.Color.accent)
-                            .lineLimit(1)
-                        Text(L10n.t(
-                            "\(descendantIds(of: m.id).count) عضو في الفرع",
-                            "\(descendantIds(of: m.id).count) members in branch"
-                        ))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
-                    }
-                    Spacer()
-                    Button {
-                        branchPickerOpen = true
-                    } label: {
-                        Text(L10n.t("تغيير", "Change"))
-                            .font(DS.Font.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(DS.Color.accent)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(DS.Color.accent.opacity(0.12)))
-                    }
-                    Button {
-                        branchRootId = nil
-                        displayLimit = 20
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(DS.Color.error)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.accent.opacity(0.08))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(DS.Color.accent.opacity(0.2), lineWidth: 1)
-                )
-            } else {
-                Button {
-                    branchPickerOpen = true
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "tree")
-                            .font(DS.Font.scaled(12, weight: .semibold))
-                        Text(L10n.t("حصر على فرع معيّن", "Filter by branch"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.semibold)
-                        Spacer()
-                        Image(systemName: "chevron.forward")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .opacity(0.5)
-                    }
-                    .foregroundColor(DS.Color.textSecondary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.surface)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(DSScaleButtonStyle())
-            }
-        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Empty States
 
     private var noResultsState: some View {
-        SysStateCard(
-            icon: "person.fill.questionmark",
-            title: L10n.t("لا يوجد نتائج", "No results found"),
-            hint: L10n.t("جرّب اسماً آخر أو غيّر الفلتر", "Try another name or change the filter"),
-            tint: DS.Color.textTertiary
-        )
+        DSEmptyView(L10n.t("لا يوجد نتائج", "No results found"),
+                    message: L10n.t("جرّب اسماً آخر أو غيّر الفلتر", "Try another name or change the filter"),
+                    style: .compact)
     }
 }
 
@@ -732,7 +615,7 @@ struct AdminMembersDirectoryView: View {
 
 private extension View {
     /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
-    func registryListRow(top: CGFloat = 4, bottom: CGFloat = 4,
+    func registryListRow(top: CGFloat = DS.Spacing.xs, bottom: CGFloat = DS.Spacing.xs,
                          horizontal: CGFloat = DS.Spacing.lg) -> some View {
         self
             .listRowBackground(Color.clear)

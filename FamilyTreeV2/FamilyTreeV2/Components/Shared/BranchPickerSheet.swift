@@ -83,10 +83,10 @@ struct BranchPickerSheet: View {
         if !search.isEmpty {
             Button { search = "" } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
+                    .dsGlyph(DS.Glyph.lg, weight: .regular)
                     .foregroundColor(DS.Color.textTertiary)
                     // مساحة ضغط ٤٤ نقطة (حد أبل) — مركز الأيقونة في مكانه (كان ٣٦ + هامش ٤)
-                    .frame(width: 44, height: 44)
+                    .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -98,17 +98,12 @@ struct BranchPickerSheet: View {
     @ViewBuilder
     private func branchList(_ nodes: [BranchNode], searching: Bool) -> some View {
         if isLoading {
-            ProgressView()
-                .tint(DS.Color.primary.dsChrome(in: dsSectionEnv))
-                .scaleEffect(1.2)
+            // التحميل الواحد: مجسّم القسم يتنفّس (بدل الدوّارة)
+            DSPageLoader(fillsSpace: false)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.xl)
+                .padding(.vertical, DS.Spacing.sm)
         } else if nodes.isEmpty {
-            Text(L10n.t("لا توجد نتائج", "No results"))
-                .font(DS.Font.plex(13, weight: .semibold))
-                .foregroundColor(DS.Color.textTertiary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.md)
+            DSEmptyView(L10n.t("لا توجد نتائج", "No results"), style: .inline)
         } else if searching && nodes.count > Self.lazyListThreshold {
             // كسولة — البحث يشمل كل الأعضاء: تُبنى الصفوف الظاهرة فقط
             LazyVStack(spacing: DS.Spacing.sm) {
@@ -168,9 +163,9 @@ struct BranchPickerSheet: View {
         .padding(.leading, DS.Spacing.lg)
         .overlay(alignment: .leading) {
             Capsule()
-                .fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.2))
-                .frame(width: 2)
-                .padding(.leading, 6)
+                .fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(DS.Opacity.tintFillStrong))
+                .frame(width: DS.Border.widthBold + DS.Border.width / 2)
+                .padding(.leading, DS.Spacing.xsm)
         }
         .transition(.opacity)
     }
@@ -188,22 +183,22 @@ struct BranchPickerSheet: View {
                 DSMemberAvatar(
                     name: node.member.fullName,
                     avatarUrl: node.member.avatarUrl,
-                    size: isTop ? 36 : 32,
+                    size: isTop ? DS.Icon.avatarRow : DS.Icon.row,
                     roleColor: DS.Color.primary.dsChrome(in: dsSectionEnv)
                 )
                 if node.member.isDeceased == true {
                     Image(systemName: "leaf.fill")
-                        .font(DS.Font.scaled(11))
+                        .dsGlyph(DS.Glyph.smCompact, weight: .regular)
                         .foregroundColor(DS.Color.textTertiary)
                 }
                 Text(node.displayName)
-                    .font(DS.Font.plex(isTop ? 14.5 : 14, weight: (isTop || isSelected) ? .bold : .regular))
+                    .dsFont(isTop ? .headlineCompact : isSelected ? .bodyStrong : .body)
                     .foregroundColor((isTop || isSelected) ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
+                        .dsGlyph(DS.Glyph.xl, weight: .regular)
                         .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                 }
                 if canExpand {
@@ -228,9 +223,9 @@ struct BranchPickerSheet: View {
         }
     }
 
-    private static let expandButtonSize: CGFloat = 30
+    private static let expandButtonSize: CGFloat = DS.Icon.discSmall
     /// منطقة ضغط سهم التوسعة — ٤٤ نقطة (حد أبل)، والدائرة ٣٠ كما هي
-    private static let expandHitSize: CGFloat = 44
+    private static let expandHitSize: CGFloat = DS.Icon.tapTarget
 
     /// سهم التوسعة — مغلق يشير لجهة القراءة (يسار بالعربي)، ومفتوح للأسفل
     private func expandButton(for node: BranchNode) -> some View {
@@ -242,12 +237,13 @@ struct BranchPickerSheet: View {
             }
         } label: {
             Image(systemName: "chevron.down")
-                .font(.system(size: 11, weight: .bold))
+                .dsGlyph(DS.Glyph.smCompact)
                 .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
                 // الاتجاه يُعكس تلقائياً بالعربي — زاوية واحدة تشير لجهة القراءة باللغتين
                 .rotationEffect(.degrees(isExpanded ? 0 : -90))
                 .frame(width: Self.expandButtonSize, height: Self.expandButtonSize)
-                .background(Circle().fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(isExpanded ? 0.18 : 0.10)))
+                .background(Circle().fill(DS.Color.primary.dsChrome(in: dsSectionEnv)
+                    .opacity(isExpanded ? DS.Opacity.tintFillStrong : DS.Opacity.tintFill)))
                 // مساحة ضغط ٤٤ نقطة (حد أبل) حول الدائرة — الصف ٤٨+ فيسعها
                 .frame(width: Self.expandHitSize, height: Self.expandHitSize)
                 .contentShape(Rectangle())

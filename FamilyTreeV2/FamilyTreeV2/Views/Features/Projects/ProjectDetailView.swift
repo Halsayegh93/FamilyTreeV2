@@ -20,34 +20,23 @@ enum SocialPlatform {
     var brandColor: Color {
         switch self {
         case .website:   return DS.Color.primary           // أزرق هادئ
-        case .instagram: return Color(hex: "#E1306C")     // وردي إنستجرام
-        case .twitter:   return Color(hex: "#000000")     // أسود X
-        case .snapchat:  return Color(hex: "#FFFC00")     // أصفر Snap
-        case .whatsapp:  return Color(hex: "#25D366")     // أخضر WhatsApp
+        case .instagram: return DS.Color.Social.instagram  // وردي إنستجرام
+        case .twitter:   return DS.Color.Social.x          // أسود X
+        case .snapchat:  return DS.Color.Social.snapchat   // أصفر Snap
+        case .whatsapp:  return DS.Color.Social.whatsapp   // أخضر WhatsApp
         case .phone:     return DS.Color.success           // أخضر هاتف
-        case .location:  return Color(hex: "#EA4335")     // أحمر Maps
+        case .location:  return DS.Color.Social.maps       // أحمر Maps
         }
     }
 
-    /// gradient إنستجرام الأوفيشيال — للحالة الخاصة فقط.
-    private var instagramGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(hex: "#F58529"),   // برتقالي
-                Color(hex: "#DD2A7B"),   // وردي
-                Color(hex: "#8134AF"),   // بنفسجي
-                Color(hex: "#515BD4")    // أزرق
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
+    /// gradient إنستجرام الأوفيشيال — للحالة الخاصة فقط (من `DS.Color.Social`).
+    private var instagramGradient: LinearGradient { DS.Color.Social.instagramGradient }
 
     /// لون الأيقونة الأمامية — أبيض غالباً، أسود مع Snapchat الأصفر.
     var foregroundColor: Color {
         switch self {
-        case .snapchat: return .black
-        default:        return .white
+        case .snapchat: return DS.Color.overlayDark
+        default:        return DS.Color.textOnPrimary
         }
     }
 
@@ -60,37 +49,37 @@ enum SocialPlatform {
                 Circle()
                     .fill(instagramGradient)
                     .frame(width: size, height: size)
-                    .shadow(color: brandColor.opacity(0.25), radius: 4, x: 0, y: 2)
+                    .dsSubtleShadow()
             } else {
                 Circle()
                     .fill(brandColor)
                     .frame(width: size, height: size)
-                    .shadow(color: brandColor.opacity(0.25), radius: 4, x: 0, y: 2)
+                    .dsSubtleShadow()
             }
 
             Group {
                 switch self {
                 case .website:
                     Image(systemName: "globe")
-                        .font(.system(size: iconSize, weight: .bold))
+                        .dsGlyph(iconSize)
                 case .instagram:
                     Image(systemName: "camera.fill")
-                        .font(.system(size: iconSize * 0.95, weight: .bold))
+                        .dsGlyph(iconSize * 0.95)
                 case .twitter:
                     Text("𝕏")
-                        .font(.system(size: iconSize + 2, weight: .black))
+                        .dsGlyph(iconSize + DS.Spacing.xxs, weight: .black)
                 case .snapchat:
                     Image(systemName: "bolt.horizontal.fill")
-                        .font(.system(size: iconSize, weight: .bold))
+                        .dsGlyph(iconSize)
                 case .whatsapp:
                     Image(systemName: "message.fill")
-                        .font(.system(size: iconSize, weight: .bold))
+                        .dsGlyph(iconSize)
                 case .phone:
                     Image(systemName: "phone.fill")
-                        .font(.system(size: iconSize, weight: .bold))
+                        .dsGlyph(iconSize)
                 case .location:
                     Image(systemName: "mappin.and.ellipse")
-                        .font(.system(size: iconSize, weight: .bold))
+                        .dsGlyph(iconSize)
                 }
             }
             .foregroundColor(foregroundColor)
@@ -200,14 +189,14 @@ struct ProjectAccountsEditor: View {
         let value = binding(p).wrappedValue.trimmingCharacters(in: .whitespaces)
         return Button { extra = .edit(p) } label: {
             HStack(spacing: DS.Spacing.sm) {
-                p.iconView(size: 32)
+                p.iconView(size: DS.Icon.row)
                     .accessibilityHidden(true)   // أيقونة المنصّة — اسمها يُقرأ
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text(p.shortLabel)
-                        .font(DS.Font.plex(12, weight: .bold))
+                        .dsFont(.chip)
                         .foregroundColor(DS.Color.textPrimary)
                     Text(value)
-                        .font(DS.Font.plex(12.5))
+                        .dsFont(.subtitle)
                         .foregroundColor(DS.Color.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -215,7 +204,7 @@ struct ProjectAccountsEditor: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "pencil")
-                    .font(.system(size: 11, weight: .bold))
+                    .dsGlyph(DS.Glyph.xs)
                     .foregroundColor(DS.Color.textTertiary)
                     .accessibilityHidden(true)
                 Button {
@@ -223,23 +212,24 @@ struct ProjectAccountsEditor: View {
                     binding(p).wrappedValue = ""
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 9.5, weight: .heavy))
+                        .dsGlyph(DS.Glyph.micro, weight: .heavy)
                         .foregroundColor(DS.Color.textSecondary)
-                        .frame(width: 24, height: 24)
+                        .frame(width: DS.Spacing.xxl, height: DS.Spacing.xxl)
                         .background(Circle().fill(DS.Color.mutedBackground))
-                        // ٢٤ ← مساحة ضغط ٤٤×٤٤ داخل الصف (ارتفاعه ~٥٤) بلا تغيير في التخطيط:
-                        // نحو القلم بقدر المسافة فقط، والباقي في هامش الصف
-                        .tapArea(top: 10, leading: 8, bottom: 10, trailing: 12)
+                        // ← مساحة ضغط ٤٤×٤٤ داخل الصف بلا تغيير في التخطيط
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, -(DS.Icon.tapTarget - DS.Spacing.xxl) / 2)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.t("حذف الحساب", "Remove"))
             }
-            .padding(.horizontal, DS.Spacing.sm + 2)
+            .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.sm)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(p.brandColor.opacity(0.07)))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(p.brandColor.opacity(0.3), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                .fill(p.brandColor.opacity(DS.Opacity.tintFillSoft)))
+            .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                .strokeBorder(p.brandColor.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -248,29 +238,30 @@ struct ProjectAccountsEditor: View {
         Button { extra = .add } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .heavy))
-                    .foregroundColor(.white)
-                    .frame(width: 30, height: 30)
+                    .dsGlyph(DS.Glyph.mdCompact, weight: .heavy)
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .frame(width: DSBox.compactHeaderIcon, height: DSBox.compactHeaderIcon)
                     .background(Circle().fill(tint))
                     .accessibilityHidden(true)
                 Text(added.isEmpty ? L10n.t("إضافة حساب تواصل", "Add a contact account")
                                    : L10n.t("إضافة حساب آخر", "Add another account"))
-                    .font(DS.Font.plex(13, weight: .bold))
+                    .dsFont(.rowTitleCompact)
                     .foregroundColor(tint)
                 Spacer(minLength: 0)
                 // معاينة صغيرة للمنصّات المتاحة
-                HStack(spacing: -7) {
+                HStack(spacing: -DS.Spacing.xsm) {
                     ForEach(Self.platforms.filter { !added.contains($0) }.prefix(4), id: \.shortLabel) { p in
-                        p.iconView(size: 22)
-                            .overlay(Circle().strokeBorder(DS.Color.surface, lineWidth: 1.5))
+                        p.iconView(size: DS.Icon.section)
+                            .overlay(Circle().strokeBorder(DS.Color.surface, lineWidth: DS.Border.widthBold))
                     }
                 }
                 .accessibilityHidden(true)   // زخرفة
             }
-            .padding(.horizontal, DS.Spacing.sm + 2)
+            .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.sm)
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(tint.opacity(0.45), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])))
+            // خانة «إضافة» المتقطّعة الموحّدة
+            .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                .strokeBorder(tint.opacity(DSAddChipLabel.strokeOpacity), style: DSAddChipLabel.dash))
             .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -363,26 +354,28 @@ private struct ProjectAccountBox: View {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) { step = p }
                     UISelectionFeedbackGenerator().selectionChanged()
                 } label: {
-                    VStack(spacing: 6) {
-                        p.iconView(size: 38)
+                    VStack(spacing: DS.Spacing.xsm) {
+                        p.iconView(size: DS.Icon.sizeSm)
                             .overlay(alignment: .topTrailing) {
                                 if done {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(.white, DS.Color.success)
-                                        .offset(x: 5, y: -4)
+                                        .dsGlyph(DS.Glyph.md)
+                                        .foregroundStyle(DS.Color.textOnPrimary, DS.Color.success)
+                                        .offset(x: DS.Spacing.xs, y: -DS.Spacing.xs)
                                 }
                             }
                         Text(p.shortLabel)
-                            .font(DS.Font.plex(11.5, weight: .bold))
+                            .dsFont(.badge)
                             .foregroundColor(DS.Color.textPrimary)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.sm + 2)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(done ? p.brandColor.opacity(0.08) : DS.Color.surface))
-                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(done ? p.brandColor.opacity(0.35) : DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
+                    .padding(.vertical, DS.Spacing.sm)
+                    .background(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                        .fill(done ? p.brandColor.opacity(DS.Opacity.tintFillSoft) : DS.Color.surface))
+                    .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                        .strokeBorder(done ? p.brandColor.opacity(DS.Opacity.tintStroke)
+                                           : DS.Color.textTertiary.opacity(DS.Opacity.cardStroke),
+                                      lineWidth: DS.Border.width))
                 }
                 .buttonStyle(DSScaleButtonStyle())
             }
@@ -391,8 +384,8 @@ private struct ProjectAccountBox: View {
 
     private func entry(_ p: SocialPlatform) -> some View {
         VStack(spacing: DS.Spacing.sm) {
-            p.iconView(size: 54)
-                .padding(.top, 2)
+            p.iconView(size: DS.Icon.state)
+                .padding(.top, DS.Spacing.xxs)
                 .accessibilityHidden(true)   // أيقونة المنصّة — عنوان المربّع يسمّيها
             TextField(placeholder(p), text: $text)
                 .keyboardType((p == .phone || p == .whatsapp) ? .phonePad : .URL)
@@ -402,19 +395,11 @@ private struct ProjectAccountBox: View {
                 .dsAlertField()
                 .focused($focused)
             if isFilledStart {
-                Button {
+                // الشريحة الموحّدة (مساحة ضغط ٤٤)
+                DSChipButton(L10n.t("حذف الحساب", "Remove account"), icon: "trash", tint: DS.Color.error) {
                     values[p.shortLabel]?.wrappedValue = ""
                     onClose()
-                } label: {
-                    Label(L10n.t("حذف الحساب", "Remove account"), systemImage: "trash")
-                        .font(DS.Font.plex(12.5, weight: .semibold))
-                        .foregroundColor(DS.Color.error)
-                        // النص ~١٩ ← مساحة ضغط ٤٤: ٣ حشوة (+٦ للتخطيط فقط) ثم ٨ فوق حتى الحقل
-                        // بلا تغطيته، و١٢ تحت حتى أزرار المربّع بلا تغطيتها
-                        .padding(.vertical, 3)
-                        .tapArea(top: 8, bottom: 12)
                 }
-                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity)
@@ -429,174 +414,13 @@ private struct ProjectAccountBox: View {
     }
 }
 
-/// «حسابات التواصل» في إضافة/تعديل المشروع — مربّعات، والضغط على أي مربّع يفتح
-/// مربّعاً بمنتصف الشاشة لإدخال الحساب (طلب المالك)
-struct ProjectContactTiles: View {
-    @Binding var phone: String
-    @Binding var whatsapp: String
-    @Binding var instagram: String
-    @Binding var twitter: String
-    @Binding var website: String
-    @Binding var location: String
-    /// مربّع الحساب في نافذة مستقلّة — بلون قسم الواجهة التي فتحته (المشاريع)
-    @Environment(\.dsSection) private var section
-
-    private struct Item {
-        let platform: SocialPlatform
-        let placeholder: String
-        let keyboard: UIKeyboardType
-        let value: Binding<String>
-    }
-
-    private var items: [Item] {
-        [
-            Item(platform: .phone, placeholder: "+965...", keyboard: .phonePad, value: $phone),
-            Item(platform: .whatsapp, placeholder: "+965...", keyboard: .phonePad, value: $whatsapp),
-            Item(platform: .instagram, placeholder: "@username", keyboard: .URL, value: $instagram),
-            Item(platform: .twitter, placeholder: "@username", keyboard: .URL, value: $twitter),
-            Item(platform: .website, placeholder: "https://...", keyboard: .URL, value: $website),
-            Item(platform: .location, placeholder: L10n.t("رابط الموقع (Maps)", "Maps URL"), keyboard: .URL, value: $location)
-        ]
-    }
-
+/// فحص «حساب تواصل» مُدخل (كانت مربّعات «حسابات التواصل» القديمة — حلّ محلها `ProjectAccountsEditor`)
+enum ProjectContactTiles {
     /// «+965 » المبدئي في واتساب لا يُعدّ حساباً
     /// (فحص نصّي خالص — `nonisolated` حتى يُمرَّر كدالة لـ`filter` بلا تحذير عزل)
     nonisolated static func isFilled(_ v: String) -> Bool {
         let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
         return !t.isEmpty && t != "+965"
-    }
-
-    var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 3),
-                  spacing: DS.Spacing.sm) {
-            ForEach(items.indices, id: \.self) { i in tile(items[i]) }
-        }
-    }
-
-    private func tile(_ item: Item) -> some View {
-        let filled = Self.isFilled(item.value.wrappedValue)
-        return Button { open(item) } label: {
-            VStack(spacing: 5) {
-                item.platform.iconView(size: 32)
-                    .overlay(alignment: .topTrailing) {
-                        if filled {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(.white, DS.Color.success)
-                                .offset(x: 5, y: -4)
-                        }
-                    }
-                    // زخرفة — اسم المنصّة والحساب (أو «إضافة») يُقرآن تحتها
-                    .accessibilityHidden(true)
-                Text(item.platform.shortLabel)
-                    .font(DS.Font.plex(11.5, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                Text(filled ? item.value.wrappedValue.trimmingCharacters(in: .whitespaces)
-                            : L10n.t("إضافة", "Add"))
-                    .font(DS.Font.plex(10))
-                    .foregroundColor(filled ? DS.Color.textSecondary : AppSection.projects.ink)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .environment(\.layoutDirection, filled ? .leftToRight : LanguageManager.shared.layoutDirection)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.sm)
-            .padding(.horizontal, 4)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(filled ? item.platform.brandColor.opacity(0.07) : DS.Color.background)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(filled ? item.platform.brandColor.opacity(0.35)
-                                         : DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
-            )
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    private func open(_ item: Item) {
-        var id: UUID?
-        let close: () -> Void = { if let i = id { DSPopupPresenter.shared.hide(i) } }
-        id = DSPopupPresenter.shared.show(
-            ContactLinkCard(platform: item.platform,
-                            placeholder: item.placeholder,
-                            keyboard: item.keyboard,
-                            initial: Self.isFilled(item.value.wrappedValue) ? item.value.wrappedValue : "",
-                            onSave: { v in item.value.wrappedValue = v; close() },
-                            onCancel: close),
-            section: section ?? AppSection.current
-        )
-    }
-}
-
-/// مربّع إدخال حساب واحد بمنتصف الشاشة
-private struct ContactLinkCard: View {
-    let platform: SocialPlatform
-    let placeholder: String
-    let keyboard: UIKeyboardType
-    let initial: String
-    let onSave: (String) -> Void
-    let onCancel: () -> Void
-    @State private var text = ""
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        DSCenterCard(onBackgroundTap: onCancel) {
-            VStack(spacing: DS.Spacing.sm) {
-                platform.iconView(size: 46)
-                    .accessibilityHidden(true)   // اسم المنصّة تحتها يُقرأ
-                Text(platform.shortLabel)
-                    .font(DS.Font.plex(17, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-            }
-            .frame(maxWidth: .infinity)
-
-            TextField(placeholder, text: $text)
-                .keyboardType(keyboard)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .environment(\.layoutDirection, .leftToRight)
-                .dsAlertField()
-                .focused($focused)
-
-            if !initial.isEmpty {
-                Button { onSave("") } label: {
-                    Label(L10n.t("حذف الحساب", "Remove"), systemImage: "trash")
-                        .font(DS.Font.plex(12.5, weight: .semibold))
-                        .foregroundColor(DS.Color.error)
-                        // النص ~١٩ ← مساحة ضغط ٤٤: حشوة ١ (+٢ للتخطيط فقط) ثم ١٢ فوق وتحت
-                        // حتى الحقل والأزرار بلا تغطيتهما
-                        .padding(.vertical, 1)
-                        .tapArea(top: 12, bottom: 12)
-                }
-                .frame(maxWidth: .infinity)
-                .buttonStyle(.plain)
-            }
-
-            HStack(spacing: DS.Spacing.sm) {
-                Button { onSave(text.trimmingCharacters(in: .whitespacesAndNewlines)) } label: {
-                    Text(L10n.t("حفظ", "Save"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(DSActionFill.style(), in: RoundedRectangle(cornerRadius: DS.Radius.md))
-                }
-                Button(action: onCancel) {
-                    Text(L10n.t("إلغاء", "Cancel"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
-                }
-            }
-            .buttonStyle(DSScaleButtonStyle())
-        }
-        .onAppear {
-            text = initial
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true }
-        }
     }
 }
 
@@ -641,13 +465,13 @@ struct ProjectSectionBackdrop: View {
                         HStack(spacing: symbolSize) {
                             ForEach(0..<max(columns, 1), id: \.self) { _ in
                                 Image(systemName: "briefcase.fill")
-                                    .font(.system(size: symbolSize, weight: .light))
+                                    .dsGlyph(symbolSize, weight: .light)
                             }
                         }
                         .offset(x: row.isMultiple(of: 2) ? 0 : symbolSize)
                     }
                 }
-                .foregroundColor(.white.opacity(0.10))
+                .foregroundColor(DS.Color.overlayFillSubtle)
                 .rotationEffect(.degrees(-18))
                 .frame(width: geo.size.width, height: geo.size.height)
                 .offset(x: -symbolSize, y: -symbolSize)
@@ -656,13 +480,10 @@ struct ProjectSectionBackdrop: View {
 
             // لمعة ناعمة من الأعلى + تعتيم أسفل ليبرز الشعار
             LinearGradient(
-                colors: [.white.opacity(0.16), .clear, .black.opacity(0.18)],
+                colors: [DS.Color.headerBorder, .clear, DS.Color.shadowMediumDark],
                 startPoint: .top,
                 endPoint: .bottom
             )
-
-            // TMP-ART-TRIAL: رسم الاتجاه المختار في طرف الغلاف (الحالي: لا شيء)
-            TrialArt(make: { ArtDispatch.pageHeroArt($0, icon: "briefcase.fill", tint: DS.Color.tileProjects) }) { EmptyView() }
         }
     }
 }
@@ -702,7 +523,15 @@ struct ProjectDetailView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            // الرأس الموحّد (`DSSubPageHeader`) بلون المشاريع: × للإغلاق، و«تعديل» في الطرف (للمالك والإدارة)
+            DSSubPageHeader(title: project.title, subtitle: L10n.t("مشاريع العائلة", "Family Projects"),
+                            section: .projects, nav: .close, onBack: { dismiss() }) {
+                if isOwnerOrAdmin {
+                    DSHeaderButton(symbol: "pencil", label: L10n.t("تعديل", "Edit")) { showEditSheet = true }
+                }
+            }
+
             ZStack {
                 DS.Color.background.ignoresSafeArea()
                 
@@ -774,48 +603,34 @@ struct ProjectDetailView: View {
                     .padding(.bottom, DS.Spacing.xxxl)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            // «تعديل» أعلى يمين، و«إغلاق» بالأحمر يسار — مثل باقي الأوراق (طلب المالك)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    DSToolbarCancelButton(title: L10n.t("إغلاق", "Close")) { dismiss() }
-                }
-                if isOwnerOrAdmin {
-                    ToolbarItem(placement: DSToolbar.confirmPlacement) {
-                        Button(L10n.t("تعديل", "Edit")) { showEditSheet = true }
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(AppSection.projects.ink)
-                    }
-                }
-            }
-            // نموذج طويل فيه كتابة وتمرير — مربّع طويل من الأسفل (توصية أبل)
-            .dsTallBox(isPresented: $showEditSheet, onDismiss: {
-                if didEdit { dismiss() }
-            }) {
-                EditProjectView(project: project, didEdit: $didEdit)
-                    .environmentObject(projectsVM)
-                    .environmentObject(authVM)
-                    .dsSectionPage(.projects)
-            }
-            .dsAlert(
-                L10n.t("حذف المشروع", "Delete Project"),
-                isPresented: $showDeleteAlert
-            ) {
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-                Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                    Task {
-                        await projectsVM.deleteProject(id: project.id)
-                        dismiss()
-                    }
-                }
-            } message: {
-                Text(L10n.t(
-                    "هل أنت متأكد من حذف \"\(project.title)\"؟",
-                    "Are you sure you want to delete \"\(project.title)\"?"
-                ))
-            }
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
+        // نموذج طويل فيه كتابة وتمرير — مربّع طويل من الأسفل (توصية أبل)
+        .dsTallBox(isPresented: $showEditSheet, onDismiss: {
+            if didEdit { dismiss() }
+        }) {
+            EditProjectView(project: project, didEdit: $didEdit)
+                .environmentObject(projectsVM)
+                .environmentObject(authVM)
+                .dsSectionPage(.projects)
+        }
+        .dsAlert(
+            L10n.t("حذف المشروع", "Delete Project"),
+            isPresented: $showDeleteAlert
+        ) {
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                Task {
+                    await projectsVM.deleteProject(id: project.id)
+                    dismiss()
+                }
+            }
+        } message: {
+            Text(L10n.t(
+                "هل أنت متأكد من حذف \"\(project.title)\"؟",
+                "Are you sure you want to delete \"\(project.title)\"?"
+            ))
+        }
+        .dsSectionPage(.projects)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
     
@@ -832,7 +647,7 @@ struct ProjectDetailView: View {
 
             VStack(spacing: DS.Spacing.sm) {
                 Text(project.title)
-                    .font(DS.Font.plex(22, weight: .bold))
+                    .dsFont(.emptyTitle)
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -854,9 +669,10 @@ struct ProjectDetailView: View {
             .frame(maxWidth: .infinity)
             .background(DS.Color.surface)
         }
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
-        .overlay(alignment: .top) { logoBadge.offset(y: coverHeight - logoSize / 2 + 4) }
-        .dsCardShadow()
+        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
+        // البطاقة الواحدة (`.dsCard`) — الشعار فوق حافة الغلاف
+        .dsCard(padding: nil)
+        .overlay(alignment: .top) { logoBadge.offset(y: coverHeight - logoSize / 2 + DS.Spacing.xs) }
     }
 
     private var coverHeight: CGFloat { 150 }
@@ -879,48 +695,25 @@ struct ProjectDetailView: View {
                     DS.Color.mutedBackground
                 }
             } else {
-                // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الشعار البديل الحالي
-                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "briefcase.fill", tint: AppSection.projects.ink, size: logoSize) }) {
-                    ZStack {
-                        LinearGradient(
-                            colors: [AppSection.projects.ink.opacity(0.25), DS.Color.accent.opacity(0.20)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        Image(systemName: "briefcase.fill")
-                            .font(DS.Font.scaled(32, weight: .bold))
-                            .foregroundColor(AppSection.projects.ink)
-                    }
-                }
+                // قرص «مجسّمات» الموحّد
+                DSStateIcon("briefcase.fill", tint: AppSection.projects.ink, size: logoSize)
             }
         }
         .frame(width: logoSize, height: logoSize)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .strokeBorder(DS.Color.surface, lineWidth: 4)
+                .strokeBorder(DS.Color.surface, lineWidth: DS.Spacing.xs)
         )
-        .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 4)
+        .dsCardShadow()
         // الشعار يتفتّح بعد صعود بطاقته بقليل — نفس أيقونات أقسام المربّعات («تقليل الحركة»: تلاشٍ)
         .modifier(DSIconPop(delay: DSMotion.staggerDelay(0, base: DSMotion.sectionsOnPage) + 0.08,
                             fromScale: 0.6, fromAngle: 0))
     }
 
-    /// صاحب المشروع — كبسولة تحت الاسم بدل بطاقة مستقلّة
+    /// صاحب المشروع — كبسولة تحت الاسم بدل بطاقة مستقلّة (الشارة الموحّدة)
     private var ownerChip: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            Image(systemName: "person.fill")
-                .font(DS.Font.scaled(11, weight: .bold))
-            Text(project.ownerName)
-                .font(DS.Font.plex(12, weight: .bold))
-                .lineLimit(1)
-        }
-        .foregroundColor(AppSection.projects.ink)
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.xs)
-        .background(AppSection.projects.ink.opacity(0.10))
-        .clipShape(Capsule())
-        .overlay(Capsule().strokeBorder(AppSection.projects.ink.opacity(0.18), lineWidth: 1))
+        DSStatusChip(text: project.ownerName, icon: "person.fill", tint: AppSection.projects.ink)
     }
 
     // MARK: - إجراءات سريعة
@@ -949,26 +742,11 @@ struct ProjectDetailView: View {
         return actions
     }
 
+    /// إجراء سريع — الزرّ الواحد بلون المنصّة (معنى)
     private func quickActionButton(_ action: QuickAction) -> some View {
-        Button {
+        DSButton(action.title, icon: action.platform.sfSymbol, tint: action.platform.brandColor) {
             openSocialLink(platform: action.platform, value: action.value)
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: action.platform.sfSymbol)
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Text(action.title)
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 38)
-            .background(
-                Capsule().fill(action.platform.brandColor)
-            )
         }
-        .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(action.title)
     }
 
@@ -976,25 +754,22 @@ struct ProjectDetailView: View {
     private func descriptionSection(_ text: String) -> some View {
         HStack(alignment: .top, spacing: DS.Spacing.md) {
             Capsule()
-                .fill(AppSection.projects.ink.opacity(0.7))
-                .frame(width: 4)
+                .fill(AppSection.projects.ink.opacity(DS.Opacity.selectedStroke))
+                .frame(width: DS.Spacing.xs)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 Text(L10n.t("نبذة عن المشروع", "About"))
-                    .font(DS.Font.plex(12, weight: .bold))
+                    .dsFont(.chip)
                     .foregroundColor(AppSection.projects.ink)
                 Text(text)
-                    .font(DS.Font.body)
+                    .dsFont(.body)
                     .foregroundColor(DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
-        .dsSubtleShadow()
+        // البطاقة الواحدة (`.dsCard`)
+        .dsCard(padding: DS.Spacing.lg)
     }
 
     // MARK: - Social Links — شبكة أيقونات بألوان المنصّات
@@ -1003,17 +778,9 @@ struct ProjectDetailView: View {
     // والضغط المطوّل ينسخ الرابط أو الرقم (طلب المالك).
     private var socialLinksSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "link")
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Text(L10n.t("حسابات المشروع", "Project Accounts"))
-                    .font(DS.Font.plex(13, weight: .bold))
-                Spacer()
-                Text("\(availableLinks.count)")
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            .foregroundColor(DS.Color.textSecondary)
+            // عنوان القسم الموحّد (قرص مجسّم + عنوان + العدد)
+            DSSectionTitle(title: L10n.t("حسابات المشروع", "Project Accounts"), icon: "link",
+                           tint: AppSection.projects.ink, trailing: "\(availableLinks.count)", iconSize: DS.Icon.inline)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: DS.Spacing.sm)],
                       spacing: DS.Spacing.sm) {
@@ -1022,10 +789,8 @@ struct ProjectDetailView: View {
                 }
             }
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .dsSubtleShadow()
+        // البطاقة الواحدة (`.dsCard`)
+        .dsCard(padding: DS.Spacing.lg)
     }
 
     /// كل الحسابات المتوفّرة بالترتيب
@@ -1050,24 +815,23 @@ struct ProjectDetailView: View {
             openSocialLink(platform: link.platform, value: link.value)
         } label: {
             VStack(spacing: DS.Spacing.xs) {
-                link.platform.iconView(size: 44)
+                link.platform.iconView(size: DS.Icon.tapTarget)
                 Text(link.platform.label)
-                    .font(DS.Font.plex(11, weight: .bold))
+                    .dsFont(.badge)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Text(shortValue(link))
-                    .font(DS.Font.plex(10, weight: .medium))
+                    .dsFont(.micro)
                     .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.mutedBackground.opacity(0.45))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            // صندوق داخل البطاقة — البطاقة الواحدة بسطح الصفحة
+            .dsCard(padding: nil, fill: DS.Color.background)
+            .contentShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
         .contextMenu {
@@ -1103,20 +867,11 @@ struct ProjectDetailView: View {
 
     // MARK: - Delete
     private var deleteSection: some View {
-        Button {
+        // الزرّ الواحد بدور الحذف (أحمر)
+        DSButton(L10n.t("حذف المشروع", "Delete Project"), icon: "trash.fill", role: .destructive) {
             showDeleteAlert = true
-        } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "trash.fill")
-                    .font(DS.Font.scaled(14, weight: .bold))
-                Text(L10n.t("حذف المشروع", "Delete Project"))
-                    .font(DS.Font.callout)
-                    .fontWeight(.bold)
-            }
-            .foregroundColor(DS.Color.error)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.lg)
         }
+        .padding(.top, DS.Spacing.sm)
     }
     
     // MARK: - Helpers
@@ -1294,29 +1049,9 @@ struct EditProjectView: View {
             if authVM.canModerate {
                 DSComposerSection(title: L10n.t("صاحب المشروع", "Owner"), icon: "person.crop.circle.badge.checkmark",
                                   tint: tint, index: 0) {
+                    // الصفّ الموحّد (`DSRow`) — قرص مجسّم + الاسم + سهم
                     Button { showOwnerPicker = true } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(tint)
-                                .frame(width: 32, height: 32)
-                                .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(tint.opacity(0.12)))
-                                .accessibilityHidden(true)
-                            Text(ownerName)
-                                .font(DS.Font.plex(14.5, weight: .semibold))
-                                .foregroundColor(DS.Color.textPrimary)
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
-                            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(DS.Color.textTertiary)
-                                .accessibilityHidden(true)
-                        }
-                        .padding(.horizontal, DS.Spacing.sm + 2)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+                        DSRow(icon: "person.fill", tint: tint, title: ownerName) { DSChevron() }
                     }
                     .buttonStyle(DSScaleButtonStyle())
                 }
@@ -1324,8 +1059,8 @@ struct EditProjectView: View {
 
             // الهوية: الشعار + الاسم + الوصف
             DSComposerSection(title: L10n.t("هوية المشروع", "Project Identity"), icon: "sparkles", tint: tint, index: 1) {
-                DSComposerLogoPicker(image: $logoImage, existingURL: project.logoUrl, tint: tint, size: 88)
-                    .padding(.bottom, 2)
+                DSComposerLogoPicker(image: $logoImage, existingURL: project.logoUrl, tint: tint)
+                    .padding(.bottom, DS.Spacing.xxs)
                 DSComposerField(icon: "textformat", label: L10n.t("اسم المشروع *", "Project name *"),
                                 placeholder: L10n.t("اسم المشروع", "Project name"),
                                 text: $title, tint: tint, limit: 60)
@@ -1350,35 +1085,6 @@ struct EditProjectView: View {
         .dsTallBox(isPresented: $showOwnerPicker) { ownerPickerSheet }   // قائمة أعضاء طويلة (توصية أبل)
     }
 
-    /// حقل تواصل احترافي — عنوان فوق (أيقونة + اسم) وصندوق إدخال موحّد الارتفاع
-    /// بحيث تتحاذى الحقول بدقّة في شبكة العمودين.
-    private func socialTextField(platform: SocialPlatform, placeholder: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
-                platform.iconView(size: 18)
-                Text(platform.label)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
-            }
-            TextField(placeholder, text: text)
-                .font(DS.Font.scaled(13))
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.sm)
-                .frame(height: 42)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.background)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
-                )
-        }
-    }
-    
     /// منتقي صاحب المشروع — للإدارة فقط. مربّع بمنتصف الشاشة بتصميم المربّعات الموحّد:
     /// بحث ثم الأعضاء صفوفاً والمختار بعلامة ✓ — الضغط على عضو يختاره ويغلق المربّع (كالسابق).
     private var ownerPickerSheet: some View {
@@ -1409,11 +1115,7 @@ struct EditProjectView: View {
             DSComposerSection(title: L10n.t("الأعضاء", "Members"), icon: "person.2.fill",
                               tint: tint, trailing: "\(candidates.count)", index: 1) {
                 if candidates.isEmpty {
-                    Text(L10n.t("لا توجد نتائج", "No results"))
-                        .font(DS.Font.plex(13, weight: .semibold))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.md)
+                    DSEmptyView(L10n.t("لا توجد نتائج", "No results"), icon: "magnifyingglass", style: .inline)
                 } else {
                     ownerPickerRows(candidates)
                 }
@@ -1448,15 +1150,15 @@ struct EditProjectView: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Text(String(m.fullName.prefix(1)))
-                    .font(DS.Font.plex(14, weight: .bold))
+                    .dsFont(.rowTitle)
                     .foregroundColor(tint)
-                    .frame(width: 32, height: 32)
-                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(tint.opacity(0.12)))
+                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
+                        .fill(tint.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)   // الحرف الأول زخرفة — الاسم كاملاً يُقرأ
 
                 Text(m.displayFullName)
-                    .dsFieldFont(14.5, weight: isSelected ? .bold : .regular)
+                    .dsFieldFont(isSelected ? .headline : .body)
                     .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
@@ -1466,7 +1168,7 @@ struct EditProjectView: View {
                 if isSelected {
                     // الاختيار يُقرأ من سمة «مُختار» على الصف
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
+                        .dsGlyph(DS.Glyph.xl, weight: .regular)
                         .foregroundColor(tint)
                         .accessibilityHidden(true)
                 }
@@ -1474,7 +1176,7 @@ struct EditProjectView: View {
             .dsRowBox()
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(tint.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5)
+                    .strokeBorder(tint.opacity(isSelected ? DS.Opacity.selectedStroke : 0), lineWidth: DS.Border.widthBold)
             )
             .contentShape(Rectangle())
         }
@@ -1538,18 +1240,5 @@ struct EditProjectView: View {
         } else {
             isSaving = false
         }
-    }
-}
-
-// MARK: - مساحة ضغط أكبر (توصية أبل: ٤٤ نقطة)
-
-private extension View {
-    /// يكبّر منطقة اللمس حول عنصر صغير بلا تغيير في شكله ولا في التخطيط: الحشوة تُضاف
-    /// لمنطقة اللمس ثم تُسترد من التخطيط. القيم محسوبة لكل عنصر حتى لا تتداخل مع جيرانه.
-    func tapArea(top: CGFloat = 0, leading: CGFloat = 0, bottom: CGFloat = 0, trailing: CGFloat = 0) -> some View {
-        self
-            .padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
-            .contentShape(Rectangle())
-            .padding(EdgeInsets(top: -top, leading: -leading, bottom: -bottom, trailing: -trailing))
     }
 }

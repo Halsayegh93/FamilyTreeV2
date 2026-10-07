@@ -3,9 +3,9 @@ import SwiftUI
 /// شاشة إدارة طلبات تعديل الشجرة — مفصولة عن AdminAllRequestsView.
 /// تعرض 7 فلاتر حسب نوع الإجراء (إضافة / تعديل اسم / رقم / ميلاد / وفاة / حذف / أخرى).
 ///
-/// بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بلون مجال «الشجرة
-/// والأعضاء» وأرقامها الحيّة ← فلاتر الأنواع بعددها ← بطاقة لكل طلب بإطار صفوف المربّعات
-/// (أيقونة النوع + اسم العضو + عمر الطلب ← التفاصيل ← «موافقة» / «رفض»).
+/// بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧، «أسلوب واحد» ٢٠٢٦-١٠-٠٧): الرأس الملوّن
+/// الموحّد (`dsSubPageHeader`) ← صفّ الأرقام الحيّة ← فلاتر الأنواع بعددها ← بطاقة لكل طلب بإطار صفوف
+/// المربّعات (أيقونة النوع + اسم العضو + عمر الطلب ← التفاصيل ← «موافقة» / «رفض» بالزرّ الواحد).
 /// الاستدعاءات والصلاحيات (`canApprove(_:)` و`canRejectRequests`) كما كانت تماماً.
 struct AdminTreeEditRequestsView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -84,19 +84,15 @@ struct AdminTreeEditRequestsView: View {
         // تُدفع داخل شريط تنقّل لوحة الإدارة (navigationDestination) — بلا NavigationStack داخلي
         // حتى لا يظهر شريطان، والرجوع هو زر أبل المعتاد بدل «إغلاق».
         Group {
-            ZStack {
-                DS.Color.background.ignoresSafeArea()
-
-                // بطاقة الرأس ← الفلاتر ← الطلبات: تتمرّر معاً (والسحب للتحديث يعمل حتى والقائمة فارغة)
-                ScrollView(showsIndicators: false) {
-                    pageContent
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.bottom, DS.Spacing.xxxl)
-                }
+            // صفّ الأرقام ← الفلاتر ← الطلبات: تتمرّر معاً (والسحب للتحديث يعمل حتى والقائمة فارغة)
+            ScrollView(showsIndicators: false) {
+                pageContent
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xxxl)
             }
-            .navigationTitle(L10n.t("طلبات الشجرة", "Tree Requests"))
-            .navigationBarTitleDisplayMode(.inline)
+            // الرأس الملوّن الموحّد (بدل شريط النظام وبطاقة الرأس) — الوصف: ما يعتمده المشاهد
+            .dsSubPageHeader(L10n.t("طلبات الشجرة", "Tree Requests"), subtitle: heroSubtitle)
             .dsAlert(
                 L10n.t("سبب الرفض", "Rejection Reason"),
                 isPresented: $showRejectAlert
@@ -138,14 +134,11 @@ struct AdminTreeEditRequestsView: View {
             heroSection(counts: counts, total: total)
 
             if isInitialLoading {
-                SysStateCard(icon: "tree.fill",
-                             title: L10n.t("جارٍ تحميل الطلبات…", "Loading requests…"),
-                             tint: pageTint,
-                             isLoading: true)
-                    .padding(.top, DS.Spacing.xs)
+                DSPageLoader(L10n.t("جارٍ تحميل الطلبات…", "Loading requests…"), fillsSpace: false)
+                    .padding(.top, DS.Spacing.xl)
                     .dsStaggerIn(1)
             } else if loadFailed {
-                SysStateCard(icon: "wifi.exclamationmark",
+                DSStateCard(icon: "wifi.exclamationmark",
                              title: L10n.t("تعذّر تحميل الطلبات", "Couldn't load requests"),
                              hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                              tint: DS.Color.error,
@@ -165,7 +158,7 @@ struct AdminTreeEditRequestsView: View {
                         .padding(.top, DS.Spacing.xs)
                         .dsStaggerIn(2)
                 } else {
-                    AdaptiveLazyStack(spacing: DS.Spacing.md, landscapeMinimum: 360) {
+                    AdaptiveLazyStack(spacing: DS.Spacing.md) {
                         ForEach(Array(requests.enumerated()), id: \.element.id) { index, request in
                             requestCard(for: request)
                                 .dsStaggerIn(min(index, 5) + 2)
@@ -176,16 +169,10 @@ struct AdminTreeEditRequestsView: View {
         }
     }
 
-    // MARK: - بطاقة الرأس
+    // MARK: - الأرقام السريعة (العنوان والوصف في الرأس الملوّن)
 
     private func heroSection(counts: [TreeEditAction: Int], total: Int) -> some View {
-        DSPageHero(
-            title: L10n.t("طلبات الشجرة", "Tree Requests"),
-            subtitle: heroSubtitle,
-            icon: "tree.fill",
-            tint: pageTint,
-            stats: heroStats(counts: counts, total: total)
-        )
+        DSStatsRow(heroStats(counts: counts, total: total), tint: pageTint)
     }
 
     /// ما يعتمده المشاهد — من نفس `canApprove(_:)` (المراقب: اسم/رقم/وفاة/حذف، المشرف: إضافة)
@@ -272,25 +259,21 @@ struct AdminTreeEditRequestsView: View {
     @ViewBuilder
     private func emptyState(total: Int, counts: [TreeEditAction: Int]) -> some View {
         if total == 0 {
-            SysStateCard(icon: "checkmark.circle.fill",
-                         title: L10n.t("لا توجد طلبات معلقة", "No pending requests"),
-                         hint: L10n.t("كل طلبات الشجرة متابَعة — ما فيه شي ينتظر قرارك",
-                                      "All tree requests are handled — nothing is awaiting your decision"),
-                         tint: DS.Color.success)
+            DSEmptyView(L10n.t("لا توجد طلبات معلقة", "No pending requests"),
+                        message: L10n.t("كل طلبات الشجرة متابَعة — ما فيه شي ينتظر قرارك",
+                                        "All tree requests are handled — nothing is awaiting your decision"),
+                        tint: DS.Color.success, style: .compact)
         } else if let next = allActions.first(where: { (counts[$0] ?? 0) > 0 }) {
             // هذا النوع فارغ وغيره فيه طلبات — زر يفتح أول نوع فيه طلبات
             let n = counts[next] ?? 0
-            SysStateCard(icon: selectedAction.iconName,
-                         title: L10n.t("لا توجد طلبات", "No requests"),
-                         hint: L10n.t("سوف تظهر طلبات هذا النوع هنا.", "Requests of this type will appear here."),
-                         tint: DS.Color.textTertiary,
-                         actionTitle: L10n.t("عرض «\(next.arabicLabel)» (\(n))", "Show \(next.englishLabel) (\(n))"),
-                         actionIcon: next.iconName,
-                         action: {
-                             withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
-                                 selectedAction = next
-                             }
-                         })
+            DSEmptyView(L10n.t("لا توجد طلبات", "No requests"),
+                        message: L10n.t("سوف تظهر طلبات هذا النوع هنا.", "Requests of this type will appear here."),
+                        actionTitle: L10n.t("عرض «\(next.arabicLabel)» (\(n))", "Show \(next.englishLabel) (\(n))"),
+                        actionIcon: next.iconName, style: .compact) {
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
+                    selectedAction = next
+                }
+            }
         }
     }
 
@@ -307,20 +290,23 @@ struct AdminTreeEditRequestsView: View {
         let targetName = payload?.targetMemberName ?? request.member?.displayFullName ?? "—"
         let showApprove = canApprove(action)
         let showReject = authVM.canRejectRequests
+        // مقدّم الطلب هو العضو نفسه (مقارنة كمعرّفات) → اسمه في العنوان مرة واحدة فقط (طلب المالك ٢٠٢٦-١٠-٠٧)
+        let targetId = payload?.targetMemberId.flatMap { UUID(uuidString: $0) } ?? request.memberId
+        let selfRequest = targetId == request.requesterId
 
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // الرأس
             HStack(alignment: .center, spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: action.iconName, tint: tint)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(targetName)
-                        .dsFieldFont(13.5, weight: .bold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(L10n.t(action.arabicLabel, action.englishLabel))
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -331,11 +317,13 @@ struct AdminTreeEditRequestsView: View {
             }
             .accessibilityElement(children: .combine)
 
-            // التفاصيل — تبدأ تحت العنوان (بعد عمود الأيقونة ٣٢ + ٨)
-            VStack(alignment: .leading, spacing: 5) {
+            // التفاصيل — تبدأ تحت العنوان (بعد عمود الأيقونة + المسافة)
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 detailLines(for: request, payload: payload, action: action)
 
-                metaLine(icon: "person.fill", text: L10n.t("مقدم الطلب: ", "Requester: ") + requesterName)
+                if !selfRequest {
+                    metaLine(icon: "person.fill", text: L10n.t("مقدم الطلب: ", "Requester: ") + requesterName)
+                }
 
                 if let createdAt = request.createdAt, !createdAt.isEmpty {
                     metaLine(icon: "clock", text: formatDate(createdAt))
@@ -343,84 +331,48 @@ struct AdminTreeEditRequestsView: View {
 
                 // «طلب آخر» يعرض ملاحظته أعلاه («الطلب») — لا تتكرّر
                 if action != .other, let notes = payload?.notes, !notes.isEmpty {
-                    HStack(alignment: .top, spacing: 5) {
+                    HStack(alignment: .top, spacing: DS.Spacing.xs) {
                         Image(systemName: "text.bubble")
-                            .font(.system(size: 10.5, weight: .semibold))
+                            .dsGlyph(DS.Glyph.xs, weight: .semibold)
                             .foregroundColor(DS.Color.textTertiary)
-                            .frame(width: 14)
-                            .padding(.top, 2)
+                            .frame(width: DS.Glyph.md)
+                            .padding(.top, DS.Spacing.xxs)
                             .accessibilityHidden(true)
                         Text(notes)
-                            .dsFieldFont(12)
+                            .dsFieldFont(.subtitle)
                             .foregroundColor(DS.Color.fieldValue)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
-            .padding(.leading, 40)
+            .padding(.leading, DS.Icon.row + DS.Spacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // القرار — نفس الصلاحيات تماماً
+            // القرار — نفس الصلاحيات تماماً، بالزرّ الواحد (الموافقة بتعبئة القسم، الرفض أحمر)
             if showApprove || showReject {
-                HStack(spacing: DS.Spacing.sm) {
+                HStack(spacing: DSBox.buttonSpacing) {
                     if showApprove {
-                        decisionButton(title: L10n.t("موافقة", "Approve"),
-                                       icon: "checkmark.circle.fill",
-                                       isPrimary: true,
-                                       accessibilityLabel: L10n.t("موافقة — \(targetName)", "Approve — \(targetName)")) {
+                        DSButton(L10n.t("موافقة", "Approve"), icon: "checkmark.circle.fill") {
                             Task { await adminRequestVM.approveTreeEditRequest(request: request) }
                         }
+                        .accessibilityLabel(L10n.t("موافقة — \(targetName)", "Approve — \(targetName)"))
                     }
 
                     if showReject {
-                        decisionButton(title: L10n.t("رفض", "Reject"),
-                                       icon: "xmark.circle.fill",
-                                       isPrimary: false,
-                                       accessibilityLabel: L10n.t("رفض — \(targetName)", "Reject — \(targetName)")) {
+                        DSButton(L10n.t("رفض", "Reject"), icon: "xmark.circle.fill", role: .destructive, tint: DS.Color.reject) {
                             rejectingRequest = request
                             rejectReasonText = ""
                             showRejectAlert = true
                         }
+                        .accessibilityLabel(L10n.t("رفض — \(targetName)", "Reject — \(targetName)"))
                     }
                 }
-                .padding(.top, 2)
+                .padding(.top, DS.Spacing.xxs)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dsRowBox()
-    }
-
-    /// زر قرار بارتفاع ٤٤: «موافقة» كحلي (زر المربّعات الأساسي)، و«رفض» أحمر خفيف بإطار
-    private func decisionButton(title: String,
-                                icon: String,
-                                isPrimary: Bool,
-                                accessibilityLabel: String,
-                                action: @escaping () -> Void) -> some View {
-        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-        return Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(DS.Font.plex(13.5, weight: .bold))
-                    .lineLimit(1)
-            }
-            .foregroundColor(isPrimary ? DSActionFill.label() : DS.Color.error)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .background {
-                if isPrimary {
-                    shape.fill(DSActionFill.style())
-                } else {
-                    shape.fill(DS.Color.error.opacity(0.10))
-                        .overlay(shape.strokeBorder(DS.Color.error.opacity(0.30), lineWidth: 1))
-                }
-            }
-            .contentShape(shape)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(accessibilityLabel)
     }
 
     // MARK: - تفاصيل الطلب حسب النوع
@@ -470,10 +422,10 @@ struct AdminTreeEditRequestsView: View {
                 CachedAsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
-                    ProgressView().tint(AppSection.admin.ink)
+                    DSPageLoader(fillsSpace: false)
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 160)
+                .frame(height: Self.photoPreviewHeight)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             }
 
@@ -494,19 +446,22 @@ struct AdminTreeEditRequestsView: View {
         }
     }
 
-    /// سطر تفصيل: أيقونة صغيرة + عنوان (Plex 11.5) + قيمة عريضة (Plex 12)
+    /// ارتفاع معاينة الصورة المقترحة
+    private static let photoPreviewHeight: CGFloat = 160
+
+    /// سطر تفصيل: أيقونة صغيرة + عنوان (`footnote`) + قيمة عريضة (`chip`)
     private func detailRow(icon: String, label: String, value: String, valueColor: Color = DS.Color.fieldLabel) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 10.5, weight: .semibold))
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.xs, weight: .semibold)
                 .foregroundColor(DS.Color.textTertiary)
-                .frame(width: 14)
+                .frame(width: DS.Glyph.md)
                 .accessibilityHidden(true)
             Text(label)
-                .dsFieldFont(11.5)
+                .dsFieldFont(.footnote)
                 .foregroundColor(DS.Color.fieldValue)
             Text(value)
-                .font(DS.Font.plex(12, weight: .bold))
+                .dsFont(.chip)
                 .foregroundColor(valueColor)
                 .lineLimit(2)
             Spacer(minLength: 0)
@@ -514,15 +469,15 @@ struct AdminTreeEditRequestsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// معلومة صغيرة: أيقونة + نص (Plex 11) — مقدّم الطلب والتاريخ
+    /// معلومة صغيرة: أيقونة + نص (`footnote`) — مقدّم الطلب والتاريخ
     private func metaLine(icon: String, text: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
-                .frame(width: 14)
+        HStack(spacing: DS.Spacing.xs) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.xsCompact, weight: .semibold)
+                .frame(width: DS.Glyph.md)
                 .accessibilityHidden(true)
             Text(text)
-                .font(DS.Font.plex(11))
+                .dsFont(.footnote)
                 .lineLimit(1)
         }
         .foregroundColor(DS.Color.textTertiary)
@@ -538,7 +493,7 @@ struct AdminTreeEditRequestsView: View {
     /// شارة «بانتظار» — بعمر الطلب إن عُرف تاريخه (اليوم، أمس، ٣ أيام…)
     private func pendingChip(_ date: Date?) -> some View {
         let text = date.map { ageText(days: daysWaiting(since: $0)) } ?? L10n.t("بانتظار", "Pending")
-        return SysStatusChip(text: text, icon: "clock", tint: DS.Color.warning)
+        return DSStatusChip(text: text, icon: "clock", tint: DS.Color.warning)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(date == nil ? text : L10n.t("بانتظار: \(text)", "Pending: \(text)"))
     }

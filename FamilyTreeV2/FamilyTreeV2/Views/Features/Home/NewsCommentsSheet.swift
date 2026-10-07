@@ -90,12 +90,13 @@ struct NewsCommentsSheet: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         // مربّع طويل من الأسفل: لا يُسحب وفي الحقل تعليق لم يُرسل
         .interactiveDismissDisabled(hasUnsentDraft)
-        .dsAlert(L10n.t("تجاهل التغييرات؟", "Discard changes?"), isPresented: $confirmDiscard) {
+        .dsAlert(L10n.t("تجاهل التعديلات؟", "Discard changes?"), isPresented: $confirmDiscard) {
             Button(L10n.t("متابعة التعديل", "Keep editing"), role: .cancel) {}
             Button(L10n.t("تجاهل", "Discard"), role: .destructive) { dismiss() }
         } message: {
-            Text(L10n.t("ما كتبته لم يُحفظ بعد، وسيضيع إذا خرجت.",
-                        "What you entered isn't saved yet and will be lost."))
+            // الصياغة الرسمية (اختيار المالك ٢٠٢٦-١٠-٠٧)
+            Text(L10n.t("لديك تعديلات غير محفوظة. هل تريد تجاهلها والخروج؟",
+                        "You have unsaved changes. Discard them and leave?"))
         }
         .task {
             isLoadingComments = true
@@ -107,6 +108,7 @@ struct NewsCommentsSheet: View {
             set: { if !$0 { reportCommentId = nil } }
         )) {
             TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+                .dsAlertField()
             Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
                 let id = reportCommentId
                 let label = reportCommentLabel
@@ -151,14 +153,9 @@ struct NewsCommentsSheet: View {
     @ViewBuilder
     private var commentsContent: some View {
         if isLoadingComments {
-            VStack(spacing: DS.Spacing.md) {
-                ProgressView().tint(AppSection.news.ink)
-                Text(L10n.t("جاري تحميل التعليقات...", "Loading comments..."))
-                    .font(DS.Font.plex(13))
-                    .foregroundColor(DS.Color.textSecondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.xxl)
+            // التحميل الموحّد: مجسّم الأخبار يتنفّس + نص قصير
+            DSPageLoader(L10n.t("جاري تحميل التعليقات...", "Loading comments..."), section: .news, fillsSpace: false)
+                .padding(.vertical, DS.Spacing.xxl)
         } else if !postComments.isEmpty {
             VStack(spacing: DS.Spacing.sm) {
                 ForEach(Array(postComments.enumerated()), id: \.element.id) { idx, comment in
@@ -177,17 +174,9 @@ struct NewsCommentsSheet: View {
             .onAppear { appeared = true }
             .onDisappear { appeared = false }
         } else {
-            VStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 34))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-                Text(L10n.t("لا توجد تعليقات بعد", "No comments yet"))
-                    .font(DS.Font.plex(15, weight: .bold))
-                    .foregroundColor(DS.Color.textSecondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.xxl)
+            // الحالة الفارغة الموحّدة (مجسّم + عنوان)
+            DSEmptyView(L10n.t("لا توجد تعليقات بعد", "No comments yet"), section: .news,
+                        icon: "bubble.left.and.bubble.right.fill", compact: true)
         }
     }
 
@@ -200,25 +189,18 @@ struct NewsCommentsSheet: View {
         let canReportThis = !isMine
         // حظر الكاتب — لغير تعليقاتي (لا يحظر المستخدم نفسه أبداً)
         let canBlockThis = !isMine && comment.author_id != nil
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm - 2) {
-            HStack(spacing: 7) {
-                // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الحالية
-                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "person.fill", tint: AppSection.news.ink, size: 22) }) {
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 10.5, weight: .bold))
-                        .foregroundColor(AppSection.news.ink)
-                        .frame(width: 22, height: 22)
-                        .background(Circle().fill(AppSection.news.ink.opacity(0.13)))
-                }
-                    .frame(width: 22, height: 22)
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            HStack(spacing: DS.Spacing.xsm) {
+                // قرص «مجسّمات» الموحّد
+                DSStateIcon("person.fill", tint: AppSection.news.ink, size: DS.Icon.section)
                     .accessibilityHidden(true)
                 Text(comment.author_name)
-                    .dsFieldFont(12.5, weight: .bold)
+                    .dsFieldFont(.sectionTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 Text(relativeTimeFromISO(comment.created_at))
-                    .font(DS.Font.plex(11, weight: .semibold))
+                    .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(1)
 
@@ -248,28 +230,26 @@ struct NewsCommentsSheet: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis")
-                            .font(.system(size: 13, weight: .bold))
+                            .dsGlyph(DS.Glyph.mdCompact)
                             .foregroundColor(DS.Color.textSecondary)
-                            .frame(width: 28, height: 24)
-                            // ٢٨×٢٤ ← مساحة ضغط ٤٤×٤٤ بلا تغيير في التخطيط: حوله هامش
+                            .frame(width: DSBox.alertIcon, height: DS.Spacing.xxl)
+                            // ← مساحة ضغط ٤٤×٤٤ بلا تغيير في التخطيط: حوله هامش
                             // البطاقة ونصوص لا تُضغط فقط
-                            .tapArea(horizontal: 8, vertical: 10)
+                            .tapArea(horizontal: (DS.Icon.tapTarget - DSBox.alertIcon) / 2,
+                                     vertical: (DS.Icon.tapTarget - DS.Spacing.xxl) / 2)
                     }
                     .accessibilityLabel(L10n.t("خيارات التعليق", "Comment options"))
                 }
             }
 
             Text(comment.content)
-                .dsFieldFont(14.5)
+                .dsFieldFont(.body)
                 .foregroundColor(DS.Color.fieldValue)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(DS.Spacing.md)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
-        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
+        // البطاقة الواحدة (`.dsCard`)
+        .dsCard(padding: DS.Spacing.md)
     }
 
     // MARK: - زر الإغلاق أعلى الرأس
@@ -289,16 +269,17 @@ struct NewsCommentsSheet: View {
         HStack(alignment: .bottom, spacing: DS.Spacing.sm) {
             TextField(L10n.t("اكتب تعليقك...", "Write a comment..."), text: $commentInput, axis: .vertical)
                 .lineLimit(1...3)
-                .dsFieldFont(14.5)
+                .dsFieldFont(.body)
                 .foregroundColor(DS.Color.textPrimary)
                 .focused($inputFocused)
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, 12)
-                .frame(minHeight: 46)
-                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(inputFocused ? AppSection.news.ink.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
-                                  lineWidth: inputFocused ? 1.5 : 1))
+                .padding(.vertical, DS.Spacing.sm)
+                .frame(minHeight: DSBox.buttonHeight)
+                .background(DSBox.buttonShape.fill(DS.Color.surface))
+                .overlay(DSBox.buttonShape
+                    .strokeBorder(inputFocused ? AppSection.news.ink.opacity(DS.Opacity.selectedStroke)
+                                               : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
+                                  lineWidth: inputFocused ? DS.Border.widthBold : DS.Border.width))
                 .animation(.easeInOut(duration: 0.2), value: inputFocused)
 
             Button(action: {
@@ -320,16 +301,16 @@ struct NewsCommentsSheet: View {
             }) {
                 ZStack {
                     if isSendingComment {
-                        ProgressView().tint(.white).scaleEffect(0.85)
+                        ProgressView().tint(DS.Color.textOnPrimary).scaleEffect(0.85)   // دوّارة صغيرة داخل الزرّ
                     } else {
                         Image(systemName: "paperplane.fill")
-                            .font(.system(size: 15, weight: .bold))
+                            .dsGlyph(DSButtonSize.regular.glyph)
                             .foregroundColor(DSActionFill.label(enabled: canSend || isSendingComment))
                     }
                 }
-                .frame(width: 46, height: 46)
-                .background(DSActionFill.style(enabled: canSend || isSendingComment),
-                            in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                // زرّ مربّع بمقاس الزرّ الواحد وزواياه
+                .frame(width: DSBox.buttonHeight, height: DSBox.buttonHeight)
+                .background(DSActionFill.style(enabled: canSend || isSendingComment), in: DSBox.buttonShape)
             }
             .disabled(isSendingComment || commentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel(L10n.t("إرسال", "Send"))
@@ -341,7 +322,7 @@ struct NewsCommentsSheet: View {
         .background(
             DS.Color.background
                 .overlay(alignment: .top) {
-                    Rectangle().fill(DS.Color.textTertiary.opacity(0.12)).frame(height: 1)
+                    Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke)).frame(height: DS.Border.width)
                 }
         )
     }

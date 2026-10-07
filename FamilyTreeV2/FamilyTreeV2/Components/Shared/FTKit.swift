@@ -344,7 +344,7 @@ nonisolated enum FTKit {
         applyBreath(&c, anchor: center, t: t)
         c.translateBy(x: center.x, y: center.y)
         c.rotate(by: .degrees(rtl ? -9 : 9))
-        let glyph = c.resolve(Text(Image(systemName: symbol))
+        let glyph = c.resolve(Text(Image(dsSymbol: symbol))
             .font(.system(size: slot.height * 0.70, weight: .bold))
             .foregroundColor(.white))
         tone(&c, opacity: tn.body) { l in l.draw(glyph, at: .zero, anchor: .center) }
@@ -364,7 +364,7 @@ nonisolated enum FTKit {
         if !symbol.isEmpty {
             var s = ctx
             applyBreath(&s, anchor: c, t: t)
-            let glyph = s.resolve(Text(Image(systemName: symbol))
+            let glyph = s.resolve(Text(Image(dsSymbol: symbol))
                 .font(.system(size: side * 0.30, weight: .semibold))
                 .foregroundColor(tint))
             tone(&s, opacity: p.tones.band + 0.15) { l in l.draw(glyph, at: c, anchor: .center) }

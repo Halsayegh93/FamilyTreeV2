@@ -59,6 +59,9 @@ struct FamilyTreeV2App: App {
                 .environment(\.locale, langManager.locale)
                 .environment(\.layoutDirection, langManager.layoutDirection)
                 .environment(\.multilineTextAlignment, langManager.selectedLanguage == "ar" ? .leading : .trailing)
+                // الخط الافتراضي لكل نص بلا خط محدّد (نصوص، حقول، أزرار) = خط الهوية بدور «نص»
+                // — خط واحد في التطبيق كله (طلب المالك ٢٠٢٦-١٠-٠٧)
+                .font(DS.Font.body)
                 .preferredColorScheme(preferredScheme)
                 // preferredColorScheme وحده لا يصل للشيتات والتنبيهات المقدَّمة من UIKit،
                 // فنفرض النمط على النافذة نفسها ليشمل كل ما يُعرض فوقها.

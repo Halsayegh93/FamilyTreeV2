@@ -41,11 +41,9 @@ struct HomeNewsView: View {
     /// دخول بطاقات الرئيسية تباعاً مرة عند ظهورها — نمط الأخبار والديوانيات
     /// (طلب المالك ٢٠٢٦-٠٩-٢٧: «طبّقه على البقية»)
     @State private var appeared = false
-    /// TMP-ART-TRIAL — الاتجاه المختار في شريط التجربة
-    @AppStorage(ArtTrial.storageKey) private var artTrialRaw = ArtTrial.emblem.rawValue
-    private var artTrial: ArtTrial { ArtTrial(rawValue: artTrialRaw) ?? .emblem }
-    @AppStorage(ArtTrial.libraryKey) private var artLibraryVariant = 0
-    @AppStorage(ArtTrial.projectsKey) private var artProjectsVariant = 0
+    /// أشكال مكتبة/مشاريع «مجسّمات» المخزّنة (اختيار المالك على جهازه) — تُمرَّر لمجسّمات المربّعات
+    @AppStorage(FTArtVariants.libraryKey) private var artLibraryVariant = 0
+    @AppStorage(FTArtVariants.projectsKey) private var artProjectsVariant = 0
     /// دخول بطاقات صفحة الأخبار — يُصفَّر قبل كل فتح للصفحة فتتوالى البطاقات مع كل دخول
     @State private var newsAppeared = false
     /// خبر ضُغط عليه في مربّع الرئيسية — تنزل إليه صفحة الأخبار وتبرزه لحظة (طلب المالك)
@@ -82,7 +80,8 @@ struct HomeNewsView: View {
                                 // البطاقات تتوالى مرة عند الظهور (الترحيب ← المربّعات ← الأخبار) —
                                 // إزاحة وشفافية عند الرسم فقط، فلا يتغيّر القياس ولا التخطيط
                                 .padding(.top, DS.Spacing.md)
-                                .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
+                                .padding(.bottom, DS.Spacing.xxxxl)
+                                .dsTabBarClearance()   // أفقياً فوق شريط التبويبات العائم
                                 .onAppear {
                                     guard !appeared else { return }
                                     appeared = true
@@ -177,11 +176,11 @@ struct HomeNewsView: View {
             showingContactForm = false
             showingNotifications = true
         }
-        .sheet(isPresented: $showingNotifications) {
+        // مركز الإشعارات (رابط push) — المربّع الطويل الموحّد من الأسفل بدل ورقة النظام
+        .dsTallBox(isPresented: $showingNotifications) {
             NavigationStack {
                 NotificationsCenterView()
             }
-            .presentationDragIndicator(.visible)
         }
         // التواصل مع الإدارة — مربّع بمنتصف الشاشة لا صفحة فرعية (طلب المالك)
         .dsCenterBox(isPresented: $showingContactForm) {
@@ -219,7 +218,8 @@ struct HomeNewsView: View {
                     ScrollView(showsIndicators: false) {
                         newsFeedSection
                             .padding(.top, DS.Spacing.sm)
-                            .padding(.bottom, isLandscape ? DS.Spacing.xxxxl + 44 : DS.Spacing.xxxxl)
+                            .padding(.bottom, DS.Spacing.xxxxl)
+                                .dsTabBarClearance()   // أفقياً فوق شريط التبويبات العائم
                             // بطاقات الأخبار تتوالى مع دخول الصفحة (نمط الأخبار والديوانيات)
                             .onAppear {
                                 newsAppeared = true
@@ -280,6 +280,7 @@ struct HomeNewsView: View {
             set: { if !$0 { postToReport = nil } }
         )) {
             TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $newsReportReason)
+                .dsAlertField()
             Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
                 let reason = newsReportReason.trimmingCharacters(in: .whitespacesAndNewlines)
                 if let post = postToReport {
@@ -316,6 +317,8 @@ struct HomeNewsView: View {
     }
 
     // MARK: - Sub-page Header
+    /// رأس الصفحة الفرعية = الرأس الموحّد `DSSubPageHeader` (مكان واحد لكل الأقسام — طلب المالك ٢٠٢٦-١٠-٠٧):
+    /// بلون قسم الصفحة (طلب المالك ٢٠٢٦-١٠-٠٥ «خل الرأس بلون القسم»): المكتبة · المشاريع · التواصل · الأخبار
     private func subPageHeader(for page: HomeSubPage) -> some View {
         let title: String = {
             switch page {
@@ -337,73 +340,20 @@ struct HomeNewsView: View {
             }
         }()
 
-        return VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.md) {
-                // الرجوع مكان أيقونة القسم (طلب المالك) — بلا علامة ×، بنفس زر الرجوع الموحّد
-                DSBackButton(context: .onColor, compact: isLandscape) {
-                    activeSubPage = nil
+        let sec: AppSection = page == .archive ? .library : page == .projects ? .projects : page == .contact ? .admin : .news
+
+        // الرجوع مكان أيقونة القسم (طلب المالك) — بلا علامة ×، بنفس زر الرجوع الموحّد
+        return DSSubPageHeader(title: title, subtitle: subtitle, section: sec, onBack: { activeSubPage = nil }) {
+            // التحديد المتعدّد انتقل للهيدر — للإدارة فقط (المكتبة والمشاريع)
+            if authVM.isAdmin && (page == .archive || page == .projects) {
+                DSHeaderButton(symbol: "checkmark.circle", label: L10n.t("تحديد متعدّد", "Multi-select"),
+                               compact: isLandscape) {
+                    NotificationCenter.default.post(name: .subPageStartSelection,
+                                                    object: nil,
+                                                    userInfo: ["page": page == .archive ? "archive" : "projects"])
                 }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(DS.Font.plex(19, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(DS.Font.plex(12, weight: .medium))
-                            .foregroundColor(DS.Color.overlayText)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                }
-
-                Spacer(minLength: DS.Spacing.xs)
-
-                // التحديد المتعدّد انتقل للهيدر — للإدارة فقط (المكتبة والمشاريع)
-                if authVM.isAdmin && (page == .archive || page == .projects) {
-                    Button {
-                        NotificationCenter.default.post(name: .subPageStartSelection,
-                                                        object: nil,
-                                                        userInfo: ["page": page == .archive ? "archive" : "projects"])
-                    } label: {
-                        Image(systemName: "checkmark.circle")
-                            .font(DS.Font.scaled(isLandscape ? 15 : 18, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
-                            .dsHeaderGlassCircle()
-                    }
-                    .buttonStyle(BounceButtonStyle())
-                    .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
-                }
-            }
-            .padding(.horizontal, isLandscape ? DS.Spacing.xxl : DS.Spacing.lg)
-            .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
-            .padding(.top, isLandscape ? DS.Spacing.xs : 0)
-            .frame(minHeight: isLandscape ? 46 : 70, alignment: .bottom)
-
-            // شريط سدو زخرفي — يحلّ محل الخط الفاصل بلا زيادة ارتفاع تُذكر
-            // TMP-ART-TRIAL: زخرفة الاتجاه المختار بلون قسم الصفحة الفرعية، وإلا السدو الحالي
-            let sec: AppSection = page == .archive ? .library : page == .projects ? .projects : page == .contact ? .admin : .news
-            TrialArt(make: { ArtDispatch.tabHeaderOrnament($0, section: "\(sec)", tint: sec.fill)
-                                .map { AnyView($0.padding(.horizontal, DS.Spacing.xl).padding(.bottom, DS.Spacing.xs)) } }) {
-                saduStrip
             }
         }
-        .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                // بلون قسم الصفحة (طلب المالك ٢٠٢٦-١٠-٠٥ «خل الرأس بلون القسم»): المكتبة · المشاريع · التواصل · الأخبار
-                (page == .archive ? AppSection.library : page == .projects ? AppSection.projects
-                    : page == .contact ? AppSection.admin : AppSection.news).gradient
-                // نفس طبقة MainHeaderView — بدونها يطلع الهيدر أفتح
-                DS.Color.headerVeil
-            }
-            .ignoresSafeArea(edges: .top)
-        )
-        // نص شريط الحالة أبيض فوق الرأس الملوّن
-        .dsLightStatusBar()
     }
 
     // MARK: - Bento Section — الترتيب الجديد
@@ -419,21 +369,19 @@ struct HomeNewsView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingRow
-                        ArtTrialBar()   // TMP-ART-TRIAL
-                        primaryTilesRow(tileHeight: max(66, layout.tileHeight - 18))
-                        quickAccessGrid(tileHeight: max(66, layout.tileHeight - 18))
+                        primaryTilesRow(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim))
+                        quickAccessGrid(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim))
                         Spacer(minLength: 0)
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
 
                     newsBentoCard
-                        .frame(maxWidth: max(260, UIScreen.main.bounds.width * 0.36), alignment: .top)
+                        .frame(maxWidth: max(DS.Landscape.homeNewsMinWidth, UIScreen.main.bounds.width * DS.Landscape.homeNewsShare), alignment: .top)
                 }
             } else {
                 // فراغات أقل بين المربّعات (طلب المالك)
                 VStack(spacing: DS.Spacing.sm) {
                     greetingRow
-                    ArtTrialBar()   // TMP-ART-TRIAL
                     primaryTilesRow(tileHeight: layout.tileHeight + 12)
                     quickAccessGrid(tileHeight: layout.tileHeight + 6)
                     newsBentoCard
@@ -462,7 +410,7 @@ struct HomeNewsView: View {
     private func primaryTilesRow(tileHeight: CGFloat) -> some View {
         HStack(spacing: tileSpacing) {
             unifiedTile(
-                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
+                title: L10n.t("شجرة المحمدعلي", "Al-Mohammad Ali Family Tree"),   // سطر واحد (طلب المالك ٢٠٢٦-١٠-٠٧)
                 icon: "tree.fill",
                 color: DS.Color.tileTree,
                 deep: DS.Color.tileTreeDeep,
@@ -475,7 +423,7 @@ struct HomeNewsView: View {
             if appSettingsVM.settings.diwaniyasEnabled ?? true {
                 unifiedTile(
                     title: L10n.t("الديوانيات", "Diwaniyas"),
-                    icon: "map.fill",
+                    icon: AppSection.diwaniyas.symbol,   // «مجلس» الموحّد
                     color: DS.Color.tileDiwaniya,
                     deep: DS.Color.tileDiwaniyaDeep,
                     imageURL: nil,
@@ -562,92 +510,65 @@ struct HomeNewsView: View {
 
                 LinearGradient(
                     stops: [
-                        .init(color: .white.opacity(0.10), location: 0),
+                        .init(color: DS.Color.overlayFillSubtle, location: 0),
                         .init(color: .clear, location: 0.32),
-                        .init(color: .black.opacity(0.36), location: 1)
+                        .init(color: DS.Color.hierarchicalSecondary, location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
 
-                // TMP-ART-TRIAL — المجسّمات والزجاج والذهبي فوق طبقة التعتيم (لا تبهت أسفل المربّع)
-                if imageURL == nil, !ArtDispatch.underOverlay(artTrial), let place = ArtTrial.place(for: icon),
-                   let art = ArtDispatch.tile(artTrial, place: place, badge: (count ?? 0) > 0,
-                                              animateOnce: !HomeTileEntrance.played) {
-                    art.id("trial-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
-                }
-
-                // TMP-ART-TRIAL: «مجسّمات» — تكوين بالوسط (طلب المالك ٢٠٢٦-١٠-٠٥ «بالنص بشكل مرتب و ابداعي»):
-                // المجسّم في وسط المربّع وتحته الاسم، ضوء ناعم خلفه ونسخة شفافة منه في الخلفية، بلا عدد — «الحالي» كما هو
-                if artTrial != .emblem, let place = ArtTrial.place(for: icon),
-                   let centerArt = ArtDispatch.tileIcon(artTrial, place: place) {
+                // «مجسّمات» — تكوين بالوسط (طلب المالك ٢٠٢٦-١٠-٠٥ «بالنص بشكل مرتب و ابداعي»):
+                // المجسّم في وسط المربّع وتحته الاسم، ضوء ناعم خلفه ونسخة شفافة منه في الخلفية، بلا عدد
+                if let place = FTArtPlace.place(for: icon),
+                   let centerArt = FT5STrial.tileIcon(place, variant: FTArtVariants.value(for: place)) {
                     // ضلع المجسّم يتبع ارتفاع المربّع: أكبر في الصفّ الأول، ويترك سطرين للاسم
                     TrialCenteredTile(art: centerArt, title: title, count: count, scale: layout.scale,
-                                      artSide: min(64, max(44, (height ?? layout.tileHeight) * 0.56)),
+                                      artSide: 46 * layout.scale,   // حجم واحد لكل المجسّمات في المربّعات الخمسة (طلب المالك ٢٠٢٦-١٠-٠٧)
                                       stagger: Double(cascade), entrance: !HomeTileEntrance.played)
                         .onAppear {
                             // الظهور الأول مرة لكل تشغيل — بعده المجسّمات تظهر مباشرة
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { HomeTileEntrance.played = true }
                         }
-                        .id("tc-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
+                        .id("tc-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
                 } else {
-                    // أيقونة دائرية أكبر + عدّاد
+                    // أيقونة دائرية زجاجية + عدّاد (مربّعات بلا مكان مرسوم)
                     VStack {
                         HStack {
-                            if !ArtDispatch.showsTileIcon(artTrial), let count, count > 0 {   // TMP-ART-TRIAL: العدد مكان الأيقونة
-                                Text("\(count)")
-                                    .font(DS.Font.scaled(11, weight: .black))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
-                                    .dsGlass(Capsule())
-                                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-                            }
-                            if ArtDispatch.showsTileIcon(artTrial) {
-                            // TMP-ART-TRIAL: «مجسّمات» — المجسّم مكان الأيقونة بحجم واحد في كل المربّعات (الاسم تحته)
-                            if let place = ArtTrial.place(for: icon),
-                               let art = ArtDispatch.tileIcon(artTrial, place: place) {
-                                art
-                                    .frame(width: 44 * layout.scale, height: 44 * layout.scale)
-                                    .id("ti-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
-                            } else {
-                            Image(systemName: icon)
-                                .font(DS.Font.scaled(15, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 36 * layout.scale, height: 36 * layout.scale)
+                            Image(dsSymbol: icon)
+                                .dsGlyph(DS.Glyph.lgCompact)
+                                .foregroundColor(DS.Color.textOnPrimary)
+                                .frame(width: DS.Icon.rowLarge * layout.scale, height: DS.Icon.rowLarge * layout.scale)
                                 .dsGlass(Circle())
-                                .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
-                                .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
-                            }
-                            }
+                                .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: DS.Border.width))
+                                .dsSubtleShadow()
 
                             Spacer()
 
-                            if ArtDispatch.showsTileIcon(artTrial), let count, count > 0 {
+                            if let count, count > 0 {
                                 Text("\(count)")
-                                    .font(DS.Font.scaled(11, weight: .black))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
+                                    .dsFont(.badge)
+                                    .foregroundColor(DS.Color.textOnPrimary)
+                                    .padding(.horizontal, DS.Spacing.xsm)
+                                    .padding(.vertical, DS.Spacing.xxs)
                                     .dsGlass(Capsule())
-                                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                                    .overlay(Capsule().strokeBorder(DS.Color.overlayIconBorder, lineWidth: DS.Border.width))
                             }
                         }
                         Spacer()
                     }
-                    .padding(9)
+                    .padding(DS.Spacing.sm)
 
                     // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
                     Text(title)
-                        .font(DS.Font.scaled(13, weight: .black))
-                        .foregroundColor(.white)
+                        .dsFont(.rowTitleCompact)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.7)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                        .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
-                        .padding(8)
-                        .padding(.trailing, artTrial == .sadu ? 50 : 0)   // TMP-ART-TRIAL: بعيد عن حاشية السدو
+                        .shadow(color: DS.Color.hierarchicalSecondary, radius: 3, x: 0, y: 1)
+                        .padding(DS.Spacing.sm)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -657,9 +578,9 @@ struct HomeNewsView: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                    .strokeBorder(DS.Color.overlayIcon, lineWidth: DS.Border.width)
             )
-            .shadow(color: .black.opacity(0.07), radius: 5, x: 0, y: 2)
+            .dsCardShadow()
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(title)
@@ -682,92 +603,26 @@ struct HomeNewsView: View {
         }
     }
 
-    /// رمز المربّع ← مشهده (وإلا nil — تبقى الأيقونة)
-    private static func tileSceneKind(for icon: String) -> FTTileScenes.Kind? {
-        switch icon {
-        case "tree.fill": return .tree
-        case "map.fill": return .diwaniya
-        case "books.vertical.fill": return .library
-        case "briefcase.fill", "storefront.fill": return .projects
-        case "envelope.fill": return .contact
-        default: return nil
-        }
-    }
-
-    private func gradientBackground(color baseColor: Color, deep baseDeep: Color, icon: String, badge: Bool = false) -> some View {
-        // TMP-ART-TRIAL: «الحالي» = ألوان المربّعات قبل أسبوع
-        let legacy = artTrial == .emblem ? LegacyTileColors.pair(for: icon) : nil
-        let color = legacy?.0 ?? baseColor, deep = legacy?.1 ?? baseDeep
-        return ZStack {
+    private func gradientBackground(color: Color, deep: Color, icon: String, badge: Bool = false) -> some View {
+        ZStack {
             LinearGradient(
                 colors: [color.opacity(0.92), color, deep],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            // شعار المربّع (طلب المالك ٢٠٢٦-١٠-٠٥ «أبسط وأقوى وباعتدال»): رسمة مصمتة واحدة بيضاء بدرجتين
-            // ولمسة ذهبية — غافة، دلّة وفنجان، كتاب على رحل، دكان، ظرف بختم. تظهر بهدوء مرة واحدة ثم تتنفّس.
-            // مع كبسولة العدد لا تُرسم (المربّع: أيقونة + عدد + عنوان).
-            if artTrial != .emblem {   // TMP-ART-TRIAL: تحت طبقة التعتيم إن طلبها الاتجاه، وإلا فوقها في unifiedTile
-                if ArtDispatch.underOverlay(artTrial), let place = ArtTrial.place(for: icon),
-                   let art = ArtDispatch.tile(artTrial, place: place, badge: badge, animateOnce: !HomeTileEntrance.played) {
-                    art.id("trial-u-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
-                }
-                // «مجسّمات»: نفس مجسّم المربّع كبير شفاف في خلفيته عند الطرف — مثل علامة «الحالي»
-                // (طلب المالك ٢٠٢٦-١٠-٠٥ «حط خلفيات ور الايقونات بنفس المجسمات بس شفافة بالرئيسية»)
-                if ArtDispatch.ghostOpacity(artTrial) > 0, let place = ArtTrial.place(for: icon),
-                   let ghost = ArtDispatch.tileIcon(artTrial, place: place) {
-                    ghost
-                        .frame(width: 86 * layout.scale, height: 86 * layout.scale)
-                        .opacity(ArtDispatch.ghostOpacity(artTrial))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .offset(x: 16, y: 12)
-                        .id("tw-\(artTrial.rawValue)-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
-                }
-            } else if artTrial == .emblem {
-                // «الحالي» = قبل أسبوع: رمز المربّع كبير شفاف أسفل الطرف
-                Image(systemName: icon)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 78, height: 78)
-                    .foregroundColor(.white.opacity(0.17))
+            // «مجسّمات»: نفس مجسّم المربّع كبير شفاف في خلفيته عند الطرف
+            // (طلب المالك ٢٠٢٦-١٠-٠٥ «حط خلفيات ور الايقونات بنفس المجسمات بس شفافة بالرئيسية»)
+            if let place = FTArtPlace.place(for: icon),
+               let ghost = FT5STrial.tileIcon(place, variant: FTArtVariants.value(for: place)) {
+                ghost
+                    .frame(width: 86 * layout.scale, height: 86 * layout.scale)
+                    .opacity(FT5STrial.ghostOpacity)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .offset(x: 16, y: 12)
-            } else if let kind = Self.tileSceneKind(for: icon) {
-                FTTileSceneView(kind: kind, playsEntrance: !HomeTileEntrance.played, badge: badge)
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { HomeTileEntrance.played = true }
-                    }
-            } else {
-                Image(systemName: icon)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 78, height: 78)
-                    .foregroundColor(.white.opacity(0.17))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .offset(x: 16, y: 12)
+                    .id("tw-\(icon)-\(artLibraryVariant)-\(artProjectsVariant)")
             }
         }
         .clipped()
-    }
-
-    /// شريط سدو زخرفي — معينات صغيرة بين خطين متلاشيين
-    private var saduStrip: some View {
-        HStack(spacing: 5) {
-            Rectangle()
-                .fill(DS.Color.textOnPrimary.opacity(0.16))
-                .frame(height: 1)
-            ForEach(0..<5, id: \.self) { i in
-                Rectangle()
-                    .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.55 : 0.30))
-                    .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
-                    .rotationEffect(.degrees(45))
-            }
-            Rectangle()
-                .fill(DS.Color.textOnPrimary.opacity(0.16))
-                .frame(height: 1)
-        }
-        .padding(.horizontal, DS.Spacing.xl)
-        .padding(.bottom, DS.Spacing.xs)
     }
 
     // MARK: - الهيدر — نفس MainHeaderView المستخدم في بقية التبويبات
@@ -797,28 +652,27 @@ struct HomeNewsView: View {
                     previewAuthStep = 0
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 26))
+                        .dsGlyph(DS.Glyph.xxl, weight: .regular)
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .black.opacity(0.45))
+                        .foregroundStyle(DS.Color.textOnPrimary, DS.Color.shadowHeavy)
                 }
                 Text(L10n.t("شاشة معاينة", "Preview"))
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .dsFont(.badge)
                     .foregroundColor(DS.Color.textSecondary)
 
-                Picker("", selection: $previewAuthStep) {
-                    Text(L10n.t("البيانات", "Profile")).tag(0)
-                    Text(L10n.t("الانتظار", "Waiting")).tag(1)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 170)
-                .environment(\.layoutDirection, .rightToLeft)
+                // نفس مبدّل الأقسام الموحّد بدل مبدّل النظام
+                DSSegmentedSwitch(options: [
+                    DSSegmentOption(id: 0, title: L10n.t("البيانات", "Profile"), icon: "person.text.rectangle"),
+                    DSSegmentOption(id: 1, title: L10n.t("الانتظار", "Waiting"), icon: "hourglass")
+                ], selection: $previewAuthStep, size: .regular)
+                .frame(maxWidth: 240)
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .dsGlass(Capsule())
-            .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1))
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-            .padding(.top, 118)
+            .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
+            .dsCardShadow()
+            .padding(.top, DS.Spacing.xxxxl * 3)
         }
     }
 #else
@@ -886,8 +740,8 @@ struct HomeNewsView: View {
 
     /// إطار يبرز الخبر المفتوح من الرئيسية
     private func focusOutline(for news: NewsPost) -> some View {
-        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.primary, lineWidth: 2)
+        RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+            .strokeBorder(DS.Color.primary, lineWidth: DS.Border.widthBold)
             .opacity(highlightedNewsId == news.id ? 1 : 0)
             .allowsHitTesting(false)
     }
@@ -896,34 +750,27 @@ struct HomeNewsView: View {
     private var newsFeedSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let error = newsVM.newsLoadError {
-                VStack(spacing: DS.Spacing.sm) {
-                    Text(error).font(DS.Font.callout).foregroundStyle(DS.Color.textSecondary)
-                    Button(L10n.t("إعادة المحاولة", "Try again")) {
-                        Task { await newsVM.fetchNews(force: true) }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
+                // بطاقة الحالة الموحّدة (خطأ + إعادة المحاولة)
+                DSStateCard(icon: "exclamationmark.triangle.fill", title: error, tint: DS.Color.error,
+                            actionTitle: L10n.t("إعادة المحاولة", "Try again"),
+                            action: { Task { await newsVM.fetchNews(force: true) } })
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
                 .dsCardCascade(0, appeared: newsAppeared)
             }
             if newsVM.isLoadingNews && newsVM.allNews.isEmpty {
-                newsLoadingSkeleton(count: 3)
-                    .padding(.horizontal, DS.Spacing.lg)
+                // التحميل الموحّد: مجسّم الأخبار يتنفّس
+                DSPageLoader(section: .news, fillsSpace: false)
+                    .padding(.vertical, DS.Spacing.xxxxl)
                     .transition(.opacity)
             } else if filteredNews.isEmpty {
                 if newsVM.newsLoadError == nil {
                     if !debouncedNewsSearch.isEmpty {
-                        Text(L10n.t("لا توجد نتائج لهذا البحث", "No results for this search"))
-                            .font(DS.Font.callout)
-                            .foregroundStyle(DS.Color.textSecondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, DS.Spacing.xxxl)
+                        DSEmptyView(L10n.t("لا توجد نتائج لهذا البحث", "No results for this search"),
+                                    section: .news, style: .inline)
                     } else if selectedNewsTypeFilter != nil {
-                        Text(L10n.t("لا منشورات من هذا النوع", "No posts of this type"))
-                            .font(DS.Font.callout)
-                            .foregroundStyle(DS.Color.textSecondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, DS.Spacing.xxxl)
+                        DSEmptyView(L10n.t("لا منشورات من هذا النوع", "No posts of this type"),
+                                    section: .news, style: .inline)
                     } else {
                         emptyNewsView
                     }
@@ -935,49 +782,19 @@ struct HomeNewsView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if newsVM.hasMoreNews && !newsVM.allNews.isEmpty {
-                Button {
+                // الزرّ الموحّد (ثانوي رمادي) — الدوّارة الصغيرة داخله أثناء التحميل
+                DSButton(L10n.t("تحميل أخبار أقدم", "Load older news"), role: .cancel,
+                         isLoading: newsVM.isLoadingMoreNews) {
                     Task { await newsVM.loadMoreNews() }
-                } label: {
-                    HStack {
-                        if newsVM.isLoadingMoreNews { ProgressView() }
-                        Text(L10n.t("تحميل أخبار أقدم", "Load older news"))
-                    }.padding(.vertical, DS.Spacing.sm).frame(maxWidth: .infinity)
                 }
                 .disabled(newsVM.isLoadingMoreNews || newsVM.isLoadingNews)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.vertical, DS.Spacing.sm)
                 .background(DS.Color.background)
             }
         }
         .animation(DS.Anim.medium, value: newsVM.isLoadingNews)
         .animation(DS.Anim.smooth, value: filteredNews.isEmpty)
-    }
-
-    /// بطاقة خبر هيكلية (skeleton) — تظهر أثناء التحميل الأول
-    private var newsCardSkeleton: some View {
-        DSCard {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSSkeletonCircle(size: 40)
-                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                        DSSkeleton(width: 120, height: 13)
-                        DSSkeleton(width: 70, height: 10)
-                    }
-                    Spacer()
-                }
-                DSSkeleton(height: 12)
-                DSSkeleton(width: 220, height: 12)
-                DSSkeleton(height: 150, cornerRadius: DS.Radius.md)
-            }
-        }
-    }
-
-    private func newsLoadingSkeleton(count: Int) -> some View {
-        VStack(spacing: DS.Spacing.md) {
-            ForEach(0..<count, id: \.self) { i in
-                // حالة التحميل تدخل بنفس تتالي البطاقات
-                newsCardSkeleton
-                    .dsCardCascade(i, appeared: newsAppeared)
-            }
-        }
     }
 
     /// الأخبار بلا منشورات من حظرهم المستخدم (منشور الإدارة بلا كاتب لا يُخفى)
@@ -1012,7 +829,7 @@ struct HomeNewsView: View {
             if isLandscape {
                 // الوضع الأفقي: عمودان من بطاقات الأخبار لاستغلال العرض
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 340), spacing: DS.Spacing.lg, alignment: .top)],
+                    columns: [GridItem(.adaptive(minimum: DS.Landscape.columnMinWidth), spacing: DS.Spacing.lg, alignment: .top)],
                     alignment: .center,
                     spacing: DS.Spacing.lg
                 ) {
@@ -1116,49 +933,15 @@ struct HomeNewsView: View {
 
     // MARK: - Empty State
     private var emptyNewsView: some View {
-        DSCard(padding: 0) {
-            VStack(spacing: DS.Spacing.md) {
-                // TMP-ART-TRIAL: رسم الاتجاه المختار بلون الأخبار، وإلا الأيقونة الحالية
-                TrialArt(make: { ArtDispatch.empty($0, place: nil, icon: "newspaper", tint: AppSection.news.ink)
-                                    .map { AnyView($0.frame(width: 130, height: 130)) } }) {
-                    Image(systemName: "newspaper")
-                        .font(DS.Font.scaled(40))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-
-                Text(L10n.t("لا توجد أخبار حديثة", "No recent news"))
-                    .font(DS.Font.title3)
-                    .foregroundColor(DS.Color.textSecondary)
-
-                if authVM.currentUser?.role != .pending {
-                    Button(action: { showingAddNews = true }) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(DS.Font.scaled(14, weight: .bold))
-                            Text(L10n.t("أضف أول خبر", "Add First Post"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.bold)
-                        }
-                        .foregroundColor(AppSection.news.ink)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(AppSection.news.ink.opacity(0.1))
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(AppSection.news.ink.opacity(0.25), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(DSBoldButtonStyle())
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.xxxl)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.sm)
-        // الحالة الفارغة تدخل مثل البطاقات
-        .dsCardCascade(0, appeared: newsAppeared)
+        // الحالة الفارغة الموحّدة: مجسّم الأخبار + عنوان (+ زرّ الإضافة لغير المعلّق)
+        let canAdd = authVM.currentUser?.role != .pending
+        return DSEmptyView(L10n.t("لا توجد أخبار حديثة", "No recent news"), section: .news,
+                           actionTitle: canAdd ? L10n.t("أضف أول خبر", "Add First Post") : nil,
+                           actionIcon: "plus.circle.fill",
+                           action: canAdd ? { showingAddNews = true } : nil)
+            .padding(.top, DS.Spacing.sm)
+            // الحالة الفارغة تدخل مثل البطاقات
+            .dsCardCascade(0, appeared: newsAppeared)
     }
 
     // MARK: - Helpers

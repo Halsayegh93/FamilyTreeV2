@@ -2,10 +2,13 @@ import SwiftUI
 
 struct SplashScreenView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    /// شعار التطبيق — الحلقات حوله نِسَب منه
+    private let logo = DS.Icon.appLogo
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var logoScale: CGFloat = 0.5
     @State private var logoOpacity: Double = 0
     @State private var textOpacity: Double = 0
+    /// النقاط المتحركة تحت «جاري التحقق» (١ → ٢ → ٣)
     @State private var dotCount = 0
     @State private var pulseScale: CGFloat = 1.0
     @State private var ringRotation: Double = 0
@@ -21,19 +24,19 @@ struct SplashScreenView: View {
             VStack(spacing: DS.Spacing.xxl) {
                 Spacer()
 
-                // اللوقو مع حلقات متحركة
+                // اللوقو مع حلقات متحركة — المقاسات نِسَب من شعار التطبيق (`DS.Icon.appLogo`)
                 ZStack {
                     // حلقة دائرية تدور
                     Circle()
                         .trim(from: 0.0, to: 0.65)
                         .stroke(
                             AngularGradient(
-                                colors: [DS.Color.primary.opacity(0.0), DS.Color.primary.opacity(0.3), DS.Color.primary.opacity(0.0)],
+                                colors: [DS.Color.primary.opacity(0.0), DS.Color.primary.opacity(DS.Opacity.tintStroke), DS.Color.primary.opacity(0.0)],
                                 center: .center
                             ),
                             style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
                         )
-                        .frame(width: 155, height: 155)
+                        .frame(width: logo * 1.55, height: logo * 1.55)
                         .rotationEffect(.degrees(ringRotation))
 
                     // حلقة ثانية عكسية
@@ -41,56 +44,56 @@ struct SplashScreenView: View {
                         .trim(from: 0.0, to: 0.4)
                         .stroke(
                             AngularGradient(
-                                colors: [DS.Color.accent.opacity(0.0), DS.Color.accent.opacity(0.2), DS.Color.accent.opacity(0.0)],
+                                colors: [DS.Color.accent.opacity(0.0), DS.Color.accent.opacity(DS.Opacity.tintFillStrong), DS.Color.accent.opacity(0.0)],
                                 center: .center
                             ),
                             style: StrokeStyle(lineWidth: 2, lineCap: .round)
                         )
-                        .frame(width: 145, height: 145)
+                        .frame(width: logo * 1.45, height: logo * 1.45)
                         .rotationEffect(.degrees(ring2Rotation))
 
                     // حلقة نبض خارجية
                     Circle()
-                        .stroke(DS.Color.primary.opacity(0.12), lineWidth: 2.5)
-                        .frame(width: 140, height: 140)
+                        .stroke(DS.Color.primary.opacity(DS.Opacity.tintFill), lineWidth: 2.5)
+                        .frame(width: logo * 1.4, height: logo * 1.4)
                         .scaleEffect(pulseScale)
 
                     // Glow ring
                     Circle()
-                        .fill(DS.Color.primary.opacity(glowOpacity * 0.08))
-                        .frame(width: 130, height: 130)
+                        .fill(DS.Color.primary.opacity(glowOpacity * DS.Opacity.tintFillSoft))
+                        .frame(width: logo * 1.3, height: logo * 1.3)
                         .blur(radius: 15)
 
                     // دائرة خارجية
                     Circle()
-                        .fill(DS.Color.primary.opacity(0.08))
-                        .frame(width: 120, height: 120)
+                        .fill(DS.Color.primary.opacity(DS.Opacity.tintFillSoft))
+                        .frame(width: logo * 1.2, height: logo * 1.2)
 
                     // الدائرة الرئيسية
                     Circle()
                         .fill(DS.Color.gradientRoyal)
-                        .frame(width: 100, height: 100)
+                        .frame(width: logo, height: logo)
                         .dsGlowShadow()
 
                     // Shimmer overlay
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [.clear, .white.opacity(0.15), .clear],
+                                colors: [.clear, DS.Color.overlayIcon, .clear],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: 100, height: 100)
+                        .frame(width: logo, height: logo)
                         .offset(x: shimmerOffset)
                         .mask(
-                            Circle().frame(width: 100, height: 100)
+                            Circle().frame(width: logo, height: logo)
                         )
 
                     Image("AppIconImage")
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 100, height: 100)
+                        .frame(width: logo, height: logo)
                         .clipShape(Circle())
                 }
                 .dsGlowShadow()
@@ -100,35 +103,34 @@ struct SplashScreenView: View {
                 // النصوص — مع فاصل تراثي ذهبي
                 VStack(spacing: DS.Spacing.sm) {
                     Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
-                        .font(DS.Font.title1)
-                        .fontWeight(.black)
+                        .dsFont(.heroTitle)
                         .foregroundColor(DS.Color.textPrimary)
 
                     // فاصل ذهبي تراثي
-                    HStack(spacing: 6) {
+                    HStack(spacing: DS.Spacing.xsm) {
                         Rectangle()
                             .fill(
                                 LinearGradient(
-                                    colors: [DS.Color.secondary.opacity(0), DS.Color.secondary.opacity(0.7)],
+                                    colors: [DS.Color.secondary.opacity(0), DS.Color.secondary.opacity(DS.Opacity.dimmed)],
                                     startPoint: .leading, endPoint: .trailing
                                 )
                             )
-                            .frame(width: 40, height: 1)
+                            .frame(width: DS.Spacing.xxxxl, height: DS.Border.width)
                         Image(systemName: "diamond.fill")
-                            .font(.system(size: 7, weight: .bold))
+                            .dsGlyph(DS.Glyph.splashDot)
                             .foregroundColor(DS.Color.secondary)
                         Rectangle()
                             .fill(
                                 LinearGradient(
-                                    colors: [DS.Color.secondary.opacity(0.7), DS.Color.secondary.opacity(0)],
+                                    colors: [DS.Color.secondary.opacity(DS.Opacity.dimmed), DS.Color.secondary.opacity(0)],
                                     startPoint: .leading, endPoint: .trailing
                                 )
                             )
-                            .frame(width: 40, height: 1)
+                            .frame(width: DS.Spacing.xxxxl, height: DS.Border.width)
                     }
 
                     Text(L10n.t("شجرة العائلة", "Family Tree"))
-                        .font(DS.Font.title3)
+                        .dsFont(.title)
                         .foregroundColor(DS.Color.textSecondary)
                 }
                 .opacity(textOpacity)
@@ -140,24 +142,22 @@ struct SplashScreenView: View {
                     connectionProblem
                         .opacity(textOpacity)
                 } else {
-                    // مؤشر التحميل
+                    // شاشة البداية تحتفظ بالنقاط الثلاث المتحركة — هوية الدخول (طلب المالك ٢٠٢٦-١٠-٠٧ «أبي النقاط»)؛
+                    // باقي التحميل في التطبيق موحّد على `DSPageLoader`
                     VStack(spacing: DS.Spacing.md) {
-                        // Custom dot loader instead of ProgressView
-                        HStack(spacing: 6) {
+                        HStack(spacing: DS.Spacing.xsm) {
                             ForEach(0..<3) { i in
                                 Circle()
                                     .fill(DS.Color.primary)
-                                    .frame(width: 8, height: 8)
-                                    // Reduce Motion: بلا نبض حجمي — يبقى التبديل على الشفافية فقط
+                                    .frame(width: DS.Icon.legendDot, height: DS.Icon.legendDot)
+                                    // «تقليل الحركة»: بلا نبض حجمي — يبقى التبديل على الشفافية فقط
                                     .scaleEffect(reduceMotion ? 1.0 : (dotCount == i + 1 ? 1.3 : 0.7))
-                                    .opacity(dotCount == i + 1 ? 1.0 : 0.3)
+                                    .opacity(dotCount == i + 1 ? 1.0 : DS.Opacity.divider)   // ٠٫٣ كما كانت
                                     .animation(reduceMotion ? .easeInOut(duration: 0.25) : DS.Anim.bouncy, value: dotCount)
                             }
                         }
-
                         Text(L10n.t("جاري التحقق", "Verifying") + String(repeating: ".", count: dotCount))
-                            .font(DS.Font.callout)
-                            .fontWeight(.medium)
+                            .dsFont(.callout)
                             .foregroundColor(DS.Color.textSecondary)
                             .frame(width: 140)
                             .animation(.none, value: dotCount)
@@ -166,7 +166,7 @@ struct SplashScreenView: View {
                 }
 
                 Spacer()
-                    .frame(height: 60)
+                    .frame(height: DS.Spacing.xxxxl + DS.Spacing.xl)
             }
         }
         .onAppear {
@@ -227,24 +227,14 @@ struct SplashScreenView: View {
     /// التحقق علق (ج-٦): بلا اتصال والجلسة تحتاج تجديداً، أو الخادم لا يرد — التطبيق يعيد المحاولة
     /// تلقائياً كل لحظات ويكمل وحده عند عودة الاتصال، وهذا الزر يعيدها فوراً.
     private var connectionProblem: some View {
-        VStack(spacing: DS.Spacing.md) {
-            Image(systemName: "wifi.exclamationmark")
-                .font(DS.Font.scaled(28, weight: .semibold))
-                .foregroundColor(DS.Color.warning)
-                .accessibilityHidden(true)
-            Text(L10n.t("تعذّر الاتصال", "Can't Connect"))
-                .font(DS.Font.headline)
-                .foregroundColor(DS.Color.textPrimary)
-            Text(L10n.t("تأكّد من اتصالك بالإنترنت — يكمل التطبيق تلقائياً عند عودة الاتصال.",
-                        "Check your internet connection — the app continues automatically once you're back online."))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-            DSSecondaryButton(L10n.t("إعادة المحاولة", "Try Again"), icon: "arrow.clockwise") {
-                Task { await authVM.retryLaunchCheck() }
-            }
+        // الحالة الواحدة (مضغوطة): مجسّم بلون التنبيه + عنوان + سطر + الزرّ الواحد
+        DSEmptyView(L10n.t("تعذّر الاتصال", "Can't Connect"),
+                    message: L10n.t("تأكّد من اتصالك بالإنترنت — يكمل التطبيق تلقائياً عند عودة الاتصال.",
+                                    "Check your internet connection — the app continues automatically once you're back online."),
+                    icon: "wifi.exclamationmark", tint: DS.Color.warning,
+                    actionTitle: L10n.t("إعادة المحاولة", "Try Again"), actionIcon: "arrow.clockwise",
+                    compact: true) {
+            Task { await authVM.retryLaunchCheck() }
         }
-        .padding(.horizontal, DS.Spacing.xxl)
     }
 }

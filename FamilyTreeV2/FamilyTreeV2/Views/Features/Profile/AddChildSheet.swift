@@ -27,7 +27,6 @@ struct AddChildSheet: View {
     @State private var approvalRequestWarning: String? = nil
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
-    @State private var sheetHeight: CGFloat = 520
 
     var body: some View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
@@ -40,16 +39,13 @@ struct AddChildSheet: View {
             actionIcon: "plus",
             canSubmit: !(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading || isSubmitting),
             isBusy: memberVM.isLoading || isSubmitting,
-            contentPadding: 0,
             hasUnsavedChanges: hasUnsavedChanges,
             onSubmit: saveChild,
             onCancel: { dismiss() }
         ) {
             // الصورة للذكر فقط — الأنثى بلا خيار صورة
-            if selectedGender != "female" { heroHeader.dsStaggerIn(0) }
-            basicInfoCard
-                .padding(.horizontal, DS.Spacing.lg)
-                .dsStaggerIn(1)
+            if selectedGender != "female" { photoSection }
+            basicInfoSection
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .dsAlert(successTitle, isPresented: $showSuccessAlert,
@@ -96,135 +92,91 @@ struct AddChildSheet: View {
             || isDeceased
     }
 
-    private var heroHeader: some View {
-        DSProfilePhotoPicker(
-            selectedImage: $selectedUIImage,
-            enableCrop: true,
-            cropShape: .circle,
-            trailing: L10n.t("اختياري", "Optional"),
-            compactEmptyState: true
-        )
-        .padding(.horizontal, DS.Spacing.lg)
+    /// الصورة — قسم مثل أقسام مربّعات الإضافة (للذكر فقط)
+    private var photoSection: some View {
+        DSComposerSection(title: L10n.t("الصورة الشخصية", "Profile Photo"), icon: "camera.fill",
+                          tint: DS.Color.primary, trailing: L10n.t("اختياري", "Optional"), index: 0) {
+            DSProfilePhotoPicker(
+                selectedImage: $selectedUIImage,
+                enableCrop: true,
+                cropShape: .circle,
+                trailing: nil,   // «اختياري» في عنوان القسم
+                compactEmptyState: true
+            )
+            .frame(maxWidth: .infinity)
+        }
     }
 
-    private var basicInfoCard: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("المعلومات الشخصية", "Personal Info"),
-                icon: "person.text.rectangle",
-                iconColor: DS.Color.primary
-            )
+    /// البيانات — نفس أقسام وحقول مربّعات الإضافة («أسلوب واحد»): الاسم، الجنس، الهاتف، التواريخ
+    private var basicInfoSection: some View {
+        DSComposerSection(title: L10n.t("المعلومات الشخصية", "Personal Info"),
+                          icon: "person.text.rectangle", tint: DS.Color.primary, index: 1) {
+            DSComposerField(icon: "person.fill", label: L10n.t("الاسم الأول", "First Name"),
+                            placeholder: L10n.t("اسم الابن", "Child's name"),
+                            text: $firstName, tint: DS.Color.primary, limit: 50)
 
-                VStack(spacing: 0) {
-                    // Name field — العنوان فوق الحقل
-                    DSLabeledFieldRow(icon: "person.fill", iconColor: DS.Color.primary,
-                                      label: L10n.t("الاسم الأول", "First Name")) {
-                        TextField(L10n.t("اسم الابن", "Child's name"), text: $firstName)
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .onChange(of: firstName) { _ in
-                                if firstName.count > 50 {
-                                    firstName = String(firstName.prefix(50))
-                                }
-                            }
-                    }
+            // اختيار الجنس — أنثى تُضاف لشجرة النساء، ذكر للشجرة العامة
+            DSGenderPicker(selection: $selectedGender)
 
-                    DSDivider()
-
-                    // اختيار الجنس — أنثى تُضاف لشجرة النساء، ذكر للشجرة العامة
-                    DSFormRow(icon: "person.2.fill", iconColor: DS.Color.accent,
-                              label: L10n.t("الجنس", "Gender")) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            // actionNavy: نفس الكحلي في الفاتح، وكحلي غامق في الداكن يُقرأ عليه النص الأبيض
-                            // (primary الداكن أزرق فاتح — «ذكر» الأبيض كان باهتاً عليه)
-                            genderButton(title: L10n.t("ذكر", "Male"), value: "male", color: DS.Color.maleFill)
-                            genderButton(title: L10n.t("أنثى", "Female"), value: "female", color: DS.Color.neonPink)
-                        }
-                    }
-
-                    // الهاتف — للابن (الذكر) فقط
-                    if selectedGender == "male" {
-                        DSDivider()
-                        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
-                                          label: L10n.t("رقم الهاتف", "Phone Number")) {
-                            DSPhoneField(
-                                country: $selectedPhoneCountry,
-                                digits: $phoneNumber,
-                                placeholder: L10n.t("اختياري", "Optional"),
-                                compact: true,
-                                bordered: false
-                            )
-                        }
-                    }
-
-                    DSDivider()
-
-                    // Birth date — صف موحّد (اختياري: يُرسل فقط إذا حدّده المستخدم)
-                    DSDateField(
-                        label: L10n.t("تاريخ الميلاد", "Birth Date"),
-                        date: $birthDate,
-                        range: ...Date(),
-                        labelAbove: true
+            // الهاتف — للابن (الذكر) فقط
+            if selectedGender == "male" {
+                DSFieldBox(L10n.t("رقم الهاتف", "Phone Number")) {
+                    DSPhoneField(
+                        country: $selectedPhoneCountry,
+                        digits: $phoneNumber,
+                        placeholder: L10n.t("اختياري", "Optional"),
+                        compact: true,
+                        bordered: false
                     )
-                    .onChange(of: birthDate) { _ in birthDateProvided = true }
-
-                    DSDivider()
-
-                    // Deceased toggle — صف موحّد
-                    DSFormRow(icon: "leaf.fill", iconColor: DS.Color.error,
-                              label: L10n.t("متوفى", "Deceased")) {
-                        Toggle("", isOn: $isDeceased)
-                            .labelsHidden()
-                            .tint(DS.Color.error)
-                            // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
-                            .accessibilityLabel(L10n.t("متوفى", "Deceased"))
-                    }
-                    .animation(.default, value: isDeceased)
-
-                    if isDeceased {
-                        DSDivider()
-                        DSDateField(
-                            label: L10n.t("تاريخ الوفاة", "Death Date"),
-                            date: $deathDate,
-                            icon: "calendar",
-                            iconColor: DS.Color.error,
-                            range: ...Date()
-                        )
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.xs)
-                    }
                 }
             }
+
+            // تاريخ الميلاد (اختياري: يُرسل فقط إذا حدّده المستخدم)
+            dateRow(icon: "gift.fill", tint: DS.Color.warning,
+                    title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                    value: birthDateProvided ? DSDateText.display(birthDate) : L10n.t("بدون تاريخ", "No date")) {
+                dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                    initial: birthDateProvided ? birthDate : nil, allowClear: false) { picked in
+                    guard let picked else { return }
+                    birthDate = picked
+                    birthDateProvided = true
+                }
+            }
+
+            // متوفى — صفّ بإطار حقول المربّعات
+            DSRow(icon: "leaf.fill", tint: DS.Color.error, title: L10n.t("متوفى", "Deceased")) {
+                Toggle("", isOn: $isDeceased.animation(DS.Anim.snappy))
+                    .labelsHidden()
+                    .tint(DS.Color.error)
+                    // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
+                    .accessibilityLabel(L10n.t("متوفى", "Deceased"))
+            }
+
+            if isDeceased {
+                dateRow(icon: "calendar", tint: DS.Color.error,
+                        title: L10n.t("تاريخ الوفاة", "Death Date"),
+                        value: DSDateText.display(deathDate)) {
+                    dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                        initial: deathDate, allowClear: false) { picked in
+                        if let picked { deathDate = picked }
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
     }
 
-    private var submitButton: some View {
-        DSPrimaryButton(
-            L10n.t("إضافة", "Add"),
-            icon: "checkmark.circle.fill",
-            isLoading: memberVM.isLoading || isSubmitting,
-            action: saveChild
-        )
-        .opacity(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
-        .disabled(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                  || memberVM.isLoading || isSubmitting)
-    }
-
-    private func genderButton(title: String, value: String, color: Color) -> some View {
-        let selected = selectedGender == value
-        return Button { selectedGender = value } label: {
-            Text(title)
-                .font(DS.Font.caption1).fontWeight(.bold)
-                .foregroundColor(selected ? .white : DS.Color.textSecondary)
-                .padding(.horizontal, DS.Spacing.md)
-                .frame(height: 34)
-                .background(Capsule().fill(selected ? color : DS.Color.surface))
-                .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.3), lineWidth: 1))
-                // مساحة ضغط ٤٤ نقطة (حد أبل) والحبّة بنفس شكلها — الصف ارتفاعه ٥٢ فيسعها
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
+    /// صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف
+    private func dateRow(icon: String, tint: Color, title: String, value: String,
+                         action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            DSRow(icon: icon, tint: tint, title: title, subtitle: value) {
+                DSStateIcon("pencil", tint: DS.Color.primary, size: DSBox.fieldIcon)
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
     }
 
     /// حارس محلي يمنع الإضافة المكرّرة — isLoading في الـ VM يتأخر لحظة

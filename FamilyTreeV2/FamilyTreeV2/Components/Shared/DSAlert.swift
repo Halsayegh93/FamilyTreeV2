@@ -44,54 +44,12 @@ private struct DSAlertButtonStyle: PrimitiveButtonStyle {
     }
 }
 
-/// شكل زر المربّع — كل الأزرار بنفس الخلفية الهادئة (طلب المالك)، ويُميَّز
-/// الدور بلون النص: الحذف أحمر، الإلغاء عادي، الأساسي كحلي
-private struct DSAlertPressStyle: ButtonStyle {
-    let role: ButtonRole?
-
-    func makeBody(configuration: Configuration) -> some View {
-        DSAlertPressBody(configuration: configuration, role: role)
-    }
-}
-
-private struct DSAlertPressBody: View {
-    let configuration: ButtonStyleConfiguration
-    let role: ButtonRole?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        // أزرار موحّدة في كل المربّعات (طلب المالك): الإجراء كحلي ممتلئ بنص
-        // أبيض (نفس «طلب تعديل»)، الحذف أحمر ممتلئ، و«إلغاء» رمادي هادئ.
-        let destructive = role == .destructive
-        let cancel = role == .cancel
-        let text: Color = cancel ? DS.Color.textPrimary : .white
-        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-        return configuration.label
-            .font(DS.Font.plex(14, weight: .bold))
-            .foregroundColor(text)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 46)
-            .background {
-                if destructive {
-                    shape.fill(DS.Color.error)
-                } else if cancel {
-                    shape.fill(DS.Color.mutedBackground.opacity(0.8))
-                } else {
-                    shape.fill(DSActionFill.style())
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            // ضغطة ناعمة موحّدة (DSMotion) — «تقليل الحركة»: خفوت فقط بلا تصغير
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(DSMotion.press, value: configuration.isPressed)
-    }
-}
+/// شكل زر الرسالة = شكل أزرار كل المربّعات (`DSBoxButtonStyle` في الهيكل الموحّد): الإجراء بلون
+/// القسم، الحذف أحمر، الإلغاء رمادي — نفس الارتفاع والزوايا والخط في مربّع العمل
+private typealias DSAlertPressStyle = DSBoxButtonStyle
 
 /// هل الزر «إلغاء»؟ — لترتيب موحّد في كل الرسائل
-private struct DSAlertIsCancelKey: LayoutValueKey {
+struct DSAlertIsCancelKey: LayoutValueKey {
     static let defaultValue = false
 }
 
@@ -107,17 +65,14 @@ extension View {
         // نفس شكل «ملاحظات إضافية» في طلبات التعديل (طلب المالك)
         self
             .textFieldStyle(.plain)
-            .font(DS.Font.plex(14))
+            .dsFont(.body)
             .foregroundColor(DS.Color.textPrimary)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.sm)
             .frame(minHeight: 38, alignment: .topLeading)
-            .background(DS.Color.surface)
+            // مملوء بخلفية هادئة (نفس رمادي زرّ «إلغاء») بدل الأبيض المحدّد — طلب المالك ٢٠٢٦-١٠-٠٧
+            .background(DS.Color.mutedBackground.opacity(0.8))
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-            )
             .layoutValue(key: DSAlertIsFieldKey.self, value: true)
     }
 }
@@ -125,7 +80,8 @@ extension View {
 /// زرّان جنب بعض بعرض متساوٍ، وثلاثة فأكثر فوق بعض.
 /// الترتيب موحّد مهما كان ترتيب الكود (طلب المالك):
 /// «إلغاء» أولاً = يمين في العربية، والإجراء بعده = يسار؛ وفي العمودي «إلغاء» آخراً.
-private struct DSAlertButtonsLayout: Layout {
+/// تُستخدم أيضاً خارج الرسائل (`DSBoxButtons`) لبطاقات بأزرارها — نفس الصفّ في كل المربّعات.
+struct DSAlertButtonsLayout: Layout {
     var spacing: CGFloat = DS.Spacing.sm
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -193,9 +149,20 @@ struct DSCenterCard<Content: View>: View {
     /// المحتوى يدخل بعد البطاقة (تلاشٍ + صعود خفيف) — false لمحتوى يُدخل عناصره
     /// تباعاً بنفسه (مثل رسائل dsAlert: العنوان ← النص ← الأزرار)
     var animatesContent: Bool = true
+    /// عنوان البطاقة وأيقونته: يرسمان الرأس المضغوط (`DSComposerHeader(compact:)`) بلون القسم أعلى
+    /// البطاقة — نفس رأس مربّع العمل بأصغر. nil = بلا رأس (شريط رفيع بلون القسم فقط)
+    var title: String? = nil
+    var icon: String? = nil
+    /// وضع العرض: المحتوى كله يتمرّر داخل البطاقة إن لم يتّسع — false لمحتوى يمرّر جزءه الطويل بنفسه
+    /// (رسائل dsAlert: النص يتمرّر والأزرار ثابتة)
+    var scrollsContent: Bool = true
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
-    @Environment(\.colorScheme) private var colorScheme
+    /// لون القسم للشريط الرفيع — من الواجهة التي فتحتها، واحتياطاً القسم المختار ثم كحلي العلامة
+    @Environment(\.dsSection) private var section
+    private var accentTint: Color { (section ?? AppSection.current)?.fill ?? DS.Color.actionNavy }
+    /// وضع العرض: البطاقة أعرض (فتقصر)، ولا تتجاوز الارتفاع المتاح — إن طال محتواها يتمرّر داخلها
+    @Environment(\.dsLandscape) private var landscape
 
     var body: some View {
         ZStack {
@@ -203,30 +170,53 @@ struct DSCenterCard<Content: View>: View {
                 .ignoresSafeArea()
                 .onTapGesture { onBackgroundTap?() }
 
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                content()
+            VStack(spacing: 0) {
+                if let title {
+                    // الرأس المضغوط: نفس تدرّج رأس العمل وتعتيمه في الداكن، المجسّم والعنوان بالأبيض
+                    DSComposerHeader(title: title, subtitle: "",
+                                     icon: icon ?? DSBox.defaultIcon(for: section ?? AppSection.current),
+                                     tint: DS.Color.actionNavy, compact: true)
+                }
+                // أفقياً: على قدر محتواه، وإن لم يتّسع يتمرّر داخل البطاقة
+                if scrollsContent {
+                    cardBody
+                        .dsLandscapeFitScroll()
+                } else {
+                    cardBody
+                }
             }
-            .environment(\.dsInCenterBox, true)
-            // نفس لغة المربّعات: البطاقة تكبر، ثم محتواها يصعد بهدوء داخلها
-            .dsEntrance(delay: 0.05, y: 8, animation: DSMotion.text, active: animatesContent)
-            .padding(DS.Spacing.xl)
-            .frame(maxWidth: 340)
+            .frame(maxWidth: landscape ? DS.Landscape.alertMaxWidth : DSBox.alertMaxWidth)
             .background(DS.Color.background)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
-            // إطار للمربّع في الوضع الداكن (طلب المالك) — يفصله عن الخلفية
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                    .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
-                                                          : Color.black.opacity(0.06),
-                                  lineWidth: colorScheme == .dark ? 1.25 : 1)
-            )
-            .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 10)
+            // بلا رأس: شريط رفيع بلون القسم أعلى البطاقة
+            .overlay(alignment: .top) {
+                if title == nil {
+                    Rectangle()
+                        .fill(LinearGradient(colors: [accentTint, accentTint.dsHeroLight],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(height: DSBox.accentHeight)
+                        .allowsHitTesting(false)
+                }
+            }
+            .dsBoxChrome()
             .padding(.horizontal, DS.Spacing.xl)
+            .padding(.vertical, landscape ? DS.Landscape.panelMargin : 0)
             .scaleEffect(appeared || reduceMotion ? 1 : DSMotion.panelScale)
             .opacity(appeared ? 1 : 0)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear { withAnimation(reduceMotion ? DSMotion.fade : DSMotion.panel) { appeared = true } }
+    }
+
+    /// محتوى البطاقة تحت رأسها
+    private var cardBody: some View {
+        VStack(alignment: .leading, spacing: DSBox.alertSpacing) {
+            content()
+        }
+        .environment(\.dsInCenterBox, true)
+        // نفس لغة المربّعات: البطاقة تكبر، ثم محتواها يصعد بهدوء داخلها
+        .dsEntrance(delay: 0.05, y: 8, animation: DSMotion.text, active: animatesContent)
+        .padding(DSBox.alertPadding)
+        .padding(.top, title == nil ? DSBox.accentHeight : 0)
     }
 }
 
@@ -242,13 +232,16 @@ struct DSCenterPanel<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
     @State private var contentHeight: CGFloat = 0
-    @Environment(\.colorScheme) private var colorScheme
     /// لون القسم داخل المربّع — من الواجهة التي فتحته، واحتياطاً القسم المختار
     @Environment(\.dsSection) private var section
+    /// وضع العرض: المربّع أعرض ويأخذ الارتفاع كله تقريباً (الشاشة ~٤٠٠ نقطة)
+    @Environment(\.dsLandscape) private var landscape
 
     /// ارتفاع اللوح: على قدر المحتوى (+ شريط العنوان) وبحدّ أقصى 86% من الشاشة
+    /// (أفقياً: الارتفاع المتاح ناقص هامش صغير — يبقى الرأس والأزرار ظاهرين والوسط يتمرّر)
     private func panelHeight(_ geo: GeometryProxy) -> CGFloat {
-        let cap = min(geo.size.height * 0.86, geo.size.height - DS.Spacing.xxl)
+        let cap = landscape ? geo.size.height - DS.Landscape.panelMargin * 2
+                            : min(geo.size.height * 0.86, geo.size.height - DS.Spacing.xxl)
         guard hugsContent, contentHeight > 0 else { return cap }
         return min(contentHeight + DS.Spacing.lg, cap)
     }
@@ -270,18 +263,11 @@ struct DSCenterPanel<Content: View>: View {
                         if !appeared { DispatchQueue.main.async { reveal() } }
                     }
                     .frame(
-                        width: min(geo.size.width - DS.Spacing.lg * 2, 520),
+                        width: min(geo.size.width - DS.Spacing.lg * 2, landscape ? DS.Landscape.panelMaxWidth : 520),
                         height: panelHeight(geo)
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
-                    // إطار في الوضع الداكن يفصل اللوح عن الخلفية (طلب المالك)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                            .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
-                                                        : Color.black.opacity(0.06),
-                                          lineWidth: colorScheme == .dark ? 1.25 : 1)
-                    )
-                    .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
+                    // الهيكل الموحّد: زوايا + إطار + ظلّ (أعمق للوح الكبير)
+                    .dsBoxChrome(strong: true)
                     // يكبر من ٠٫٩٤ مع تلاشٍ — ثم يبدأ تسلسل محتواه (DSMotion)
                     .scaleEffect(appeared || reduceMotion ? 1 : DSMotion.panelScale)
                     .opacity(appeared ? 1 : 0)
@@ -352,15 +338,16 @@ struct DSExpandableCenterPanel<Content: View>: View {
     @State private var contentHeight: CGFloat = 0
     /// ارتفاع الرأس فقط (`DSPanelCollapsedHeightKey`) — للمصغّر؛ المحتوى يبقى ويُقصّ
     @State private var collapsedHeight: CGFloat = 0
-    @Environment(\.colorScheme) private var colorScheme
     /// لون القسم داخل المربّع — من الواجهة التي فتحته، واحتياطاً القسم المختار
     @Environment(\.dsSection) private var section
+    /// وضع العرض: أعرض، والارتفاع المتاح ناقص هامش صغير
+    @Environment(\.dsLandscape) private var landscape
 
     var body: some View {
         GeometryReader { geo in
             // المصغّر والموسّع كلاهما على قدر المحتوى بلا فراغ زائد (طلب المالك)،
             // وبحد أقصى 90% من الشاشة — والباقي يتمرّر داخل المربّع
-            let cap = geo.size.height * 0.9
+            let cap = landscape ? geo.size.height - DS.Landscape.panelMargin * 2 : geo.size.height * 0.9
             let fallback = isExpanded ? cap : min(geo.size.height * 0.52, 470)
             let measured = isExpanded ? contentHeight
                                       : (collapsedHeight > 0 ? collapsedHeight : contentHeight)
@@ -385,16 +372,10 @@ struct DSExpandableCenterPanel<Content: View>: View {
                         // المحتوى تحت رأس ملوّن (تفاصيل العضو) — أقسامه تدخل بعد الرأس (DSMotion)
                         .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
                 }
-                .frame(width: min(geo.size.width - DS.Spacing.lg * 2, 520), height: height)
+                .frame(width: min(geo.size.width - DS.Spacing.lg * 2, landscape ? DS.Landscape.panelMaxWidth : 520),
+                       height: height)
                 .background(DS.Color.background)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
-                        .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
-                                                              : Color.black.opacity(0.06),
-                                      lineWidth: colorScheme == .dark ? 1.25 : 1)
-                )
-                .shadow(color: .black.opacity(0.3), radius: 28, x: 0, y: 12)
+                .dsBoxChrome(strong: true)
                 // فتح/إغلاق بحركة: يكبر من أصغر وأسفل قليلاً مع تلاشٍ (طلب المالك)
                 .scaleEffect(appeared || reduceMotion ? 1 : 0.9)
                 .offset(y: appeared || reduceMotion ? 0 : (closing ? 18 : 20))
@@ -428,7 +409,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
     }
 }
 
-/// محتوى رسالة: عنوان + نص + أزرار (أو «حسناً» إن لم تُمرَّر أزرار)
+/// محتوى رسالة: رأس مضغوط (عنوان + مجسّم) + نص + أزرار (أو «حسناً» إن لم تُمرَّر أزرار) — على
+/// الهيكل الموحّد: نفس بطاقة مربّع العمل ورأسه بأصغر
 private struct DSAlertBody<A: View, M: View>: View {
     let title: String
     let actions: A
@@ -436,31 +418,29 @@ private struct DSAlertBody<A: View, M: View>: View {
     let onDismiss: () -> Void
     /// لحظة فرح فوق العنوان (طلب المالك ٢٠٢٦-١٠-٠٥) — nil = الرسالة كما كانت
     var moment: FTMoments.Moment? = nil
+    /// أيقونة الرأس — nil = أيقونة القسم (`DSBox.defaultIcon`)
+    var icon: String? = nil
     @Environment(\.dsSection) private var section
 
     var body: some View {
         // نفس لغة المربّعات: البطاقة تكبر ← العنوان ← النص ← الأزرار آخراً
-        DSCenterCard(onBackgroundTap: nil, animatesContent: false) {
+        // الرأس المضغوط (عنوان + مجسّم القسم أو `icon`) من البطاقة نفسها — ثم النص والأزرار
+        DSCenterCard(onBackgroundTap: nil, animatesContent: false, title: title, icon: icon, scrollsContent: false) {
             if let moment {
                 FTMomentView(moment: moment, tint: section?.fill ?? DS.Color.actionNavy)
                     .frame(height: 112)
                     .frame(maxWidth: .infinity)
             }
-            Text(title)
-                .font(DS.Font.plex(17, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .dsEntrance(delay: 0.05, y: 8, animation: DSMotion.text)
 
             if let message {
                 message
-                    .font(DS.Font.plex(14, weight: .regular))
+                    .font(DSBox.alertBodyFont)
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    // وضع العرض: النص الطويل يتمرّر والأزرار تحته ثابتة
+                    .dsLandscapeFitScroll()
                     .dsEntrance(delay: 0.09, y: 8, animation: DSMotion.text)
             }
 
@@ -477,6 +457,38 @@ private struct DSAlertBody<A: View, M: View>: View {
             .padding(.top, DS.Spacing.xs)
             .dsEntrance(delay: 0.14, y: DSMotion.footerRise, animation: DSMotion.footer)
         }
+    }
+}
+
+extension DSBox {
+    /// أيقونة قرص التنبيه حين لا تُمرَّر: رمز القسم (ويرسمه «مجسّمات» بمجسّم القسم)
+    static func defaultIcon(for section: AppSection?) -> String {
+        // مجسّم القسم من مكانه الواحد (`AppSection.artIcon` — الديوانيات «مجلس»)
+        section?.artIcon ?? "bell.fill"
+    }
+}
+
+/// صفّ أزرار المربّعات لبطاقات خارج `dsAlert` (تاريخ، اختيار…): نفس الترتيب والشكل —
+/// ضع الأزرار بأدوارها (`.cancel`/`.destructive`) وسيأخذ كلٌّ شكله من `DSBoxButtonStyle`
+struct DSBoxButtons<Content: View>: View {
+    /// مقاس الصفّ — ٤٠ في المربّعات والصفحات، و`.large` (٤٨) للإجراء الرئيسي في شاشات ملء الشاشة
+    var size: DSButtonSize = .regular
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        DSAlertButtonsLayout { content() }
+            .buttonStyle(DSBoxRoleButtonStyle(size: size))
+    }
+}
+
+/// يمرّر دور الزر إلى `DSBoxButtonStyle` ويعلّم «إلغاء» للترتيب الموحّد
+private struct DSBoxRoleButtonStyle: PrimitiveButtonStyle {
+    var size: DSButtonSize = .regular
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button(action: configuration.trigger) { configuration.label }
+            .buttonStyle(DSBoxButtonStyle(role: configuration.role, size: size))
+            .layoutValue(key: DSAlertIsCancelKey.self, value: configuration.role == .cancel)
     }
 }
 
@@ -556,6 +568,7 @@ private struct DSAlertModifier<A: View, M: View>: ViewModifier {
     let actions: () -> A
     let message: (() -> M)?
     var moment: FTMoments.Moment? = nil
+    var icon: String? = nil
     @State private var shownID: UUID?
     /// أحدث نسخة من الأزرار والنص — onChange يلتقط قيم الرسم السابق، فالرسالة
     /// المبنية من بيانات (presenting) كانت تظهر بالعنوان فقط لأن البيانات nil وقتها
@@ -584,7 +597,8 @@ private struct DSAlertModifier<A: View, M: View>: ViewModifier {
                 // بعد ظهور أثر الضغط — ثم تُغلق النافذة عبر onChange
                 DispatchQueue.main.async { binding.wrappedValue = false }
             },
-            moment: moment
+            moment: moment,
+            icon: icon
         )
         shownID = DSPopupPresenter.shared.show(view, section: section ?? AppSection.current)
     }
@@ -597,15 +611,17 @@ private struct DSAlertModifier<A: View, M: View>: ViewModifier {
 }
 
 extension View {
-    /// بديل `.alert` بتصميم التطبيق الموحّد (عنوان + أزرار)
+    /// بديل `.alert` بتصميم التطبيق الموحّد (عنوان + أزرار). `icon`: أيقونة القرص الصغير
+    /// (nil = أيقونة القسم)
     func dsAlert<A: View>(
         _ title: String,
         isPresented: Binding<Bool>,
         moment: FTMoments.Moment? = nil,
+        icon: String? = nil,
         @ViewBuilder actions: @escaping () -> A
     ) -> some View {
         modifier(DSAlertModifier<A, EmptyView>(title: title, isPresented: isPresented,
-                                                actions: actions, message: nil, moment: moment))
+                                                actions: actions, message: nil, moment: moment, icon: icon))
     }
 
     /// بديل `.alert` بتصميم التطبيق الموحّد (عنوان + أزرار + نص)
@@ -613,11 +629,12 @@ extension View {
         _ title: String,
         isPresented: Binding<Bool>,
         moment: FTMoments.Moment? = nil,
+        icon: String? = nil,
         @ViewBuilder actions: @escaping () -> A,
         @ViewBuilder message: @escaping () -> M
     ) -> some View {
         modifier(DSAlertModifier(title: title, isPresented: isPresented,
-                                 actions: actions, message: message, moment: moment))
+                                 actions: actions, message: message, moment: moment, icon: icon))
     }
 
     /// بديل `.alert(presenting:)` — الأزرار والنص يُبنيان من البيانات المعروضة

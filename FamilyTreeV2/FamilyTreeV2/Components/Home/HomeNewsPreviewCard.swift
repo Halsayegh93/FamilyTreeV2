@@ -38,21 +38,15 @@ struct HomeNewsPreviewCard: View {
                 .buttonStyle(.plain)
             content
             if visibleNews.count > 3 {
+                // الزرّ الموحّد (ثانوي) — السهم بعد النص
                 Button(action: onTap) { showAllButton }
-                    .buttonStyle(DSScaleButtonStyle())
+                    .buttonStyle(.ds(.cancel))
+                    .padding(.top, DS.Spacing.xs)
             }
         }
-        .padding(DS.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .strokeBorder(DS.Color.cardBorder.opacity(0.8), lineWidth: 0.75)
-        )
-        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
-        // ظل ناعم منتشر بدل الظل الأزرق الثقيل
-        .shadow(color: .black.opacity(0.05), radius: 14, x: 0, y: 6)
+        // البطاقة الواحدة (`.dsCard`) — نفس بطاقة الترحيب وبطاقات الأقسام
+        .dsCard(padding: DS.Spacing.lg)
     }
 
     // MARK: - الهيدر
@@ -60,27 +54,18 @@ struct HomeNewsPreviewCard: View {
     private var header: some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
             // لون قسم «الأخبار» في الرئيسية — من عائلة اللوحة (AppSection.HomeTile.news)
-            // TMP-ART-TRIAL: رسم بطاقة الأخبار للاتجاه المختار، وإلا الشارة الحالية
-            TrialArt(make: { ArtDispatch.newsCardArt($0, tint: AppSection.HomeTile.news.ink)
-                                .map { AnyView($0.frame(width: 60, height: 44)) } }) {
-                Image(systemName: "newspaper.fill")
-                    .font(DS.Font.scaled(16, weight: .semibold))
-                    .foregroundColor(AppSection.HomeTile.news.ink)
-                    .frame(width: 38, height: 38)
-                    .background(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(AppSection.HomeTile.news.ink.opacity(0.10))
-                    )
-            }
+            // رسم بطاقة الأخبار للاتجاه المختار، وإلا الشارة الحالية
+            FT5STrial.newsCardArt(tint: AppSection.HomeTile.news.ink)
+                                .map { AnyView($0.frame(width: DS.Icon.sizeLg, height: DS.Icon.tapTarget)) }
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(L10n.t("الأخبار والمناسبات", "News & Events"))
-                    .font(DS.Font.plex(17, weight: .bold))
+                    .dsFont(.title)
                     .foregroundColor(DS.Color.textPrimary)
                 if !newsVM.allNews.isEmpty {
                     // الإجمالي من السيرفر — لا عدد المحمَّل فقط
                     Text("\(max(newsVM.totalNewsCount, newsVM.allNews.count)) " + L10n.t("منشور", "posts"))
-                        .font(DS.Font.plex(12, weight: .medium))
+                        .dsFont(.subtitle)
                         .foregroundColor(DS.Color.textSecondary)
                 }
             }
@@ -97,12 +82,7 @@ struct HomeNewsPreviewCard: View {
     }
 
     private var todayBadge: some View {
-        Text(L10n.t("جديد اليوم", "New today"))
-            .font(DS.Font.scaled(10, weight: .bold))
-            .foregroundColor(DS.Color.error)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(DS.Color.error.opacity(0.10)))
+        DSStatusChip(text: L10n.t("جديد اليوم", "New today"), tint: DS.Color.error)
     }
 
     // MARK: - المحتوى
@@ -110,23 +90,12 @@ struct HomeNewsPreviewCard: View {
     @ViewBuilder
     private var content: some View {
         if newsVM.isLoading && newsVM.allNews.isEmpty {
-            VStack(spacing: DS.Spacing.sm) {
-                ForEach(0..<2, id: \.self) { _ in
-                    DSSkeletonRow(avatarSize: 40)
-                }
-            }
-            .padding(.vertical, DS.Spacing.sm)
+            // التحميل الموحّد: مجسّم الأخبار يتنفّس
+            DSPageLoader(section: .news, fillsSpace: false)
+                .padding(.vertical, DS.Spacing.sm)
         } else if visibleNews.isEmpty {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "newspaper")
-                    .font(DS.Font.scaled(18))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(L10n.t("لا توجد أخبار بعد", "No news yet"))
-                    .font(DS.Font.scaled(13, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-            }
-            .padding(.vertical, DS.Spacing.md)
+            // الحالة الفارغة الموحّدة (مجسّم الأخبار + عنوان) داخل البطاقة
+            DSEmptyView(L10n.t("لا توجد أخبار بعد", "No news yet"), section: .news, style: .inline)
         } else {
             VStack(spacing: DS.Spacing.sm) {
                 // آخر مناسبة (زواج/مولود/وفاة) أولاً — هي ما يهم العائلة أكثر
@@ -138,9 +107,9 @@ struct HomeNewsPreviewCard: View {
                     if idx > 0 {
                         // فاصل رفيع بين الأخبار — أنعم من تكديسها بلا فواصل
                         Rectangle()
-                            .fill(DS.Color.cardBorder.opacity(0.7))
-                            .frame(height: 0.5)
-                            .padding(.leading, 42)
+                            .fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
+                            .frame(height: DS.Border.width)
+                            .padding(.leading, DS.Icon.row + DS.Spacing.sm)
                     }
                     Button { open(news) } label: {
                         HomeNewsPreviewRow(
@@ -149,7 +118,7 @@ struct HomeNewsPreviewCard: View {
                             likes: newsVM.likesCountByPost[news.id] ?? 0,
                             comments: newsVM.commentsCountByPost[news.id] ?? 0
                         )
-                        .padding(.vertical, 2)
+                        .padding(.vertical, DS.Spacing.xxs)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(DSScaleButtonStyle())
@@ -175,31 +144,10 @@ struct HomeNewsPreviewCard: View {
     }
 
     private var showAllButton: some View {
-        HStack(spacing: DS.Spacing.xs + 2) {
+        HStack(spacing: DSBox.buttonSpacing) {
             Text(L10n.t("عرض كل الأخبار", "Show all news"))
-                .font(DS.Font.plex(13, weight: .semibold))
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .bold))
-        }
-        .foregroundColor(AppSection.HomeTile.news.ink)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(AppSection.HomeTile.news.ink.opacity(0.08))
-        )
-        .padding(.top, DS.Spacing.xs)
-    }
-
-    /// سطح هادئ مع لمسة لونية خفيفة جداً في الزاوية — بلا بقع ملوّنة متعدّدة
-    private var cardBackground: some View {
-        ZStack(alignment: .topTrailing) {
-            DS.Color.surface
-            LinearGradient(
-                colors: [AppSection.HomeTile.news.ink.opacity(0.06), .clear],
-                startPoint: .top,
-                endPoint: .center
-            )
+                .dsGlyph(DSButtonSize.regular.glyph)
         }
     }
 }
@@ -237,9 +185,9 @@ struct HomeNewsPreviewRow: View {
         HStack(alignment: .top, spacing: DS.Spacing.sm) {
             avatar
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(news.content)
-                    .font(DS.Font.scaled(13, weight: .medium))
+                    .dsFont(.callout)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -256,8 +204,8 @@ struct HomeNewsPreviewRow: View {
                 } placeholder: {
                     DS.Color.mutedBackground
                 }
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Icon.discRadiusSmall, style: .continuous))
             }
         }
     }
@@ -268,31 +216,31 @@ struct HomeNewsPreviewRow: View {
             ZStack {
                 Circle().fill(DS.Color.gradientPrimary)
                 // مكبّر صوت مصمت ونبضة ذهبية واحدة كل ٨ ث (طلب المالك ٢٠٢٦-١٠-٠٥ «باعتدال»)
-                FTNewsBadge(type: "إعلان", tint: .white, seed: Int(news.id.uuid.0), style: .onColor)
+                FTNewsBadge(type: "إعلان", tint: DS.Color.textOnPrimary, seed: Int(news.id.uuid.0), style: .onColor)
             }
-            .frame(width: 32, height: 32)
-            .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
+            .frame(width: DS.Icon.row, height: DS.Icon.row)
+            .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: DS.Border.width))
         } else {
             DSMemberAvatar(
                 name: news.author_name,
                 avatarUrl: member?.avatarUrl,
-                size: 32,
+                size: DS.Icon.row,
                 roleColor: roleColor
             )
         }
     }
 
     private var metaRow: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DS.Spacing.xs) {
             Text(displayName)
-                .font(DS.Font.scaled(11, weight: isAdminIdentity ? .bold : .medium))
+                .dsFont(isAdminIdentity ? .badge : .footnote)
                 .foregroundColor(isAdminIdentity ? DS.Color.primary : DS.Color.textSecondary)
                 .lineLimit(1)
             Text("•")
-                .font(DS.Font.scaled(11))
+                .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
             Text(Self.relativeTime(news.timestamp))
-                .font(DS.Font.scaled(11))
+                .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .lineLimit(1)
 
@@ -303,12 +251,12 @@ struct HomeNewsPreviewRow: View {
     }
 
     private func metaChip(icon: String, value: Int?) -> some View {
-        HStack(spacing: 2) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.xs)
             if let value {
                 Text("\(value)")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .dsFont(.badge)
             }
         }
         .foregroundColor(DS.Color.textTertiary)
@@ -337,35 +285,30 @@ struct HomeOccasionRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
             ZStack {
-                Circle().fill(color.opacity(0.16))
+                Circle().fill(color.opacity(DS.Opacity.tintFillStrong))
                 // شارة متحرّكة للنوع (مهد يتأرجح، خاتمان يلتحمان، ألعاب نارية فوق الأبراج…) — «وفاة» هلال ثابت
                 if FTNewsBadges.hasArt(for: news.type, currentIcon: NewsTypeHelper.icon(for: news.type)) {
                     FTNewsBadge(type: news.type, tint: color, seed: 0,
                                 celebrate: celebratedId != news.id.uuidString)
                 } else {
-                    Image(systemName: NewsTypeHelper.icon(for: news.type))
-                        .font(DS.Font.scaled(14, weight: .bold))
+                    Image(dsSymbol: NewsTypeHelper.icon(for: news.type))
+                        .dsGlyph(DS.Glyph.md)
                         .foregroundColor(color)
                 }
             }
-            .frame(width: 36, height: 36)
+            .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
             .onDisappear { celebratedId = news.id.uuidString }
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(news.type)
-                        .font(DS.Font.scaled(10, weight: .heavy))
-                        .foregroundColor(color)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(color.opacity(0.12)))
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                HStack(spacing: DS.Spacing.xsm) {
+                    DSStatusChip(text: news.type, tint: color, size: .mini)
                     Text(HomeDates.relativeString(news.timestamp))
-                        .font(DS.Font.scaled(10))
+                        .dsFont(.micro)
                         .foregroundColor(DS.Color.textTertiary)
                         .lineLimit(1)
                 }
                 Text(news.content)
-                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .dsFont(.rowTitleCompact)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -374,10 +317,10 @@ struct HomeOccasionRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.sm + 2)
+        .padding(DS.Card.padding)
         .background(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(color.opacity(0.06))
+            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                .fill(color.opacity(DS.Opacity.tintFillSoft))
         )
     }
 }

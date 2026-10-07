@@ -13,6 +13,7 @@ struct WaitingForApprovalView: View {
     @State private var deletingAccount = false
     /// «تقليل الحركة» (توصية أبل): بلا دوران ولا نبض ولا قفز متكرر
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsLandscape) private var landscape
 
     var body: some View {
         ZStack {
@@ -33,12 +34,11 @@ struct WaitingForApprovalView: View {
 
                     // ساعة رملية مصمتة على قرص بلون الإدارة، وخيط رمل ذهبي تنساب فيه لمعة كل ٤ ث
                     // (طلب المالك ٢٠٢٦-١٠-٠٥ «أبسط وأقوى وباعتدال») — بدل الأيقونة والنقاط
-                    TrialArt(make: { ArtDispatch.waiting($0) }) {   // TMP-ART-TRIAL
-                        FTSceneCanvas { ctx, size, t, dark in
-                            FTPlaceScenes.drawWaitingMajlis(in: &ctx, size: size, t: t, dark: dark)
-                        }
-                    }
-                    .frame(width: 140, height: 140)
+                    FT5STrial.waiting()
+                    // وضع العرض: أصغر (`DS.Landscape.stateHero`) — الرسمة بمقاسها الثابت فتُصغَّر بالمقياس
+                    .scaleEffect(landscape ? DS.Landscape.stateHero / DS.Icon.heroArt : 1)
+                    .frame(width: landscape ? DS.Landscape.stateHero : DS.Icon.heroArt,
+                           height: landscape ? DS.Landscape.stateHero : DS.Icon.heroArt)
                     .opacity(contentOpacity)
 
                     // بعد الأيقونة تدخل البطاقة ثم الأزرار واحداً بعد الآخر (dsStaggerIn)
@@ -53,6 +53,8 @@ struct WaitingForApprovalView: View {
                 }
                 // الأقسام تبدأ بعد الأيقونة (نفس «بعد الرأس» في المربّعات)
                 .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
+                // وضع العرض: البطاقة والأزرار بعمود قراءة متوسّط
+                .dsLandscapeReadable()
                 }
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -88,17 +90,16 @@ struct WaitingForApprovalView: View {
         }
     }
 
-    // MARK: - Info Card
+    // MARK: - Info Card — البطاقة الواحدة
     private var infoCard: some View {
         VStack(spacing: DS.Spacing.lg) {
             // اسم التطبيق
             VStack(spacing: DS.Spacing.xs) {
                 Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
-                    .font(DS.Font.title3)
-                    .fontWeight(.black)
+                    .dsFont(.title)
                     .foregroundColor(DS.Color.textPrimary)
                 Text(L10n.t("شجرة العائلة", "Family Tree"))
-                    .font(DS.Font.caption1)
+                    .dsFont(.subtitle)
                     .foregroundColor(DS.Color.textSecondary)
             }
 
@@ -106,7 +107,7 @@ struct WaitingForApprovalView: View {
 
             // العنوان
             Text(L10n.t("طلبك قيد المراجعة", "Request Under Review"))
-                .font(DS.Font.headline)
+                .dsFont(.headline)
                 .foregroundColor(DS.Color.textPrimary)
 
             // الوصف
@@ -114,36 +115,19 @@ struct WaitingForApprovalView: View {
                 "تم إرسال بياناتك للإدارة.\nيرجى الانتظار حتى يتم التفعيل.",
                 "Info submitted.\nPlease wait for activation."
             ))
-            .font(DS.Font.body)
-            .foregroundColor(DS.Color.textPrimary.opacity(0.75))
+            .dsFont(.body)
+            .foregroundColor(DS.Color.textSecondary)
             .multilineTextAlignment(.center)
-            .lineSpacing(4)
+            .lineSpacing(DS.Spacing.xs)
 
-            // شارة الحالة
-            HStack(spacing: DS.Spacing.xs) {
-                Circle()
-                    .fill(DS.Color.primary)
-                    .frame(width: 8, height: 8)
-                    .scaleEffect(pulseScale > 1.05 ? 1.2 : 1.0)
-                Text(L10n.t("قيد الانتظار", "Pending"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.primary)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(DS.Color.primary.opacity(0.08))
-            .cornerRadius(DS.Radius.full)
+            // شارة الحالة — كبسولة الحالة المشتركة (نقطتها تنبض بهدوء)
+            DSStatusChip(text: L10n.t("قيد الانتظار", "Pending"), icon: "circle.fill", tint: DS.Color.primary)
+                .scaleEffect(pulseScale > 1.05 ? 1.04 : 1.0)
 
         }
         .padding(DS.Spacing.xl)
         .padding(.vertical, DS.Spacing.xs)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.primary.opacity(0.15), lineWidth: 1)
-        )
-        .dsSubtleShadow()
+        .dsCard(padding: nil)
         .padding(.horizontal, DS.Spacing.xl)
     }
 
@@ -188,27 +172,11 @@ struct WaitingForApprovalView: View {
             .padding(.horizontal, DS.Spacing.xl)
             .dsStaggerIn(4)
 
-            // حذف الحساب — زر هادئ في الأسفل (نفس أسلوب الإعدادات)
-            Button { confirmDeletion = true } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    if deletingAccount {
-                        ProgressView().tint(DS.Color.error)
-                    } else {
-                        Image(systemName: "trash")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .accessibilityHidden(true)   // زخرفة — النص يكفي
-                    }
-                    Text(L10n.t("حذف الحساب", "Delete Account"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                }
-                .foregroundColor(DS.Color.error)
-                .frame(maxWidth: .infinity)
-                .frame(height: 46)
-                .background(DS.Color.error.opacity(0.08),
-                            in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            // حذف الحساب — الزرّ الواحد بدور الحذف (نفس الإعدادات)
+            DSButton(L10n.t("حذف الحساب", "Delete Account"), icon: "trash", role: .destructive,
+                     isLoading: deletingAccount) {
+                confirmDeletion = true
             }
-            .buttonStyle(DSScaleButtonStyle())
-            .disabled(deletingAccount)
             .padding(.horizontal, DS.Spacing.xl)
             .padding(.bottom, DS.Spacing.xl)
             .dsStaggerIn(5)

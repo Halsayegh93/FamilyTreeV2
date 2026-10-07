@@ -122,9 +122,9 @@ struct DSPhoneField: View {
                                        "Country code \(country.dialingCode)"))
 
             // فاصل رأسي
-            RoundedRectangle(cornerRadius: 1)
-                .fill(DS.Color.textTertiary.opacity(0.3))
-                .frame(width: 1, height: compact ? 20 : 24)
+            Capsule()
+                .fill(DS.Color.textTertiary.opacity(DS.Opacity.divider))
+                .frame(width: DS.Border.width, height: compact ? DS.Icon.countBadge : DS.Spacing.xxl)
                 .padding(.horizontal, DS.Spacing.sm)
 
             // رقم العضو — يتمدّد لملء المساحة على الجهة المقابلة
@@ -150,53 +150,6 @@ struct DSPhoneField: View {
 
 /// ارتفاع موحّد لصفوف النماذج (الاسم/الهاتف/التاريخ/متوفى/البريد).
 let dsFormRowHeight: CGFloat = 52
-
-/// صف نموذج موحّد — أيقونة + اسم الحقل على الجهة الأمامية ثم المحتوى،
-/// بنفس الارتفاع والحجم في كل النماذج (إضافة/تعديل الأبناء + تعديل حسابي).
-struct DSFormRow<Trailing: View>: View {
-    let icon: String
-    var iconColor: Color = DS.Color.primary
-    let label: String
-    @ViewBuilder var trailing: () -> Trailing
-
-    var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: iconColor)
-            Text(label)
-                .font(DS.Font.footnote)
-                .foregroundColor(DS.Color.textPrimary)
-                .fixedSize(horizontal: true, vertical: false)
-            Spacer(minLength: DS.Spacing.sm)
-            trailing()
-        }
-        .frame(height: dsFormRowHeight)
-        .padding(.horizontal, DS.Spacing.lg)
-    }
-}
-
-/// صف نموذج باسم الحقل **فوق** الحقل (عنوان صغير ثم الحقل تحته) — للحقول
-/// النصية (الاسم/الهاتف/البريد).
-struct DSLabeledFieldRow<Field: View>: View {
-    let icon: String
-    var iconColor: Color = DS.Color.primary
-    let label: String
-    @ViewBuilder var field: () -> Field
-
-    var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: iconColor)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                field()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
-    }
-}
 
 /// مفتاح قياس ارتفاع محتوى الشيت لجعل الشيت بارتفاع المحتوى فقط.
 struct SheetContentHeightKey: PreferenceKey {

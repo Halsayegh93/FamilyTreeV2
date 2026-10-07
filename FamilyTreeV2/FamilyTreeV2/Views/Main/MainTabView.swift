@@ -2,8 +2,6 @@ import SwiftUI
 import UserNotifications
 
 struct MainTabView: View {
-    /// TMP-ART-TRIAL: تغيير التصميم يعيد بناء التبويبات حتى تتبدّل ألوان الأقسام فوراً
-    @AppStorage(ArtTrial.storageKey) private var artTrialRaw = ArtTrial.emblem.rawValue
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var langManager = LanguageManager.shared
@@ -44,6 +42,7 @@ struct MainTabView: View {
 
     /// iOS 18+: واجهة Tab الحديثة — تأخذ شكل شريط iOS 26/27 الكامل (زجاج سائل عائم
     /// بفقاعة اختيار). الأقدم: tabItem كما كان.
+    /// رموز التبويبات من مكان واحد: `AppSection.symbol` (المختار) و`.symbolOutline` — الديوانيات «مجلس»
     @ViewBuilder
     private var tabs: some View {
         if #available(iOS 18.0, *) {
@@ -53,14 +52,14 @@ struct MainTabView: View {
                     HomeNewsView(selectedTab: $selectedTab)
                         .dsSection(.home)
                 } label: {
-                    Label(tabTitle("الرئيسية", "Home"), systemImage: "house.fill")
+                    Label(tabTitle("الرئيسية", "Home"), systemImage: AppSection.home.symbol)
                 }
 
                 Tab(value: 1) {
                     TreeTabContainer(selectedTab: $selectedTab)
                         .dsSection(.tree)
                 } label: {
-                    Label(tabTitle("الشجرة", "Tree"), systemImage: "tree.fill")
+                    Label(tabTitle("الشجرة", "Tree"), systemImage: AppSection.tree.symbol)
                 }
 
                 if appSettingsVM.settings.diwaniyasEnabled ?? true {
@@ -68,7 +67,7 @@ struct MainTabView: View {
                         DiwaniyasView(selectedTab: $selectedTab)
                             .dsSection(.diwaniyas)
                     } label: {
-                        Label(tabTitle("الديوانيات", "Diwaniyas"), systemImage: "map.fill")
+                        Label(tabTitle("الديوانيات", "Diwaniyas"), systemImage: AppSection.diwaniyas.symbol)
                     }
                 }
 
@@ -76,7 +75,7 @@ struct MainTabView: View {
                     ProfileView(selectedTab: $selectedTab)
                         .dsSection(.profile)
                 } label: {
-                    Label(tabTitle("حسابي", "Profile"), systemImage: "person.crop.circle.fill")
+                    Label(tabTitle("حسابي", "Profile"), systemImage: AppSection.profile.symbol)
                 }
 
                 if authVM.canModerate {
@@ -84,7 +83,7 @@ struct MainTabView: View {
                         AdminDashboardView(selectedTab: $selectedTab)
                             .dsSection(.admin)
                     } label: {
-                        Label(tabTitle("الإدارة", "Admin"), systemImage: "gearshape.2.fill")
+                        Label(tabTitle("الإدارة", "Admin"), systemImage: AppSection.admin.symbol)
                     }
                 }
             }
@@ -93,7 +92,7 @@ struct MainTabView: View {
             HomeNewsView(selectedTab: $selectedTab)
                 .dsSection(.home)
                 .tabItem {
-                    Image(systemName: selectedTab == 0 ? "house.fill" : "house")
+                    Image(systemName: selectedTab == 0 ? AppSection.home.symbol : AppSection.home.symbolOutline)
                     Text(verticalSizeClass == .compact ? "" : L10n.t("الرئيسية", "Home"))
                 }
                 .tag(0)
@@ -102,7 +101,7 @@ struct MainTabView: View {
             TreeTabContainer(selectedTab: $selectedTab)
                 .dsSection(.tree)
                 .tabItem {
-                    Image(systemName: selectedTab == 1 ? "tree.fill" : "tree")
+                    Image(systemName: selectedTab == 1 ? AppSection.tree.symbol : AppSection.tree.symbolOutline)
                     Text(verticalSizeClass == .compact ? "" : L10n.t("الشجرة", "Tree"))
                 }
                 .tag(1)
@@ -111,7 +110,7 @@ struct MainTabView: View {
                 DiwaniyasView(selectedTab: $selectedTab)
                     .dsSection(.diwaniyas)
                     .tabItem {
-                        Image(systemName: selectedTab == 2 ? "map.fill" : "map")
+                        Image(systemName: selectedTab == 2 ? AppSection.diwaniyas.symbol : AppSection.diwaniyas.symbolOutline)
                         Text(verticalSizeClass == .compact ? "" : L10n.t("الديوانيات", "Diwaniyas"))
                     }
                     .tag(2)
@@ -120,7 +119,7 @@ struct MainTabView: View {
             ProfileView(selectedTab: $selectedTab)
                 .dsSection(.profile)
                 .tabItem {
-                    Image(systemName: selectedTab == 3 ? "person.crop.circle.fill" : "person.crop.circle")
+                    Image(systemName: selectedTab == 3 ? AppSection.profile.symbol : AppSection.profile.symbolOutline)
                     Text(verticalSizeClass == .compact ? "" : L10n.t("حسابي", "Profile"))
                 }
                 .tag(3)
@@ -129,7 +128,7 @@ struct MainTabView: View {
                 AdminDashboardView(selectedTab: $selectedTab)
                     .dsSection(.admin)
                     .tabItem {
-                        Image(systemName: selectedTab == 4 ? "gearshape.2.fill" : "gearshape.2")
+                        Image(systemName: selectedTab == 4 ? AppSection.admin.symbol : AppSection.admin.symbolOutline)
                         Text(verticalSizeClass == .compact ? "" : L10n.t("الإدارة", "Admin"))
                     }
                     .tag(4)
@@ -141,7 +140,6 @@ struct MainTabView: View {
     var body: some View {
         ZStack(alignment: .bottomLeading) {
         tabs
-        .id(artTrialRaw)   // TMP-ART-TRIAL
         // أيقونة التبويب المختار بلون قسمه
         .tint(selectedSection.ink)
         .dsTabBarBackground()

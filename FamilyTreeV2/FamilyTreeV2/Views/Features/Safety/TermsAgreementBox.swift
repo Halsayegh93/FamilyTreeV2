@@ -111,12 +111,12 @@ struct TermsHighlightRow: View {
         HStack(alignment: .top, spacing: DS.Spacing.sm) {
             DSFieldIcon(name: item.icon, tint: item.tint)
                 .accessibilityHidden(true)   // زخرفة — العنوان والنص يكفيان
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(item.title)
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(item.text)
-                    .dsFieldFont(12.5)
+                    .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -143,10 +143,10 @@ struct TermsConsentRow: View {
             HStack(alignment: .top, spacing: DS.Spacing.xs) {
                 Button(action: toggle) {
                     Image(systemName: isAccepted ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 22, weight: .semibold))
+                        .dsGlyph(DS.Glyph.xxl, weight: .semibold)
                         .foregroundColor(isAccepted ? DS.Color.primary
                                                     : (highlightError ? DS.Color.error : DS.Color.textTertiary))
-                        .frame(width: 44, height: 44)   // مساحة ضغط ٤٤ (توصية أبل)
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -154,45 +154,46 @@ struct TermsConsentRow: View {
                                            "I accept the Terms of Use and Privacy Policy"))
                 .accessibilityAddTraits(isAccepted ? .isSelected : [])
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     Text(L10n.t("أُقرّ بأنني قرأت شروط الاستخدام وسياسة الخصوصية وأوافق عليهما، وأتعهّد بعدم نشر أي محتوى مسيء.",
                                 "I confirm that I have read and accept the Terms of Use and Privacy Policy, and I pledge not to post any objectionable content."))
-                        .dsFieldFont(13, weight: .bold)
+                        .dsFieldFont(.rowTitleCompact)
                         .foregroundColor(DS.Color.fieldLabel)
                         .fixedSize(horizontal: false, vertical: true)
                         .onTapGesture(perform: toggle)
                         .accessibilityHidden(true)   // نفس نص زر الاختيار
                     Text(L10n.t("لا تهاون مع المحتوى المسيء أو المستخدمين المسيئين؛ إذ يُحذف المحتوى المخالف ويُوقف حساب ناشره، وتُراجَع البلاغات خلال ٢٤ ساعة.",
                                 "Zero tolerance for objectionable content or abusive users: violating content is removed and its author's account suspended; reports are reviewed within 24 hours."))
-                        .font(DS.Font.plex(11.5))
+                        .dsFont(.footnote)
                         .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Button { showTerms = true } label: {
                         Text(L10n.t("قراءة الشروط كاملة", "Read the full terms"))
-                            .font(DS.Font.plex(12.5, weight: .bold))
+                            .dsFont(.sectionTitle)
                             .foregroundColor(DS.Color.primary)
-                            .frame(minHeight: 44)   // مساحة ضغط ٤٤ (توصية أبل)
+                            .frame(minHeight: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.top, 10)
+                .padding(.top, DS.Spacing.sm + DS.Spacing.xxs)
                 Spacer(minLength: 0)
             }
             .padding(.trailing, DS.Spacing.sm)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.surface))
+            // البطاقة الواحدة، وإطار أحمر بعد محاولة الإرسال بلا موافقة
+            .dsCard(padding: nil)
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(highlightError ? DS.Color.error.opacity(0.6) : DS.Color.textTertiary.opacity(0.15),
-                                  lineWidth: highlightError ? 1.5 : 1)
+                RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                    .strokeBorder(DS.Color.error.opacity(highlightError ? DS.Opacity.selectedStroke : 0),
+                                  lineWidth: DS.Border.widthBold)
             )
 
             if highlightError {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(DS.Font.caption2)
+                        .dsGlyph(DS.Glyph.smCompact)
                     Text(L10n.t("يجب الموافقة على الشروط لإرسال الطلب", "You must agree to the terms to submit"))
-                        .font(DS.Font.caption1)
+                        .dsFont(.caption)
                 }
                 .foregroundColor(DS.Color.error)
                 .padding(.leading, DS.Spacing.sm)
@@ -226,26 +227,29 @@ struct SafetyLinkRow: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: icon, tint: tint)
                     .accessibilityHidden(true)   // زخرفة
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(title)
-                        .dsFieldFont(13.5, weight: .bold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
                     if let subtitle {
                         Text(subtitle)
-                            .font(DS.Font.plex(11.5))
+                            .dsFont(.footnote)
                             .foregroundColor(DS.Color.textTertiary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
                 }
                 Spacer(minLength: DS.Spacing.xs)
-                Image(systemName: external ? "arrow.up.forward.square"
-                                           : (L10n.isArabic ? "chevron.left" : "chevron.right"))
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .accessibilityHidden(true)
+                if external {
+                    Image(systemName: "arrow.up.forward.square")
+                        .dsGlyph(DS.Glyph.sm)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .accessibilityHidden(true)
+                } else {
+                    DSChevron()
+                }
             }
             .dsRowBox()
             .contentShape(Rectangle())

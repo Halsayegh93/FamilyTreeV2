@@ -30,30 +30,20 @@ struct DSFormCard<Content: View, Trailing: View>: View {
     // نفس شكل أقسام مربّعات الإضافة (DSComposerSection) — تصميم موحّد (طلب المالك)
     var body: some View {
         let c = color.dsChrome(in: section).dsReadableGlyph
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm + 2) {
-            HStack(spacing: 7) {
-                TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: c, size: 22) }) {   // TMP-ART-TRIAL
-                Image(systemName: icon)
-                    .font(.system(size: 10.5, weight: .bold))
-                    .foregroundColor(c)
-                    .frame(width: 22, height: 22)
-                    .background(Circle().fill(c.opacity(0.13)))
-                }
-                .frame(width: 22, height: 22)
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm + DS.Spacing.xxs) {
+            HStack(spacing: DS.Spacing.xsm + 1) {
+                DSStateIcon(icon, tint: c, size: DS.Icon.section, mapsChrome: false)
                 Text(title)
-                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .dsFont(.sectionTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                 Spacer(minLength: 0)
                 trailing()
             }
             content()
         }
-        .padding(DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
-        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
+        // البطاقة الواحدة (زواياها من `DS.Card` — كانت ١٦) بحشوة الصفحات
+        .dsCard(padding: DS.Spacing.md)
     }
 }
 
@@ -75,18 +65,25 @@ extension EnvironmentValues {
 }
 
 enum DSFieldFont {
-    /// كم تصغر عناوين الحقول وقيمها داخل المربّعات
-    static let boxReduction: CGFloat = 1
+    /// كم تصغر عناوين الحقول وقيمها داخل المربّعات (كان ١ — «صغّر خطوط المربّعات شوي»، طلب المالك ٢٠٢٦-١٠-٠٧)
+    static let boxReduction: CGFloat = 2
 }
 
 /// صناديق الحقول داخل المربّعات أصغر قليلاً أيضاً (طلب المالك: «وحتى المربعات بعد شوي»)
+/// الأرقام نفسها في `DSBox` (مكان واحد لهيكل المربّعات) — هذه أسماء قديمة تشير إليها
 enum DSFieldMetrics {
-    /// كم يقصر صندوق الحقل داخل المربّعات
-    static let boxHeightReduction: CGFloat = 4
+    /// كم يقصر صندوق الحقل داخل المربّعات (٤٦ ← ٤٠)
+    static let boxHeightReduction: CGFloat = fieldHeight - DSBox.fieldMinHeight
     /// الحشوة الرأسية لصندوق الحقل/الصف داخل المربّعات (بدل ٨)
-    static let boxVerticalPadding: CGFloat = 6
+    static let boxVerticalPadding: CGFloat = DSBox.fieldVerticalPadding
     /// أيقونة الحقل داخل المربّعات (بدل ٣٢)
-    static let boxIconSize: CGFloat = 28
+    static let boxIconSize: CGFloat = DSBox.fieldIcon
+    /// ارتفاع صندوق الحقل في الصفحات (داخل المربّعات أقصر بـ `boxHeightReduction`)
+    static let fieldHeight: CGFloat = 46
+    /// صفوف «الميلاد ← متوفّى ← الوفاة» وبطاقتا الجنس (في الصفحات؛ داخل المربّعات أقصر بـ `boxHeightReduction`)
+    static let dateRowHeight: CGFloat = 58
+    static let toggleRowHeight: CGFloat = 52
+    static let optionRowHeight: CGFloat = 50
 }
 
 private struct DSFieldFontModifier: ViewModifier {
@@ -108,7 +105,7 @@ extension View {
 
 /// إطار المربّع الموحّد للحقول داخل البطاقات
 struct DSFieldChrome: ViewModifier {
-    var minHeight: CGFloat = 46
+    var minHeight: CGFloat = DSFieldMetrics.fieldHeight
     @Environment(\.dsInCenterBox) private var inBox
     func body(content: Content) -> some View {
         content
@@ -118,14 +115,14 @@ struct DSFieldChrome: ViewModifier {
             .background(DS.Color.background, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                    .stroke(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width)
             )
     }
 }
 
 extension View {
     /// يضع المحتوى داخل مربّع الحقل الموحّد
-    func dsFieldChrome(minHeight: CGFloat = 46) -> some View {
+    func dsFieldChrome(minHeight: CGFloat = DSFieldMetrics.fieldHeight) -> some View {
         modifier(DSFieldChrome(minHeight: minHeight))
     }
 }
@@ -141,12 +138,12 @@ struct DSFieldBox<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs + 1) {
             Text(label)
-                .dsFieldFont(12, weight: .heavy)
+                .dsFieldFont(DSBox.fieldLabelSize, weight: .heavy)
                 .foregroundColor(DS.Color.fieldLabel)
             content()
-                .dsFieldFont(14.5)
+                .dsFieldFont(DSBox.fieldValueSize)
                 .foregroundColor(DS.Color.textPrimary)
                 .dsFieldChrome()
         }
@@ -163,7 +160,7 @@ struct DSToggleBox: View {
     var body: some View {
         Toggle(isOn: $isOn.animation(DS.Anim.snappy)) {
             Text(title)
-                .dsFieldFont(14, weight: .medium)
+                .dsFieldFont(.bodyMedium)
                 .foregroundColor(DS.Color.textPrimary)
         }
         .tint(tint.dsChrome(in: section))
@@ -176,7 +173,7 @@ struct DSFieldLabel: View {
     let text: String
     var body: some View {
         Text(text)
-            .dsFieldFont(12, weight: .heavy)
+            .dsFieldFont(.label)
             .foregroundColor(DS.Color.fieldLabel)
     }
 }
@@ -193,38 +190,6 @@ enum DSDateText {
     }
 }
 
-/// صف تاريخ داخل مربّع: العنوان فوق، والتاريخ (أو «لم يُحدَّد») مع قلم التعديل
-struct DSDateRow: View {
-    let title: String
-    let date: Date?
-    let action: () -> Void
-    @Environment(\.dsSection) private var section
-    /// قلم التعديل بحبر القسم (كحلي خارج التبويبات)
-    private var accent: Color { DS.Color.primary.dsChrome(in: section) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            DSFieldLabel(text: title)
-            Button(action: action) {
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(date.map(DSDateText.display) ?? L10n.t("بدون تاريخ", "No date"))
-                        .dsFieldFont(14.5, weight: date == nil ? .regular : .semibold)
-                        .foregroundColor(date == nil ? DS.Color.textTertiary : DS.Color.textPrimary)
-                    Spacer(minLength: 0)
-                    Image(systemName: "pencil")
-                        .font(DS.Font.plex(13, weight: .bold))
-                        .foregroundColor(accent)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(accent.opacity(0.10)))
-                }
-                .dsFieldChrome(minHeight: 48)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-}
-
 /// مربّع اختيار تاريخ بمنتصف الشاشة — «حفظ» يمين و«إلغاء» يسار (قاعدة التطبيق).
 /// `onClear` اختياري: يُظهر «بدون تاريخ» لمسح التاريخ.
 struct DSDateCard: View {
@@ -237,11 +202,7 @@ struct DSDateCard: View {
     @State private var date: Date = Date()
 
     var body: some View {
-        DSCenterCard(onBackgroundTap: onCancel) {
-            Text(title)
-                .font(DS.Font.plex(17, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-                .frame(maxWidth: .infinity)
+        DSCenterCard(onBackgroundTap: onCancel, title: title, icon: "calendar") {
 
             DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
                 .datePickerStyle(.wheel)
@@ -250,34 +211,15 @@ struct DSDateCard: View {
                 .environment(\.locale, LanguageManager.shared.locale)
 
             if let onClear {
-                Button(action: onClear) {
-                    Label(L10n.t("بدون تاريخ", "No date"), systemImage: "calendar.badge.minus")
-                        .font(DS.Font.plex(13.5, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .frame(maxWidth: .infinity).frame(height: 40)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .strokeBorder(DS.Color.textTertiary.opacity(0.3), lineWidth: 1))
-                }
-                .buttonStyle(DSScaleButtonStyle())
+                // الزرّ الواحد بدور «ثانوي» الرمادي (كان إطاراً مرسوماً باليد)
+                DSButton(L10n.t("بدون تاريخ", "No date"), icon: "calendar.badge.minus", role: .cancel, action: onClear)
             }
 
-            HStack(spacing: DS.Spacing.sm) {
-                Button { onDone(date) } label: {
-                    Text(L10n.t("حفظ", "Save"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(DSActionFill.style(), in: RoundedRectangle(cornerRadius: DS.Radius.md))
-                }
-                Button(action: onCancel) {
-                    Text(L10n.t("إلغاء", "Cancel"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.mutedBackground.opacity(0.8)))
-                }
+            // صفّ أزرار الهيكل الموحّد
+            DSBoxButtons {
+                Button(L10n.t("حفظ", "Save")) { onDone(date) }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel, action: onCancel)
             }
-            .buttonStyle(DSScaleButtonStyle())
         }
         .onAppear { date = initial }
     }
@@ -311,6 +253,8 @@ struct DSLifeDatesBox: View {
     @Binding var hasDeathDate: Bool
     @Binding var deathDate: Date
     var deceasedTitle: String = L10n.t("متوفّى", "Deceased")
+    /// false = الميلاد وحده (إضافة لا تُسجّل وفاة — مثل إضافة ابن/ابنة في شجرة النساء)
+    var showsDeceased: Bool = true
 
     /// رمادي هادئ لحالة الوفاة (طلب المالك)
     private let deceasedTint = DS.Color.textSecondary
@@ -323,28 +267,31 @@ struct DSLifeDatesBox: View {
             dateRow(icon: "gift.fill", tint: DS.Color.warning,
                     title: L10n.t("تاريخ الميلاد", "Birth Date"),
                     has: $hasBirthDate, date: $birthDate)
-                .modifier(BoxChrome(fill: DS.Color.background, stroke: DS.Color.textTertiary.opacity(0.18)))
+                .modifier(BoxChrome(fill: DS.Color.background, stroke: DS.Color.textTertiary.opacity(DS.Opacity.tintFillStrong)))
 
             // «متوفّى» — لون مميّز
-            Toggle(isOn: $isDeceased.animation(DS.Anim.snappy)) {
-                HStack(spacing: DS.Spacing.sm) {
-                    rowIcon("heart.text.square.fill", tint: deceasedTint)
-                    Text(deceasedTitle)
-                        .dsFieldFont(14.5, weight: .bold)
-                        .foregroundColor(deceasedTint)
+            if showsDeceased {
+                Toggle(isOn: $isDeceased.animation(DS.Anim.snappy)) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        rowIcon("heart.text.square.fill", tint: deceasedTint)
+                        Text(deceasedTitle)
+                            .dsFieldFont(.headlineCompact)
+                            .foregroundColor(deceasedTint)
+                    }
                 }
+                .tint(deceasedTint)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(minHeight: inBox ? DSFieldMetrics.toggleRowHeight - DSFieldMetrics.boxHeightReduction
+                                        : DSFieldMetrics.toggleRowHeight)
+                .modifier(BoxChrome(fill: deceasedTint.opacity(isDeceased ? 0.14 : 0.07),
+                                    stroke: deceasedTint.opacity(0.35)))
             }
-            .tint(deceasedTint)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(minHeight: inBox ? 52 - DSFieldMetrics.boxHeightReduction : 52)
-            .modifier(BoxChrome(fill: deceasedTint.opacity(isDeceased ? 0.14 : 0.07),
-                                stroke: deceasedTint.opacity(0.35)))
 
-            if isDeceased {
+            if showsDeceased && isDeceased {
                 dateRow(icon: "calendar.badge.minus", tint: deceasedTint,
                         title: L10n.t("تاريخ الوفاة", "Death Date"),
                         has: $hasDeathDate, date: $deathDate)
-                    .modifier(BoxChrome(fill: DS.Color.background, stroke: DS.Color.textTertiary.opacity(0.18)))
+                    .modifier(BoxChrome(fill: DS.Color.background, stroke: DS.Color.textTertiary.opacity(DS.Opacity.tintFillStrong)))
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -358,22 +305,15 @@ struct DSLifeDatesBox: View {
                 .background(fill, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(stroke, lineWidth: 1)
+                        .stroke(stroke, lineWidth: DS.Border.width)
                 )
-                .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
+                .trialCardSkin(radius: DS.Radius.md)
         }
     }
 
     // لون الصف كما هو (الرمادي = متوفى، الكهرماني = الميلاد) — رسم الاتجاه بنفس الحجم
     private func rowIcon(_ name: String, tint: Color) -> some View {
-        TrialArt(make: { ArtDispatch.stateIcon($0, icon: name, tint: tint, size: 28) }) {   // TMP-ART-TRIAL
-        Image(systemName: name)
-            .font(DS.Font.plex(12, weight: .bold))
-            .foregroundColor(tint)
-            .frame(width: 28, height: 28)
-            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .frame(width: 28, height: 28)
+        DSStateIcon(name, tint: tint, size: DSBox.alertIcon, mapsChrome: false)
     }
 
     /// صف تاريخ: العنوان والقيمة، ثم زر «بدون تاريخ» وقلم التعديل داخل الصف
@@ -383,13 +323,13 @@ struct DSLifeDatesBox: View {
             rowIcon(icon, tint: tint)
 
             Button { pick(title: title, has: has, date: date) } label: {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(title)
-                        .dsFieldFont(12.5, weight: .bold)
+                        .dsFieldFont(.sectionTitle)
                         .foregroundColor(DS.Color.textPrimary)
                     Text(has.wrappedValue ? DSDateText.display(date.wrappedValue)
                                           : L10n.t("بدون تاريخ", "No date"))
-                        .dsFieldFont(14, weight: has.wrappedValue ? .semibold : .regular)
+                        .dsFieldFont(has.wrappedValue ? .bodySemibold : .body)
                         .foregroundColor(has.wrappedValue ? DS.Color.textPrimary : DS.Color.textTertiary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -397,34 +337,23 @@ struct DSLifeDatesBox: View {
             }
             .buttonStyle(.plain)
 
-            // «بدون تاريخ» — زر داخل صف التاريخ (يُبرَز إذا لا تاريخ)
-            Button {
+            // «بدون تاريخ» — الشريحة الواحدة داخل صف التاريخ (مختارة = كحلي القسم إذا لا تاريخ)
+            DSChipButton(L10n.t("بدون تاريخ", "No date"), isSelected: !has.wrappedValue, size: .small) {
                 withAnimation(DS.Anim.snappy) { has.wrappedValue = false }
-            } label: {
-                Text(L10n.t("بدون تاريخ", "No date"))
-                    .font(DS.Font.plex(11.5, weight: .bold))
-                    .foregroundColor(has.wrappedValue ? DS.Color.textSecondary : .white)
-                    .padding(.horizontal, DS.Spacing.sm + 2)
-                    .frame(height: 30)
-                    .background(
-                        // المختار كحلي (واضح بالوضعين) بدل الرمادي الباهت بالداكن — بلون القسم
-                        Capsule().fill(has.wrappedValue ? DS.Color.mutedBackground.opacity(0.7)
-                                                        : DS.Color.actionNavy.dsChromeFill(in: section))
-                    )
             }
-            .buttonStyle(DSScaleButtonStyle())
 
             Button { pick(title: title, has: has, date: date) } label: {
                 Image(systemName: has.wrappedValue ? "pencil" : "plus")
-                    .font(DS.Font.plex(13, weight: .bold))
+                    .dsGlyph(DS.Glyph.mdCompact)
                     .foregroundColor(DS.Color.primary.dsChrome(in: section))
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(DS.Color.primary.dsChrome(in: section).opacity(0.10)))
+                    .frame(width: DS.Icon.discSmall, height: DS.Icon.discSmall)
+                    .background(Circle().fill(DS.Color.primary.dsChrome(in: section).opacity(DS.Opacity.tintFill)))
             }
             .buttonStyle(DSScaleButtonStyle())
         }
         .padding(.horizontal, DS.Spacing.md)
-        .frame(minHeight: inBox ? 58 - DSFieldMetrics.boxHeightReduction : 58)
+        .frame(minHeight: inBox ? DSFieldMetrics.dateRowHeight - DSFieldMetrics.boxHeightReduction
+                                : DSFieldMetrics.dateRowHeight)
     }
 
     private func pick(title: String, has: Binding<Bool>, date: Binding<Date>) {
@@ -445,7 +374,7 @@ struct DSGenderPicker: View {
     @Environment(\.dsInCenterBox) private var inBox
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             DSFieldLabel(text: L10n.t("الجنس", "Gender"))
             HStack(spacing: DS.Spacing.sm) {
                 option("male", title: L10n.t("ذكر", "Male"),
@@ -462,23 +391,25 @@ struct DSGenderPicker: View {
             withAnimation(DS.Anim.snappy) { selection = value }
         } label: {
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(DS.Font.plex(16, weight: .bold))
+                Image(dsSymbol: icon)
+                    .dsGlyph(DS.Glyph.lg)
                 Text(title)
-                    .dsFieldFont(14.5, weight: .bold)
+                    .dsFieldFont(.headlineCompact)
                 Spacer(minLength: 0)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(DS.Font.plex(15, weight: .semibold))
+                    .dsGlyph(DS.Glyph.lgCompact, weight: .semibold)
             }
             .foregroundColor(selected ? tint : DS.Color.textSecondary)
             .padding(.horizontal, DS.Spacing.md)
-            .frame(height: inBox ? 50 - DSFieldMetrics.boxHeightReduction : 50)
-            .background(selected ? tint.opacity(0.12) : DS.Color.background,
+            .frame(height: inBox ? DSFieldMetrics.optionRowHeight - DSFieldMetrics.boxHeightReduction
+                                 : DSFieldMetrics.optionRowHeight)
+            .background(selected ? tint.opacity(DS.Opacity.tintFill) : DS.Color.background,
                         in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(selected ? tint.opacity(0.55) : DS.Color.textTertiary.opacity(0.18),
-                            lineWidth: selected ? 1.5 : 1)
+                    .stroke(selected ? tint.opacity(DS.Opacity.selectedStroke)
+                                     : DS.Color.textTertiary.opacity(DS.Opacity.tintFillStrong),
+                            lineWidth: selected ? DS.Border.widthBold : DS.Border.width)
             )
             .contentShape(Rectangle())
         }

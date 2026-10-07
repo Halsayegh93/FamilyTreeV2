@@ -19,32 +19,20 @@ struct DeviceLimitView: View {
                 Spacer()
 
                 // Icon — تقفز أولاً مثل أيقونة رأس المربّعات («تقليل الحركة»: تلاشٍ)
-                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "iphone.gen3.badge.exclamationmark", tint: DS.Color.error, size: 100) }) {   // TMP-ART-TRIAL
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.error.opacity(0.15))
-                        .frame(width: 100, height: 100)
-
-                    Image(systemName: "iphone.gen3.badge.exclamationmark")
-                        .font(DS.Font.scaled(42, weight: .bold))
-                        .foregroundColor(DS.Color.error)
-                }
-                }
-                .frame(width: 100, height: 100)
+                DSStateIcon("iphone.gen3.badge.exclamationmark", tint: DS.Color.error, size: DS.Icon.stateArt)
                 .modifier(DSIconPop())
 
                 // Title & Description
                 VStack(spacing: DS.Spacing.md) {
                     Text(t("تم تجاوز حد الأجهزة", "Device Limit Reached"))
-                        .font(DS.Font.title2)
-                        .fontWeight(.black)
+                        .dsFont(.emptyTitle)
                         .foregroundColor(DS.Color.textPrimary)
 
                     Text(t(
                         "وصلت للعدد الأقصى من الأجهزة (\(maxDevices)).\nاحذف جهازاً من القائمة للمتابعة.",
                         "Maximum device limit reached (\(maxDevices)).\nRemove a device from the list to continue."
                     ))
-                        .font(DS.Font.body)
+                        .dsFont(.body)
                         .foregroundColor(DS.Color.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, DS.Spacing.xxl)
@@ -76,6 +64,8 @@ struct DeviceLimitView: View {
             }
             // بعد الأيقونة: النص ← الأزرار تباعاً (نفس «بعد الرأس» في المربّعات)
             .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
+            // وضع العرض: تتمرّر بدل أن يُقصّ النص
+            .dsLandscapeScroll()
         }
         .dsCenterBox(isPresented: $showDevicesSheet) {
             LinkedDevicesSheet()
@@ -108,30 +98,19 @@ struct DeviceOverLimitView: View {
                 Spacer()
 
                 // الأيقونة تقفز أولاً مثل أيقونة رأس المربّعات («تقليل الحركة»: تلاشٍ)
-                TrialArt(make: { ArtDispatch.stateIcon($0, icon: "iphone.gen3.badge.exclamationmark", tint: DS.Color.warning, size: 100) }) {   // TMP-ART-TRIAL
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.warning.opacity(0.12))
-                        .frame(width: 100, height: 100)
-                    Image(systemName: "iphone.gen3.badge.exclamationmark")
-                        .font(DS.Font.scaled(42, weight: .bold))
-                        .foregroundColor(DS.Color.warning)
-                }
-                }
-                .frame(width: 100, height: 100)
+                DSStateIcon("iphone.gen3.badge.exclamationmark", tint: DS.Color.warning, size: DS.Icon.stateArt)
                 .modifier(DSIconPop())
 
                 VStack(spacing: DS.Spacing.md) {
                     Text(t("تم تقليل حد الأجهزة", "Device Limit Reduced"))
-                        .font(DS.Font.title2)
-                        .fontWeight(.black)
+                        .dsFont(.emptyTitle)
                         .foregroundColor(DS.Color.textPrimary)
 
                     Text(t(
                         "الحد الأقصى أصبح \(maxDevices) \(maxDevices == 1 ? "جهاز" : "أجهزة").\nأزل \(excessCount == 1 ? "جهازاً" : "\(excessCount) أجهزة") للمتابعة.",
                         "The device limit is now \(maxDevices). Please remove \(excessCount) device\(excessCount == 1 ? "" : "s") to continue."
                     ))
-                    .font(DS.Font.body)
+                    .dsFont(.body)
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.xxl)
@@ -162,6 +141,8 @@ struct DeviceOverLimitView: View {
             }
             // بعد الأيقونة: النص ← الأزرار تباعاً (نفس «بعد الرأس» في المربّعات)
             .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
+            // وضع العرض: تتمرّر بدل أن يُقصّ النص
+            .dsLandscapeScroll()
         }
         .dsCenterBox(isPresented: $showDevicesSheet) {
             OverLimitDevicesSheet()
@@ -264,14 +245,14 @@ struct OverLimitDevicesSheet: View {
         return HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: over ? "exclamationmark.triangle.fill" : "checkmark.circle.fill", tint: tint)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(t("الحد الأقصى", "Limit"))
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(over
                      ? t("أزل \(excessCount == 1 ? "جهازاً" : "\(excessCount) أجهزة") للمتابعة", "Remove \(excessCount) device\(excessCount == 1 ? "" : "s") to continue")
                      : t("وصلت للحد — اضغط متابعة", "At limit — tap Continue"))
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(tint)
             }
             Spacer(minLength: 0)
@@ -290,16 +271,11 @@ struct OverLimitDevicesSheet: View {
                         tint: isCurrent ? DS.Color.success : DS.Color.accent)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 HStack(spacing: DS.Spacing.xs) {
                     DeviceNameText(name: device.displayName)
                     if isCurrent {
-                        Text(t("هذا الجهاز", "This device"))
-                            .font(DS.Font.plex(10.5, weight: .bold))
-                            .foregroundColor(DS.Color.success)
-                            .padding(.horizontal, DS.Spacing.xs + 2)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(DS.Color.success.opacity(0.12)))
+                        DSStatusChip(text: t("هذا الجهاز", "This device"), tint: DS.Color.success, size: .mini)
                             .fixedSize()
                     }
                 }
@@ -310,13 +286,8 @@ struct OverLimitDevicesSheet: View {
             Spacer(minLength: 0)
 
             if isCurrent {
-                // لا يمكن حذف الجهاز الحالي
-                Text(t("الحالي", "Current"))
-                    .font(DS.Font.plex(11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(height: 30)
-                    .background(Capsule().fill(DS.Color.mutedBackground))
+                // لا يمكن حذف الجهاز الحالي — كبسولة الحالة المشتركة
+                DSStatusChip(text: t("الحالي", "Current"), tint: DS.Color.textTertiary)
                     .fixedSize()
             } else {
                 // يفتح تأكيد الإزالة فقط — لا يحذف مباشرة
@@ -433,15 +404,15 @@ struct LinkedDevicesSheet: View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: "exclamationmark.triangle.fill", tint: DS.Color.warning)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(t("الحد الأقصى", "Limit"))
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(t(
                     "\(notificationVM.linkedDevices.count) من \(maxDevices) أجهزة",
                     "\(notificationVM.linkedDevices.count) of \(maxDevices) devices"
                 ))
-                    .font(DS.Font.plex(13.5, weight: .bold))
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.error)
             }
             Spacer(minLength: 0)
@@ -454,10 +425,9 @@ struct LinkedDevicesSheet: View {
     @ViewBuilder
     private var devicesContent: some View {
         if notificationVM.isLoadingLinkedDevices && notificationVM.linkedDevices.isEmpty {
-            ProgressView()
-                .tint(DS.Color.primary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.lg)
+            // التحميل الواحد: المجسّم يتنفّس
+            DSPageLoader(fillsSpace: false)
+                .padding(.vertical, DS.Spacing.sm)
         } else if notificationVM.linkedDevices.isEmpty {
             emptyState
         } else {
@@ -468,40 +438,16 @@ struct LinkedDevicesSheet: View {
         }
     }
 
+    /// الحالة الفاضية الواحدة (مضغوطة) + «إعادة المحاولة» بالزرّ الواحد
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            Image(systemName: notificationVM.linkedDevicesLoadFailed
-                  ? "wifi.exclamationmark"
-                  : "iphone.slash")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundColor(DS.Color.textTertiary)
-                .accessibilityHidden(true)
-
-            Text(notificationVM.linkedDevicesLoadFailed
-                 ? t("تعذّر تحميل الأجهزة", "Couldn't Load Devices")
-                 : t("لا توجد أجهزة مرتبطة", "No Linked Devices"))
-                .font(DS.Font.plex(14, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-
-            Button {
-                Task { await notificationVM.fetchLinkedDevices() }
-            } label: {
-                Label(t("إعادة المحاولة", "Try Again"), systemImage: "arrow.clockwise")
-                    .font(DS.Font.plex(12.5, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(height: 32)
-                    .background(Capsule().fill(DS.Color.primary.opacity(0.1)))
-                    // مساحة ضغط ٤٤ (توصية أبل) — الكبسولة ومكانها كما هما
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-                    .padding(.vertical, -6)
-            }
-            .buttonStyle(DSScaleButtonStyle())
+        DSEmptyView(notificationVM.linkedDevicesLoadFailed
+                    ? t("تعذّر تحميل الأجهزة", "Couldn't Load Devices")
+                    : t("لا توجد أجهزة مرتبطة", "No Linked Devices"),
+                    icon: notificationVM.linkedDevicesLoadFailed ? "wifi.exclamationmark" : "iphone.slash",
+                    actionTitle: t("إعادة المحاولة", "Try Again"), actionIcon: "arrow.clockwise",
+                    compact: true) {
+            Task { await notificationVM.fetchLinkedDevices() }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.sm)
-        .dsRowBox()
     }
 
     /// صف جهاز: أيقونة الحقل + الاسم + آخر ظهور + «إزالة»
@@ -510,7 +456,7 @@ struct LinkedDevicesSheet: View {
             DSFieldIcon(name: "iphone.gen3", tint: DS.Color.accent)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 DeviceNameText(name: device.displayName)
                 DeviceLastSeenText(text: formattedDate(device.updatedAt))
             }
@@ -556,7 +502,7 @@ fileprivate struct DeviceNameText: View {
     let name: String
     var body: some View {
         Text(name)
-            .dsFieldFont(13.5, weight: .bold)
+            .dsFieldFont(.rowTitle)
             .foregroundColor(DS.Color.fieldLabel)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
@@ -568,7 +514,7 @@ fileprivate struct DeviceLastSeenText: View {
     let text: String
     var body: some View {
         Text(text)
-            .dsFieldFont(12.5)
+            .dsFieldFont(.subtitle)
             .foregroundColor(DS.Color.fieldValue)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
@@ -579,24 +525,8 @@ fileprivate struct DeviceLastSeenText: View {
 fileprivate struct DeviceRemoveChip: View {
     let action: () -> Void
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "trash.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(L10n.t("إزالة", "Remove"))
-                    .font(DS.Font.plex(11.5, weight: .bold))
-            }
-            .foregroundColor(DS.Color.error)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(height: 30)
-            .background(Capsule().fill(DS.Color.error.opacity(0.1)))
-            // مساحة ضغط ٤٤ (توصية أبل): الكبسولة ٣٠ كما هي، والحشوة السالبة تُبقي ارتفاع الصف
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .padding(.vertical, -7)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .fixedSize()
+        // الشريحة الواحدة بلون الحذف
+        DSChipButton(L10n.t("إزالة", "Remove"), icon: "trash.fill", tint: DS.Color.error, size: .small, action: action)
+            .fixedSize()
     }
 }

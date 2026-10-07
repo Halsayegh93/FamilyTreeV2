@@ -104,11 +104,9 @@ struct AdminNotificationsView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            // الأقسام تتمرّر معاً (قائمة الأعضاء آخرها) — وشريط الإرسال مثبّت في الأسفل
-            ScrollView(showsIndicators: false) {
+        // الأقسام تتمرّر معاً (قائمة الأعضاء آخرها) — وشريط الإرسال مثبّت في الأسفل
+        // (الصفحة مضمّنة في «الإشعارات والتحديثات» تحت رأسها الملوّن — بلا عنوان خاص بها)
+        ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
                     // شريط الإشعارات المجدولة — يظهر فقط عند وجود إشعارات معلّقة
                     if !notificationVM.scheduledNotifications.isEmpty {
@@ -128,9 +126,7 @@ struct AdminNotificationsView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 sendBar
             }
-        }
-        .navigationTitle(L10n.t("إرسال إشعار", "Send Notification"))
-        .navigationBarTitleDisplayMode(.inline)
+        .background(DS.Color.background.ignoresSafeArea())
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             await loadData()
@@ -150,11 +146,13 @@ struct AdminNotificationsView: View {
                 .environmentObject(notificationVM)
                 .environmentObject(memberVM)
         }
-        // تأكيد الإرسال — يذكر الجمهور صراحةً (البثّ للجميع إجراء لا رجعة فيه)
-        .confirmationDialog(
+        // تأكيد الإرسال — يذكر الجمهور صراحةً (البثّ للجميع إجراء لا رجعة فيه)؛
+        // مربّع التنبيه الموحّد بالمنتصف (كان ورقة أسفل الشاشة)
+        .dsAlert(
             scheduleEnabled ? L10n.t("تأكيد الجدولة", "Confirm Schedule")
                             : L10n.t("تأكيد الإرسال", "Confirm Send"),
-            isPresented: $showSendConfirm, titleVisibility: .visible
+            isPresented: $showSendConfirm,
+            icon: scheduleEnabled ? "clock.badge.checkmark.fill" : "paperplane.fill"
         ) {
             Button(
                 isBroadcastSend
@@ -233,30 +231,30 @@ struct AdminNotificationsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "clock.badge.fill", tint: DS.Color.warning)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(L10n.t(
                         "\(count) إشعار مجدول بانتظار الإرسال",
                         "\(count) scheduled — pending send"
                     ))
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     Text(L10n.t("تُرسل تلقائياً في موعدها", "Sent automatically on time"))
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
-                SysChevron()
+                DSChevron()
             }
-            .padding(.horizontal, DS.Spacing.sm + 2)
+            .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
             .padding(.vertical, DS.Spacing.sm)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.warning.opacity(0.09)))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.warning.opacity(0.24), lineWidth: 1))
+            // نفس سطح ملاحظة التحذير (`DSNoteCard`) — لكنه صفّ يُضغط فيفتح القائمة
+            .background(DSBox.sectionShape.fill(DS.Color.warning.opacity(DS.Opacity.tintFillSoft)))
+            .overlay(DSBox.sectionShape
+                .strokeBorder(DS.Color.warning.opacity(DS.Opacity.tintStroke), lineWidth: DS.Card.strokeWidth))
             .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -294,12 +292,12 @@ struct AdminNotificationsView: View {
                     }
                 } label: {
                     Image(systemName: "list.bullet")
-                        .font(.system(size: 14, weight: .bold))
+                        .dsGlyph(DS.Glyph.md)
                         .foregroundColor(pageTint)
-                        .frame(width: 40, height: 40)
+                        .frame(width: DS.Icon.avatar, height: DS.Icon.avatar)
                         .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(pageTint.opacity(0.12)))
-                        .frame(width: 44, height: 44)   // مساحة ضغط ٤٤ (توصية أبل)
+                            .fill(pageTint.opacity(DS.Opacity.tintFill)))
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(DSScaleButtonStyle())
@@ -320,18 +318,18 @@ struct AdminNotificationsView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     DSFieldIcon(name: "bell.badge", tint: pageTint)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(L10n.t("العنوان", "Title"))
-                            .dsFieldFont(12, weight: .heavy)
+                            .dsFieldFont(.label)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(title.isEmpty ? L10n.t("اختر عنواناً", "Choose a title") : title)
-                            .font(DS.Font.plex(14.5))
+                            .dsFont(.body)
                             .foregroundColor(title.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 11, weight: .bold))
+                        .dsGlyph(DS.Glyph.xs)
                         .foregroundColor(DS.Color.textTertiary)
                         .accessibilityHidden(true)
                 }
@@ -344,21 +342,21 @@ struct AdminNotificationsView: View {
 
     /// التفاصيل (اختياري) — محرّر متعدد الأسطر بإطار حقول المربّعات (يتلوّن عند الكتابة) + عدّاد ٥٠٠
     private var bodyEditor: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "text.alignright")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(bodyFocused ? .white : pageTint)
-                    .frame(width: 32, height: 32)
-                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(bodyFocused ? pageTint : pageTint.opacity(0.12)))
+                    .dsGlyph(DS.Glyph.mdCompact, weight: .semibold)
+                    .foregroundColor(bodyFocused ? DS.Color.textOnPrimary : pageTint)
+                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
+                        .fill(bodyFocused ? pageTint : pageTint.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)
                 Text(L10n.t("التفاصيل", "Details"))
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(bodyFocused ? pageTint : DS.Color.fieldLabel)
                 Spacer(minLength: 0)
                 Text("\(bodyText.count)/500")
-                    .font(DS.Font.plex(10.5, weight: .semibold))
+                    .dsFont(.micro)
                     .foregroundColor(bodyText.count > 450 ? DS.Color.error : DS.Color.textTertiary)
                     .monospacedDigit()
             }
@@ -366,32 +364,28 @@ struct AdminNotificationsView: View {
             ZStack(alignment: .topLeading) {
                 if bodyText.isEmpty {
                     Text(L10n.t("تفاصيل (اختياري)", "Details (optional)"))
-                        .font(DS.Font.plex(14.5))
+                        .dsFont(.body)
                         .foregroundColor(DS.Color.textTertiary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .padding(.vertical, DS.Spacing.sm)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
                 TextEditor(text: $bodyText)
                     .focused($bodyFocused)
-                    .dsFieldFont(14.5)
+                    .dsFieldFont(.body)
                     .foregroundColor(DS.Color.textPrimary)
                     .scrollContentBackground(.hidden)
-                    .frame(minHeight: 64, maxHeight: 140)
+                    .frame(minHeight: DSBox.editorMinHeight, maxHeight: DSBox.editorMaxHeight)
                     .accessibilityLabel(L10n.t("تفاصيل (اختياري)", "Details (optional)"))
                     .onChange(of: bodyText) { _ in
                         if bodyText.count > 500 { bodyText = String(bodyText.prefix(500)) }
                     }
             }
         }
-        .padding(.horizontal, DS.Spacing.sm + 2)
+        .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
         .padding(.vertical, DS.Spacing.sm)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(bodyFocused ? pageTint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
-                          lineWidth: bodyFocused ? 1.5 : 1))
-        .animation(.easeInOut(duration: 0.2), value: bodyFocused)
+        .dsFocusFieldBox(focused: bodyFocused, tint: pageTint)
     }
 
     // MARK: - المستلمون
@@ -400,14 +394,11 @@ struct AdminNotificationsView: View {
     @ViewBuilder
     private var recipientsContent: some View {
         if memberVM.allMembers.isEmpty && (isLoadingMembers || !hasLoaded) {
-            SysStateCard(icon: "person.2.fill",
-                         title: L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"),
-                         tint: pageTint,
-                         isLoading: true)
-                .padding(.top, DS.Spacing.xs)
+            DSPageLoader(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"), fillsSpace: false)
+                .padding(.top, DS.Spacing.md)
                 .dsStaggerIn(2)
         } else if memberVM.allMembers.isEmpty && memberVM.membersLoadFailed {
-            SysStateCard(icon: "wifi.exclamationmark",
+            DSStateCard(icon: "wifi.exclamationmark",
                          title: L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
                          hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                          tint: DS.Color.error,
@@ -481,11 +472,11 @@ struct AdminNotificationsView: View {
     private var searchField: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
+                .dsGlyph(DS.Glyph.md, weight: .semibold)
                 .foregroundColor(searchFocused ? pageTint : DS.Color.textTertiary)
                 .accessibilityHidden(true)
             TextField(L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."), text: $searchText)
-                .dsFieldFont(14.5)
+                .dsFieldFont(.body)
                 .foregroundColor(DS.Color.textPrimary)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -498,88 +489,52 @@ struct AdminNotificationsView: View {
                 }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 15))
+                    .dsGlyph(DS.Glyph.lgCompact, weight: .regular)
                     .foregroundColor(DS.Color.textTertiary)
-                    .frame(width: 44, height: 44)   // مساحة ضغط ٤٤ (توصية أبل)
+                    .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.vertical, -8)
+            .padding(.vertical, -DS.Spacing.sm)
             .accessibilityLabel(L10n.t("إغلاق البحث", "Close search"))
         }
         .padding(.leading, DS.Spacing.md)
         .padding(.trailing, DS.Spacing.xs)
-        .frame(minHeight: 46)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(searchFocused ? pageTint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
-                          lineWidth: searchFocused ? 1.5 : 1))
-        .animation(.easeInOut(duration: 0.2), value: searchFocused)
+        .frame(minHeight: DSBox.searchHeight)
+        .dsFocusFieldBox(focused: searchFocused, tint: pageTint)
     }
 
     /// زر البحث · تحديد الكل · إلغاء التحديد
     private func selectionControls(members: [FamilyMember]) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            // زر البحث — يفتح حقل البحث عند الحاجة فقط
-            Button {
+            // زر البحث — يفتح حقل البحث عند الحاجة فقط (الشريحة الواحدة، مساحة ضغط ٤٤)
+            DSChipButton(L10n.t("بحث", "Search"),
+                         icon: showSearchField ? "magnifyingglass.circle.fill" : "magnifyingglass",
+                         tint: pageTint, isSelected: showSearchField) {
                 withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
                     showSearchField.toggle()
                 }
                 if showSearchField { searchFocused = true }
-            } label: {
-                controlCapsule(icon: showSearchField ? "magnifyingglass.circle.fill" : "magnifyingglass",
-                               title: nil,
-                               tint: pageTint)
             }
-            .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("بحث", "Search"))
 
-            Button {
+            DSChipButton(L10n.t("الكل", "All"), icon: "checkmark.circle.fill", tint: pageTint) {
                 selectedMemberIds = Set(members.map(\.id))
-            } label: {
-                controlCapsule(icon: "checkmark.circle.fill", title: L10n.t("الكل", "All"), tint: pageTint)
             }
-            .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("تحديد الكل", "Select all"))
 
-            Button {
+            DSChipButton(L10n.t("إلغاء", "Clear"), icon: "xmark.circle.fill", tint: DS.Color.error) {
                 selectedMemberIds.removeAll()
-            } label: {
-                controlCapsule(icon: "xmark.circle.fill", title: L10n.t("إلغاء", "Clear"), tint: DS.Color.error)
             }
-            .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("إلغاء التحديد", "Clear selection"))
 
             Spacer(minLength: 0)
         }
     }
 
-    /// كبسولة تحكّم صغيرة — مساحة ضغط ٤٤ نقطة والشكل كما هو
-    private func controlCapsule(icon: String, title: String?, tint: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: title == nil ? 13 : 11, weight: .bold))
-                .accessibilityHidden(true)
-            if let title {
-                Text(title)
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .lineLimit(1)
-            }
-        }
-        .foregroundColor(tint)
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(minWidth: 44)
-        .frame(height: 30)
-        .background(tint.opacity(0.10), in: Capsule())
-        .padding(.vertical, 7)
-        .contentShape(Rectangle())
-        .padding(.vertical, -7)
-    }
-
     /// صفوف الأعضاء (٢٠ في كل مرة) — الضغط يحدّد أو يلغي، و«عرض المزيد» يكمل القائمة
     @ViewBuilder
     private func memberRows(_ members: [FamilyMember]) -> some View {
-        LazyVStack(spacing: 6) {
+        LazyVStack(spacing: DS.Spacing.xsm) {
             ForEach(Array(members.prefix(displayLimit))) { member in
                 memberRow(member: member)
             }
@@ -601,20 +556,20 @@ struct AdminNotificationsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 initialBadge(member.displayFullName)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(member.displayFullName)
-                        .dsFieldFont(13.5, weight: .bold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
 
                     if let phone = member.phoneNumber, !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        HStack(spacing: 4) {
+                        HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "phone.fill")
-                                .font(.system(size: 10, weight: .semibold))
+                                .dsGlyph(DS.Glyph.micro, weight: .semibold)
                                 .accessibilityHidden(true)
                             Text(Self.isolatedLTR(KuwaitPhone.display(phone)))
                         }
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                     }
                 }
@@ -622,14 +577,14 @@ struct AdminNotificationsView: View {
                 Spacer(minLength: 0)
 
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20, weight: .semibold))
+                    .dsGlyph(DS.Glyph.xl, weight: .semibold)
                     .foregroundColor(selected ? pageTint : DS.Color.textTertiary)
                     .accessibilityHidden(true)
             }
             .dsRowBox()
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(pageTint.opacity(selected ? 0.55 : 0), lineWidth: 1.5)
+                    .strokeBorder(pageTint.opacity(selected ? DS.Opacity.selectedStroke : 0), lineWidth: DS.Border.widthBold)
             )
             .contentShape(Rectangle())
         }
@@ -641,50 +596,36 @@ struct AdminNotificationsView: View {
     private func initialBadge(_ name: String) -> some View {
         let first = name.trimmingCharacters(in: .whitespaces).first
         return ZStack {
-            Circle().fill(pageTint.opacity(0.13))
+            Circle().fill(pageTint.opacity(DS.Opacity.tintFill))
             if let first {
                 Text(String(first))
-                    .font(DS.Font.plex(14, weight: .bold))
+                    .dsFont(.rowTitle)
                     .foregroundColor(pageTint)
             } else {
                 Image(systemName: "person.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .dsGlyph(DS.Glyph.mdCompact, weight: .semibold)
                     .foregroundColor(pageTint)
             }
         }
-        .frame(width: 32, height: 32)
+        .frame(width: DS.Icon.row, height: DS.Icon.row)
         .accessibilityHidden(true)
     }
 
     private func showMoreButton(remaining: Int) -> some View {
-        Button {
+        // الشريحة الواحدة بلون الصفحة (مساحة ضغط ٤٤)
+        DSChipButton(L10n.t("عرض المزيد (\(remaining) متبقي)", "Show more (\(remaining) remaining)"),
+                     icon: "chevron.down", tint: pageTint) {
             displayLimit += 20
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(L10n.t(
-                    "عرض المزيد (\(remaining) متبقي)",
-                    "Show more (\(remaining) remaining)"
-                ))
-                .font(DS.Font.plex(12.5, weight: .bold))
-            }
-            .foregroundColor(pageTint)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 44)   // مساحة ضغط ٤٤ (توصية أبل)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .frame(maxWidth: .infinity)
     }
 
     /// لا أعضاء في الشريحة أو البحث (كان «لا يوجد أعضاء» مكان القائمة)
     private var noMembersState: some View {
         let searching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return SysStateCard(icon: "person.2.slash",
-                            title: L10n.t("لا يوجد أعضاء", "No members found"),
-                            hint: searching ? L10n.t("جرّب كلمة أخرى", "Try another word") : nil,
-                            tint: DS.Color.textTertiary)
+        return DSEmptyView(L10n.t("لا يوجد أعضاء", "No members found"),
+                           message: searching ? L10n.t("جرّب كلمة أخرى", "Try another word") : nil,
+                           style: .compact)
     }
 
     // MARK: - شريط الإرسال
@@ -693,54 +634,22 @@ struct AdminNotificationsView: View {
     /// (زر المربّعات الأساسي) و«جدولة» فاتح بلون القسم، وتحتهما ملخّص الجمهور
     private var sendBar: some View {
         let noTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return VStack(spacing: DS.Spacing.xs + 2) {
+        return VStack(spacing: DS.Spacing.xsm) {
+            // الزرّ الواحد: «إرسال الآن» بتعبئة القسم، و«جدولة» الثانوي رمادي
             HStack(spacing: DS.Spacing.sm) {
-                Button {
+                DSButton(L10n.t("إرسال الآن", "Send Now"), icon: "paperplane.fill",
+                         isLoading: notificationVM.isLoading) {
                     scheduleEnabled = false
                     // شريحة بلا أعضاء: رسالة واضحة بدل تأكيد «إرسال للجميع (٠)» (ب-٩)
                     if isEmptyAudience { showEmptyAudience = true } else { showSendConfirm = true }
-                } label: {
-                    HStack(spacing: 7) {
-                        if notificationVM.isLoading {
-                            ProgressView().tint(DSActionFill.label()).scaleEffect(0.85)
-                        } else {
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 14, weight: .bold))
-                                .accessibilityHidden(true)
-                        }
-                        Text(L10n.t("إرسال الآن", "Send Now"))
-                            .font(DS.Font.plex(14.5, weight: .bold))
-                    }
-                    .foregroundColor(DSActionFill.label(enabled: !noTitle))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 46)
-                    .background(DSActionFill.style(enabled: !noTitle),
-                                in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                 }
                 .disabled(noTitle)
 
-                Button {
+                DSButton(L10n.t("جدولة", "Schedule"), icon: "clock.badge", role: .cancel) {
                     if isEmptyAudience { showEmptyAudience = true } else { showScheduleComposer = true }
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "clock.badge")
-                            .font(.system(size: 14, weight: .bold))
-                            .accessibilityHidden(true)
-                        Text(L10n.t("جدولة", "Schedule"))
-                            .font(DS.Font.plex(14.5, weight: .bold))
-                    }
-                    .foregroundColor(pageTint)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 46)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(pageTint.opacity(0.12)))
-                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(pageTint.opacity(0.25), lineWidth: 1))
-                    .opacity(noTitle ? 0.55 : 1)
                 }
                 .disabled(noTitle)
             }
-            .buttonStyle(DSScaleButtonStyle())
 
             audienceSummary
         }
@@ -750,7 +659,7 @@ struct AdminNotificationsView: View {
         .background(
             DS.Color.background
                 .overlay(alignment: .top) {
-                    Rectangle().fill(DS.Color.textTertiary.opacity(0.12)).frame(height: 1)
+                    Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.tintFill)).frame(height: DS.Border.width)
                 }
                 // الخلفية تكمل لأسفل الشاشة — لا تظهر صفوف الأعضاء تحت الشريط
                 .ignoresSafeArea(edges: .bottom)
@@ -767,15 +676,15 @@ struct AdminNotificationsView: View {
             ? L10n.t("سيُجدول الإرسال \(targetText) في \(scheduledDateText)",
                      "Will be scheduled \(targetText) at \(scheduledDateText)")
             : L10n.t("سيُرسل \(targetText)", "Will be sent \(targetText)")
-        return HStack(spacing: 6) {
+        return HStack(spacing: DS.Spacing.xsm) {
             Text(summary)
-                .font(DS.Font.plex(11.5, weight: .medium))
+                .dsFont(.caption)
                 .foregroundColor(DS.Color.textTertiary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             if selectedMemberIds.isEmpty {
                 let count = sendAudienceCount
-                SysStatusChip(text: "\(count)", icon: "person.2.fill", tint: pageTint)
+                DSStatusChip(text: "\(count)", icon: "person.2.fill", tint: pageTint)
                     .fixedSize()
                     .accessibilityLabel(L10n.t("\(count) مستلم", "\(count) recipients"))
             }
@@ -906,7 +815,7 @@ private struct ScheduleComposerSheet: View {
             .tint(AppSection.admin.ink)
             .environment(\.locale, LanguageManager.shared.locale)
             .frame(maxWidth: .infinity)
-            .frame(maxHeight: 190)
+            .frame(maxHeight: DS.Chart.wheelHeight)
             .clipped()
             // العجلة بعرض البطاقة كاملاً — عرضها ثابت تقريباً فلا تُقصّ أعمدتها على الشاشات الصغيرة
             .padding(.horizontal, -DS.Spacing.md)
@@ -915,12 +824,12 @@ private struct ScheduleComposerSheet: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "paperplane.fill", tint: AppSection.admin.ink)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(L10n.t("سيُرسل", "Sends"))
-                        .dsFieldFont(12, weight: .heavy)
+                        .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(summaryDateText)
-                        .dsFieldFont(14.5)
+                        .dsFieldFont(.body)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -942,14 +851,14 @@ private struct ScheduleComposerSheet: View {
             DSComposerSection(title: L10n.t("مجدولة بانتظار الإرسال", "Pending"),
                               icon: "clock.badge", tint: DS.Color.warning,
                               trailing: "\(items.count)", index: 1) {
-                VStack(alignment: .leading, spacing: DS.Spacing.xs + 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
                     ForEach(items) { item in
                         HStack(spacing: DS.Spacing.sm) {
                             Circle()
-                                .fill(DS.Color.warning.opacity(0.6))
-                                .frame(width: 6, height: 6)
+                                .fill(DS.Color.warning.opacity(DS.Opacity.selectedStroke))
+                                .frame(width: DS.Spacing.xsm, height: DS.Spacing.xsm)
                             Text(item.title)
-                                .dsFieldFont(13)
+                                .dsFieldFont(.callout)
                                 .foregroundColor(DS.Color.fieldValue)
                                 .lineLimit(1)
                             Spacer(minLength: 0)
@@ -1009,21 +918,10 @@ private struct ScheduledNotificationsSheet: View {
         .task { await notificationVM.fetchScheduledNotifications() }
     }
 
+    /// الحالة الفارغة الواحدة (مجسّم القسم + عنوان) — كانت رمز SF رمادياً في بطاقة يدوية
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.md) {
-            Image(systemName: "clock.badge.checkmark")
-                .font(.system(size: 36, weight: .regular))
-                .foregroundColor(DS.Color.textTertiary)
-                .accessibilityHidden(true)
-            Text(L10n.t("لا توجد إشعارات مجدولة", "No scheduled notifications"))
-                .font(DS.Font.plex(14, weight: .semibold))
-                .foregroundColor(DS.Color.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.xxl)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        DSEmptyView(L10n.t("لا توجد إشعارات مجدولة", "No scheduled notifications"), style: .inline)
+            .dsCard(padding: nil)
     }
 
     /// صف إشعار مجدول: العنوان والنص، ثم الوقت والجمهور، ثم «إلغاء الجدولة»
@@ -1032,16 +930,16 @@ private struct ScheduledNotificationsSheet: View {
             HStack(alignment: .top, spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "bell.badge.fill", tint: DS.Color.warning)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     // العنوان
                     Text(item.title)
-                        .dsFieldFont(14.5, weight: .bold)
+                        .dsFieldFont(.headlineCompact)
                         .foregroundColor(DS.Color.fieldLabel)
                         .fixedSize(horizontal: false, vertical: true)
                     // النص (إن اختلف عن العنوان)
                     if !item.body.isEmpty && item.body != item.title {
                         Text(item.body)
-                            .dsFieldFont(13)
+                            .dsFieldFont(.callout)
                             .foregroundColor(DS.Color.fieldValue)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -1062,53 +960,22 @@ private struct ScheduledNotificationsSheet: View {
                 Spacer(minLength: 0)
             }
 
-            // إلغاء الجدولة
-            Button {
+            // إلغاء الجدولة — الزرّ الواحد بالأحمر (دوّارته داخله أثناء الإلغاء)
+            DSButton(L10n.t("إلغاء الجدولة", "Cancel schedule"), icon: "trash", role: .destructive,
+                     isLoading: cancellingId == item.id) {
                 Task {
                     cancellingId = item.id
                     await notificationVM.cancelScheduledNotification(item.id)
                     cancellingId = nil
                 }
-            } label: {
-                HStack(spacing: DS.Spacing.xs) {
-                    if cancellingId == item.id {
-                        ProgressView().tint(DS.Color.error)
-                    } else {
-                        Image(systemName: "trash")
-                            .font(.system(size: 12.5, weight: .bold))
-                    }
-                    Text(L10n.t("إلغاء الجدولة", "Cancel schedule"))
-                        .font(DS.Font.plex(13, weight: .bold))
-                }
-                .foregroundColor(DS.Color.error)
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
-                .background(DS.Color.error.opacity(0.08),
-                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                // مساحة ضغط ٤٤ (توصية أبل) — الشكل والارتفاع في الصف كما هما
-                .frame(height: 44)
-                .contentShape(Rectangle())
-                .padding(.vertical, -2)
             }
-            .buttonStyle(DSScaleButtonStyle())
             .disabled(cancellingId != nil)
         }
         .dsRowBox()
     }
 
     private func metaChip(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: DS.Spacing.xs) {
-            Image(systemName: icon).font(.system(size: 11, weight: .semibold))
-                .accessibilityHidden(true)
-            Text(text)
-                .font(DS.Font.plex(11.5, weight: .semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .foregroundColor(color)
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xs)
-        .background(color.opacity(0.10), in: Capsule())
+        DSStatusChip(text: text, icon: icon, tint: color)
     }
 
     private func timeText(_ item: NotificationViewModel.ScheduledNotification) -> String {

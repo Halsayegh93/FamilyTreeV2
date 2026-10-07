@@ -20,10 +20,6 @@ struct DiwaniyasView: View {
     @State private var cachedVisibleDiwaniyas: [Diwaniya] = []
     /// ديوانيات / حسينيات (nil = الكل) — قسم الحسينيات (طلب المالك)
     @State private var kindFilter: DiwaniyaKind? = nil
-    @Namespace private var filterNS
-    @Environment(\.verticalSizeClass) private var vSizeClass
-    /// الوضع الأفقي — بطاقات على عمودين
-    private var isLandscape: Bool { vSizeClass == .compact }
 
     var body: some View {
         NavigationStack {
@@ -38,45 +34,30 @@ struct DiwaniyasView: View {
                         title: L10n.t("الديوانيات", "Diwaniyas"),
                         subtitle: L10n.t("ديوانيات وحسينيات · \(cachedVisibleDiwaniyas.count)",
                                          "Diwaniyas & husseiniyas · \(cachedVisibleDiwaniyas.count)"),
-                        icon: "map.fill",
+                        icon: AppSection.diwaniyas.symbol,   // «مجلس»
                         backgroundGradient: AppSection.diwaniyas.gradient
                     )
 
                     kindFilterBar
 
                     if viewModel.isLoading && filteredDiwaniyas.isEmpty {
-                        Spacer()
-                        ProgressView(L10n.t("جاري التحميل...", "Loading..."))
-                        Spacer()
+                        // التحميل الموحّد: مجسّم «المجلس» يتنفّس (بدل الدوّارة)
+                        DSPageLoader(section: .diwaniyas)
                     } else if filteredDiwaniyas.isEmpty {
                         emptyStateView
                     } else {
                         ScrollView(showsIndicators: false) {
-                            Group {
-                                if isLandscape {
-                                    // الوضع الأفقي: عمودان من بطاقات الديوانيات
-                                    LazyVGrid(
-                                        columns: [GridItem(.adaptive(minimum: 340), spacing: DS.Spacing.md, alignment: .top)],
-                                        alignment: .center,
-                                        spacing: DS.Spacing.md
-                                    ) {
-                                        ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
-                                            // نفس الدخول المتتالي — والآن يحترم «تقليل الحركة» (تلاشٍ فقط)
-                                            diwaniyaCard(for: diwaniya)
-                                                .dsCardCascade(index, appeared: appeared)
-                                        }
-                                    }
-                                } else {
-                                    LazyVStack(spacing: DS.Spacing.md) {
-                                        ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
-                                            diwaniyaCard(for: diwaniya)
-                                                .dsCardCascade(index, appeared: appeared)
-                                        }
-                                    }
+                            // عمودياً قائمة واحدة؛ أفقياً عمودان (`DS.Landscape.columnMinWidth`) — من المكان الواحد
+                            // نفس الدخول المتتالي — ويحترم «تقليل الحركة» (تلاشٍ فقط)
+                            AdaptiveLazyStack(spacing: DS.Spacing.md) {
+                                ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
+                                    diwaniyaCard(for: diwaniya)
+                                        .dsCardCascade(index, appeared: appeared)
                                 }
                             }
                             .padding(DS.Spacing.lg)
                             .padding(.bottom, DS.Spacing.xxxl)
+                            .dsTabBarClearance()   // أفقياً: آخر بطاقة لا تختفي تحت شريط التبويبات العائم
                             .onAppear {
                                 guard !appeared else { return }
                                 appeared = true
@@ -128,6 +109,7 @@ struct DiwaniyasView: View {
                 set: { if !$0 { diwaniyaToReport = nil } }
             )) {
                 TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+                    .dsAlertField()   // حقل لا زرّ: الزرّان جنب بعض
                 Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
                     let target = diwaniyaToReport
                     let reason = reportReason
@@ -232,76 +214,33 @@ struct DiwaniyasView: View {
 
     // MARK: - شريط الأقسام: الكل / ديوانيات / حسينيات
 
+    /// الفلاتر الموحّدة (`DSFilterChips`) — نفس شريط المكتبة والإدارة: المختار بتعبئة القسم، والعدد لكل قسم
     private var kindFilterBar: some View {
-        HStack(spacing: 6) {
-            filterChip(nil, title: L10n.t("الكل", "All"), icon: "square.grid.2x2.fill",
-                       count: cachedVisibleDiwaniyas.count, tint: AppSection.diwaniyas.fill)
-            ForEach(DiwaniyaKind.allCases) { k in
-                filterChip(k, title: k.plural, icon: k.icon,
-                           count: cachedVisibleDiwaniyas.filter { k == .husseiniya ? $0.isHusseiniya : !$0.isHusseiniya }.count,
-                           tint: k.tint)
-            }
-        }
-        .padding(4)
-        .background(Capsule().fill(DS.Color.surface))
-        .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.md)
+        DSFilterChips(options: kindFilterOptions, selection: $kindFilter)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.md)
     }
 
-    private func filterChip(_ k: DiwaniyaKind?, title: String, icon: String, count: Int, tint: Color) -> some View {
-        let selected = kindFilter == k
-        return Button {
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.78)) { kindFilter = k }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 11, weight: .bold))
-                Text(title).font(DS.Font.plex(12.5, weight: .bold)).lineLimit(1)
-                Text("\(count)")
-                    .font(DS.Font.plex(10.5, weight: .bold))
-                    .padding(.horizontal, 5).padding(.vertical, 1)
-                    .background(Capsule().fill(selected ? Color.white.opacity(0.22) : tint.dsReadableGlyph.opacity(0.12)))
-            }
-            .foregroundColor(selected ? .white : DS.Color.textSecondary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 34)
-            .background {
-                if selected {
-                    Capsule()
-                        .fill(LinearGradient(colors: [tint, tint.opacity(0.82)], startPoint: .top, endPoint: .bottom))
-                        .matchedGeometryEffect(id: "kind-filter", in: filterNS)
-                        .shadow(color: tint.opacity(0.35), radius: 6, y: 2)
-                }
-            }
-            .contentShape(Capsule())
+    /// «الكل» ثم الأنواع برمزها الموحّد (`DiwaniyaKind.icon`: «مجلس» / «راية»)
+    private var kindFilterOptions: [DSFilterOption<DiwaniyaKind?>] {
+        let all = DSFilterOption<DiwaniyaKind?>(id: nil, title: L10n.t("الكل", "All"),
+                                                icon: "square.grid.2x2.fill",
+                                                count: cachedVisibleDiwaniyas.count)
+        let kinds = DiwaniyaKind.allCases.map { k in
+            DSFilterOption<DiwaniyaKind?>(id: k, title: k.plural, icon: k.icon,
+                                          count: cachedVisibleDiwaniyas.filter { k == .husseiniya ? $0.isHusseiniya : !$0.isHusseiniya }.count)
         }
-        .buttonStyle(.plain)
+        return [all] + kinds
     }
 
     // MARK: - Empty State
     private var emptyStateView: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            Spacer()
-            // دلّة يتصاعد بخارها بلون تبويب الديوانيات (طلب المالك ٢٠٢٦-١٠-٠٤: رسومات متحرّكة)
-            EmptyStateArt(icon: "mappin.slash", tint: AppSection.diwaniyas.ink)
-
-            VStack(spacing: DS.Spacing.sm) {
-                Text(kindFilter == .husseiniya ? L10n.t("لا توجد حسينيات", "No Husseiniyas Yet")
-                                               : L10n.t("لا توجد ديوانيات", "No Diwaniyas Yet"))
-                    .font(DS.Font.title3)
-                    .fontWeight(.black)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t(
-                    "اضغط + لإضافة ديوانيتك.\nتُعرض بعد موافقة الإدارة.",
-                    "Tap + to add your diwaniya.\nIt appears after admin approval."
-                ))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-                .multilineTextAlignment(.center)
-            }
-            Spacer()
-        }
+        // الصفحة الفاضية الموحّدة: مجسّم «المجلس» + عنوان + سطر
+        DSEmptyView(kindFilter == .husseiniya ? L10n.t("لا توجد حسينيات", "No Husseiniyas Yet")
+                                              : L10n.t("لا توجد ديوانيات", "No Diwaniyas Yet"),
+                    message: L10n.t("اضغط + لإضافة ديوانيتك.\nتُعرض بعد موافقة الإدارة.",
+                                    "Tap + to add your diwaniya.\nIt appears after admin approval."),
+                    section: .diwaniyas)
     }
 
     // MARK: - Diwaniya Card
@@ -311,191 +250,146 @@ struct DiwaniyasView: View {
         // الديوانية بلون تبويبها (حبر القسم)، والحسينية بأخضرها الثابت
         let kindTint = item.isHusseiniya ? DS.Color.composerHusseiniya : AppSection.diwaniyas.ink
         let cardColor = isPending ? DS.Color.warning : (isClosed ? DS.Color.textTertiary : kindTint)
+        // رمز النوع الموحّد في كل مكان: «مجلس» للديوانية و«راية» للحسينية
+        let kind: DiwaniyaKind = item.isHusseiniya ? .husseiniya : .diwaniya
 
-        return DSCard(padding: 0) {
-            VStack(spacing: 0) {
-                // badge تحت المراجعة
-                if isPending {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "clock.badge.questionmark")
-                            .font(DS.Font.scaled(12, weight: .bold))
-                        Text(L10n.t("تحت المراجعة", "Under Review"))
-                            .font(DS.Font.scaled(12, weight: .bold))
-                    }
-                    .foregroundColor(DS.Color.warning)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.warning.opacity(0.08))
+        return VStack(spacing: 0) {
+            // badge تحت المراجعة
+            if isPending {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "clock.badge.questionmark")
+                        .dsGlyph(DS.Glyph.sm)
+                    Text(L10n.t("تحت المراجعة", "Under Review"))
+                        .dsFont(.chip)
                 }
+                .foregroundColor(DS.Color.warning)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.warning.opacity(DS.Opacity.tintFillSoft))
+            }
 
-                // شريط علوي ملون
-                HStack(spacing: DS.Spacing.md) {
-                    // أيقونة بتدرج — TMP-ART-TRIAL: رسم الاتجاه المختار، والحالي بديلاً
-                    TrialArt(make: { ArtDispatch.stateIcon($0, icon: item.isHusseiniya ? DiwaniyaKind.husseiniya.icon : (item.imageUrl ?? "map.fill"),
-                                                            tint: cardColor, size: DS.Icon.size) }) {   // TMP-ART-TRIAL
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: isPending
-                                        ? [DS.Color.warning.opacity(0.2), DS.Color.warning.opacity(0.1)]
-                                        : (isClosed
-                                            ? [DS.Color.textTertiary.opacity(0.3), DS.Color.textTertiary.opacity(0.1)]
-                                            : [kindTint.opacity(0.2), kindTint.opacity(0.1)]),
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: DS.Icon.size, height: DS.Icon.size)
-                        Image(systemName: item.isHusseiniya ? DiwaniyaKind.husseiniya.icon : (item.imageUrl ?? "map.fill"))
-                            .font(DS.Font.scaled(22, weight: .bold))
-                            .foregroundColor(cardColor)
-                    }
-                    }
-                    .frame(width: DS.Icon.size, height: DS.Icon.size)
+            // شريط علوي ملون
+            HStack(spacing: DS.Spacing.md) {
+                // قرص «مجسّمات» الموحّد برمز النوع
+                DSStateIcon(kind.icon, tint: cardColor, size: DS.Icon.size)
 
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Text(item.title)
-                                .font(DS.Font.headline)
-                                .foregroundColor(isPending ? DS.Color.textSecondary : (isClosed ? DS.Color.textTertiary : DS.Color.textPrimary))
-
-                            if item.isHusseiniya {
-                                Text(DiwaniyaKind.husseiniya.title)
-                                    .font(DS.Font.plex(10.5, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 7).padding(.vertical, 2)
-                                    .background(Capsule().fill(DS.Color.composerHusseiniya))
-                            }
-
-                            if isClosed && !isPending {
-                                HStack(spacing: DS.Spacing.xs) {
-                                    Image(systemName: "lock.fill")
-                                        .font(DS.Font.caption2)
-                                    Text(L10n.t("مغلقة", "Closed"))
-                                        .font(DS.Font.scaled(11, weight: .bold))
-                                }
-                                .foregroundColor(DS.Color.textOnPrimary)
-                                .padding(.horizontal, DS.Spacing.sm)
-                                .padding(.vertical, DS.Spacing.xs)
-                                .background(DS.Color.error.opacity(0.8))
-                                .clipShape(Capsule())
-                            }
-                        }
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "person.fill")
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textTertiary)
-                            Text(item.ownerName)
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                    }
-
-                    Spacer()
-
-                    let canManageThis = authVM.canDeleteDiwaniyas || authVM.currentUser?.id == item.ownerId
-                    let canReportThis = authVM.currentUser?.id != item.ownerId
-                    if canManageThis || canReportThis {
-                        Menu {
-                            if canManageThis {
-                                Button(action: { diwaniyaToEdit = item }) {
-                                    Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
-                                }
-                                Button(role: .destructive, action: { diwaniyaToDelete = item }) {
-                                    Label(L10n.t("حذف", "Delete"), systemImage: "trash")
-                                }
-                            }
-                            // إبلاغ متاح للجميع (أعضاء وإدارة) لغير ديوانياتهم — سياسة Apple
-                            if canReportThis {
-                                if canManageThis { Divider() }
-                                Button(action: { diwaniyaToReport = item }) {
-                                    Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(DS.Font.scaled(16, weight: .bold))
-                                .foregroundColor(DS.Color.textSecondary)
-                                .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
-                                .background(DS.Color.textTertiary.opacity(0.08))
-                                .clipShape(Circle())
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
-
-                // ═══ شرائح المعلومات — أفقية متمرّرة بدل الصفوف الطويلة ═══
-                let infoItems = buildDiwaniyaInfoItems(item)
-                if !infoItems.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            ForEach(Array(infoItems.enumerated()), id: \.offset) { _, info in
-                                HStack(spacing: 5) {
-                                    Image(systemName: info.icon)
-                                        .font(DS.Font.scaled(11, weight: .semibold))
-                                        .foregroundColor(info.color)
-                                    Text(info.text)
-                                        .font(DS.Font.scaled(12, weight: .medium))
-                                        .foregroundColor(DS.Color.textSecondary)
-                                        .lineLimit(1)
-                                }
-                                .padding(.horizontal, DS.Spacing.sm + 2)
-                                .padding(.vertical, 6)
-                                .background(info.color.opacity(0.08), in: Capsule())
-                                .overlay(Capsule().strokeBorder(info.color.opacity(0.18), lineWidth: 1))
-                            }
-                        }
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.md)
-                    }
-                }
-
-                // ═══ إجراءات أيقونية مدمجة ═══
-                let hasLocation = item.mapsUrl?.isEmpty == false
-                let hasPhone = item.contactPhone?.isEmpty == false
-                if hasLocation || hasPhone {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     HStack(spacing: DS.Spacing.sm) {
-                        if let mapsStr = item.mapsUrl, !mapsStr.isEmpty, let url = URL(string: mapsStr) {
-                            Button(action: { UIApplication.shared.open(url) }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "location.fill")
-                                        .font(DS.Font.scaled(12, weight: .bold))
-                                    Text(L10n.t("الموقع", "Location"))
-                                        .font(DS.Font.scaled(12, weight: .bold))
-                                }
-                                .foregroundColor(DS.Color.textOnPrimary)
-                                .padding(.horizontal, DS.Spacing.md)
-                                .padding(.vertical, 8)
-                                .background(AppSection.diwaniyas.gradient, in: Capsule())
-                            }
-                            .buttonStyle(DSBoldButtonStyle())
+                        Text(item.title)
+                            .dsFont(.headline)
+                            .foregroundColor(isPending ? DS.Color.textSecondary : (isClosed ? DS.Color.textTertiary : DS.Color.textPrimary))
+
+                        // شارات الحالة الموحّدة (`DSStatusChip`)
+                        if item.isHusseiniya {
+                            DSStatusChip(text: DiwaniyaKind.husseiniya.title, tint: DS.Color.composerHusseiniya, size: .mini)
                         }
 
-                        if let phone = item.contactPhone, !phone.isEmpty, let callURL = KuwaitPhone.telURL(phone) {
-                            Button(action: { UIApplication.shared.open(callURL) }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "phone.fill")
-                                        .font(DS.Font.scaled(12, weight: .bold))
-                                    Text(L10n.t("اتصال", "Call"))
-                                        .font(DS.Font.scaled(12, weight: .bold))
-                                }
-                                .foregroundColor(DS.Color.success)
-                                .padding(.horizontal, DS.Spacing.md)
-                                .padding(.vertical, 8)
-                                .background(DS.Color.success.opacity(0.10), in: Capsule())
-                                .overlay(Capsule().strokeBorder(DS.Color.success.opacity(0.30), lineWidth: 1))
-                            }
-                            .buttonStyle(DSBoldButtonStyle())
+                        if isClosed && !isPending {
+                            DSStatusChip(text: L10n.t("مغلقة", "Closed"), icon: "lock.fill", tint: DS.Color.error)
                         }
+                    }
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "person.fill")
+                            .dsGlyph(DS.Glyph.xs)
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(item.ownerName)
+                            .dsFont(.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
 
-                        Spacer(minLength: 0)
+                Spacer()
+
+                let canManageThis = authVM.canDeleteDiwaniyas || authVM.currentUser?.id == item.ownerId
+                let canReportThis = authVM.currentUser?.id != item.ownerId
+                if canManageThis || canReportThis {
+                    Menu {
+                        if canManageThis {
+                            Button(action: { diwaniyaToEdit = item }) {
+                                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+                            }
+                            Button(role: .destructive, action: { diwaniyaToDelete = item }) {
+                                Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                            }
+                        }
+                        // إبلاغ متاح للجميع (أعضاء وإدارة) لغير ديوانياتهم — سياسة Apple
+                        if canReportThis {
+                            if canManageThis { Divider() }
+                            Button(action: { diwaniyaToReport = item }) {
+                                Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .dsGlyph(DS.Glyph.lg)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
+                            .background(Circle().fill(DS.Color.textTertiary.opacity(DS.Opacity.tintFillSoft)))
+                            // القرص ٣٨ ← مساحة ضغط ٤٤ بلا تغيير في التخطيط
+                            .tapArea(top: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2,
+                                     leading: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2,
+                                     bottom: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2,
+                                     trailing: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2)
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+
+            // ═══ شرائح المعلومات — أفقية متمرّرة بدل الصفوف الطويلة ═══
+            let infoItems = buildDiwaniyaInfoItems(item)
+            if !infoItems.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        ForEach(Array(infoItems.enumerated()), id: \.offset) { _, info in
+                            HStack(spacing: DS.Spacing.xsm) {
+                                Image(systemName: info.icon)
+                                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                                    .foregroundColor(info.color)
+                                Text(info.text)
+                                    .dsFont(.subtitle)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, DSBox.chipPadding)
+                            .padding(.vertical, DS.Spacing.xsm)
+                            .background(info.color.opacity(DS.Opacity.tintFillSoft), in: Capsule())
+                            .overlay(Capsule().strokeBorder(info.color.opacity(DS.Opacity.tintStroke),
+                                                            lineWidth: DS.Border.width))
+                        }
                     }
                     .padding(.horizontal, DS.Spacing.lg)
                     .padding(.bottom, DS.Spacing.md)
                 }
             }
+
+            // ═══ إجراءات صغيرة — الشريحة الموحّدة (`DSChipButton`) ═══
+            let hasLocation = item.mapsUrl?.isEmpty == false
+            let hasPhone = item.contactPhone?.isEmpty == false
+            if hasLocation || hasPhone {
+                HStack(spacing: DS.Spacing.sm) {
+                    if let mapsStr = item.mapsUrl, !mapsStr.isEmpty, let url = URL(string: mapsStr) {
+                        DSChipButton(L10n.t("الموقع", "Location"), icon: "location.fill", size: .small) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+
+                    if let phone = item.contactPhone, !phone.isEmpty, let callURL = KuwaitPhone.telURL(phone) {
+                        DSChipButton(L10n.t("اتصال", "Call"), icon: "phone.fill", tint: DS.Color.success, size: .small) {
+                            UIApplication.shared.open(callURL)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                // الشريحة تحمل مساحة ضغطها (٥ فوق وتحت) — الهامش الظاهر يبقى ≈ ١٢
+                .padding(.bottom, DS.Spacing.xsm)
+            }
         }
+        // البطاقة الواحدة (`.dsCard`) — شريط «تحت المراجعة» مقصوص على حوافها
+        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
+        .dsCard(padding: nil)
     }
     
     private struct DiwaniyaInfoItem {
@@ -586,7 +480,6 @@ private struct DiwaniyaComposerForm: View {
 
     private enum Extra: String, Identifiable { case time, phone, location; var id: String { rawValue } }
     @State private var activeExtra: Extra?
-    @Namespace private var kindNS
 
     /// اختصار اليوم للدوائر
     private static let dayLetters = ["س", "ح", "ن", "ث", "ر", "خ", "ج"]
@@ -625,13 +518,9 @@ private struct DiwaniyaComposerForm: View {
         ) {
             // ── النوع ──
             DSComposerSection(title: L10n.t("النوع", "Type"), icon: "square.grid.2x2.fill", tint: kind.tint, index: 0) {
-                HStack(spacing: 4) {
-                    ForEach(DiwaniyaKind.allCases) { k in kindOption(k) }
-                }
-                .padding(4)
-                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.background))
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.14), lineWidth: 1))
+                // مربّعات الاختيار الموحّدة (`DSOptionTiles`) برمز كل نوع: «مجلس» / «راية»
+                DSOptionTiles(DiwaniyaKind.allCases.map { DSOptionTile($0, title: $0.title, icon: $0.icon, tint: $0.tint) },
+                              selection: $kind, columns: 2)
             }
 
             // ── البيانات ──
@@ -650,12 +539,12 @@ private struct DiwaniyaComposerForm: View {
             // ── المواعيد ──
             DSComposerSection(title: L10n.t("المواعيد", "Schedule"), icon: "calendar", tint: kind.tint,
                               trailing: selectedDays.isEmpty ? L10n.t("اختياري", "Optional") : nil, index: 2) {
-                HStack(spacing: 5) {
+                HStack(spacing: DS.Spacing.xsm) {
                     ForEach(Self.weekDays, id: \.id) { day in dayCircle(day.id, name: L10n.t(day.ar, day.en)) }
                 }
                 if !daysDisplayText.isEmpty {
                     Text(daysDisplayText)
-                        .font(DS.Font.plex(11.5, weight: .semibold))
+                        .dsFont(.caption)
                         .foregroundColor(kind.tint.dsReadableGlyph)
                         .transition(.opacity)
                 }
@@ -679,24 +568,17 @@ private struct DiwaniyaComposerForm: View {
             if let isClosed {
                 DSComposerSection(title: L10n.t("الحالة", "Status"), icon: "power", tint: kind.tint, index: 4) {
                     HStack(spacing: DS.Spacing.sm) {
-                        TrialArt(make: { ArtDispatch.stateIcon($0, icon: isClosed.wrappedValue ? "lock.fill" : "lock.open.fill",
-                                                                tint: isClosed.wrappedValue ? DS.Color.error : DS.Color.success, size: 32) }) {   // TMP-ART-TRIAL
-                        Image(systemName: isClosed.wrappedValue ? "lock.fill" : "lock.open.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(isClosed.wrappedValue ? DS.Color.error : DS.Color.success)
-                            .frame(width: 32, height: 32)
-                            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill((isClosed.wrappedValue ? DS.Color.error : DS.Color.success).opacity(0.12)))
-                        }
-                            .frame(width: 32, height: 32)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 1) {
+                        // قرص «مجسّمات» الموحّد بمقاس أيقونة الحقل داخل المربّع (لون المعنى: أحمر/أخضر)
+                        DSStateIcon(isClosed.wrappedValue ? "lock.fill" : "lock.open.fill",
+                                    tint: isClosed.wrappedValue ? DS.Color.error : DS.Color.success,
+                                    size: DSBox.fieldIcon)
+                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                             Text(isClosed.wrappedValue ? L10n.t("متوقفة حالياً", "Currently closed")
                                                        : L10n.t("مفتوحة ونشطة", "Open and active"))
-                                .font(DS.Font.plex(13.5, weight: .bold))
+                                .dsFont(.rowTitle)
                                 .foregroundColor(DS.Color.textPrimary)
                             Text(L10n.t("إيقافها يُظهرها «مغلقة» في القائمة", "Closing shows it as closed"))
-                                .font(DS.Font.plex(10.5))
+                                .dsFont(.footnoteCompact)
                                 .foregroundColor(DS.Color.textTertiary)
                         }
                         Spacer(minLength: 0)
@@ -707,11 +589,8 @@ private struct DiwaniyaComposerForm: View {
                             // المفتاح بلا نص ظاهر — القارئ الصوتي يسمّيه (القيمة: تشغيل/إيقاف)
                             .accessibilityLabel(L10n.t("مفتوحة", "Open"))
                     }
-                    .padding(.horizontal, DS.Spacing.sm + 2)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+                    // صفّ بإطار حقول المربّع الموحّد
+                    .dsRowBox()
                 }
             }
         }
@@ -726,47 +605,6 @@ private struct DiwaniyaComposerForm: View {
         }
     }
 
-    private func kindOption(_ k: DiwaniyaKind) -> some View {
-        let selected = kind == k
-        return Button {
-            guard kind != k else { return }
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.75)) { kind = k }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                // TMP-ART-TRIAL: رسم الاتجاه لغير المختار فقط (المختار يبقى أبيض على لونه)
-                TrialArt(make: { selected ? nil : ArtDispatch.stateIcon($0, icon: k.icon, tint: k.tint.dsReadableGlyph, size: 32) }) {
-                Image(systemName: k.icon)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(selected ? .white : k.tint.dsReadableGlyph)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(selected ? Color.white.opacity(0.2) : k.tint.dsReadableGlyph.opacity(0.12)))
-                    .rotationEffect(.degrees(selected || reduceMotion ? 0 : -12))
-                }
-                    .frame(width: 32, height: 32)
-                    .accessibilityHidden(true)
-                Text(k.title)
-                    .font(DS.Font.plex(14, weight: .bold))
-                    .foregroundColor(selected ? .white : DS.Color.textSecondary)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 7)
-            .frame(maxWidth: .infinity)
-            .background {
-                if selected {
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(LinearGradient(colors: [k.tint, k.tint.opacity(0.8)], startPoint: .top, endPoint: .bottom))
-                        .matchedGeometryEffect(id: "kind-pill", in: kindNS)
-                        .shadow(color: k.tint.opacity(0.4), radius: 8, y: 3)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
     private func dayCircle(_ id: Int, name: String) -> some View {
         let on = selectedDays.contains(id)
         return Button {
@@ -776,16 +614,18 @@ private struct DiwaniyaComposerForm: View {
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
             Text(Self.dayLetters[id])
-                .font(DS.Font.plex(13.5, weight: .bold))
-                .foregroundColor(on ? .white : DS.Color.textSecondary)
+                .dsFont(.rowTitle)
+                .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .frame(maxWidth: .infinity)
-                .frame(height: 38)
+                .frame(height: DS.Icon.sizeSm)
                 .background(Circle().fill(on ? kind.tint : DS.Color.background))
-                .overlay(Circle().strokeBorder(on ? Color.clear : DS.Color.textTertiary.opacity(0.2), lineWidth: 1))
+                .overlay(Circle().strokeBorder(on ? Color.clear : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
+                                               lineWidth: DS.Border.width))
                 .scaleEffect(on && !reduceMotion ? 1.06 : 1)
-                // الدائرة ٣٨ ← مساحة ضغط ٤٤ ارتفاعاً، وعرضاً حتى نصف المسافة (٢٫٥) بين
+                // الدائرة ٣٨ ← مساحة ضغط ٤٤ ارتفاعاً، وعرضاً حتى نصف المسافة (٣) بين
                 // الدوائر فتتلاصق المساحات بلا تداخل — التخطيط كما هو
-                .tapArea(top: 3, leading: 2.5, bottom: 3, trailing: 2.5)
+                .tapArea(top: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2, leading: DS.Spacing.xsm / 2,
+                         bottom: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2, trailing: DS.Spacing.xsm / 2)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(name)
@@ -802,25 +642,27 @@ private struct DiwaniyaComposerForm: View {
             onDone: { dsCloseExtra { activeExtra = nil } },
             onCancel: { dsCloseExtra { activeExtra = nil } }
         ) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.xsm), count: 4),
+                      spacing: DS.Spacing.xsm) {
                 ForEach(Self.timeSlots, id: \.self) { time in
                     let on = selectedTimes.contains(time)
+                    let slot = RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.68)) {
                             if on { selectedTimes.remove(time) } else { selectedTimes.insert(time) }
                         }
                     } label: {
                         Text(L10n.t("\(time) م", "\(time) PM"))
-                            .font(DS.Font.plex(12, weight: on ? .bold : .medium))
-                            .foregroundColor(on ? .white : DS.Color.textSecondary)
-                            .frame(maxWidth: .infinity).frame(height: 36)
-                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(on ? kind.tint : DS.Color.surface))
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(on ? Color.clear : DS.Color.textTertiary.opacity(0.18), lineWidth: 1))
+                            .dsFont(on ? .chip : .subtitle)
+                            .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                            .frame(maxWidth: .infinity).frame(height: DS.Icon.rowLarge)
+                            .background(slot.fill(on ? kind.tint : DS.Color.surface))
+                            .overlay(slot.strokeBorder(on ? Color.clear : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
+                                                       lineWidth: DS.Border.width))
                             // مساحة الضغط حتى نصف المسافة (٣) بين الخانات من كل جهة — ٤٢ ارتفاعاً
                             // بلا تداخل ولا تغيير في الشبكة (الصفوف متباعدة ٦ فقط)
-                            .tapArea(top: 3, leading: 3, bottom: 3, trailing: 3)
+                            .tapArea(top: DS.Spacing.xsm / 2, leading: DS.Spacing.xsm / 2,
+                                     bottom: DS.Spacing.xsm / 2, trailing: DS.Spacing.xsm / 2)
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(on ? .isSelected : [])
@@ -828,7 +670,7 @@ private struct DiwaniyaComposerForm: View {
             }
             if !timeDisplayText.isEmpty {
                 Text(timeDisplayText)
-                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .dsFont(.sectionTitle)
                     .foregroundColor(kind.tint)
                     .frame(maxWidth: .infinity)
             }
@@ -846,16 +688,10 @@ private struct DiwaniyaComposerForm: View {
             DSPhoneField(country: $selectedPhoneCountry, digits: $phoneNumber,
                          placeholder: L10n.t("رقم الهاتف", "Phone number"), compact: true, bordered: true)
             if !phoneNumber.isEmpty {
-                Button { phoneNumber = "" } label: {
-                    Label(L10n.t("إزالة الرقم", "Remove"), systemImage: "trash")
-                        .font(DS.Font.plex(12, weight: .semibold))
-                        .foregroundColor(DS.Color.error)
-                        // النص ١٨ ← مساحة ضغط ٤٤: حشوة ١ (+٢ للتخطيط فقط) ثم ١٢ فوق وتحت حتى
-                        // حقل الرقم والأزرار بلا تغطيتهما
-                        .padding(.vertical, 1)
-                        .tapArea(top: 12, leading: 0, bottom: 12, trailing: 0)
+                // الشريحة الموحّدة (`DSChipButton`) — مثل «إزالة» في مربّع المكتبة، بمساحة ضغط ٤٤
+                DSChipButton(L10n.t("إزالة الرقم", "Remove"), icon: "trash", tint: DS.Color.error, size: .mini) {
+                    phoneNumber = ""
                 }
-                .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
             }
         }
@@ -986,34 +822,6 @@ private struct AddDiwaniyaRequestView: View {
         }
     }
 
-    // MARK: - بطاقة وهيدر مصغّران
-
-    private func compactCard<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        VStack(spacing: 0) { content() }
-            .background(DS.Color.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
-            )
-            .dsSubtleShadow()
-    }
-
-    private func compactHeader(_ title: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(color)
-            Text(title)
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(color)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, DS.Spacing.sm + 2)
-        .padding(.bottom, DS.Spacing.xs)
-    }
-
     private func submitDiwaniya() async {
         guard let user = authVM.currentUser, !isSubmitting else { return }
         isSubmitting = true
@@ -1038,24 +846,6 @@ private struct AddDiwaniyaRequestView: View {
             autoApprove: canAutoApprove
         )
         if success { dismiss() } else { showError = true }
-    }
-
-    private func formField(
-        icon: String, iconColors: [Color], placeholder: String,
-        text: Binding<String>, keyboard: UIKeyboardType = .default
-    ) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSIcon(icon, color: iconColors.first ?? DS.Color.primary, size: 30, iconSize: 13)
-            TextField(placeholder, text: text)
-                .font(DS.Font.scaled(13))
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(.leading)
-                .keyboardType(keyboard)
-                .textInputAutocapitalization(keyboard == .URL ? .never : .words)
-                .autocorrectionDisabled(keyboard == .URL || keyboard == .phonePad)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, 5)
     }
 }
 
@@ -1260,24 +1050,6 @@ private struct EditDiwaniyaView: View {
             kind: kind
         )
         if success { dismiss() } else { showError = true }
-    }
-
-    private func formField(
-        icon: String, iconColors: [Color], placeholder: String,
-        text: Binding<String>, keyboard: UIKeyboardType = .default
-    ) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: iconColors.first ?? DS.Color.primary)
-            TextField(placeholder, text: text)
-                .font(DS.Font.body)
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(.leading)
-                .keyboardType(keyboard)
-                .textInputAutocapitalization(keyboard == .URL ? .never : .words)
-                .autocorrectionDisabled(keyboard == .URL || keyboard == .phonePad)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.xs)
     }
 }
 

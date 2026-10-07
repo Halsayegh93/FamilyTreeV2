@@ -58,39 +58,28 @@ struct AdminModeratorsView: View {
     var body: some View {
         let team = moderators
 
-        return ZStack {
-            DS.Color.background.ignoresSafeArea()
+        // صفّ الأرقام ← بطاقات الأدوار ← دليل الأدوار: قائمة واحدة تتمرّر معاً
+        // (بقيت `List` لأجل السحب «إزالة» على صف المسؤول)
+        return List {
+            hero(team)
+                .teamListRow(top: DS.Spacing.sm, bottom: DS.Spacing.xs)
 
-            // بطاقة الرأس ← بطاقات الأدوار ← دليل الأدوار: قائمة واحدة تتمرّر معاً
-            // (بقيت `List` لأجل السحب «إزالة» على صف المسؤول)
-            List {
-                hero(team)
-                    .teamListRow(top: DS.Spacing.sm, bottom: DS.Spacing.xs)
-
-                teamContent(team)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .environment(\.defaultMinListRowHeight, 0)
-            // تفاصيل الدور — مربّع عرض بمنتصف الشاشة (يُغلق أيضاً بالضغط خارجه)
-            .dsCenterBox(item: $selectedRoleGuide, onBackgroundTap: { selectedRoleGuide = nil }) { guide in
-                roleDetailBox(guide)
-            }
+            teamContent(team)
         }
-        .navigationTitle(L10n.t("فريق الإدارة", "Admin Team"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 0)
+        // تفاصيل الدور — مربّع عرض بمنتصف الشاشة (يُغلق أيضاً بالضغط خارجه)
+        .dsCenterBox(item: $selectedRoleGuide, onBackgroundTap: { selectedRoleGuide = nil }) { guide in
+            roleDetailBox(guide)
+        }
+        // الرأس الملوّن الموحّد — «إضافة» (كانت في شريط النظام) زرّ الرأس، للمالك فقط كما كانت
+        .dsSubPageHeader(L10n.t("فريق الإدارة", "Admin Team"),
+                         subtitle: isOwner
+                            ? L10n.t("اضغط على أي عضو لتغيير دوره", "Tap a member to change their role")
+                            : L10n.t("تتصفّح للقراءة — تغيير الأدوار للمالك", "Read-only — the owner assigns roles")) {
             if isOwner {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAddSheet = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(DS.Font.scaled(22, weight: .medium))
-                            .foregroundStyle(AppSection.admin.ink)
-                    }
-                    .accessibilityLabel(L10n.t("إضافة", "Add"))
-                }
+                DSHeaderButton(symbol: "plus", label: L10n.t("إضافة", "Add")) { showAddSheet = true }
             }
         }
         .dsTallBox(isPresented: $showAddSheet, onDismiss: {   // قائمة أعضاء طويلة (توصية أبل)
@@ -185,14 +174,11 @@ struct AdminModeratorsView: View {
     @ViewBuilder
     private func teamContent(_ team: [FamilyMember]) -> some View {
         if isInitialLoading(team) {
-            SysStateCard(icon: "person.3.fill",
-                         title: L10n.t("جارٍ تحميل فريق الإدارة…", "Loading the admin team…"),
-                         tint: pageTint,
-                         isLoading: true)
+            DSPageLoader(L10n.t("جارٍ تحميل فريق الإدارة…", "Loading the admin team…"), fillsSpace: false)
                 .dsStaggerIn(1)
                 .teamListRow(top: DS.Spacing.md, bottom: DS.Spacing.xxxl)
         } else if loadFailed(team) {
-            SysStateCard(icon: "wifi.exclamationmark",
+            DSStateCard(icon: "wifi.exclamationmark",
                          title: L10n.t("تعذّر تحميل فريق الإدارة", "Couldn't load the admin team"),
                          hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                          tint: DS.Color.error,
@@ -227,25 +213,18 @@ struct AdminModeratorsView: View {
         func value(_ roles: Set<FamilyMember.UserRole>) -> String {
             pending ? "—" : "\(team.filter { roles.contains($0.role) }.count)"
         }
-        return DSPageHero(
-            title: L10n.t("فريق الإدارة", "Admin Team"),
-            subtitle: isOwner
-                ? L10n.t("اضغط على أي عضو لتغيير دوره", "Tap a member to change their role")
-                : L10n.t("تتصفّح للقراءة — تغيير الأدوار للمالك", "Read-only — the owner assigns roles"),
-            icon: "person.3.fill",
-            tint: pageTint,
-            stats: [
-                DSHeroStat(value: value([.owner, .admin]),
-                           label: L10n.t("المدراء", "Admins"),
-                           icon: RoleGuide.forRole(.admin)?.icon),
-                DSHeroStat(value: value([.monitor]),
-                           label: L10n.t("المراقبين", "Monitors"),
-                           icon: RoleGuide.forRole(.monitor)?.icon),
-                DSHeroStat(value: value([.supervisor]),
-                           label: L10n.t("المشرفين", "Supervisors"),
-                           icon: RoleGuide.forRole(.supervisor)?.icon)
-            ]
-        )
+        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
+        return DSStatsRow([
+            DSHeroStat(value: value([.owner, .admin]),
+                       label: L10n.t("المدراء", "Admins"),
+                       icon: RoleGuide.forRole(.admin)?.icon),
+            DSHeroStat(value: value([.monitor]),
+                       label: L10n.t("المراقبين", "Monitors"),
+                       icon: RoleGuide.forRole(.monitor)?.icon),
+            DSHeroStat(value: value([.supervisor]),
+                       label: L10n.t("المشرفين", "Supervisors"),
+                       icon: RoleGuide.forRole(.supervisor)?.icon)
+        ], tint: pageTint)
     }
 
     // MARK: - بطاقات الأدوار
@@ -284,7 +263,7 @@ struct AdminModeratorsView: View {
     /// (أعلى / وسط / أسفل) حتى يبقى السحب على صف العضو نفسه كما كان
     @ViewBuilder
     private func groupRows(_ group: RoleGroup, index: Int, firstRow: Int) -> some View {
-        SysSectionTitle(title: group.title,
+        DSSectionTitle(title: group.title,
                         icon: group.icon,
                         tint: group.tint,
                         trailing: membersCountText(group.members.count))
@@ -345,31 +324,31 @@ struct AdminModeratorsView: View {
         let canChange = isOwner && !isSelf && member.role != .owner
 
         return HStack(spacing: DS.Spacing.sm) {
-            DSMemberAvatar(name: member.firstName, avatarUrl: member.avatarUrl, size: 40, roleColor: roleColor)
+            DSMemberAvatar(name: member.firstName, avatarUrl: member.avatarUrl, size: DS.Icon.avatar, roleColor: roleColor)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(member.displayFullName)
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let scope = RoleGuide.forRole(shownRole)?.mandate {
                     Text(scope)
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                 }
 
                 if let phone = member.phoneNumber, !phone.isEmpty {
-                    HStack(spacing: 4) {
+                    HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "phone.fill")
-                            .font(.system(size: 9.5, weight: .semibold))
+                            .dsGlyph(DS.Glyph.micro, weight: .semibold)
                             .accessibilityHidden(true)
                         Text(Self.isolatedLTR(KuwaitPhone.display(phone)))
-                            .font(DS.Font.plex(11.5, weight: .medium))
+                            .dsFont(.footnote)
                             .monospacedDigit()
                     }
                     .foregroundColor(DS.Color.textTertiary)
@@ -378,16 +357,16 @@ struct AdminModeratorsView: View {
 
             Spacer(minLength: 0)
 
-            VStack(alignment: .trailing, spacing: 4) {
-                SysStatusChip(text: member.roleName, tint: roleColor)
+            VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
+                DSStatusChip(text: member.roleName, tint: roleColor)
                 if isSelf {
-                    SysStatusChip(text: L10n.t("أنت", "You"), tint: DS.Color.info)
+                    DSStatusChip(text: L10n.t("أنت", "You"), tint: DS.Color.info)
                 }
             }
             .fixedSize()
 
             if canChange {
-                SysChevron()
+                DSChevron()
             }
         }
         .dsRowBox()
@@ -454,7 +433,7 @@ struct AdminModeratorsView: View {
             }
 
             // ٢) صف لكل دور — الضغط يفتح تفاصيله
-            VStack(spacing: 6) {
+            VStack(spacing: DS.Spacing.xsm) {
                 ForEach(Array(RoleGuide.all.enumerated()), id: \.offset) { _, guide in
                     Button { selectedRoleGuide = guide } label: {
                         roleCompactRow(guide)
@@ -468,34 +447,25 @@ struct AdminModeratorsView: View {
 
     /// مجال عمل: أيقونته بدائرة بلونه + اسمه + أدواره
     private func domainTile(_ domain: RoleDomain) -> some View {
-        VStack(spacing: 4) {
-            TrialArt(make: { ArtDispatch.stateIcon($0, icon: domain.icon, tint: domain.color, size: 26) }) {   // TMP-ART-TRIAL
-            Image(systemName: domain.icon)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(domain.color)
-                .frame(width: 26, height: 26)
-                .background(Circle().fill(domain.color.opacity(0.13)))
-            }
-                .frame(width: 26, height: 26)
-                .accessibilityHidden(true)
+        VStack(spacing: DS.Spacing.xs) {
+            DSStateIcon(domain.icon, tint: domain.color, size: DS.Icon.section, mapsChrome: false)
             Text(domain.title)
-                .dsFieldFont(11, weight: .bold)
+                .dsFieldFont(.badge)
                 .foregroundColor(DS.Color.fieldLabel)
                 .multilineTextAlignment(.center)
                 .lineLimit(2, reservesSpace: true)
                 .minimumScaleFactor(0.8)
             Text(domain.roles.joined(separator: " · "))
-                .font(DS.Font.plex(10, weight: .medium))
+                .dsFont(.micro)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.sm)
-        .padding(.horizontal, 4)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(domain.color.opacity(0.28), lineWidth: 1))
+        .padding(.horizontal, DS.Spacing.xs)
+        // البطاقة الواحدة (صندوق فوق بطاقة القسم)
+        .dsCard(padding: nil, fill: DS.Color.background)
         .accessibilityElement(children: .combine)
     }
 
@@ -506,12 +476,12 @@ struct AdminModeratorsView: View {
             DSFieldIcon(name: guide.icon, tint: guide.color)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(guide.title)
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(guide.mandate)
-                    .dsFieldFont(12)
+                    .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -519,7 +489,7 @@ struct AdminModeratorsView: View {
                 if guide.title == L10n.t("العضو", "Member"), let usage = usageStats {
                     Text(L10n.t("فعّالون (رقم + جهاز): \(usage.active)",
                                 "Active (phone + device): \(usage.active)"))
-                        .font(DS.Font.plex(11, weight: .semibold))
+                        .dsFont(.caption)
                         .foregroundColor(DS.Color.success)
                 }
             }
@@ -527,11 +497,11 @@ struct AdminModeratorsView: View {
             Spacer(minLength: 0)
 
             if let count, count > 0 {
-                SysStatusChip(text: "\(count)", tint: guide.color)
+                DSStatusChip(text: "\(count)", tint: guide.color)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(membersCountText(count))
             }
-            SysChevron()
+            DSChevron()
         }
         .dsRowBox()
         .contentShape(Rectangle())
@@ -582,7 +552,7 @@ struct AdminModeratorsView: View {
                           icon: allowed ? "checkmark.circle.fill" : "xmark.circle.fill",
                           tint: allowed ? DS.Color.success : DS.Color.textTertiary,
                           index: index) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 ForEach(lines, id: \.self) { line in
                     RoleScopeLineRow(text: line, allowed: allowed)
                 }
@@ -596,21 +566,17 @@ struct AdminModeratorsView: View {
 
     /// لا أحد في الفريق — «إضافة» للمالك كما كانت
     private var emptyState: some View {
-        SysStateCard(
-            icon: "person.3.fill",
-            title: L10n.t("لا يوجد أعضاء في فريق الإدارة", "No admin team members"),
-            hint: isOwner ? L10n.t("أضف مديراً أو مراقباً أو مشرفاً", "Add an admin, monitor or supervisor") : nil,
-            tint: pageTint,
-            actionTitle: isOwner ? L10n.t("إضافة", "Add") : nil,
-            actionIcon: "plus",
-            action: isOwner ? { showAddSheet = true } : nil
-        )
+        DSEmptyView(L10n.t("لا يوجد أعضاء في فريق الإدارة", "No admin team members"),
+                    message: isOwner ? L10n.t("أضف مديراً أو مراقباً أو مشرفاً", "Add an admin, monitor or supervisor") : nil,
+                    actionTitle: isOwner ? L10n.t("إضافة", "Add") : nil,
+                    actionIcon: "plus",
+                    style: .compact, action: isOwner ? { showAddSheet = true } : nil)
     }
 }
 
 // MARK: - بطاقة الدور مقطّعة على صفوف القائمة (خاصة بهذا الملف)
 
-/// نفس بطاقة `DSComposerSection` (سطح + حافة خفيفة + زوايا ١٦) لكن مقسومة على صفوف `List`:
+/// نفس البطاقة الواحدة (`DS.Card`: سطح + حافة خفيفة + زواياها) لكن مقسومة على صفوف `List`:
 /// كل صف يرسم جزءه — الأعلى بزاويتيه، الأوسط بحافتيه، الأسفل بزاويتيه — وما ليس له يُقصّ.
 /// بهذا يبقى السحب («إزالة») على صف العضو نفسه كما كان، والبطاقة تبدو قطعة واحدة.
 private struct TeamCardSegment: View {
@@ -619,13 +585,13 @@ private struct TeamCardSegment: View {
 
     var body: some View {
         GeometryReader { geo in
-            let overflow = DS.Radius.lg * 2
+            let overflow = DS.Card.radius * 2
             let above: CGFloat = part == .top ? 0 : overflow
             let below: CGFloat = part == .bottom ? 0 : overflow
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
                 .fill(DS.Color.surface)
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke), lineWidth: DS.Card.strokeWidth))
                 .frame(width: geo.size.width, height: geo.size.height + above + below)
                 .offset(y: -above)
         }
@@ -638,7 +604,7 @@ private struct TeamCardSegment: View {
 
 private extension View {
     /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
-    func teamListRow(top: CGFloat = 4, bottom: CGFloat = 4) -> some View {
+    func teamListRow(top: CGFloat = DS.Spacing.xs, bottom: CGFloat = DS.Spacing.xs) -> some View {
         self
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
@@ -663,7 +629,6 @@ struct AddModeratorSheet: View {
     @State private var selectedMember: FamilyMember?
     @State private var isSaving = false
     @State private var filterCache = RegularMembersCache()
-    @Namespace private var roleNS
 
     /// نفس ترتيب المبدّل السابق: مشرف، مراقب، مدير
     private let roleOptions: [FamilyMember.UserRole] = [.supervisor, .monitor, .admin]
@@ -711,18 +676,12 @@ struct AddModeratorSheet: View {
     private var roleSection: some View {
         DSComposerSection(title: L10n.t("الدور", "Role"), icon: "person.badge.key.fill",
                           tint: AppSection.admin.ink, index: 0) {
-            // اختيار مستوى الحساب
-            HStack(spacing: 4) {
-                ForEach(roleOptions, id: \.self) { role in
-                    roleOption(role)
-                }
-            }
-            // الخيار ٤٤ ضغطاً و٤٠ شكلاً — الهامش العمودي ٢ + نقطتا الضغط = نفس الإطار السابق (٤)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(DS.Color.textTertiary.opacity(0.14), lineWidth: 1))
+            // اختيار مستوى الحساب — المبدّل الموحّد (`DSSegmentedSwitch`)
+            DSSegmentedSwitch(options: roleOptions.map {
+                                  DSSegmentOption(id: $0, title: roleLabel($0),
+                                                  icon: RoleGuide.forRole($0)?.icon ?? "person.fill")
+                              },
+                              selection: $selectedRole, size: .regular)
 
             // مجال الدور المختار — ليعرف من يمنح الدور ما الذي يمنحه بالضبط
             // (ZStack: القديم والجديد يتداخلان أثناء التلاشي بدل أن يتكدّسا)
@@ -734,45 +693,6 @@ struct AddModeratorSheet: View {
                 }
             }
         }
-    }
-
-    private func roleOption(_ role: FamilyMember.UserRole) -> some View {
-        let isSelected = selectedRole == role
-        let guide = RoleGuide.forRole(role)
-        return Button {
-            guard selectedRole != role else { return }
-            if reduceMotion {
-                selectedRole = role   // «تقليل الحركة»: المؤشّر يظهر في مكانه مباشرة
-            } else {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) { selectedRole = role }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: guide?.icon ?? "person.fill")
-                    .font(.system(size: 12.5, weight: .bold))
-                    .foregroundColor(isSelected ? .white : (guide?.color ?? AppSection.admin.ink))
-                    .accessibilityHidden(true)
-                Text(roleLabel(role))
-                    .font(DS.Font.plex(13.5, weight: .bold))
-                    .foregroundColor(isSelected ? .white : DS.Color.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 40)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DSActionFill.style())
-                        .matchedGeometryEffect(id: "role-pill", in: roleNS)
-                }
-            }
-            // مساحة ضغط ٤٤ (توصية أبل) — المؤشّر الظاهر ٤٠ كما هو
-            .frame(height: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     /// نفس أسماء المبدّل السابق
@@ -818,15 +738,15 @@ struct AddModeratorSheet: View {
                 DSFieldIcon(name: "person.fill", tint: AppSection.admin.ink)
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(member.displayFullName)
-                        .dsFieldFont(14, weight: .bold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
 
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         Text(KuwaitPhone.display(phone))
-                            .dsFieldFont(12)
+                            .dsFieldFont(.subtitle)
                             .foregroundColor(DS.Color.fieldValue)
                             .monospacedDigit()
                     }
@@ -836,14 +756,15 @@ struct AddModeratorSheet: View {
 
                 // للعين فقط — «محدّد» يُعلن من صفة isSelected
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(isSelected ? AppSection.admin.ink : DS.Color.textTertiary.opacity(0.5))
+                    .dsGlyph(DS.Glyph.xl, weight: .semibold)
+                    .foregroundColor(isSelected ? AppSection.admin.ink : DS.Color.textTertiary.opacity(DS.Opacity.disabled))
                     .accessibilityHidden(true)
             }
             .dsRowBox()
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(AppSection.admin.ink.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5)
+                    .strokeBorder(AppSection.admin.ink.opacity(isSelected ? DS.Opacity.selectedStroke : 0),
+                                  lineWidth: DS.Border.widthBold)
             )
             .contentShape(Rectangle())
         }
@@ -852,18 +773,7 @@ struct AddModeratorSheet: View {
     }
 
     private var emptyMembers: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "person.slash")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundColor(DS.Color.textTertiary)
-                .accessibilityHidden(true)
-            Text(L10n.t("لا يوجد أعضاء", "No members found"))
-                .font(DS.Font.plex(13, weight: .semibold))
-                .foregroundColor(DS.Color.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
-        .dsRowBox()
+        DSEmptyView(L10n.t("لا يوجد أعضاء", "No members found"), style: .inline)
     }
 
     // MARK: التعيين — نفس الاستدعاء ثم الإغلاق
@@ -943,13 +853,13 @@ struct ChangeRoleSheet: View {
                 memberAvatar
                     .accessibilityHidden(true)   // الصورة زخرفة — الاسم يُقرأ بعدها
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(member.displayFullName)
-                        .dsFieldFont(14.5, weight: .bold)
+                        .dsFieldFont(.headlineCompact)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                     Text(L10n.t("دوره الحالي: ", "Current role: ") + roleTitle(member.role))
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: 0)
@@ -959,23 +869,10 @@ struct ChangeRoleSheet: View {
         }
     }
 
+    /// صورة العضو الموحّدة
     private var memberAvatar: some View {
-        Group {
-            if let avatar = member.avatarUrl, let url = URL(string: avatar) {
-                CachedAsyncImage(url: url) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: { DS.Color.mutedBackground }
-            } else {
-                ZStack {
-                    AppSection.admin.ink.opacity(0.14)
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(AppSection.admin.ink)
-                }
-            }
-        }
-        .frame(width: 40, height: 40)
-        .clipShape(Circle())
+        DSMemberAvatar(name: member.firstName, avatarUrl: member.avatarUrl,
+                       size: DS.Icon.avatar, roleColor: AppSection.admin.ink)
     }
 
     // MARK: بطاقات الأدوار
@@ -1005,36 +902,36 @@ struct ChangeRoleSheet: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: guide.icon, tint: guide.color)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(guide.title)
-                        .dsFieldFont(13.5, weight: .heavy)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(guide.mandate)
-                        .dsFieldFont(12.5)
+                        .dsFieldFont(.calloutCompact)
                         .foregroundColor(DS.Color.fieldValue)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
                 // للعين فقط — «محدّد» يُعلن من صفة isSelected على البطاقة
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(isSelected ? guide.color : DS.Color.textTertiary.opacity(0.5))
+                    .dsGlyph(DS.Glyph.xl, weight: .semibold)
+                    .foregroundColor(isSelected ? guide.color : DS.Color.textTertiary.opacity(DS.Opacity.disabled))
                     .accessibilityHidden(true)
             }
 
             if isSelected {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     Rectangle()
-                        .fill(DS.Color.textTertiary.opacity(0.12))
-                        .frame(height: 1)
-                        .padding(.bottom, 3)
+                        .fill(DS.Color.textTertiary.opacity(DS.Opacity.border))
+                        .frame(height: DS.Border.width)
+                        .padding(.bottom, DS.Spacing.xxs)
                     scopeCaption(L10n.t("يقدر", "Can"), color: DS.Color.success)
                     ForEach(guide.can, id: \.self) { text in
                         RoleScopeLineRow(text: text, allowed: true)
                     }
                     if !guide.cannot.isEmpty {
                         scopeCaption(L10n.t("ما يقدر", "Cannot"), color: DS.Color.textTertiary)
-                            .padding(.top, 2)
+                            .padding(.top, DS.Spacing.xxs)
                         ForEach(guide.cannot, id: \.self) { text in
                             RoleScopeLineRow(text: text, allowed: false)
                         }
@@ -1047,7 +944,7 @@ struct ChangeRoleSheet: View {
         .dsRowBox()
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(guide.color.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5)
+                .strokeBorder(guide.color.opacity(isSelected ? DS.Opacity.selectedStroke : 0), lineWidth: DS.Border.widthBold)
         )
         .contentShape(Rectangle())
         .animation(DS.Anim.snappy, value: selected)
@@ -1055,7 +952,7 @@ struct ChangeRoleSheet: View {
 
     private func scopeCaption(_ text: String, color: Color) -> some View {
         Text(text)
-            .font(DS.Font.plex(12, weight: .heavy))
+            .dsFont(.label)
             .foregroundColor(color)
     }
 
@@ -1093,13 +990,13 @@ private struct RoleScopeLineRow: View {
     let allowed: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(alignment: .top, spacing: DS.Spacing.xsm) {
             Image(systemName: allowed ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(allowed ? DS.Color.success : DS.Color.textTertiary.opacity(0.8))
-                .padding(.top, 2)
+                .dsGlyph(DS.Glyph.sm)
+                .foregroundColor(allowed ? DS.Color.success : DS.Color.textTertiary)
+                .padding(.top, DS.Spacing.xxs)
             Text(text)
-                .dsFieldFont(12.5)
+                .dsFieldFont(.calloutCompact)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -1120,19 +1017,19 @@ private struct RoleScopeRowBox: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: guide.icon, tint: guide.color)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(guide.title)
-                        .dsFieldFont(12, weight: .heavy)
+                        .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(guide.mandate)
-                        .dsFieldFont(13.5)
+                        .dsFieldFont(.bodyCompact)
                         .foregroundColor(DS.Color.fieldValue)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
             }
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 ForEach(Array(guide.can.prefix(2)), id: \.self) { text in
                     RoleScopeLineRow(text: text, allowed: true)
                 }

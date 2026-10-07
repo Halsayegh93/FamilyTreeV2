@@ -22,6 +22,8 @@ struct AdminMemberDetailSheet: View {
     @State private var selectedPhoneCountry: KuwaitPhone.Country
     @State private var phoneNumber: String
     @State private var selectedFatherId: UUID?
+    /// مربّع «السيرة الذاتية» (مربّع عمل)
+    @State private var showBioBox = false
     @State private var fullName: String
     @State private var familyName: String
 
@@ -173,6 +175,18 @@ struct AdminMemberDetailSheet: View {
             .dsTallBox(isPresented: $showFatherPicker) {
                 FatherPickerSheet(selectedId: $selectedFatherId, editingMemberId: member.id)
             }
+            .dsCenterBox(isPresented: $showBioBox) {
+                BioEditCard(
+                    initial: bioStations,
+                    goesToAdmins: false,
+                    remaining: 3,
+                    onCancel: { showBioBox = false },
+                    onDone: { updated in
+                        showBioBox = false
+                        bioStations = updated   // يُحفظ مع «حفظ» السجل
+                    }
+                )
+            }
             .fullScreenCover(isPresented: $showAddSonSheet) {
                 DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
                     AddSonByAdminSheet(parent: member)
@@ -279,6 +293,10 @@ struct AdminMemberDetailSheet: View {
                     Text(L10n.t("حذف \(child.firstName)؟", "Delete \(child.firstName)?"))
                 }
             }
+        // حين يُدفع صفحةً (سجل الأعضاء) لا شريط نظام أبيض فوق رأس المربّع الملوّن («أسلوب واحد»
+        // ٢٠٢٦-١٠-٠٧) — الرجوع بـ«إلغاء» أسفل المربّع أو السحب من الحافة؛ داخل المربّع الطويل لا أثر له
+        .background(DS.Color.background.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -336,9 +354,9 @@ struct AdminMemberDetailSheet: View {
                 }
             }
 
-            VStack(spacing: 4) {
+            VStack(spacing: DS.Spacing.xs) {
                 Text(member.displayFullName)
-                    .font(DS.Font.plex(16, weight: .bold))
+                    .dsFont(.headline)
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -410,7 +428,7 @@ struct AdminMemberDetailSheet: View {
 
                 if let warning = phoneDuplicateWarning {
                     Label(warning, systemImage: "exclamationmark.triangle.fill")
-                        .font(DS.Font.plex(12, weight: .medium))
+                        .dsFont(.subtitle)
                         .foregroundColor(DS.Color.warning)
                 }
                 if !isPhoneValid {
@@ -419,7 +437,7 @@ struct AdminMemberDetailSheet: View {
                                "Enter a valid number or leave it empty."),
                         systemImage: "exclamationmark.circle.fill"
                     )
-                    .font(DS.Font.plex(12, weight: .medium))
+                    .dsFont(.subtitle)
                     .foregroundColor(DS.Color.error)
                 }
             }
@@ -445,35 +463,28 @@ struct AdminMemberDetailSheet: View {
         adminCard(L10n.t("النسب", "Lineage"), icon: "link", color: chromeInk) {
             // الأب — لا يظهر لرأس الشجرة (طلب المالك)
             if !isFamilyRoot {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
                     Text(L10n.t("الأب في الشجرة", "Father in Tree"))
-                        .font(DS.Font.plex(12.5, weight: .semibold))
-                        .foregroundColor(DS.Color.textPrimary.opacity(0.78))
+                        .dsFont(.sectionTitle)
+                        .foregroundColor(DS.Color.fieldValue)
                     Button { showFatherPicker = true } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
                                 Text(father.displayFullName)
-                                    .font(DS.Font.plex(14.5, weight: .semibold))
+                                    .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
                                     .foregroundColor(DS.Color.textPrimary)
                                     .lineLimit(1)
                             } else {
                                 Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
-                                    .font(DS.Font.plex(14.5))
+                                    .dsFieldFont(.body)
                                     .foregroundColor(DS.Color.textSecondary)
                             }
                             Spacer(minLength: 0)
-                            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                                .font(DS.Font.plex(12, weight: .bold))
-                                .foregroundColor(DS.Color.textTertiary)
-                                .accessibilityHidden(true)   // زخرفة
+                            DSChevron()
                         }
-                        .padding(.horizontal, DS.Spacing.md)
-                        .frame(minHeight: 46)
-                        .background(DS.Color.background, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .stroke(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
-                        )
+                        .frame(minHeight: DS.Icon.tapTarget)
+                        // صندوق صفوف المربّعات الموحّد
+                        .dsRowBox()
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -485,7 +496,7 @@ struct AdminMemberDetailSheet: View {
                                "\(descendantCount) descendant names will be rebuilt."),
                         systemImage: "exclamationmark.triangle.fill"
                     )
-                    .font(DS.Font.plex(12, weight: .medium))
+                    .dsFont(.subtitle)
                     .foregroundColor(DS.Color.warning)
                 }
             }
@@ -493,27 +504,18 @@ struct AdminMemberDetailSheet: View {
             // الأبناء
             HStack {
                 Text(L10n.t("الأبناء (\(localChildren.count))", "Children (\(localChildren.count))"))
-                    .font(DS.Font.plex(12.5, weight: .semibold))
-                    .foregroundColor(DS.Color.textPrimary.opacity(0.78))
+                    .dsFont(.sectionTitle)
+                    .foregroundColor(DS.Color.fieldValue)
                 Spacer()
                 if localChildren.count > 1 {
-                    Button {
+                    // «ترتيب» / «تم» — الشريحة الموحّدة (مساحة ضغط ٤٤ فيها)
+                    DSChipButton(isSortingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"),
+                                 icon: isSortingChildren ? "checkmark" : "arrow.up.arrow.down",
+                                 tint: chromeInk,
+                                 isSelected: isSortingChildren, size: .small) {
                         withAnimation(DS.Anim.snappy) {
                             editMode = isSortingChildren ? .inactive : .active
                         }
-                    } label: {
-                        Text(isSortingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"))
-                            .font(DS.Font.plex(12.5, weight: .bold))
-                            .foregroundColor(chromeInk)
-                            // مساحة ضغط ~٤٤ نقطة (حد أبل) في الفراغ حول الكلمة (فوقها ١٤ وتحتها
-                            // ١٠ = المسافة للصفوف) — مكانها وحجمها كما هما، بلا تداخل مع الصفوف
-                            .padding(.top, 14)
-                            .padding(.bottom, 10)
-                            .padding(.horizontal, 14)
-                            .contentShape(Rectangle())
-                            .padding(.top, -14)
-                            .padding(.bottom, -10)
-                            .padding(.horizontal, -14)
                     }
                 }
             }
@@ -524,18 +526,12 @@ struct AdminMemberDetailSheet: View {
                     childRow(child: child, index: index)
                 }
 
-                Button { showAddSonSheet = true } label: {
-                    Label(localChildren.isEmpty ? L10n.t("إضافة ابن", "Add Child")
-                                                : L10n.t("إضافة ابن آخر", "Add Another Child"),
-                          systemImage: "plus.circle.fill")
-                        .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(chromeInk)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(chromeInk.opacity(0.08),
-                                    in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                // الزرّ الواحد — ثانوي (رمادي) داخل البطاقة، والإجراء الرئيسي «حفظ» أسفل المربّع
+                DSButton(localChildren.isEmpty ? L10n.t("إضافة ابن", "Add Child")
+                                               : L10n.t("إضافة ابن آخر", "Add Another Child"),
+                         icon: "plus.circle.fill", role: .cancel) {
+                    showAddSonSheet = true
                 }
-                .buttonStyle(DSScaleButtonStyle())
             }
         }
     }
@@ -562,27 +558,20 @@ struct AdminMemberDetailSheet: View {
         let tint = isChildDeceased ? DS.Color.error : chromeInk
 
         return HStack(spacing: DS.Spacing.sm) {
-            TrialArt(make: { ArtDispatch.stateIcon($0, icon: isChildDeceased ? "person.fill.xmark" : "person.fill",
-                                                    tint: tint, size: 30) }) {   // TMP-ART-TRIAL
-            Image(systemName: isChildDeceased ? "person.fill.xmark" : "person.fill")
-                .font(DS.Font.plex(13, weight: .bold))
-                .foregroundColor(tint)
-                .frame(width: 30, height: 30)
-                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-                .frame(width: 30, height: 30)
+            DSStateIcon(isChildDeceased ? "person.fill.xmark" : "person.fill",
+                        tint: tint, size: DS.Icon.discSmall, mapsChrome: false)
                 // القارئ الصوتي: الأيقونة زخرفة، إلا علامة الوفاة فتُقرأ كلمةً
                 .accessibilityLabel(L10n.t("متوفى", "Deceased"))
                 .accessibilityHidden(!isChildDeceased)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(child.firstName)
-                    .font(DS.Font.plex(14.5, weight: .semibold))
+                    .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                 if let birth = child.birthDate, !birth.isEmpty {
                     Text(birth)
-                        .font(DS.Font.plex(11.5))
+                        .dsFont(.footnote)
                         .foregroundColor(DS.Color.textSecondary)
                 }
             }
@@ -590,51 +579,45 @@ struct AdminMemberDetailSheet: View {
             Spacer(minLength: 0)
 
             if isSortingChildren {
-                // منطقة ضغط ٤٤×٤٤ لكل زر (حد أبل) بلا تداخل والدوائر كما هي: الطرفان
-                // يمتدّان للخارج ١٤، والأوسط (مع زر الحذف) يأخذ الفراغين ٧+٧
+                // منطقة ضغط ٤٤×٤٤ لكل زر (حد أبل) بلا تداخل والأقراص كما هي: الطرفان
+                // يمتدّان للخارج بفرق المقاسين، والأوسط (مع زر الحذف) يأخذ نصفه من كل جهة
                 let canDelete = authVM.canDeleteMembers
-                HStack(spacing: 7) {
+                let hit = Self.sortHit
+                HStack(spacing: hit / 2) {
                     sortArrow("chevron.up", enabled: index > 0,
                               label: L10n.t("نقل لأعلى", "Move up"),
-                              hitLeading: 14, hitTrailing: 0) {
+                              hitLeading: hit, hitTrailing: 0) {
                         localChildren.swapAt(index, index - 1)
                     }
                     sortArrow("chevron.down", enabled: index < localChildren.count - 1,
                               label: L10n.t("نقل لأسفل", "Move down"),
-                              hitLeading: canDelete ? 7 : 0, hitTrailing: canDelete ? 7 : 14) {
+                              hitLeading: canDelete ? hit / 2 : 0, hitTrailing: canDelete ? hit / 2 : hit) {
                         localChildren.swapAt(index, index + 1)
                     }
                     if canDelete {
                         Button { childToDelete = child } label: {
                             Image(systemName: "trash")
-                                .font(DS.Font.plex(12, weight: .bold))
+                                .dsGlyph(DS.Glyph.sm)
                                 .foregroundColor(DS.Color.error)
-                                .frame(width: 30, height: 30)
-                                .background(DS.Color.error.opacity(0.10), in: Circle())
-                                .padding(.trailing, 14)
-                                .padding(.vertical, 7)
+                                .frame(width: Self.sortDisc, height: Self.sortDisc)
+                                .background(DS.Color.error.opacity(DS.Opacity.tintFill), in: Circle())
+                                .padding(.trailing, hit)
+                                .padding(.vertical, hit / 2)
                                 .contentShape(Rectangle())
-                                .padding(.trailing, -14)
-                                .padding(.vertical, -7)
+                                .padding(.trailing, -hit)
+                                .padding(.vertical, -hit / 2)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(L10n.t("حذف \(child.firstName)", "Delete \(child.firstName)"))
                     }
                 }
             } else {
-                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.plex(11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .accessibilityHidden(true)   // زخرفة
+                DSChevron()
             }
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(minHeight: 50)
-        .background(DS.Color.background, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
-        )
+        .frame(minHeight: DS.Icon.tapTarget)
+        // صندوق صفوف المربّعات الموحّد
+        .dsRowBox()
         .contentShape(Rectangle())
         .onTapGesture { if !isSortingChildren { childToEdit = child } }
         // القارئ الصوتي: خارج الترتيب الصف كله زر «تعديل»؛ في الترتيب تبقى أزراره منفصلة
@@ -642,24 +625,28 @@ struct AdminMemberDetailSheet: View {
         .accessibilityAddTraits(isSortingChildren ? [] : .isButton)
     }
 
-    /// سهم ترتيب: دائرة ٣٠ كما هي، ومنطقة ضغط ٤٤×٤٤ (حد أبل) حولها بلا تغيير مكانها —
+    /// قرص أسهم الترتيب وزرّ الحذف (قرص الصفّ)، وفرقه عن مساحة الضغط ٤٤
+    private static let sortDisc: CGFloat = DS.Icon.row
+    private static let sortHit: CGFloat = DS.Icon.tapTarget - DS.Icon.row
+
+    /// سهم ترتيب: القرص كما هو، ومنطقة ضغط ٤٤×٤٤ (حد أبل) حولها بلا تغيير مكانها —
     /// الحشو الموجب يوسّع منطقة الضغط، والسالب يعيد حجمها في التخطيط
     private func sortArrow(_ icon: String, enabled: Bool, label: String,
                            hitLeading: CGFloat, hitTrailing: CGFloat,
                            action: @escaping () -> Void) -> some View {
         Button { withAnimation(DS.Anim.snappy) { action() } } label: {
-            Image(systemName: icon)
-                .font(DS.Font.plex(12, weight: .bold))
-                .foregroundColor(enabled ? chromeInk : DS.Color.textTertiary.opacity(0.4))
-                .frame(width: 30, height: 30)
-                .background(chromeInk.opacity(enabled ? 0.10 : 0.04), in: Circle())
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.sm)
+                .foregroundColor(enabled ? chromeInk : DS.Color.textTertiary.opacity(DS.Opacity.disabled))
+                .frame(width: Self.sortDisc, height: Self.sortDisc)
+                .background(chromeInk.opacity(enabled ? DS.Opacity.tintFill : DS.Opacity.tintFillSoft / 2), in: Circle())
                 .padding(.leading, hitLeading)
                 .padding(.trailing, hitTrailing)
-                .padding(.vertical, 7)
+                .padding(.vertical, Self.sortHit / 2)
                 .contentShape(Rectangle())
                 .padding(.leading, -hitLeading)
                 .padding(.trailing, -hitTrailing)
-                .padding(.vertical, -7)
+                .padding(.vertical, -Self.sortHit / 2)
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
@@ -673,83 +660,47 @@ struct AdminMemberDetailSheet: View {
             if !bioStations.isEmpty {
                 VStack(spacing: DS.Spacing.sm) {
                     ForEach(bioStations) { station in
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                             HStack(spacing: DS.Spacing.xs) {
                                 if let year = station.year, !year.isEmpty {
-                                    Text(year)
-                                        .font(DS.Font.plex(11, weight: .bold))
-                                        .foregroundColor(DS.Color.accent)
-                                        .padding(.horizontal, 7)
-                                        .padding(.vertical, 2)
-                                        .background(DS.Color.accent.opacity(0.12), in: Capsule())
+                                    DSStatusChip(text: year, tint: DS.Color.accent, size: .mini)
                                 }
                                 Text(station.title)
-                                    .font(DS.Font.plex(14, weight: .semibold))
+                                    .dsFont(.rowTitle)
                                     .foregroundColor(DS.Color.textPrimary)
                             }
                             if !station.details.isEmpty {
                                 Text(station.details)
-                                    .font(DS.Font.plex(12))
+                                    .dsFont(.subtitle)
                                     .foregroundColor(DS.Color.textSecondary)
                                     .lineLimit(2)
                             }
                         }
-                        .padding(DS.Spacing.md)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(DS.Color.background, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .stroke(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
-                        )
+                        // صندوق صفوف المربّعات الموحّد
+                        .dsRowBox()
                     }
                 }
             }
 
-            Button { openBioPopup() } label: {
-                Label(bioStations.isEmpty ? L10n.t("إضافة حدث للسيرة", "Add Biography Entry")
-                                          : L10n.t("تعديل السيرة", "Edit Biography"),
-                      systemImage: bioStations.isEmpty ? "plus.circle.fill" : "pencil")
-                    .font(DS.Font.plex(14, weight: .bold))
-                    .foregroundColor(DS.Color.accent)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(DS.Color.accent.opacity(0.10),
-                                in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            // الزرّ الواحد — ثانوي (رمادي) داخل البطاقة
+            DSButton(bioStations.isEmpty ? L10n.t("إضافة حدث للسيرة", "Add Biography Entry")
+                                         : L10n.t("تعديل السيرة", "Edit Biography"),
+                     icon: bioStations.isEmpty ? "plus.circle.fill" : "pencil", role: .cancel) {
+                openBioPopup()
             }
-            .buttonStyle(DSScaleButtonStyle())
         }
     }
 
-    /// السيرة: مربّع بمنتصف الشاشة على قدر محتواه (نفس مربّع تعديل البيانات)
-    private func openBioPopup() {
-        var id: UUID?
-        let close: () -> Void = { if let i = id { DSPopupPresenter.shared.hide(i) } }
-        id = DSPopupPresenter.shared.show(
-            BioEditCard(
-                initial: bioStations,
-                goesToAdmins: false,
-                remaining: 3,
-                onCancel: close,
-                onDone: { updated in
-                    close()
-                    bioStations = updated   // يُحفظ مع «حفظ» السجل
-                }
-            )
-        )
-    }
+    /// السيرة: مربّع عمل بمنتصف الشاشة (`dsCenterBox`) — نفس مربّع تعديل البيانات
+    private func openBioPopup() { showBioBox = true }
 
     // MARK: - حذف السجل
+    /// الزرّ الواحد بالأحمر (حذف) — التأكيد كما هو
     private var deleteButton: some View {
-        Button { showDeleteConfirmation = true } label: {
-            Label(L10n.t("حذف السجل نهائياً", "Permanently Delete"), systemImage: "trash.fill")
-                .font(DS.Font.plex(14, weight: .bold))
-                .foregroundColor(DS.Color.error)
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(DS.Color.error.opacity(0.10),
-                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        DSButton(L10n.t("حذف السجل نهائياً", "Permanently Delete"), icon: "trash.fill", role: .destructive) {
+            showDeleteConfirmation = true
         }
-        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Setup / Validation Helpers
@@ -1411,12 +1362,12 @@ struct FatherPickerSheet: View {
                 HStack(spacing: DS.Spacing.sm) {
                     DSFieldIcon(name: "person.crop.circle.badge.minus", tint: DS.Color.warning)
                         .accessibilityHidden(true)   // زخرفة
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(L10n.t("بدون أب", "No Father"))
-                            .dsFieldFont(12, weight: .heavy)
+                            .dsFieldFont(.label)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(L10n.t("رأس شجرة", "Tree root"))
-                            .dsFieldFont(14.5, weight: checked ? .bold : .regular)
+                            .dsFieldFont(DSBox.fieldValueSize, weight: checked ? .bold : .regular)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: 0)
@@ -1424,7 +1375,7 @@ struct FatherPickerSheet: View {
                         // primary: كحلي في الفاتح وأزرق فاتح في الداكن — التدرّج الكحلي كان
                         // قرصاً غامقاً لا يُرى على صف الداكن (مثل علامة «ربط الأب»)
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 18))
+                            .dsGlyph(DS.Glyph.xl, weight: .regular)
                             .foregroundStyle(chromeInk)
                             .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
                             .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
@@ -1442,7 +1393,7 @@ struct FatherPickerSheet: View {
     private func membersSection(_ list: [FamilyMember]) -> some View {
         DSComposerSection(title: L10n.t("اختر الأب", "Choose Father"), icon: "person.2.fill",
                           tint: DS.Color.primary, trailing: "\(list.count)", index: 2) {
-            LazyVStack(spacing: DS.Spacing.xs + 2) {
+            LazyVStack(spacing: DS.Spacing.xsm) {
                 ForEach(list) { m in
                     FatherPickerRow(
                         member: m,
@@ -1476,15 +1427,15 @@ private struct FatherPickerRow: View, Equatable {
             HStack(spacing: DS.Spacing.sm) {
                 // الحرف الأول في مربّع أيقونة الحقل — نفس صفوف المربّعات
                 Text(String(member.fullName.prefix(1)))
-                    .font(DS.Font.plex(13, weight: .bold))
+                    .dsFont(.rowTitleCompact)
                     .foregroundColor(chromeInk)
-                    .frame(width: 32, height: 32)
-                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(chromeInk.opacity(0.12)))
+                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
+                        .fill(chromeInk.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)   // الحرف الأول زخرفة — الاسم بجانبه
 
                 Text(member.displayFullName)
-                    .dsFieldFont(14.5, weight: isSelected ? .bold : .regular)
+                    .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
                     .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -1493,7 +1444,7 @@ private struct FatherPickerRow: View, Equatable {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
+                        .dsGlyph(DS.Glyph.xl, weight: .regular)
                         .foregroundStyle(chromeInk)
                         .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
                         .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
@@ -1513,7 +1464,7 @@ private extension View {
         dsRowBox()
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(tint.opacity(selected ? 0.6 : 0), lineWidth: 1.5)
+                    .strokeBorder(tint.opacity(selected ? DS.Opacity.selectedStroke : 0), lineWidth: DS.Border.widthBold)
             )
     }
 }

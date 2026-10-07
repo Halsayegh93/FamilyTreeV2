@@ -128,7 +128,7 @@ struct FTTileSceneView: View {
     var playsEntrance = false
     var badge = false
 
-    // TMP-ART-TRIAL: «الحالي» = الشكل القديم، المربّع بخلفيته فقط بلا رسم (طلب المالك ٢٠٢٦-١٠-٠٥)
+    // «الحالي» = الشكل القديم، المربّع بخلفيته فقط بلا رسم (طلب المالك ٢٠٢٦-١٠-٠٥)
     var body: some View { EmptyView() }
 
     private var oldBody: some View { EmptyView() }

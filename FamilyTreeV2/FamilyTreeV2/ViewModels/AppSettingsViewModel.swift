@@ -15,6 +15,8 @@ struct AppSettings: Codable {
     var diwaniyasEnabled: Bool?
     var projectsEnabled: Bool?
     var albumsEnabled: Bool?
+    /// إظهار «شجرة النساء» في قسم الشجرة (العمود موجود ويقرؤه الأندرويد لاختصار الرئيسية) — nil = ظاهرة
+    var womenTreeEnabled: Bool?
     /// لغة التطبيق الرسمية (ar / en) — للمستخدمين الذين لم يختاروا لغتهم
     var defaultLanguage: String?
     /// التحديث الإجباري — أقل رقم بناء مسموح لكل منصة (0 = بلا إجبار) + رابط المتجر
@@ -39,6 +41,7 @@ struct AppSettings: Codable {
         case diwaniyasEnabled = "diwaniyas_enabled"
         case projectsEnabled = "projects_enabled"
         case albumsEnabled = "albums_enabled"
+        case womenTreeEnabled = "women_tree_enabled"
         case defaultLanguage = "default_language"
         case iosMinBuild = "ios_min_build"
         case forceUpdate = "force_update"
@@ -148,6 +151,7 @@ class AppSettingsViewModel: ObservableObject {
                 "diwaniyas_enabled": AnyEncodable(true),
                 "projects_enabled": AnyEncodable(true),
                 "albums_enabled": AnyEncodable(true),
+                "women_tree_enabled": AnyEncodable(true),
                 "updated_at": AnyEncodable(DateHelper.now),
                 "updated_by": AnyEncodable(updatedBy?.uuidString)
             ]

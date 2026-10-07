@@ -136,8 +136,6 @@ struct BlockedMembersSection: View {
     var index: Int = 0
     @ObservedObject private var store = BlockedMembersStore.shared
     @State private var entryToUnblock: BlockedMembersStore.Entry?
-    // لون القسم الذي يظهر فيه («حسابي» ← الإعدادات) — كحلي «الإطار» يتبعه
-    @Environment(\.dsSection) private var section
 
     var body: some View {
         DSComposerSection(title: L10n.t("الأعضاء المحظورون", "Blocked Members"),
@@ -147,15 +145,9 @@ struct BlockedMembersSection: View {
                           index: index) {
             VStack(spacing: DS.Spacing.sm) {
                 if store.entries.isEmpty {
-                    HStack(spacing: DS.Spacing.sm) {
-                        DSFieldIcon(name: "hand.raised.slash.fill", tint: DS.Color.textTertiary)
-                            .accessibilityHidden(true)   // زخرفة
-                        Text(L10n.t("لا يوجد أعضاء محظورون", "No blocked members"))
-                            .font(DS.Font.plex(13.5, weight: .semibold))
-                            .foregroundColor(DS.Color.textSecondary)
-                        Spacer(minLength: 0)
-                    }
-                    .dsRowBox()
+                    // الحالة الفاضية الواحدة (مضغوطة داخل القسم)
+                    DSEmptyView(L10n.t("لا يوجد أعضاء محظورون", "No blocked members"),
+                                icon: "hand.raised.slash.fill", style: .inline)
                 } else {
                     ForEach(store.entries) { entry in
                         row(entry)
@@ -163,7 +155,7 @@ struct BlockedMembersSection: View {
                 }
                 Text(L10n.t("المحظور لا تظهر لك أخباره ولا تعليقاته، ولا يُبلَّغ بأنك حظرته. تحظر العضو من ملفه أو من قائمة «…» على خبره أو تعليقه.",
                             "You won't see posts or comments from blocked members, and they aren't notified. Block someone from their profile or the “…” menu on their post or comment."))
-                    .font(DS.Font.plex(10.5, weight: .medium))
+                    .dsFont(.footnoteCompact)
                     .foregroundColor(DS.Color.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,32 +180,23 @@ struct BlockedMembersSection: View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: "person.crop.circle.badge.xmark", tint: DS.Color.error)
                 .accessibilityHidden(true)   // زخرفة
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(entry.name)
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(L10n.t("محظور منذ \(Self.dateText(entry.blockedAt))",
                             "Blocked since \(Self.dateText(entry.blockedAt))"))
-                    .font(DS.Font.plex(11))
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(1)
             }
             Spacer(minLength: DS.Spacing.xs)
-            Button { entryToUnblock = entry } label: {
-                Text(L10n.t("إلغاء الحظر", "Unblock"))
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .foregroundColor(DS.Color.primary.dsChrome(in: section))
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(height: 32)
-                    .background(Capsule().fill(DS.Color.primary.dsChrome(in: section).opacity(0.12)))
-                    // مساحة ضغط ٤٤ نقطة (توصية أبل) — الحبّة كما هي
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("إلغاء حظر \(entry.name)", "Unblock \(entry.name)"))
+            // الشريحة الواحدة (لون القسم)
+            DSChipButton(L10n.t("إلغاء الحظر", "Unblock")) { entryToUnblock = entry }
+                .fixedSize()
+                .accessibilityLabel(L10n.t("إلغاء حظر \(entry.name)", "Unblock \(entry.name)"))
         }
         .dsRowBox()
     }

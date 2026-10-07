@@ -45,6 +45,21 @@ struct ContentCategory: Codable, Identifiable, Equatable {
 
     var displayName: String { L10n.isArabic ? nameAr : nameEn }
     var color: Color { CategoryPalette.color(colorKey) }
+    /// الرمز المعروض (قد يختلف عن المفتاح المخزّن — انظر `CategoryPalette.symbol`)
+    var symbol: String { CategoryPalette.symbol(iconKey) }
+}
+
+/// رموز مخصّصة في الأصول (Assets ← *.symbolset) تُستعمل كأنها رموز SF — `Image(dsSymbol:)` يختار المصدر
+enum DSCustomSymbols {
+    /// قبر «وفاة» بشاهدين (طلب المالك ٢٠٢٦-١٠-٠٧) — لا يوجد في رموز النظام
+    static let names: Set<String> = ["grave.fill"]
+}
+
+extension Image {
+    /// رمز SF بالاسم، أو الرمز المخصّص من الأصول إن كان من `DSCustomSymbols` — يتجاوب مع .font مثل رموز النظام
+    init(dsSymbol name: String) {
+        if DSCustomSymbols.names.contains(name) { self.init(name) } else { self.init(systemName: name) }
+    }
 }
 
 /// الأيقونات والألوان المسموحة — نفس المجموعة يعرفها الأندرويد
@@ -55,6 +70,12 @@ enum CategoryPalette {
         "calendar", "gift.fill", "graduationcap.fill", "house.fill", "trophy.fill",
         "doc.text.fill", "book.closed.fill", "photo.stack.fill", "folder.fill", "sparkles"
     ]
+
+    /// الرمز المعروض لمفتاح مخزّن. المفتاح يبقى كما هو في السيرفر (يقرؤه الأندرويد والموقع)،
+    /// لكن «وفاة» تُعرض قبراً بشاهدين بدل القلب المشطوب (طلب المالك ٢٠٢٦-١٠-٠٧)
+    static func symbol(_ key: String) -> String {
+        key == "heart.slash.fill" ? "grave.fill" : key
+    }
 
     static let colorKeys: [String] = [
         "navy", "green", "gold", "wedding", "birth", "death", "vote",

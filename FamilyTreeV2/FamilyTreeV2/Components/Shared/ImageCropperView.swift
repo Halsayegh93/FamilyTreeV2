@@ -62,49 +62,33 @@ struct ImageCropperView: View {
                 // «إلغاء» يسار و«تأكيد» يمين، بنفس أزرار مربّعات التطبيق
                 VStack(spacing: 0) {
                     Text(L10n.t("تعديل الصورة", "Edit Photo"))
-                        .font(DS.Font.plex(17, weight: .bold))
-                        .foregroundColor(.white)
+                        .dsFont(.title)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.sm)
-                        .background(.black.opacity(0.35), in: Capsule())
-                        .padding(.top, 64)
+                        .background(DS.Color.shadowStrong, in: Capsule())
+                        .padding(.top, DSBox.logoSide)
 
                     Spacer()
 
                     Text(L10n.t("اسحب وكبّر الصورة للتعديل", "Drag and pinch to adjust"))
-                        .font(DS.Font.plex(12.5, weight: .medium))
-                        .foregroundColor(.white.opacity(0.85))
+                        .dsFont(.calloutCompactMedium)
+                        .foregroundColor(DS.Color.overlayText)
                         .padding(.bottom, DS.Spacing.md)
 
-                    HStack(spacing: DS.Spacing.sm) {
+                    // الزرّ الواحد بمقاس الشاشة الكاملة (٤٨): «إلغاء» رمادي يسار و«تأكيد» بتعبئة القسم يمين
+                    HStack(spacing: DSBox.buttonSpacing) {
                         // الاتجاه هنا يسار→يمين (للإيماءات)، فالأول = يسار
-                        Button { onCancel() } label: {
-                            Text(L10n.t("إلغاء", "Cancel"))
-                                .font(DS.Font.plex(15, weight: .bold))
-                                .foregroundColor(DS.Color.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(DS.Color.background,
-                                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        }
+                        DSButton(L10n.t("إلغاء", "Cancel"), role: .cancel, size: .large) { onCancel() }
 
-                        Button {
+                        DSButton(L10n.t("تأكيد", "Confirm"), icon: "checkmark", size: .large) {
                             let cropped = performCrop()
                             onCrop(cropped)
-                        } label: {
-                            Label(L10n.t("تأكيد", "Confirm"), systemImage: "checkmark")
-                                .font(DS.Font.plex(15, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(DSActionFill.style(),
-                                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
                         }
                         .disabled(displayImage == nil)
                     }
-                    .buttonStyle(DSScaleButtonStyle())
                     .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.bottom, 44)
+                    .padding(.bottom, DS.Icon.tapTarget)
                 }
             }
             .onAppear {

@@ -33,30 +33,25 @@ struct ForceUpdateView: View {
         VStack(spacing: DS.Spacing.xxl) {
             Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.12))
-                    .frame(width: 110, height: 110)
-                Image(systemName: "arrow.down.app.fill")
-                    .font(DS.Font.scaled(52, weight: .semibold))
-                    .foregroundStyle(DS.Color.primary)
-            }
+            // قرص الحالة المجسّم الكبير (نفس شاشات التجميد وحد الأجهزة)
+            DSStateIcon("arrow.down.app.fill", tint: DS.Color.primary, size: DS.Icon.stateHero)
+                .accessibilityHidden(true)
 
             Text(L10n.t("حدّث التطبيق", "Update the App"))
-                .font(DS.Font.title1)
+                .dsFont(.emptyTitle)
                 .foregroundColor(DS.Color.textPrimary)
 
             Text(customMessage ?? L10n.t(
                 "صدرت نسخة جديدة من التطبيق فيها تحسينات وإصلاحات مهمة. حدّث التطبيق حتى تكمل استخدامه.",
                 "A new version with important improvements and fixes is available. Please update to continue."
             ))
-            .font(DS.Font.body)
+            .dsFont(.body)
             .foregroundColor(DS.Color.textSecondary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, DS.Spacing.xl)
 
             Text(L10n.t("نسختك: \(AppBuild.versionLabel)", "Your version: \(AppBuild.versionLabel)"))
-                .font(DS.Font.caption1)
+                .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
 
             Spacer()
@@ -72,6 +67,9 @@ struct ForceUpdateView: View {
             }
         }
         .padding(DS.Spacing.xxl)
+        // وضع العرض: عمود قراءة متوسّط، ويتمرّر بدل أن يُقصّ النص
+        .dsLandscapeReadable()
+        .dsLandscapeScroll()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DS.Color.background)
     }

@@ -8,8 +8,6 @@ struct TreeEditRequestView: View {
     // لون القسم الذي فُتح منه الطلب (الشجرة، الرئيسية، الإدارة…) — الكحلي «إطار» يتبعه
     @Environment(\.dsSection) private var section
     private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
-    @FocusState private var isDetailsFocused: Bool
-    @FocusState private var isPrimaryFieldFocused: Bool
 
     let member: FamilyMember
     let action: TreeEditAction
@@ -25,11 +23,6 @@ struct TreeEditRequestView: View {
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
     @State private var errorMessage: String? = nil
-    @State private var showCountrySheet = false
-
-    /// ارتفاع الشيت — يُقاس من المحتوى ليكون الشيت بحجم المحتوى عند الكتابة
-    /// (نفس نمط AddChildSheet / EditChildSheet).
-    @State private var sheetHeight: CGFloat = 360
 
     private var actionColor: Color {
         switch action {
@@ -104,9 +97,8 @@ struct TreeEditRequestView: View {
             onSubmit: { submit() },
             onCancel: { dismiss() }
         ) {
-            memberCard.dsStaggerIn(0)
-            primaryFieldSection.dsStaggerIn(1)
-            notesSection.dsStaggerIn(2)
+            // قسم واحد بلغة مربّعات العمل («أسلوب واحد»): رأسه نوع الطلب بلونه، ثم العضو، ثم الحقل، ثم الملاحظات
+            requestSection
         }
             .dsAlert(L10n.t("تم الإرسال", "Request Sent"), isPresented: $showSuccessAlert, moment: .sentForApproval) {
                 Button(L10n.t("حسناً", "OK")) { dismiss() }
@@ -123,10 +115,6 @@ struct TreeEditRequestView: View {
                     "تعذر إرسال الطلب. حاول مرة أخرى.",
                     "Failed to send request. Please try again."
                 ))
-            }
-            // اختيار الدولة — مربّع ثانٍ بمنتصف الشاشة فوق مربّع الطلب
-            .dsCenterBox(isPresented: $showCountrySheet) {
-                countryPickerSheet
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onAppear { prefillFromMember() }
@@ -170,328 +158,93 @@ struct TreeEditRequestView: View {
         return selectedPhoto != nil || currentDraft != startDraft
     }
 
-    // MARK: - Member Card
+    // MARK: - القسم
 
-    private var memberCard: some View {
-        HStack(spacing: DS.Spacing.md) {
-            TrialArt(make: { ArtDispatch.stateIcon($0, icon: action.iconName, tint: actionColor, size: 56) }) {   // TMP-ART-TRIAL
-            ZStack {
-                Circle()
-                    .fill(actionColor.opacity(0.12))
-                    .frame(width: 56, height: 56)
-                Image(systemName: action.iconName)
-                    .font(DS.Font.plex(20, weight: .semibold))
-                    .foregroundColor(actionColor)
-            }
-            }
-            .frame(width: 56, height: 56)
-            .accessibilityHidden(true)   // زخرفة — نوع الطلب مكتوب بجانبها
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t(action.arabicLabel, action.englishLabel))
-                    .font(DS.Font.plex(12))
-                    .fontWeight(.semibold)
-                    .foregroundColor(actionColor)
-                Text(member.displayFullName)
-                    .font(DS.Font.plex(14, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-            }
-            Spacer()
+    /// قسم الطلب (`DSComposerSection`): رأسه نوع الطلب (رمزه ولونه)، صفّ العضو، حقل الطلب، والملاحظات —
+    /// نفس أقسام وحقول مربّعات الإضافة (`DSRow` / `DSComposerField` / `DSFieldBox`)
+    private var requestSection: some View {
+        DSComposerSection(title: L10n.t(action.arabicLabel, action.englishLabel),
+                          icon: action.iconName, tint: actionColor, index: 0) {
+            DSRow(icon: "person.fill", tint: actionColor, title: member.displayFullName)
+            primaryField
+            notesField
         }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg)
-                .stroke(actionColor.opacity(0.18), lineWidth: 1)
-        )
     }
 
     // MARK: - Primary Field
 
     @ViewBuilder
-    private var primaryFieldSection: some View {
+    private var primaryField: some View {
         switch action {
         case .add:
-            textInputSection(
-                label: L10n.t("اسم الابن الجديد", "New Son Name"),
-                placeholder: L10n.t("اكتب اسم الابن...", "Enter son's name..."),
-                icon: "person.badge.plus",
-                text: $primaryText
-            )
+            DSComposerField(icon: "person.badge.plus", label: L10n.t("اسم الابن الجديد", "New Son Name"),
+                            placeholder: L10n.t("اكتب اسم الابن...", "Enter son's name..."),
+                            text: $primaryText, tint: actionColor)
         case .editName:
-            textInputSection(
-                label: L10n.t("الاسم الجديد", "New Name"),
-                placeholder: L10n.t("اكتب الاسم الجديد...", "Enter new name..."),
-                icon: "pencil",
-                text: $primaryText
-            )
+            DSComposerField(icon: "pencil", label: L10n.t("الاسم الجديد", "New Name"),
+                            placeholder: L10n.t("اكتب الاسم الجديد...", "Enter new name..."),
+                            text: $primaryText, tint: actionColor)
         case .editBirth:
-            dateSection(
-                title: L10n.t("تاريخ الميلاد الصحيح", "Correct Birth Date"),
-                label: L10n.t("تاريخ الميلاد", "Birth Date"),
-                date: $birthDate,
-                iconColor: DS.Color.warning
-            )
+            dateRow(icon: "gift.fill", tint: DS.Color.warning,
+                    title: L10n.t("تاريخ الميلاد الصحيح", "Correct Birth Date"), date: $birthDate)
         case .editPhone:
-            phoneInputSection
-        case .deceased:
-            deceasedDateSection
-        case .addDeathDate:
-            dateSection(
-                title: L10n.t("تاريخ الوفاة", "Date of Death"),
-                label: L10n.t("تاريخ الوفاة", "Date of Death"),
-                date: $deathDate,
-                iconColor: DS.Color.error
-            )
+            DSFieldBox(L10n.t("الرقم الجديد", "New Phone Number")) {
+                DSPhoneField(
+                    country: $phoneCountry,
+                    digits: $localPhoneDigits,
+                    placeholder: L10n.t("رقم الهاتف", "Phone number"),
+                    compact: true,
+                    bordered: false
+                )
+            }
+        case .deceased, .addDeathDate:
+            dateRow(icon: "calendar", tint: DS.Color.error,
+                    title: L10n.t("تاريخ الوفاة", "Date of Death"), date: $deathDate)
         case .addPhoto:
-            photoPickerSection
+            // عنوان الحقل بخط عناوين حقول المربّعات، والصورة بلا صندوق حقل حولها (مثل «إضافة ابن»)
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                Text(L10n.t("الصورة المقترحة", "Suggested Photo"))
+                    .dsFieldFont(DSBox.fieldLabelSize, weight: .heavy)
+                    .foregroundColor(DS.Color.fieldLabel)
+                DSProfilePhotoPicker(
+                    selectedImage: $selectedPhoto,
+                    title: L10n.t("اضغط لاختيار صورة", "Tap to choose a photo"),
+                    trailing: nil,
+                    compactEmptyState: true
+                )
+                .frame(maxWidth: .infinity)
+            }
         case .delete, .other:
             EmptyView()
         }
     }
 
-    /// قسم اختيار تاريخ عام — يُستخدم لتعديل الميلاد وإضافة تاريخ الوفاة.
-    private func dateSection(title: String, label: String, date: Binding<Date>, iconColor: Color) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(title)
-                .font(DS.Font.plex(14, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-
-            DSDateField(
-                label: label,
-                date: date,
-                iconColor: iconColor,
-                range: ...Date()
-            )
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-            )
-        }
-    }
-
-    /// قسم اختيار صورة — لطلب «إضافة صورة».
-    private var photoPickerSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(L10n.t("الصورة المقترحة", "Suggested Photo"))
-                .font(DS.Font.plex(14, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-
-            DSProfilePhotoPicker(
-                selectedImage: $selectedPhoto,
-                title: L10n.t("اضغط لاختيار صورة", "Tap to choose a photo"),
-                trailing: nil,
-                compactEmptyState: true
-            )
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    private func textInputSection(label: String, placeholder: String, icon: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(label)
-                .font(DS.Font.plex(14, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(DS.Font.plex(14, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .frame(width: 24)
-
-                TextField(placeholder, text: text)
-                    .dsFieldFont(15)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .focused($isPrimaryFieldFocused)
-
-                if !text.wrappedValue.isEmpty {
-                    Button { text.wrappedValue = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.plex(14, weight: .medium))
-                            .foregroundColor(DS.Color.textTertiary)
-                            // مساحة ضغط ٤٤ نقطة (حد أبل): العرض من مساحة الكتابة والأيقونة
-                            // في مكانها على الطرف، والطول داخل هامش الصندوق — فلا يتغيّر
-                            // ارتفاع الحقل ولا شكله
-                            .frame(width: 44, alignment: .trailing)
-                            .padding(.vertical, 14)
-                            .contentShape(Rectangle())
-                            .padding(.vertical, -14)
-                    }
-                    .accessibilityLabel(L10n.t("مسح النص", "Clear text"))
-                }
+    /// صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف (حتى اليوم) — نفس صفوف التاريخ في «إضافة ابن»
+    private func dateRow(icon: String, tint: Color, title: String, date: Binding<Date>) -> some View {
+        Button {
+            dsPresentDatePicker(title: title, initial: date.wrappedValue, allowClear: false) { picked in
+                if let picked { date.wrappedValue = picked }
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(
-                        isPrimaryFieldFocused ? chromeInk.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
-                        lineWidth: isPrimaryFieldFocused ? 1.5 : 1
-                    )
-            )
-        }
-    }
-
-    private var phoneInputSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(L10n.t("الرقم الجديد", "New Phone Number"))
-                .font(DS.Font.plex(14, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-
-            DSPhoneField(
-                country: $phoneCountry,
-                digits: $localPhoneDigits,
-                placeholder: L10n.t("رقم الهاتف", "Phone number")
-            )
-        }
-    }
-
-    /// اختيار دولة الرقم — مربّع بمنتصف الشاشة بتصميم المربّعات الموحّد: الدول صفوفاً
-    /// والمختارة بعلامة ✓، والضغط على دولة يختارها ويغلق المربّع (كالسابق)
-    private var countryPickerSheet: some View {
-        DSComposer(
-            title: L10n.t("اختر الدولة", "Select Country"),
-            subtitle: L10n.t("رمز الدولة للرقم الجديد", "Country code for the new number"),
-            icon: "globe",
-            tint: DS.Color.actionNavy,
-            actionTitle: "",
-            showsAction: false,
-            cancelTitle: L10n.t("إلغاء", "Cancel"),
-            canSubmit: false,
-            onSubmit: {},
-            onCancel: { showCountrySheet = false }
-        ) {
-            DSComposerSection(title: L10n.t("الدول", "Countries"), icon: "globe",
-                              tint: DS.Color.primary, index: 0) {
-                // صفوف عادية لا كسولة — القائمة قصيرة وتُقاس كاملةً فلا يُقصّ آخرها
-                VStack(spacing: DS.Spacing.sm) {
-                    ForEach(KuwaitPhone.supportedCountries) { country in
-                        countryRow(country)
-                    }
-                }
-            }
-        }
-    }
-
-    /// صف دولة: العلم بمربّع أيقونة الحقل + الاسم والرمز، والمختارة بعلامة ✓ وإطار
-    private func countryRow(_ country: KuwaitPhone.Country) -> some View {
-        let isSelected = phoneCountry == country
-        return Button {
-            phoneCountry = country
-            showCountrySheet = false
         } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                Text(country.flag)
-                    .font(DS.Font.scaled(20))
-                    .frame(width: 32, height: 32)
-                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(chromeInk.opacity(0.08)))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t(country.nameArabic, country.isoCode))
-                        .dsFieldFont(14.5, weight: .bold)
-                        .foregroundColor(DS.Color.fieldLabel)
-                    // علامة اتجاه (LRM) حتى يظهر «+965» لا «965+» في العربي
-                    Text("\u{200E}" + country.dialingCode)
-                        .font(DS.Font.plex(12))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-                Spacer(minLength: 0)
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(chromeInk)
-                        .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
-                }
+            DSRow(icon: icon, tint: tint, title: title, subtitle: DSDateText.display(date.wrappedValue)) {
+                DSStateIcon("pencil", tint: DS.Color.primary, size: DSBox.fieldIcon)
             }
-            .dsRowBox()
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(chromeInk.opacity(isSelected ? 0.6 : 0), lineWidth: 1.5)
-            )
             .contentShape(Rectangle())
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .buttonStyle(.plain)
+        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
     }
 
-    private var deceasedDateSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(L10n.t("تاريخ الوفاة", "Date of Death"))
-                .font(DS.Font.plex(14, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
+    // MARK: - Notes / Reason
 
-            DSDateField(
-                label: L10n.t("تاريخ الوفاة", "Date of Death"),
-                date: $deathDate,
-                iconColor: DS.Color.error,
-                range: ...Date()
-            )
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-            )
-        }
+    /// الملاحظات — حقل المربّعات متعدد الأسطر (يكبر بالكتابة حتى ٤ أسطر)
+    private var notesField: some View {
+        DSComposerField(icon: notesRequired ? "text.bubble.fill" : "note.text",
+                        label: notesLabel, placeholder: notesPlaceholder,
+                        text: $notes, tint: notesRequired ? actionColor : DS.Color.primary, multiline: true)
     }
 
-    // MARK: - Notes / Reason Section
-
-    private var notesSection: some View {
-        // مربّع الملاحظات صغير (طلب المالك) — يكبر بالكتابة لا أكثر
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Text(notesLabel)
-                .font(DS.Font.plex(13, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $notes)
-                    .frame(minHeight: notesRequired ? 56 : 38)
-                    .focused($isDetailsFocused)
-                    .scrollContentBackground(.hidden)
-                    .dsFieldFont(14)
-                    // القارئ الصوتي: مربّع الكتابة بلا اسم — العنوان اسمه والتلميح وصفه
-                    .accessibilityLabel(notesLabel)
-                    .accessibilityHint(notesPlaceholder)
-
-                if notes.isEmpty {
-                    Text(notesPlaceholder)
-                        .font(DS.Font.plex(14))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.leading, DS.Spacing.xs)
-                        .lineLimit(1)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)   // يُقرأ تلميحاً لمربّع الكتابة
-                }
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(
-                        isDetailsFocused ? chromeInk.opacity(0.4) : DS.Color.textTertiary.opacity(0.15),
-                        lineWidth: isDetailsFocused ? 1.5 : 1
-                    )
-            )
-        }
-    }
-
-    /// الملاحظات مطلوبة في الحذف و«أخرى» — تأخذ ارتفاعاً أكبر قليلاً
+    /// الملاحظات مطلوبة في الحذف و«أخرى»
     private var notesRequired: Bool { action == .delete || action == .other }
 
     private var notesLabel: String {
@@ -514,39 +267,6 @@ struct TreeEditRequestView: View {
         default:
             return L10n.t("أي ملاحظات إضافية...", "Any additional notes...")
         }
-    }
-
-    // MARK: - Submit
-
-    /// «إرسال الطلب» و«إلغاء» جنب بعض، والإلغاء في الجهة اليسرى (طلب المالك)
-    private var submitButton: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Button { submit() } label: {
-                Group {
-                    if adminRequestVM.isLoading {
-                        ProgressView().tint(.white)
-                    } else {
-                        Label(L10n.t("إرسال الطلب", "Submit Request"), systemImage: "paperplane.fill")
-                            .font(DS.Font.plex(14, weight: .bold))
-                    }
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity).frame(height: 48)
-                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(canSubmit ? actionColor : actionColor.opacity(0.4)))
-            }
-            .disabled(!canSubmit)
-
-            Button { dismiss() } label: {
-                Text(L10n.t("إلغاء", "Cancel"))
-                    .font(DS.Font.plex(14, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                    .frame(maxWidth: .infinity).frame(height: 48)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.mutedBackground.opacity(0.8)))
-            }
-        }
-        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - Helpers

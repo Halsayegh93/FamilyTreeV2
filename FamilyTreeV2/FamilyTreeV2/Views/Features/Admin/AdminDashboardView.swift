@@ -62,6 +62,8 @@ struct AdminDashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
+    /// وضع العرض: «المعلّقة» بطاقتان جنباً إلى جنب، والأدوات بشبكة أعرض (`DS.Landscape`)
+    @Environment(\.dsLandscape) private var landscape
 
     /// مجموع كل الطلبات المعلّقة من مصادر مختلفة — يُستخدم لتشغيل إعادة الحساب لحظياً عند أي تغيير
     private var pendingRequestsSum: Int {
@@ -194,6 +196,7 @@ struct AdminDashboardView: View {
                             .padding(.horizontal, DS.Spacing.lg)
                             .padding(.top, DS.Spacing.md)
                             .padding(.bottom, DS.Spacing.xxxl)
+                            .dsTabBarClearance()   // أفقياً: آخر صفّ لا يختفي تحت شريط التبويبات العائم
                     }
                     // السحب للتحديث على الـ ScrollView نفسه (كان على المحتوى الداخلي فلا يعمل)
                     .refreshable { await loadAllAdminData(force: true) }
@@ -321,34 +324,21 @@ struct AdminDashboardView: View {
 
     // MARK: - مربّع «أفراد العائلة»
 
+    /// «أسلوب واحد» (دفعة 3-B): البطاقة الواحدة `.dsCard()` بعنوان قسم مجسّم — كانت بطاقة تدرّج يدوية
+    /// (قرص SF أبيض، دائرتان زخرفيتان، ظلّ ملوّن) بجانب بطاقات العُدّة
     private var familyHero: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "person.3.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color.white.opacity(0.18)))
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-                    .accessibilityHidden(true)
-                Text(L10n.t("أفراد العائلة", "Family members"))
-                    .font(DS.Font.plex(17, weight: .bold))
-                    .foregroundColor(.white)
-                Spacer(minLength: 0)
+                DSSectionTitle(title: L10n.t("أفراد العائلة", "Family members"), icon: "person.3.fill",
+                               tint: domainTint)
                 // الدور للمالك والمدير (المراقب يراه في «مجالك» — بلا تكرار)
                 if authVM.isAdmin, let guide = viewerGuide {
-                    Text(guide.title)
-                        .font(DS.Font.plex(11.5, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .frame(height: 24)
-                        .background(Capsule().fill(Color.white.opacity(0.18)))
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                    DSStatusChip(text: guide.title, tint: domainTint)
                 }
             }
 
             HStack(spacing: DS.Spacing.sm) {
-                GenderRingPanel(title: L10n.t("الرجال", "Men"), dot: DS.Color.primaryLight,
+                GenderRingPanel(title: L10n.t("الرجال", "Men"), dot: DS.Color.male,
                                 total: totalMembersCount, alive: aliveMembersCount,
                                 deceased: deceasedMembersCount, loading: isInitialLoading)
                 GenderRingPanel(title: L10n.t("النساء", "Women"), dot: DS.Color.female,
@@ -356,25 +346,7 @@ struct AdminDashboardView: View {
                                 deceased: womenDeceasedCount, loading: isInitialLoading)
             }
         }
-        .padding(DS.Spacing.lg)
-        .background(
-            ZStack {
-                // طرفان مصمتان (الأساسي ← الأفتح) — النص الأبيض الصغير يبقى ≥ ٤٫٥:١
-                LinearGradient(colors: [domainTint, domainTint.dsHeroLight],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                // دائرتان ناعمتان للعمق (ثابتتان — بلا حركة)
-                Circle().fill(Color.white.opacity(0.07))
-                    .frame(width: 190, height: 190)
-                    .offset(x: 130, y: -70)
-                Circle().fill(Color.white.opacity(0.05))
-                    .frame(width: 140, height: 140)
-                    .offset(x: -140, y: 80)
-                if colorScheme == .dark { Color.black.opacity(0.3) }
-            }
-            .accessibilityHidden(true)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .shadow(color: domainTint.opacity(colorScheme == .dark ? 0 : 0.16), radius: 10, x: 0, y: 5)
+        .dsCard(padding: DS.Spacing.md)
     }
 
     // MARK: - الأقسام
@@ -457,7 +429,7 @@ struct AdminDashboardView: View {
         ZStack(alignment: .top) {
             switch effectiveSection {
             case .pending:
-                VStack(spacing: DS.Spacing.md) {
+                AdaptiveCardStack(spacing: DS.Spacing.md) {
                     reviewCard
                         .dsCardCascade(0, appeared: tilesAppeared)
                     messagesCard
@@ -483,10 +455,10 @@ struct AdminDashboardView: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     ForEach(systemGroups) { group in
                         VStack(alignment: .leading, spacing: 0) {
-                            DSSectionHeader(title: group.title, icon: group.icon,
-                                            trailing: group.trailing,
-                                            iconColor: group.tint.dsReadableGlyph)
-                                .accessibilityAddTraits(.isHeader)
+                            DSSectionTitle(title: group.title, icon: group.icon, tint: group.tint,
+                                           trailing: group.trailing)
+                                .padding(.top, DS.Spacing.md)
+                                .padding(.bottom, DS.Spacing.sm)
                                 .dsCardCascade(group.start, appeared: tilesAppeared)
                             tilesGrid(group.tiles, columns: 2, startIndex: group.start + 1)
                         }
@@ -551,34 +523,32 @@ struct AdminDashboardView: View {
         return NavigationLink { destinationView(.requests) } label: {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 HStack(spacing: DS.Spacing.md) {
-                    SysGradientIcon(name: "tray.full.fill", tint: tint, size: 46)
-                    VStack(alignment: .leading, spacing: 2) {
+                    DSStateIcon("tray.full.fill", tint: tint, size: DS.Icon.tile)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(L10n.t("طلبات المراجعة", "Review requests"))
-                            .font(DS.Font.plex(16, weight: .bold))
+                            .dsFont(.headline)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(reviews > 0 ? L10n.t("بانتظار قرارك", "Awaiting your decision")
                                          : L10n.t("لا شيء بانتظارك", "Nothing waiting"))
-                            .dsFieldFont(12)
+                            .dsFieldFont(.subtitle)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: DS.Spacing.sm)
                     statusBadge(alert: reviews, loading: isInitialLoading)
-                    SysChevron()
+                    DSChevron()
                 }
                 let chips = reviewChips
                 if !chips.isEmpty {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 6)],
-                              alignment: .leading, spacing: 6) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: DS.Spacing.xsm)],
+                              alignment: .leading, spacing: DS.Spacing.xsm) {
                         ForEach(chips) { chip in reviewChipView(chip) }
                     }
                 }
             }
-            .padding(DS.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(cardBackground(tint))
-            .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL — قبل الإطار ليبقى إطار التنبيه الأحمر ظاهراً
+            .dsCard(padding: DS.Spacing.md)
             .overlay(cardBorder(highlight: reviews > 0))
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .contentShape(DSBox.sectionShape)
         }
         .buttonStyle(DSPressStyle())
         .accessibilityLabel(reviews > 0
@@ -588,23 +558,23 @@ struct AdminDashboardView: View {
 
     private func reviewChipView(_ chip: ReviewChip) -> some View {
         let color = chip.tint.dsReadableGlyph
-        return HStack(spacing: 5) {
+        return HStack(spacing: DS.Spacing.xs) {
             Image(systemName: chip.icon)
-                .font(.system(size: 10.5, weight: .bold))
+                .dsGlyph(DS.Glyph.xs)
                 .accessibilityHidden(true)
             Text(chip.label)
-                .font(DS.Font.plex(11.5, weight: .semibold))
+                .dsFont(.caption)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            Spacer(minLength: 2)
+            Spacer(minLength: DS.Spacing.xxs)
             Text("\(chip.count)")
-                .font(DS.Font.plex(12, weight: .bold))
+                .dsFont(.chip)
                 .monospacedDigit()
         }
         .foregroundColor(color)
-        .padding(.horizontal, 9)
-        .frame(height: 30)
-        .background(Capsule().fill(color.opacity(0.12)))
+        .padding(.horizontal, DS.Spacing.sm)
+        .frame(height: DSBox.chipHeightCompact)
+        .background(Capsule().fill(color.opacity(DS.Opacity.tintFill)))
         .accessibilityElement(children: .combine)
     }
 
@@ -617,25 +587,23 @@ struct AdminDashboardView: View {
             : L10n.t("لا جديد", "All caught up")
         return NavigationLink { destinationView(.inbox) } label: {
             HStack(spacing: DS.Spacing.md) {
-                SysGradientIcon(name: "bubble.left.and.bubble.right.fill", tint: tint, size: 46)
-                VStack(alignment: .leading, spacing: 2) {
+                DSStateIcon("bubble.left.and.bubble.right.fill", tint: tint, size: DS.Icon.tile)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(L10n.t("الرسائل", "Messages"))
-                        .font(DS.Font.plex(16, weight: .bold))
+                        .dsFont(.headline)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(caption)
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: DS.Spacing.sm)
                 statusBadge(alert: unread, loading: false)
-                SysChevron()
+                DSChevron()
             }
-            .padding(DS.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(cardBackground(tint))
-            .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL — قبل الإطار ليبقى إطار التنبيه الأحمر ظاهراً
+            .dsCard(padding: DS.Spacing.md)
             .overlay(cardBorder(highlight: unread > 0))
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .contentShape(DSBox.sectionShape)
         }
         .buttonStyle(DSPressStyle())
         .accessibilityLabel(L10n.t("الرسائل، \(caption)", "Messages, \(caption)"))
@@ -645,21 +613,25 @@ struct AdminDashboardView: View {
     @ViewBuilder
     private func statusBadge(alert: Int, loading: Bool) -> some View {
         if loading {
-            ProgressView().scaleEffect(0.8)
+            // قبل وصول الأرقام «—» هادئة (كصفّ الأرقام) بدل دوّارة
+            Text("—")
+                .dsFont(.chip)
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityHidden(true)
         } else if alert > 0 {
             // أصغر (طلب المالك ٢٠٢٦-١٠-٠٥ «الرقم الأحمر اصغر»)
             Text(Self.countText(alert))
-                .font(DS.Font.plex(12, weight: .bold))
+                .dsFont(.chip)
                 .monospacedDigit()
-                .foregroundColor(.white)
-                .padding(.horizontal, 7)
-                .frame(minWidth: 24, minHeight: 20)
+                .foregroundColor(DS.Color.textOnPrimary)
+                .padding(.horizontal, DS.Spacing.xsm)
+                .frame(minWidth: DS.Spacing.xxl, minHeight: DS.Icon.countBadge)
                 .background(Capsule().fill(DS.Color.error))
                 .contentTransition(.numericText())
                 .accessibilityHidden(true)
         } else {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 22, weight: .semibold))
+                .dsGlyph(DS.Glyph.xxl, weight: .semibold)
                 .foregroundColor(DS.Color.success)
                 .accessibilityHidden(true)
         }
@@ -697,10 +669,10 @@ struct AdminDashboardView: View {
         let totalUsers = usageStats.map { $0.active + $0.idle + $0.loginNoDevice } ?? 0
         return VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.md) {
-                SysGradientIcon(name: "iphone.gen3", tint: DS.Color.success, size: 44)
-                VStack(alignment: .leading, spacing: 2) {
+                DSStateIcon("iphone.gen3", tint: DS.Color.success, size: DS.Icon.tile)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(L10n.t("استخدام التطبيق", "App usage"))
-                        .font(DS.Font.plex(16, weight: .bold))
+                        .dsFont(.headline)
                         .foregroundColor(DS.Color.fieldLabel)
                     // «إجمالي المستخدمين» هنا وحده (كان في صفحة «إعدادات النظام» الوسطية)
                     Text(total > 0
@@ -708,7 +680,7 @@ struct AdminDashboardView: View {
                                   "\(totalUsers) users · of \(total) living members")
                          : isInitialLoading ? L10n.t("جارٍ التحميل…", "Loading…")
                          : L10n.t("غير متاح الآن — اسحب للتحديث", "Unavailable — pull to refresh"))
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -716,35 +688,32 @@ struct AdminDashboardView: View {
                 Spacer(minLength: 0)
             }
 
-            UsageBar(segments: segments.map { ($0.value, $0.color) }, total: total)
-                .frame(height: 12)
-                .accessibilityHidden(true)
+            DSDistributionBar(segments: segments.map { .init(id: $0.id, value: $0.value, tint: $0.color) },
+                              height: DS.Spacing.md)
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: DS.Spacing.sm),
                                 GridItem(.flexible(), spacing: DS.Spacing.sm)],
                       spacing: DS.Spacing.sm) {
                 ForEach(segments) { seg in
                     NavigationLink { destinationView(.usage(seg.category)) } label: {
-                        HStack(spacing: 6) {
-                            Circle().fill(seg.color).frame(width: 9, height: 9)
+                        HStack(spacing: DS.Spacing.xsm) {
+                            Circle().fill(seg.color).frame(width: DS.Icon.legendDot, height: DS.Icon.legendDot)
                                 .accessibilityHidden(true)
                             Text(seg.label)
-                                .dsFieldFont(12.5, weight: .semibold)
+                                .dsFieldFont(.sectionTitle)
                                 .foregroundColor(DS.Color.fieldLabel)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
-                            Spacer(minLength: 2)
+                            Spacer(minLength: DS.Spacing.xxs)
                             Text("\(seg.value)")
-                                .font(DS.Font.plex(14, weight: .bold))
+                                .dsFont(.button)
                                 .monospacedDigit()
                                 .foregroundColor(seg.color.dsReadableGlyph)
                                 .contentTransition(.numericText())
-                            SysChevron()
+                            DSChevron()
                         }
-                        .padding(.horizontal, DS.Spacing.sm + 2)
-                        .frame(height: 38)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.background))
+                        .frame(minHeight: DSBox.fieldMinHeight)
+                        .dsRowBox()
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(DSPressStyle())
@@ -752,11 +721,8 @@ struct AdminDashboardView: View {
                 }
             }
         }
-        .padding(DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackground(DS.Color.success))
-        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL — قبل الإطار ليبقى إطار التنبيه الأحمر ظاهراً
-        .overlay(cardBorder(highlight: false))
+        .dsCard(padding: DS.Spacing.md)
     }
 
     /// مربّعات صغيرة تحت «استخدام التطبيق» — بلا أرقام مكررة (عدد الأعضاء في المربّع العلوي)
@@ -912,7 +878,9 @@ struct AdminDashboardView: View {
     }
 
     private func tilesGrid(_ tiles: [DashTile], columns: Int, startIndex: Int) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: columns),
+        LazyVGrid(columns: landscape
+                    ? [GridItem(.adaptive(minimum: DS.Landscape.tileMinWidth), spacing: DS.Spacing.sm)]
+                    : Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: columns),
                   spacing: DS.Spacing.sm) {
             ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
                 dashTile(tile, compact: columns > 2)
@@ -928,42 +896,41 @@ struct AdminDashboardView: View {
         NavigationLink {
             destinationView(tile.target)
         } label: {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 HStack(alignment: .top) {
-                    TrialArt(make: { ArtDispatch.dashTileArt($0, icon: tile.icon, tint: tile.tint) }) {   // TMP-ART-TRIAL
-                        SysGradientIcon(name: tile.icon, tint: tile.tint, size: compact ? 38 : 42)
-                    }
-                    .frame(width: compact ? 38 : 42, height: compact ? 38 : 42)
-                    Spacer(minLength: 2)
+                    FT5STrial.dashTileArt(icon: tile.icon, tint: tile.tint)
+                    .frame(width: compact ? DS.Icon.sizeSm : DS.Icon.tile, height: compact ? DS.Icon.sizeSm : DS.Icon.tile)
+                    Spacer(minLength: DS.Spacing.xxs)
                     if tile.alert > 0 {
                         Text(Self.countText(tile.alert))
-                            .font(DS.Font.plex(12, weight: .bold))
+                            .dsFont(.chip)
                             .monospacedDigit()
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 7)
-                            .frame(minWidth: 24, minHeight: 21)
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .padding(.horizontal, DS.Spacing.xsm)
+                            .frame(minWidth: DS.Spacing.xxl, minHeight: DS.Icon.countBadge)
                             .background(Capsule().fill(DS.Color.error))
                             .accessibilityHidden(true)
                     }
                 }
                 Spacer(minLength: DS.Spacing.xs)
                 Text(tile.title)
-                    .font(DS.Font.plex(compact ? 13 : 14.5, weight: .bold))
+                    .dsFont(compact ? .rowTitle : .headline)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(rowTextLines)
                     .minimumScaleFactor(0.75)
                 Text(tile.caption)
-                    .font(DS.Font.plex(compact ? 10.5 : 11.5))
+                    .dsFont(compact ? .footnote : .subtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(rowTextLines)
                     .minimumScaleFactor(0.75)
             }
-            .padding(compact ? DS.Spacing.sm + 2 : DS.Spacing.md)
-            .frame(maxWidth: .infinity, minHeight: compact ? 108 : 116, alignment: .topLeading)
-            .background(cardBackground(tile.tint))
-            .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL — قبل الإطار ليبقى إطار التنبيه الأحمر ظاهراً
+            .frame(maxWidth: .infinity,
+                   minHeight: (compact ? DSBox.dashTileHeightCompact : DSBox.dashTileHeight)
+                       - 2 * (compact ? DS.Spacing.sm : DS.Spacing.md),
+                   alignment: .topLeading)
+            .dsCard(padding: compact ? DS.Spacing.sm : DS.Spacing.md)
             .overlay(cardBorder(highlight: tile.alert > 0))
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .contentShape(DSBox.sectionShape)
         }
         .buttonStyle(DSPressStyle())
         .accessibilityLabel(tile.alert > 0
@@ -972,22 +939,15 @@ struct AdminDashboardView: View {
         .accessibilityHint(tile.caption)
     }
 
-    // MARK: - خلفية وإطار البطاقات (لمسة لون القسم من الأعلى)
+    // MARK: - إطار التنبيه فوق البطاقة الواحدة
 
-    private func cardBackground(_ tint: Color) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .fill(DS.Color.surface)
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .fill(LinearGradient(colors: [tint.dsReadableGlyph.opacity(0.12), .clear],
-                                     startPoint: .top, endPoint: .bottom))
-        }
-    }
-
+    /// البطاقة نفسها `.dsCard()`؛ وما ينتظرك يُحاط بإطار أحمر خفيف (نفس زوايا البطاقة)
+    @ViewBuilder
     private func cardBorder(highlight: Bool) -> some View {
-        RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-            .strokeBorder(highlight ? DS.Color.error.opacity(0.30) : DS.Color.textTertiary.opacity(0.12),
-                          lineWidth: 1)
+        if highlight {
+            DSBox.sectionShape
+                .strokeBorder(DS.Color.error.opacity(DS.Opacity.tintStroke), lineWidth: DS.Card.strokeWidth)
+        }
     }
 
     private static func countText(_ n: Int) -> String { n > 9999 ? "9999+" : "\(n)" }
@@ -1003,28 +963,28 @@ struct AdminDashboardView: View {
                 }
             } label: {
                 HStack(spacing: DS.Spacing.md) {
-                    SysGradientIcon(name: guide.icon, tint: domainTint, size: 34)
-                    VStack(alignment: .leading, spacing: 1) {
+                    DSStateIcon(guide.icon, tint: domainTint, size: DS.Icon.rowCompact)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(L10n.t("نطاق الصلاحيات · \(guide.title)", "Your scope · \(guide.title)"))
-                            .dsFieldFont(13, weight: .bold)
+                            .dsFieldFont(.rowTitleCompact)
                             .foregroundColor(DS.Color.fieldLabel)
                             .lineLimit(rowTextLines)
                         Text(guide.mandate)
-                            .dsFieldFont(11.5)
+                            .dsFieldFont(.footnote)
                             .foregroundColor(DS.Color.fieldValue)
                             .lineLimit(rowTextLines)
                             .minimumScaleFactor(0.85)
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
+                        .dsGlyph(DS.Glyph.xs)
                         .foregroundColor(DS.Color.textTertiary)
                         .rotationEffect(.degrees(showFullScope ? 180 : 0))
                         .accessibilityHidden(true)
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.xs)
-                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget + DS.Spacing.sm, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(DashRowPressStyle())
@@ -1036,7 +996,7 @@ struct AdminDashboardView: View {
 
             if showFullScope {
                 Divider().padding(.horizontal, DS.Spacing.md)
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
                     ForEach(guide.can, id: \.self) { text in
                         scopeLine(text, allowed: true)
                     }
@@ -1049,21 +1009,20 @@ struct AdminDashboardView: View {
                 .transition(.opacity)
             }
         }
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        // ظلّ الضغط داخل الزوايا، ثم البطاقة الواحدة
+        .clipShape(DSBox.sectionShape)
+        .dsCard(padding: nil)
     }
 
     private func scopeLine(_ text: String, allowed: Bool) -> some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(alignment: .top, spacing: DS.Spacing.xsm) {
             Image(systemName: allowed ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.system(size: 11.5, weight: .bold))
+                .dsGlyph(DS.Glyph.smCompact)
                 .foregroundColor(allowed ? DS.Color.success : DS.Color.textTertiary)
-                .padding(.top, 2)
+                .padding(.top, DS.Spacing.xxs)
                 .accessibilityHidden(true)
             Text(text)
-                .dsFieldFont(12, weight: .medium)
+                .dsFieldFont(.subtitle)
                 .foregroundColor(allowed ? DS.Color.fieldLabel : DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -1080,12 +1039,12 @@ struct AdminDashboardView: View {
                           tint: DS.Color.error,
                           index: 1) {
             if !authVM.notificationsFeatureAvailable {
-                SysRow(icon: "bell.slash.fill", tint: DS.Color.error,
+                DSRow(icon: "bell.slash.fill", tint: DS.Color.error,
                        title: L10n.t("جدول notifications غير موجود، الإشعارات معطلة.",
                                      "Notifications table missing, feature disabled."))
             }
             if !authVM.newsApprovalFeatureAvailable {
-                SysRow(icon: "newspaper.fill", tint: DS.Color.warning,
+                DSRow(icon: "newspaper.fill", tint: DS.Color.warning,
                        title: L10n.t("عمود news.approval_status غير موجود، موافقات الأخبار معطلة.",
                                      "News approval_status column missing, approvals disabled."))
             }
@@ -1093,9 +1052,8 @@ struct AdminDashboardView: View {
     }
 }
 
-/// ضغط الصف: تظليل خفيف لكامل الصف (بدل التصغير) — مثل صفوف قوائم أبل، بلا حركة
-/// حلقة جنس في مربّع «أفراد العائلة»: نسبة الأحياء حلقةً بيضاء والعدد في وسطها،
-/// والأحياء والمتوفون بجانبها — تمتلئ الحلقة بهدوء عند التحميل (بلا حركة مع «تقليل الحركة»)
+/// حلقة جنس في مربّع «أفراد العائلة»: نسبة الأحياء حلقةً بلون المعنى (`DSRing`) والعدد في وسطها،
+/// والأحياء والمتوفون بجانبها، في صندوق صفّ (`.dsRowBox()`) — تمتلئ بهدوء حين تصل الأرقام
 private struct GenderRingPanel: View {
     let title: String
     let dot: Color
@@ -1103,217 +1061,59 @@ private struct GenderRingPanel: View {
     let alive: Int
     let deceased: Int
     let loading: Bool
-    @State private var shown = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var share: Double { total > 0 ? Double(alive) / Double(total) : 0 }
+    private var share: Double { total > 0 && !loading ? Double(alive) / Double(total) : 0 }
 
     var body: some View {
+        let ink = dot.dsReadableGlyph
         HStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle().stroke(Color.white.opacity(0.20), lineWidth: 5)
-                Circle()
-                    .trim(from: 0, to: shown && !loading ? share : 0)
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    // تمتلئ بهدوء حين تصل الأرقام — «تقليل الحركة»: مباشرة
-                    .animation(reduceMotion ? nil : .spring(response: 0.9, dampingFraction: 0.85).delay(0.1),
-                               value: shown && !loading)
+            DSRing(progress: share, tint: ink, lineWidth: DS.Spacing.xs + 1, size: DS.Icon.sizeLg) {
                 Text(loading ? "—" : "\(total)")
-                    .font(DS.Font.plex(15, weight: .bold))
+                    .dsFont(.headline)
                     .monospacedDigit()
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, DS.Spacing.xsm)
                     .contentTransition(.numericText())
             }
-            .frame(width: 58, height: 58)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Circle().fill(dot).frame(width: 7, height: 7)
-                    Text(title)
-                        .font(DS.Font.plex(13, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                }
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(title)
+                    .dsFont(.rowTitleCompact)
+                    .foregroundColor(ink)
+                    .lineLimit(1)
                 line(L10n.t("أحياء", "Alive"), alive)
                 line(L10n.t("متوفون", "Deceased"), deceased)
             }
             Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.sm + 2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.13),
-                    in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(Color.white.opacity(0.16), lineWidth: 1))
-        .onAppear { DispatchQueue.main.async { shown = true } }
+        .dsRowBox()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.t("\(title): \(total)، أحياء \(alive)، متوفون \(deceased)",
                                    "\(title): \(total), alive \(alive), deceased \(deceased)"))
     }
 
     private func line(_ label: String, _ value: Int) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DS.Spacing.xs) {
             Text(label)
-                .font(DS.Font.plex(11, weight: .medium))
-                .foregroundColor(.white.opacity(0.78))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textSecondary)
             Text(loading ? "—" : "\(value)")
-                .font(DS.Font.plex(12, weight: .bold))
+                .dsFont(.chip)
                 .monospacedDigit()
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textPrimary)
         }
         .lineLimit(1)
         .minimumScaleFactor(0.75)
     }
-
 }
 
-/// شريط «استخدام التطبيق»: قطعة لكل فئة بعرض نسبتها — يمتدّ بهدوء عند الظهور
-private struct UsageBar: View {
-    let segments: [(Int, Color)]
-    let total: Int
-    @State private var grown = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        GeometryReader { geo in
-            let visible = segments.filter { $0.0 > 0 }
-            let gaps = CGFloat(max(visible.count - 1, 0)) * 3
-            let width = max(geo.size.width - gaps, 0)
-            HStack(spacing: 3) {
-                if total > 0 {
-                    ForEach(Array(visible.enumerated()), id: \.offset) { _, seg in
-                        Capsule()
-                            .fill(seg.1)
-                            .frame(width: max(6, width * CGFloat(seg.0) / CGFloat(total)) * (grown ? 1 : 0))
-                    }
-                } else {
-                    Capsule().fill(DS.Color.textTertiary.opacity(0.15))
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .onAppear {
-            if reduceMotion { grown = true; return }
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.85).delay(0.2)) { grown = true }
-        }
-    }
-}
-
+/// ضغط الصف: تظليل خفيف لكامل الصف (بدل التصغير) — مثل صفوف قوائم أبل، بلا حركة
 private struct DashRowPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(DS.Color.textTertiary.opacity(configuration.isPressed ? 0.12 : 0))
-    }
-}
-
-// MARK: - بلاطة قسم
-
-/// بلاطة قسم إداري — تُستعمل في صفحات الإدارة الداخلية (الأعضاء، الإحصائيات، حالة الإشعارات…).
-/// الكاملة: أيقونة متدرّجة بلون المجال + عنوان + وصف + رقم حيّ + شارة حمراء لما ينتظر.
-/// المضغوطة (إعدادات النظام، ثلاثة أعمدة — طلب المالك): أيقونة + عنوان فقط.
-struct AdminTile<Destination: View>: View {
-    let title: String
-    let subtitle: String  // يُستخدم كوصف وصولية فقط في العرض المضغوط
-    let icon: String
-    let color: Color
-    var badge: Int? = nil
-    /// سطر رقم حيّ صغير أسفل البلاطة (مثل «١٢٣ عضو») — nil = بلا
-    var detail: String? = nil
-    /// أصغر — لشبكة «إعدادات النظام» بثلاثة أعمدة (طلب المالك)
-    var compact: Bool = false
-    /// ما يقوله القارئ الصوتي عن الشارة — nil = «N بانتظارك» (للشارات التي ليست طلبات، مثل عدد الفريق)
-    var badgeSpoken: String? = nil
-    @ViewBuilder let destination: () -> Destination
-
-    private var hasBadge: Bool { (badge ?? 0) > 0 }
-
-    var body: some View {
-        NavigationLink(destination: destination()) {
-            if compact { compactLabel } else { fullLabel }
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(accessibilityText)
-    }
-
-    private var accessibilityText: String {
-        var parts = [title, subtitle]
-        if let badge, badge > 0 { parts.append(badgeSpoken ?? L10n.t("\(badge) بانتظار الإجراء", "\(badge) pending")) }
-        if let detail, !compact { parts.append(detail) }
-        return parts.joined(separator: "، ")
-    }
-
-    /// بلاطة أبسط (طلب المالك): أيقونة + العنوان + رقم صغير، والشارة الحمراء إن وُجدت — سطر واحد
-    private var fullLabel: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            SysGradientIcon(name: icon, tint: color, size: 34)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .dsFieldFont(13.5, weight: .bold)
-                    .foregroundColor(DS.Color.fieldLabel)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                if let detail {
-                    Text(detail)
-                        .dsFieldFont(11, weight: .semibold)
-                        .foregroundColor(DS.Color.fieldValue)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-            }
-            Spacer(minLength: 0)
-            if hasBadge { badgeView }
-        }
-        .padding(.horizontal, DS.Spacing.sm + 2)
-        .padding(.vertical, DS.Spacing.sm + 2)
-        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-    }
-
-    private var compactLabel: some View {
-        VStack(spacing: DS.Spacing.xs + 2) {
-            SysGradientIcon(name: icon, tint: color, size: 38)
-                .overlay(alignment: .topTrailing) {
-                    if hasBadge {
-                        badgeView
-                            .fixedSize()
-                            .offset(x: L10n.isArabic ? -12 : 12, y: -7)
-                    }
-                }
-            Text(title)
-                .dsFieldFont(11.5, weight: .bold)
-                .foregroundColor(DS.Color.fieldLabel)
-                .multilineTextAlignment(.center)
-                .lineLimit(2, reservesSpace: true)
-                .minimumScaleFactor(0.8)
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-        .padding(.horizontal, DS.Spacing.xs)
-        .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-    }
-
-    /// الشارة حمراء دائماً — لون المربّع كان يجعل بعضها باهتاً فلا يُقرأ كتنبيه يحتاج إجراءً
-    private var badgeView: some View {
-        let value = badge ?? 0
-        return Text(value > 99 ? "99+" : "\(value)")
-            .font(DS.Font.plex(11, weight: .bold))
-            .monospacedDigit()
-            .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(Capsule().fill(DS.Color.error))
-            .accessibilityHidden(true)
+            .background(DS.Color.textTertiary.opacity(configuration.isPressed ? DS.Opacity.tintFill : 0))
     }
 }
 

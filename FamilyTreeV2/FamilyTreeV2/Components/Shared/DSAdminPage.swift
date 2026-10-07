@@ -1,122 +1,24 @@
 import SwiftUI
 
-// MARK: - صفحات الإدارة بتصميم المربّعات الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧)
+// MARK: - صفحات الإدارة بتصميم المربّعات الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧، «أسلوب واحد» ٢٠٢٦-١٠-٠٧)
 //
-// لغة واحدة لكل صفحات الإدارة (لوحة الإدارة، الطلبات، الأعضاء، الرسائل، السجل…):
-//   • `DSPageHero` — بطاقة رأس ملوّنة أعلى الصفحة (نفس رأس المربّعات: تدرّج، أيقونة
-//     زجاجية، علامة مائية) مع أرقام سريعة `DSHeroStat`.
+// لغة واحدة لكل صفحات الإدارة (الطلبات، الأعضاء، الرسائل، السجل، النظام…):
+//   • الرأس: الرأس الملوّن الموحّد `.dsSubPageHeader(…)` (DSSubPageHeader.swift) — كان شريط النظام الأبيض
+//     + بطاقة رأس `DSPageHero` (حُذفت في دفعة 3-B بعد أن صار لا يستعملها أحد).
+//   • `DSHeroStat` + `DSStatsRow` (DSStateKit) — صفّ الأرقام السريعة تحت الرأس.
 //   • `DSStatTile` — بطاقة رقم حيّ (قابلة للضغط) لشبكة الأرقام.
 //   • `DSSearchField` — حقل بحث بنفس إطار حقول المربّعات.
-//   • `DSFilterChips` — شريط فلاتر أفقي مع العدد، والمختار ممتلئ بلون القسم.
+//   • `DSFilterChips` — شريط فلاتر أفقي مع العدد، والمختار ممتلئ بلون القسم (بارتفاع الشريحة الواحدة).
 // والمحتوى تحتها بأقسام `DSComposerSection` وصفوف `.dsRowBox()` — مثل المربّعات تماماً.
-// شريط التنقّل يبقى شريط النظام (رجوع أبل المعتاد) — لا نستبدله.
+// كل المقاسات والخطوط من DesignSystem.swift (`DS`، `DSBox`، `DS.TextRole`).
 
-// MARK: - رقم داخل بطاقة الرأس
+// MARK: - رقم في صفّ الأرقام
 
 struct DSHeroStat: Identifiable {
     let id = UUID()
     let value: String
     let label: String
     var icon: String? = nil
-}
-
-// MARK: - بطاقة رأس الصفحة
-
-struct DSPageHero: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    var tint: Color = DS.Color.actionNavy
-    var stats: [DSHeroStat] = []
-    @State private var appeared = false
-    @State private var drift = false
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dsSection) private var section
-
-    var body: some View {
-        // الكحلي (إطار الصفحة) ← لون القسم؛ ألوان المجالات (أخضر الأعضاء، ذهبي المحتوى…) كما هي
-        let tint = self.tint.dsChromeFill(in: section)
-        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.md) {
-                // TMP-ART-TRIAL: «مجسّمات» — المجسّم أيقونة البطاقة (بلا تكرار)
-                TrialHeaderIcon(icon: icon, tint: tint) {
-                    ZStack {
-                        Circle().fill(Color.white.opacity(0.18))
-                        Circle().strokeBorder(Color.white.opacity(0.38), lineWidth: 1)
-                        Image(systemName: icon)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    .frame(width: 48, height: 48)
-                }
-                .scaleEffect(appeared || reduceMotion ? 1 : 0.5)
-                .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(DS.Font.plex(19, weight: .bold))
-                        .foregroundColor(.white)
-                    Text(subtitle)
-                        .font(DS.Font.plex(12))
-                        .foregroundColor(.white.opacity(0.86))
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }
-
-            if !stats.isEmpty {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(stats) { stat in
-                        VStack(spacing: 2) {
-                            HStack(spacing: 4) {
-                                if let icon = stat.icon {
-                                    Image(systemName: icon)
-                                        .font(.system(size: 11, weight: .bold))
-                                        .accessibilityHidden(true)
-                                }
-                                Text(stat.value)
-                                    .font(DS.Font.plex(17, weight: .bold))
-                                    .monospacedDigit()
-                            }
-                            .foregroundColor(.white)
-                            Text(stat.label)
-                                .font(DS.Font.plex(10.5, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.82))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DS.Spacing.sm)
-                        .background(Color.white.opacity(0.14),
-                                    in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        .accessibilityElement(children: .combine)
-                    }
-                }
-            }
-        }
-        .padding(DS.Spacing.lg)
-        .background(
-            ZStack {
-                // طرفان مصمتان (الأساسي ← الأفتح) — الوصف الأبيض ١٢ نقطة يبقى ≥ ٤٫٥:١
-                LinearGradient(colors: [tint, tint.dsHeroLight],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                if colorScheme == .dark { Color.black.opacity(0.3) }
-                // أبسط (طلب المالك): بلا علامة مائية ولا لمعة ولا حركة
-                // TMP-ART-TRIAL: رسم الاتجاه المختار في الطرف الآخر
-                TrialArt(make: { ArtDispatch.pageHeroArt($0, icon: icon, tint: tint) }) { EmptyView() }
-            }
-            .accessibilityHidden(true)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .shadow(color: tint.opacity(colorScheme == .dark ? 0 : 0.14), radius: 8, x: 0, y: 4)
-        .accessibilityElement(children: .contain)
-        .onAppear {
-            if reduceMotion { appeared = true; return }
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.65).delay(0.05)) { appeared = true }
-        }
-    }
 }
 
 // MARK: - بطاقة رقم حيّ
@@ -153,31 +55,28 @@ struct DSStatTile: View {
                 if let badge {
                     let glyph = tint.dsChrome(in: section).dsReadableGlyph
                     Text(badge)
-                        .font(DS.Font.plex(10.5, weight: .bold))
+                        .dsFont(.badgeCompact)
                         .foregroundColor(glyph)
                         .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 2)
-                        .background(glyph.opacity(0.14), in: Capsule())
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .background(glyph.opacity(DS.Opacity.tintFill), in: Capsule())
                 }
             }
             Text(value)
-                .font(DS.Font.plex(22, weight: .bold))
+                .dsFont(.emptyTitle)
                 .foregroundColor(DS.Color.fieldLabel)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             Text(label)
-                .dsFieldFont(12, weight: .semibold)
+                .dsFieldFont(.chip)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .padding(DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
-        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
+        // البطاقة الواحدة (`.dsCard`) — كانت سطحاً وإطاراً وزوايا ١٦ يدوية
+        .dsCard(padding: DS.Spacing.md)
         .contentShape(Rectangle())
     }
 }
@@ -197,11 +96,11 @@ struct DSSearchField: View {
         let tint = self.tint.dsChrome(in: section).dsReadableGlyph
         return HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
+                .dsGlyph(DS.Glyph.md, weight: .semibold)
                 .foregroundColor(focused ? tint : DS.Color.textTertiary)
                 .accessibilityHidden(true)
             TextField(placeholder, text: $text)
-                .dsFieldFont(14.5)
+                .dsFieldFont(.body)
                 .foregroundColor(DS.Color.textPrimary)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -209,23 +108,19 @@ struct DSSearchField: View {
             if !text.isEmpty {
                 Button { text = "" } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
+                        .dsGlyph(DS.Glyph.lgCompact, weight: .regular)
                         .foregroundColor(DS.Color.textTertiary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.vertical, -8)
+                .padding(.vertical, -DS.Spacing.sm)
                 .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
             }
         }
         .padding(.horizontal, DS.Spacing.md)
-        .frame(minHeight: 46)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(focused ? tint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
-                          lineWidth: focused ? 1.5 : 1))
-        .animation(.easeInOut(duration: 0.2), value: focused)
+        .frame(minHeight: DSBox.searchHeight)
+        .dsFocusFieldBox(focused: focused, tint: tint, fill: DS.Color.surface)
     }
 }
 
@@ -238,7 +133,7 @@ struct DSFilterOption<ID: Hashable>: Identifiable {
     var count: Int? = nil
 }
 
-/// فلاتر أفقية: المختار ممتلئ بلون القسم، والباقي بإطار خفيف — مساحة ضغط ٤٤
+/// فلاتر أفقية: المختار ممتلئ بلون القسم، والباقي بإطار خفيف — بارتفاع الشريحة الواحدة ومساحة ضغط ٤٤
 struct DSFilterChips<ID: Hashable>: View {
     let options: [DSFilterOption<ID>]
     @Binding var selection: ID
@@ -261,40 +156,76 @@ struct DSFilterChips<ID: Hashable>: View {
                             selection = option.id
                         }
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: DS.Spacing.xs) {
                             if let icon = option.icon {
-                                Image(systemName: icon).font(.system(size: 11.5, weight: .bold))
+                                Image(dsSymbol: icon).dsGlyph(DS.Glyph.smCompact)
                             }
-                            Text(option.title).font(DS.Font.plex(12.5, weight: .bold))
+                            Text(option.title).dsFont(.sectionTitle)
                             if let count = option.count {
                                 Text("\(count)")
-                                    .font(DS.Font.plex(11, weight: .bold))
+                                    .dsFont(.badge)
                                     .monospacedDigit()
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 1)
-                                    .background((selected ? Color.white : tint).opacity(selected ? 0.22 : 0.12),
+                                    .padding(.horizontal, DS.Spacing.xsm)
+                                    .padding(.vertical, DS.Border.width)
+                                    .background((selected ? DS.Color.textOnPrimary : tint)
+                                                    .opacity(selected ? DS.Opacity.tintFillStrong : DS.Opacity.tintFill),
                                                 in: Capsule())
                             }
                         }
-                        .foregroundColor(selected ? .white : DS.Color.textSecondary)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .frame(height: 36)
+                        .foregroundColor(selected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+                        .padding(.horizontal, DSBox.chipPadding)
+                        // ارتفاع الشريحة الواحدة (`DSBox.chipHeight`) — كان ٣٦
+                        .frame(height: DSBox.chipHeight)
                         .background {
                             if selected {
                                 Capsule().fill(DSActionFill.style())
                                     .matchedGeometryEffect(id: "chip", in: ns)
                             } else {
-                                Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.3), lineWidth: 1)
+                                Capsule().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke),
+                                                       lineWidth: DS.Border.width)
                             }
                         }
-                        .padding(.vertical, 4)   // مساحة ضغط ٤٤
+                        .padding(.vertical, (DS.Icon.tapTarget - DSBox.chipHeight) / 2)   // مساحة ضغط ٤٤
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 1)
+            .padding(.horizontal, DS.Border.width)
         }
+    }
+}
+
+// MARK: - صندوق حقل يتلوّن عند الكتابة (دفعة 3-B «أسلوب واحد»، ٢٠٢٦-١٠-٠٧)
+
+/// إطار صندوق الحقل في الصفحات (حقل البحث، محرّر نص متعدد الأسطر، حقل الرد، نطاق العمر): سطح + إطار
+/// خفيف، ويتلوّن بلون الصفحة عند الكتابة، ويحمرّ عند خطأ — كان منسوخاً باليد في ٥ صفحات بنفس الأرقام.
+struct DSFocusFieldBox: ViewModifier {
+    var focused: Bool
+    var tint: Color = DS.Color.primary
+    var invalid: Bool = false
+    var fill: Color = DS.Color.background
+    var radius: CGFloat = DS.Radius.md
+    @Environment(\.dsSection) private var section
+
+    func body(content: Content) -> some View {
+        let ink = tint.dsChrome(in: section).dsReadableGlyph
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let stroke: Color = invalid ? DS.Color.error.opacity(DS.Opacity.selectedStroke)
+            : focused ? ink.opacity(DS.Opacity.selectedStroke)
+            : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke)
+        return content
+            .background(shape.fill(fill))
+            .overlay(shape.strokeBorder(stroke, lineWidth: focused ? DS.Border.widthBold : DS.Border.width))
+            .animation(.easeInOut(duration: 0.2), value: focused)
+    }
+}
+
+extension View {
+    /// صندوق الحقل الموحّد في الصفحات — `.dsFocusFieldBox(focused: isFocused, tint: pageTint)`
+    func dsFocusFieldBox(focused: Bool, tint: Color = DS.Color.primary, invalid: Bool = false,
+                         fill: Color = DS.Color.background, radius: CGFloat = DS.Radius.md) -> some View {
+        modifier(DSFocusFieldBox(focused: focused, tint: tint, invalid: invalid, fill: fill, radius: radius))
     }
 }

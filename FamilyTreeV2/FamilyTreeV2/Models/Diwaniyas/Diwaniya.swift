@@ -101,8 +101,8 @@ enum DiwaniyaKind: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .diwaniya: return "building.columns.fill"
-        case .husseiniya: return "moon.stars.fill"
+        case .diwaniya: return "sofa.fill"   // «مجلس» — رمز الديوانيات الموحّد (اختيار المالك ٢٠٢٦-١٠-٠٧)
+        case .husseiniya: return "flag.fill"   // راية (اختيار المالك ٢٠٢٦-١٠-٠٧، كانت هلالاً ونجمة)
         }
     }
 

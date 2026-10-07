@@ -12,9 +12,9 @@ struct HomeInfoButton: View {
         } label: {
             // نفس حجم الجرس (22) وعرض أضيق ليقترب منه
             Image(systemName: "info.circle")
-                .font(DS.Font.scaled(22, weight: .semibold))
+                .dsGlyph(DS.Glyph.xxl, weight: .semibold)
                 .foregroundStyle(DS.Color.textOnPrimary)
-                .frame(width: 32, height: 44)
+                .frame(width: DS.Icon.row, height: DS.Icon.tapTarget)
         }
         .buttonStyle(BounceButtonStyle())
         .accessibilityLabel(L10n.t("عن التطبيق ودليل الاستخدام", "About & User Guide"))

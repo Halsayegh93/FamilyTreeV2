@@ -4,8 +4,9 @@ import SwiftUI
 //
 // «إرسال إشعارات» و«تحديثات التطبيق» كانتا صفحتين منفصلتين لنفس المهمة
 // (إرسال رسالة للأعضاء). الآن مبدّل واحد أعلى الصفحة.
-// التصميم الموحّد (٢٠٢٦-٠٩-٢٧): بطاقة رأس بأرقام حيّة + شريط اختيار بنفس فلاتر الصفحات.
-// بطاقة الرأس تنطوي وقت الكتابة (الكيبورد ظاهر) حتى يبقى المكان كله للرسالة.
+// «أسلوب واحد» (٢٠٢٦-١٠-٠٧): الرأس الملوّن الموحّد (`dsSubPageHeader`) + صفّ أرقام حيّة + مبدّل
+// الوضعين (`DSSegmentedSwitch` مثل أقسام اللوحة). صفّ الأرقام ينطوي وقت الكتابة (الكيبورد ظاهر)
+// حتى يبقى المكان كله للرسالة.
 
 struct AdminMessagingHubView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -37,36 +38,29 @@ struct AdminMessagingHubView: View {
         VStack(spacing: 0) {
             VStack(spacing: DS.Spacing.sm) {
                 if !keyboardVisible && verticalSizeClass != .compact {
-                    DSPageHero(
-                        title: L10n.t("الإشعارات والتحديثات", "Notifications & Updates"),
-                        subtitle: L10n.t("إشعار موجّه للأعضاء، أو إعلان عن تحديث التطبيق للجميع",
-                                         "Notify selected members, or announce an app update to everyone"),
-                        icon: "bell.badge.fill",
-                        tint: DS.Color.composerDiwaniya,
-                        stats: [
-                            DSHeroStat(value: "\(recipientsCount)",
-                                       label: L10n.t("المستلمون", "Recipients"), icon: "person.3.fill"),
-                            DSHeroStat(value: reachableValue,
-                                       label: L10n.t("تصلهم الإشعارات", "Reachable"), icon: "iphone.radiowaves.left.and.right"),
-                            DSHeroStat(value: "\(notificationVM.scheduledNotifications.count)",
-                                       label: L10n.t("مجدول", "Scheduled"), icon: "clock.badge.checkmark.fill")
-                        ]
-                    )
+                    // العنوان والوصف في الرأس الملوّن — الأرقام هنا
+                    DSStatsRow([
+                        DSHeroStat(value: "\(recipientsCount)",
+                                   label: L10n.t("المستلمون", "Recipients"), icon: "person.3.fill"),
+                        DSHeroStat(value: reachableValue,
+                                   label: L10n.t("تصلهم الإشعارات", "Reachable"), icon: "iphone.radiowaves.left.and.right"),
+                        DSHeroStat(value: "\(notificationVM.scheduledNotifications.count)",
+                                   label: L10n.t("مجدول", "Scheduled"), icon: "clock.badge.checkmark.fill")
+                    ], tint: DS.Color.composerDiwaniya)
                     .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
 
-                DSFilterChips(
+                // مبدّل الوضعين — نفس مبدّل أقسام لوحة الإدارة
+                DSSegmentedSwitch(
                     options: [
-                        DSFilterOption(id: Mode.notification,
-                                       title: L10n.t("إشعار للأعضاء", "Notify members"),
-                                       icon: "bell.fill"),
-                        DSFilterOption(id: Mode.appUpdate,
-                                       title: L10n.t("تحديث التطبيق", "App update"),
-                                       icon: "megaphone.fill")
+                        DSSegmentOption(id: Mode.notification,
+                                        title: L10n.t("إشعار للأعضاء", "Notify members"),
+                                        icon: "bell.fill"),
+                        DSSegmentOption(id: Mode.appUpdate,
+                                        title: L10n.t("تحديث التطبيق", "App update"),
+                                        icon: "megaphone.fill")
                     ],
-                    selection: $mode,
-                    tint: DS.Color.composerDiwaniya
-                )
+                    selection: $mode, size: .regular)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.sm)
@@ -86,9 +80,10 @@ struct AdminMessagingHubView: View {
                     .environmentObject(notificationVM)
             }
         }
-        .background(DS.Color.background.ignoresSafeArea())
-        .navigationTitle(L10n.t("الإشعارات والتحديثات", "Notifications & Updates"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(L10n.t("الإشعارات والتحديثات", "Notifications & Updates"),
+                         subtitle: L10n.t("إشعار موجّه للأعضاء، أو إعلان عن تحديث التطبيق للجميع",
+                                          "Notify selected members, or announce an app update to everyone"))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             setKeyboard(true)

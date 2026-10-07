@@ -44,10 +44,7 @@ struct WomenClassicTreeView: View {
     private let rose = DS.Color.female
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    /// TMP-ART-TRIAL: اتجاه الرسوم — يُقرأ مرة هنا لكل العقد
-    @AppStorage(ArtTrial.storageKey) private var artRaw = ArtTrial.emblem.rawValue
-    private var art: ArtTrial { ArtTrial(rawValue: artRaw) ?? .emblem }   // TMP-ART-TRIAL
-    @Environment(\.colorScheme) private var artScheme   // TMP-ART-TRIAL
+    @Environment(\.colorScheme) private var artScheme
 
     @State private var collapsed: Set<UUID> = []
     @State private var initedRoot: UUID? = nil
@@ -424,14 +421,14 @@ struct WomenClassicTreeView: View {
                         ZStack(alignment: .topLeading) {
                             // خطوط الأب وأبنائه — كل الصفوف موصولة (اختيار المالك ٢٠٢٦-١٠-٠٤، مثل
                             // شجرة العائلة: أقواس للعائلة الصغيرة، و«العمود» للمجموعات الملتفّة)
-                            // TMP-ART-TRIAL: طبقات الخط ونقطة التفرّع بحسب الاتجاه («الحالي» كما كان)
-                            let lineLayers = TreeArtLines.layers(art, width: 1.5, dark: artScheme == .dark)
-                            let lineArt = art, lineDark = artScheme == .dark
+                            // طبقات الخط ونقطة التفرّع بأسلوب «مجسّمات»
+                            let lineLayers = TreeArtLines.layers(width: 1.5, dark: artScheme == .dark)
+                            let lineDark = artScheme == .dark
                             Canvas { ctx, _ in
                                 for c in layout.connectors {
                                     TreeArtLines.stroke(&ctx, c.path, lineLayers)
                                     for d in c.dots {
-                                        TreeArtLines.dot(&ctx, at: d, r: 2, art: lineArt, dark: lineDark)
+                                        TreeArtLines.dot(&ctx, at: d, r: 2, dark: lineDark)
                                     }
                                 }
                             }
@@ -522,49 +519,28 @@ struct WomenClassicTreeView: View {
         return L
     }
 
-    // ─── شريط الأدوات العلوي — نفس بطاقة شجرة العائلة المدمّجة ───
+    // ─── شريط الأدوات العلوي — نفس بطاقة شجرة العائلة المدمّجة (`treeToolbarCard`) ───
     private var toolbarRow: some View {
         HStack(spacing: DS.Spacing.sm) {
             // البداية — رجوع للجذر + إعادة الملاءمة (بحركة واضحة)
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                goHome()
-            } label: {
-                toolbarIcon("house.fill")
-            }
-            .buttonStyle(DSScaleButtonStyle())
+            homeButton(.toolbar)
 
-            Spacer()
+            Spacer(minLength: 0)
 
+            // التبويب [شجرة العائلة / النساء] — بعرض نصّه في الوسط
             if let treeTab {
                 FamilyTreeTabBar(selection: treeTab)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             // موقعي — يوسّع مسار العضو ويتمركز عليه (وإلا على الجذر)
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                if let mid = meWomanId {
-                    locate(mid)
-                } else if let root = activeRoot {
-                    centerOn(root, in: layout)
-                }
-            } label: {
-                toolbarIcon("location.fill")
-            }
-            .buttonStyle(DSScaleButtonStyle())
+            locateButton(.toolbar)
         }
         .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, 3)
-        // مادة مخففة (50%) — نفس بار شجرة العائلة
-        .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .modifier(TreeArtSkin(art: art, radius: DS.Radius.lg, compact: true, glassBacked: true))   // TMP-ART-TRIAL
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
-        )
-        .dsSubtleShadow()
+        .padding(.vertical, DS.Spacing.xxs)
+        // زجاج + لمسة الطين + إطار شعري + ظلّ خفيف — نفس بار شجرة العائلة
+        .treeToolbarCard()
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.top, DS.Spacing.sm)
     }
@@ -572,66 +548,38 @@ struct WomenClassicTreeView: View {
     /// بار جانبي عمودي للوضع الأفقي — نفس أدوات البار العلوي (طلب المالك)
     private var landscapeSideToolbar: some View {
         VStack(spacing: DS.Spacing.xs) {
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                goHome()
-            } label: {
-                toolbarIcon("house.fill", compact: true)
-            }
-            .buttonStyle(DSScaleButtonStyle())
+            homeButton(.mini)
 
             if let treeTab {
-                VStack(spacing: 4) {
-                    sideTabChip(L10n.t("العائلة", "Family"), idx: 0, treeTab: treeTab)
-                    sideTabChip(L10n.t("النساء", "Women"), idx: 1, treeTab: treeTab)
-                }
+                FamilyTreeSideTabs(selection: treeTab)
             }
 
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                if let mid = meWomanId {
-                    locate(mid)
-                } else if let root = activeRoot {
-                    centerOn(root, in: layout)
-                }
-            } label: {
-                toolbarIcon("location.fill", compact: true)
+            locateButton(.mini)
+        }
+        .padding(DS.Spacing.xs)
+        .treeToolbarCard()
+    }
+
+    /// «البداية» — زرّ العُدّة الدائري (نفس زرّ شجرة العائلة: ٣٤ في الشريط العلوي، ٢٧ في الجانبي، برمز بحبر الشجرة)
+    private func homeButton(_ size: DSNavButtonSize) -> some View {
+        DSHeaderButton(symbol: "house.fill", label: L10n.t("البداية", "Start"), context: .surface,
+                       size: size, tint: AppSection.tree.ink) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            goHome()
+        }
+    }
+
+    /// «موقعي» — زرّ العُدّة الدائري
+    private func locateButton(_ size: DSNavButtonSize) -> some View {
+        DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعي", "Me"), context: .surface,
+                       size: size, tint: AppSection.tree.ink) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if let mid = meWomanId {
+                locate(mid)
+            } else if let root = activeRoot {
+                centerOn(root, in: layout)
             }
-            .buttonStyle(DSScaleButtonStyle())
         }
-        .padding(4)
-        .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .modifier(TreeArtSkin(art: art, radius: DS.Radius.lg, compact: true, glassBacked: true))   // TMP-ART-TRIAL
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
-        )
-        .dsSubtleShadow()
-    }
-
-    private func sideTabChip(_ title: String, idx: Int, treeTab: Binding<Int>) -> some View {
-        Button {
-            withAnimation(DS.Anim.snappy) { treeTab.wrappedValue = idx }
-        } label: {
-            Text(title)
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 5)
-                .frame(minWidth: 40, minHeight: 20)
-                .background(Capsule().fill(treeTab.wrappedValue == idx ? AppSection.tree.fill : DS.Color.surface.opacity(0.8)))
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    private func toolbarIcon(_ icon: String, compact: Bool = false) -> some View {
-        Image(systemName: icon)
-            .font(DS.Font.scaled(compact ? 12 : 14, weight: .bold))
-            .foregroundColor(AppSection.tree.ink)
-            .frame(width: compact ? 27 : 34, height: compact ? 27 : 34)
-            .background(DS.Color.surface.opacity(0.8), in: Circle())   // أغمق (طلب المالك)
-            .overlay(Circle().strokeBorder(AppSection.tree.ink.opacity(0.15), lineWidth: 1))
-            .dsSubtleShadow()
-            .contentShape(Circle())
     }
 
     /// تمركز على عقدة معيّنة داخل الشاشة (باستخدام تخطيط محدّد).
@@ -711,14 +659,14 @@ struct WomenClassicTreeView: View {
         let wives = showWives ? (cWives[m.id] ?? []) : []
 
         let shape = RoundedRectangle(cornerRadius: CORNER, style: .continuous)
-        let noPhotoMale = !female && m.avatarUrl.flatMap { URL(string: $0) } == nil   // TMP-ART-TRIAL
+        let noPhotoMale = !female && m.avatarUrl.flatMap { URL(string: $0) } == nil
 
-        VStack(spacing: 2) {
+        VStack(spacing: DS.Spacing.xxs) {
             ZStack {
                 // الزوجات جنب العضو — دائماً جنب بعض (طلب المالك)؛
                 // الاسم الطويل ينزل على سطرين تحت مربعه بدل تكديس المربعات
                 if !wives.isEmpty {
-                    HStack(alignment: .top, spacing: 6) {
+                    HStack(alignment: .top, spacing: DS.Spacing.xsm) {
                         ForEach(wives.prefix(3)) { wifeCell($0) }
                     }
                     .offset(x: -(CIRCLE / 2 + 6
@@ -732,44 +680,40 @@ struct WomenClassicTreeView: View {
                     .fill(DS.Color.background)
                     // مربع الابنة بنفس غمقة مربع الزوجة (طلب المالك) — رمادي أنعم قليلاً
                     .overlay(shape.fill(deceased && !female
-                        ? DS.Color.textTertiary.opacity(0.5)
+                        ? DS.Color.textTertiary.opacity(DS.Opacity.disabled)
                         : accent)
-                        // TMP-ART-TRIAL: الذكر بلا صورة — أرضية فاتحة بلونه والرسم فوقها
-                        .opacity(art != .emblem && noPhotoMale ? 0.16 : 1))
+                        // الذكر بلا صورة — أرضية فاتحة بلونه والرسم فوقها
+                        .opacity(noPhotoMale ? DS.Opacity.tintFillStrong : 1))
                     .frame(width: CIRCLE, height: CIRCLE)
                     .overlay(
                         Group {
                             if !female, let url = m.avatarUrl, let u = URL(string: url) {
                                 CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() } placeholder: {
                                     Image(systemName: "person.fill")
-                                        .font(.system(size: CIRCLE * 0.42, weight: .semibold))
-                                        .foregroundColor(.white)
+                                        .dsGlyph(DS.Glyph.xl, weight: .semibold)
+                                        .foregroundColor(DS.Color.textOnPrimary)
                                 }
                                 .frame(width: CIRCLE, height: CIRCLE).clipShape(shape)
                                 .saturation(deceased ? 0 : 1)          // متوفّى → غير ملوّنة
                             } else if female {
                                 // الإناث: كلمة «ابنة» بدل الحرف الأول
                                 Text(L10n.t("ابنة", "Daughter"))
-                                    .font(.system(size: CIRCLE * 0.26, weight: .bold))
+                                    .dsFont(.badge)
                                     .minimumScaleFactor(0.7)
                                     .lineLimit(1)
-                                    .foregroundColor(.white)
-                            } else if art != .emblem {
-                                // TMP-ART-TRIAL: رسم الاتجاه بلون الذكر/المتوفّى نفسه
-                                TreeAvatarArt(art: art, tint: accent, size: CIRCLE - 6)
-                                    .equatable()
+                                    .foregroundColor(DS.Color.textOnPrimary)
                             } else {
-                                // الذكور بلا صورة: أيقونة شخص بدل الحرف (طلب المالك)
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: CIRCLE * 0.42, weight: .semibold))
-                                    .foregroundColor(.white)
+                                // الذكر بلا صورة: مجسّم «مجسّمات» بلون الذكر/المتوفّى نفسه
+                                TreeAvatarArt(tint: accent, size: CIRCLE - 6)
+                                    .equatable()
                             }
                         }
                     )
                     // حواف متّحدة المركز (طلب المالك): الأبيض داخل الحافة تماماً، والملوّن خارجها
                     // بنصف قطر أكبر بمقدار المسافة نفسها — فتتطابق الزوايا ولا تتعرّج
-                    .overlay(shape.strokeBorder(Color.white, lineWidth: RING))
-                    .modifier(TreeArtSkin(art: female ? art : .emblem, radius: CORNER, onFill: true))   // TMP-ART-TRIAL
+                    // (حلقة بيضاء رسم — نفس لون النص فوق التعبئة)
+                    .overlay(shape.strokeBorder(DS.Color.textOnPrimary, lineWidth: RING))
+                    .modifier(DSClaySkin(active: female, radius: CORNER, onFill: true, section: .tree))
                     .overlay(
                         RoundedRectangle(cornerRadius: CORNER + 2.5, style: .continuous)
                             .strokeBorder(border, lineWidth: 2)
@@ -779,10 +723,10 @@ struct WomenClassicTreeView: View {
                     .overlay(alignment: .bottomTrailing) {
                         if deceased {
                             Circle().fill(DS.Color.background)
-                                .frame(width: 17, height: 17)
+                                .frame(width: DS.Icon.avatarBadge, height: DS.Icon.avatarBadge)
                                 .overlay(
                                     Image(systemName: "heart.slash.fill")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .dsGlyph(DS.Glyph.microCompact)
                                         .foregroundColor(DS.Color.textSecondary)
                                 )
                                 .offset(x: 4, y: 4)
@@ -794,33 +738,33 @@ struct WomenClassicTreeView: View {
                     .overlay(alignment: .topTrailing) {
                         if m.isHiddenFromTree {
                             Circle().fill(DS.Color.background)
-                                .frame(width: 17, height: 17)
+                                .frame(width: DS.Icon.avatarBadge, height: DS.Icon.avatarBadge)
                                 .overlay(
                                     Image(systemName: "eye.slash.fill")
-                                        .font(.system(size: 8.5, weight: .bold))
+                                        .dsGlyph(DS.Glyph.microCompact)
                                         .foregroundColor(DS.Color.warning)
                                 )
                                 .offset(x: 4, y: -4)
                         }
                     }
                     // المخفيّ باهت — إشارة ثانية تُقرأ من بعيد دون تمييز الشارة
-                    .opacity(m.isHiddenFromTree ? 0.55 : 1)
+                    .opacity(m.isHiddenFromTree ? DS.Opacity.disabled : 1)
                     // شارة عدد الأبناء + سهم — فوق يسار الصورة (طلب المالك)
                     .overlay(alignment: .topLeading) {
                         if !kids.isEmpty {
-                            HStack(spacing: 1.5) {
+                            HStack(spacing: DS.Spacing.xxs) {
                                 Text("\(kids.count)")
-                                    .font(.system(size: 8.5, weight: .heavy))
+                                    .dsFont(.treeNodeMicro)
                                 Image(systemName: "chevron.down")
-                                    .font(.system(size: 6, weight: .heavy))
+                                    .dsGlyph(DS.Glyph.nano, weight: .heavy)
                                     .rotationEffect(.degrees(isCollapsed ? 0 : 180))
                             }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 4)
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .padding(.horizontal, DS.Spacing.xs)
                             .frame(minWidth: 16, minHeight: 16)
                             // غامق قسم الشجرة (كان كحلياً ثابتاً) — أغمق من لون العضو بلا صورة (طلب المالك)
-                            .background(Capsule().fill(art == .emblem ? DS.Color.primaryDark : AppSection.tree.deep))   // TMP-ART-TRIAL
-                            .overlay(Capsule().stroke(Color.white.opacity(0.9), lineWidth: 1.2))
+                            .background(Capsule().fill(AppSection.tree.deep))
+                            .overlay(Capsule().stroke(DS.Color.textOnPrimary, lineWidth: 1.2))
                             .offset(x: -7, y: -7)
                         }
                     }
@@ -844,45 +788,48 @@ struct WomenClassicTreeView: View {
                 // (نفس تصميم شجرة العائلة، بمقاس عقد النساء الصغيرة)
                 VStack(spacing: 0) {
                     Text(m.firstName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .dsFont(.caption)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, DS.Spacing.xsm)
                         .frame(maxWidth: NODE_W)
                         .frame(height: PILL_H)
                         .background(DS.Color.surface)
                     Text(lifeSpanNeat(m) ?? L10n.t(m.isFemale ? "متوفية" : "متوفى", "Deceased"))
-                        .font(.system(size: 8.5, weight: .heavy))
-                        .foregroundColor(.white)
+                        .dsFont(.treeNodeMicro)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .environment(\.layoutDirection, .leftToRight)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, DS.Spacing.xs)
                         .frame(maxWidth: NODE_W)
                         .frame(height: LIFE_H + 2)
-                        .background(Color(hex: "#A62B32"))   // عنّابي بدرجة خفيفة (طلب المالك)
+                        .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .modifier(TreeArtSkin(art: art, radius: 10, compact: true))   // TMP-ART-TRIAL
+                .modifier(DSClaySkin(radius: 10, compact: true, section: .tree))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(female ? border.opacity(0.7) : accent.opacity(0.4), lineWidth: 1))
+                    .stroke(female ? border.opacity(DS.Opacity.selectedStroke) : accent.opacity(DS.Opacity.tintStroke),
+                            lineWidth: DS.Border.width))
                 .onTapGesture { onSelect?(m) }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             } else {
                 Text(m.firstName)
-                    .font(.system(size: 11, weight: .semibold))
+                    .dsFont(.caption)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)   // تصغير أكبر → الاسم الطويل يظهر كاملاً بلا اقتطاع
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, DS.Spacing.xsm)
                     .frame(maxWidth: NODE_W)
                     .frame(height: PILL_H)
                     .background(Capsule().fill(DS.Color.surface))
-                    .modifier(TreeArtSkin(art: art, compact: true))   // TMP-ART-TRIAL
-                    .overlay(Capsule().stroke(accent.opacity(0.4), lineWidth: 1))
+                    .modifier(DSClaySkin(compact: true, section: .tree))
+                    .overlay(Capsule().stroke(accent.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
                     .onTapGesture { onSelect?(m) }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             }
         }
+        // نصوص العقدة بمقاسها الثابت مثل خطوط النظام سابقاً — الكانفس يُكبَّر بالقرص لا بحجم الخط
+        .dynamicTypeSize(.large)
         .frame(width: NODE_W, height: layout.heights[m.id] ?? NODE_H, alignment: .top)  // ارتفاع ثابت → الأسماء بنفس المستوى
         .position(x: p.x + NODE_W / 2, y: p.y + (layout.heights[m.id] ?? NODE_H) / 2)
         // دخول متدرّج: أبناء العقدة المتوسّعة ينزلون واحدًا بعد الآخر
@@ -897,19 +844,19 @@ struct WomenClassicTreeView: View {
 
     /// خلية زوجة واحدة: مربّع «زوجة» + الاسم الأول والأخير تحته.
     private func wifeCell(_ w: FamilyMember) -> some View {
-        VStack(spacing: 1) {
+        VStack(spacing: DS.Spacing.xxs) {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(w.isDeceased == true ? DS.Color.femaleDeceased : rose)
                 .frame(width: 24, height: 24)
                 .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(w.isDeceased == true ? DS.Color.femaleDeceasedBorder : Color.white.opacity(0.9),
-                                  lineWidth: w.isDeceased == true ? 1.5 : 1))
+                    .strokeBorder(w.isDeceased == true ? DS.Color.femaleDeceasedBorder : DS.Color.textOnPrimary,
+                                  lineWidth: w.isDeceased == true ? DS.Border.widthBold : DS.Border.width))
                 .overlay(
                     Text(L10n.t("زوجة", "Wife"))
-                        .font(.system(size: 7.5, weight: .bold))
+                        .dsFont(.treeNodeTiny)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                 )
                 // نفس شارة الإخفاء على مربّع الزوجة — بمقاس الخلية الصغيرة
                 .overlay(alignment: .topTrailing) {
@@ -918,15 +865,15 @@ struct WomenClassicTreeView: View {
                             .frame(width: 12, height: 12)
                             .overlay(
                                 Image(systemName: "eye.slash.fill")
-                                    .font(.system(size: 6, weight: .bold))
+                                    .dsGlyph(DS.Glyph.nano)
                                     .foregroundColor(DS.Color.warning)
                             )
                             .offset(x: 3, y: -3)
                     }
                 }
-                .opacity(w.isHiddenFromTree ? 0.55 : 1)
+                .opacity(w.isHiddenFromTree ? DS.Opacity.disabled : 1)
             Text(wifeShortName(w))
-                .font(.system(size: 8, weight: .medium))
+                .dsFont(.treeNodeTiny)
                 .foregroundColor(DS.Color.textSecondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)

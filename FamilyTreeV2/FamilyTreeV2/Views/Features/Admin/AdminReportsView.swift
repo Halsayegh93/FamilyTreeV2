@@ -403,9 +403,10 @@ struct AdminReportsView: View {
                 exportBar(members: members)
             }
         }
-        .background(DS.Color.background.ignoresSafeArea())
-        .navigationTitle(L10n.t("مركز التقارير", "Reports Center"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(L10n.t("مركز التقارير", "Reports Center"),
+                         subtitle: L10n.t("اختر الأعضاء والحقول، ثم صدّر ملف PDF للطباعة أو المشاركة",
+                                          "Pick members and fields, then export a PDF to print or share"))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             if memberVM.allMembers.isEmpty {
@@ -434,7 +435,7 @@ struct AdminReportsView: View {
                 filtersBlock
 
                 // الوضع الأفقي: الأقسام على عمودين
-                AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
+                AdaptiveCardStack(spacing: DS.Spacing.md) {
                     infoSection
                     fieldsSection
                     if members.isEmpty {
@@ -456,21 +457,15 @@ struct AdminReportsView: View {
     /// ٣ أرقام حيّة من بيانات الصفحة نفسها (بلا طلبات جديدة): الأعضاء المتاحون للتقارير، ومن سيدخل
     /// الملف الآن (النطاق)، وعدد الحقول المختارة — «—» قبل تحميل الأعضاء.
     private func hero(members: [FamilyMember], loaded: Bool) -> some View {
-        DSPageHero(
-            title: L10n.t("مركز التقارير", "Reports Center"),
-            subtitle: L10n.t("اختر الأعضاء والحقول، ثم صدّر ملف PDF للطباعة أو المشاركة",
-                             "Pick members and fields, then export a PDF to print or share"),
-            icon: "doc.text.fill",
-            tint: pageTint,
-            stats: [
+        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
+        DSStatsRow([
                 DSHeroStat(value: loaded ? "\(activeMembers.count)" : "—",
                            label: L10n.t("الأعضاء", "Members"), icon: "person.3.fill"),
                 DSHeroStat(value: loaded ? "\(selectedCount(in: members))" : "—",
                            label: L10n.t("في التقرير", "In report"), icon: "doc.richtext.fill"),
                 DSHeroStat(value: "\(selectedFields.count)",
                            label: L10n.t("الحقول", "Fields"), icon: "list.bullet.rectangle.fill")
-            ]
-        )
+        ], tint: pageTint)
     }
 
     // MARK: - حالة الأعضاء (قبل التحميل)
@@ -479,17 +474,15 @@ struct AdminReportsView: View {
     @ViewBuilder
     private var membersStateCard: some View {
         if memberVM.membersLoadFailed {
-            SysStateCard(icon: "wifi.exclamationmark",
+            DSStateCard(icon: "wifi.exclamationmark",
                          title: L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
                          hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                          tint: DS.Color.error,
                          actionTitle: L10n.t("إعادة المحاولة", "Retry"),
                          action: { Task { await memberVM.fetchAllMembers(force: true) } })
         } else {
-            SysStateCard(icon: "doc.text.fill",
-                         title: L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"),
-                         tint: pageTint,
-                         isLoading: true)
+            DSPageLoader(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"), fillsSpace: false)
+                .padding(.top, DS.Spacing.lg)
         }
     }
 
@@ -498,7 +491,7 @@ struct AdminReportsView: View {
     /// بحث + فلاتر الحالة بعددها (+ نطاق العمر) — نفس خيارات «تصفية» السابقة
     @ViewBuilder
     private var filtersBlock: some View {
-        SysSectionTitle(title: L10n.t("تصفية", "Filter"),
+        DSSectionTitle(title: L10n.t("تصفية", "Filter"),
                         icon: "person.crop.circle.badge.checkmark",
                         tint: pageTint,
                         trailing: activeFilterCount > 0
@@ -542,31 +535,28 @@ struct AdminReportsView: View {
             DSFieldIcon(name: "calendar", tint: DS.Color.warning)
                 .accessibilityHidden(true)
             Text(L10n.t("العمر", "Age"))
-                .dsFieldFont(13.5, weight: .bold)
+                .dsFieldFont(.rowTitle)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
             Spacer(minLength: DS.Spacing.xs)
             ageField(.min)
                 .onChange(of: minAgeText) { _ in displayLimit = 20 }
             Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                .font(.system(size: 11, weight: .bold))
+                .dsGlyph(DS.Glyph.xs)
                 .foregroundColor(DS.Color.textTertiary)
                 .accessibilityHidden(true)
             ageField(.max)
                 .onChange(of: maxAgeText) { _ in displayLimit = 20 }
             if ageRangeInvalid {
-                SysStatusChip(text: L10n.t("غلط", "Invalid"),
+                DSStatusChip(text: L10n.t("غلط", "Invalid"),
                               icon: "exclamationmark.triangle.fill",
                               tint: DS.Color.error)
                     .fixedSize()
             }
         }
-        .padding(.horizontal, DS.Spacing.sm + 2)
-        .frame(minHeight: 52)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(ageRangeInvalid ? DS.Color.error.opacity(0.45) : DS.Color.textTertiary.opacity(0.15),
-                          lineWidth: 1))
+        .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
+        .frame(minHeight: DS.Icon.tapTarget + DS.Spacing.sm)
+        .dsFocusFieldBox(focused: false, invalid: ageRangeInvalid, fill: DS.Color.surface)
     }
 
     private func ageField(_ bound: AgeBound) -> some View {
@@ -576,17 +566,13 @@ struct AdminReportsView: View {
                          text: isMin ? $minAgeText : $maxAgeText)
             .keyboardType(.numberPad)
             .multilineTextAlignment(.center)
-            .dsFieldFont(14.5, weight: .semibold)
+            .dsFieldFont(.headlineCompact)
             .foregroundColor(DS.Color.textPrimary)
             .monospacedDigit()
             .focused($focusedAge, equals: bound)
-            .frame(width: 60, height: 36)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).fill(DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                .strokeBorder(ageRangeInvalid ? DS.Color.error.opacity(0.5)
-                                              : (focused ? pageTint.opacity(0.65) : DS.Color.textTertiary.opacity(0.2)),
-                              lineWidth: focused ? 1.5 : 1))
-            .padding(.vertical, 4)   // مساحة ضغط ٤٤ نقطة
+            .frame(width: DS.Icon.sizeLg, height: DSBox.fieldMinHeight)
+            .dsFocusFieldBox(focused: focused, tint: pageTint, invalid: ageRangeInvalid, radius: DS.Radius.sm)
+            .padding(.vertical, DS.Spacing.xs)   // مساحة ضغط ٤٤ نقطة
             .contentShape(Rectangle())
             .onTapGesture { focusedAge = bound }
             .accessibilityLabel(isMin ? L10n.t("العمر من", "Minimum age") : L10n.t("العمر إلى", "Maximum age"))
@@ -615,7 +601,7 @@ struct AdminReportsView: View {
         Group {
             if let m = branchRootMember {
                 let count = descendantIds(of: m.id).count
-                SysRow(icon: "tree.fill", tint: pageTint,
+                DSRow(icon: "tree.fill", tint: pageTint,
                        title: L10n.t("فرع: \(m.displayFullName)", "Branch: \(m.displayFullName)"),
                        subtitle: L10n.t("\(count) عضو في الفرع", "\(count) members in branch")) {
                     HStack(spacing: DS.Spacing.xs) {
@@ -627,26 +613,26 @@ struct AdminReportsView: View {
                             displayLimit = 20
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 18, weight: .semibold))
+                                .dsGlyph(DS.Glyph.xl, weight: .semibold)
                                 .foregroundColor(DS.Color.error)
-                                .frame(width: 44, height: 44)
+                                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .padding(.vertical, -6)
+                        .padding(.vertical, -DS.Spacing.xsm)
                         .accessibilityLabel(L10n.t("إزالة الفرع", "Remove branch"))
                     }
                 }
                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(pageTint.opacity(0.4), lineWidth: 1.2))
+                    .strokeBorder(pageTint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
             } else {
                 Button {
                     branchPickerOpen = true
                 } label: {
-                    SysRow(icon: "tree", tint: DS.Color.textSecondary,
+                    DSRow(icon: "tree", tint: DS.Color.textSecondary,
                            title: L10n.t("حصر على فرع معيّن", "Filter by branch"),
                            subtitle: L10n.t("كل الفروع", "All branches")) {
-                        SysChevron()
+                        DSChevron()
                     }
                     .contentShape(Rectangle())
                 }
@@ -687,26 +673,26 @@ struct AdminReportsView: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: active ? "checkmark.circle.fill" : field.icon)
-                    .font(.system(size: 11.5, weight: .bold))
+                    .dsGlyph(DS.Glyph.smCompact)
                     .foregroundColor(active ? pageTint : DS.Color.textTertiary)
                     .accessibilityHidden(true)
                 Text(field.title)
-                    .dsFieldFont(12, weight: .bold)
+                    .dsFieldFont(.chip)
                     .foregroundColor(active ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, DS.Spacing.sm)
-            .frame(maxWidth: .infinity, minHeight: 40)
+            .frame(maxWidth: .infinity, minHeight: DS.Icon.avatar)
             .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(active ? pageTint.opacity(0.12) : DS.Color.background))
+                .fill(active ? pageTint.opacity(DS.Opacity.tintFill) : DS.Color.background))
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(active ? pageTint.opacity(0.5) : DS.Color.textTertiary.opacity(0.15),
-                              lineWidth: active ? 1.5 : 1))
-            .padding(.vertical, 2)   // مساحة ضغط ٤٤ نقطة
+                .strokeBorder(active ? pageTint.opacity(DS.Opacity.selectedStroke) : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
+                              lineWidth: active ? DS.Border.widthBold : DS.Border.width))
+            .padding(.vertical, DS.Spacing.xxs)   // مساحة ضغط ٤٤ نقطة
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -746,7 +732,7 @@ struct AdminReportsView: View {
 
     /// تحديد الكل · إلغاء التحديد · إعادة ضبط (مع تصفية مفعّلة) — نفس الأزرار السابقة
     private func resultsTools(members: [FamilyMember]) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: DS.Spacing.xsm) {
             toolButton(title: L10n.t("تحديد الكل", "Select all"), icon: "checkmark.circle.fill",
                        tint: AppSection.admin.ink) {
                 selectedMemberIds = Set(members.map(\.id))
@@ -768,30 +754,10 @@ struct AdminReportsView: View {
         }
     }
 
-    /// كبسولة إجراء صغيرة — مساحة ضغط ٤٤ نقطة والشكل كما هو
+    /// الشريحة الواحدة (`DSChipButton`) — مساحة ضغط ٤٤ بلا تكبير الصف
     private func toolButton(title: String, icon: String?, tint: Color,
                             action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 11, weight: .bold))
-                        .accessibilityHidden(true)
-                }
-                Text(title)
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundColor(tint)
-            .padding(.horizontal, DS.Spacing.sm + 2)
-            .frame(height: 30)
-            .background(tint.opacity(0.10), in: Capsule())
-            .padding(.vertical, 7)
-            .contentShape(Rectangle())
-            .padding(.vertical, -7)
-        }
-        .buttonStyle(DSScaleButtonStyle())
+        DSChipButton(title, icon: icon, tint: tint, action: action)
     }
 
     /// صف عضو بإطار صفوف المربّعات: الصورة + الاسم (وورقة للمتوفى) + العمر/الهاتف كما كانت
@@ -811,18 +777,18 @@ struct AdminReportsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSMemberAvatar(name: member.fullName,
                                avatarUrl: member.avatarUrl,
-                               size: 36,
+                               size: DS.Icon.avatarRow,
                                roleColor: deceased ? DS.Color.textTertiary : member.roleColor)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    HStack(spacing: DS.Spacing.xs) {
                         Text(member.displayFullName)
-                            .dsFieldFont(13.5, weight: .bold)
+                            .dsFieldFont(.rowTitle)
                             .foregroundColor(DS.Color.fieldLabel)
                             .lineLimit(1)
                         if deceased {
                             Image(systemName: "leaf.fill")
-                                .font(.system(size: 10, weight: .semibold))
+                                .dsGlyph(DS.Glyph.micro, weight: .semibold)
                                 .foregroundColor(DS.Color.textTertiary)
                         }
                     }
@@ -835,7 +801,7 @@ struct AdminReportsView: View {
                             if !phone.isEmpty {
                                 detailText(icon: "phone.fill", text: KuwaitPhone.display(phone))
                             } else if missingPhone {
-                                SysStatusChip(text: L10n.t("رقم ناقص", "Missing number"),
+                                DSStatusChip(text: L10n.t("رقم ناقص", "Missing number"),
                                               icon: "exclamationmark.triangle.fill",
                                               tint: DS.Color.warning)
                             }
@@ -846,15 +812,15 @@ struct AdminReportsView: View {
                 Spacer(minLength: 0)
 
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 21, weight: .semibold))
-                    .foregroundColor(selected ? AppSection.admin.ink : DS.Color.textTertiary.opacity(0.7))
+                    .dsGlyph(DS.Glyph.xxlCompact, weight: .semibold)
+                    .foregroundColor(selected ? AppSection.admin.ink : DS.Color.textTertiary)
             }
-            .frame(minHeight: 36)
+            .frame(minHeight: DSBox.fieldMinHeight)
             .dsRowBox()
             .overlay {
                 if selected {
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(AppSection.admin.ink.opacity(0.55), lineWidth: 1.5)
+                        .strokeBorder(AppSection.admin.ink.opacity(DS.Opacity.selectedStroke), lineWidth: DS.Border.widthBold)
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
@@ -865,11 +831,11 @@ struct AdminReportsView: View {
     }
 
     private func detailText(icon: String, text: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon)
-                .font(.system(size: 9.5, weight: .semibold))
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.micro, weight: .semibold)
             Text(text)
-                .font(DS.Font.plex(12))
+                .dsFont(.subtitle)
                 .monospacedDigit()
                 .lineLimit(1)
         }
@@ -889,43 +855,28 @@ struct AdminReportsView: View {
         return parts.joined(separator: "، ")
     }
 
+    /// الشريحة الواحدة بلون الصفحة (مساحة ضغط ٤٤)
     private func loadMoreButton(remaining: Int) -> some View {
-        Button {
+        DSChipButton(L10n.t("عرض المزيد (\(remaining) متبقي)", "Show more (\(remaining) remaining)"),
+                     icon: "arrow.down.circle.fill", tint: pageTint) {
             displayLimit += 20
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 12.5, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(L10n.t("عرض المزيد (\(remaining) متبقي)", "Show more (\(remaining) remaining)"))
-                    .font(DS.Font.plex(12.5, weight: .bold))
-                    .monospacedDigit()
-            }
-            .foregroundColor(pageTint)
-            .padding(.horizontal, DS.Spacing.lg)
-            .frame(minHeight: 40)
-            .background(Capsule().fill(pageTint.opacity(0.10)))
-            .overlay(Capsule().strokeBorder(pageTint.opacity(0.22), lineWidth: 1))
-            .padding(.vertical, 2)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .frame(maxWidth: .infinity)
     }
 
     /// لا أحد يطابق — ومع تصفية مفعّلة «إعادة ضبط» (نفس زر أدوات النتائج)
     private var noResultsCard: some View {
         let filtered = activeFilterCount > 0
         let reset: (() -> Void)? = filtered ? { resetFilters() } : nil
-        return SysStateCard(icon: "person.2.slash",
-                            title: L10n.t("لا يوجد أعضاء", "No members"),
-                            hint: filtered
-                                ? L10n.t("لا أحد يطابق التصفية الحالية", "No one matches the current filters")
-                                : nil,
-                            tint: DS.Color.textTertiary,
-                            actionTitle: filtered ? L10n.t("إعادة ضبط", "Reset") : nil,
-                            actionIcon: "arrow.counterclockwise",
-                            action: reset)
+        return DSEmptyView(L10n.t("لا يوجد أعضاء", "No members"),
+                           message: filtered
+                               ? L10n.t("لا أحد يطابق التصفية الحالية", "No one matches the current filters")
+                               : nil,
+                           actionTitle: filtered ? L10n.t("إعادة ضبط", "Reset") : nil,
+                           actionIcon: "arrow.counterclockwise",
+                           style: .compact,
+                           action: reset)
+            .dsCard(padding: nil)
             .dsStaggerIn(4)
     }
 
@@ -935,7 +886,7 @@ struct AdminReportsView: View {
     private func exportBar(members: [FamilyMember]) -> some View {
         let scope = selectedCount(in: members)
         return HStack(spacing: DS.Spacing.md) {
-            SysActionButton(title: L10n.t("إنشاء تقرير PDF", "Generate PDF Report"),
+            DSActionButton(title: L10n.t("إنشاء تقرير PDF", "Generate PDF Report"),
                             icon: "doc.richtext.fill",
                             isBusy: isGenerating,
                             enabled: !(isGenerating || members.isEmpty || ageRangeInvalid)) {
@@ -946,10 +897,10 @@ struct AdminReportsView: View {
                 Text(selectedMemberIds.isEmpty
                      ? L10n.t("النطاق: الكل", "Scope: all")
                      : L10n.t("النطاق: المحدّدون", "Scope: selected"))
-                    .font(DS.Font.plex(10.5, weight: .semibold))
+                    .dsFont(.micro)
                     .foregroundColor(DS.Color.fieldValue)
                 Text(L10n.t("\(scope) عضو", "\(scope) members"))
-                    .font(DS.Font.plex(15, weight: .bold))
+                    .dsFont(.headline)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
             }
@@ -1163,12 +1114,16 @@ private enum MembersPDFBuilder {
     private static let rowHeight: CGFloat = 24
     private static let pageBodyTop: CGFloat = 150     // الصفحة الأولى: تحت الهيدر مباشرة (مقرّب)
     private static let pageBodyTopOther: CGFloat = 50 // الصفحات الباقية: قريب من الأعلى
-    private static let border = UIColor(red: 0.89, green: 0.91, blue: 0.93, alpha: 1.0)
-    private static let softGray = UIColor(red: 0.97, green: 0.98, blue: 0.99, alpha: 1.0)
-    private static let headerGray = UIColor(red: 0.94, green: 0.96, blue: 0.97, alpha: 1.0)
-    private static let textPrimary = UIColor(red: 0.06, green: 0.09, blue: 0.16, alpha: 1.0)
-    private static let textMuted = UIColor(red: 0.39, green: 0.45, blue: 0.52, alpha: 1.0)
-    private static let textTertiary = UIColor(red: 0.58, green: 0.64, blue: 0.72, alpha: 1.0)
+    // ألوان الملف من DS («مكان واحد») — مثبّتة على الفاتح لأن الملف يُطبع على ورق أبيض
+    private static func paper(_ color: Color) -> UIColor {
+        UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+    }
+    private static let border = paper(DS.Color.textTertiary).withAlphaComponent(DS.Opacity.tintFillStrong)
+    private static let softGray = paper(DS.Color.surface).withAlphaComponent(DS.Opacity.disabled)
+    private static let headerGray = paper(DS.Color.surface)
+    private static let textPrimary = paper(DS.Color.textPrimary)
+    private static let textMuted = paper(DS.Color.textSecondary)
+    private static let textTertiary = paper(DS.Color.textTertiary)
 
     private static let titleFont = UIFont.systemFont(ofSize: 26, weight: .black)
     private static let brandFont = UIFont.systemFont(ofSize: 9, weight: .semibold)
@@ -1226,70 +1181,6 @@ private enum MembersPDFBuilder {
             branchName: branchName,
             fieldLabels: fieldLabels,
             filterLabel: filterLabel
-        )
-    }
-
-    static func makePhoneReport(members: [FamilyMember], filters: [String], ageResolver: @escaping (FamilyMember) -> Int?) throws -> Data {
-        try makeMembersTableReport(
-            members: members,
-            filters: filters,
-            theme: PDFTheme(
-                accent: UIColor(red: 0.21, green: 0.46, blue: 0.78, alpha: 1),
-                title: "تقرير الهواتف"
-            ),
-            columns: [
-                ReportColumn(title: "م", ratio: 0.10) { _, index in "\(index)" },
-                ReportColumn(title: "الاسم الكامل", ratio: 0.42) { member, _ in member.fullName },
-                ReportColumn(title: "العمر", ratio: 0.12) { member, _ in ageResolver(member).map { "\($0) سنة" } ?? "—" },
-                ReportColumn(title: "رقم الهاتف", ratio: 0.36) { member, _ in standardizedPhone(member.phoneNumber) }
-            ]
-        )
-    }
-
-    static func makeAgeReport(members: [FamilyMember], filters: [String], ageResolver: @escaping (FamilyMember) -> Int?) throws -> Data {
-        try makeMembersTableReport(
-            members: members,
-            filters: filters,
-            theme: PDFTheme(
-                accent: UIColor(red: 0.18, green: 0.55, blue: 0.51, alpha: 1),
-                title: "تقرير الأعمار"
-            ),
-            columns: [
-                ReportColumn(title: "م", ratio: 0.08) { _, index in "\(index)" },
-                ReportColumn(title: "الاسم الكامل", ratio: 0.56) { member, _ in member.fullName },
-                ReportColumn(title: "العمر", ratio: 0.14) { member, _ in ageResolver(member).map { "\($0) سنة" } ?? "—" },
-                ReportColumn(title: "الهاتف", ratio: 0.22) { member, _ in standardizedPhone(member.phoneNumber) }
-            ]
-        )
-    }
-
-    static func makeFamilyReport(members: [FamilyMember], filters: [String]) throws -> Data {
-        try makeMembersTableReport(
-            members: members,
-            filters: filters,
-            theme: PDFTheme(
-                accent: UIColor(red: 0.33, green: 0.41, blue: 0.57, alpha: 1),
-                title: "تقرير الأسماء"
-            ),
-            columns: [
-                ReportColumn(title: "م", ratio: 0.10) { _, index in "\(index)" },
-                ReportColumn(title: "الاسم الكامل", ratio: 0.90) { member, _ in member.fullName }
-            ]
-        )
-    }
-
-    static func makeMissingPhoneReport(members: [FamilyMember], filters: [String]) throws -> Data {
-        try makeMembersTableReport(
-            members: members,
-            filters: filters,
-            theme: PDFTheme(
-                accent: UIColor(red: 0.63, green: 0.49, blue: 0.23, alpha: 1),
-                title: "تقرير الأعضاء بدون هاتف"
-            ),
-            columns: [
-                ReportColumn(title: "م", ratio: 0.10) { _, index in "\(index)" },
-                ReportColumn(title: "الاسم الكامل", ratio: 0.90) { member, _ in member.fullName }
-            ]
         )
     }
 
@@ -1514,12 +1405,12 @@ private enum MembersPDFBuilder {
 
     private static func fillRoundedRect(_ rect: CGRect, color: UIColor) {
         color.setFill()
-        UIBezierPath(roundedRect: rect, cornerRadius: 12).fill()
+        UIBezierPath(roundedRect: rect, cornerRadius: DS.Radius.md).fill()
     }
 
     private static func strokeRoundedRect(_ rect: CGRect, color: UIColor, lineWidth: CGFloat) {
         color.setStroke()
-        let path = UIBezierPath(roundedRect: rect, cornerRadius: 12)
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: DS.Radius.md)
         path.lineWidth = lineWidth
         path.stroke()
     }

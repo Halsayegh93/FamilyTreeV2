@@ -179,25 +179,19 @@ struct AdminTreeHealthView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            // بطاقة الرأس ← الحلقة ← البحث والفلاتر ← الأعضاء: قائمة واحدة تتمرّر معاً
-            // (بقيت `List` لأجل أزرار السحب)
-            List {
+        // صفّ الأرقام ← الحلقة ← البحث والفلاتر ← الأعضاء: قائمة واحدة تتمرّر معاً
+        // (بقيت `List` لأجل أزرار السحب)
+        List {
                 heroSection
                     .healthListRow(top: DS.Spacing.sm, bottom: DS.Spacing.sm)
 
                 if isCheckingTree {
-                    SysStateCard(icon: "heart.text.square.fill",
-                                 title: L10n.t("جاري فحص الشجرة...", "Checking tree health..."),
-                                 tint: pageTint,
-                                 isLoading: true)
-                        .padding(.top, DS.Spacing.xs)
+                    DSPageLoader(L10n.t("جاري فحص الشجرة...", "Checking tree health..."), fillsSpace: false)
+                        .padding(.top, DS.Spacing.xl)
                         .dsStaggerIn(1)
                         .healthListRow()
                 } else if membersFailed {
-                    SysStateCard(icon: "wifi.exclamationmark",
+                    DSStateCard(icon: "wifi.exclamationmark",
                                  title: L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
                                  hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                                  tint: DS.Color.error,
@@ -208,7 +202,7 @@ struct AdminTreeHealthView: View {
                         .healthListRow()
                 } else if cachedIssueMembers.isEmpty {
                     emptyState
-                        .padding(.top, DS.Spacing.xs)
+                        .padding(.top, DS.Spacing.xl)
                         .dsStaggerIn(1)
                         .healthListRow()
                 } else {
@@ -223,14 +217,14 @@ struct AdminTreeHealthView: View {
                                   placeholder: L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."),
                                   tint: pageTint)
                         .dsStaggerIn(2)
-                        .healthListRow(top: DS.Spacing.xs, bottom: 2)
+                        .healthListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xxs)
 
                     filterChips
                         .dsStaggerIn(2)
                         .healthListRow(top: 0, bottom: 0)
 
                     // عنوان الفلتر المختار + تلميح السحب
-                    SysSectionTitle(title: selectedFilter.label,
+                    DSSectionTitle(title: selectedFilter.label,
                                     icon: selectedFilter.icon,
                                     tint: selectedFilter.color,
                                     trailing: members.isEmpty ? nil
@@ -238,7 +232,7 @@ struct AdminTreeHealthView: View {
                         .dsStaggerIn(3)
                         // العنوان يظهر مع الصفوف (بعد الفحص) — فتبدأ الصفوف بعده
                         .onAppear(perform: startRowsCascade)
-                        .healthListRow(top: DS.Spacing.xs, bottom: 2)
+                        .healthListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xxs)
 
                     if members.isEmpty {
                         noResultsState
@@ -313,9 +307,10 @@ struct AdminTreeHealthView: View {
             .scrollDismissesKeyboard(.interactively)
             .environment(\.defaultMinListRowHeight, 0)
             .onChange(of: searchText) { _ in displayLimit = 20 }
-        }
-        .navigationTitle(L10n.t("صحة الشجرة", "Tree Health"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(L10n.t("صحة الشجرة", "Tree Health"),
+                         subtitle: L10n.t("أعضاء يحتاجون ربطاً أو تصحيحاً في الشجرة",
+                                          "Members who need a link or a fix in the tree"))
         .dsAlert(
             L10n.t("تأكيد", "Confirm"),
             isPresented: $showToggleHiddenConfirm,
@@ -431,13 +426,8 @@ struct AdminTreeHealthView: View {
     private var heroSection: some View {
         let ready = !isCheckingTree && !membersFailed
         func value(_ n: Int) -> String { ready ? "\(n)" : "—" }
-        return DSPageHero(
-            title: L10n.t("صحة الشجرة", "Tree Health"),
-            subtitle: L10n.t("أعضاء يحتاجون ربطاً أو تصحيحاً في الشجرة",
-                             "Members who need a link or a fix in the tree"),
-            icon: "heart.text.square.fill",
-            tint: pageTint,
-            stats: [
+        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
+        return DSStatsRow([
                 DSHeroStat(value: value(cachedIssueMembers.count),
                            label: L10n.t("يحتاجون مراجعة", "Need review"),
                            icon: "exclamationmark.triangle.fill"),
@@ -447,8 +437,7 @@ struct AdminTreeHealthView: View {
                 DSHeroStat(value: value(cachedCounts[.brokenParent] ?? 0),
                            label: TreeIssueFilter.brokenParent.label,
                            icon: TreeIssueFilter.brokenParent.icon)
-            ]
-        )
+        ], tint: pageTint)
     }
 
     // MARK: - Health Score
@@ -466,9 +455,9 @@ struct AdminTreeHealthView: View {
         let ringTint = score >= 0.9 ? DS.Color.success
             : (score >= 0.6 ? DS.Color.warning : DS.Color.error)
         return HStack(spacing: DS.Spacing.md) {
-            SysRing(progress: score, tint: ringTint, lineWidth: 6, size: 56) {
+            DSRing(progress: score, tint: ringTint, lineWidth: DS.Spacing.xsm, size: DS.Icon.sizeLg) {
                 Text(L10n.t("\(pct)٪", "\(pct)%"))
-                    .dsFieldFont(13, weight: .bold)
+                    .dsFieldFont(.rowTitleCompact)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -476,13 +465,13 @@ struct AdminTreeHealthView: View {
             }
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(L10n.t("سلامة الشجرة", "Tree integrity"))
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("بلا ملاحظات: \(cachedCleanCount) من \(cachedCheckedCount)",
                             "No issues: \(cachedCleanCount) of \(cachedCheckedCount)"))
-                    .dsFieldFont(12)
+                    .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .monospacedDigit()
                     .fixedSize(horizontal: false, vertical: true)
@@ -535,20 +524,21 @@ struct AdminTreeHealthView: View {
         let hasPhone = !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let issues = issueLabels(for: member)
 
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             HStack(alignment: .center, spacing: DS.Spacing.sm) {
                 // Avatar
                 Text(displayName.isEmpty ? "?" : String(displayName.prefix(1)))
-                    .font(DS.Font.plex(14, weight: .bold))
+                    .dsFont(.rowTitle)
                     .foregroundColor(tint)
-                    .frame(width: 32, height: 32)
-                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(tint.opacity(0.12)))
+                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
+                        .fill(tint.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     // Name
                     Text(displayName.isEmpty ? L10n.t("بدون اسم", "No Name") : displayName)
-                        .dsFieldFont(13.5, weight: .bold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(displayName.isEmpty ? DS.Color.textTertiary : DS.Color.fieldLabel)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -556,7 +546,7 @@ struct AdminTreeHealthView: View {
                     // Phone
                     if hasPhone {
                         Text(phone)
-                            .dsFieldFont(12)
+                            .dsFieldFont(.subtitle)
                             .foregroundColor(DS.Color.fieldValue)
                             .monospacedDigit()
                             .lineLimit(1)
@@ -567,14 +557,14 @@ struct AdminTreeHealthView: View {
                 Spacer(minLength: 0)
 
                 // Role badge
-                SysStatusChip(text: member.roleName, tint: member.roleColor)
+                DSStatusChip(text: member.roleName, tint: member.roleColor)
                     .fixedSize()
             }
 
             // Issue tags — تبدأ تحت الاسم (بعد عمود الأيقونة ٣٢ + ٨)
             if !issues.isEmpty {
                 issueTags(issues)
-                    .padding(.leading, 40)
+                    .padding(.leading, DS.Spacing.xxxxl)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -587,17 +577,17 @@ struct AdminTreeHealthView: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: DS.Spacing.xs) {
                 ForEach(issues, id: \.self) { tag in
-                    SysStatusChip(text: tag.label, icon: tag.icon, tint: tag.color)
+                    DSStatusChip(text: tag.label, icon: tag.icon, tint: tag.color)
                 }
             }
             HStack(spacing: DS.Spacing.xs) {
                 ForEach(issues, id: \.self) { tag in
-                    SysStatusChip(text: tag.label, tint: tag.color)
+                    DSStatusChip(text: tag.label, tint: tag.color)
                 }
             }
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 ForEach(issues, id: \.self) { tag in
-                    SysStatusChip(text: tag.label, icon: tag.icon, tint: tag.color)
+                    DSStatusChip(text: tag.label, icon: tag.icon, tint: tag.color)
                 }
             }
         }
@@ -606,49 +596,30 @@ struct AdminTreeHealthView: View {
     // MARK: - Show More
 
     private func showMoreButton(remaining: Int) -> some View {
-        Button {
+        // الشريحة الواحدة بلون الصفحة (مساحة ضغط ٤٤)
+        DSChipButton(L10n.t("عرض المزيد (\(remaining) متبقي)", "Show more (\(remaining) remaining)"),
+                     icon: "chevron.down", tint: pageTint) {
             displayLimit += 20
-        } label: {
-            HStack(spacing: 6) {
-                Text(L10n.t(
-                    "عرض المزيد (\(remaining) متبقي)",
-                    "Show more (\(remaining) remaining)"
-                ))
-                .font(DS.Font.plex(12.5, weight: .bold))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10.5, weight: .bold))
-                    .accessibilityHidden(true)
-            }
-            .foregroundColor(pageTint)
-            .padding(.horizontal, DS.Spacing.lg)
-            .frame(minHeight: 44)
-            .background(Capsule().fill(pageTint.opacity(0.10)))
-            .overlay(Capsule().strokeBorder(pageTint.opacity(0.25), lineWidth: 1))
-            .contentShape(Capsule())
         }
-        .buttonStyle(DSScaleButtonStyle())
         .frame(maxWidth: .infinity)
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        SysStateCard(
-            icon: "checkmark.shield.fill",
-            title: L10n.t("الشجرة سليمة!", "Tree is Healthy!"),
-            hint: L10n.t("ما في أعضاء مشكلين حالياً", "No problematic members found"),
-            tint: DS.Color.success
-        )
+        DSEmptyView(
+            L10n.t("الشجرة سليمة!", "Tree is Healthy!"),
+            message: L10n.t("ما في أعضاء مشكلين حالياً", "No problematic members found"),
+            tint: DS.Color.success, style: .compact)
     }
 
     private var noResultsState: some View {
-        SysStateCard(
-            icon: "magnifyingglass",
-            title: L10n.t("لا توجد نتائج", "No Results"),
-            hint: searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        DSEmptyView(
+            L10n.t("لا توجد نتائج", "No Results"),
+            message: searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? L10n.t("لا أحد في «\(selectedFilter.label)» الآن", "Nobody in \(selectedFilter.label) right now")
                 : L10n.t("جرّب اسماً آخر أو رقماً", "Try another name or number"),
-            tint: DS.Color.textTertiary
+            style: .compact
         )
     }
 }
@@ -657,7 +628,7 @@ struct AdminTreeHealthView: View {
 
 private extension View {
     /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
-    func healthListRow(top: CGFloat = 4, bottom: CGFloat = 4) -> some View {
+    func healthListRow(top: CGFloat = DS.Spacing.xs, bottom: CGFloat = DS.Spacing.xs) -> some View {
         self
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
@@ -720,12 +691,12 @@ struct EditNameSheet: View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: "phone.fill", tint: DS.Color.success)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(L10n.t("رقم الهاتف", "Phone Number"))
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(phone)
-                    .dsFieldFont(14.5)
+                    .dsFieldFont(.body)
                     .foregroundColor(DS.Color.fieldValue)
                     .monospacedDigit()
                     .environment(\.layoutDirection, .leftToRight)

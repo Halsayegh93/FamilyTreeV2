@@ -41,16 +41,16 @@ enum AppSection: Int, CaseIterable {
     /// النص الأبيض فوق التدرّج ≥ ٤٫٥:١ في الوضعين، والحبر الداكن ≥ ٤٫٥:١ على #1C1C1E.
     private var tones: Tones {
         switch self {
-        case .home:      return Tones(deep: ("#102B47", "#0E2238"), base: ("#1F4E79", "#173A5E"), light: ("#285D8D", "#1E4B75"), ink: ("#1F4E79", "#7FA8D6"), control: ("#1A4470", "#16395E")) // كحلي العلامة
-        case .tree:      return Tones(deep: ("#0D332D", "#092823"), base: ("#1E5950", "#14413A"), light: ("#24665B", "#1B534A"), ink: ("#1E5950", "#6CB6A8"), control: ("#194F46", "#134038")) // أخضر مزرق
-        case .diwaniyas: return Tones(deep: ("#0D313A", "#09262E"), base: ("#1E5665", "#133F4A"), light: ("#236373", "#1B505E"), ink: ("#1E5665", "#6CB2C6"), control: ("#194C59", "#133E48")) // بترولي
-        case .profile:   return Tones(deep: ("#192A50", "#142240"), base: ("#334C81", "#213664"), light: ("#3B5793", "#2E477A"), ink: ("#334C81", "#8AA6DE"), control: ("#284177", "#203562")) // كوبالت نيلي
-        case .admin:     return Tones(deep: ("#28274B", "#1E1C3E"), base: ("#47467F", "#333260"), light: ("#525190", "#424178"), ink: ("#47467F", "#9E9FDC"), control: ("#3E3C74", "#323060")) // نيلي بنفسجي
+        case .home:      return Tones(deep: ("#244771", "#1E3856"), base: ("#3A6DA6", "#2A4E78"), light: ("#3E74B2", "#305988"), ink: ("#326297", "#91B5DE"), control: ("#315F94", "#284A71"))   // البحري الخفيف (٢٠٢٦-١٠-٠٧)
+        case .tree:      return Tones(deep: ("#1F4F68", "#1B3E50"), base: ("#337799", "#25566E"), light: ("#377FA4", "#2A627D"), ink: ("#2C6C8C", "#90C5E0"), control: ("#2B6988", "#235168"))   // البحري الخفيف (٢٠٢٦-١٠-٠٧)
+        case .diwaniyas: return Tones(deep: ("#224A6B", "#1D3A52"), base: ("#38709F", "#285172"), light: ("#3C78AA", "#2E5C82"), ink: ("#306591", "#91BBDE"), control: ("#2F638D", "#264C6C"))   // البحري الخفيف (٢٠٢٦-١٠-٠٧)
+        case .profile:   return Tones(deep: ("#284173", "#223458"), base: ("#4264A9", "#2F487A"), light: ("#466BB5", "#36528B"), ink: ("#39599A", "#94ACDB"), control: ("#385797", "#2D4473"))   // البحري الخفيف (٢٠٢٦-١٠-٠٧)
+        case .admin:     return Tones(deep: ("#2D3774", "#262D59"), base: ("#4956AB", "#353E7B"), light: ("#515FB5", "#3C478D"), ink: ("#404C9C", "#97A0D8"), control: ("#3E4B99", "#323B75"))   // البحري الخفيف (٢٠٢٦-١٠-٠٧)
         // نفس سلّم «الاعتدال» (OKLCH): الغامق والأساسي والحبر = درجات مربّعات الرئيسية المعتمدة،
         // والفاتح (النص الأبيض ١٢ نقطة ≥ ٤٫٥:١ فوقه) والتحكّم مشتقّان بنفس السلّم
-        case .library:   return Tones(deep: ("#392041", "#2D1833"), base: ("#633C6F", "#4E2756"), light: ("#71457F", "#5D3769"), ink: ("#633C6F", "#BE95CA"), control: ("#593265", "#492853")) // بنفسجي المكتبة
-        case .projects:  return Tones(deep: ("#13341C", "#0D2915"), base: ("#275B35", "#184324"), light: ("#2D673C", "#225530"), ink: ("#275B35", "#7EB689"), control: ("#1C512B", "#154222")) // أخضر المشاريع
-        case .news:      return Tones(deep: ("#0D3041", "#082534"), base: ("#25566F", "#133D52"), light: ("#23617F", "#1A4F68"), ink: ("#25566F", "#75B2D1"), control: ("#184A62", "#123C51")) // أزرق الأخبار
+        case .library:   return Tones(deep: ("#3B3276", "#312A5A"), base: ("#5E52AD", "#443B7D"), light: ("#695EB3", "#4D438E"), ink: ("#53479E", "#A29AD6"), control: ("#51469B", "#403776"))   // البحري الخفيف (٢٠٢٦-١٠-٠٧)
+        case .projects:  return Tones(deep: ("#1C5164", "#183F4D"), base: ("#2F7893", "#21576A"), light: ("#32819E", "#266379"), ink: ("#286D86", "#8ECBE1"), control: ("#276B83", "#205264"))   // البحري الخفيف (٢٠٢٦-١٠-٠٧)
+        case .news:      return Tones(deep: ("#244673", "#1F3858"), base: ("#3C6BAA", "#2B4D7A"), light: ("#4073B6", "#31588B"), ink: ("#34609B", "#91B2DE"), control: ("#325E97", "#294973"))   // البحري الخفيف (٢٠٢٦-١٠-٠٧)
         }
     }
 
@@ -77,8 +77,8 @@ enum AppSection: Int, CaseIterable {
                                                startPoint: .bottomTrailing, endPoint: .topLeading))
     }
 
-    // TMP-ART-TRIAL: «الحالي» = تصميم ٢٨ سبتمبر (قبل ألوان الأقسام) — كل الأقسام بكحلي العلامة
-    private var swatch: Swatch { Self.swatches[ArtTrial.legacyColors ? 0 : rawValue] }
+    // ألوان الأقسام «البحرية المتقاربة» — دائمة بعد اعتماد «مجسّمات» اتجاهاً نهائياً (٢٠٢٦-١٠-٠٦)
+    private var swatch: Swatch { Self.swatches[rawValue] }
 
     /// تدرّج رأس القسم — نفس بناء `DS.Color.gradientPrimary` بلون القسم
     var gradient: LinearGradient { swatch.gradient }
@@ -124,6 +124,54 @@ enum AppSection: Int, CaseIterable {
 
     fileprivate static func pageDisappeared(_ id: UUID) {
         openPages.removeAll { $0.id == id }
+    }
+}
+
+// MARK: - رمز القسم ومجسّمه — مكان واحد (طلب المالك ٢٠٢٦-١٠-٠٧ «أسلوب واحد»)
+
+extension AppSection {
+    /// رمز SF للقسم — شريط التبويبات، فصل الدليل، رأس الصفحة. الديوانيات «مجلس» (`sofa.fill`) في كل مكان
+    /// (اختيار المالك ٢٠٢٦-١٠-٠٧؛ كانت `map.fill` في التبويب و`building.columns.fill` في المربّعات).
+    var symbol: String {
+        switch self {
+        case .home:      return "house.fill"
+        case .tree:      return "tree.fill"
+        case .diwaniyas: return "sofa.fill"
+        case .profile:   return "person.crop.circle.fill"
+        case .admin:     return "gearshape.2.fill"
+        case .library:   return "books.vertical.fill"
+        case .projects:  return "briefcase.fill"
+        case .news:      return "newspaper.fill"
+        }
+    }
+
+    /// الرمز المفرّغ (تبويب غير مختار)
+    var symbolOutline: String {
+        switch self {
+        case .home:      return "house"
+        case .tree:      return "tree"
+        case .diwaniyas: return "sofa"
+        case .profile:   return "person.crop.circle"
+        case .admin:     return "gearshape.2"
+        case .library:   return "books.vertical"
+        case .projects:  return "briefcase"
+        case .news:      return "newspaper"
+        }
+    }
+
+    /// رمز مجسّم القسم («مجسّمات») — رأس الصفحة الفرعية، الصفحة الفاضية، التحميل، قرص التنبيه:
+    /// الرئيسية والأخبار صحيفة، الشجرة غافة، الديوانيات «مجلس»، حسابي بيادق، الإدارة ختم، المكتبة كتاب،
+    /// المشاريع حقيبة
+    var artIcon: String {
+        switch self {
+        case .home, .news: return "newspaper.fill"
+        case .tree:        return "tree.fill"
+        case .diwaniyas:   return "sofa.fill"
+        case .profile:     return "person.2.fill"
+        case .admin:       return "checkmark.shield.fill"
+        case .library:     return "books.vertical.fill"
+        case .projects:    return "briefcase.fill"
+        }
     }
 }
 

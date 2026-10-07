@@ -634,6 +634,9 @@ class AuthViewModel: ObservableObject {
 
         // جلب إعدادات التطبيق من السيرفر
         await appSettingsVM?.fetchSettings()
+        // تصنيفات الأخبار والمكتبة كما ضبطتها الإدارة — كانت لا تُحمَّل إلا بفتح شاشة «التصنيفات»،
+        // فتظهر الأسماء الافتراضية القديمة لبقية المستخدمين (بلاغ المالك ٢٠٢٦-١٠-٠٧). بلا انتظار.
+        Task { await CategoryStore.shared.fetch() }
         guard generation == sessionGeneration, !isEndingSession,
               authUser.id == supabase.auth.currentUser?.id, !Task.isCancelled else { return }
         if let normalizedPhone, normalizedPhone.count == 8 {
@@ -1486,20 +1489,8 @@ class AuthViewModel: ObservableObject {
 
             // الإدارة تُبلَّغ مرة واحدة — عند إنشاء الطلب فقط
             if requestOutcome == .created {
-                let pushBody: String
-                if matchedMemberIds.isEmpty {
-                    pushBody = "\(cleanFirstName) يطلب الانضمام — لا مطابقات."
-                } else {
-                    pushBody = "\(cleanFirstName) يطلب الانضمام — \(matchedMemberIds.count) مطابقة."
-                }
-                
-                await notifyAdminsWithPush(
-                    title: "طلب انضمام جديد",
-                    body: pushBody,
-                    kind: NotificationKind.linkRequest.rawValue,
-                    requestId: user.id,
-                    requestType: RequestType.joinRequest.rawValue
-                )
+                // الإشعار الداخلي والدفع يصدران من طلب الانضمام المحفوظ في قاعدة البيانات.
+                // لا نرسل نسخة ثانية من التطبيق.
 
                 // إيميل للإدارة بطلب الانضمام الجديد
                 await sendEventEmail(payload: [
@@ -1556,13 +1547,7 @@ class AuthViewModel: ObservableObject {
             return
         }
         if outcome == .created {
-            await notifyAdminsWithPush(
-                title: "طلب انضمام جديد",
-                body: "\(existing.firstName) يطلب الانضمام — موجود في الشجرة.",
-                kind: NotificationKind.linkRequest.rawValue,
-                requestId: existing.id,
-                requestType: RequestType.joinRequest.rawValue
-            )
+            // نفس مسار التسجيل الجديد: قاعدة البيانات تنشئ إشعار الطلب مرة واحدة.
             await sendEventEmail(payload: [
                 "type": AnyEncodable("join_request"),
                 "member_name": AnyEncodable(existing.fullName),

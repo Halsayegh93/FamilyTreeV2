@@ -5,8 +5,9 @@ import Supabase
 /// «المستجدات» بمركز الإشعارات (طلب المالك).
 /// الفرق عن «إرسال إشعارات»: هذه إعلانات عامة عن التطبيق نفسه (إصدار جديد،
 /// ميزة، صيانة)، لا رسائل موجّهة لأعضاء بعينهم.
-/// التصميم الموحّد (٢٠٢٦-٠٩-٢٧): بطاقة رأس، ثم أقسام: النوع ← الرسالة ← المعاينة ← زر النشر.
-/// داخل «الإشعارات والتحديثات» (`embedded`) الصفحة الأم تحمل بطاقة الرأس فلا تتكرّر.
+/// «أسلوب واحد» (٢٠٢٦-١٠-٠٧): الرأس الملوّن الموحّد (بـ× لأنها تُفتح مربّعاً من إشعارات الرئيسية) +
+/// صفّ أرقام، ثم أقسام: النوع ← الرسالة ← المعاينة ← زر النشر.
+/// داخل «الإشعارات والتحديثات» (`embedded`) الصفحة الأم تحمل الرأس فلا يتكرّر.
 struct AdminAppUpdateView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
@@ -86,9 +87,22 @@ struct AdminAppUpdateView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
+        Group {
+            if embedded {
+                page
+            } else {
+                // تُفتح مربّعاً طويلاً من إشعارات الرئيسية — الرأس الملوّن الموحّد و× للإغلاق
+                page
+                    .dsSubPageHeader(L10n.t("تحديثات التطبيق", "App Updates"),
+                                     subtitle: L10n.t("رسالة نظام لكل الأعضاء — تظهر في «المستجدات» ويصل معها إشعار.",
+                                                      "A system message to everyone — shows in Updates with a push."),
+                                     nav: .close)
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
 
+    private var page: some View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
                     if embedded {
@@ -103,22 +117,7 @@ struct AdminAppUpdateView: View {
                     previewSection
 
                     if let errorText {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(DS.Color.error)
-                                .accessibilityHidden(true)
-                            Text(errorText)
-                                .dsFieldFont(12, weight: .semibold)
-                                .foregroundColor(DS.Color.fieldLabel)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(DS.Spacing.md)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.error.opacity(0.10)))
-                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
-                        .accessibilityElement(children: .combine)
+                        DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
                     }
 
                     publishButton
@@ -127,32 +126,23 @@ struct AdminAppUpdateView: View {
                 .padding(.top, DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxxxl)
             }
-        }
-        .navigationTitle(L10n.t("تحديثات التطبيق", "App Updates"))
-        .navigationBarTitleDisplayMode(.inline)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .background(DS.Color.background.ignoresSafeArea())
     }
 
     // MARK: - الرأس
 
+    /// العنوان والوصف في الرأس الملوّن — الأرقام هنا
     private var hero: some View {
-        DSPageHero(
-            title: L10n.t("تحديثات التطبيق", "App Updates"),
-            subtitle: L10n.t("رسالة نظام لكل الأعضاء — تظهر في «المستجدات» ويصل معها إشعار.",
-                             "A system message to everyone — shows in Updates with a push."),
-            icon: "megaphone.fill",
-            tint: tint,
-            stats: [
-                DSHeroStat(value: "\(AppBuild.current)", label: L10n.t("رقم البناء", "Build"), icon: "app.badge.fill"),
-                DSHeroStat(value: "\(summary.count)", label: L10n.t("حرف من \(maxLength)", "of \(maxLength) chars"),
-                           icon: "text.alignright")
-            ]
-        )
+        DSStatsRow([
+            DSHeroStat(value: "\(AppBuild.current)", label: L10n.t("رقم البناء", "Build"), icon: "app.badge.fill"),
+            DSHeroStat(value: "\(summary.count)", label: L10n.t("حرف من \(maxLength)", "of \(maxLength) chars"),
+                       icon: "text.alignright")
+        ], tint: tint)
     }
 
     /// داخل الصفحة الأم: سطر يشرح أين تظهر الرسالة (كان بطاقة المقدّمة)
     private var introRow: some View {
-        SysRow(icon: "megaphone.fill", tint: tint,
+        DSRow(icon: "megaphone.fill", tint: tint,
                title: L10n.t("رسالة نظام لكل الأعضاء", "System message to everyone"),
                subtitle: L10n.t("تظهر في تبويب «المستجدات» ويصل معها إشعار.",
                                 "Appears in the Updates tab with a push notification."))
@@ -171,13 +161,13 @@ struct AdminAppUpdateView: View {
                 summary = AppReleaseNotes.current ?? summary
             }
         } label: {
-            SysRow(icon: "doc.text.fill", tint: DS.Color.primary,
+            DSRow(icon: "doc.text.fill", tint: DS.Color.primary,
                    title: L10n.t("تعبئة ملاحظات هذا الإصدار \(AppReleaseNotes.currentVersionLabel)",
                                  "Fill this release's notes \(AppReleaseNotes.currentVersionLabel)"),
                    subtitle: L10n.t("النوع والرقم وما الجديد — راجعها ثم انشر",
                                     "Type, version and what's new — review, then publish")) {
                 Image(systemName: "wand.and.stars")
-                    .font(.system(size: 14, weight: .bold))
+                    .dsGlyph(DS.Glyph.md)
                     .foregroundColor(DS.Color.primary.dsChrome(in: section))
                     .accessibilityHidden(true)
             }
@@ -193,53 +183,10 @@ struct AdminAppUpdateView: View {
                           tint: tint,
                           trailing: kind.title,
                           index: 1) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 2),
-                      spacing: DS.Spacing.sm) {
-                ForEach(UpdateKind.allCases) { k in
-                    kindOption(k)
-                }
-            }
+            // مربّعات الاختيار الواحد (`DSOptionTiles`) — كانت أزراراً يدوية بعمودين
+            DSOptionTiles(UpdateKind.allCases.map { DSOptionTile($0, title: $0.title, icon: $0.icon, tint: $0.color) },
+                          selection: $kind, columns: 4)
         }
-    }
-
-    private func kindOption(_ k: UpdateKind) -> some View {
-        let selected = kind == k
-        return Button {
-            withAnimation(DS.Anim.quick) { kind = k }
-        } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: k.icon)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(selected ? .white : k.color)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(selected ? k.color : k.color.opacity(0.13)))
-                    .accessibilityHidden(true)
-                Text(k.title)
-                    .dsFieldFont(12.5, weight: .bold)
-                    .foregroundColor(selected ? DS.Color.fieldLabel : DS.Color.fieldValue)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Spacer(minLength: 0)
-                if selected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(k.color)
-                        .transition(.opacity)
-                        .accessibilityHidden(true)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.sm + 2)
-            .frame(maxWidth: .infinity, minHeight: 46)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(selected ? k.color.opacity(0.10) : DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(selected ? k.color.opacity(0.55) : DS.Color.textTertiary.opacity(0.15),
-                              lineWidth: selected ? 1.5 : 1))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(k.title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var messageSection: some View {
@@ -261,21 +208,21 @@ struct AdminAppUpdateView: View {
 
     /// «ما الجديد» — محرّر متعدد الأسطر بإطار حقول المربّعات (يتلوّن عند الكتابة) + عدّاد
     private var summaryEditor: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "text.alignright")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(summaryFocused ? .white : tint)
-                    .frame(width: 32, height: 32)
-                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(summaryFocused ? tint : tint.opacity(0.12)))
+                    .dsGlyph(DS.Glyph.mdCompact, weight: .semibold)
+                    .foregroundColor(summaryFocused ? DS.Color.textOnPrimary : tint)
+                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
+                        .fill(summaryFocused ? tint : tint.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)
                 Text(L10n.t("ما الجديد", "What's new"))
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(summaryFocused ? tint : DS.Color.fieldLabel)
                 Spacer(minLength: 0)
                 Text("\(summary.count)/\(maxLength)")
-                    .font(DS.Font.plex(10.5, weight: .semibold))
+                    .dsFont(.micro)
                     .foregroundColor(summary.count > maxLength ? DS.Color.error : DS.Color.textTertiary)
                     .monospacedDigit()
             }
@@ -283,32 +230,28 @@ struct AdminAppUpdateView: View {
             ZStack(alignment: .topLeading) {
                 if summary.isEmpty {
                     Text(L10n.t("اكتب ما تغيّر في التطبيق…", "Describe what changed…"))
-                        .font(DS.Font.plex(14.5))
+                        .dsFont(.body)
                         .foregroundColor(DS.Color.textTertiary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .padding(.vertical, DS.Spacing.sm)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
                 TextEditor(text: $summary)
                     .focused($summaryFocused)
-                    .dsFieldFont(14.5)
+                    .dsFieldFont(.body)
                     .foregroundColor(DS.Color.textPrimary)
                     .scrollContentBackground(.hidden)
-                    .frame(minHeight: 160, maxHeight: 320)
+                    .frame(minHeight: DSBox.editorTallMinHeight, maxHeight: DSBox.editorTallMaxHeight)
                     .accessibilityLabel(L10n.t("ما الجديد", "What's new"))
                     .onChange(of: summary) { _ in
                         if summary.count > maxLength { summary = String(summary.prefix(maxLength)) }
                     }
             }
         }
-        .padding(.horizontal, DS.Spacing.sm + 2)
+        .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
         .padding(.vertical, DS.Spacing.sm)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(summaryFocused ? tint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
-                          lineWidth: summaryFocused ? 1.5 : 1))
-        .animation(.easeInOut(duration: 0.2), value: summaryFocused)
+        .dsFocusFieldBox(focused: summaryFocused, tint: tint)
     }
 
     /// معاينة الشكل كما يصل العضو
@@ -319,18 +262,13 @@ struct AdminAppUpdateView: View {
                           trailing: L10n.t("كما يصل العضو", "As members see it"),
                           index: 3) {
             HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                Image(systemName: kind.icon)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(kind.color)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(kind.color.opacity(0.13)))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
+                DSStateIcon(kind.icon, tint: kind.color, size: DS.Icon.row)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(finalTitle)
-                        .dsFieldFont(13.5, weight: .bold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(summary.isEmpty ? L10n.t("نص التحديث…", "Update text…") : summary)
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(6)
                 }
@@ -341,34 +279,19 @@ struct AdminAppUpdateView: View {
         }
     }
 
+    /// الزرّ الواحد: «نشر للجميع» بتعبئة القسم، و«تم النشر» أخضر صلب (دوّارته داخله أثناء النشر)
     private var publishButton: some View {
-        Button {
+        DSButton(didSend ? L10n.t("تم النشر", "Published") : L10n.t("نشر للجميع", "Publish to everyone"),
+                 icon: didSend ? "checkmark.circle.fill" : "megaphone.fill",
+                 tint: didSend ? DS.Color.success : nil,
+                 isLoading: isSending) {
             Task { await publish() }
-        } label: {
-            HStack(spacing: 7) {
-                if isSending {
-                    ProgressView().tint(.white).scaleEffect(0.85)
-                } else {
-                    Image(systemName: didSend ? "checkmark.circle.fill" : "megaphone.fill")
-                        .font(.system(size: 14, weight: .bold))
-                }
-                Text(didSend ? L10n.t("تم النشر", "Published")
-                             : L10n.t("نشر للجميع", "Publish to everyone"))
-                    .font(DS.Font.plex(15, weight: .bold))
-            }
-            .foregroundColor(didSend ? .white : DSActionFill.label(enabled: canSend))
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(publishFill, in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .disabled(!canSend)
+        // «تم النشر» يبقى بلونه (لا خفوت المعطّل) لكنه لا يُضغط
+        .disabled(!canSend && !didSend)
+        .allowsHitTesting(canSend)
         .padding(.top, DS.Spacing.xs)
         .animation(.easeInOut(duration: 0.2), value: didSend)
-    }
-
-    private var publishFill: AnyShapeStyle {
-        didSend ? AnyShapeStyle(DS.Color.success) : AnyShapeStyle(DSActionFill.style(enabled: canSend))
     }
 
     // MARK: - النشر

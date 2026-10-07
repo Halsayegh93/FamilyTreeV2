@@ -136,8 +136,20 @@ struct AdminActivityLogView: View {
     ]
 
     /// السجل شامل: كل حركة في التطبيق بلا استثناء (طلب المالك)
+    /// حركات الإدارة فقط — الإشعار الشخصي (نتيجة طلبي «تم قبول طلبك»، رسالة لي، إعجاب أو تعليق على خبري)
+    /// مكانه «الإشعارات» لا سجل النشاط (طلب المالك ٢٠٢٦-١٠-٠٧)
     private var activityItems: [AppNotification] {
-        notificationVM.notifications
+        let myId = authVM.currentUser?.id
+        return notificationVM.notifications.filter { !Self.isPersonal($0, myId: myId) }
+    }
+
+    /// كل أنواع حركات السجل المعروفة (الأعضاء، النساء، المحتوى، الطلبات)
+    private static let activityKinds: Set<String> = memberKinds.union(womenKinds).union(contentKinds).union(requestKinds)
+
+    /// موجّه لي ونوعه ليس حركة إدارية = إشعار شخصي
+    private static func isPersonal(_ n: AppNotification, myId: UUID?) -> Bool {
+        guard let myId, n.targetMemberId == myId else { return false }
+        return !activityKinds.contains(n.kind)
     }
 
     private func matchesFilter(_ n: AppNotification) -> Bool { matches(n, filter) }
@@ -201,49 +213,41 @@ struct AdminActivityLogView: View {
     var body: some View {
         let counts = filterCounts
 
-        return ZStack {
-            DS.Color.background.ignoresSafeArea()
+        // صفّ الأرقام ← البحث والفلاتر ← الحركات: قائمة واحدة تتمرّر معاً
+        // (بقيت `List` لأجل السحب للحذف والسحب للتحديث — والسحب للتحديث يعمل حتى والسجل فارغ)
+        return List {
+            heroSection(counts: counts)
+                .activityListRow(top: DS.Spacing.sm, bottom: DS.Spacing.sm)
 
-            // بطاقة الرأس ← البحث والفلاتر ← الحركات: قائمة واحدة تتمرّر معاً
-            // (بقيت `List` لأجل السحب للحذف والسحب للتحديث — والسحب للتحديث يعمل حتى والسجل فارغ)
-            List {
-                heroSection(counts: counts)
-                    .activityListRow(top: DS.Spacing.sm, bottom: DS.Spacing.sm)
-
-                listContent(counts: counts)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .scrollDismissesKeyboard(.interactively)
-            .environment(\.defaultMinListRowHeight, 0)
+            listContent(counts: counts)
         }
-        .navigationTitle(L10n.t("سجل النشاط", "Activity Log"))
-        .navigationBarTitleDisplayMode(.inline)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .toolbar {
-            // البحث والتصفية صارا تحت بطاقة الرأس (حقل بحث + فلاتر بعددها) — والتحديد باقٍ هنا
-            ToolbarItem(placement: .topBarTrailing) {
-                // لا تحديد والسجل فارغ (يبقى ظاهراً أثناء التحديد ليُلغى)
-                if isSelecting || !activityItems.isEmpty {
-                    Button {
-                        withAnimation(DS.Anim.quick) {
-                            isSelecting.toggle()
-                            if !isSelecting { selectedIds.removeAll() }
-                        }
-                    } label: {
-                        // التحديد علامة بدل النص (طلب المالك)
-                        Image(systemName: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
-                            .foregroundColor(AppSection.admin.ink)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .environment(\.defaultMinListRowHeight, 0)
+        // الرأس الملوّن الموحّد — «تحديد» (كان في شريط النظام) زرّ الرأس
+        .dsSubPageHeader(L10n.t("سجل النشاط", "Activity Log"),
+                         subtitle: L10n.t("كل حركة وتغيير في التطبيق — اضغط أي حركة لتفاصيلها",
+                                          "Every change in the app — tap an entry for its details")) {
+            // لا تحديد والسجل فارغ (يبقى ظاهراً أثناء التحديد ليُلغى)
+            if isSelecting || !activityItems.isEmpty {
+                // التحديد علامة بدل النص (طلب المالك)
+                DSHeaderButton(symbol: isSelecting ? "checkmark.circle.fill" : "checkmark.circle",
+                               label: isSelecting ? L10n.t("إلغاء التحديد", "Cancel selection")
+                                                  : L10n.t("تحديد", "Select")) {
+                    withAnimation(DS.Anim.quick) {
+                        isSelecting.toggle()
+                        if !isSelecting { selectedIds.removeAll() }
                     }
-                    .accessibilityLabel(isSelecting ? L10n.t("إلغاء التحديد", "Cancel selection")
-                                                    : L10n.t("تحديد", "Select"))
                 }
             }
         }
-        .confirmationDialog(
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        // تأكيد الحذف — مربّع التنبيه الموحّد بالمنتصف (كان ورقة أسفل الشاشة)
+        .dsAlert(
             L10n.t("حذف \(selectedIds.count) من السجل؟", "Delete \(selectedIds.count) entries?"),
             isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
+            icon: "trash.fill"
         ) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 Task { await deleteSelected() }
@@ -281,15 +285,12 @@ struct AdminActivityLogView: View {
     @ViewBuilder
     private func listContent(counts: [ActivityFilter: Int]) -> some View {
         if isInitialLoading {
-            SysStateCard(icon: "clock.arrow.circlepath",
-                         title: L10n.t("جارٍ تحميل السجل…", "Loading the log…"),
-                         tint: pageTint,
-                         isLoading: true)
-                .padding(.top, DS.Spacing.xs)
+            DSPageLoader(L10n.t("جارٍ تحميل السجل…", "Loading the log…"), fillsSpace: false)
+                .padding(.top, DS.Spacing.md)
                 .dsStaggerIn(1)
                 .activityListRow()
         } else if loadFailed {
-            SysStateCard(icon: "wifi.exclamationmark",
+            DSStateCard(icon: "wifi.exclamationmark",
                          title: L10n.t("تعذّر تحميل السجل", "Couldn't load the log"),
                          hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                          tint: DS.Color.error,
@@ -299,11 +300,9 @@ struct AdminActivityLogView: View {
                 .dsStaggerIn(1)
                 .activityListRow()
         } else if activityItems.isEmpty {
-            SysStateCard(icon: "clock.arrow.circlepath",
-                         title: L10n.t("لا توجد حركة بعد", "No activity yet"),
-                         hint: L10n.t("كل حركة أو تغيير في التطبيق يظهر هنا", "Every change in the app shows up here"),
-                         tint: pageTint)
-                .padding(.top, DS.Spacing.xs)
+            DSEmptyView(L10n.t("لا توجد حركة بعد", "No activity yet"),
+                        message: L10n.t("كل حركة أو تغيير في التطبيق يظهر هنا", "Every change in the app shows up here"), style: .compact)
+                .padding(.top, DS.Spacing.xl)
                 .dsStaggerIn(1)
                 .activityListRow()
         } else {
@@ -313,7 +312,7 @@ struct AdminActivityLogView: View {
                           placeholder: L10n.t("ابحث في السجل…", "Search the log…"),
                           tint: pageTint)
                 .dsStaggerIn(1)
-                .activityListRow(top: DS.Spacing.xs, bottom: 2)
+                .activityListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xxs)
 
             filterChips(counts)
                 .dsStaggerIn(1)
@@ -321,18 +320,18 @@ struct AdminActivityLogView: View {
 
             if isSelecting {
                 selectionBar
-                    .activityListRow(top: DS.Spacing.xs, bottom: 2)
+                    .activityListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xxs)
             }
 
             // عنوان التصفية المختارة + عدد ما يظهر منها
-            SysSectionTitle(title: filter == .all ? L10n.t("كل الحركات", "All activity") : filter.title,
+            DSSectionTitle(title: filter == .all ? L10n.t("كل الحركات", "All activity") : filter.title,
                             icon: filter.icon,
                             tint: filter.color,
                             trailing: items.isEmpty ? nil : L10n.t("\(items.count) حركة", "\(items.count) entries"))
                 .dsStaggerIn(2)
                 // العنوان يظهر مع الصفوف (بعد التحميل) — فتبدأ الصفوف بعده
                 .onAppear(perform: startRowsCascade)
-                .activityListRow(top: DS.Spacing.xs, bottom: 2)
+                .activityListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xxs)
 
             if items.isEmpty {
                 noResultsState
@@ -358,15 +357,9 @@ struct AdminActivityLogView: View {
 
     // MARK: - بطاقة الرأس
 
+    /// العنوان والوصف في الرأس الملوّن — الأرقام هنا
     private func heroSection(counts: [ActivityFilter: Int]) -> some View {
-        DSPageHero(
-            title: L10n.t("سجل النشاط", "Activity Log"),
-            subtitle: L10n.t("كل حركة وتغيير في التطبيق — اضغط أي حركة لتفاصيلها",
-                             "Every change in the app — tap an entry for its details"),
-            icon: "clock.arrow.circlepath",
-            tint: pageTint,
-            stats: heroStats(counts: counts)
-        )
+        DSStatsRow(heroStats(counts: counts), tint: pageTint)
     }
 
     /// ٣ أرقام حيّة من السجل المحمّل أصلاً (بلا طلبات جديدة للسيرفر): حركة اليوم، من نفّذ حركات
@@ -437,15 +430,14 @@ struct AdminActivityLogView: View {
     /// لا نتيجة للبحث أو للتصنيف — زر يرجع لـ«الكل» (مثل شارة التصفية السابقة)
     private var noResultsState: some View {
         let searching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return SysStateCard(
-            icon: searching ? "magnifyingglass" : filter.icon,
-            title: searching ? L10n.t("لا توجد نتائج", "No results")
-                             : L10n.t("لا توجد حركة بعد", "No activity yet"),
-            hint: searching ? L10n.t("جرّب كلمة أخرى", "Try another word")
-                            : L10n.t("لا حركة في «\(filter.title)» الآن", "Nothing in \(filter.title) right now"),
-            tint: DS.Color.textTertiary,
+        return DSEmptyView(
+            searching ? L10n.t("لا توجد نتائج", "No results")
+                      : L10n.t("لا توجد حركة بعد", "No activity yet"),
+            message: searching ? L10n.t("جرّب كلمة أخرى", "Try another word")
+                               : L10n.t("لا حركة في «\(filter.title)» الآن", "Nothing in \(filter.title) right now"),
             actionTitle: filter == .all ? nil : L10n.t("عرض الكل", "Show all"),
             actionIcon: ActivityFilter.all.icon,
+            style: .compact,
             action: showAllAction
         )
     }
@@ -462,20 +454,15 @@ struct AdminActivityLogView: View {
     /// شريط التحديد: تحديد الكل · العدد · حذف
     private var selectionBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Button {
+            DSChipButton(L10n.t("تحديد الكل", "Select all"), icon: "checkmark.circle.fill") {
                 withAnimation(DS.Anim.quick) {
                     let all = Set(filteredItems.map(\.id))
                     selectedIds = (selectedIds == all) ? [] : all
                 }
-            } label: {
-                selectionCapsule(icon: "checkmark.circle.fill",
-                                 title: L10n.t("تحديد الكل", "Select all"),
-                                 tint: AppSection.admin.ink)
             }
-            .buttonStyle(.plain)
 
             Text(L10n.t("\(selectedIds.count) محدّد", "\(selectedIds.count) selected"))
-                .dsFieldFont(12, weight: .semibold)
+                .dsFieldFont(.chip)
                 .foregroundColor(DS.Color.fieldValue)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -483,42 +470,15 @@ struct AdminActivityLogView: View {
 
             Spacer(minLength: 0)
 
-            Button {
+            // أثناء الحذف ساعة رملية بدل الدوّارة — الشريحة معطّلة حتى ينتهي
+            DSChipButton(L10n.t("حذف", "Delete"), icon: isDeleting ? "hourglass" : "trash.fill",
+                         tint: DS.Color.error) {
                 showDeleteConfirm = true
-            } label: {
-                selectionCapsule(icon: "trash.fill",
-                                 title: L10n.t("حذف", "Delete"),
-                                 tint: DS.Color.error,
-                                 busy: isDeleting)
             }
-            .buttonStyle(.plain)
             .disabled(selectedIds.isEmpty || isDeleting)
-            .opacity(selectedIds.isEmpty ? 0.45 : 1)
+            .opacity(selectedIds.isEmpty ? DS.Opacity.disabled : 1)
         }
         .dsRowBox()
-    }
-
-    /// كبسولة شريط التحديد — مساحة ضغط ٤٤ نقطة والشكل كما هو
-    private func selectionCapsule(icon: String, title: String, tint: Color, busy: Bool = false) -> some View {
-        HStack(spacing: 4) {
-            if busy {
-                ProgressView().tint(tint).scaleEffect(0.7)
-            } else {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .bold))
-                    .accessibilityHidden(true)
-            }
-            Text(title)
-                .font(DS.Font.plex(12, weight: .bold))
-                .lineLimit(1)
-        }
-        .foregroundColor(tint)
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(height: 30)
-        .background(tint.opacity(0.10), in: Capsule())
-        .padding(.vertical, 7)
-        .contentShape(Rectangle())
-        .padding(.vertical, -7)
     }
 
     @MainActor
@@ -544,22 +504,22 @@ struct AdminActivityLogView: View {
         return HStack(spacing: DS.Spacing.sm) {
             if isSelecting {
                 Image(systemName: picked ? "checkmark.circle.fill" : "circle")
-                    .font(DS.Font.scaled(20))
+                    .dsGlyph(DS.Glyph.xl, weight: .regular)
                     .foregroundColor(picked ? AppSection.admin.ink : DS.Color.textTertiary)
                     .accessibilityHidden(true)
             }
 
             rowIcon(style: style, isNew: isNew)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(item.title)
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 if !item.body.isEmpty {
                     Text(item.body)
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -568,7 +528,7 @@ struct AdminActivityLogView: View {
             Spacer(minLength: 0)
 
             // الوقت — كحلي للحركة الجديدة، رمادي لما قُرئ
-            SysStatusChip(text: relativeTime(item.createdDate),
+            DSStatusChip(text: relativeTime(item.createdDate),
                           tint: isNew ? AppSection.admin.ink : DS.Color.textTertiary)
                 .fixedSize()
         }
@@ -577,7 +537,7 @@ struct AdminActivityLogView: View {
         .overlay {
             if isSelecting && picked {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(AppSection.admin.ink.opacity(0.55), lineWidth: 1.5)
+                    .strokeBorder(AppSection.admin.ink.opacity(DS.Opacity.selectedStroke), lineWidth: DS.Border.widthBold)
             }
         }
         .contentShape(Rectangle())
@@ -606,9 +566,9 @@ struct AdminActivityLogView: View {
                 if isNew {
                     Circle()
                         .fill(AppSection.admin.ink)
-                        .frame(width: 9, height: 9)
-                        .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
-                        .offset(x: L10n.isArabic ? -3 : 3, y: -3)
+                        .frame(width: DS.Icon.legendDot, height: DS.Icon.legendDot)
+                        .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: DS.Border.widthBold))
+                        .offset(x: L10n.isArabic ? -DS.Spacing.xxs : DS.Spacing.xxs, y: -DS.Spacing.xxs)
                 }
             }
             .accessibilityHidden(true)
@@ -641,7 +601,7 @@ struct AdminActivityLogView: View {
         if Self.contentKinds.contains(kind) {
             if kind.contains("news") { return ("newspaper.fill", DS.Color.info) }
             if kind.contains("gallery") { return ("photo.stack.fill", DS.Color.info) }
-            if kind.contains("diwaniya") { return ("map.fill", AppSection.admin.ink) }
+            if kind.contains("diwaniya") { return (AppSection.diwaniyas.symbol, AppSection.admin.ink) }
             if kind.contains("project") { return ("briefcase.fill", DS.Color.warning) }
             return ("doc.fill", DS.Color.info)
         }
@@ -664,7 +624,7 @@ struct AdminActivityLogView: View {
 
 private extension View {
     /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
-    func activityListRow(top: CGFloat = 4, bottom: CGFloat = 4) -> some View {
+    func activityListRow(top: CGFloat = DS.Spacing.xs, bottom: CGFloat = DS.Spacing.xs) -> some View {
         self
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
@@ -763,7 +723,7 @@ private struct ActivityDetailSheet: View {
         DSComposerSection(title: L10n.t("التفاصيل", "Details"), icon: "text.alignright",
                           tint: AppSection.admin.ink, index: bodyIndex) {
             Text(item.body)
-                .dsFieldFont(14)
+                .dsFieldFont(.body)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -798,12 +758,12 @@ private struct ActivityDetailSheet: View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: icon, tint: tint)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .dsFieldFont(14.5)
+                    .dsFieldFont(.body)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -817,7 +777,7 @@ private struct ActivityDetailSheet: View {
     /// مصغّرة صورة داخل تفاصيل التغيير — تُظهر الصورة الفعلية قبل/بعد
     private func photoThumb(_ urlString: String?, label: String, faded: Bool) -> some View {
         let trimmed = (urlString ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return VStack(spacing: 3) {
+        return VStack(spacing: DS.Spacing.xxs) {
             Group {
                 if let url = URL(string: trimmed), !trimmed.isEmpty {
                     CachedAsyncImage(url: url) { img in
@@ -829,22 +789,22 @@ private struct ActivityDetailSheet: View {
                     ZStack {
                         Rectangle().fill(DS.Color.surface)
                         Image(systemName: "person.crop.circle.badge.xmark")
-                            .font(DS.Font.scaled(14))
+                            .dsGlyph(DS.Glyph.md, weight: .regular)
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }
             }
-            .frame(width: 54, height: 54)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(width: DSBox.photoTile, height: DSBox.photoTile)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
+                    .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width)
             )
-            .opacity(faded ? 0.55 : 1)
+            .opacity(faded ? DS.Opacity.disabled : 1)
             .accessibilityHidden(true)   // المصغّرة للعين — «قبل/بعد» يُقرأ من النص تحتها
 
             Text(label)
-                .font(DS.Font.scaled(11, weight: .semibold))
+                .dsFont(.caption)
                 .foregroundColor(DS.Color.textTertiary)
         }
     }
@@ -861,9 +821,9 @@ private struct ActivityDetailSheet: View {
             DSFieldIcon(name: isPhoto ? "photo.fill" : "pencil", tint: DS.Color.accent)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 Text(AppNotification.NotificationDetails.localizedFieldName(ch.field))
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
 
                 if isPhoto {
@@ -871,26 +831,26 @@ private struct ActivityDetailSheet: View {
                     HStack(spacing: DS.Spacing.md) {
                         photoThumb(ch.before, label: L10n.t("قبل", "Before"), faded: true)
                         Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                            .font(.system(size: 11, weight: .bold))
+                            .dsGlyph(DS.Glyph.xs)
                             .foregroundColor(DS.Color.textTertiary)
                             .accessibilityHidden(true)
                         photoThumb(ch.after, label: L10n.t("بعد", "After"), faded: false)
                         Spacer(minLength: 0)
                     }
                 } else {
-                    HStack(spacing: 6) {
+                    HStack(spacing: DS.Spacing.xsm) {
                         Text(display(ch.before))
-                            .font(DS.Font.plex(13))
+                            .dsFont(.callout)
                             .foregroundColor(DS.Color.textTertiary)
-                            .strikethrough(true, color: DS.Color.textTertiary.opacity(0.6))
+                            .strikethrough(true, color: DS.Color.textTertiary.opacity(DS.Opacity.selectedStroke))
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
                         Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                            .font(.system(size: 11, weight: .bold))
+                            .dsGlyph(DS.Glyph.xs)
                             .foregroundColor(DS.Color.textTertiary)
                             .accessibilityHidden(true)
                         Text(display(ch.after))
-                            .font(DS.Font.plex(13, weight: .bold))
+                            .dsFont(.rowTitleCompact)
                             .foregroundColor(DS.Color.textPrimary)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)

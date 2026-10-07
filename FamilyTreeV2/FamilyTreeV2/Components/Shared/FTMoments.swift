@@ -129,11 +129,9 @@ struct FTNewsBadge: View {
         celebrate || beatOnAppear ? FTNewsBadges.firstBeat(type: type, seed: seed) - 0.35 : 0
     }
 
-    @AppStorage(ArtTrial.storageKey) private var artTrialRaw = ArtTrial.emblem.rawValue   // TMP-ART-TRIAL
-
     @ViewBuilder var body: some View {
-        if let art = ArtDispatch.newsBadge(ArtTrial(rawValue: artTrialRaw) ?? .emblem, type: type, tint: tint,
-                                           onColor: style == .onColor) {
+        if let art = FT5STrial.newsBadge(type: type, tint: tint,
+                                         onColor: style == .onColor) {
             art
         } else {
             emblemBody
@@ -281,22 +279,9 @@ struct FTMomentView: View {
     /// تأخير بسيط حتى يكبر المربّع أولاً
     var delay: Double = 0.12
 
-    @AppStorage(ArtTrial.storageKey) private var artTrialRaw = ArtTrial.emblem.rawValue   // TMP-ART-TRIAL
-
-    @ViewBuilder var body: some View {
-        if let art = ArtDispatch.moment(ArtTrial(rawValue: artTrialRaw) ?? .emblem,
-                                        name: String(describing: moment), tint: tint) {
-            art
-        } else {
-            emblemBody
-        }
-    }
-
-    private var emblemBody: some View {
-        let moment = self.moment, tint = self.tint
-        return FTKitMomentCanvas(duration: FTMoments.duration(moment), delay: delay) { ctx, size, t, _ in
-            FTMoments.draw(moment, in: &ctx, size: size, t: t, tint: tint)
-        }
+    var body: some View {
+        // «مجسّمات»: لحظة المناسبة مجسّمة
+        FT5STrial.moment(String(describing: moment), tint: tint)
     }
 }
 
@@ -348,7 +333,7 @@ nonisolated fileprivate enum FTMKind {
         case .announce: return "megaphone.fill"
         case .wedding: return "heart.fill"
         case .birth: return "figure.child"
-        case .death: return "heart.slash.fill"
+        case .death: return "grave.fill"
         case .congrats: return "hands.clap.fill"
         case .invite: return "envelope.open.fill"
         case .reminder: return "bell.badge.fill"

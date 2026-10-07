@@ -87,24 +87,24 @@ struct OfflineBanner: View {
 
     private func bannerView(icon: String, title: String, subtitle: String?, color: Color) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .frame(width: 28, height: 28)
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.md)
+                .foregroundStyle(DS.Color.textOnPrimary)
+                .frame(width: DSBox.alertIcon, height: DSBox.alertIcon)
                 .background(
                     Circle()
-                        .fill(.white.opacity(0.2))
+                        .fill(DS.Color.overlayFill)
                 )
 
             Text(title)
-                .font(DS.Font.subheadline)
+                .dsFont(.subtitle)
                 .fontWeight(.semibold)
-                .foregroundStyle(.white)
+                .foregroundStyle(DS.Color.textOnPrimary)
 
             if let subtitle {
                 Text("— \(subtitle)")
                     .font(DS.Font.caption2)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(DS.Color.overlayTextMuted)
                     .lineLimit(1)
             }
 
@@ -114,8 +114,8 @@ struct OfflineBanner: View {
         .padding(.vertical, DS.Spacing.sm)
         .background(
             Capsule()
-                .fill(color.opacity(0.88))
-                .shadow(color: color.opacity(0.2), radius: 8, y: 3)
+                .fill(color.opacity(DS.Opacity.mediaDim))
+                .shadow(color: color.opacity(DS.Opacity.tintFillStrong), radius: DS.Spacing.sm, y: DS.Card.shadowY)
         )
         .padding(.horizontal, DS.Spacing.xl)
         .transition(.move(edge: .top).combined(with: .opacity))

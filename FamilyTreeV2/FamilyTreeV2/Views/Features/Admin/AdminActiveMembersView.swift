@@ -4,9 +4,9 @@ import PostgREST
 
 // MARK: - Admin Active Members — النشاط (الآن + آخر 24 ساعة + آخر 30 يوم)
 //
-// تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بأرقام حيّة
-// (الآن · التطبيق · الموقع) ← ثلاثة أقسام صفوفها `.dsRowBox()`. التحديث كما كان:
-// كل ١٥ ثانية، وبالسحب، وبزر الشريط العلوي.
+// تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧، «أسلوب واحد» ٢٠٢٦-١٠-٠٧): الرأس الملوّن
+// الموحّد (`dsSubPageHeader`) ← صفّ أرقام حيّة (الآن · التطبيق · الموقع) ← ثلاثة أقسام صفوفها
+// `.dsRowBox()`. التحديث كما كان: كل ١٥ ثانية، وبالسحب، وبزر التحديث في الرأس.
 struct AdminActiveMembersView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -32,30 +32,27 @@ struct AdminActiveMembersView: View {
     private let tint = DS.Color.composerProject
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: DS.Spacing.md) {
+                hero
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.md) {
-                    hero
-
-                    // الوضع الأفقي: الأقسام على عمودين
-                    AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
-                        nowSection
-                        last24Section
-                        last30Section
-                    }
+                // الوضع الأفقي: الأقسام على عمودين
+                AdaptiveCardStack(spacing: DS.Spacing.md) {
+                    nowSection
+                    last24Section
+                    last30Section
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xxxl)
             }
-            .refreshable { await fetch() }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xxxl)
         }
-        .navigationTitle(L10n.t("النشاط الآن", "Live Activity"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) { refreshButton }
+        .refreshable { await fetch() }
+        // الرأس الملوّن الموحّد — زرّ التحديث (كان في شريط النظام) صار زرّ الرأس
+        .dsSubPageHeader(L10n.t("النشاط الآن", "Live Activity"),
+                         subtitle: L10n.t("من يستخدم التطبيق والموقع — يتحدّث كل ١٥ ثانية",
+                                          "Who's on the app and the website — refreshes every 15 seconds")) {
+            refreshButton
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
@@ -68,9 +65,9 @@ struct AdminActiveMembersView: View {
         .onDisappear { refreshTimer?.invalidate() }
     }
 
-    // MARK: - Refresh button (أيقونة صغيرة في الشريط العلوي — طلب المالك)
+    // MARK: - زرّ التحديث (في الرأس الملوّن — طلب المالك: أيقونة صغيرة)
     private var refreshButton: some View {
-        Button {
+        DSHeaderButton(symbol: "arrow.clockwise", label: L10n.t("تحديث الآن", "Refresh Now")) {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             Task {
                 isRefreshing = true
@@ -78,16 +75,9 @@ struct AdminActiveMembersView: View {
                 await fetch()
                 isRefreshing = false
             }
-        } label: {
-            if isRefreshing {
-                ProgressView().scaleEffect(0.8)
-            } else {
-                Image(systemName: "arrow.clockwise")
-                    .font(DS.Font.scaled(14, weight: .bold))
-            }
         }
         .disabled(isRefreshing)
-        .accessibilityLabel(L10n.t("تحديث الآن", "Refresh Now"))
+        .opacity(isRefreshing ? DS.Opacity.disabled : 1)
     }
 
     // MARK: - بطاقة الرأس
@@ -104,22 +94,16 @@ struct AdminActiveMembersView: View {
 
     private func heroValue(_ n: Int) -> String { didLoadOnce ? "\(n)" : "—" }
 
+    /// الأرقام السريعة — العنوان والوصف في الرأس الملوّن
     private var hero: some View {
-        DSPageHero(
-            title: L10n.t("النشاط الآن", "Live Activity"),
-            subtitle: L10n.t("من يستخدم التطبيق والموقع — يتحدّث كل ١٥ ثانية",
-                             "Who's on the app and the website — refreshes every 15 seconds"),
-            icon: "person.2.fill",
-            tint: tint,
-            stats: [
-                DSHeroStat(value: heroValue(nowRows.count),
-                           label: L10n.t("الآن", "Now"), icon: "circle.fill"),
-                DSHeroStat(value: heroValue(appCount),
-                           label: L10n.t("التطبيق", "App"), icon: "iphone.gen3"),
-                DSHeroStat(value: heroValue(webCount),
-                           label: L10n.t("الموقع", "Web"), icon: "globe")
-            ]
-        )
+        DSStatsRow([
+            DSHeroStat(value: heroValue(nowRows.count),
+                       label: L10n.t("الآن", "Now"), icon: "circle.fill"),
+            DSHeroStat(value: heroValue(appCount),
+                       label: L10n.t("التطبيق", "App"), icon: "iphone.gen3"),
+            DSHeroStat(value: heroValue(webCount),
+                       label: L10n.t("الموقع", "Web"), icon: "globe")
+        ], tint: tint)
     }
 
     // MARK: - الأقسام
@@ -132,14 +116,12 @@ struct AdminActiveMembersView: View {
                           trailing: nowRows.isEmpty ? nil : "\(nowRows.count)",
                           index: 1) {
             if isLoading && nowRows.isEmpty {
-                ProgressView()
-                    .tint(tint)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.xl)
+                DSPageLoader(fillsSpace: false)
+                    .padding(.vertical, DS.Spacing.md)
             } else if nowRows.isEmpty {
                 inlineEmpty(text: L10n.t("لا يوجد نشاط حالياً", "No one active right now"))
             } else {
-                VStack(spacing: 6) {
+                VStack(spacing: DS.Spacing.xsm) {
                     ForEach(nowRows, id: \.sessionKey) { row in
                         activeNowRow(row)
                     }
@@ -158,7 +140,7 @@ struct AdminActiveMembersView: View {
             if actionRows.isEmpty {
                 inlineEmpty(text: L10n.t("لا يوجد نشاط خلال 24 ساعة", "No activity in last 24 hours"))
             } else {
-                VStack(spacing: 6) {
+                VStack(spacing: DS.Spacing.xsm) {
                     ForEach(actionRows, id: \.sessionKey) { row in
                         actionRowView(row)
                     }
@@ -177,7 +159,7 @@ struct AdminActiveMembersView: View {
             if recentRows.isEmpty {
                 inlineEmpty(text: L10n.t("لا يوجد نشاط في آخر 30 يوم", "No activity in last 30 days"))
             } else {
-                VStack(spacing: 6) {
+                VStack(spacing: DS.Spacing.xsm) {
                     ForEach(recentRows, id: \.sessionKey) { row in
                         recentlyActiveRow(row)
                     }
@@ -193,21 +175,21 @@ struct AdminActiveMembersView: View {
                                              icon: String, iconTint: Color, detail: String,
                                              @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            avatarView(avatarUrl, online: online)
+            avatarView(avatarUrl, name: name, online: online)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(name)
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
 
-                HStack(spacing: 4) {
-                    Image(systemName: icon)
-                        .font(.system(size: 10.5, weight: .semibold))
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(dsSymbol: icon)
+                        .dsGlyph(DS.Glyph.xs, weight: .semibold)
                         .foregroundColor(iconTint)
                         .accessibilityHidden(true)
                     Text(detail)
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -217,7 +199,7 @@ struct AdminActiveMembersView: View {
 
             trailing()
         }
-        .frame(minHeight: 36)
+        .frame(minHeight: DSBox.fieldMinHeight)
         .dsRowBox()
         .accessibilityElement(children: .combine)
     }
@@ -225,7 +207,7 @@ struct AdminActiveMembersView: View {
     /// وقت نسبي صغير في طرف الصف
     private func timeText(_ text: String) -> some View {
         Text(text)
-            .font(DS.Font.plex(11.5, weight: .bold))
+            .dsFont(.badge)
             .foregroundColor(DS.Color.textTertiary)
             .monospacedDigit()
             .lineLimit(1)
@@ -238,7 +220,7 @@ struct AdminActiveMembersView: View {
         return activityRow(avatarUrl: row.avatarUrl, online: trulyOnline, name: row.fullName,
                            icon: sourceIcon(row.source), iconTint: DS.Color.textSecondary,
                            detail: screenLabel(row.currentScreen, source: row.source)) {
-            SysStatusChip(text: secondsLabel(row.secondsSinceActive), tint: DS.Color.success)
+            DSStatusChip(text: secondsLabel(row.secondsSinceActive), tint: DS.Color.success)
         }
     }
 
@@ -261,54 +243,20 @@ struct AdminActiveMembersView: View {
         }
     }
 
-    private func avatarView(_ urlString: String?, online: Bool) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            if let urlString, let url = URL(string: urlString) {
-                CachedAsyncImage(url: url) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle().fill(DS.Color.textTertiary.opacity(0.15))
+    /// صورة العضو الموحّدة (`DSMemberAvatar`) + نقطة «متصل الآن»
+    private func avatarView(_ urlString: String?, name: String, online: Bool) -> some View {
+        DSMemberAvatar(name: name, avatarUrl: urlString, size: DS.Icon.avatar, roleColor: tint)
+            .overlay(alignment: .bottomTrailing) {
+                if online {
+                    ActivityOnlineDot()
                 }
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
-            } else {
-                Circle()
-                    .fill(tint.opacity(0.12))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(tint)
-                    )
             }
-
-            if online {
-                ActivityOnlineDot()
-            }
-        }
-        .accessibilityHidden(true)
+            .accessibilityHidden(true)
     }
 
-    /// حالة فارغة داخل القسم: أيقونة بدائرة + سطر
+    /// حالة فارغة داخل القسم — مجسّم القسم + السطر (`DSEmptyView` المضغوط)
     private func inlineEmpty(text: String) -> some View {
-        VStack(spacing: 6) {
-            TrialArt(make: { ArtDispatch.stateIcon($0, icon: "moon.zzz.fill", tint: DS.Color.textTertiary, size: 38) }) {   // TMP-ART-TRIAL
-            Image(systemName: "moon.zzz.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(DS.Color.textTertiary)
-                .frame(width: 38, height: 38)
-                .background(Circle().fill(DS.Color.textTertiary.opacity(0.12)))
-            }
-                .frame(width: 38, height: 38)
-                .accessibilityHidden(true)
-            Text(text)
-                .dsFieldFont(12, weight: .medium)
-                .foregroundColor(DS.Color.fieldValue)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
-        .accessibilityElement(children: .combine)
+        DSEmptyView(text, style: .inline)
     }
     // MARK: - Action helpers
     private func actionIcon(_ kind: String, source: String? = nil) -> String {
@@ -644,15 +592,15 @@ private struct ActivityOnlineDot: View {
         ZStack {
             if !reduceMotion {
                 Circle()
-                    .stroke(DS.Color.success.opacity(pulse ? 0 : 0.55), lineWidth: 2)
-                    .frame(width: pulse ? 22 : 11, height: pulse ? 22 : 11)
+                    .stroke(DS.Color.success.opacity(pulse ? 0 : DS.Opacity.selectedStroke), lineWidth: DS.Border.widthBold)
+                    .frame(width: DS.Icon.onlineDot * (pulse ? 2 : 1), height: DS.Icon.onlineDot * (pulse ? 2 : 1))
             }
             Circle()
                 .fill(DS.Color.success)
-                .frame(width: 11, height: 11)
-                .overlay(Circle().stroke(DS.Color.background, lineWidth: 2))
+                .frame(width: DS.Icon.onlineDot, height: DS.Icon.onlineDot)
+                .overlay(Circle().stroke(DS.Color.background, lineWidth: DS.Border.widthBold))
         }
-        .frame(width: 11, height: 11)
+        .frame(width: DS.Icon.onlineDot, height: DS.Icon.onlineDot)
         .onAppear {
             guard !reduceMotion else { return }
             withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) { pulse = true }

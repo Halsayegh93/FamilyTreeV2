@@ -20,11 +20,6 @@ struct QRScannerView: View {
     @State private var scannedMember: FamilyMember?
     @State private var cameraPermissionDenied = false
 
-    /// الكاميرا ظاهرة (نفس شرط العرض في body) — يحدّد لون زر الإغلاق
-    private var showsCamera: Bool {
-        !(kinshipResult != nil && scannedMember != nil) && !cameraPermissionDenied
-    }
-
     var body: some View {
         NavigationStack {
             ZStack {
@@ -42,15 +37,11 @@ struct QRScannerView: View {
                     scanOverlay
 
                     if isResolving {
-                        VStack(spacing: DS.Spacing.sm) {
-                            ProgressView().tint(.white).scaleEffect(1.1)
-                            Text(L10n.t("جارٍ إيجاد العضو…", "Finding member…"))
-                                .font(DS.Font.scaled(12, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                        .padding(DS.Spacing.lg)
-                        .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.lg))
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                        // التحميل الواحد: المجسّم يتنفّس + النص، على البطاقة الواحدة
+                        DSPageLoader(L10n.t("جارٍ إيجاد العضو…", "Finding member…"), fillsSpace: false)
+                            .padding(DS.Spacing.lg)
+                            .dsCard(padding: nil)
+                            .padding(.horizontal, DS.Spacing.xxxxl)
                     }
                 }
             }
@@ -63,22 +54,8 @@ struct QRScannerView: View {
             } message: {
                 Text(scanErrorMessage ?? "")
             }
-            .background(DS.Color.background)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    // زر الإغلاق الموحّد: أبيض فوق الكاميرا، وبلون النص فوق النتيجة وشاشة الإذن
-                    // (كان أبيض دائماً فيختفي فوق الخلفية الفاتحة)
-                    DSCloseButton(context: showsCamera ? .onMedia : .surface, inToolbar: true) { dismiss() }
-                }
-                ToolbarItem(placement: .principal) {
-                    if kinshipResult == nil {
-                        Text(L10n.t("رمز QR", "QR Code"))
-                            .font(DS.Font.headline)
-                            .foregroundColor(.white)
-                    }
-                }
-            }
+            // الرأس الملوّن الموحّد للصفحات الفرعية (بدل شريط النظام فوق الكاميرا) — × في الطرف لأنها غطاء
+            .dsSubPageHeader(L10n.t("رمز QR", "QR Code"), section: .profile, nav: .close)
             .onAppear {
                 checkCameraPermission()
             }
@@ -91,11 +68,11 @@ struct QRScannerView: View {
             Spacer()
 
             Text(L10n.t("وجّه الكاميرا نحو رمز QR", "Point camera at QR code"))
-                .font(DS.Font.calloutBold)
-                .foregroundColor(.white)
+                .dsFont(.rowTitle)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.textPrimary.opacity(0.55))
+                .background(DS.Color.shadowOverlay)
                 .clipShape(Capsule())
                 .padding(.bottom, DS.Spacing.xxxxl)
         }
@@ -106,82 +83,56 @@ struct QRScannerView: View {
         VStack(spacing: DS.Spacing.xxl) {
             Spacer()
 
-            // أيقونة النجاح
-            ZStack {
-                Circle()
-                    .fill(AppSection.profile.ink.opacity(0.1))
-                    .frame(width: 100, height: 100)
-                Circle()
-                    .fill(AppSection.profile.ink.opacity(0.2))
-                    .frame(width: 80, height: 80)
-                Image(systemName: "person.2.fill")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(AppSection.profile.ink)
-            }
+            // أيقونة النجاح — قرص مجسّم بدل الدوائر والرمز المسطّح
+            DSStateIcon("person.2.fill", tint: AppSection.profile.ink, size: DS.Icon.loaderArt, mapsChrome: false)
+                .accessibilityHidden(true)
 
             // اسم العضو
             VStack(spacing: DS.Spacing.sm) {
                 Text(member.firstName)
-                    .font(DS.Font.title1)
-                    .fontWeight(.bold)
+                    .dsFont(.emptyTitle)
                     .foregroundColor(DS.Color.textPrimary)
 
                 Text(KinshipCalculator.lineageText(for: member, lookup: memberVM._memberById))
-                    .font(DS.Font.callout)
+                    .dsFont(.callout)
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
-            // صلة القرابة
-            DSCard(padding: DS.Spacing.lg) {
-                VStack(spacing: DS.Spacing.md) {
-                    Text(L10n.t("صلة القرابة", "Kinship"))
-                        .font(DS.Font.caption1)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textTertiary)
+            // صلة القرابة — البطاقة الواحدة
+            VStack(spacing: DS.Spacing.md) {
+                Text(L10n.t("صلة القرابة", "Kinship"))
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
 
-                    Text(result.relationship)
-                        .font(DS.Font.title2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(AppSection.profile.gradient)
-                        .multilineTextAlignment(.center)
+                Text(result.relationship)
+                    .dsFont(.pageTitle)
+                    .foregroundStyle(AppSection.profile.gradient)
+                    .multilineTextAlignment(.center)
 
-                    if let ancestor = result.commonAncestor, ancestor.id != member.id {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "person.3.fill")
-                                .font(DS.Font.caption1)
-                            Text(L10n.t("الجد المشترك: \(ancestor.firstName)", "Common ancestor: \(ancestor.firstName)"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundColor(DS.Color.textSecondary)
+                if let ancestor = result.commonAncestor, ancestor.id != member.id {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Image(systemName: "person.3.fill")
+                            .dsGlyph(DS.Glyph.sm)
+                        Text(L10n.t("الجد المشترك: \(ancestor.firstName)", "Common ancestor: \(ancestor.firstName)"))
+                            .dsFont(.subtitle)
                     }
+                    .foregroundColor(DS.Color.textSecondary)
                 }
-                .frame(maxWidth: .infinity)
             }
+            .frame(maxWidth: .infinity)
+            .dsCard(padding: DS.Spacing.lg)
             .padding(.horizontal, DS.Spacing.xl)
 
             Spacer()
 
-            // زر مسح جديد
-            Button {
+            // زر مسح جديد — الزرّ الواحد بمقاس الإجراء الرئيسي (٤٨)
+            DSButton(L10n.t("مسح باركود آخر", "Scan another"), icon: "qrcode.viewfinder", size: .large) {
                 withAnimation(DS.Anim.snappy) {
                     scannedMemberId = nil
                     scannedMember = nil
                     kinshipResult = nil
                 }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "qrcode.viewfinder")
-                        .font(DS.Font.scaled(18, weight: .semibold))
-                    Text(L10n.t("مسح باركود آخر", "Scan another"))
-                        .font(DS.Font.calloutBold)
-                }
-                .foregroundColor(DS.Color.textOnPrimary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(AppSection.profile.gradient)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.xl)
@@ -190,22 +141,13 @@ struct QRScannerView: View {
 
     // MARK: - Permission Denied
     private var permissionDeniedView: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            Spacer()
-            Image(systemName: "camera.fill")
-                .font(.system(size: 50))
-                .foregroundColor(DS.Color.textTertiary)
-            Text(L10n.t("يرجى السماح بالوصول للكاميرا", "Please allow camera access"))
-                .font(DS.Font.headline)
-                .foregroundColor(DS.Color.textSecondary)
-            Button(L10n.t("فتح الإعدادات", "Open Settings")) {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
+        // الحالة الفاضية الواحدة: مجسّم + عنوان + زرّ بالمواصفة الواحدة
+        DSEmptyView(L10n.t("يرجى السماح بالوصول للكاميرا", "Please allow camera access"),
+                    section: .profile, icon: "camera.fill",
+                    actionTitle: L10n.t("فتح الإعدادات", "Open Settings"), actionIcon: "gearshape.fill") {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
             }
-            .font(DS.Font.calloutBold)
-            .foregroundColor(AppSection.profile.ink)
-            Spacer()
         }
     }
 

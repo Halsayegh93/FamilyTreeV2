@@ -60,22 +60,16 @@ struct AdminDevicesView: View {
     private var multiDeviceMembers: Int { groupedDevices.filter { $0.devices.count > 1 }.count }
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
+        ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
                     hero
 
                     if isLoading {
-                        SysStateCard(icon: "iphone.gen3",
-                                     title: t("جارٍ تحميل الأجهزة…", "Loading devices…"),
-                                     tint: tint,
-                                     isLoading: true)
-                            .padding(.top, DS.Spacing.sm)
+                        DSPageLoader(t("جارٍ تحميل الأجهزة…", "Loading devices…"), fillsSpace: false)
+                            .padding(.top, DS.Spacing.xl)
                     } else if allDevices.isEmpty {
                         emptyState
-                            .padding(.top, DS.Spacing.sm)
+                            .padding(.top, DS.Spacing.xl)
                     } else {
                         DSSearchField(text: $searchText,
                                       placeholder: t("بحث بالاسم أو الجهاز...", "Search by name or device..."),
@@ -83,12 +77,11 @@ struct AdminDevicesView: View {
                             .dsStaggerIn(1)
 
                         // قائمة الأجهزة — الوضع الأفقي على عمودين
-                        AdaptiveLazyStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
+                        AdaptiveLazyStack(spacing: DS.Spacing.md) {
                             if filteredGroups.isEmpty {
-                                SysStateCard(icon: "magnifyingglass",
-                                             title: t("لا توجد نتائج مطابقة", "No matching results"),
-                                             hint: t("جرّب اسماً آخر أو نوع جهاز", "Try another name or device model"),
-                                             tint: DS.Color.textTertiary)
+                                DSEmptyView(t("لا توجد نتائج مطابقة", "No matching results"),
+                                            message: t("جرّب اسماً آخر أو نوع جهاز", "Try another name or device model"),
+                                            style: .compact)
                             }
                             ForEach(filteredGroups, id: \.memberId) { group in
                                 memberDeviceCard(group)
@@ -99,41 +92,40 @@ struct AdminDevicesView: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxxl)
-            }
-            .scrollDismissesKeyboard(.interactively)
         }
+        .scrollDismissesKeyboard(.interactively)
         .overlay(alignment: .bottom) {
             if let removalMessage {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: removalFailed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                         .accessibilityHidden(true)
                     Text(removalMessage)
-                        .font(DS.Font.plex(12, weight: .semibold))
+                        .dsFont(.chip)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Button { self.removalMessage = nil } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .frame(width: 44, height: 44)
+                            .dsGlyph(DS.Glyph.xs)
+                            .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .padding(.vertical, -10)
+                    .padding(.vertical, -DS.Spacing.sm)
                     .accessibilityLabel(t("إغلاق", "Close"))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.leading, DS.Spacing.md)
                 .padding(.trailing, DS.Spacing.xs)
                 .padding(.vertical, DS.Spacing.md)
-                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(removalFailed ? DS.Color.error : DS.Color.success))
+                .background(DSBox.sectionShape.fill(removalFailed ? DS.Color.error : DS.Color.success))
                 .padding(DS.Spacing.lg)
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(DS.Anim.snappy, value: removalMessage)
-        .navigationTitle(t("إدارة الأجهزة", "Device Management"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(t("إدارة الأجهزة", "Device Management"),
+                         subtitle: t("ابحث عن العضو وتابع أجهزته", "Find a member and manage their devices"))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .dsAlert(
             t("إزالة الجهاز", "Remove Device"),
@@ -180,53 +172,45 @@ struct AdminDevicesView: View {
 
     // MARK: - بطاقة الرأس
 
+    /// العنوان والوصف في الرأس الملوّن — الأرقام هنا
     private var hero: some View {
-        DSPageHero(
-            title: t("الأجهزة المرتبطة", "Connected devices"),
-            subtitle: t("ابحث عن العضو وتابع أجهزته", "Find a member and manage their devices"),
-            icon: "iphone.gen3",
-            tint: tint,
-            stats: [
+        DSStatsRow([
                 DSHeroStat(value: isLoading ? "—" : "\(totalMembersWithDevices)",
                            label: t("عضو", "Members"), icon: "person.2.fill"),
                 DSHeroStat(value: isLoading ? "—" : "\(totalDevices)",
                            label: t("جهاز", "Devices"), icon: "iphone.gen3"),
                 DSHeroStat(value: isLoading ? "—" : "\(multiDeviceMembers)",
                            label: t("بأكثر من جهاز", "Multi-device"), icon: "ipad.and.iphone")
-            ]
-        )
+        ], tint: tint)
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        SysStateCard(
-            icon: "iphone.slash",
-            title: t("لا توجد أجهزة مسجلة", "No registered devices"),
-            hint: t("تظهر هنا أجهزة الأعضاء بعد دخولهم التطبيق", "Members' devices appear here after they sign in"),
-            tint: tint
-        )
+        DSEmptyView(
+            t("لا توجد أجهزة مسجلة", "No registered devices"),
+            message: t("تظهر هنا أجهزة الأعضاء بعد دخولهم التطبيق", "Members' devices appear here after they sign in"), style: .compact)
     }
 
     // MARK: - Member Device Card
 
     private func memberDeviceCard(_ group: (member: FamilyMember?, memberId: UUID, devices: [NotificationViewModel.LinkedDevice])) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm + 2) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // رأس العضو
             HStack(spacing: DS.Spacing.sm) {
                 memberAvatar(group.member)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(group.member?.displayFullName ?? t("عضو غير معروف", "Unknown Member"))
-                        .dsFieldFont(13.5, weight: .bold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
 
                     HStack(spacing: DS.Spacing.xs) {
                         if let member = group.member {
-                            SysStatusChip(text: member.roleName, tint: member.roleColor)
+                            DSStatusChip(text: member.roleName, tint: member.roleColor)
                         }
-                        SysStatusChip(
+                        DSStatusChip(
                             text: t("\(group.devices.count) جهاز",
                                     "\(group.devices.count) device\(group.devices.count == 1 ? "" : "s")"),
                             icon: "iphone.gen3",
@@ -240,38 +224,19 @@ struct AdminDevicesView: View {
             .accessibilityElement(children: .combine)
 
             // أجهزة العضو
-            VStack(spacing: 6) {
+            VStack(spacing: DS.Spacing.xsm) {
                 ForEach(group.devices) { device in
                     adminDeviceRow(device)
                 }
             }
         }
-        .padding(DS.Spacing.md)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .dsCard(padding: DS.Spacing.md)
     }
 
     private func memberAvatar(_ member: FamilyMember?) -> some View {
-        ZStack {
-            Circle().fill(tint.dsReadableGlyph.opacity(0.12))
-            if let urlStr = member?.avatarUrl, let url = URL(string: urlStr) {
-                CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
-                placeholder: { ProgressView() }
-                .frame(width: 38, height: 38)
-                .clipShape(Circle())
-            } else if let name = member?.fullName, let first = name.first {
-                Text(String(first))
-                    .font(DS.Font.plex(15, weight: .bold))
-                    .foregroundColor(tint.dsReadableGlyph)
-            } else {
-                Image(systemName: "person.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(tint.dsReadableGlyph)
-            }
-        }
-        .frame(width: 38, height: 38)
-        .accessibilityHidden(true)
+        DSMemberAvatar(name: member?.fullName ?? t("عضو", "Member"), avatarUrl: member?.avatarUrl,
+                       size: DS.Icon.avatar, roleColor: tint)
+            .accessibilityHidden(true)
     }
 
     // MARK: - Device Row
@@ -282,13 +247,13 @@ struct AdminDevicesView: View {
                         tint: tint)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(device.displayName)
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                 Text(formattedDate(device.updatedAt))
-                    .dsFieldFont(12)
+                    .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
             }
@@ -298,25 +263,10 @@ struct AdminDevicesView: View {
 
             // فصل الأجهزة للمالك فقط (إجراء أمني — كان بلا بوابة)
             if authVM.canManageDevices {
-                Button {
+                // الشريحة الواحدة بالأحمر (مساحة ضغط ٤٤)
+                DSChipButton(t("إزالة", "Remove"), icon: "trash.fill", tint: DS.Color.error) {
                     deviceToRemove = device
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 10.5, weight: .bold))
-                        Text(t("إزالة", "Remove"))
-                            .font(DS.Font.plex(11.5, weight: .bold))
-                    }
-                    .foregroundColor(DS.Color.error)
-                    .padding(.horizontal, DS.Spacing.sm + 2)
-                    .frame(height: 30)
-                    .background(DS.Color.error.opacity(0.10), in: Capsule())
-                    // مساحة ضغط ٤٤ نقطة والشكل كما هو
-                    .padding(.vertical, 7)
-                    .contentShape(Rectangle())
-                    .padding(.vertical, -7)
                 }
-                .buttonStyle(.plain)
                 .disabled(isRemoving)
                 .accessibilityLabel(t("إزالة \(device.displayName)", "Remove \(device.displayName)"))
             }

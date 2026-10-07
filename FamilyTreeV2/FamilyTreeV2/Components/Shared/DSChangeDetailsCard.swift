@@ -30,9 +30,9 @@ struct DSChangeDetailsCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.1), lineWidth: 0.5)
+                .stroke(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke), lineWidth: DS.Card.strokeWidth / 2)
         )
-        .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
+        .trialCardSkin(radius: DS.Radius.xl)
         .dsSubtleShadow()
     }
 
@@ -41,9 +41,9 @@ struct DSChangeDetailsCard: View {
     private var header: some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: "pencil.line")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .dsFont(.badge)
             Text(L10n.t("ما الذي تغيّر", "What Changed"))
-                .font(DS.Font.scaled(11, weight: .bold))
+                .dsFont(.badge)
                 .textCase(.uppercase)
         }
         .foregroundColor(DS.Color.textTertiary)
@@ -53,9 +53,9 @@ struct DSChangeDetailsCard: View {
 
     @ViewBuilder
     private func changeRow(_ change: AppNotification.NotificationDetails.ChangeEntry) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             Text(AppNotification.NotificationDetails.localizedFieldName(change.field))
-                .font(DS.Font.scaled(13, weight: .bold))
+                .dsFont(.rowTitleCompact)
                 .foregroundColor(DS.Color.textPrimary)
 
             if AppNotification.NotificationDetails.isOpaqueField(change.field) {
@@ -87,17 +87,17 @@ struct DSChangeDetailsCard: View {
     private func valueLine(label: String, value: String, color: Color) -> some View {
         HStack(alignment: .top, spacing: DS.Spacing.sm) {
             Rectangle()
-                .fill(color.opacity(0.55))
-                .frame(width: 2.5)
+                .fill(color.opacity(DS.Opacity.selectedStroke))
+                .frame(width: DS.Border.ring)
                 .clipShape(Capsule())
 
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
                 Text(label)
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .dsFont(.chip)
                     .foregroundColor(color)
 
                 Text(value)
-                    .font(DS.Font.scaled(13, weight: .medium))
+                    .dsFont(.calloutMedium)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(3)
                     .multilineTextAlignment(.leading)
@@ -110,12 +110,12 @@ struct DSChangeDetailsCard: View {
     private func opaqueSummary(for change: AppNotification.NotificationDetails.ChangeEntry) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Rectangle()
-                .fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(0.55))
-                .frame(width: 2.5)
+                .fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(DS.Opacity.selectedStroke))
+                .frame(width: DS.Border.ring)
                 .clipShape(Capsule())
 
             Text(opaqueSummaryLabel(for: change.field))
-                .font(DS.Font.scaled(13, weight: .medium))
+                .dsFont(.calloutMedium)
                 .foregroundColor(DS.Color.textPrimary)
 
             Spacer(minLength: 0)
@@ -135,8 +135,8 @@ struct DSChangeDetailsCard: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(DS.Color.textTertiary.opacity(0.1))
-            .frame(height: 0.5)
+            .fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
+            .frame(height: DS.Card.strokeWidth / 2)
     }
 
     // MARK: - Helpers

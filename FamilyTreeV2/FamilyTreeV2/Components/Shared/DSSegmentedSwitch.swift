@@ -13,28 +13,68 @@ struct DSSegmentOption<ID: Hashable>: Identifiable {
     var count: Int? = nil
 }
 
+/// مقاس المبدّل — مكان واحد (طلب المالك ٢٠٢٦-١٠-٠٧ «أي شي حجمه صار كبير تردّه حجمه السابق»)
+enum DSSegmentSize {
+    /// ٤٤ + رمز، ويملأ العرض — «الإشعارات | المستجدات»، «عن التطبيق | التعليمات»
+    case large
+    /// ٣٢، نص ١٣ عريض ورمز صغير، ويملأ العرض — الفلاتر داخل الصفحات (كانت المبدّل المقسّم للنظام ~٣٢)
+    case regular
+    /// ٣٠، نص ١١ عريض بلا رمز، بعرض نصّه — تبويب الشجرة [شجرة العائلة / النساء] في شريط أدواتها
+    case compact
+}
+
 struct DSSegmentedSwitch<ID: Hashable>: View {
     let options: [DSSegmentOption<ID>]
     @Binding var selection: ID
+    var size: DSSegmentSize = .large
     @Namespace private var ns
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     /// المختار بتدرّج القسم (DSActionFill) وظلّه بلونه
     @Environment(\.dsSection) private var section
 
+    init(options: [DSSegmentOption<ID>], selection: Binding<ID>, size: DSSegmentSize = .large) {
+        self.options = options
+        self._selection = selection
+        self.size = size
+    }
+
+    // المقاسات من `DSBox.segment*` و`DS.TextRole.segment*`
+    private var height: CGFloat {
+        switch size {
+        case .large: return DSBox.segmentHeight
+        case .regular: return DSBox.segmentHeightRegular
+        case .compact: return DSBox.segmentHeightCompact
+        }
+    }
+    private var inset: CGFloat { size == .large ? DSBox.segmentPadding : DSBox.segmentPaddingSmall }
+    private var role: DS.TextRole {
+        switch size {
+        case .large: return .segment
+        case .regular: return .segmentRegular
+        case .compact: return .segmentCompact
+        }
+    }
+    private var glyph: CGFloat { size == .large ? DS.Glyph.md : DS.Glyph.sm }
+
     var body: some View {
-        HStack(spacing: 4) {
+        let bar = HStack(spacing: size == .compact ? DS.Spacing.xxs : DS.Spacing.xs) {
             ForEach(options) { option in
                 segment(option)
             }
         }
-        .padding(4)
+        .padding(inset)
         // دائري الأطراف (كبسولة — طلب المالك)
         .background(Capsule().fill(DS.Color.surface))
         .overlay(Capsule()
             .strokeBorder(DS.Color.textTertiary.opacity(colorScheme == .dark ? 0.28 : 0.18), lineWidth: 1))
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.05), radius: 8, x: 0, y: 3)
-        .dynamicTypeSize(...DynamicTypeSize.large)
+        .shadow(color: .black.opacity(colorScheme == .dark || size == .compact ? 0 : 0.05), radius: 8, x: 0, y: 3)
+        if size == .compact {
+            // بعرض نصّه وحجم خط ثابت (كان تبويب الشجرة لا يكبر مع الخط فلا يدفع أزرار الشريط)
+            bar.fixedSize().dynamicTypeSize(.large)
+        } else {
+            bar.dynamicTypeSize(...DynamicTypeSize.large)
+        }
     }
 
     private func segment(_ option: DSSegmentOption<ID>) -> some View {
@@ -46,32 +86,36 @@ struct DSSegmentedSwitch<ID: Hashable>: View {
                 selection = option.id
             }
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: option.icon)
-                    .font(.system(size: 14, weight: .bold))
-                    .accessibilityHidden(true)
+            HStack(spacing: DS.Spacing.xsm) {
+                if size != .compact {
+                    Image(systemName: option.icon)
+                        .dsGlyph(glyph)
+                        .accessibilityHidden(true)
+                }
                 Text(option.title)
-                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .dsFont(role)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 if let count = option.count, count > 0 {
                     Text("\(count)")
-                        .font(DS.Font.plex(11, weight: .bold))
+                        .dsFont(.badge)
                         .monospacedDigit()
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .frame(minWidth: 20, minHeight: 18)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .padding(.horizontal, DS.Spacing.xsm)
+                        .frame(minWidth: DS.Icon.countBadge, minHeight: DSBox.chipHeightMini)
                         .background(Capsule().fill(selected ? Color.white.opacity(0.25) : DS.Color.error))
                 }
             }
             .foregroundColor(selected ? .white : DS.Color.textSecondary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
+            .padding(.horizontal, size == .compact ? DS.Spacing.sm : 0)
+            .frame(maxWidth: size == .compact ? nil : .infinity)
+            .frame(height: height)
             .background {
                 if selected {
                     Capsule()
                         .fill(DSActionFill.style())
-                        .shadow(color: DS.Color.actionNavy.dsChromeFill(in: section).opacity(colorScheme == .dark ? 0 : 0.28),
+                        .shadow(color: DS.Color.actionNavy.dsChromeFill(in: section)
+                                    .opacity(colorScheme == .dark || size == .compact ? 0 : 0.28),
                                 radius: 6, x: 0, y: 3)
                         .matchedGeometryEffect(id: "thumb", in: ns)
                 }

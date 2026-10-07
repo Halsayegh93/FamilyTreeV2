@@ -65,7 +65,6 @@ struct AddNewsView: View {
     @State private var draftQuestion = ""
     @State private var draftOptions: [PollDraft] = [PollDraft(), PollDraft()]
     @FocusState private var contentFocused: Bool
-    @Namespace private var identityNS
 
     private struct PollDraft: Identifiable, Equatable {
         let id = UUID()
@@ -141,65 +140,9 @@ struct AddNewsView: View {
             trailing: isPoll ? L10n.t("غير مطلوب للتصويت", "Not needed for polls") : nil,
             index: 0
         ) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 4),
-                      spacing: DS.Spacing.sm) {
-                ForEach(availableTypes, id: \.self) { type in
-                    categoryTile(type)
-                }
-            }
-            .opacity(isPoll ? 0.4 : 1)
-            .allowsHitTesting(!isPoll)
+            // مربّعات الاختيار الموحّدة (`DSOptionTiles`) بشارة كل نوع — مشتركة مع «تعديل الخبر»
+            NewsTypeTiles(types: availableTypes, selection: $selectedType, disabled: isPoll)
         }
-    }
-
-    private func categoryTile(_ type: String) -> some View {
-        let selected = !isPoll && selectedType == type
-        // الإعلان: brand ثابت (معنى؛ كحلي في الفاتح، أزرق فاتح يُقرأ في الداكن)
-        let typeColor = NewsTypeHelper.color(for: type)
-        // «خبر» العادي بلون قسم الأخبار — مثل رأس المربّع
-        let c = type == "إعلان" ? DS.Color.brand
-              : (typeColor == DS.Color.brand ? AppSection.news.ink : typeColor)
-        return Button {
-            guard selectedType != type else { return }
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.68)) { selectedType = type }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
-            VStack(spacing: 6) {
-                // شارة النوع المتحرّكة — اختيار النوع يشغّل حكايته فوراً (طلب المالك ٢٠٢٦-١٠-٠٥)
-                Group {
-                    if FTNewsBadges.hasArt(for: type, currentIcon: NewsTypeHelper.icon(for: type)) {
-                        FTNewsBadge(type: type, tint: c, seed: abs(type.hashValue % 89),
-                                    style: selected ? .onColor : .soft, beatOnAppear: selected)
-                            .id(selected)
-                    } else {
-                        Image(systemName: NewsTypeHelper.icon(for: type))
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(selected ? .white : c)
-                    }
-                }
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(selected ? AnyShapeStyle(LinearGradient(colors: [c, c.opacity(0.75)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(c.opacity(0.13))))
-                    .shadow(color: selected ? c.opacity(0.45) : .clear, radius: 8, y: 3)
-                    // «تقليل الحركة»: بلا تكبير — اللون وحده يدلّ على الاختيار
-                    .scaleEffect(selected && !reduceMotion ? 1.08 : 1)
-                    .accessibilityHidden(true)
-                Text(NewsTypeHelper.displayName(for: type))
-                    .font(DS.Font.plex(11.5, weight: selected ? .bold : .semibold))
-                    .foregroundColor(selected ? c : DS.Color.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.sm + 1)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(selected ? c.opacity(0.10) : DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(selected ? c.opacity(0.55) : DS.Color.textTertiary.opacity(0.12),
-                              lineWidth: selected ? 1.5 : 1))
-            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: - النشر باسم (للإدارة)
@@ -209,70 +152,16 @@ struct AddNewsView: View {
             title: L10n.t("النشر باسم", "Post as"),
             icon: "person.crop.circle.badge.checkmark",
             tint: DS.Color.primary,
+            trailing: postAsAdmin ? L10n.t("منشور رسمي", "Official") : L10n.t("منشور شخصي", "Personal"),
             index: 1
         ) {
-            HStack(spacing: 4) {
-                identityOption(isAdmin: false)
-                identityOption(isAdmin: true)
-            }
-            .padding(4)
-            .background(Capsule().fill(DS.Color.background))
-            .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+            // المبدّل الموحّد (`DSSegmentedSwitch`) بدل الكبسولة المرسومة باليد
+            DSSegmentedSwitch(options: [
+                DSSegmentOption(id: false, title: authVM.currentUser?.firstName ?? L10n.t("باسمي", "Me"),
+                                icon: "person.fill"),
+                DSSegmentOption(id: true, title: L10n.t("إدارة العائلة", "Family Admin"), icon: "megaphone.fill")
+            ], selection: $postAsAdmin)
         }
-    }
-
-    private func identityOption(isAdmin: Bool) -> some View {
-        let selected = (postAsAdmin == isAdmin)
-        let myName = authVM.currentUser?.firstName ?? L10n.t("باسمي", "Me")
-        return Button {
-            guard postAsAdmin != isAdmin else { return }
-            withAnimation(.spring(response: 0.36, dampingFraction: 0.78)) { postAsAdmin = isAdmin }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
-            HStack(spacing: 7) {
-                Group {
-                    if isAdmin {
-                        ZStack {
-                            Circle().fill(DS.Color.gradientPrimary)
-                            Image(systemName: "megaphone.fill")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        .overlay(Circle().strokeBorder(Color.white.opacity(selected ? 0.6 : 0), lineWidth: 1))
-                    } else {
-                        // المختار على حبّة كحلية — الحرف الأبيض يُقرأ (الكحلي كان يختفي في الفاتح)
-                        DSMemberAvatar(name: myName, avatarUrl: authVM.currentUser?.avatarUrl,
-                                       size: 28, roleColor: selected ? .white : AppSection.news.ink)
-                    }
-                }
-                .frame(width: 28, height: 28)
-                .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(isAdmin ? L10n.t("إدارة العائلة", "Family Admin") : myName)
-                        .font(DS.Font.plex(12.5, weight: .bold))
-                        .lineLimit(1)
-                    Text(isAdmin ? L10n.t("منشور رسمي", "Official") : L10n.t("منشور شخصي", "Personal"))
-                        .font(DS.Font.plex(10))
-                        .opacity(0.8)
-                }
-                Spacer(minLength: 0)
-            }
-            .foregroundColor(selected ? .white : DS.Color.textSecondary)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity)
-            .background {
-                if selected {
-                    Capsule()
-                        .fill(DSActionFill.style())
-                        .matchedGeometryEffect(id: "identity-pill", in: identityNS)
-                        .shadow(color: AppSection.news.fill.opacity(0.35), radius: 6, y: 2)
-                }
-            }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: - المحتوى (مع الصور والتصويت)
@@ -289,34 +178,13 @@ struct AddNewsView: View {
                 pollPreview
                     .transition(reduceMotion ? .opacity : .scale(scale: 0.92).combined(with: .opacity))
             } else {
-                ZStack(alignment: .topLeading) {
-                    TextEditor(text: $content)
-                        .focused($contentFocused)
-                        .frame(minHeight: 104, maxHeight: 190)
-                        .scrollContentBackground(.hidden)
-                        .dsFieldFont(15)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                    if content.isEmpty {
-                        Text(L10n.t("اكتب الخبر هنا… مناسبة، إعلان، أو خبر يهم العائلة",
-                                    "Write your post… an occasion, announcement or family news"))
-                            .font(DS.Font.plex(15))
-                            .foregroundColor(DS.Color.textTertiary)
-                            .padding(.horizontal, 11)
-                            .padding(.top, 12)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(contentFocused ? sectionTint.opacity(0.6) : DS.Color.textTertiary.opacity(0.15),
-                                  lineWidth: contentFocused ? 1.5 : 1))
-                .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
-                .animation(.easeInOut(duration: 0.2), value: contentFocused)
+                NewsContentEditor(text: $content,
+                                  placeholder: L10n.t("اكتب الخبر هنا… مناسبة، إعلان، أو خبر يهم العائلة",
+                                                      "Write your post… an occasion, announcement or family news"),
+                                  tint: sectionTint, focused: $contentFocused)
 
                 if !selectedImages.isEmpty {
-                    DSComposerPhotoStrip(images: $selectedImages, limit: 5, tint: sectionTint, size: 68)
+                    DSComposerPhotoStrip(images: $selectedImages, limit: 5, tint: sectionTint)
                         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
             }
@@ -325,23 +193,9 @@ struct AddNewsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 if !isPoll && selectedImages.isEmpty {
                     PhotosPicker(selection: $pickerItems, maxSelectionCount: 5, matching: .images) {
-                        HStack(spacing: 6) {
-                            if isLoadingPhotos {
-                                ProgressView().scaleEffect(0.7).tint(sectionTint)
-                            } else {
-                                Image(systemName: "plus").font(.system(size: 11.5, weight: .bold))
-                                Image(systemName: "photo.on.rectangle.angled").font(.system(size: 11.5, weight: .semibold))
-                            }
-                            Text(L10n.t("صور", "Photos")).font(DS.Font.plex(12, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.textSecondary)
-                        .padding(.horizontal, 12)
-                        .frame(height: 34)
-                        .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.4),
-                                                        style: StrokeStyle(lineWidth: 1.2, dash: [4, 3])))
-                        // مساحة ضغط ٤٤ نقطة مثل شارة «تصويت» جنبها (DSExtraChip) — الشكل كما هو
-                        .padding(.vertical, 5)
-                        .contentShape(Rectangle())
+                        // نفس وجه شريحة «تصويت» جنبها (DSExtraChip)
+                        DSAddChipLabel(icon: "photo.on.rectangle.angled", title: L10n.t("صور", "Photos"),
+                                       isLoading: isLoadingPhotos)
                     }
                     .disabled(isLoadingPhotos)
                     .accessibilityLabel(L10n.t("إضافة صور", "Add photos"))
@@ -362,61 +216,11 @@ struct AddNewsView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedImages.count)
     }
 
-    /// معاينة التصويت داخل المحتوى — الضغط يفتحه للتعديل
+    /// معاينة التصويت داخل المحتوى — الضغط يفتحه للتعديل (القطعة المشتركة مع «تعديل الخبر»)
     private var pollPreview: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            let q = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
-            Text(q.isEmpty ? L10n.t("تصويت بدون سؤال", "Poll without a question") : q)
-                .font(DS.Font.plex(14, weight: .bold))
-                .foregroundColor(q.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
-            ForEach(Array(normalizedPollOptions.enumerated()), id: \.offset) { idx, option in
-                HStack(spacing: DS.Spacing.sm) {
-                    Text("\(idx + 1)")
-                        .font(DS.Font.plex(11, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 20, height: 20)
-                        .background(Circle().fill(DS.Color.newsVote))
-                    Text(option)
-                        .font(DS.Font.plex(13))
-                        .foregroundColor(DS.Color.textPrimary)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, DS.Spacing.sm)
-                .frame(height: 34)
-                .background(
-                    GeometryReader { g in
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(DS.Color.newsVote.opacity(0.10))
-                            .frame(width: g.size.width * CGFloat(0.35 + 0.15 * Double((idx * 7) % 4)))
-                    }
-                )
-                .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(DS.Color.background))
-            }
-            HStack {
-                // النص ١٨ نقطة ← مساحة ضغط ٤٤ (١٣ فوق وتحت) بلا تغيير في التخطيط:
-                // فوقه صف خيار غير قابل للضغط، وتحته ٢٠ نقطة قبل شارة «تصويت»
-                Button { openPollBox() } label: {
-                    Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
-                        .font(DS.Font.plex(12, weight: .bold))
-                        .foregroundColor(DS.Color.newsVote)
-                        .tapArea(vertical: 13)
-                }
-                Spacer()
-                Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { removePoll() }
-                } label: {
-                    Label(L10n.t("إزالة التصويت", "Remove poll"), systemImage: "trash")
-                        .font(DS.Font.plex(12, weight: .bold))
-                        .foregroundColor(DS.Color.error)
-                        .tapArea(vertical: 13)
-                }
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(DS.Spacing.sm + 2)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.newsVote.opacity(0.06)))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(DS.Color.newsVote.opacity(0.3), lineWidth: 1))
+        NewsPollPreview(question: pollQuestion, options: normalizedPollOptions,
+                        onEdit: { openPollBox() },
+                        onRemove: { withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { removePoll() } })
     }
 
     // MARK: - مربّع التصويت
@@ -441,11 +245,7 @@ struct AddNewsView: View {
                     .dsAlertField()
                 ForEach(Array(draftOptions.enumerated()), id: \.element.id) { idx, option in
                     HStack(spacing: DS.Spacing.sm) {
-                        Text("\(idx + 1)")
-                            .font(DS.Font.plex(12, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 24, height: 24)
-                            .background(Circle().fill(DS.Color.newsVote))
+                        NewsPollNumber(number: idx + 1, size: DS.Spacing.xxl)
                         TextField(idx < 2 ? L10n.t("الخيار \(idx + 1)", "Option \(idx + 1)")
                                           : L10n.t("الخيار \(idx + 1) (اختياري)", "Option \(idx + 1) (optional)"),
                                   text: Binding(
@@ -457,41 +257,21 @@ struct AddNewsView: View {
                                     }))
                             .dsAlertField()
                         if draftOptions.count > 2 {
-                            Button {
+                            NewsPollRemoveOptionButton(label: L10n.t("حذف الخيار \(idx + 1)", "Remove option \(idx + 1)")) {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
                                     draftOptions.removeAll { $0.id == option.id }
                                 }
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(DS.Color.error.opacity(0.85))
-                                    // الدائرة ٢٤ ← مساحة ضغط ٤٤×٤٤: نحو الحقل بقدر المسافة فقط (بلا
-                                    // تغطيته)، والباقي في هامش المربّع؛ والصفوف متباعدة ٤٦ فلا تتداخل
-                                    .tapArea(top: 10, leading: 8, bottom: 10, trailing: 12)
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(L10n.t("حذف الخيار \(idx + 1)", "Remove option \(idx + 1)"))
                         }
                     }
                     .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
                 if draftOptions.count < 4 {
-                    Button {
+                    NewsPollAddOptionButton {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
                             draftOptions.append(PollDraft())
                         }
-                    } label: {
-                        Label(L10n.t("خيار آخر", "Another option"), systemImage: "plus")
-                            .font(DS.Font.plex(12.5, weight: .bold))
-                            .foregroundColor(DS.Color.newsVote)
-                            .frame(maxWidth: .infinity).frame(height: 38)
-                            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .strokeBorder(DS.Color.newsVote.opacity(0.45),
-                                              style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])))
-                            // ٣٨ ← مساحة ضغط ٤٤ (٣ فوق وتحت، ضمن المسافة للجيران) بلا تغيير في التخطيط
-                            .tapArea(vertical: 3)
                     }
-                    .buttonStyle(DSScaleButtonStyle())
                 }
             }
         }
@@ -577,22 +357,5 @@ struct AddNewsView: View {
             asAdminIdentity: postAsAdmin
         )
         if isPosted { dismiss() } else { showPostErrorAlert = true }
-    }
-}
-
-// MARK: - مساحة ضغط أكبر (توصية أبل: ٤٤ نقطة)
-
-private extension View {
-    /// يكبّر منطقة اللمس حول عنصر صغير بلا تغيير في شكله ولا في التخطيط: الحشوة تُضاف
-    /// لمنطقة اللمس ثم تُسترد من التخطيط. القيم محسوبة لكل عنصر حتى لا تتداخل مع جيرانه.
-    func tapArea(top: CGFloat = 0, leading: CGFloat = 0, bottom: CGFloat = 0, trailing: CGFloat = 0) -> some View {
-        self
-            .padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
-            .contentShape(Rectangle())
-            .padding(EdgeInsets(top: -top, leading: -leading, bottom: -bottom, trailing: -trailing))
-    }
-
-    func tapArea(horizontal: CGFloat = 0, vertical: CGFloat = 0) -> some View {
-        tapArea(top: vertical, leading: horizontal, bottom: vertical, trailing: horizontal)
     }
 }

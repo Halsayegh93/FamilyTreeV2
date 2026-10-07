@@ -136,6 +136,11 @@ enum DS {
         static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // Slate — مقروء (AA)
         static let textOnPrimary = SwiftUI.Color.white
         static let textGold      = accent // ذهبي
+        /// النقطة الذهبية الصغيرة — اللمسة الواحدة بذهب المجسّمات (#F2C65E ← #D9A23E بحافة #B5832A)،
+        /// مثل ثمرة الغافة على مجسّمات الرئيسية: «غير مقروء» في الإشعارات وعلامات الدليل (`DSGoldDot`)
+        static let goldDotLight  = SwiftUI.Color(hex: "#F2C65E")
+        static let goldDot       = SwiftUI.Color(hex: "#D9A23E")
+        static let goldDotRim    = SwiftUI.Color.adaptive(light: "#B5832A", dark: "#F2C65E")
 
         // Semantic
         static let success = SwiftUI.Color.adaptive(light: "#157F3C", dark: "#45BC72") // Emerald — يعدّي AA (~5:1) كنص وكتعبئة
@@ -164,6 +169,23 @@ enum DS {
 
         // Status Colors
         static let deceased         = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#808080") // رمادي هادي
+        /// شريط «متوفّى» على عقدة الشجرة — عنّابي بدرجة خفيفة (كان مكتوباً في TreeView وWomenClassicTreeView)
+        static let deceasedStrip    = SwiftUI.Color(hex: "#A62B32")
+
+        /// ألوان شعارات التواصل (معنى: هوية المنصّة — لا تتبع القسم). كانت مكرّرة في FamilyProjectsView وProjectDetailView
+        enum Social {
+            static let whatsapp  = SwiftUI.Color(hex: "#25D366")
+            static let instagram = SwiftUI.Color(hex: "#E1306C")
+            static let x         = SwiftUI.Color(hex: "#000000")
+            static let snapchat  = SwiftUI.Color(hex: "#FFFC00")
+            static let maps      = SwiftUI.Color(hex: "#EA4335")
+            /// تدرّج إنستغرام الرسمي
+            static let instagramGradient = LinearGradient(
+                colors: [SwiftUI.Color(hex: "#F58529"), SwiftUI.Color(hex: "#DD2A7B"),
+                         SwiftUI.Color(hex: "#8134AF"), SwiftUI.Color(hex: "#515BD4")],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+        }
         static let currentLocation  = SwiftUI.Color.adaptive(light: "#00C853", dark: "#69F0AE") // أخضر
         static let likeAction       = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
         /// لون الإناث في شجرة النساء — وردي تراثي موحّد (بدل القيم المرمّزة يدوياً في WomenTreeView/WomenClassicTreeView)
@@ -295,16 +317,17 @@ enum DS {
 
         /// اختيار TextStyle المناسب للحجم — يضمن تكيّف الخط المخصّص مع Dynamic Type
         static func textStyle(for size: CGFloat) -> SwiftUI.Font.TextStyle {
+            // نطاقات نصف مفتوحة — الأحجام الكسرية (١٢٫٥، ١٣٫٥) كانت تتكبّر مثل العناوين الكبيرة
             switch size {
-            case ...12:  return .caption
-            case 13:     return .footnote
-            case 14...15: return .subheadline
-            case 16:     return .callout
-            case 17:     return .body
-            case 18...19: return .headline
-            case 20...21: return .title3
-            case 22...27: return .title2
-            default:     return .title
+            case ..<12.5: return .caption
+            case ..<13.5: return .footnote
+            case ..<15.5: return .subheadline
+            case ..<16.5: return .callout
+            case ..<17.5: return .body
+            case ..<19.5: return .headline
+            case ..<21.5: return .title3
+            case ..<27.5: return .title2
+            default:      return .title
             }
         }
 
@@ -315,33 +338,38 @@ enum DS {
         static let title2      = SwiftUI.Font.custom(Plex.bold, size: 22, relativeTo: .title2)
         static let title3      = SwiftUI.Font.custom(Plex.semibold, size: 20, relativeTo: .title3)
         static let headline    = SwiftUI.Font.custom(Plex.semibold, size: 17, relativeTo: .headline)
-        // نص المحتوى — خط النظام للوضوح الأقصى
-        static let body        = SwiftUI.Font.system(.body, design: .default)
-        static let bodyBold    = SwiftUI.Font.system(.body, design: .default).weight(.semibold)
-        static let callout     = SwiftUI.Font.system(.callout, design: .default)
-        static let calloutBold = SwiftUI.Font.system(.callout, design: .default).weight(.bold)
-        static let subheadline = SwiftUI.Font.system(.subheadline, design: .default)
-        static let footnote    = SwiftUI.Font.system(.footnote, design: .default)
-        static let caption1    = SwiftUI.Font.system(.caption, design: .default)
-        static let caption2    = SwiftUI.Font.system(.caption2, design: .default)
+        // نص المحتوى — خط الهوية نفسه بأحجام أدوار النص (طلب المالك ٢٠٢٦-١٠-٠٧ «خط الكتابة مو موحّد»:
+        // كان خط النظام هنا فيختلط الخطّان في الشاشة الواحدة)
+        static var body: SwiftUI.Font        { role(.body) }
+        static var bodyBold: SwiftUI.Font    { plex(DS.TextRole.body.size, weight: .semibold) }
+        static var callout: SwiftUI.Font     { role(.callout) }
+        static var calloutBold: SwiftUI.Font { plex(DS.TextRole.callout.size, weight: .bold) }
+        static var subheadline: SwiftUI.Font { role(.subtitle) }
+        static var footnote: SwiftUI.Font    { role(.footnote) }
+        static var caption1: SwiftUI.Font    { plex(DS.TextRole.caption.size, weight: .regular) }
+        static var caption2: SwiftUI.Font    { plex(DS.TextRole.micro.size, weight: .regular) }
 
         /// خط مرن يدعم Dynamic Type - يُستخدم بدل .system(size:weight:)
         static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
             let style: SwiftUI.Font.TextStyle
+            // نطاقات نصف مفتوحة: الأحجام الكسرية (١٢٫٥، ١٣٫٥) كانت تسقط في default فتظهر بحجم العنوان الكبير
+            // (سؤال الاستطلاع في بطاقة الخبر مثلاً). الأحجام الصحيحة على نفس أنماطها السابقة.
             switch size {
-            case ...10: style = .caption2
-            case 11: style = .caption2
-            case 12: style = .caption
-            case 13: style = .footnote
-            case 14...15: style = .subheadline
-            case 16: style = .callout
-            case 17: style = .body
-            case 18...19: style = .headline
-            case 20...21: style = .title3
-            case 22...27: style = .title2
-            case 28...35: style = .title
+            case ..<11.5: style = .caption2
+            case ..<12.5: style = .caption
+            case ..<13.5: style = .footnote
+            case ..<15.5: style = .subheadline
+            case ..<16.5: style = .callout
+            case ..<17.5: style = .body
+            case ..<19.5: style = .headline
+            case ..<21.5: style = .title3
+            case ..<27.5: style = .title2
+            case ..<35.5: style = .title
             default: style = .largeTitle
             }
+            // خط واحد في التطبيق كله (طلب المالك ٢٠٢٦-١٠-٠٧): خط الهوية بالحجم المطلوب نفسه —
+            // كان خط النظام بأقرب نمط فيختلط الخطّان؛ الأرقام أحادية العرض فقط تبقى بخط النظام
+            guard design == .monospaced else { return plex(size, weight: weight) }
             return SwiftUI.Font.system(style, design: design).weight(weight)
         }
 
@@ -353,7 +381,11 @@ enum DS {
 
     // MARK: Spacing
     enum Spacing {
+        /// ٢ — بين عنوان ووصفه، وحشوة الشارات الرأسية (كان `spacing: 2` / `.padding(2)` في ٥٣ ملفاً)
+        static let xxs:   CGFloat = 2
         static let xs:    CGFloat = 4
+        /// ٦ — بين أيقونة صغيرة ونصّها، وبين عناصر الشبكات الضيقة (كان `spacing: 6` في ٤٥ ملفاً)
+        static let xsm:   CGFloat = 6
         static let sm:    CGFloat = 8
         static let md:    CGFloat = 12
         static let lg:    CGFloat = 16
@@ -369,6 +401,21 @@ enum DS {
         static let disabled: Double = 0.5
         static let divider: Double  = 0.3
         static let border: Double   = 0.12
+        // «أسلوب واحد» (طلب المالك ٢٠٢٦-١٠-٠٧): شفافيات اللون المكرّرة في الشاشات — من هنا فقط
+        /// تعبئة خفيفة جداً بلون (خلفية ملاحظة، صفّ مختار) — كانت ٠٫٠٦–٠٫٠٨
+        static let tintFillSoft: Double   = 0.08
+        /// تعبئة قرص/شارة/شريحة بلون (الدور الأشيع) — كانت ٠٫١٠–٠٫١٤
+        static let tintFill: Double       = 0.12
+        /// تعبئة أقوى (المختار، الداكن) — كانت ٠٫١٥–٠٫١٨
+        static let tintFillStrong: Double = 0.18
+        /// إطار البطاقة على السطح (`textTertiary`) — بطاقات الأقسام والحالات
+        static let cardStroke: Double     = 0.10
+        /// إطار صندوق الحقل (`textTertiary`)
+        static let fieldStroke: Double    = 0.15
+        /// إطار ملوّن خفيف (ملاحظة، شريحة) — كان ٠٫٢٢–٠٫٣٥
+        static let tintStroke: Double     = 0.30
+        /// إطار الخيار المختار بلونه
+        static let selectedStroke: Double = 0.55
     }
 
     // MARK: Border
@@ -393,6 +440,72 @@ enum DS {
         static let sizeSm: CGFloat = 38
         static let sizeLg: CGFloat = 58
         static let opacity: CGFloat = 0.15
+        // أقراص الأيقونات (المجسّم/الرمز داخل قرص) — مقاس واحد لكل دور (طلب المالك ٢٠٢٦-١٠-٠٧)
+        /// مساحة اللمس الدنيا (توصية أبل)
+        static let tapTarget: CGFloat = 44
+        /// أيقونة عنوان قسم داخل المربّع (= `DSBox.sectionIcon`)
+        static let inline: CGFloat = 16
+        /// أيقونة عنوان قسم في صفحة / شارة صغيرة
+        static let section: CGFloat = 22
+        /// أيقونة صفّ/حقل في صفحة (داخل المربّع: `DSBox.fieldIcon`)
+        static let row: CGFloat = 32
+        /// أيقونة صفّ كبير (طلب، عضو)
+        static let rowLarge: CGFloat = 36
+        /// قرص بطاقة الحالة (فارغ صغير، خطأ داخل بطاقة)
+        static let state: CGFloat = 52
+        /// مجسّم الصفحة الفاضية
+        static let emptyArt: CGFloat = 130
+        /// مجسّم التحميل (يتنفّس)
+        static let loaderArt: CGFloat = 96
+        /// زوايا القرص المستدير في الصفحات، وداخل المربّعات
+        static let discRadius: CGFloat = 9
+        static let discRadiusSmall: CGFloat = 8
+    }
+
+    // MARK: Glyph — مقاسات رموز SF داخل الأقراص والأزرار (ثابتة لا تكبر مع Dynamic Type فلا تخرج من قرصها)
+    // كانت ٢٨٢ `.system(size:)` بسبعة مقاسات (١١ ×٣٤، ١٣ ×٣٤، ١٠٫٥ ×٢٣، ١٤ ×٢٢…) — الآن من هنا
+    enum Glyph {
+        /// شارة حالة، عدّاد
+        static let micro: CGFloat = 9.5
+        /// قرص عنوان القسم (٢٢)، رمز داخل شريحة
+        static let xs: CGFloat = 10.5
+        /// رمز صفّ صغير، سهم الصف، ملاحظة
+        static let sm: CGFloat = 12
+        /// رمز زرّ ٤٠، قرص صفّ (٣٢–٣٦)
+        static let md: CGFloat = 14
+        /// رمز زرّ ٤٨
+        static let lg: CGFloat = 16
+        /// زرّ الرأس الملوّن (رجوع/إغلاق/إجراء)
+        static let xl: CGFloat = 18
+        /// قرص كبير
+        static let xxl: CGFloat = 22
+
+        static func font(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> SwiftUI.Font {
+            .system(size: size, weight: weight)
+        }
+    }
+
+    // MARK: Card — بطاقة «مجسّمات» الواحدة (`.dsCard()` / `DSComposerSection` / `TrialCardSkin`)
+    enum Card {
+        /// زوايا كل البطاقات (= بطاقة قسم المربّع)
+        static var radius: CGFloat { DSBox.sectionRadius }
+        /// حشوة البطاقة (= بطاقة قسم المربّع)
+        static var padding: CGFloat { DSBox.sectionPadding }
+        static let strokeWidth: CGFloat = 1
+        /// لمسة الطين: إضاءة علوية داخلية (فاتح/داكن) وعرضها
+        static let highlightLight: Double = 0.9
+        static let highlightDark: Double = 0.12
+        /// اللمعة فوق سطح ملوّن (عليه نص أبيض) — أخفّ
+        static let highlightOnFill: Double = 0.5
+        static let highlightWidth: CGFloat = 1.5
+        /// ظلّ داخلي سفلي خفيف بلون غامق القسم (عقد الشجرة وأزرارها — `DSClaySkin(glassBacked: false)`)
+        static let innerShadeLight: Double = 0.08
+        static let innerShadeDark: Double = 0.22
+        /// ظلّ الطين بلون غامق القسم (فاتح/داكن)
+        static let shadowLight: Double = 0.10
+        static let shadowDark: Double = 0.35
+        static let shadowRadius: CGFloat = 6
+        static let shadowY: CGFloat = 3
     }
 
     // MARK: Shadow — ظلال عصرية أنيقة
@@ -465,6 +578,79 @@ enum DS {
     }
 }
 
+// MARK: - أدوار النص — «التعديل من مكان واحد» (طلب المالك ٢٠٢٦-١٠-٠٧)
+//
+// كل نص في التطبيق دوره واحد من هذا الجدول (خط IBM Plex Sans Arabic + حجم + وزن). تغيير سطر هنا يغيّر
+// كل مكان بنفس الدور. كانت الأحجام تُقرَّر في كل شاشة (~١٠٤٠ موضعاً بثلاثين تركيبة).
+//   • `.dsFont(.rowTitle)` — الحجم كما هو في كل مكان.
+//   • `.dsFieldFont(.rowTitle)` — مثل `dsFieldFont(_:weight:)`: أصغر نقطة داخل المربّعات بالمنتصف.
+//   • `DS.Font.role(.rowTitle)` — قيمة `Font` لمن يحتاجها (Label، تركيب نصوص).
+extension DS {
+    struct TextRole: Hashable {
+        let size: CGFloat
+        let weight: SwiftUI.Font.Weight
+    }
+}
+
+extension DS.TextRole {
+    /// عنوان رأس الصفحة الفرعية / بطاقة رأس الصفحة
+    static let pageTitle    = DS.TextRole(size: 19, weight: .bold)
+    /// عنوان الحالة الفارغة
+    static let emptyTitle   = DS.TextRole(size: 20, weight: .bold)
+    /// عنوان رأس المربّع
+    static let title        = DS.TextRole(size: 17, weight: .bold)
+    /// عنوان التنبيه والبطاقة
+    static let headline     = DS.TextRole(size: 15, weight: .bold)
+    /// نص عادي وقيمة الحقل
+    static let body         = DS.TextRole(size: 14, weight: .regular)
+    /// عنوان الصفّ
+    static let rowTitle     = DS.TextRole(size: 13.5, weight: .bold)
+    /// نص التنبيه والملاحظة
+    static let callout      = DS.TextRole(size: 13, weight: .regular)
+    /// عنوان قسم في صفحة (`DSSectionHeader`)
+    static let sectionTitle = DS.TextRole(size: 12.5, weight: .bold)
+    /// وصف تحت عنوان / صفّ، ووصف رأس المربّع
+    static let subtitle     = DS.TextRole(size: 12, weight: .regular)
+    /// وصف رأس الصفحة الفرعية
+    static let pageSubtitle = DS.TextRole(size: 12, weight: .medium)
+    /// عنوان الحقل في الصفحات (`DSFieldLabel`)
+    static let label        = DS.TextRole(size: 12, weight: .heavy)
+    /// الشرائح والأزرار الصغيرة
+    static let chip         = DS.TextRole(size: 12, weight: .bold)
+    /// نص جانبي وتلميح (طرف عنوان القسم)
+    static let caption      = DS.TextRole(size: 11, weight: .semibold)
+    /// شارة حالة
+    static let badge        = DS.TextRole(size: 11, weight: .bold)
+    /// عنوان قسم داخل المربّع (`DSComposerSection`)
+    static let boxSectionTitle = DS.TextRole(size: 11, weight: .bold)
+    /// ملاحظة صغيرة (فوق أزرار المربّع)
+    static let footnote     = DS.TextRole(size: 11, weight: .regular)
+    /// عدّاد ورقم صغير
+    static let micro        = DS.TextRole(size: 10, weight: .semibold)
+    /// زرّ ٤٤ (المربّعات والصفحات) — ١٥ عريض (كبّرناه، طلب المالك ٢٠٢٦-١٠-٠٧ «كبّر شوي إلغاء والإضافة»)
+    static let button       = DS.TextRole(size: 15, weight: .bold)
+    /// زرّ ٤٨ (الإجراء الرئيسي في شاشات ملء الشاشة)
+    static let buttonLarge  = DS.TextRole(size: 15, weight: .bold)
+}
+
+extension DS.Font {
+    /// خط الدور — `DS.Font.role(.rowTitle)`
+    static func role(_ role: DS.TextRole) -> SwiftUI.Font { plex(role.size, weight: role.weight) }
+}
+
+extension View {
+    /// خط الدور بحجمه في كل مكان
+    func dsFont(_ role: DS.TextRole) -> some View { font(DS.Font.role(role)) }
+
+    /// خط الدور — أصغر نقطة داخل المربّعات بالمنتصف (مثل `dsFieldFont(_:weight:)`)
+    func dsFieldFont(_ role: DS.TextRole) -> some View { dsFieldFont(role.size, weight: role.weight) }
+
+    /// رمز SF بمقاس ثابت من `DS.Glyph` — `.dsGlyph(DS.Glyph.md)`
+    func dsGlyph(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> some View {
+        font(DS.Glyph.font(size, weight: weight))
+    }
+}
+
 // MARK: - Color Hex Extension
 extension Color {
     init(hex: String) {
@@ -522,10 +708,6 @@ extension View {
         modifier(DSSectionGlow(style: DS.Shadow.glow, sectionOpacity: 0.16))
     }
 
-    func dsNeonShadow() -> some View {
-        modifier(DSSectionGlow(style: DS.Shadow.neon, sectionOpacity: 0.14))
-    }
-
     /// شريط التبويبات: على iOS 26+ نترك زجاج النظام السائل كما هو
     /// (فرض مادة يدوية يطفئه)، وعلى الأقدم مادة شفافة كما كان.
     @ViewBuilder
@@ -547,56 +729,6 @@ extension View {
         } else {
             self.background(shape.fill(.ultraThinMaterial))
         }
-    }
-
-    func dsAccentGlow() -> some View {
-        self.shadow(color: DS.Shadow.glowAccent.color,
-                    radius: DS.Shadow.glowAccent.radius,
-                    x: DS.Shadow.glowAccent.x,
-                    y: DS.Shadow.glowAccent.y)
-    }
-
-    func dsGradientBackground() -> some View {
-        self.background(DS.Color.gradientPrimary)
-    }
-
-    /// كرت زجاجي — Liquid Glass card
-    func glassCard(radius: CGFloat = DS.Radius.xl) -> some View {
-        self
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(SwiftUI.Color.white.opacity(0.2), lineWidth: 0.5)
-            )
-            .trialCardSkin(radius: radius)   // TMP-ART-TRIAL
-            .dsCardShadow()
-    }
-
-    /// خلفية زجاجية — Liquid Glass background
-    func glassBackground(radius: CGFloat = DS.Radius.lg) -> some View {
-        self
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(SwiftUI.Color.white.opacity(0.15), lineWidth: 0.5)
-            )
-    }
-
-    /// شكل كبسولة زجاجية — Liquid Glass pill
-    func glassPill() -> some View {
-        self
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(SwiftUI.Color.white.opacity(0.15), lineWidth: 0.5))
-    }
-
-    /// Bold press effect
-    func dsBoldPress(_ isPressed: Bool) -> some View {
-        self
-            .scaleEffect(isPressed ? 0.95 : 1.0)
-            .animation(DS.Anim.bouncy, value: isPressed)
     }
 }
 
@@ -631,141 +763,9 @@ private struct DSSectionGlow: ViewModifier {
 
 // MARK: - Reusable Components
 
-/// كرت موحد — Liquid Glass card
-struct DSCard<Content: View>: View {
-    let content: Content
-    var padding: CGFloat = DS.Spacing.lg
-
-    init(padding: CGFloat = DS.Spacing.lg, @ViewBuilder content: () -> Content) {
-        self.content = content()
-        self.padding = padding
-    }
-
-    /// الكحلي في الدائرة الزخرفية يتبع لون القسم
-    @Environment(\.dsSection) private var section
-
-    var body: some View {
-        VStack(spacing: 0) { content }
-            .padding(padding)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                        .fill(DS.Color.cardBackground)
-                    Circle()
-                        .fill(DS.Color.primary.dsChrome(in: section).opacity(0.06))
-                        .frame(width: 200, height: 200)
-                        .blur(radius: 55)
-                        .offset(x: 120, y: -80)
-                    Circle()
-                        .fill(DS.Color.secondary.opacity(0.04))
-                        .frame(width: 140, height: 140)
-                        .blur(radius: 50)
-                        .offset(x: -60, y: 100)
-                }
-                // الدوائر الزخرفية تخرج عن حدود البطاقة — كانت تلتقط اللمس فوق
-                // أزرار البطاقة المجاورة (مثل «إزالة» آخر جهاز في كل عضو)
-                .allowsHitTesting(false)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-            // منطقة اللمس = حدود البطاقة فقط
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-            .trialCardSkin(radius: DS.Radius.xl)   // TMP-ART-TRIAL
-            .dsCardShadow()
-    }
-}
-
-/// كرت مع تدرج لوني جريء + glass overlay
-struct DSGradientCard<Content: View>: View {
-    let gradient: LinearGradient
-    let content: Content
-
-    init(gradient: LinearGradient = DS.Color.gradientPrimary, @ViewBuilder content: () -> Content) {
-        self.gradient = gradient
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(spacing: 0) { content }
-            .background(
-                ZStack {
-                    gradient
-                    SwiftUI.Color.white.opacity(0.06)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .stroke(SwiftUI.Color.white.opacity(0.30), lineWidth: 0.7)
-            )
-            .dsGlowShadow()
-    }
-}
-
-/// كرت مع حدود ملونة — Accent border card
-struct DSGlowCard<Content: View>: View {
-    let glowColor: SwiftUI.Color
-    let content: Content
-
-    init(glowColor: SwiftUI.Color = DS.Color.primary, @ViewBuilder content: () -> Content) {
-        self.glowColor = glowColor
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(spacing: 0) { content }
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .stroke(glowColor.opacity(0.3), lineWidth: 1)
-            )
-            .shadow(color: glowColor.opacity(0.12), radius: 10, x: 0, y: 3)
-    }
-}
-
-/// نص بتدرج لوني
-struct DSGradientText: View {
-    let text: String
-    var font: SwiftUI.Font = DS.Font.title1
-    var gradient: LinearGradient = DS.Color.gradientPrimary
-
-    var body: some View {
-        Text(text)
-            .font(font)
-            .foregroundStyle(gradient)
-    }
-}
-
-/// باج متحرك مع نبض
-struct DSPulseBadge: View {
-    let count: Int
-    var color: SwiftUI.Color = DS.Color.error
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
-
-    private var displayText: String { count > 99 ? "99+" : "\(count)" }
-
-    var body: some View {
-        Text(displayText)
-            .font(DS.Font.caption2)
-            .fontWeight(.bold)
-            .foregroundColor(.white)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 3)
-            .background(DS.Color.error)
-            .clipShape(Capsule())
-            .scaleEffect(isPulsing ? 1.15 : 1.0)
-            .animation(
-                DS.Anim.respectingMotion(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), reduceMotion: reduceMotion),
-                value: isPulsing
-            )
-            // يحترم "تقليل الحركة": يبقى الباج ثابتاً بلا نبض متكرر
-            .onAppear { isPulsing = !reduceMotion }
-    }
-}
-
-/// زر رئيسي — Bold gradient مع bounce effect
+/// زر رئيسي — الزرّ الواحد بمقاس ٤٨ (الإجراء الرئيسي في شاشات ملء الشاشة) — كان ٥٨ بتدرّج وسهم وظلّ.
+/// `color`: الكحلي (والرمادي المعطّل `inactive`) = تعبئة القسم؛ غيره لون معنى صلب. `useGradient` بقي
+/// للتوافق ولا يغيّر الشكل (شكل واحد) — المعطّل يُعرف من `.disabled(...)` بشفافية الهيكل.
 struct DSPrimaryButton: View {
     let title: String
     let icon: String?
@@ -773,378 +773,50 @@ struct DSPrimaryButton: View {
     let action: () -> Void
     var useGradient: Bool = true
     var color: Color = DS.Color.primary
-    /// الكحلي الافتراضي يتبع لون القسم (تدرّجه وتعبئته)
-    @Environment(\.dsSection) private var section
+    var size: DSButtonSize = .large
 
-    init(_ title: String, icon: String? = nil, isLoading: Bool = false, useGradient: Bool = true, color: Color = DS.Color.primary, action: @escaping () -> Void) {
+    init(_ title: String, icon: String? = nil, isLoading: Bool = false, useGradient: Bool = true,
+         color: Color = DS.Color.primary, size: DSButtonSize = .large, action: @escaping () -> Void) {
         self.title = title
         self.icon = icon
         self.isLoading = isLoading
         self.useGradient = useGradient
         self.color = color
+        self.size = size
         self.action = action
     }
 
-    private var debouncedAction: () -> Void {
-        let key = "DSPrimary_\(title)"
-        let original = action
-        return {
-            if TapDebouncer.shared.canFire(key) { original() }
-        }
+    /// لون معنى صلب — nil = تعبئة القسم (الكحلي/المعطّل)
+    private var meaningTint: Color? {
+        if color == DS.Color.primary || color == DS.Color.actionNavy || color == DS.Color.inactive { return nil }
+        return color
     }
 
     var body: some View {
-        let color = self.color.dsChromeFill(in: section)
-        return Button(action: debouncedAction) {
-            HStack(spacing: DS.Spacing.sm) {
-                if isLoading {
-                    ProgressView().tint(.white)
-                } else {
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(16, weight: .bold))
-                    }
-                    Text(title)
-                        .fontWeight(.bold)
-                    Spacer(minLength: 0)
-                    Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(DS.Font.scaled(14, weight: .black))
-                        .opacity(0.9)
-                }
-            }
-            .font(DS.Font.headline)
-            .foregroundColor(.white)
-            .padding(.horizontal, DS.Spacing.lg)
-            .frame(maxWidth: .infinity)
-            // minHeight بدل الارتفاع الثابت — يسمح للنص بالنمو بدل القص في أحجام Dynamic Type الكبيرة
-            .frame(minHeight: 58)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .fill(
-                            useGradient
-                                ? AnyShapeStyle(section?.gradient ?? DS.Color.gradientPrimary)
-                                : AnyShapeStyle(isLoading ? color.opacity(0.7) : color)
-                        )
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
-                        .padding(1)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(SwiftUI.Color.white.opacity(0.22), lineWidth: 1)
-            )
-            .shadow(color: color.opacity(useGradient ? 0.22 : 0.16), radius: 14, x: 0, y: 6)
-        }
-        .buttonStyle(DSBoldButtonStyle())
-        .disabled(isLoading)
+        DSButton(title, icon: icon, size: size, tint: meaningTint, isLoading: isLoading, action: action)
     }
 }
 
-/// زر ثانوي — Bold glass + حدود
+/// زر ثانوي — الزرّ الواحد بدور «إلغاء/ثانوي» الرمادي (كان زجاجاً بنص أخضر ٥٢). `color: DS.Color.error`
+/// = إجراء خطِر (تسجيل الخروج) ← الأحمر. المقاس ٤٠ — الـ٤٨ للإجراء الرئيسي وحده.
 struct DSSecondaryButton: View {
     let title: String
     let icon: String?
     let action: () -> Void
     var color: Color = DS.Color.secondary
+    var size: DSButtonSize = .regular
 
-    init(_ title: String, icon: String? = nil, color: Color = DS.Color.secondary, action: @escaping () -> Void) {
+    init(_ title: String, icon: String? = nil, color: Color = DS.Color.secondary,
+         size: DSButtonSize = .regular, action: @escaping () -> Void) {
         self.title = title
         self.icon = icon
         self.color = color
+        self.size = size
         self.action = action
     }
 
-    private var debouncedAction: () -> Void {
-        let key = "DSSecondary_\(title)"
-        let original = action
-        return {
-            if TapDebouncer.shared.canFire(key) { original() }
-        }
-    }
-
     var body: some View {
-        Button(action: debouncedAction) {
-            HStack(spacing: DS.Spacing.sm) {
-                if let icon { Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold)) }
-                Text(title).fontWeight(.bold)
-            }
-            .font(DS.Font.calloutBold)
-            .foregroundColor(color)
-            .frame(maxWidth: .infinity)
-            // minHeight بدل الارتفاع الثابت — يسمح للنص بالنمو بدل القص في أحجام Dynamic Type الكبيرة
-            .frame(minHeight: 52)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(color.opacity(0.25), lineWidth: 0.7)
-            )
-        }
-        .buttonStyle(DSBoldButtonStyle())
-    }
-}
-
-/// حقل إدخال — Bold Glass style مع glow focus
-struct DSTextField: View {
-    @Environment(\.layoutDirection) private var layoutDirection
-    var label: String
-    var placeholder: String
-    @Binding var text: String
-    var icon: String
-    var iconColor: Color = DS.Color.primary
-    var keyboard: UIKeyboardType = .default
-    var isSecure: Bool = false
-    var required: Bool = false
-    var hint: String? = nil
-
-    @FocusState private var isFocused: Bool
-    /// الكحلي الافتراضي يتبع لون القسم
-    @Environment(\.dsSection) private var section
-
-    var body: some View {
-        let iconColor = self.iconColor.dsChrome(in: section)
-        return HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: iconColor)
-
-            VStack(alignment: .leading, spacing: 2) {
-                if !label.isEmpty {
-                    HStack(spacing: 2) {
-                        Text(label)
-                            .foregroundColor(isFocused ? iconColor : DS.Color.textSecondary)
-                        if required {
-                            Text("*")
-                                .foregroundColor(DS.Color.error)
-                        }
-                        if let hint {
-                            Text(hint)
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                    }
-                    .font(DS.Font.caption1)
-                    .animation(DS.Anim.quick, value: isFocused)
-                }
-                if isSecure {
-                    SecureField(placeholder, text: $text)
-                        .font(DS.Font.body)
-                        .keyboardType(keyboard)
-                        .focused($isFocused)
-                } else {
-                    TextField(placeholder, text: $text)
-                        .font(DS.Font.body)
-                        .keyboardType(keyboard)
-                        .multilineTextAlignment(.leading)
-                        .focused($isFocused)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
-        .background(isFocused ? .thinMaterial : .ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(isFocused ? iconColor.opacity(0.4) : Color.white.opacity(0.15), lineWidth: isFocused ? 1.2 : 0.5)
-                .animation(DS.Anim.quick, value: isFocused)
-        )
-        .shadow(color: isFocused ? iconColor.opacity(0.1) : .clear, radius: 8, x: 0, y: 3)
-        .animation(DS.Anim.quick, value: isFocused)
-    }
-}
-
-/// أيقونة — Bold circle مع gradient tint
-struct DSIcon: View {
-    let name: String
-    var color: Color = DS.Color.primary
-    var size: CGFloat = DS.Icon.size
-    var iconSize: CGFloat = 17
-
-    init(_ name: String, color: Color = DS.Color.primary, size: CGFloat = DS.Icon.size, iconSize: CGFloat = 17) {
-        self.name = name
-        self.color = color
-        self.size = size
-        self.iconSize = iconSize
-    }
-
-    /// الكحلي (الافتراضي) يتبع لون القسم — وألوان المعاني كما هي
-    @Environment(\.dsSection) private var section
-
-    var body: some View {
-        let color = self.color.dsChrome(in: section).dsReadableGlyph
-        return TrialArt(make: { ArtDispatch.stateIcon($0, icon: name, tint: color, size: size) }) {   // TMP-ART-TRIAL
-        Image(systemName: name)
-            .font(DS.Font.scaled(iconSize, weight: .bold))
-            .foregroundColor(color)
-            .frame(width: size, height: size)
-            .background(
-                LinearGradient(
-                    colors: [color.opacity(DS.Icon.opacity), color.opacity(DS.Icon.opacity * 0.4)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-        }
-        .frame(width: size, height: size)
-    }
-}
-
-/// صف بيانات — Bold Glass style
-struct DSDataRow: View {
-    var title: String
-    var value: String
-    var icon: String
-    var color: Color = DS.Color.primary
-
-    var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: color)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                Text(value)
-                    .font(DS.Font.calloutBold)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
-    }
-}
-
-/// صف إجراء مع badge — Bold Glass style
-struct DSActionRow: View {
-    var title: String
-    var subtitle: String? = nil
-    var icon: String
-    var color: Color = DS.Color.primary
-    var badge: Int? = nil
-
-    var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: color)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-            }
-
-            Spacer()
-
-            if let badge, badge > 0 {
-                DSPulseBadge(count: badge)
-            }
-
-            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(13, weight: .bold))
-                .foregroundColor(DS.Color.textTertiary)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
-    }
-}
-
-/// عنوان قسم — Bold
-struct DSSectionHeader: View {
-    var title: String
-    var icon: String? = nil
-    var trailing: String? = nil
-    var iconColor: Color = DS.Color.primary
-    @Environment(\.dsSection) private var section
-
-    // نفس عناوين أقسام مربّعات الإضافة (DSComposerSection) — تصميم موحّد في
-    // كل التطبيق (طلب المالك ٢٠٢٦-٠٩-٢٦): أيقونة في دائرة ملوّنة + عنوان غامق،
-    // والتلميح الثانوي في الطرف
-    var body: some View {
-        // الكحلي الافتراضي ← حبر القسم
-        let iconColor = self.iconColor.dsChrome(in: section).dsReadableGlyph
-        return HStack(spacing: 7) {
-            if let icon {
-                TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: iconColor, size: 22) }) {   // TMP-ART-TRIAL
-                Image(systemName: icon)
-                    .font(.system(size: 10.5, weight: .bold))
-                    .foregroundColor(iconColor)
-                    .frame(width: 22, height: 22)
-                    .background(Circle().fill(iconColor.opacity(0.13)))
-                }
-                .frame(width: 22, height: 22)
-            }
-            Text(title)
-                .dsFieldFont(12.5, weight: .bold)
-                .foregroundColor(DS.Color.fieldLabel)
-            Spacer(minLength: 0)
-            if let trailing {
-                Text(trailing)
-                    .font(DS.Font.plex(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, DS.Spacing.md)
-        .padding(.bottom, DS.Spacing.sm)
-    }
-}
-
-/// هيدر شيت — Bold Glass style
-struct DSSheetHeader: View {
-    var title: String
-    var cancelTitle: String = L10n.t("إلغاء", "Cancel")
-    var confirmTitle: String = L10n.t("حفظ", "Save")
-    var isLoading: Bool = false
-    var confirmDisabled: Bool = false
-    var showBackground: Bool = true
-    var onCancel: () -> Void
-    var onConfirm: () -> Void
-    @Environment(\.dsSection) private var section
-
-    var body: some View {
-        let accent = DS.Color.primary.dsChrome(in: section)
-        return VStack(spacing: 0) {
-            Capsule()
-                .fill(Color.secondary.opacity(0.4))
-                .frame(width: 40, height: 5)
-                .padding(.top, DS.Spacing.sm)
-
-            HStack {
-                // «إلغاء» أعلى الورقة بالأحمر العريض — نفس زر شريط الأوراق الموحّد
-                DSToolbarCancelButton(title: cancelTitle, action: onCancel)
-
-                Spacer()
-
-                Text(title)
-                    .font(DS.Font.headline)
-
-                Spacer()
-
-                Button(action: onConfirm) {
-                    if isLoading {
-                        ProgressView().tint(accent)
-                    } else {
-                        Text(confirmTitle)
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(confirmDisabled ? DS.Color.textTertiary : accent)
-                    }
-                }
-                .disabled(confirmDisabled || isLoading)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
-
-            Divider().opacity(0.3)
-        }
-        .background(showBackground ? DS.Color.surface : Color.clear)
+        DSButton(title, icon: icon, role: color == DS.Color.error ? .destructive : .cancel, size: size, action: action)
     }
 }
 
@@ -1172,38 +844,6 @@ struct DSRoleBadge: View {
             .background(color.opacity(0.12))
             .clipShape(Capsule())
             .overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.7))
-    }
-}
-
-/// بطاقة إحصاء — Bold Glass card
-struct DSStatCard: View {
-    var title: String
-    var value: String
-    var icon: String
-    var color: Color
-
-    var body: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(26, weight: .bold))
-                .foregroundColor(color)
-                .frame(width: DS.Icon.sizeLg, height: DS.Icon.sizeLg)
-                .background(color.opacity(0.12))
-                .clipShape(Circle())
-
-            Text(value)
-                .font(DS.Font.title1)
-                .fontWeight(.black)
-                .foregroundColor(DS.Color.textPrimary)
-
-            Text(title)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(DS.Spacing.lg)
-        .frame(maxWidth: .infinity)
-        .glassCard()
     }
 }
 
@@ -1273,7 +913,7 @@ struct DSFloatingButton: View {
         Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
                 if let icon, !icon.isEmpty {
-                    Image(systemName: icon)
+                    Image(dsSymbol: icon)
                         .font(DS.Font.scaled(20, weight: .black))
                 }
                 if let label {
@@ -1297,156 +937,6 @@ struct DSFloatingButton: View {
             guard !appeared else { return }
             // «تقليل الحركة»: يظهر بتلاشٍ فقط بلا قفزة
             withAnimation(reduceMotion ? .easeOut(duration: 0.2) : DS.Anim.elastic.delay(0.4)) { appeared = true }
-        }
-    }
-}
-
-// MARK: - Decorative Background — خلفية نظيفة بدون وهج
-struct DSDecorativeBackground: View {
-    var primaryGradient: LinearGradient = DS.Color.gradientPrimary
-    var accentGradient: LinearGradient = DS.Color.gradientAccent
-
-    var body: some View {
-        EmptyView()
-    }
-}
-
-// MARK: - Setting Icon — أيقونة الإعدادات
-struct DSSettingIcon: View {
-    var name: String
-    var color: Color
-    var size: CGFloat = DS.Icon.sizeSm
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size, height: size)
-
-            Image(systemName: name)
-                .font(DS.Font.scaled(size * 0.42, weight: .bold))
-                .foregroundColor(.white)
-        }
-    }
-}
-
-// MARK: - Card Accent Line — خط زخرفي فوق البطاقة
-struct DSCardAccentLine<S: ShapeStyle>: View {
-    var style: S
-
-    init(gradient: LinearGradient) where S == LinearGradient {
-        self.style = gradient
-    }
-
-    init(color: Color) where S == Color {
-        self.style = color
-    }
-
-    init() where S == LinearGradient {
-        self.style = DS.Color.gradientPrimary
-    }
-
-    var body: some View {
-        Rectangle()
-            .fill(style)
-            .frame(height: 4)
-            .cornerRadius(DS.Radius.full)
-            .padding(.horizontal, DS.Spacing.xl)
-            .padding(.top, DS.Spacing.xs)
-    }
-}
-
-// MARK: - Approve / Reject Buttons — أزرار الموافقة والرفض
-struct DSApproveRejectButtons: View {
-    var approveTitle: String
-    var rejectTitle: String
-    var isLoading: Bool = false
-    /// nil = تدرّج القسم (كحلي العلامة خارج التبويبات)
-    var approveGradient: LinearGradient? = nil
-    var showReject: Bool = true
-    /// عند true تكون الأزرار بحواف دائرية كاملة (capsule) بدل المستطيل المُدوّر
-    var useCapsule: Bool = false
-    /// طلب تأكيد قبل تنفيذ الموافقة/الرفض (افتراضياً مُفعّل لكل الأماكن).
-    var confirmBeforeAction: Bool = true
-    var onApprove: () -> Void
-    var onReject: () -> Void
-
-    @State private var showApproveConfirm = false
-    @State private var showRejectConfirm = false
-    @Environment(\.dsSection) private var section
-
-    private var cornerRadius: CGFloat { useCapsule ? DS.Radius.full : DS.Radius.md }
-
-    private var debouncedApprove: () -> Void {
-        let key = "DSApprove_\(approveTitle)"
-        let original = onApprove
-        return { if TapDebouncer.shared.canFire(key) { original() } }
-    }
-    private var debouncedReject: () -> Void {
-        let key = "DSReject_\(rejectTitle)"
-        let original = onReject
-        return { if TapDebouncer.shared.canFire(key) { original() } }
-    }
-
-    private func approveTapped() {
-        if confirmBeforeAction { showApproveConfirm = true } else { debouncedApprove() }
-    }
-    private func rejectTapped() {
-        if confirmBeforeAction { showRejectConfirm = true } else { debouncedReject() }
-    }
-
-    var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            if showReject {
-            Button(action: rejectTapped) {
-                Text(rejectTitle)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.error.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .stroke(DS.Color.error.opacity(0.3), lineWidth: 1.5)
-                    )
-            }
-            }
-
-            Button(action: approveTapped) {
-                ZStack {
-                    if isLoading {
-                        ProgressView().tint(.white)
-                    } else {
-                        Text(approveTitle)
-                            .font(DS.Font.calloutBold)
-                    }
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.md)
-                .background(approveGradient ?? section?.gradient ?? DS.Color.gradientPrimary)
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-                .dsGlowShadow()
-            }
-        }
-        .dsAlert(L10n.t("تأكيد الموافقة", "Confirm Approval"), isPresented: $showApproveConfirm) {
-            Button(approveTitle) { debouncedApprove() }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: {
-            Text(L10n.t("هل تريد المتابعة؟", "Do you want to proceed?"))
-        }
-        .dsAlert(L10n.t("تأكيد الرفض", "Confirm Rejection"), isPresented: $showRejectConfirm) {
-            Button(rejectTitle, role: .destructive) { debouncedReject() }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: {
-            Text(L10n.t("هل تريد المتابعة؟", "Do you want to proceed?"))
         }
     }
 }
@@ -1496,103 +986,11 @@ struct DSIconButton: View {
                     .fill(fillColor)
                     .frame(width: size, height: size)
                     .overlay(Circle().stroke(borderColor, lineWidth: borderWidth))
-                Image(systemName: icon)
+                Image(dsSymbol: icon)
                     .font(DS.Font.scaled(iconSize, weight: .bold))
                     .foregroundColor(iconColor)
             }
             .contentShape(Circle())
-        }
-        .buttonStyle(DSBoldButtonStyle())
-    }
-}
-
-// MARK: - Destructive Button — زر هدام (للحذف)
-/// زر الإجراءات الهدامة — الحذف، الإلغاء النهائي
-struct DSDestructiveButton: View {
-    let title: String
-    let icon: String?
-    let isLoading: Bool
-    let action: () -> Void
-
-    init(_ title: String, icon: String? = nil, isLoading: Bool = false, action: @escaping () -> Void) {
-        self.title = title
-        self.icon = icon
-        self.isLoading = isLoading
-        self.action = action
-    }
-
-    private var debouncedAction: () -> Void {
-        let key = "DSDestructive_\(title)"
-        let original = action
-        return { if TapDebouncer.shared.canFire(key) { original() } }
-    }
-
-    var body: some View {
-        Button(action: debouncedAction) {
-            HStack(spacing: DS.Spacing.sm) {
-                if isLoading {
-                    ProgressView().tint(DS.Color.error)
-                } else {
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(15, weight: .bold))
-                    }
-                    Text(title).fontWeight(.bold)
-                }
-            }
-            .font(DS.Font.calloutBold)
-            .foregroundColor(DS.Color.error)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(DS.Color.error.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(DS.Color.error.opacity(0.3), lineWidth: 1.2)
-            )
-        }
-        .buttonStyle(DSBoldButtonStyle())
-        .disabled(isLoading)
-    }
-}
-
-// MARK: - Text Button — زر نصي بسيط (رابط)
-/// زر نصي — "إعادة المحاولة"، "إلغاء"، "إعادة الإرسال"
-struct DSTextButton: View {
-    let title: String
-    let icon: String?
-    var color: Color = DS.Color.primary
-    let action: () -> Void
-    /// الكحلي الافتراضي يتبع لون القسم (`dsChrome`)، وأي لون معنى آخر كما هو
-    @Environment(\.dsSection) private var dsSectionEnv
-
-    init(_ title: String, icon: String? = nil, color: Color = DS.Color.primary, action: @escaping () -> Void) {
-        self.title = title
-        self.icon = icon
-        self.color = color
-        self.action = action
-    }
-
-    private var debouncedAction: () -> Void {
-        let key = "DSText_\(title)"
-        let original = action
-        return { if TapDebouncer.shared.canFire(key) { original() } }
-    }
-
-    var body: some View {
-        Button(action: debouncedAction) {
-            HStack(spacing: DS.Spacing.xs) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(DS.Font.scaled(13, weight: .semibold))
-                }
-                Text(title).fontWeight(.semibold)
-            }
-            .font(DS.Font.callout)
-            .foregroundColor(color.dsChrome(in: dsSectionEnv))
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.xs)
-            .contentShape(Rectangle())
         }
         .buttonStyle(DSBoldButtonStyle())
     }
@@ -1615,37 +1013,6 @@ struct DSScaleButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
             .animation(.easeInOut(duration: 0.2), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Backwards Compatibility
-
-struct UnifiedTextField: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding()
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(Color.gray.opacity(0.12), lineWidth: 1)
-            )
-            .multilineTextAlignment(.leading)
-    }
-}
-
-struct UnifiedButtonStyle: ButtonStyle {
-    var color: Color = DS.Color.primary
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(DS.Font.headline)
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 58)
-            .background(configuration.isPressed ? color.opacity(0.85) : color)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 
@@ -1690,176 +1057,6 @@ struct DSMemberAvatar: View {
                     .foregroundColor(roleColor)
             }
         }
-    }
-}
-
-/// حالة فارغة موحدة — أيقونة + عنوان + زر اختياري (بدل 31 تكرار)
-struct DSEmptyState: View {
-    enum Style { case simple, halo }
-
-    let icon: String
-    let title: String
-    var subtitle: String? = nil
-    var buttonTitle: String? = nil
-    var buttonAction: (() -> Void)? = nil
-    var style: Style = .simple
-    /// أيقونة زر الإجراء — "arrow.clockwise" لإعادة المحاولة مثلاً
-    var buttonIcon: String = "plus.circle.fill"
-    /// لون الأيقونة — استخدم DS.Color.success لحالات "كل شيء تمام" (الكحلي يتبع لون القسم)
-    var tint: SwiftUI.Color = DS.Color.primary
-    @Environment(\.dsSection) private var section
-
-    /// لون الحالة الفعلي: الكحلي ← حبر القسم، والباقي كما هو
-    private var shownTint: SwiftUI.Color { tint.dsChrome(in: section).dsReadableGlyph }
-
-    var body: some View {
-        VStack(spacing: DS.Spacing.xl) {
-            Spacer()
-            iconArea
-            VStack(spacing: DS.Spacing.sm) {
-                Text(title)
-                    .font(DS.Font.title3)
-                    .foregroundColor(DS.Color.textSecondary)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, DS.Spacing.xxxl)
-                }
-            }
-            if let buttonTitle, let buttonAction {
-                Button(action: buttonAction) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: buttonIcon)
-                        Text(buttonTitle)
-                    }
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, DS.Spacing.xl)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(buttonBackground)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(DSScaleButtonStyle())
-            }
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    /// خلفية زر الإجراء: تدرّج القسم للحالات العادية (الكحلي أو لون القسم)، لون صلب لحالات الخطأ/المخصصة
-    @ViewBuilder
-    private var buttonBackground: some View {
-        if tint == DS.Color.primary || tint == DS.Color.actionNavy || tint.dsSectionOfFill != nil {
-            tint.dsSectionOfFill?.gradient ?? section?.gradient ?? DS.Color.gradientPrimary
-        } else {
-            tint
-        }
-    }
-
-    @ViewBuilder
-    private var iconArea: some View {
-        switch style {
-        case .simple:
-            // رسمة متحرّكة هادئة (طلب المالك ٢٠٢٦-١٠-٠٤) — ثابتة مع «تقليل الحركة»
-            EmptyStateArt(icon: icon, tint: shownTint)
-        case .halo:
-            ZStack {
-                Circle()
-                    .fill(shownTint.opacity(0.06))
-                    .frame(width: 130, height: 130)
-                Circle()
-                    .fill(shownTint.opacity(0.10))
-                    .frame(width: 95, height: 95)
-                Circle()
-                    .fill(tint.dsChromeFill(in: section))
-                    .frame(width: 64, height: 64)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(28, weight: .bold))
-                    .foregroundColor(.white)
-            }
-        }
-    }
-}
-
-/// حالة خطأ موحّدة مع رسالة + زر إعادة المحاولة. تُبنى فوق DSEmptyState.
-struct DSErrorState: View {
-    var message: String? = nil
-    var retryAction: (() -> Void)? = nil
-
-    var body: some View {
-        DSEmptyState(
-            icon: "exclamationmark.triangle.fill",
-            title: L10n.t("تعذّر تحميل البيانات", "Couldn't load data"),
-            subtitle: message ?? L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-            buttonTitle: retryAction != nil ? L10n.t("إعادة المحاولة", "Retry") : nil,
-            buttonAction: retryAction,
-            style: .simple,
-            buttonIcon: "arrow.clockwise",
-            tint: DS.Color.error
-        )
-    }
-}
-
-// MARK: - Skeleton Loading
-
-/// عنصر هيكلي (skeleton) بتأثير لمعان متحرك — يحل محل الـ spinner للإحساس بسرعة أكبر
-struct DSSkeleton: View {
-    var width: CGFloat? = nil
-    var height: CGFloat = 16
-    var cornerRadius: CGFloat = DS.Radius.sm
-
-    @State private var phase: CGFloat = -1
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(DS.Color.mutedBackground)
-            .frame(width: width, height: height)
-            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
-            .overlay {
-                GeometryReader { geo in
-                    LinearGradient(
-                        colors: [.clear, SwiftUI.Color.white.opacity(0.45), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * 0.55)
-                    .offset(x: phase * geo.size.width * 1.7)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .onAppear {
-                withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
-                    phase = 1
-                }
-            }
-    }
-}
-
-/// دائرة هيكلية — للصور الرمزية أثناء التحميل
-struct DSSkeletonCircle: View {
-    var size: CGFloat = 56
-
-    var body: some View {
-        DSSkeleton(width: size, height: size, cornerRadius: size / 2)
-    }
-}
-
-/// صف هيكلي جاهز: دائرة + سطرين نص — مناسب لقوائم الأعضاء/الأخبار
-struct DSSkeletonRow: View {
-    var avatarSize: CGFloat = 48
-
-    var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSSkeletonCircle(size: avatarSize)
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                DSSkeleton(width: 140, height: 14)
-                DSSkeleton(width: 90, height: 11)
-            }
-            Spacer()
-        }
-        .padding(.vertical, DS.Spacing.xs)
     }
 }
 
@@ -1922,4 +1119,752 @@ private struct DSToolbarConfirmButton: View {
             .foregroundColor(disabled ? DS.Color.textTertiary : DS.Color.primary.dsChrome(in: section))
             .disabled(disabled)
     }
+}
+
+// MARK: - هيكل المربّعات الموحّد (طلب المالك ٢٠٢٦-١٠-٠٦)
+//
+// لغة واحدة لكل ما يظهر فوق المحتوى: مربّع العمل (نموذج برأس ملوّن) ومربّع التأكيد/التنبيه
+// (مضغوط، بلا رأس — شريط رفيع بلون القسم وقرص أيقونة صغير). الهيكل المشترك هنا في مكان واحد:
+// الزوايا، السطح والإطار والظلّ، قرص الأيقونة، خط العنوان والنص، وشكل الأزرار — ولا تُكرَّر
+// هذه القيم في الشاشات. ما يختلف: الرأس (كامل في العمل، شريط رفيع في التنبيه) وحجم القرص.
+enum DSBox {
+    // المربّع نفسه
+    /// زوايا المربّع نفسه
+    static let radius: CGFloat = DS.Radius.xxl
+    /// الرأس الملوّن لمربّع العمل (٨٦ ← ٨٠، `DSComposerHeader`)
+    static let headerHeight: CGFloat = 80
+    /// شريط القسم الرفيع أعلى البطاقات بلا رأس (مثل ربط حساب التواصل)
+    static let accentHeight: CGFloat = 4
+    /// الرأس المضغوط لمربّع التنبيه/التأكيد (طلب المالك ٢٠٢٦-١٠-٠٧ «أقرب لمربّعات العمل»): نفس رأس العمل
+    /// (`DSComposerHeader(compact:)`) بارتفاع ٥٦، مجسّم ٣٠، ونسخة مائلة شفافة ٨٠ بشفافية ٠٫١٨
+    static let compactHeaderHeight: CGFloat = 56
+    static let compactHeaderIcon: CGFloat = 30
+    static let compactWatermark: CGFloat = 80
+    static let compactWatermarkOpacity: Double = 0.18
+    /// مجسّم رأس العمل ٤٤، وقرص التنبيه أخ أصغر له (٣٦ ← ٢٨)
+    static let headerIcon: CGFloat = 44
+    static let alertIcon: CGFloat = 28
+    /// مجسّم رأس مربّع العمل (`DSComposerHeader`) وقرص المربّع الإضافي (`DSExtraBox`)
+    static let composerIcon: CGFloat = 40
+
+    // ما بداخل المربّع — أصغر بنحو ٣٠٪ ليتناسب مع الرأس الأصغر (طلب المالك ٢٠٢٦-١٠-٠٧ «وصّله إلى ٣٠٪»).
+    // الحدّ: نص القيمة ≥ ١٣ نقطة والأزرار ≥ ٤٠ نقطة وصناديق الحقول ≥ ٣٦ (مساحة اللمس والقراءة) —
+    // عندها يتوقّف التصغير قبل ٣٠٪ ويُذكر ذلك في التعليق.
+    /// هامش محتوى مربّع العمل الجانبي (١٦ ← ١١) وأعلاه (١٢ ← ٨) وأسفله (٨ ← ٦)
+    static let contentPadding: CGFloat = 11
+    static let contentTop: CGFloat = 8
+    static let contentBottom: CGFloat = 6
+    /// بين الأقسام (١٢ ← ٨)
+    static let sectionSpacing: CGFloat = 8
+    /// بطاقة القسم: حشوة (١٢ ← ٨)، زوايا (١٦ ← ١٢)، المسافة بين عنوانها ومحتواها (١٠ ← ٧)
+    static let sectionPadding: CGFloat = 8
+    static let sectionRadius: CGFloat = 12
+    static let sectionInnerSpacing: CGFloat = 7
+    /// أيقونة عنوان القسم (٢٢ ← ١٦) وخطّه (١٢٫٥ ← ١١ — حدّ القراءة، لا ٨٫٧٥)
+    static let sectionIcon: CGFloat = 16
+    static var sectionTitleFont: Font { DS.Font.role(.boxSectionTitle) }
+    /// صفّ الحقل داخل المربّع: الأيقونة (٢٨ ← ٢٢)، الحشوة الرأسية (٦ ← ٤) والجانبية (١٠ ← ٧)،
+    /// أدنى ارتفاع لصندوق الحقل (٤٢ ← ٣٦ — حدّ اللمس، لا ٣٢)، وخط القيمة (١٣٫٥ ← ١٣ — حدّ القراءة)
+    /// وعنوانه (١١ ← ١٠٫٥) — بعد `DSFieldFont.boxReduction`
+    static let fieldIcon: CGFloat = 22
+    static let fieldVerticalPadding: CGFloat = 4
+    static let fieldHorizontalPadding: CGFloat = 7
+    static let fieldMinHeight: CGFloat = 36
+    static let fieldValueSize: CGFloat = 14
+    static let fieldLabelSize: CGFloat = 11.5
+    /// صور المربّع: مربّع الصورة المصغّرة في شريط الصور (٧٦ ← ٥٦) ودائرة الشعار (٩٢ ← ٦٤) — كانت
+    /// أرقاماً في الشاشات (٦٨/٨٠/٨٨)، والآن من هنا فقط
+    static let photoTile: CGFloat = 56
+    static let logoSide: CGFloat = 64
+    /// صفوف النماذج (`DSFormRow`/`DSLabeledFieldRow` في إضافة/تعديل الابن): الارتفاع (٥٢ ← ٤٠ — حدّ
+    /// اللمس، لا ٣٦)، قرص الأيقونة (٤٦ ← ٣٢)، الهامش الجانبي (١٦ ← ١١)
+    static let formRowHeight: CGFloat = 40
+    static let formRowIcon: CGFloat = 32
+    static let formRowPadding: CGFloat = 11
+
+    // مربّع التنبيه/التأكيد — نفس النسبة
+    /// هامش المحتوى (٢٠ ← ١٤)، المسافة بين عناصره (١٢ ← ٨)، العنوان (١٧ ← ١٥)، النص (١٤ ← ١٣ — حدّ
+    /// القراءة)، قرص الأيقونة (٣٦ ← ٢٨)، وعرضه الأقصى (٣٤٠ ← ٣٢٠)
+    static let alertPadding: CGFloat = 14
+    static let alertSpacing: CGFloat = 8
+    static let alertMaxWidth: CGFloat = 320
+    static var alertTitleFont: Font { DS.Font.role(.headline) }
+    static var alertBodyFont: Font { DS.Font.role(.callout) }
+
+    // الأزرار — مواصفة واحدة في كل أقسام التطبيق ومربّعاته (طلب المالك)، بمقاسين فقط (٢٠٢٦-١٠-٠٧):
+    /// ارتفاع ٤٤ (كان ٤٠ — «كبّر شوي» طلب المالك ٢٠٢٦-١٠-٠٧)، زوايا ١٢، خط ١٥ عريض؛
+    /// الإجراء بتعبئة القسم، الحذف أحمر، الإلغاء رمادي — `DSBoxButtonStyle` / `DSButton` / `DSButtonSize`
+    static let buttonHeight: CGFloat = 44
+    /// الإجراء الرئيسي في شاشات ملء الشاشة (الدخول، التسجيل، الانتظار، التجميد، التحديث) — كان ٥٨/٥٢
+    static let buttonHeightLarge: CGFloat = 48
+    static let buttonRadius: CGFloat = 12
+    static let buttonSpacing: CGFloat = 7
+    static var buttonFont: Font { DS.Font.role(.button) }
+    static var buttonFontLarge: Font { DS.Font.role(.buttonLarge) }
+    /// شريط الأزرار السفلي لمربّع العمل: هوامشه (١٦/٨/١٢ ← ١١/٦/٨)
+    static let footerHorizontal: CGFloat = 11
+    static let footerTop: CGFloat = 6
+    static let footerBottom: CGFloat = 8
+
+    // الشرائح (أزرار صغيرة، فلاتر، «+ صور») — `DSChipButton` / `DSExtraChip`
+    /// ارتفاع الشريحة (كانت ٢٨–٣٨ في الشاشات) وحشوتها الجانبية
+    static let chipHeight: CGFloat = 34
+    static let chipPadding: CGFloat = 12
+
+    /// زوايا قرص الأيقونة المستدير داخل المربّعات (في الصفحات `DS.Icon.discRadius`)
+    static let iconRadius: CGFloat = DS.Icon.discRadiusSmall
+
+    // رأس الصفحة الفرعية الملوّن (`DSSubPageHeader`) ورأس التبويب (`MainHeaderView`) — نفس الأبعاد
+    /// ارتفاع صفّ الرأس تحت شريط الحالة (والأفقي المضغوط)
+    static let pageHeaderHeight: CGFloat = 70
+    static let pageHeaderHeightCompact: CGFloat = 46
+    /// مجسّم الرأس (= مجسّم رأس المربّع) والمضغوط
+    static var pageHeaderIcon: CGFloat { headerIcon }
+    static var pageHeaderIconCompact: CGFloat { compactHeaderIcon }
+    /// النسخة الكبيرة المائلة الشفافة في طرف الرأس (اختيارية)
+    static let pageWatermark: CGFloat = 104
+    static let pageWatermarkOpacity: Double = 0.2
+    static let pageWatermarkAngle: Double = -18
+    static var pageTitleFont: Font { DS.Font.role(.pageTitle) }
+    static var pageSubtitleFont: Font { DS.Font.role(.pageSubtitle) }
+
+    // أزرار الرجوع/الإغلاق/الإجراء (`DSNavButtons`): فوق الرأس الملوّن ٤٤ (المضغوط ٣٦)، وفوق السطح ٣٨
+    static let navButtonOnColor: CGFloat = 44
+    static let navButtonCompact: CGFloat = 36
+    static let navButtonSurface: CGFloat = 38
+    static var navGlyph: CGFloat { DS.Glyph.xl }
+    static let navGlyphCompact: CGFloat = 15
+    static var navGlyphSurface: CGFloat { DS.Glyph.md }
+
+    // الخطوط المشتركة: عنوان الرأس ١٧ عريض، وصفه ١٢، نص عادي ١٤ (أدوارها في `DS.TextRole`)
+    static var titleFont: Font { DS.Font.role(.title) }
+    static var subtitleFont: Font { DS.Font.role(.subtitle) }
+    static var bodyFont: Font { DS.Font.role(.body) }
+
+    static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: radius, style: .continuous) }
+    static var buttonShape: RoundedRectangle { RoundedRectangle(cornerRadius: buttonRadius, style: .continuous) }
+    static var sectionShape: RoundedRectangle { RoundedRectangle(cornerRadius: sectionRadius, style: .continuous) }
+}
+
+/// سطح المربّع: قصّ بزوايا الهيكل + إطار (أوضح في الداكن، طلب المالك) + ظلّ — الظلّ أعمق قليلاً
+/// للوح الكبير (`strong`)
+struct DSBoxChrome: ViewModifier {
+    var strong: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .clipShape(DSBox.shape)
+            .overlay(
+                DSBox.shape.strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
+                                                              : Color.black.opacity(0.06),
+                                         lineWidth: colorScheme == .dark ? 1.25 : 1)
+            )
+            .shadow(color: .black.opacity(strong ? 0.3 : 0.25), radius: strong ? 28 : 24, x: 0, y: strong ? 12 : 10)
+    }
+}
+
+extension View {
+    /// سطح المربّع الموحّد (زوايا + إطار + ظلّ) — الخلفية يضعها المحتوى قبله
+    func dsBoxChrome(strong: Bool = false) -> some View { modifier(DSBoxChrome(strong: strong)) }
+}
+
+// MARK: - البطاقة الواحدة (طلب المالك ٢٠٢٦-١٠-٠٧ «أسلوب واحد»)
+
+/// بطاقة «مجسّمات» الواحدة — نفس بطاقة قسم المربّع (`DSComposerSection`): سطح + إطار شعري + لمسة الطين
+/// (`TrialCardSkin`). أبعادها من `DS.Card` (زوايا ١٢، حشوة ٨)، فتغيير سطر هناك يغيّر كل البطاقات.
+struct DSCardModifier: ViewModifier {
+    /// nil = بلا حشوة (المحتوى يحمل هامشه)
+    var padding: CGFloat? = DS.Card.padding
+    var radius: CGFloat = DS.Card.radius
+    /// سطح البطاقة — `DS.Color.background` لصندوق داخل بطاقة (صفّ/حقل)
+    var fill: Color = DS.Color.surface
+    /// الإطار الخفيف — false لبطاقة بلا إطار (خبر «إدارة العائلة»، طلب المالك)
+    var stroked: Bool = true
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return content
+            .padding(padding ?? 0)
+            .background(shape.fill(fill))
+            .overlay(shape.strokeBorder(DS.Color.textTertiary.opacity(stroked ? DS.Opacity.cardStroke : 0),
+                                        lineWidth: DS.Card.strokeWidth))
+            .trialCardSkin(radius: radius)
+    }
+}
+
+extension View {
+    /// البطاقة الواحدة: `.dsCard()` (حشوة ٨)، `.dsCard(padding: nil)` (بلا حشوة)،
+    /// `.dsCard(fill: DS.Color.background)` (صندوق فوق بطاقة)
+    func dsCard(padding: CGFloat? = DS.Card.padding, radius: CGFloat = DS.Card.radius,
+                fill: Color = DS.Color.surface, stroked: Bool = true) -> some View {
+        modifier(DSCardModifier(padding: padding, radius: radius, fill: fill, stroked: stroked))
+    }
+}
+
+/// قرص أيقونة المربّع: مربّع مستدير بلون القسم يحمل مجسّم «مجسّمات» (`TrialHeaderIcon`).
+/// `onTint`: فوق الرأس الملوّن (قرص زجاجي أبيض خفيف)، وإلا فوق البطاقة (قرص بلون القسم الخفيف).
+struct DSBoxIconDisc: View {
+    let icon: String
+    let tint: Color
+    var side: CGFloat = DSBox.headerIcon
+    var onTint: Bool = false
+
+    var body: some View {
+        let disc = RoundedRectangle(cornerRadius: side * 0.3, style: .continuous)
+        ZStack {
+            disc.fill(onTint ? Color.white.opacity(0.16) : tint.opacity(0.12))
+            disc.strokeBorder(onTint ? Color.white.opacity(0.22) : tint.opacity(0.18), lineWidth: 1)
+            TrialHeaderIcon(icon: icon, tint: tint, side: side * 0.78)
+        }
+        .frame(width: side, height: side)
+        .accessibilityHidden(true)
+    }
+}
+
+/// صفّ عنوان مربّع التنبيه ومربّعات البطاقة: قرص صغير بلون القسم + العنوان بخط الهيكل
+struct DSBoxTitleRow: View {
+    let title: String
+    var icon: String? = nil
+    /// لون القرص — nil = لون القسم؛ يُمرَّر لون معنى (تحذير مثلاً) عند الحاجة
+    var tint: Color? = nil
+    @Environment(\.dsSection) private var section
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            if let icon {
+                DSBoxIconDisc(icon: icon, tint: tint ?? (section ?? AppSection.current)?.fill ?? DS.Color.actionNavy,
+                              side: DSBox.alertIcon)
+            }
+            Text(title)
+                .font(DSBox.alertTitleFont)
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+// MARK: - الزرّ الواحد (طلب المالك ٢٠٢٦-١٠-٠٧ «أسلوب واحد»)
+//
+// شكل واحد (الزوايا، الألوان، الخط، الضغطة) بمقاسين فقط:
+//   • `.regular` ٤٠ — داخل المربّعات والصفحات.
+//   • `.large`   ٤٨ — الإجراء الرئيسي في شاشات ملء الشاشة (الدخول، التسجيل، الانتظار، التجميد، التحديث).
+// الإجراء بتعبئة القسم (`DSActionFill`)، الحذف أحمر (`role: .destructive`)، الإلغاء/الثانوي رمادي
+// (`role: .cancel`)، ولون معنى صلب عند الحاجة (`tint:` نجاح/تحذير). المعطّل نفس الشكل بشفافية واحدة.
+// كل الأزرار تُرسم هنا: `DSBoxButtonStyle` (و`.buttonStyle(.ds(...))`)، `DSButton`، `DSBoxButtons`،
+// `DSPrimaryButton`، `DSSecondaryButton`، `DSDestructiveButton`، `UnifiedButtonStyle`، `DSApproveRejectButtons`.
+
+/// مقاس الزرّ — اثنان فقط
+enum DSButtonSize {
+    /// ٤٠ — داخل المربّعات والصفحات
+    case regular
+    /// ٤٨ — الإجراء الرئيسي في شاشات ملء الشاشة
+    case large
+
+    var height: CGFloat { self == .large ? DSBox.buttonHeightLarge : DSBox.buttonHeight }
+    var font: Font { self == .large ? DSBox.buttonFontLarge : DSBox.buttonFont }
+    /// رمز الزرّ (قبل النص)
+    var glyph: CGFloat { self == .large ? DS.Glyph.lg : DS.Glyph.md }
+}
+
+/// شكل زرّ المربّعات في كل مكان (تنبيه، بطاقة، شريط مربّع العمل، الصفحات): الإجراء بتدرّج القسم ونص
+/// أبيض، الحذف أحمر، الإلغاء رمادي هادئ — ضغطة ناعمة موحّدة (DSMotion)
+struct DSBoxButtonStyle: ButtonStyle {
+    var role: ButtonRole? = nil
+    var size: DSButtonSize = .regular
+    /// لون معنى صلب بدل تعبئة القسم (نجاح، تحذير…) — nil = حسب الدور
+    var tint: Color? = nil
+    /// false = بعرض محتواه (زرّ الحالة الفارغة مثلاً) بدل عرض السطر
+    var fullWidth: Bool = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        DSBoxButtonBody(configuration: configuration, role: role, size: size, tint: tint, fullWidth: fullWidth)
+    }
+}
+
+extension ButtonStyle where Self == DSBoxButtonStyle {
+    /// الزرّ الموحّد — `.buttonStyle(.ds())`، `.buttonStyle(.ds(.cancel))`، `.buttonStyle(.ds(size: .large))`
+    static func ds(_ role: ButtonRole? = nil, size: DSButtonSize = .regular, tint: Color? = nil,
+                   fullWidth: Bool = true) -> DSBoxButtonStyle {
+        DSBoxButtonStyle(role: role, size: size, tint: tint, fullWidth: fullWidth)
+    }
+}
+
+private struct DSBoxButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let role: ButtonRole?
+    var size: DSButtonSize = .regular
+    var tint: Color? = nil
+    var fullWidth: Bool = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        configuration.label
+            .modifier(DSButtonFace(role: role, size: size, tint: tint, fullWidth: fullWidth, enabled: isEnabled))
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(DSMotion.press, value: configuration.isPressed)
+    }
+}
+
+/// وجه الزرّ (الخط، اللون، الارتفاع، الزوايا، التعبئة، شفافية المعطّل) — المكان الوحيد الذي يُرسم فيه
+struct DSButtonFace: ViewModifier {
+    var role: ButtonRole? = nil
+    var size: DSButtonSize = .regular
+    var tint: Color? = nil
+    var fullWidth: Bool = true
+    var enabled: Bool = true
+    /// وضع العرض: الزرّ «بعرض السطر» في الصفحات لا يتجاوز `DS.Landscape.buttonMaxWidth` ويتوسّط سطره
+    /// (داخل المربّعات الوسطية يبقى بعرض المربّع — المربّع نفسه محدود العرض)
+    @Environment(\.dsLandscape) private var landscape
+    @Environment(\.dsInCenterBox) private var inCenterBox
+
+    func body(content: Content) -> some View {
+        let cancel = role == .cancel && tint == nil
+        let capped = fullWidth && landscape && !inCenterBox
+        return content
+            .font(size.font)
+            .foregroundColor(cancel ? DS.Color.textPrimary : .white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, fullWidth ? 0 : DS.Spacing.lg)
+            .frame(maxWidth: fullWidth ? (capped ? DS.Landscape.buttonMaxWidth : .infinity) : nil)
+            .frame(minHeight: size.height)
+            .background { fill }
+            .contentShape(DSBox.buttonShape)
+            // المعطّل: نفس الشكل بشفافية الهيكل (كزرّ الإجراء في مربّع العمل)
+            .opacity(enabled ? 1 : DSActionFill.disabledOpacity)
+            .frame(maxWidth: capped ? .infinity : nil)
+    }
+
+    @ViewBuilder
+    private var fill: some View {
+        if let tint {
+            DSBox.buttonShape.fill(tint)
+        } else if role == .destructive {
+            DSBox.buttonShape.fill(DS.Color.error)
+        } else if role == .cancel {
+            DSBox.buttonShape.fill(DS.Color.mutedBackground.opacity(0.8))
+        } else {
+            DSBox.buttonShape.fill(DSActionFill.style())
+        }
+    }
+}
+
+/// زرّ جاهز بالمواصفة الواحدة: رمز اختياري + نص (+ دوّارة أثناء العمل)
+struct DSButton: View {
+    let title: String
+    var icon: String? = nil
+    var role: ButtonRole? = nil
+    var size: DSButtonSize = .regular
+    var tint: Color? = nil
+    var isLoading: Bool = false
+    var fullWidth: Bool = true
+    let action: () -> Void
+
+    init(_ title: String, icon: String? = nil, role: ButtonRole? = nil, size: DSButtonSize = .regular,
+         tint: Color? = nil, isLoading: Bool = false, fullWidth: Bool = true, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.role = role
+        self.size = size
+        self.tint = tint
+        self.isLoading = isLoading
+        self.fullWidth = fullWidth
+        self.action = action
+    }
+
+    private var debouncedAction: () -> Void {
+        let key = "DSButton_\(title)"
+        let original = action
+        return { if TapDebouncer.shared.canFire(key) { original() } }
+    }
+
+    var body: some View {
+        Button(action: debouncedAction) {
+            HStack(spacing: DSBox.buttonSpacing) {
+                if isLoading {
+                    ProgressView()
+                        .tint(role == .cancel && tint == nil ? DS.Color.textPrimary : .white)
+                        .scaleEffect(DS.Spinner.buttonScale)
+                } else if let icon {
+                    Image(dsSymbol: icon).dsGlyph(size.glyph)
+                }
+                Text(title)
+            }
+        }
+        .buttonStyle(DSBoxButtonStyle(role: role, size: size, tint: tint, fullWidth: fullWidth))
+        // أثناء العمل: نفس اللون (بلا خفوت المعطّل) ولا يُضغط مرة ثانية
+        .allowsHitTesting(!isLoading)
+    }
+}
+
+/// النقطة الذهبية الصغيرة (اللمسة الواحدة، مثل ثمرة الغافة على مجسّمات الرئيسية): كرة طين صغيرة
+/// بذهب المجسّمات وحافة أغمق تُرى على السطح الفاتح — ساكنة ومخفية عن القارئ الصوتي
+struct DSGoldDot: View {
+    var size: CGFloat = 8
+
+    var body: some View {
+        Circle()
+            .fill(LinearGradient(colors: [DS.Color.goldDotLight, DS.Color.goldDot],
+                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay(Circle().strokeBorder(DS.Color.goldDotRim.opacity(0.55), lineWidth: 0.75))
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - دفعة 2-B «أسلوب واحد» (٢٠٢٦-١٠-٠٧): مقاسات صور الأعضاء في صفوف صفحات الإدارة
+extension DS.Icon {
+    /// صورة العضو في صفّ قائمة (السجل، الطلبات، الفريق، النشاط) — كانت `size: 40` في كل شاشة
+    static let avatar: CGFloat = 40
+    /// شارة الحالة الصغيرة على طرف صورة العضو (متوفّى، مجمّد، متصل)
+    static let avatarBadge: CGFloat = 17
+    /// صورة العضو الكبيرة في بطاقة (محطة استكمال الحسابات)
+    static let avatarLarge: CGFloat = 66
+    /// دائرة اختيار صورة العضو داخل المربّع (فارغة بحلقة متقطّعة، أو الصورة المختارة)
+    static let photoPicker: CGFloat = 96
+    /// شارة «+ / تعديل» على طرف دائرة الصورة
+    static let photoBadge: CGFloat = 28
+    /// نقطة «متصل الآن» على طرف صورة العضو (حلقتها النابضة ضعفها)
+    static let onlineDot: CGFloat = 11
+}
+
+// MARK: - شفافية العنصر المعلّق/المخفي (دفعة 2-A «أسلوب واحد»، ٢٠٢٦-١٠-٠٧)
+
+extension DS.Opacity {
+    /// بطاقة عنصر «بانتظار» الموافقة أو مخفي عن الأعضاء (المكتبة، المشاريع) — خافتة قليلاً
+    /// (المرفوض = `disabled`)
+    static let dimmed: Double = 0.8
+}
+
+// MARK: - لون «رفض» (طلب المالك ٢٠٢٦-١٠-٠٧ «غيّر بين لون الرفض والحذف النهائي»)
+extension DS.Color {
+    /// الرفض برتقالي محروق — يتميّز عن «حذف نهائي» الأحمر؛ النص الأبيض فوقه ≥ ٤٫٥:١ في الوضعين
+    static let reject = SwiftUI.Color.adaptive(light: "#B94E0C", dark: "#C8621E")
+}
+
+// MARK: - دفعة 3-B «أسلوب واحد» (٢٠٢٦-١٠-٠٧): شارة العدد ونقطة الفئة في صفحات الإدارة
+extension DS.Icon {
+    /// ارتفاع شارة العدد الحمراء «ما ينتظرك» (بطاقات اللوحة والمربّعات) — كانت ٢٠/٢١ في كل شاشة
+    static let countBadge: CGFloat = 20
+    /// نقطة لون صغيرة قبل اسم فئة (توزيع الاستخدام، مفتاح الرسم، حالة) — كانت ٧–١٠
+    static let legendDot: CGFloat = 8
+    /// قرص بطاقة كبيرة في لوحة الإدارة (طلبات المراجعة، الرسائل، استخدام التطبيق) ومربّعها
+    static let tile: CGFloat = 42
+}
+
+extension DSBox {
+    /// أدنى ارتفاع لمربّع أداة في شبكات لوحة الإدارة: ثلاثة أعمدة (المضغوط) وعمودان
+    static let dashTileHeightCompact: CGFloat = 108
+    static let dashTileHeight: CGFloat = 116
+}
+
+// MARK: - دفعة 3-A «أسلوب واحد» (٢٠٢٦-١٠-٠٧): «حسابي» والدخول
+extension DS.Icon {
+    /// صورة الحساب في رأس «حسابي» وقرصها الخارجي (الحلقة الملوّنة بينهما)
+    static let profileAvatar: CGFloat = 98
+    static let profileAvatarRing: CGFloat = 110
+    /// قرص رقم الترتيب في وضع ترتيب الأبناء
+    static let orderBadge: CGFloat = 28
+    /// شعار التطبيق الدائري (الدخول، شاشة البداية — وحلقاتها نِسَب منه)
+    static let appLogo: CGFloat = 100
+    /// قرص الحالة الكبير في شاشات ملء الشاشة (الحساب مجمّد، حد الأجهزة، التحديث الإجباري)
+    static let stateHero: CGFloat = 110
+    /// رسمة شاشة الانتظار (الساعة الرملية)
+    static let heroArt: CGFloat = 140
+}
+
+extension DS.TextRole {
+    /// الحرف الأول مكان الصورة: في رأس «حسابي»، وفي معاينة الصورة المكبّرة
+    static let avatarInitial = DS.TextRole(size: 34, weight: .bold)
+    static let avatarInitialLarge = DS.TextRole(size: 96, weight: .bold)
+    /// اسم العائلة الكبير تحت الشعار (الدخول، شاشة البداية)
+    static let heroTitle = DS.TextRole(size: 26, weight: .heavy)
+    /// رقم في مربّعات رمز التحقق
+    static let codeDigit = DS.TextRole(size: 26, weight: .bold)
+}
+
+extension DS.Opacity {
+    /// تعتيم الشاشة خلف صورة مكبّرة (معاينة الصورة)
+    static let mediaDim: Double = 0.88
+}
+
+extension DS.Color {
+    /// خلفية رمز QR — بيضاء دائماً (تقرؤها الكاميرا في الوضعين)
+    static let codeBackground = SwiftUI.Color.white
+}
+
+extension DSBox {
+    /// ضلع رمز QR في مربّع «رمزي» (والأفقي)
+    static let qrSide: CGFloat = 200
+    static let qrSideCompact: CGFloat = 130
+    /// عرض المربّع الصغير الخارج من خانته (اختيار الأم/الزوجة في «عائلتي»)
+    static let popoverWidth: CGFloat = 280
+    /// أقصى ضلع للصورة المكبّرة (معاينة الصورة الشخصية)
+    static let mediaMaxSide: CGFloat = 420
+    /// أقصى عرض لبطاقة الإدخال في شاشة الدخول (الأجهزة العريضة والأفقي)
+    static let formMaxWidth: CGFloat = 380
+}
+
+extension DSBox {
+    /// ارتفاع حقل البحث في الصفحات (`DSSearchField` وبحث «المستلمون») — كان ٤٦ في كل منهما
+    static let searchHeight: CGFloat = 46
+}
+
+extension DSBox {
+    /// محرّر نص متعدد الأسطر في الصفحات: العادي (تفاصيل الإشعار) والطويل (ما الجديد في التحديث)
+    static let editorMinHeight: CGFloat = 64
+    static let editorMaxHeight: CGFloat = 140
+    static let editorTallMinHeight: CGFloat = 160
+    static let editorTallMaxHeight: CGFloat = 320
+}
+
+extension DS {
+    /// رسوم «الإحصائيات» (أشرطة التوزيع وأعمدة النمو) وعجلة اختيار الوقت — مقاسات الرسم من هنا
+    enum Chart {
+        /// عمود اسم الفئة وعمود الرقم بجانب شريط التوزيع، وسماكة الشريط وأقلّ طول ظاهر له
+        static let barLabelWidth: CGFloat = 92
+        static let barValueWidth: CGFloat = 58
+        static let barHeight: CGFloat = 10
+        static let barMinLength: CGFloat = 6
+        /// أعمدة النمو الشهري: أطول عمود، أقصره، وارتفاع المنطقة كلها (ثابت حتى لا تتمدّد البطاقة)
+        static let columnMaxHeight: CGFloat = 100
+        static let columnMinHeight: CGFloat = 4
+        static let columnsAreaHeight: CGFloat = 142
+        /// عجلة التاريخ والوقت داخل مربّع (جدولة الإشعار)
+        static let wheelHeight: CGFloat = 190
+    }
+}
+
+// MARK: - وضع العرض (طلب المالك ٢٠٢٦-١٠-٠٧ «ضبط كل التطبيق بحيث تناسب وضع العرض»)
+//
+// الجوال مائلاً: الارتفاع ~٤٠٠ نقطة والعرض ~٩٠٠. كل قواعد الوضع الأفقي من هنا — مكان واحد:
+// المربّعات الوسطية (عرضها، هامشها، رأسها المضغوط)، الصفحات الفاضية والتحميل، عرض القراءة،
+// وسقف عرض الأزرار. يُقرأ «هل نحن أفقياً؟» من `@Environment(\.dsLandscape)` (= `verticalSizeClass == .compact`)
+// والأدوات الجاهزة في `LandscapeLayout.swift` (`.dsLandscapeReadable()`، `AdaptiveCardStack`…).
+// الوضع العمودي لا يتأثر بأي قيمة هنا.
+extension DS {
+    enum Landscape {
+        /// عمود القراءة في الصفحات الكاملة والنماذج (الدخول، التجميد، الانتظار…) — يتوسّط الشاشة
+        static let maxContentWidth: CGFloat = 560
+        /// أقصى عرض للزرّ «بعرض السطر» — لا يتمدّد عبر الشاشة كلها
+        static let buttonMaxWidth: CGFloat = 420
+        /// المربّع الوسطي (`DSCenterPanel`): أقصى عرض (العمودي ٥٢٠)، والمسافة فوقه وتحته داخل المنطقة الآمنة
+        static let panelMaxWidth: CGFloat = 600
+        static let panelMargin: CGFloat = DS.Spacing.sm
+        /// مربّع الرسالة (`dsAlert`): أعرض قليلاً فيقصر — والعمودي `DSBox.alertMaxWidth`
+        static let alertMaxWidth: CGFloat = 420
+        /// المربّع الإضافي فوق مربّع العمل (`DSExtraBox`) — العمودي ٣٨٠
+        static let extraBoxMaxWidth: CGFloat = 480
+        /// رأس مربّع العمل المضغوط (العمودي ٨٠) — نفس أبعاد رأس الرسالة
+        static var boxHeaderHeight: CGFloat { DSBox.compactHeaderHeight }
+        static var boxHeaderIcon: CGFloat { DSBox.compactHeaderIcon }
+        static var boxWatermark: CGFloat { DSBox.compactWatermark }
+        /// مجسّم الصفحة الفاضية (العمودي `DS.Icon.emptyArt`) — بجانب النص بدل فوقه
+        static let emptyArt: CGFloat = 88
+        /// مجسّم التحميل (العمودي `DS.Icon.loaderArt`)
+        static let loaderArt: CGFloat = 72
+        /// أيقونة الحالة الكبيرة في الصفحات الكاملة (العمودي `DS.Icon.stateHero`)
+        static let stateHero: CGFloat = 72
+        /// أقل عرض لعمود في الشبكة التكيّفية (عمودان على الجوال المائل)
+        static let columnMinWidth: CGFloat = 340
+        /// أقل عرض لمربّع أداة في شبكات الأدوات (لوحة الإدارة) — ٤ أعمدة تقريباً بدل ٢–٣
+        static let tileMinWidth: CGFloat = 170
+        /// أقل عرض لبطاقة في شبكات البطاقات (المكتبة، المشاريع) — ٣–٤ أعمدة بدل عمودين
+        static let gridCardMinWidth: CGFloat = 200
+        /// أقل عرض لصورة في شبكة الألبوم
+        static let photoMinWidth: CGFloat = 110
+        /// فراغ إضافي أسفل الصفحات فوق شريط التبويبات العائم أفقياً
+        static var tabBarClearance: CGFloat { DS.Icon.tapTarget }
+        /// الرئيسية أفقياً: مربّعات الأقسام أقصر بمقدار، بحدّ أدنى — وعمود الأخبار بجانبها (حدّ أدنى وحصّة من العرض)
+        static let homeTileTrim: CGFloat = 18
+        static let homeTileMinHeight: CGFloat = 66
+        static let homeNewsMinWidth: CGFloat = 260
+        static let homeNewsShare: CGFloat = 0.36
+        static var columnSpacing: CGFloat { DS.Spacing.md }
+    }
+}
+
+extension EnvironmentValues {
+    /// «وضع العرض»: جوال مائل (ارتفاع مضغوط) — القاعدة الواحدة لكل مكوّن يتكيّف أفقياً
+    var dsLandscape: Bool { verticalSizeClass == .compact }
+}
+
+// MARK: - دفعة 4-W «أسلوب واحد» (٢٠٢٦-١٠-٠٧): شجرة النساء
+// العقدة المصغّرة في شجرة النساء (مربّع ٤٤، مربّع الزوجة ٢٤) أصغر من أصغر دور (`micro` ١٠) — مقاساتها من هنا
+extension DS.TextRole {
+    /// سنوات المتوفّى في شريطه، وعدد الأبناء في شارة العقدة
+    static let treeNodeMicro = DS.TextRole(size: 8.5, weight: .heavy)
+    /// كلمة «زوجة» داخل مربّع الزوجة الصغير، واسمها تحته
+    static let treeNodeTiny = DS.TextRole(size: 8, weight: .semibold)
+}
+
+extension DS.Glyph {
+    /// سهم شارة عدد الأبناء، وعين الإخفاء على مربّع الزوجة الصغير
+    static let nano: CGFloat = 6
+}
+
+// MARK: - دفعة 4 «أسلوب واحد» (٢٠٢٦-١٠-٠٧): الشجرة
+extension DS.TextRole {
+    /// عدد الأبناء على شارة عقدة شجرة العائلة
+    static let nodeCount = DS.TextRole(size: 16, weight: .heavy)
+}
+
+extension DSBox {
+    /// أقصى ارتفاع لقائمة نتائج تطفو فوق صفحة (نتائج بحث الشجرة المضمّنة) — بعده تتمرّر
+    static let overlayListMaxHeight: CGFloat = 280
+}
+
+extension DS.Icon {
+    /// الصورة المكبّرة عند الضغط على صورة العضو في تفاصيله
+    static let avatarPreview: CGFloat = 300
+}
+
+// MARK: - «ردّ الأحجام» (طلب المالك ٢٠٢٦-١٠-٠٧: «أبي أي شي حجمه صار كبير تردّه حجمه السابق»)
+// التوحيد نقل الشاشات إلى قطع مشتركة بمقاس واحد أكبر مما كانت ترسمه. هنا المقاسات الأصغر — مكان واحد:
+// أحجام أزرار الرأس على السطح (شريط أدوات الشجرة)، المبدّل، الشريحة، شارة الحالة، الحالة الفارغة المضمّنة،
+// ودرجات نصف النقطة للنص والرموز حيث كانت الشاشة أصغر بنصف/نقطة من الدور الأقرب.
+extension DSBox {
+    // أزرار الرأس فوق السطح (`DSNavButtonSize`): شريط أدوات الشجرة ٣٤ ورمز ١٤، وشريطها الجانبي (الأفقي) ٢٧ ورمز ١٢
+    static let navButtonToolbar: CGFloat = 34
+    static let navGlyphToolbar: CGFloat = 14
+    static let navButtonMini: CGFloat = 27
+    static let navGlyphMini: CGFloat = 12
+    /// الإغلاق الصغير فوق سطح ملوّن (بانر صلة القرابة): رمز «×» داخل دائرة ممتلئة بلا قرص زجاجي
+    static let navGlyphMiniOnColor: CGFloat = 18
+    static let navGlyphMiniOnColorOpacity: Double = 0.75
+
+    // المبدّل (`DSSegmentedSwitch`): الكبير ٤٤ (صفحات الإشعارات والتعليمات)، العادي ٣٢ (فلاتر داخل الصفحات)،
+    // المدمّج ٣٠ (تبويب الشجرة) — والحشوة حول الأزرار
+    static let segmentHeight: CGFloat = 44
+    static let segmentHeightRegular: CGFloat = 32
+    static let segmentHeightCompact: CGFloat = 30
+    static let segmentPadding: CGFloat = 4
+    static let segmentPaddingSmall: CGFloat = 3
+
+    // الشريحة (`DSChipSize`): الصغيرة ٢٨ (أزرار صفّ، فروع البحث)، والمصغّرة (شريط المسار، تبويب الشريط الجانبي)
+    static let chipHeightSmall: CGFloat = 28
+    static let chipPaddingSmall: CGFloat = 10
+    static let chipHeightMini: CGFloat = 18
+    static var chipPaddingMini: CGFloat { DS.Spacing.xsm }
+}
+
+extension DS.TextRole {
+    /// نص المبدّل الكبير / العادي / المدمّج
+    static let segment        = DS.TextRole(size: 14.5, weight: .bold)
+    static let segmentRegular = DS.TextRole(size: 13, weight: .bold)
+    static let segmentCompact = DS.TextRole(size: 11, weight: .bold)
+    // نصف الدرجة: نفس الدور بنصف نقطة (أو نقطة) أصغر — حيث كانت الشاشة أصغر من الدور الأقرب
+    static let headlineCompact = DS.TextRole(size: 14.5, weight: .bold)
+    static let bodyCompact     = DS.TextRole(size: 13.5, weight: .regular)
+    static let rowTitleCompact = DS.TextRole(size: 13, weight: .bold)
+    static let calloutCompact  = DS.TextRole(size: 12.5, weight: .regular)
+    static let chipCompact     = DS.TextRole(size: 11.5, weight: .bold)
+    static let captionCompact  = DS.TextRole(size: 10.5, weight: .semibold)
+    static let badgeCompact    = DS.TextRole(size: 10.5, weight: .bold)
+    static let footnoteCompact = DS.TextRole(size: 10.5, weight: .regular)
+    static let microCompact    = DS.TextRole(size: 9.5, weight: .semibold)
+}
+
+extension DS.Glyph {
+    // نصف الدرجة للرموز (كانت `.system(size: 11/13/15/17…)` في الشاشات)
+    static let microCompact: CGFloat = 9
+    static let xsCompact: CGFloat = 10
+    static let smCompact: CGFloat = 11
+    static let mdCompact: CGFloat = 13
+    static let lgCompact: CGFloat = 15
+    static let xlCompact: CGFloat = 17
+    static let xxlCompact: CGFloat = 21
+    /// قلب الإعجاب الكبير عند الضغط المزدوج على الخبر
+    static let doubleTapHeart: CGFloat = 34
+    /// نقطة الحالة الصغيرة في شاشة البداية
+    static let splashDot: CGFloat = 7
+}
+
+extension DS.Icon {
+    /// مجسّم التحميل داخل بطاقة/قائمة (`DSPageLoader(fillsSpace: false)`) — = قرص بطاقة الحالة
+    static var loaderArtInline: CGFloat { state }
+    /// مجسّم الصفحة الفاضية المدمجة (`DSEmptyView(style: .compact)`) — صفحات الإدارة
+    static let emptyArtCompact: CGFloat = 64
+    /// صورة العضو في صفّ نتائج/أبناء (أصغر من `avatar` ٤٠) والصغيرة
+    static let avatarRow: CGFloat = 36
+    static let avatarSmall: CGFloat = 34
+    /// قرص صغير (بانر صلة القرابة، صفوف التصنيفات) ومتوسط
+    static let discSmall: CGFloat = 30
+    static let rowCompact: CGFloat = 34
+    /// نقطة مفتاح صغيرة (شجرة النساء) ونقطة التوزيع
+    static let legendDotSmall: CGFloat = 5
+    static let legendDotCompact: CGFloat = 7
+    /// قرص الحالة الكبير في الصفحة (حساب محذوف، حد الأجهزة) — أصغر من `stateHero`
+    static let stateArt: CGFloat = 100
+    /// قرص صغير جداً قبل عنوان بطاقة (المكتبة، المشاريع) ومكان أيقونة صفّ الإشعار
+    static let discMini: CGFloat = 26
+    /// دائرة صورة العضو في مراجعة طلب (أصغر من `photoPicker`)
+    static let photoPickerCompact: CGFloat = 88
+    /// حلقة النسبة الكبيرة (التحليلات، صحة الإشعارات)
+    static let ring: CGFloat = 92
+}
+
+extension DSBox {
+    /// كبسولة بارتفاع ٣٠ (شارة إحصاء في اللوحة، صندوق السنة) — بين الصغيرة ٢٨ والعادية ٣٤
+    static let chipHeightCompact: CGFloat = 30
+}
+
+// MARK: - قسم «العائلة» في تفاصيل العضو (طلب المالك ٢٠٢٦-١٠-٠٧: الخط كما كان قبل التوحيد)
+extension DS.TextRole {
+    /// «الأبناء · N» فوق صور الأبناء
+    static let familyLabel = DS.TextRole(size: 11, weight: .heavy)
+    /// قيمة صفّ العلاقة (الأم/الزوج) في «العائلة»
+    static let familyValue = DS.TextRole(size: 13, weight: .regular)
+}
+
+// MARK: - دفعة 5 «أسلوب واحد» (٢٠٢٦-١٠-٠٧): آخر الأوزان التي كانت أرقاماً في المكوّنات المشتركة والدليل
+extension DS.TextRole {
+    /// نص المحتوى بوزن أثقل: عريض (صفّ فرع مختار)، شبه عريض (قيمة تاريخ، شرح نقطة الدليل)، متوسط (مفتاح)
+    static let bodyStrong   = DS.TextRole(size: 14, weight: .bold)
+    static let bodySemibold = DS.TextRole(size: 14, weight: .semibold)
+    static let bodyMedium   = DS.TextRole(size: 14, weight: .medium)
+    /// نص ملاحظة بوزن متوسط (قيمة «قبل/بعد»، رقم الإصدار) — ونصف درجته (تلميح فوق صورة، سطر تحت اسم)
+    static let calloutMedium        = DS.TextRole(size: 13, weight: .medium)
+    static let calloutCompactMedium = DS.TextRole(size: 12.5, weight: .medium)
+    /// عنوان نهاية فصل الدليل (= `DS.Font.title2`)
+    static let celebrationTitle = DS.TextRole(size: 22, weight: .bold)
+    /// رقم في خانة رمز التحقق داخل المربّع (`DSOTPField`) — أصغر من `codeDigit` (شاشة الدخول)
+    static let codeDigitCompact = DS.TextRole(size: 22, weight: .bold)
+}
+
+extension DSBox {
+    /// خانة رقم في رمز التحقق داخل المربّع (`DSOTPField`)
+    static let otpBoxHeight: CGFloat = 50
+}
+
+extension DS {
+    /// الدوّارة الصغيرة المسموحة (داخل زرّ أو شريحة فقط — الصفحات والبطاقات `DSPageLoader`): مقاسها من هنا
+    enum Spinner {
+        /// داخل الزرّ الواحد (`DSButton`)
+        static let buttonScale: CGFloat = 0.85
+        /// داخل الشريحة (`DSChipButton`) أو حقل
+        static let chipScale: CGFloat = 0.7
+    }
+}
+
+extension DS.Glyph {
+    /// رمز داخل مكان صورة فارغ (اختيار صورة العضو)
+    static let placeholder: CGFloat = 40
+}
+
+extension DS.Icon {
+    /// صورة العضو الكبيرة في مربّع تفاصيله
+    static let memberHero: CGFloat = 130
+}
+
+extension DS.Border {
+    /// حلقة حول صورة العضو وشارة الكاميرا فوقها
+    static let ring: CGFloat = 2.5
 }

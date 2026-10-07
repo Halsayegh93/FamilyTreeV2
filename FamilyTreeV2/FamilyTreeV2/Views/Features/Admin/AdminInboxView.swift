@@ -117,39 +117,33 @@ struct AdminInboxView: View {
         let messages = filteredMessages
         let counts = statusCounts
 
-        return ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            // بطاقة الرأس ← البحث والفلاتر ← الرسائل: تتمرّر معاً (والسحب للتحديث يعمل حتى والقائمة فارغة)
-            ScrollView(showsIndicators: false) {
-                pageContent(messages: messages, counts: counts)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xxxl)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .refreshable { await loadMessages(force: true) }
-            // شريط الحذف السفلي في وضع التحديد — مثبّت، وآخر رسالة تبقى فوقه
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if isSelectMode {
-                    deleteBar
-                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                }
+        // صفّ الأرقام ← البحث والفلاتر ← الرسائل: تتمرّر معاً (والسحب للتحديث يعمل حتى والقائمة فارغة)
+        return ScrollView(showsIndicators: false) {
+            pageContent(messages: messages, counts: counts)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.xxxl)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .refreshable { await loadMessages(force: true) }
+        // شريط الحذف السفلي في وضع التحديد — مثبّت، وآخر رسالة تبقى فوقه
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isSelectMode {
+                deleteBar
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                if !messages.isEmpty {
-                    Button {
-                        withAnimation(DS.Anim.quick) {
-                            isSelectMode.toggle()
-                            if !isSelectMode { selectedIDs.removeAll() }
-                        }
-                    } label: {
-                        Image(systemName: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
-                            .foregroundColor(AppSection.admin.ink)
+        // الرأس الملوّن الموحّد — «تحديد» (كان في شريط النظام) زرّ الرأس
+        .dsSubPageHeader(L10n.t("رسائل التواصل", "Contact Messages"),
+                         subtitle: L10n.t("رسائل الأعضاء من «تواصل مع الإدارة» — اضغط أي رسالة للرد عليها",
+                                          "Members' messages from “Contact Admin” — tap one to reply")) {
+            if !messages.isEmpty {
+                DSHeaderButton(symbol: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle",
+                               label: isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select")) {
+                    withAnimation(DS.Anim.quick) {
+                        isSelectMode.toggle()
+                        if !isSelectMode { selectedIDs.removeAll() }
                     }
-                    .accessibilityLabel(isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select"))
                 }
             }
         }
@@ -176,8 +170,6 @@ struct AdminInboxView: View {
         } message: {
             Text(L10n.t("هل تريد حذف هذه الرسالة؟ لا يمكن التراجع.", "Delete this message? This can't be undone."))
         }
-        .navigationTitle(L10n.t("رسائل التواصل", "Contact Messages"))
-        .navigationBarTitleDisplayMode(.inline)
         .task {
             isLoading = true
             await loadMessages()
@@ -198,14 +190,11 @@ struct AdminInboxView: View {
             heroSection(counts: counts)
 
             if isInitialLoading {
-                SysStateCard(icon: "bubble.left.and.bubble.right.fill",
-                             title: L10n.t("جارٍ تحميل الرسائل…", "Loading messages…"),
-                             tint: pageTint,
-                             isLoading: true)
-                    .padding(.top, DS.Spacing.xs)
+                DSPageLoader(L10n.t("جارٍ تحميل الرسائل…", "Loading messages…"), fillsSpace: false)
+                    .padding(.top, DS.Spacing.xl)
                     .dsStaggerIn(1)
             } else if loadFailed {
-                SysStateCard(icon: "wifi.exclamationmark",
+                DSStateCard(icon: "wifi.exclamationmark",
                              title: L10n.t("تعذّر تحميل الرسائل", "Couldn't load messages"),
                              hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                              tint: DS.Color.error,
@@ -233,13 +222,13 @@ struct AdminInboxView: View {
                     }
 
                     // عنوان الحالة المختارة + عدد ما يظهر منها
-                    SysSectionTitle(title: filter.title,
+                    DSSectionTitle(title: filter.title,
                                     icon: filter.icon,
                                     tint: filter.color,
                                     trailing: L10n.t("\(messages.count) رسالة", "\(messages.count) messages"))
                         .dsStaggerIn(2)
 
-                    AdaptiveLazyStack(spacing: DS.Spacing.sm, landscapeMinimum: 340) {
+                    AdaptiveLazyStack(spacing: DS.Spacing.sm) {
                         ForEach(Array(messages.enumerated()), id: \.element.id) { index, msg in
                             messageCell(msg)
                                 // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
@@ -265,14 +254,8 @@ struct AdminInboxView: View {
     // MARK: - بطاقة الرأس
 
     private func heroSection(counts: [InboxFilter: Int]) -> some View {
-        DSPageHero(
-            title: L10n.t("رسائل التواصل", "Contact Messages"),
-            subtitle: L10n.t("رسائل الأعضاء من «تواصل مع الإدارة» — اضغط أي رسالة للرد عليها",
-                             "Members' messages from “Contact Admin” — tap one to reply"),
-            icon: "bubble.left.and.bubble.right.fill",
-            tint: pageTint,
-            stats: heroStats(counts: counts)
-        )
+        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
+        DSStatsRow(heroStats(counts: counts), tint: pageTint)
     }
 
     /// ٣ أرقام حيّة من الرسائل المحمّلة أصلاً (بلا طلبات جديدة للسيرفر): غير المقروءة، ما ينتظر
@@ -354,33 +337,16 @@ struct AdminInboxView: View {
     private var deleteBar: some View {
         HStack(spacing: DS.Spacing.md) {
             Text(L10n.t("\(selectedIDs.count) محدّدة", "\(selectedIDs.count) selected"))
-                .dsFieldFont(13.5, weight: .bold)
+                .dsFieldFont(.rowTitle)
                 .foregroundColor(DS.Color.fieldValue)
                 .monospacedDigit()
             Spacer()
-            Button {
+            // الزرّ الواحد بالأحمر (دوّارته داخله أثناء الحذف)
+            DSButton(L10n.t("حذف", "Delete"), icon: "trash.fill", role: .destructive,
+                     isLoading: isDeleting, fullWidth: false) {
                 showDeleteConfirm = true
-            } label: {
-                HStack(spacing: 6) {
-                    if isDeleting {
-                        ProgressView().tint(DSActionFill.label()).scaleEffect(0.85)
-                    } else {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .accessibilityHidden(true)
-                    }
-                    Text(L10n.t("حذف", "Delete"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                }
-                .foregroundColor(DSActionFill.label())
-                .padding(.horizontal, DS.Spacing.xl)
-                .frame(minHeight: 44)
-                .background(Capsule().fill(DS.Color.error))
-                .contentShape(Capsule())
             }
-            .buttonStyle(DSScaleButtonStyle())
             .disabled(selectedIDs.isEmpty || isDeleting)
-            .opacity(selectedIDs.isEmpty ? 0.5 : 1)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
@@ -395,25 +361,23 @@ struct AdminInboxView: View {
     private func emptyState(counts: [InboxFilter: Int]) -> some View {
         let searching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if searching {
-            SysStateCard(icon: "magnifyingglass",
-                         title: L10n.t("لا توجد نتائج", "No results"),
-                         hint: L10n.t("جرّب كلمة أخرى", "Try another word"),
-                         tint: DS.Color.textTertiary)
+            DSEmptyView(L10n.t("لا توجد نتائج", "No results"),
+                        message: L10n.t("جرّب كلمة أخرى", "Try another word"),
+                        style: .compact)
         } else {
             let other: InboxFilter = filter == .pending ? .handled : .pending
             let otherCount = counts[other] ?? 0
             let showOther: (() -> Void)? = otherCount > 0 ? { showFilter(other) } : nil
-            SysStateCard(icon: filter == .pending ? "checkmark.circle.fill" : "tray",
-                         title: L10n.t("ما فيه رسائل", "No messages"),
-                         hint: filter == .pending
+            DSEmptyView(L10n.t("ما فيه رسائل", "No messages"),
+                        message: filter == .pending
                             ? L10n.t("كل الرسائل تم التعامل معها", "All messages handled")
                             : L10n.t("لا توجد رسائل متعامل معها بعد", "No handled messages yet"),
-                         tint: filter == .pending ? DS.Color.success : DS.Color.textTertiary,
-                         actionTitle: otherCount > 0
+                        tint: filter == .pending ? DS.Color.success : nil,
+                        actionTitle: otherCount > 0
                             ? L10n.t("عرض «\(other.title)» (\(otherCount))", "Show \(other.title) (\(otherCount))")
                             : nil,
-                         actionIcon: other.icon,
-                         action: showOther)
+                        actionIcon: other.icon,
+                        style: .compact, action: showOther)
         }
     }
 
@@ -434,7 +398,7 @@ struct AdminInboxView: View {
         return HStack(spacing: DS.Spacing.sm) {
             if isSelectMode {
                 Image(systemName: picked ? "checkmark.circle.fill" : "circle")
-                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .dsGlyph(DS.Glyph.xl, weight: .semibold)
                     .foregroundColor(picked ? AppSection.admin.ink : DS.Color.textTertiary)
                     .accessibilityHidden(true)
             }
@@ -474,11 +438,11 @@ struct AdminInboxView: View {
         return HStack(alignment: .top, spacing: DS.Spacing.sm) {
             avatar(for: msg.member, isUnread: isUnread)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 HStack(alignment: .top, spacing: DS.Spacing.xs) {
                     // الاسم بخط IBM Plex وعلى سطرين (طلب المالك)
                     Text(msg.member?.displayFullName ?? L10n.t("عضو", "Member"))
-                        .dsFieldFont(13.5, weight: isUnread ? .bold : .semibold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -486,7 +450,7 @@ struct AdminInboxView: View {
                     Spacer(minLength: DS.Spacing.xs)
                     if let date {
                         // الوقت — أزرق للرسالة الجديدة، رمادي لما قُرئ
-                        SysStatusChip(text: relativeShort(date),
+                        DSStatusChip(text: relativeShort(date),
                                       tint: isUnread ? AppSection.admin.ink : DS.Color.textTertiary)
                             .fixedSize()
                     }
@@ -494,17 +458,17 @@ struct AdminInboxView: View {
 
                 if !preview.isEmpty {
                     Text(preview)
-                        .dsFieldFont(12, weight: isUnread ? .medium : .regular)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(isUnread ? DS.Color.fieldLabel : DS.Color.fieldValue)
                         .lineLimit(1)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                HStack(spacing: 6) {
-                    SysStatusChip(text: info.title, icon: info.icon, tint: info.color)
+                HStack(spacing: DS.Spacing.xsm) {
+                    DSStatusChip(text: info.title, icon: info.icon, tint: info.color)
                     if isPending {
-                        SysStatusChip(text: L10n.t("بانتظار الرد", "Awaiting reply"),
+                        DSStatusChip(text: L10n.t("بانتظار الرد", "Awaiting reply"),
                                       icon: "clock.fill",
                                       tint: DS.Color.warning)
                     }
@@ -518,10 +482,10 @@ struct AdminInboxView: View {
             // المحدّدة بإطار أوضح، والجديدة بإطار أزرق خفيف
             if isSelectMode && picked {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(AppSection.admin.ink.opacity(0.55), lineWidth: 1.5)
+                    .strokeBorder(AppSection.admin.ink.opacity(DS.Opacity.selectedStroke), lineWidth: DS.Border.widthBold)
             } else if isUnread {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(AppSection.admin.ink.opacity(0.30), lineWidth: 1.2)
+                    .strokeBorder(AppSection.admin.ink.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width)
             }
         }
         .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
@@ -536,43 +500,18 @@ struct AdminInboxView: View {
             DSFieldIcon(name: "envelope.badge.fill", tint: AppSection.admin.ink)
                 .accessibilityHidden(true)
             Text(L10n.t("\(unread) رسالة جديدة", "\(unread) new messages"))
-                .dsFieldFont(13, weight: .bold)
+                .dsFieldFont(.rowTitleCompact)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Spacer(minLength: 0)
-            Button {
+            DSChipButton(L10n.t("تحديد الكل كمقروء", "Mark all read"), icon: "envelope.open.fill") {
                 withAnimation(DS.Anim.quick) {
                     adminRequestVM.markAllContactMessagesRead()
                 }
-            } label: {
-                actionCapsule(icon: "envelope.open.fill",
-                              title: L10n.t("تحديد الكل كمقروء", "Mark all read"),
-                              tint: AppSection.admin.ink)
             }
-            .buttonStyle(DSScaleButtonStyle())
         }
         .dsRowBox()
-    }
-
-    /// كبسولة إجراء صغيرة — مساحة ضغط ٤٤ نقطة والشكل كما هو
-    private func actionCapsule(icon: String, title: String, tint: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
-                .accessibilityHidden(true)
-            Text(title)
-                .font(DS.Font.plex(12, weight: .bold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .foregroundColor(tint)
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(height: 30)
-        .background(tint.opacity(0.10), in: Capsule())
-        .padding(.vertical, 7)
-        .contentShape(Rectangle())
-        .padding(.vertical, -7)
     }
 
     /// صورة المرسل — ونقطة «جديد» صغيرة على ركنها للرسالة غير المقروءة
@@ -580,15 +519,15 @@ struct AdminInboxView: View {
         DSMemberAvatar(
             name: member?.firstName ?? "?",
             avatarUrl: member?.avatarUrl,
-            size: 36,
+            size: DS.Icon.avatarRow,
             roleColor: member?.roleColor ?? DS.Color.primary
         )
         .overlay(alignment: .topTrailing) {
             if isUnread {
                 Circle()
                     .fill(AppSection.admin.ink)
-                    .frame(width: 10, height: 10)
-                    .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
+                    .frame(width: DS.Icon.legendDot, height: DS.Icon.legendDot)
+                    .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: DS.Border.widthBold))
             }
         }
         .accessibilityHidden(true)
@@ -669,37 +608,30 @@ private struct MessageDetailSheet: View {
                 DSMemberAvatar(
                     name: message.member?.firstName ?? "?",
                     avatarUrl: message.member?.avatarUrl,
-                    size: 44,
+                    size: DS.Icon.avatar,
                     roleColor: message.member?.roleColor ?? DS.Color.primary
                 )
                 .accessibilityHidden(true)   // الصورة زخرفة — الاسم يُقرأ بعدها
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(message.member?.displayFullName ?? L10n.t("عضو", "Member"))
-                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .dsFont(.headlineCompact)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     if !phone.isEmpty {
                         Text(phone)
-                            .dsFieldFont(12)
+                            .dsFieldFont(.subtitle)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                VStack(spacing: 2) {
-                    TrialArt(make: { ArtDispatch.stateIcon($0, icon: info.icon, tint: info.color, size: 32) }) {   // TMP-ART-TRIAL
-                    Image(systemName: info.icon)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(info.color)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(info.color.opacity(0.14)))
-                    }
-                        .frame(width: 32, height: 32)
-                        .accessibilityHidden(true)   // التصنيف يُقرأ من النص تحته
+                VStack(spacing: DS.Spacing.xxs) {
+                    // التصنيف يُقرأ من النص تحته — قرص الحالة المجسّم بلون التصنيف كما هو
+                    DSStateIcon(info.icon, tint: info.color, size: DS.Icon.row, mapsChrome: false)
                     Text(info.title)
-                        .font(DS.Font.plex(10.5, weight: .semibold))
+                        .dsFont(.micro)
                         .foregroundColor(DS.Color.textSecondary)
                 }
             }
@@ -716,7 +648,7 @@ private struct MessageDetailSheet: View {
                           tint: DS.Color.info,
                           index: 1) {
             Text(ContactParser.message(from: message))
-                .font(DS.Font.plex(15))
+                .dsFont(.body)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -728,7 +660,7 @@ private struct MessageDetailSheet: View {
                     DSFieldIcon(name: "checkmark.seal.fill", tint: DS.Color.success)
                         .accessibilityHidden(true)
                     Text(L10n.t("تم التعامل مع هذه الرسالة", "This message was handled"))
-                        .font(DS.Font.plex(13.5, weight: .semibold))
+                        .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.success)
                     Spacer(minLength: 0)
                 }
@@ -791,19 +723,19 @@ private struct MessageDetailSheet: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: isEmail ? "envelope.fill" : "phone.fill", tint: DS.Color.info)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(L10n.t("وسيلة التواصل", "Preferred contact"))
-                        .dsFieldFont(12, weight: .heavy)
+                        .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(preferred)
-                        .dsFieldFont(14.5)
+                        .dsFieldFont(.body)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .environment(\.layoutDirection, .leftToRight)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "doc.on.doc")
-                    .font(.system(size: 13, weight: .semibold))
+                    .dsGlyph(DS.Glyph.mdCompact, weight: .semibold)
                     .foregroundColor(DS.Color.textTertiary)
                     .accessibilityHidden(true)
             }
@@ -815,32 +747,9 @@ private struct MessageDetailSheet: View {
         .accessibilityHint(L10n.t("ينسخ وسيلة التواصل", "Copies the contact"))
     }
 
+    /// الزرّ الواحد (٤٤) بلون الوسيلة صلباً (واتساب، اتصال، بريد)
     private func replyButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(DS.Font.plex(13.5, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundColor(color)
-            .frame(maxWidth: .infinity)
-            .frame(height: 42)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(color.opacity(0.12)))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(color.opacity(0.25), lineWidth: 1)
-            )
-            // مساحة ضغط ٤٤ (توصية أبل) — الشكل والارتفاع في الصف كما هما
-            .frame(height: 44)
-            .contentShape(Rectangle())
-            .padding(.vertical, -1)
-        }
-        .buttonStyle(DSScaleButtonStyle())
+        DSButton(title, icon: icon, tint: color, action: action)
     }
 
     private func sanitize(_ phone: String) -> String {
@@ -1033,13 +942,13 @@ private struct OfficialReplySheet: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "envelope.badge.fill", tint: DS.Color.info)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(memberName.isEmpty ? L10n.t("العضو", "Member") : memberName)
-                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .dsFont(.headlineCompact)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
                     Text(to)
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .environment(\.layoutDirection, .leftToRight)
@@ -1063,10 +972,7 @@ private struct OfficialReplySheet: View {
                                text: $replyText)
 
             if let errorText {
-                Text(errorText)
-                    .font(DS.Font.plex(12, weight: .semibold))
-                    .foregroundColor(DS.Color.error)
-                    .fixedSize(horizontal: false, vertical: true)
+                DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
     }
@@ -1114,31 +1020,27 @@ private struct ReplyComposerField: View {
     var body: some View {
         HStack(alignment: .top, spacing: DS.Spacing.sm) {
             Image(systemName: "square.and.pencil")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(focused ? .white : tint)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(focused ? tint : tint.opacity(0.12)))
+                .dsGlyph(DS.Glyph.mdCompact, weight: .semibold)
+                .foregroundColor(focused ? DS.Color.textOnPrimary : tint)
+                .frame(width: DS.Icon.row, height: DS.Icon.row)
+                .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
+                    .fill(focused ? tint : tint.opacity(DS.Opacity.tintFill)))
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(focused ? tint : DS.Color.fieldLabel)
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(6...12)
-                    .dsFieldFont(14.5)
+                    .dsFieldFont(.body)
                     .foregroundColor(DS.Color.textPrimary)
                     .focused($focused)
             }
         }
-        .padding(.horizontal, DS.Spacing.sm + 2)
+        .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
         .padding(.vertical, DS.Spacing.sm)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(focused ? tint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
-                          lineWidth: focused ? 1.5 : 1))
+        .dsFocusFieldBox(focused: focused, tint: tint)
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
-        .animation(.easeInOut(duration: 0.2), value: focused)
     }
 }

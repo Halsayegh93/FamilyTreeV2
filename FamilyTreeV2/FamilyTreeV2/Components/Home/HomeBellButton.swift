@@ -25,8 +25,8 @@ struct HomeBellButton: View {
                         .foregroundStyle(DS.Color.textOnPrimary)
                 }
             }
-            .font(DS.Font.scaled(22, weight: .semibold))
-            .frame(width: 44, height: 44)
+            .dsGlyph(DS.Glyph.xxl, weight: .semibold)
+            .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
             .animation(DS.Anim.smooth, value: hasUnread)
         }
         .buttonStyle(BounceButtonStyle())

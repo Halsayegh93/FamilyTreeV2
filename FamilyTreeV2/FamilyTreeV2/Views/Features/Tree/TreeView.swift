@@ -28,9 +28,6 @@ private enum TreeConst {
     static let highlightDuration: UInt64 = 5_000_000_000 // 5s
     static let kinshipBannerDuration: UInt64 = 20_000_000_000 // 20s
 
-    // Layout
-    static let toolButtonSize: CGFloat = 44
-    static let dividerWidth: CGFloat = 30
 }
 
 // MARK: - تخطيط الكانفس (إحداثيات مطلقة — نفس محرّك تبويب النساء)
@@ -168,7 +165,6 @@ struct TreeView: View {
     }
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
-    private var isLandscapeMode: Bool { verticalSizeClass == .compact }
     @Environment(\.colorScheme) var colorScheme
     /// دخول الأدوات حول الشجرة (الشريط، زر التحديث، الحالة الفارغة) مرة مع أول ظهور
     /// للتبويب — من TreeTabContainer، فلا يتكرر عند التبديل «العائلة/النساء».
@@ -183,10 +179,6 @@ struct TreeView: View {
     /// (طلب المالك ٢٠٢٦-١٠-٠٤: حركات بالشجرة). «تقليل الحركة»: بلا تدريج.
     @State private var drawOnId: UUID? = nil
     @State private var drawProgress: CGFloat = 1
-    /// TMP-ART-TRIAL: اتجاه الرسوم المختار — يقرأ مرة هنا ويُمرَّر للعقد (لا قراءة لكل عقدة)
-    @AppStorage(ArtTrial.storageKey) private var artRaw = ArtTrial.emblem.rawValue
-    private var art: ArtTrial { ArtTrial(rawValue: artRaw) ?? .emblem }   // TMP-ART-TRIAL
-
     // MARK: - بيانات مُخزنة مؤقتاً لتجنب إعادة الحساب كل render
     @State private var cachedVisibleMembers: [FamilyMember] = []
     @State private var cachedMemberById: [UUID: FamilyMember] = [:]
@@ -283,14 +275,14 @@ struct TreeView: View {
                                 ZStack(alignment: .topLeading) {
                                     // خطوط الأب وأبنائه — كل الصفوف موصولة (طلب المالك ٢٠٢٦-١٠-٠٤:
                                     // كان الخط يصل الصف الأول فقط). المسارات مبنية مع التخطيط.
-                                    // TMP-ART-TRIAL: طبقات الخط ونقطة التفرّع بحسب الاتجاه («الحالي» = خط ونقطة كما كانا)
-                                    let lineLayers = TreeArtLines.layers(art, width: 2, dark: colorScheme == .dark)
-                                    let lineArt = art, lineDark = colorScheme == .dark
+                                    // طبقات الخط ونقطة التفرّع بأسلوب «مجسّمات» (أنبوب طين بلمعة)
+                                    let lineLayers = TreeArtLines.layers(width: 2, dark: colorScheme == .dark)
+                                    let lineDark = colorScheme == .dark
                                     Canvas { ctx, _ in
                                         for g in layout.connectors where drawOnId == nil || g.pid != drawOnId {
                                             TreeArtLines.stroke(&ctx, g.path, lineLayers)
                                             for d in g.dots {
-                                                TreeArtLines.dot(&ctx, at: d, r: 3, art: lineArt, dark: lineDark)
+                                                TreeArtLines.dot(&ctx, at: d, r: 3, dark: lineDark)
                                             }
                                             if !g.kinPath.isEmpty {
                                                 ctx.stroke(g.kinPath, with: .color(DS.Color.warning),
@@ -303,7 +295,7 @@ struct TreeView: View {
                                     .accessibilityHidden(true)
                                     // خطوط آخر أب فُتح: تمتدّ من الأب نحو الأبناء، ثم تظهر نقاط التفرّع
                                     if let id = drawOnId, let g = layout.connectors.first(where: { $0.pid == id }) {
-                                        ZStack(alignment: .topLeading) {   // TMP-ART-TRIAL: نفس طبقات الخط
+                                        ZStack(alignment: .topLeading) {   // نفس طبقات الخط
                                             ForEach(Array(lineLayers.enumerated()), id: \.offset) { _, l in
                                                 ConnectorPathShape(path: l.dy == 0 ? g.path : g.path.offsetBy(dx: 0, dy: l.dy))
                                                     .trim(from: 0, to: drawProgress)
@@ -315,7 +307,7 @@ struct TreeView: View {
                                             .accessibilityHidden(true)
                                         Canvas { ctx, _ in
                                             for d in g.dots {
-                                                TreeArtLines.dot(&ctx, at: d, r: 3, art: lineArt, dark: lineDark)
+                                                TreeArtLines.dot(&ctx, at: d, r: 3, dark: lineDark)
                                             }
                                             if !g.kinPath.isEmpty {
                                                 ctx.stroke(g.kinPath, with: .color(DS.Color.warning),
@@ -385,11 +377,8 @@ struct TreeView: View {
                             } else if breadcrumbChain.count > 1 {
                                 breadcrumbStrip
                                     .padding(.horizontal, DS.Spacing.sm)
-                                    .padding(.vertical, 3)
-                                    .background(glassCardBackground)
-                                    .modifier(TreeArtSkin(art: art, radius: DS.Radius.lg, compact: true, glassBacked: true))   // TMP-ART-TRIAL
-                                    .overlay(glassCardStroke)
-                                    .dsSubtleShadow()
+                                    .padding(.vertical, DS.Spacing.xxs)
+                                    .treeToolbarCard()
                             }
                         }
                         .padding(.horizontal, DS.Spacing.sm)
@@ -410,7 +399,7 @@ struct TreeView: View {
                             showingNotifications: $showingNotifications,
                             title: L10n.t("شجرة العائلة", "Family Tree"),
                             subtitle: "\(cachedVisibleMembers.count) " + L10n.t("فرد", "members"),
-                            icon: "leaf.fill",
+                            icon: AppSection.tree.symbol,   // الشجرة (رمز التطبيق) لا ورقة
                             backgroundGradient: AppSection.tree.gradient,
                             subtitleChip: true
                         )
@@ -426,24 +415,21 @@ struct TreeView: View {
                                     showFiltersWhenEmpty: true
                                 )
                             } else {
-                                VStack(spacing: 4) {
+                                VStack(spacing: DS.Spacing.xxs) {
                                     classicToolbarRow
 
                                     // شريط المسار مدمج داخل نفس البطاقة — يظهر عند التعمق فقط
                                     if breadcrumbChain.count > 1 {
                                         DS.Color.mutedBackground
-                                            .frame(height: 1)
+                                            .frame(height: DS.Border.width)
                                             .padding(.horizontal, DS.Spacing.xs)
                                         breadcrumbStrip
                                     }
                                 }
                                 .padding(.horizontal, DS.Spacing.sm)
-                                .padding(.vertical, 3)
-                                // مادة مخففة — مائلة للشفافية لكن مو شفافة بالكامل
-                                .background(glassCardBackground)
-                                .modifier(TreeArtSkin(art: art, radius: DS.Radius.lg, compact: true, glassBacked: true))   // TMP-ART-TRIAL
-                                .overlay(glassCardStroke)
-                                .dsSubtleShadow()
+                                .padding(.vertical, DS.Spacing.xxs)
+                                // بطاقة الأدوات الزجاجية الواحدة (نفسها في شجرة النساء)
+                                .treeToolbarCard()
                             }
                         }
                         .padding(.horizontal, DS.Spacing.sm)
@@ -461,14 +447,12 @@ struct TreeView: View {
                         if let banner = kinshipBanner {
                             VStack {
                                 HStack(spacing: DS.Spacing.sm) {
-                                    TrialArt(make: { ArtDispatch.stateIcon($0, icon: "person.2.fill", tint: AppSection.tree.ink, size: 30) }) {   // TMP-ART-TRIAL
-                                        Image(systemName: "person.2.fill")
-                                            .font(DS.Font.scaled(16, weight: .bold))
-                                    }
+                                    DSStateIcon("person.2.fill", tint: AppSection.tree.ink, size: DS.Icon.discSmall, mapsChrome: false)
                                     Text(banner)
-                                        .font(DS.Font.calloutBold)
+                                        .dsFont(.headline)
                                     Spacer()
-                                    Button {
+                                    // «×» الصغير بلا قرص (كما كان) — مساحة ضغطه ٤٤ لا تكبّر البانر
+                                    DSCloseButton(context: .onColor, size: .mini) {
                                         withAnimation(DS.Anim.snappy) {
                                             kinshipBanner = nil
                                             kinshipHighlightedIds = []
@@ -478,21 +462,17 @@ struct TreeView: View {
                                             let L = rebuildLayout()
                                             fitCanvas(in: viewport, layout: L)
                                         }
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(DS.Font.scaled(18))
-                                            .foregroundColor(DS.Color.textOnPrimary.opacity(0.7))
                                     }
                                 }
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.vertical, DS.Spacing.md)
                                 .background(AppSection.tree.gradient)
-                                .modifier(TreeArtSkin(art: art, radius: DS.Radius.lg, onFill: true))   // TMP-ART-TRIAL
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
+                                // لمسة الطين الواحدة بظلّها (كان ظلاً يدوياً بلون الشجرة)
+                                .modifier(DSClaySkin(radius: DS.Card.radius, onFill: true, shadow: true, section: .tree))
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.top, DS.Spacing.sm)
-                                .shadow(color: AppSection.tree.fill.opacity(0.3), radius: 8, y: 4)
                                 // «تقليل الحركة»: تلاشٍ بلا انزلاق
                                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
 
@@ -723,52 +703,21 @@ struct TreeView: View {
     }
 
     // MARK: - صف الأدوات تحت الهيدر — مطابق للتفرّع (بحث / البداية / موقعي) أيقونات فقط
-    /// خلفية البطاقة الزجاجية الموحّدة (مادة 75%)
-    @ViewBuilder
-    private var glassCardBackground: some View {
-        // iOS 26/27: زجاج سائل؛ الأقدم: مادة 75%
-        if #available(iOS 26.0, *) {
-            Color.clear.glassEffect(.regular, in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        } else {
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .opacity(0.75)
-        }
-    }
-    private var glassCardStroke: some View {
-        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .stroke(DS.Color.mutedBackground.opacity(0.7), lineWidth: 1)
-    }
+    // الأزرار = زرّ الرأس الموحّد على السطح بمقاس الشريط (`DSHeaderButton(.surface, size: .toolbar)` ٣٤،
+    // والجانبي `.mini` ٢٧) برمز بحبر الشجرة، والتبويب = `FamilyTreeTabBar` (`DSSegmentedSwitch(.compact)`)،
+    // والبطاقة = `.treeToolbarCard()` — نفسها في شجرة النساء (أسلوب واحد، ومقاسات ما قبل التوحيد ٢٠٢٦-١٠-٠٧)
 
     /// بار جانبي عمودي للوضع الأفقي — نفس أدوات البار العلوي (طلب المالك)
     private var landscapeSideToolbar: some View {
         VStack(spacing: DS.Spacing.xs) {
-            Button {
-                withAnimation(DS.Anim.smooth) { showSearch = true }
-            } label: {
-                toolbarIconButton(icon: "magnifyingglass", compact: true)
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("بحث", "Search"))
-
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                resetToTopRoot()
-            } label: {
-                toolbarIconButton(icon: "house.fill", compact: true)
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("البداية", "Start"))
-
+            searchToolButton(.mini)
+            homeToolButton(.mini)
             if let treeTab {
-                VStack(spacing: 4) {
-                    sideTabChip(L10n.t("العائلة", "Family"), idx: 0, treeTab: treeTab)
-                    sideTabChip(L10n.t("النساء", "Women"), idx: 1, treeTab: treeTab)
-                }
+                FamilyTreeSideTabs(selection: treeTab)
             }
-
             if authVM.currentUser != nil {
-                Button {
+                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعي", "Me"), context: .surface,
+                               size: .mini, tint: AppSection.tree.ink) {
                     if let currentUserID = authVM.currentUser?.id,
                        let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID),
                        cachedMemberById[currentUserID] != nil {
@@ -777,91 +726,56 @@ struct TreeView: View {
                     } else {
                         showNotInTree = true
                     }
-                } label: {
-                    toolbarIconButton(icon: "location.fill", compact: true)
                 }
-                .buttonStyle(DSScaleButtonStyle())
-                .accessibilityLabel(L10n.t("موقعي", "Me"))
             }
         }
-        .padding(4)
-        .background(glassCardBackground)
-        .modifier(TreeArtSkin(art: art, radius: DS.Radius.lg, compact: true, glassBacked: true))   // TMP-ART-TRIAL
-        .overlay(glassCardStroke)
-        .dsSubtleShadow()
-    }
-
-    private func sideTabChip(_ title: String, idx: Int, treeTab: Binding<Int>) -> some View {
-        Button {
-            withAnimation(DS.Anim.snappy) { treeTab.wrappedValue = idx }
-        } label: {
-            Text(title)
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 5)
-                .frame(minWidth: 40, minHeight: 20)
-                .background(Capsule().fill(treeTab.wrappedValue == idx ? AppSection.tree.fill : DS.Color.surface.opacity(0.8)))
-        }
-        .buttonStyle(DSScaleButtonStyle())
+        .padding(DS.Spacing.xs)
+        .treeToolbarCard()
     }
 
     private var classicToolbarRow: some View {
         HStack(spacing: DS.Spacing.sm) {
             // الترتيب: بحث → البداية → تبويب [عائلة/نساء] → موقعي
-            Button {
-                withAnimation(DS.Anim.smooth) { showSearch = true }
-            } label: {
-                toolbarIconButton(icon: "magnifyingglass")
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("بحث", "Search"))
+            searchToolButton(.toolbar)
+            homeToolButton(.toolbar)
 
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                resetToTopRoot()
-            } label: {
-                toolbarIconButton(icon: "house.fill")
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .accessibilityLabel(L10n.t("البداية", "Start"))
+            Spacer(minLength: 0)
 
-            Spacer()
-
-            // التبويب [شجرة العائلة / النساء] بالنص
+            // التبويب [شجرة العائلة / النساء] — بعرض نصّه في الوسط
             if let treeTab {
                 FamilyTreeTabBar(selection: treeTab)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             // زر موقعي — آخر شي
             if authVM.currentUser != nil {
-                Button {
+                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعي", "Me"), context: .surface,
+                               size: .toolbar, tint: AppSection.tree.ink) {
                     if let currentUserID = authVM.currentUser?.id,
                        let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
                         // التمييز «أنت هنا» دائم — الزر يفتح المسار ويتمركز فقط
                         currentLocationMemberID = userMember.id
                         centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
                     }
-                } label: {
-                    toolbarIconButton(icon: "location.fill")
                 }
-                .buttonStyle(DSScaleButtonStyle())
-                .accessibilityLabel(L10n.t("موقعي", "Me"))
             }
         }
     }
 
-    /// زر دائري بأيقونة — تضليل خفيف (مو شفاف 100%).
-    private func toolbarIconButton(icon: String, color: Color = AppSection.tree.ink, compact: Bool = false) -> some View {
-        Image(systemName: icon)
-            .font(DS.Font.scaled(compact ? 12 : 14, weight: .bold))
-            .foregroundColor(color)
-            .frame(width: compact ? 27 : 34, height: compact ? 27 : 34)                         // بار مدمّج أصغر
-            .background(DS.Color.surface.opacity(0.8), in: Circle())   // أغمق (طلب المالك)
-            .overlay(Circle().strokeBorder(AppSection.tree.ink.opacity(0.15), lineWidth: 1))
-            .dsSubtleShadow()
-            .contentShape(Circle())
+    private func searchToolButton(_ size: DSNavButtonSize) -> some View {
+        DSHeaderButton(symbol: "magnifyingglass", label: L10n.t("بحث", "Search"), context: .surface,
+                       size: size, tint: AppSection.tree.ink) {
+            withAnimation(DS.Anim.smooth) { showSearch = true }
+        }
+    }
+
+    private func homeToolButton(_ size: DSNavButtonSize) -> some View {
+        DSHeaderButton(symbol: "house.fill", label: L10n.t("البداية", "Start"), context: .surface,
+                       size: size, tint: AppSection.tree.ink) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            resetToTopRoot()
+        }
     }
 
     // MARK: - شريط المسار (فتات النسب) — يوضّح وين أنت وترجع لأي مستوى بضغطة
@@ -901,42 +815,29 @@ struct TreeView: View {
         // يتحرّك مع المسار (طلب المالك): آخر اسم يبقى ظاهراً عند التعمّق وعند «موقعي»
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
+                HStack(spacing: DS.Spacing.xxs) {
                     ForEach(Array(breadcrumbChain.enumerated()), id: \.element.id) { idx, m in
                         let isLast = idx == breadcrumbChain.count - 1
-                        HStack(spacing: 2) {
-                            Button {
+                        HStack(spacing: DS.Spacing.xxs) {
+                            // شريحة العُدّة الواحدة (`DSChipButton`) — الأخيرة (موقعك الآن) ممتلئة؛ المصغّرة داخل
+                            // بطاقة الأدوات (كما كانت)، والصغيرة في بطاقتها المستقلة أفقياً
+                            DSChipButton(m.firstName.isEmpty ? "—" : m.firstName,
+                                         icon: idx == 0 ? "house.fill" : nil,
+                                         isSelected: isLast,
+                                         size: verticalSizeClass == .compact ? .small : .mini) {
                                 jumpToBreadcrumb(m)
-                            } label: {
-                                HStack(spacing: 3) {
-                                    if idx == 0 {
-                                        Image(systemName: "house.fill")
-                                            .font(DS.Font.scaled(isLandscapeMode ? 11 : 8, weight: .bold))
-                                    }
-                                    Text(m.firstName.isEmpty ? "—" : m.firstName)
-                                        .font(DS.Font.scaled(isLandscapeMode ? 13 : 10, weight: isLast ? .heavy : .semibold))
-                                        .lineLimit(1)
-                                }
-                                .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.textPrimary)
-                                .padding(.horizontal, isLandscapeMode ? 10 : 6)
-                                .padding(.vertical, isLandscapeMode ? 5 : 1)
-                                .background(isLast ? AnyShapeStyle(AppSection.tree.fill) : AnyShapeStyle(DS.Color.surface), in: Capsule())
-                                .overlay(Capsule().stroke(AppSection.tree.ink.opacity(isLast ? 0 : 0.2), lineWidth: 1))
                             }
-                            .buttonStyle(DSScaleButtonStyle())
                             .accessibilityLabel(L10n.t("الرجوع إلى \(m.firstName)", "Back to \(m.firstName)"))
 
                             if !isLast {
-                                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                                    .font(DS.Font.scaled(isLandscapeMode ? 9 : 7, weight: .bold))
-                                    .foregroundColor(DS.Color.textTertiary)
+                                DSChevron(size: DS.Glyph.xs)
                             }
                         }
                         .id(m.id)
                     }
                 }
-                .padding(.horizontal, 2)
-                .padding(.vertical, 1)
+                .padding(.horizontal, DS.Spacing.xxs)
+                .padding(.vertical, DS.Border.width)
             }
             // يُعاد التمرير كلما تغيّر آخر اسم (وعند الظهور) بعد رسم العناصر —
             // مع مسار طويل (أكثر من ٧) كان التمرير يسبق الرسم فلا يصل للنهاية
@@ -967,42 +868,29 @@ struct TreeView: View {
             Spacer()
             HStack {
                 Spacer()
-                VStack(spacing: 0) {
-                    Button(action: {
-                        guard !isRefreshing else { return }
-                        isRefreshing = true
-                        Task {
-                            await memberVM.fetchAllMembers(force: true)
-                            guard !Task.isCancelled else { return }
-                            await rebuildCacheBackground()
-                            resetToTopRoot()
-                            withAnimation { isRefreshing = false }
-                        }
-                    }) {
-                        if isRefreshing {
-                            ProgressView()
-                                .tint(AppSection.tree.ink)
-                                .scaleEffect(0.7)
-                                .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
-                        } else {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(DS.Font.scaled(15, weight: .bold))
-                                .foregroundColor(AppSection.tree.ink)
-                                .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
-                        }
+                // زرّ الرأس الموحّد على السطح (دائرة زجاجية رمادية) — أثناء التحديث دوّارة صغيرة داخله
+                Button(action: {
+                    guard !isRefreshing else { return }
+                    isRefreshing = true
+                    Task {
+                        await memberVM.fetchAllMembers(force: true)
+                        guard !Task.isCancelled else { return }
+                        await rebuildCacheBackground()
+                        resetToTopRoot()
+                        withAnimation { isRefreshing = false }
                     }
-                    // ضغطة ناعمة موحّدة (كان بلا إحساس بالضغط)
-                    .buttonStyle(DSPressStyle())
-                    .disabled(isRefreshing)
-                    .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
+                }) {
+                    DSNavButtonLabel(symbol: isRefreshing ? "" : "arrow.counterclockwise", context: .surface)
+                        .overlay {
+                            if isRefreshing {
+                                ProgressView().tint(DS.Color.textPrimary)
+                            }
+                        }
                 }
-                .dsGlass(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .modifier(TreeArtSkin(art: art, radius: DS.Radius.md, compact: true, glassBacked: true))   // TMP-ART-TRIAL
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(DS.Color.mutedBackground, lineWidth: 1)
-                )
+                // ضغطة ناعمة موحّدة (كان بلا إحساس بالضغط)
+                .buttonStyle(DSPressStyle())
+                .disabled(isRefreshing)
+                .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
                 .dsSubtleShadow()
                 // الزر العائم يقفز آخراً بعد بطاقة الأدوات (مثل أزرار «+» العائمة)
                 .modifier(TreeToolPop(shown: chromeAppeared))
@@ -1275,7 +1163,6 @@ struct TreeView: View {
             level: layout.depth[m.id] ?? 0,
             currentLocationMemberID: currentLocationMemberID,
             isKinshipHighlighted: kinshipHighlightedIds.contains(m.id),
-            art: art,   // TMP-ART-TRIAL
             onTap: { selectedMember = m },
             onToggle: { toggleNode(m) }
         )
@@ -1429,8 +1316,13 @@ struct TreeView: View {
     // MARK: - حالة فارغة
     @ViewBuilder
     private var emptyStateView: some View {
+        // الحالات الثلاث بالعُدّة الواحدة (أسلوب واحد ٢٠٢٦-١٠-٠٧): مجسّم قسم الشجرة (الغافة) + عنوان + سطر،
+        // والتحميل نفس المجسّم يتنفّس — مثل باقي الأقسام وشجرة النساء
         if memberVM.membersLoadFailed {
-            DSErrorState(retryAction: {
+            DSEmptyView(L10n.t("تعذّر تحميل البيانات", "Couldn't load data"),
+                        message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                        section: .tree, icon: "exclamationmark.triangle.fill", tint: DS.Color.error,
+                        actionTitle: L10n.t("إعادة المحاولة", "Retry"), actionIcon: "arrow.clockwise") {
                 memberVM.membersLoadFailed = false
                 Task {
                     await memberVM.fetchAllMembers(force: true)
@@ -1438,44 +1330,22 @@ struct TreeView: View {
                     await rebuildCacheBackground()
                     resetToTopRoot()
                 }
-            })
+            }
         } else if memberVM.membersVersion > 0 && !memberVM.isLoading {
             // التحميل تم فعلاً لكن لا يوجد أعضاء — رسالة مختلفة عن "جاري المزامنة"
-            DSEmptyState(
-                icon: "leaf",
-                title: L10n.t("لا يوجد أفراد في الشجرة بعد", "No family members yet"),
-                subtitle: L10n.t("اسحب للتحديث أو تواصل مع الإدارة", "Pull to refresh or contact the admin"),
-                buttonTitle: L10n.t("تحديث", "Refresh"),
-                buttonAction: {
-                    Task {
-                        await memberVM.fetchAllMembers(force: true)
-                        guard !Task.isCancelled else { return }
-                        await rebuildCacheBackground()
-                        resetToTopRoot()
-                    }
-                },
-                buttonIcon: "arrow.clockwise"
-            )
-        } else {
-            VStack(spacing: DS.Spacing.xl) {
-                Spacer()
-
-                // غافة المربّع نفسها تتنفّس أثناء المزامنة، ونقطة ذهبية تصعد من الجذور إلى الثمرة فتتوهّج
-                // (طلب المالك ٢٠٢٦-١٠-٠٥ «أبسط وأقوى وباعتدال») — المشهد هو مؤشّر التقدّم
-                TrialArt(make: { ArtDispatch.treeLoading($0) }) {   // TMP-ART-TRIAL
-                    FTSceneCanvas { ctx, size, t, dark in
-                        FTPlaceScenes.drawTreeGrowth(in: &ctx, size: size, t: t, dark: dark)
-                    }
+            DSEmptyView(L10n.t("لا يوجد أفراد في الشجرة بعد", "No family members yet"),
+                        message: L10n.t("اسحب للتحديث أو تواصل مع الإدارة", "Pull to refresh or contact the admin"),
+                        section: .tree,
+                        actionTitle: L10n.t("تحديث", "Refresh"), actionIcon: "arrow.clockwise") {
+                Task {
+                    await memberVM.fetchAllMembers(force: true)
+                    guard !Task.isCancelled else { return }
+                    await rebuildCacheBackground()
+                    resetToTopRoot()
                 }
-                .frame(width: 240, height: 200)
-
-                Text(L10n.t("جاري مزامنة الشجرة...", "Syncing tree..."))
-                    .font(DS.Font.title3)
-                    .foregroundColor(DS.Color.textPrimary)
-
-                Spacer()
             }
-            .frame(maxWidth: .infinity)
+        } else {
+            DSPageLoader(L10n.t("جاري مزامنة الشجرة...", "Syncing tree..."), section: .tree)
         }
     }
 
@@ -1508,8 +1378,6 @@ struct TreeMemberNode: View {
     var level: Int = 0
     let currentLocationMemberID: UUID?
     var isKinshipHighlighted: Bool = false
-    /// TMP-ART-TRIAL: اتجاه الرسوم — «الحالي» = العقدة كما كانت
-    var art: ArtTrial = .emblem
     let onTap: () -> Void
     let onToggle: () -> Void
     @State private var shouldLoadImage = false
@@ -1570,12 +1438,10 @@ struct TreeMemberNode: View {
                     }
                 } label: {
                     ZStack {
-                        // الدائرة الرئيسية — ظل ملوّن ناعم بلون الرتبة (عمق أنظف)
-                        // TMP-ART-TRIAL: مع رسم الاتجاه تصير الدائرة أرضية فاتحة بلون الرتبة والرسم فوقها
+                        // الدائرة الرئيسية — أرضية فاتحة بلون الرتبة والمجسّم فوقها، وظلّ ملوّن ناعم (عمق أنظف)
                         Circle()
-                            .fill(art == .emblem ? AnyShapeStyle(nodeGradient)
-                                                 : AnyShapeStyle(nodeAccentColor.opacity(0.14)))
-                            .background(Circle().fill(art == .emblem ? Color.clear : DS.Color.surface))
+                            .fill(AnyShapeStyle(nodeAccentColor.opacity(DS.Opacity.tintFill)))
+                            .background(Circle().fill(DS.Color.surface))
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .shadow(color: nodeAccentColor.opacity(member.isDeceased == true ? 0.12 : 0.26),
                                     radius: 10, x: 0, y: 5)
@@ -1585,25 +1451,13 @@ struct TreeMemberNode: View {
                             CachedAsyncImage(url: url) { image in
                                 image.resizable().scaledToFill()
                             } placeholder: {
-                                if art == .emblem {
-                                    Image(systemName: "person.fill")
-                                        .font(DS.Font.scaled(30))
-                                        .foregroundColor(DS.Color.overlayTextMuted)
-                                } else {
-                                    avatarArt   // TMP-ART-TRIAL
-                                }
+                                avatarArt
                             }
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .clipShape(Circle())
                             .saturation(member.isDeceased == true ? 0 : 1)   // المتوفّى: صورة غير ملوّنة
-                        } else if art != .emblem {
-                            avatarArt   // TMP-ART-TRIAL
                         } else {
-                            Image(systemName: "person.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 44)
-                                .foregroundColor(DS.Color.overlayTextMuted)
+                            avatarArt
                         }
 
                         // فاصل داخلي بلون السطح — يفصل الصورة عن الحلقة (مظهر أنظف)
@@ -1661,33 +1515,33 @@ struct TreeMemberNode: View {
                             .frame(width: 30, height: 30)
                             .overlay(
                                 Image(systemName: "heart.slash.fill")
-                                    .font(DS.Font.scaled(15, weight: .bold))
+                                    .dsGlyph(DS.Glyph.md)
                                     .foregroundColor(DS.Color.textTertiary)
                             )
-                            .overlay(Circle().stroke(DS.Color.deceased.opacity(0.35), lineWidth: 1))
+                            .overlay(Circle().stroke(DS.Color.deceased.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
                             .offset(x: -6, y: -6)
                     }
                 }
                 .overlay(alignment: .topLeading) {
                     // شارة عدد الأبناء + سهم — فوق يسار الصورة (رقم أكبر — طلب المالك)
                     if hasChildren {
-                        HStack(spacing: 2) {
+                        HStack(spacing: DS.Spacing.xxs) {
                             Text("\(childrenCount)")
-                                .font(DS.Font.scaled(16, weight: .heavy))
+                                .dsFont(.nodeCount)
                             Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(11, weight: .heavy))
+                                .dsGlyph(DS.Glyph.xs, weight: .heavy)
                                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .padding(.horizontal, DS.Spacing.sm)
                         .frame(minWidth: 34, minHeight: 32)
                         // غامق قسم الشجرة (كان كحلياً ثابتاً) — أغمق من لون العضو بلا صورة
-                        // TMP-ART-TRIAL: «الحالي» الكحلي القديم كما هو
                         .background(Capsule().fill(isKinshipHighlighted ? DS.Color.warning
-                                                   : (art == .emblem ? DS.Color.primaryDark : AppSection.tree.deep)))
-                        .modifier(TreeArtSkin(art: art, onFill: true, compact: true))   // TMP-ART-TRIAL
-                        .overlay(Capsule().stroke(DS.Color.textOnPrimary.opacity(0.45), lineWidth: 1.2))
-                        .shadow(color: (art == .emblem ? DS.Color.primary : AppSection.tree.deep).opacity(0.4), radius: 4, y: 2)
+                                                   : AppSection.tree.deep))
+                        // لمسة الطين الواحدة بظلّها (كان ظلاً يدوياً)
+                        .modifier(DSClaySkin(onFill: true, compact: true, shadow: true, section: .tree))
+                        .overlay(Capsule().stroke(DS.Color.textOnPrimary.opacity(DS.Opacity.selectedStroke),
+                                                  lineWidth: DS.Border.widthBold))
                         .offset(x: -2, y: 0)
                     }
                 }
@@ -1695,10 +1549,10 @@ struct TreeMemberNode: View {
                     // علامة "أنت هنا" — overlay لا يأثر على الـ layout
                     if isCurrentLocationMember {
                         Text(L10n.t("أنت هنا", "You"))
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .dsFont(.badge)
                             .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 3)
+                            .padding(.vertical, DS.Spacing.xxs)
                             .background(DS.Color.currentLocation)
                             .clipShape(Capsule())
                             .offset(y: -16)
@@ -1730,43 +1584,44 @@ struct TreeMemberNode: View {
                             VStack(spacing: 0) {
                                 if showName {
                                     Text(displayName)
-                                        .font(DS.Font.scaled(15, weight: .bold))
+                                        .dsFont(.headline)
                                         .foregroundColor(DS.Color.textPrimary)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.75)
                                         .padding(.horizontal, DS.Spacing.lg)
-                                        .padding(.vertical, 5)
+                                        .padding(.vertical, DS.Spacing.xs)
                                         .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2)
                                         .background(DS.Color.surface)
                                 }
                                 Text(getLifeSpan())
-                                    .font(DS.Font.scaled(11, weight: .heavy))
-                                    .foregroundColor(.white)
+                                    .dsFont(.badge)
+                                    .foregroundColor(DS.Color.textOnPrimary)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.7)
                                     .padding(.horizontal, DS.Spacing.md)
-                                    .padding(.vertical, 4)
+                                    // سطر خط الهوية أطول من خط النظام (١٫٥×) — حشوة أصغر فيبقى الشريط ٢١ كما كان
+                                    .padding(.vertical, DS.Spacing.xxs)
                                     // maxWidth يمدّد الشريط الأحمر ليطابق عرض الاسم مهما طال
                                     .frame(minWidth: interactiveLabelWidth, maxWidth: .infinity, minHeight: 21)
-                                    .background(Color(hex: "#A62B32"))   // عنّابي بدرجة خفيفة (طلب المالك)
+                                    .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
                             }
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                            .modifier(TreeArtSkin(art: art, radius: DS.Radius.lg,
-                                                  eyeRow: showName ? interactiveLabelHeight + 2 : nil))   // TMP-ART-TRIAL
+                            .modifier(DSClaySkin(radius: DS.Radius.lg,
+                                                 eyeRow: showName ? interactiveLabelHeight + 2 : nil, section: .tree))
                             .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                                 .stroke(borderGradient, lineWidth: 2.5))
                         } else if showName {
                             Text(displayName)
-                                .font(DS.Font.scaled(15, weight: .bold))
+                                .dsFont(.headline)
                                 .foregroundColor(DS.Color.textPrimary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.75)
                                 .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, 5)
+                                .padding(.vertical, DS.Spacing.xs)
                                 .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2)
                                 .background(DS.Color.surface)
                                 .clipShape(Capsule())
-                                .modifier(TreeArtSkin(art: art))   // TMP-ART-TRIAL
+                                .modifier(DSClaySkin(section: .tree))
                                 .overlay(Capsule().stroke(borderGradient, lineWidth: 2.5))
                         }
                     }
@@ -1815,10 +1670,10 @@ struct TreeMemberNode: View {
         return L10n.t("بدون اسم", "No name")
     }
 
-    /// TMP-ART-TRIAL: رسم العضو بلا صورة بحسب الاتجاه، بلون الرتبة/الجنس نفسه (المعنى لا يتغيّر).
+    /// رسم العضو بلا صورة بأسلوب «مجسّمات»، بلون الرتبة/الجنس نفسه (المعنى لا يتغيّر).
     /// غلاف Equatable فلا يُعاد رسم الكانفس مع كل سحب/تكبير للشجرة.
     private var avatarArt: some View {
-        TreeAvatarArt(art: art, tint: nodeAccentColor, size: interactiveNodeSize - 4)
+        TreeAvatarArt(tint: nodeAccentColor, size: interactiveNodeSize - 4)
             .equatable()
             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
             .clipShape(Circle())
@@ -1844,10 +1699,9 @@ struct TreeMemberNode: View {
     }
 }
 
-// MARK: - TMP-ART-TRIAL: الشجرة تتبع اتجاه الرسوم (يُحذف مع ملف ArtTrial بعد اختيار المالك)
+// MARK: - رسوم الشجرة بأسلوب «مجسّمات» (الاتجاه النهائي — اعتماد المالك ٢٠٢٦-١٠-٠٦)
 // كل ما هنا ساكن وخفيف — الشجرة فيها مئات العقد: لا ظلال إضافية، ولا كانفس متحرك لكل عقدة،
-// ولا TimelineView. «الحالي» يرجع المحتوى كما هو تماماً. الألوان: حبر/غامق قسم الشجرة،
-// وألوان المعنى (ذكر/أنثى/رتبة/متوفّى/القرابة) لا تتغيّر.
+// ولا TimelineView. الألوان: حبر/غامق قسم الشجرة، وألوان المعنى (ذكر/أنثى/رتبة/متوفّى/القرابة) لا تتغيّر.
 
 /// طبقة واحدة من خط الوصل
 struct TreeLineLayer {
@@ -1857,36 +1711,15 @@ struct TreeLineLayer {
 }
 
 enum TreeArtLines {
-    private static let gold = Color(hex: "#C9973F")
-    private static let cream = Color(hex: "#F3E7CF")
-    private static let saduRed = Color(hex: "#B3262E")
-
-    /// طبقات خط الأب وأبنائه — «الحالي»: خط واحد بحبر القسم ٤٥٪ كما كان
-    static func layers(_ art: ArtTrial, width w: CGFloat, dark: Bool) -> [TreeLineLayer] {
+    /// طبقات خط الأب وأبنائه — أنبوب طين: ظلّ ناعم تحته + جسم أعرض + لمعة علوية رفيعة
+    static func layers(width w: CGFloat, dark: Bool) -> [TreeLineLayer] {
         let ink = AppSection.tree.ink
         func st(_ lw: CGFloat, dash: [CGFloat] = []) -> StrokeStyle {
             StrokeStyle(lineWidth: lw, lineCap: dash.isEmpty ? .round : .butt, lineJoin: .round, dash: dash)
         }
-        switch art {
-        case .emblem:
-            return [TreeLineLayer(color: ink.opacity(0.45), style: st(w))]
-        case .soft3d:
-            // أنبوب طين: ظلّ ناعم تحته + جسم أعرض + لمعة علوية رفيعة
-            return [TreeLineLayer(color: AppSection.tree.deep.opacity(dark ? 0.45 : 0.14), style: st(w + 1.6), dy: 1.6),
-                    TreeLineLayer(color: ink.opacity(dark ? 0.6 : 0.5), style: st(w + 0.8)),
-                    TreeLineLayer(color: .white.opacity(dark ? 0.14 : 0.55), style: st(max(0.6, w * 0.3)), dy: -0.5)]
-        case .glass:
-            // أنبوب زجاجي: حافة شفافة وخيط ضوء في قلبه
-            return [TreeLineLayer(color: ink.opacity(dark ? 0.4 : 0.3), style: st(w + 1.4)),
-                    TreeLineLayer(color: .white.opacity(dark ? 0.3 : 0.8), style: st(max(0.6, w * 0.35)))]
-        case .gold:
-            // خيط ذهبي رفيع في قلب خط القسم
-            return [TreeLineLayer(color: ink.opacity(0.45), style: st(w)),
-                    TreeLineLayer(color: gold.opacity(dark ? 0.75 : 0.9), style: st(max(0.6, w * 0.32)))]
-        case .sadu:
-            // غرزة نسيج متقطّعة
-            return [TreeLineLayer(color: ink.opacity(dark ? 0.7 : 0.6), style: st(w, dash: [w * 2.6, w * 1.6]))]
-        }
+        return [TreeLineLayer(color: AppSection.tree.deep.opacity(dark ? 0.45 : 0.14), style: st(w + 1.6), dy: 1.6),
+                TreeLineLayer(color: ink.opacity(dark ? 0.6 : 0.5), style: st(w + 0.8)),
+                TreeLineLayer(color: .white.opacity(dark ? 0.14 : 0.55), style: st(max(0.6, w * 0.3)), dy: -0.5)]
     }
 
     static func stroke(_ ctx: inout GraphicsContext, _ path: Path, _ layers: [TreeLineLayer]) {
@@ -1895,162 +1728,28 @@ enum TreeArtLines {
         }
     }
 
-    /// نقطة التفرّع — «الحالي»: دائرة بحبر القسم ٦٠٪ كما كانت
-    static func dot(_ ctx: inout GraphicsContext, at d: CGPoint, r: CGFloat, art: ArtTrial, dark: Bool) {
+    /// نقطة التفرّع — قرص طين أكبر قليلاً مع لمعة علوية
+    static func dot(_ ctx: inout GraphicsContext, at d: CGPoint, r: CGFloat, dark: Bool) {
         let ink = AppSection.tree.ink
         let rect = CGRect(x: d.x - r, y: d.y - r, width: r * 2, height: r * 2)
-        switch art {
-        case .emblem:
-            ctx.fill(Path(ellipseIn: rect), with: .color(ink.opacity(0.6)))
-        case .soft3d:
-            let big = rect.insetBy(dx: -r * 0.25, dy: -r * 0.25)
-            ctx.fill(Path(ellipseIn: big), with: .color(ink.opacity(0.75)))
-            ctx.fill(Path(ellipseIn: CGRect(x: big.minX + big.width * 0.22, y: big.minY + big.height * 0.16,
-                                            width: big.width * 0.36, height: big.height * 0.3)),
-                     with: .color(.white.opacity(dark ? 0.3 : 0.6)))
-        case .glass:
-            ctx.fill(Path(ellipseIn: rect.insetBy(dx: -r * 0.3, dy: -r * 0.3)), with: .color(ink.opacity(0.18)))
-            ctx.stroke(Path(ellipseIn: rect), with: .color(ink.opacity(0.75)), lineWidth: 1)
-            ctx.fill(Path(ellipseIn: rect.insetBy(dx: r * 0.55, dy: r * 0.55)), with: .color(.white.opacity(dark ? 0.5 : 0.9)))
-        case .gold:
-            ctx.fill(Path(ellipseIn: rect), with: .color(ink.opacity(0.7)))
-            ctx.stroke(Path(ellipseIn: rect.insetBy(dx: -0.8, dy: -0.8)), with: .color(gold), lineWidth: 1)
-        case .sadu:
-            ctx.fill(diamond(d, r * 1.45), with: .color(AppSection.tree.deep))
-            ctx.fill(diamond(d, r * 0.6), with: .color(cream))
-        }
-    }
-
-    private static func diamond(_ c: CGPoint, _ r: CGFloat) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: c.x, y: c.y - r))
-        p.addLine(to: CGPoint(x: c.x + r, y: c.y))
-        p.addLine(to: CGPoint(x: c.x, y: c.y + r))
-        p.addLine(to: CGPoint(x: c.x - r, y: c.y))
-        p.closeSubpath()
-        return p
+        let big = rect.insetBy(dx: -r * 0.25, dy: -r * 0.25)
+        ctx.fill(Path(ellipseIn: big), with: .color(ink.opacity(0.75)))
+        ctx.fill(Path(ellipseIn: CGRect(x: big.minX + big.width * 0.22, y: big.minY + big.height * 0.16,
+                                        width: big.width * 0.36, height: big.height * 0.3)),
+                 with: .color(.white.opacity(dark ? 0.3 : 0.6)))
     }
 }
 
-/// رسم العضو بلا صورة — Equatable: لا يُعاد رسمه إلا إن تغيّر الاتجاه أو اللون أو المقاس
+/// رسم العضو بلا صورة — Equatable: لا يُعاد رسمه إلا إن تغيّر اللون أو المقاس
 struct TreeAvatarArt: View, Equatable {
-    let art: ArtTrial
     let tint: Color
     let size: CGFloat
     var icon: String = "person.fill"
 
-    nonisolated static func == (a: TreeAvatarArt, b: TreeAvatarArt) -> Bool {
-        a.art == b.art && a.tint == b.tint && a.size == b.size && a.icon == b.icon
-    }
-
     var body: some View {
-        if let v = ArtDispatch.stateIcon(art, icon: icon, tint: tint, size: size) {
-            v.frame(width: size, height: size).allowsHitTesting(false).accessibilityHidden(true)
-        }
+        DSStateIcon(icon, tint: tint, size: size, mapsChrome: false)
+            .allowsHitTesting(false)
     }
 }
 
-/// لمسة الاتجاه على عناصر الشجرة (كبسولة الاسم، بطاقة المتوفّى، الشارات، بطاقة الأدوات):
-/// حواف وخطوط فقط فوق الخلفية الموجودة — «الحالي» = بلا تغيير.
-struct TreeArtSkin: ViewModifier {
-    let art: ArtTrial
-    /// nil = كبسولة
-    var radius: CGFloat? = nil
-    /// سطح ممتلئ بلون (عليه نص أبيض) بدل سطح فاتح
-    var onFill: Bool = false
-    /// عنصر صغير/ضيّق: بلا عيون السدو الجانبية (حاشية سفلية بدلها)
-    var compact: Bool = false
-    /// ارتفاع صف الاسم لعيون السدو (بطاقة المتوفّى: الاسم فوق والسنوات تحت) — nil = كامل الارتفاع
-    var eyeRow: CGFloat? = nil
-    /// خلفية زجاج/مادة النظام: حواف فقط بلا تعبئة إضافية
-    var glassBacked: Bool = false
-    @Environment(\.colorScheme) private var scheme
-
-    private static let gold = LinearGradient(colors: [Color(hex: "#E7C27A"), Color(hex: "#C9973F")],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing)
-
-    func body(content: Content) -> some View {
-        if art == .emblem {
-            content
-        } else {
-            // الزخرفة فوق المحتوى لا تلتقط اللمس (أزرار البطاقة تحتها)
-            content.overlay(decoration.allowsHitTesting(false).accessibilityHidden(true))
-        }
-    }
-
-    @ViewBuilder
-    private var decoration: some View {
-        let shape: AnyShape = radius.map { AnyShape(RoundedRectangle(cornerRadius: $0, style: .continuous)) }
-            ?? AnyShape(Capsule())
-        let dark = scheme == .dark
-        let tree = AppSection.tree
-        switch art {
-        case .emblem:
-            EmptyView()
-        case .soft3d:
-            // طين ناعم: ظلّ داخلي سفلي خفيف + لمعة علوية
-            ZStack {
-                if !glassBacked {
-                    shape.fill(LinearGradient(colors: [.clear, tree.deep.opacity(dark ? 0.22 : 0.08)],
-                                              startPoint: .center, endPoint: .bottom))
-                }
-                shape.stroke(LinearGradient(colors: [.white.opacity(dark ? 0.16 : (onFill ? 0.5 : 0.95)), .clear],
-                                            startPoint: .top, endPoint: .center), lineWidth: 1.4)
-                    .padding(0.7)
-            }
-        case .glass:
-            // زجاج: حافة ضوء وتعبئة خفيفة بلون القسم (أو لمعة علوية فوق الممتلئ)
-            ZStack {
-                if onFill {
-                    shape.fill(LinearGradient(colors: [.white.opacity(dark ? 0.14 : 0.24), .clear],
-                                              startPoint: .top, endPoint: .center))
-                } else if !glassBacked {
-                    shape.fill(tree.ink.opacity(dark ? 0.08 : 0.05))
-                }
-                shape.stroke(LinearGradient(colors: [.white.opacity(dark ? 0.4 : 0.95), tree.ink.opacity(0.25),
-                                                     .white.opacity(dark ? 0.12 : 0.55)],
-                                            startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.1)
-                    .padding(0.55)
-            }
-        case .gold:
-            // خط ذهبي رفيع داخل الحافة
-            shape.stroke(Self.gold, lineWidth: compact ? 0.8 : 0.9)
-                .opacity(dark ? 0.65 : 0.85)
-                .padding(compact ? 1.8 : 3)
-        case .sadu:
-            if compact {
-                // حاشية سدو سفلية رفيعة داخل الشكل
-                shape.fill(onFill ? Color(hex: "#F3E7CF").opacity(0.85) : tree.deep.opacity(0.85))
-                    .mask(alignment: .bottom) { Rectangle().frame(height: 2) }
-            } else {
-                VStack(spacing: 0) {
-                    let eyes = HStack(spacing: 0) {
-                        saduEye(onFill: onFill)
-                        Spacer(minLength: 0)
-                        saduEye(onFill: onFill)
-                    }
-                    .padding(.horizontal, 6)
-                    if let eyeRow {
-                        eyes.frame(height: eyeRow)
-                        Spacer(minLength: 0)
-                    } else {
-                        eyes.frame(maxHeight: .infinity)
-                    }
-                }
-            }
-        }
-    }
-
-    /// عين سدو: معيّن بلون القسم الغامق وقلب كريمي (وفوق الممتلئ: كريمي بقلب أحمر)
-    private func saduEye(onFill: Bool) -> some View {
-        ZStack {
-            // الداكن: حبر القسم بدل غامقه (الغامق يذوب في السطح الداكن)
-            Rectangle().fill(onFill ? Color(hex: "#F3E7CF") : (scheme == .dark ? AppSection.tree.ink : AppSection.tree.deep))
-                .frame(width: 5, height: 5).rotationEffect(.degrees(45))
-            Rectangle().fill(onFill ? Color(hex: "#B3262E") : Color(hex: "#F3E7CF"))
-                .frame(width: 2, height: 2).rotationEffect(.degrees(45))
-        }
-        .frame(width: 8, height: 8)
-        .accessibilityHidden(true)
-    }
-}
+// لمسة الطين على عناصر الشجرة صارت الواحدة `DSClaySkin` (ArtTrial.swift) — كانت `TreeArtSkin` هنا (أسلوب واحد ٢٠٢٦-١٠-٠٧)

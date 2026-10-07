@@ -160,29 +160,26 @@ struct AddSonByAdminSheet: View {
     // MARK: - لمن الابن
     private var contextSection: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: isEditMode ? "pencil" : "person.badge.plus")
-                .font(DS.Font.plex(13, weight: .bold))
-                .foregroundColor(chromeInk)
-                .frame(width: 32, height: 32)
-                .background(chromeInk.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .accessibilityHidden(true)   // زخرفة — النص بجانبها يكفي
+            // قرص الحالة المجسّم (زخرفة — النص بجانبه يكفي)
+            DSStateIcon(isEditMode ? "pencil" : "person.badge.plus", tint: chromeInk, size: DS.Icon.row,
+                        mapsChrome: false)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(isEditMode
                      ? L10n.t("تعديل ابن", "Editing Child")
                      : L10n.t("إضافة ابن لـ", "Adding child to"))
-                    .font(DS.Font.plex(11.5, weight: .medium))
+                    .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
                 Text(isEditMode ? (editingChild?.firstName ?? "") : parent.fullName)
-                    .font(DS.Font.plex(14.5, weight: .bold))
+                    .dsFont(.headlineCompact)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
             }
             Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        // البطاقة الواحدة
+        .dsCard(padding: DS.Spacing.md)
     }
 
     // MARK: - البيانات الأساسية: الاسم، الجنس، الرقم

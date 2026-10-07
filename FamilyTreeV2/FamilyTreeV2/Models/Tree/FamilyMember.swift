@@ -573,3 +573,13 @@ extension Sequence where Element == FamilyMember {
         }
     }
 }
+
+// MARK: - الاسم الثلاثي (طلب المالك ٢٠٢٦-١٠-٠٧: في تعديل «عائلتي» يظهر الأول والثاني والأخير فقط)
+extension String {
+    /// «الأول الثاني … الأخير» ← الأول + الثاني + اسم العائلة؛ الاسم القصير يبقى كما هو
+    var nameThreeParts: String {
+        let parts = split(whereSeparator: \.isWhitespace).map(String.init)
+        guard parts.count > 3 else { return self }
+        return "\(parts[0]) \(parts[1]) \(parts[parts.count - 1])"
+    }
+}

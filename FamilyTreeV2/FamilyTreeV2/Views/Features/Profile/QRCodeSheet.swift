@@ -67,7 +67,7 @@ struct QRCodeSheet: View {
 
     /// الرمز على بطاقة بيضاء (يُقرأ في الوضع الداكن أيضاً) + الاسم تحته
     private var codeSection: some View {
-        let side: CGFloat = isLandscape ? 130 : 200
+        let side: CGFloat = isLandscape ? DSBox.qrSideCompact : DSBox.qrSide
         return DSComposerSection(title: L10n.t("الرمز التعريفي", "ID Code"),
                                  icon: "qrcode",
                                  tint: DS.Color.primary,
@@ -83,19 +83,19 @@ struct QRCodeSheet: View {
                             // القارئ الصوتي: صورة الرمز بلا اسم كانت تُقرأ «صورة» فقط
                             .accessibilityLabel(L10n.t("رمز QR الخاص بك", "Your QR code"))
                     } else {
-                        ProgressView()
-                            .tint(AppSection.profile.ink)
+                        // التحميل الواحد: المجسّم يتنفّس
+                        DSPageLoader(section: .profile, size: DS.Icon.state, fillsSpace: false)
                     }
                 }
                 .frame(width: side, height: side)
                 .padding(DS.Spacing.md)
-                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(Color.white))
+                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.codeBackground))
                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
+                    .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
 
                 // الاسم
                 Text(lineage)
-                    .font(DS.Font.plex(15, weight: .bold))
+                    .dsFont(.headline)
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -114,14 +114,11 @@ struct QRCodeSheet: View {
                 DSFieldIcon(name: "camera.viewfinder", tint: DS.Color.primary)
                     .accessibilityHidden(true)   // زخرفة
                 Text(L10n.t("امسح رمز QR لمعرفة صلة القرابة", "Scan QR to discover kinship"))
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
-                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .accessibilityHidden(true)   // زخرفة
+                DSChevron()
             }
             .dsRowBox()
             .contentShape(Rectangle())

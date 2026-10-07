@@ -39,7 +39,7 @@ struct DSSwipeActionsModifier: ViewModifier {
                 .offset(x: offset)
                 .background(alignment: .leading) {
                     if offset > 0 {
-                        HStack(spacing: 6) {
+                        HStack(spacing: DS.Spacing.xsm) {
                             ForEach(actions) { a in
                                 actionButton(a)
                             }
@@ -60,19 +60,19 @@ struct DSSwipeActionsModifier: ViewModifier {
             close()
             a.action()
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: DS.Spacing.xs) {
                 Image(systemName: a.icon)
-                    .font(DS.Font.scaled(18, weight: .bold))
+                    .dsGlyph(DS.Glyph.xlCompact)
                 Text(a.title)
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .dsFont(.chip)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .foregroundColor(.white)
-            .frame(width: buttonWidth - 6)
+            .foregroundColor(DS.Color.textOnPrimary)
+            .frame(width: buttonWidth - DS.Spacing.xsm)
             .frame(maxHeight: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
                     .fill(a.color)
             )
         }

@@ -6,7 +6,6 @@ import SwiftUI
 /// بنية مستقلة حتى لا تُثقل نوع واجهة الرئيسية (سبب انهيار سابق).
 struct HomeGreetingRow: View {
     @EnvironmentObject private var authVM: AuthViewModel
-    @AppStorage(ArtTrial.storageKey) private var artTrialRaw = ArtTrial.emblem.rawValue   // TMP-ART-TRIAL
 
     let onOpenProfile: () -> Void
     /// ضغطة مطوّلة للمطوّر (DEBUG) — تُمرَّر من الرئيسية إن وُجدت
@@ -17,18 +16,18 @@ struct HomeGreetingRow: View {
             HStack(alignment: .center, spacing: DS.Spacing.md) {
                 avatar
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     // التحية بلون الوقت — كبسولة صغيرة واضحة فوق الاسم
-                    HStack(spacing: 5) {
+                    HStack(spacing: DS.Spacing.xs) {
                         // رمز الوقت المرسوم (شمس طالعة · شمس الظهر · شمس على البحر · هلال) يتحرّك بهدوء
-                        TrialGreetingGlyph(hour: hour, tint: timeAccent)   // TMP-ART-TRIAL (كان FTGreetingGlyph)
+                        TrialGreetingGlyph(hour: hour, tint: timeAccent)
                         Text(timeBasedGreeting)
-                            .font(DS.Font.plex(13, weight: .semibold))
+                            .dsFont(.rowTitleCompact)
                     }
                     .foregroundStyle(timeAccent)
 
                     Text(greetingName)
-                        .font(DS.Font.plex(21, weight: .bold))
+                        .dsFont(.emptyTitle)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -37,33 +36,18 @@ struct HomeGreetingRow: View {
 
                 // بطاقة بسيطة بلا منظر (طلب المالك ٢٠٢٦-١٠-٠٥ «شيل خله ابسط بكثير»):
                 // الصورة · رمز الوقت والتحية · الاسم · السهم
-                Spacer(minLength: 8)
+                Spacer(minLength: DS.Spacing.sm)
 
                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .dsGlyph(DS.Glyph.sm)
                     .foregroundColor(DS.Color.textSecondary)
-                    .frame(width: 30, height: 30)
+                    .frame(width: DSBox.compactHeaderIcon, height: DSBox.compactHeaderIcon)
                     .background(Circle().fill(DS.Color.mutedBackground))
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm + 2)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                        .fill(DS.Color.surface)
-                    if let deco = ArtDispatch.greetingBackground(ArtTrial(rawValue: artTrialRaw) ?? .emblem,
-                                                                 tint: timeAccent) {   // TMP-ART-TRIAL
-                        deco
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .strokeBorder(timeAccent.opacity(0.14), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 3)
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .padding(.horizontal, DS.Spacing.xs)
+            // البطاقة الواحدة (`.dsCard`) — نفس بطاقة الأخبار تحتها
+            .dsCard()
+            .contentShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(L10n.t("حسابي", "My profile"))
@@ -86,18 +70,18 @@ struct HomeGreetingRow: View {
                     initial(user)
                 }
             }
-            .frame(width: 50, height: 50)
+            .frame(width: DS.Icon.sizeLg - DS.Spacing.sm, height: DS.Icon.sizeLg - DS.Spacing.sm)
             .clipShape(Circle())
-            .overlay(Circle().strokeBorder(timeAccent.opacity(0.55), lineWidth: 2))
-            .padding(2)
+            .overlay(Circle().strokeBorder(timeAccent.opacity(DS.Opacity.selectedStroke), lineWidth: DS.Border.widthBold))
+            .padding(DS.Spacing.xxs)
         }
     }
 
     private func initial(_ user: FamilyMember) -> some View {
         ZStack {
-            Circle().fill(timeAccent.opacity(0.12))
+            Circle().fill(timeAccent.opacity(DS.Opacity.tintFill))
             Text(String(user.firstName.prefix(1)))
-                .font(DS.Font.plex(20, weight: .bold))
+                .dsFont(.emptyTitle)
                 .foregroundColor(timeAccent)
         }
     }

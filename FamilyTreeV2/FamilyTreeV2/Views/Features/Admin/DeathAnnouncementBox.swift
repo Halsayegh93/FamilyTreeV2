@@ -214,12 +214,12 @@ struct DeathAnnouncementBox: View {
                           icon: "bell.fill", tint: tint, index: 2) {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "bell.badge.fill", tint: tint)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(L10n.t("إرسال إشعار لكل الأعضاء", "Notify all members"))
-                        .font(DS.Font.plex(13.5, weight: .bold))
+                        .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.textPrimary)
                     Text(L10n.t("يوصلهم تنبيه على الجوال", "They get an alert on their phone"))
-                        .font(DS.Font.plex(11))
+                        .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                 }
                 Spacer(minLength: 0)
@@ -231,16 +231,8 @@ struct DeathAnnouncementBox: View {
         }
 
         if let errorText {
-            HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                Text(errorText)
-                    .font(DS.Font.plex(12, weight: .semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .foregroundColor(DS.Color.error)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .transition(.opacity)
+            DSNoteCard(errorText, icon: "exclamationmark.circle.fill", tint: DS.Color.error)
+                .transition(.opacity)
         }
     }
 
@@ -250,7 +242,7 @@ struct DeathAnnouncementBox: View {
                  ? L10n.t("نُشر الإعلان في الأخبار ووصل الإشعار لكل الأعضاء.",
                           "The announcement is in the news and all members were notified.")
                  : L10n.t("نُشر الإعلان في الأخبار.", "The announcement is in the news."))
-                .font(DS.Font.plex(13.5))
+                .dsFont(.bodyCompact)
                 .foregroundColor(DS.Color.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -344,44 +336,33 @@ struct DeathAnnouncementsPage: View {
     private var done: [FamilyMember] { filtered.filter { announced.contains($0.id) } }
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
+        ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
-                    DSPageHero(
-                        title: L10n.t("إعلان وفاة", "Death Announcement"),
-                        subtitle: L10n.t("وفيات آخر ٣٠ يوماً — اختر لنشر الخبر وإشعار الأعضاء",
-                                         "Deaths in the last 30 days — pick one to post and notify"),
-                        icon: icon,
-                        tint: DS.Color.actionNavy,
-                        stats: [
-                            DSHeroStat(value: "\(deceased.count)",
-                                       label: L10n.t("وفيات حديثة", "Recent deaths"), icon: "person.fill"),
-                            DSHeroStat(value: loaded ? "\(announced.count)" : "—",
-                                       label: L10n.t("أُعلن عنهم", "Announced"), icon: "checkmark.seal.fill")
-                        ]
-                    )
+                    // العنوان والوصف في الرأس الملوّن — الأرقام هنا
+                    DSStatsRow([
+                        DSHeroStat(value: "\(deceased.count)",
+                                   label: L10n.t("وفيات حديثة", "Recent deaths"), icon: "person.fill"),
+                        DSHeroStat(value: loaded ? "\(announced.count)" : "—",
+                                   label: L10n.t("أُعلن عنهم", "Announced"), icon: "checkmark.seal.fill")
+                    ], tint: DS.Color.actionNavy)
 
                     DSSearchField(text: $query,
                                   placeholder: L10n.t("ابحث بالاسم…", "Search by name…"),
                                   tint: tint)
 
                     if deceased.isEmpty {
-                        SysStateCard(icon: icon,
-                                     title: L10n.t("لا توجد وفيات حديثة", "No recent deaths"),
-                                     hint: L10n.t("تظهر هنا وفيات آخر ٣٠ يوماً فقط", "Only deaths in the last 30 days appear here"),
-                                     tint: tint)
+                        DSEmptyView(L10n.t("لا توجد وفيات حديثة", "No recent deaths"),
+                                    message: L10n.t("تظهر هنا وفيات آخر ٣٠ يوماً فقط", "Only deaths in the last 30 days appear here"), style: .compact)
+                            .padding(.top, DS.Spacing.xl)
                     } else if waiting.isEmpty && done.isEmpty {
-                        SysStateCard(icon: "magnifyingglass",
-                                     title: L10n.t("لا يوجد متوفى بهذا الاسم", "No deceased member by that name"),
-                                     tint: tint)
+                        DSEmptyView(L10n.t("لا يوجد متوفى بهذا الاسم", "No deceased member by that name"),
+                                    style: .compact)
                     } else {
                         if !waiting.isEmpty {
                             DSComposerSection(title: L10n.t("لم يُعلن عنهم", "Not announced"),
                                               icon: icon, tint: tint,
                                               trailing: "\(waiting.count)", index: 1) {
-                                LazyVStack(spacing: 6) {
+                                LazyVStack(spacing: DS.Spacing.xsm) {
                                     ForEach(waiting.prefix(200)) { member in
                                         row(member, isDone: false)
                                     }
@@ -392,7 +373,7 @@ struct DeathAnnouncementsPage: View {
                             DSComposerSection(title: L10n.t("أُعلن عنهم", "Announced"),
                                               icon: "checkmark.seal.fill", tint: DS.Color.success,
                                               trailing: "\(done.count)", index: 2) {
-                                LazyVStack(spacing: 6) {
+                                LazyVStack(spacing: DS.Spacing.xsm) {
                                     ForEach(done) { member in
                                         row(member, isDone: true)
                                     }
@@ -404,12 +385,13 @@ struct DeathAnnouncementsPage: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxxl)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .refreshable { await loadAnnounced() }
         }
-        .navigationTitle(L10n.t("إعلان وفاة", "Death Announcement"))
-        .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.interactively)
+        .refreshable { await loadAnnounced() }
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(L10n.t("إعلان وفاة", "Death Announcement"),
+                         subtitle: L10n.t("وفيات آخر ٣٠ يوماً — اختر لنشر الخبر وإشعار الأعضاء",
+                                          "Deaths in the last 30 days — pick one to post and notify"))
         .task { await loadAnnounced() }
         .onReceive(NotificationCenter.default.publisher(for: .deathAnnouncementPublished)) { _ in
             Task { await loadAnnounced() }
@@ -441,16 +423,23 @@ struct DeathAnnouncementsPage: View {
                 id: member.id, name: member.fullName, isFemale: member.isFemale,
                 deathDate: member.deathDate))
         } label: {
-            SysRow(icon: isDone ? "checkmark.seal.fill" : icon,
+            DSRow(icon: isDone ? "checkmark.seal.fill" : icon,
                    tint: isDone ? DS.Color.success : tint,
                    title: member.fullName,
                    subtitle: deathLine(member)) {
+                // وجه الشريحة الواحدة: «إعلان» ممتلئة بتعبئة القسم، و«أُعلن» خفيفة بلون النجاح
                 Text(isDone ? L10n.t("أُعلن", "Done") : L10n.t("إعلان", "Announce"))
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .foregroundColor(isDone ? DS.Color.success : .white)
-                    .padding(.horizontal, 12)
-                    .frame(height: 28)
-                    .background(Capsule().fill(isDone ? DS.Color.success.opacity(0.12) : AppSection.admin.fill))
+                    .dsFont(.chip)
+                    .foregroundColor(isDone ? DS.Color.success : DS.Color.textOnPrimary)
+                    .padding(.horizontal, DSBox.chipPadding)
+                    .frame(height: DSBox.chipHeightSmall)
+                    .background {
+                        if isDone {
+                            Capsule().fill(DS.Color.success.opacity(DS.Opacity.tintFill))
+                        } else {
+                            Capsule().fill(DSActionFill.style())
+                        }
+                    }
             }
         }
         .buttonStyle(.plain)

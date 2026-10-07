@@ -3,7 +3,8 @@ import SwiftUI
 /// «التحديث الإجباري» — شاشة مستقلة في إعدادات النظام (طلب المالك).
 /// لكل منصة أقل رقم بناء مسموح + رابط المتجر. أي نسخة أقل تنقفل بشاشة «حدّث التطبيق».
 /// التعديل للمالك فقط؛ المدير يشوفها للقراءة.
-/// التصميم: بطاقة رأس بالحدّين ونسختك، ثم أقسام `DSComposerSection` بصفوف `.dsRowBox()`.
+/// التصميم («أسلوب واحد» ٢٠٢٦-١٠-٠٧): الرأس الملوّن الموحّد، صفّ أرقام بالحدّين ونسختك، ثم أقسام
+/// `DSComposerSection` بصفوف `.dsRowBox()`.
 struct AdminForceUpdateView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
@@ -44,22 +45,22 @@ struct AdminForceUpdateView: View {
                     legacyAndroidSection
                     messageSection
 
-                    HStack(alignment: .top, spacing: 6) {
+                    HStack(alignment: .top, spacing: DS.Spacing.xsm) {
                         Image(systemName: "crown.fill")
-                            .font(.system(size: 10.5, weight: .bold))
+                            .dsGlyph(DS.Glyph.xs)
                             .foregroundColor(DS.Color.textTertiary)
-                            .padding(.top, 2)
+                            .padding(.top, DS.Spacing.xxs)
                             .accessibilityHidden(true)
                         Text(L10n.t(
                             "المالك مستثنى من القفل حتى ما يقفل نفسه لو رفع الحد قبل ما يحدّث جهازه.",
                             "The owner is exempt so you can't lock yourself out."
                         ))
-                        .font(DS.Font.plex(11))
+                        .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 2)
+                    .padding(.horizontal, DS.Spacing.xxs)
                 }
                 .disabled(!canEdit)
             }
@@ -67,9 +68,11 @@ struct AdminForceUpdateView: View {
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxl)
         }
-        .background(DS.Color.background)
-        .navigationTitle(L10n.t("التحديث الإجباري", "Force Update"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(L10n.t("التحديث الإجباري", "Force Update"),
+                         subtitle: canEdit
+                            ? L10n.t("أقل نسخة مسموحة لكل منصة — الأقدم تنقفل", "Minimum build per platform — older ones are blocked")
+                            : L10n.t("للقراءة فقط — التعديل للمالك.", "Read only — the owner edits this."))
         .onAppear {
             iosURLDraft = s.iosUpdateUrl ?? ""
             androidURLDraft = s.androidUpdateUrl ?? ""
@@ -85,44 +88,24 @@ struct AdminForceUpdateView: View {
         return v == 0 ? L10n.t("بلا", "Off") : "\(v)"
     }
 
+    /// العنوان والوصف في الرأس الملوّن — الأرقام هنا
     private var hero: some View {
-        DSPageHero(
-            title: L10n.t("التحديث الإجباري", "Force Update"),
-            subtitle: canEdit
-                ? L10n.t("أقل نسخة مسموحة لكل منصة — الأقدم تنقفل", "Minimum build per platform — older ones are blocked")
-                : L10n.t("للقراءة فقط — التعديل للمالك.", "Read only — the owner edits this."),
-            icon: "arrow.down.app.fill",
-            tint: DS.Color.actionNavy,
-            stats: [
+        DSStatsRow([
                 DSHeroStat(value: minLabel(s.iosMinBuild), label: L10n.t("حد الآيفون", "iPhone min"), icon: "apple.logo"),
                 DSHeroStat(value: minLabel(s.androidMinBuild), label: L10n.t("حد الأندرويد", "Android min"), icon: "candybarphone"),
                 DSHeroStat(value: "\(AppBuild.current)", label: L10n.t("نسختك", "Your build"), icon: "iphone.gen3")
-            ]
-        )
+        ], tint: DS.Color.actionNavy)
     }
 
     // MARK: - الأقسام
 
     private var explainer: some View {
-        HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: canEdit ? "info.circle.fill" : "eye.fill", tint: AppSection.admin.ink)
-                .accessibilityHidden(true)
-            Text(canEdit
-                 ? L10n.t("أي نسخة رقمها أقل من الحد تنقفل بشاشة «حدّث التطبيق» لين يحدّث العضو. 0 = بلا إجبار.",
-                          "Any build below the minimum is blocked until the member updates. 0 = off.")
-                 : L10n.t("للقراءة فقط — التعديل للمالك.", "Read only — the owner edits this."))
-                .dsFieldFont(12)
-                .foregroundColor(DS.Color.fieldValue)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(DS.Spacing.md)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .fill(AppSection.admin.ink.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(AppSection.admin.ink.opacity(0.20), lineWidth: 1))
-        .accessibilityElement(children: .combine)
-        .dsStaggerIn(0)
+        DSNoteCard(canEdit
+                   ? L10n.t("أي نسخة رقمها أقل من الحد تنقفل بشاشة «حدّث التطبيق» لين يحدّث العضو. 0 = بلا إجبار.",
+                            "Any build below the minimum is blocked until the member updates. 0 = off.")
+                   : L10n.t("للقراءة فقط — التعديل للمالك.", "Read only — the owner edits this."),
+                   icon: canEdit ? "info.circle.fill" : "eye.fill")
+            .dsStaggerIn(0)
     }
 
     private func platformSection(title: String, icon: String, key: String, value: Int, hint: String,
@@ -134,15 +117,15 @@ struct AdminForceUpdateView: View {
                           trailing: value == 0 ? L10n.t("بلا إجبار", "Off") : L10n.t("مفعّل", "On"),
                           index: index) {
             // أقل رقم بناء مسموح
-            SysRow(icon: "number", tint: value == 0 ? DS.Color.textTertiary : AppSection.admin.ink,
+            DSRow(icon: "number", tint: value == 0 ? DS.Color.textTertiary : AppSection.admin.ink,
                    title: L10n.t("أقل رقم بناء", "Minimum build"),
                    subtitle: hint) {
                 HStack(spacing: DS.Spacing.sm) {
                     Text(value == 0 ? L10n.t("بلا", "Off") : "\(value)")
-                        .font(DS.Font.plex(17, weight: .bold))
+                        .dsFont(.title)
                         .monospacedDigit()
                         .foregroundColor(value == 0 ? DS.Color.textTertiary : AppSection.admin.ink)
-                        .frame(minWidth: 36)
+                        .frame(minWidth: DS.Icon.rowLarge)
                         .accessibilityHidden(true)
                     Stepper("", value: Binding(
                         get: { value },
@@ -158,14 +141,14 @@ struct AdminForceUpdateView: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "link", tint: DS.Color.actionNavy)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(urlTitle)
-                        .dsFieldFont(12, weight: .heavy)
+                        .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     TextField(urlTitle, text: urlDraft)
-                        .dsFieldFont(13.5)
+                        .dsFieldFont(.bodyCompact)
                         .foregroundColor(DS.Color.textPrimary)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
@@ -187,7 +170,7 @@ struct AdminForceUpdateView: View {
                           icon: "clock.arrow.circlepath",
                           tint: DS.Color.actionNavy,
                           index: 3) {
-            SysRow(icon: "candybarphone", tint: DS.Color.warning,
+            DSRow(icon: "candybarphone", tint: DS.Color.warning,
                    title: L10n.t("إيقاف نسخ الأندرويد القديمة", "Block old Android versions"),
                    subtitle: L10n.t("للنسخ المثبّتة قبل هذا التحديث — ما تعرف الحد الجديد",
                                     "For copies installed before this update")) {
@@ -219,7 +202,7 @@ struct AdminForceUpdateView: View {
                     .accessibilityHidden(true)
                 TextField(L10n.t("مثال: نسخة جديدة فيها حماية أكثر لبياناتك", "e.g. New version with better privacy"),
                           text: $messageDraft, axis: .vertical)
-                    .dsFieldFont(13.5)
+                    .dsFieldFont(.bodyCompact)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1...3)
                 saveButton {
@@ -231,19 +214,9 @@ struct AdminForceUpdateView: View {
         }
     }
 
-    /// زر «حفظ» صغير كحلي — مساحة ضغط ٤٤ نقطة
+    /// «حفظ» — الشريحة الواحدة ممتلئة بتعبئة القسم (مساحة ضغط ٤٤)
     private func saveButton(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(L10n.t("حفظ", "Save"))
-                .font(DS.Font.plex(13, weight: .bold))
-                .foregroundColor(DSActionFill.label(enabled: canEdit))
-                .padding(.horizontal, DS.Spacing.md)
-                .frame(height: 32)
-                .background(DSActionFill.style(enabled: canEdit), in: Capsule())
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(DSScaleButtonStyle())
+        DSChipButton(L10n.t("حفظ", "Save"), isSelected: true, action: action)
     }
 
     private func save<T: Encodable>(_ key: String, _ value: T) {

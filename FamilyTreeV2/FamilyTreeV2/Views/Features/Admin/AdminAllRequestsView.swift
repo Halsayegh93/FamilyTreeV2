@@ -266,7 +266,6 @@ struct AdminAllRequestsView: View {
     @State private var cachedHealthIssueMembers: [FamilyMember] = []
     @State private var cachedHealthMemberIssues: [UUID: Set<TreeHealthIssue>] = [:]
     @State private var cachedHealthCounts: [TreeHealthIssue: Int] = [:]
-    @State private var openTreeHealthFilter: AdminTreeHealthView.TreeIssueFilter? = nil
 
     enum TreeHealthIssue: String, Hashable {
         case orphan, noName, brokenParent, hiddenFromTree, duplicatePhone
@@ -354,51 +353,38 @@ struct AdminAllRequestsView: View {
     }
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // وضع التحديد: شريط ملخّص التحديد مثبّت أعلى القائمة (إلغاء · العدد · تحديد الكل)
-                // — يحلّ محل الفلاتر كما كان، ويبقى ظاهراً مهما نزلت القائمة.
-                if isSelectMode && totalCount > 0 {
-                    selectionSummaryBar
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.bottom, DS.Spacing.xs)
-                        .transition(.opacity)
-                }
-
-                // بطاقة الرأس ← الفلاتر ← الطلبات: قائمة واحدة تتمرّر (List لأجل أزرار السحب)
-                requestsList
-                    // شريط العمليات الجماعية — مثبّت في الأسفل، وآخر صف في القائمة يبقى فوقه
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        if isSelectMode && !selectedIds.isEmpty {
-                            bulkActionBar
-                                .transition(reduceMotion ? .opacity
-                                            : .move(edge: .bottom).combined(with: .opacity))
-                        }
-                    }
+        VStack(spacing: 0) {
+            // وضع التحديد: شريط ملخّص التحديد مثبّت أعلى القائمة (إلغاء · العدد · تحديد الكل)
+            // — يحلّ محل الفلاتر كما كان، ويبقى ظاهراً مهما نزلت القائمة.
+            if isSelectMode && totalCount > 0 {
+                selectionSummaryBar
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xs)
+                    .transition(.opacity)
             }
+
+            // صفّ الأرقام ← الفلاتر ← الطلبات: قائمة واحدة تتمرّر (List لأجل أزرار السحب)
+            requestsList
+                // شريط العمليات الجماعية — مثبّت في الأسفل، وآخر صف في القائمة يبقى فوقه
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if isSelectMode && !selectedIds.isEmpty {
+                        bulkActionBar
+                            .transition(reduceMotion ? .opacity
+                                        : .move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
         }
         .animation(DS.Anim.snappy, value: isSelectMode && !selectedIds.isEmpty)
-        .navigationTitle(L10n.t("طلبات المراجعة", "Review Requests"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            // زر التحديد المتعدّد — أيقونة فقط بدون خلفية
-            ToolbarItem(placement: .topBarTrailing) {
-                if !isSelectMode && itemCount(for: selectedTab) > 0
-                    && selectedTab.section != .treeHealth {
-                    Button {
-                        withAnimation(DS.Anim.snappy) {
-                            isSelectMode = true
-                            selectedIds.removeAll()
-                        }
-                    } label: {
-                        Image(systemName: "checkmark.circle")
-                            .font(DS.Font.scaled(16, weight: .semibold))
-                            .foregroundColor(DS.Color.success)
+        // الرأس الملوّن الموحّد (بدل شريط النظام وبطاقة الرأس) — زرّ التحديد المتعدّد في الرأس
+        .dsSubPageHeader(L10n.t("طلبات المراجعة", "Review Requests"), subtitle: heroSubtitle) {
+            if !isSelectMode && itemCount(for: selectedTab) > 0
+                && selectedTab.section != .treeHealth {
+                DSHeaderButton(symbol: "checkmark.circle", label: L10n.t("تحديد", "Select")) {
+                    withAnimation(DS.Anim.snappy) {
+                        isSelectMode = true
+                        selectedIds.removeAll()
                     }
-                    .accessibilityLabel(L10n.t("تحديد", "Select"))
                 }
             }
         }
@@ -422,18 +408,6 @@ struct AdminAllRequestsView: View {
                     selectedTab = firstNonEmpty
                     selectedSection = firstNonEmpty.section
                 }
-            }
-        }
-        .sheet(item: $openTreeHealthFilter) { filter in
-            NavigationStack {
-                AdminTreeHealthView(initialFilter: filter)
-                    .environmentObject(memberVM)
-                    .toolbar {
-                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                            // زر الإغلاق الموحّد أعلى الأوراق (أحمر عريض)
-                            DSToolbarCancelButton(title: L10n.t("إغلاق", "Close")) { openTreeHealthFilter = nil }
-                        }
-                    }
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -883,14 +857,9 @@ struct AdminAllRequestsView: View {
         return L10n.t("مجالك: الشجرة والأعضاء", "Your scope: tree & members")
     }
 
+    /// الأرقام السريعة — العنوان والوصف في الرأس الملوّن
     private var heroSection: some View {
-        DSPageHero(
-            title: L10n.t("طلبات المراجعة", "Review Requests"),
-            subtitle: heroSubtitle,
-            icon: "tray.full.fill",
-            tint: pageTint,
-            stats: heroStats
-        )
+        DSStatsRow(heroStats, tint: pageTint)
     }
 
     /// ٣ أرقام حيّة من البيانات المحمّلة أصلاً (بلا طلبات جديدة للسيرفر): المجموع (نفس
@@ -936,35 +905,7 @@ struct AdminAllRequestsView: View {
 
     // MARK: - الفلاتر (مستويان: الأقسام ← تبويبات القسم)
 
-    /// الأقسام الظاهرة لهذا الدور — كل دور يشوف تبويبات مجاله فقط (`availableTabs` = `tabsForRole`)
-    private var visibleSections: [RequestSection] {
-        RequestSection.allCases.filter { section in availableTabs.contains { $0.section == section } }
-    }
-
-    private func countOrNil(_ n: Int) -> Int? { n > 0 ? n : nil }
-
-    /// عدّادات شرائح القسم بلون مجاله: المحتوى ذهبي، والشجرة والأعضاء أخضر
-    private func sectionTint(_ section: RequestSection) -> Color {
-        section == .content ? DS.Color.composerLibrary : DS.Color.composerProject
-    }
-
-    /// اختيار القسم — نفس سلوك الشرائح السابقة: «الكل» يرجع للكل، والقسم يفتح أول تبويب فيه
-    private var sectionSelection: Binding<RequestSection?> {
-        Binding(
-            get: { selectedTab == .all ? nil : selectedSection },
-            set: { section in
-                if let section {
-                    selectedSection = section
-                    if let firstTab = RequestTab.allCases.first(where: { $0.section == section && !Self.hiddenTabs.contains($0) }) {
-                        selectedTab = firstTab
-                    }
-                } else {
-                    selectedTab = .all
-                    selectedSection = nil
-                }
-            }
-        )
-    }
+    // (المستويان القديمان «الأقسام ← تبويبات القسم» حُذفا — لا مرجع لهما منذ صارت شبكة الأنواع)
 
     // MARK: - شبكة أنواع الطلبات (بلاطات ديناميكية)
 
@@ -979,15 +920,15 @@ struct AdminAllRequestsView: View {
         let tabs = tileTabs
         let columns = 5
         let rows = stride(from: 0, to: tabs.count, by: columns).map { Array(tabs[$0..<min($0 + columns, tabs.count)]) }
-        return VStack(spacing: 6) {
+        return VStack(spacing: DS.Spacing.xsm) {
             ForEach(rows.indices, id: \.self) { r in
-                HStack(spacing: 6) {
+                HStack(spacing: DS.Spacing.xsm) {
                     ForEach(rows[r], id: \.self) { tab in
                         typeTile(tab)
                     }
                     // أكمل الصف الأخير بفراغات حتى تبقى البلاطات بنفس العرض
                     ForEach(0..<(columns - rows[r].count), id: \.self) { _ in
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: DS.Border.width)
                     }
                 }
             }
@@ -996,12 +937,14 @@ struct AdminAllRequestsView: View {
                    value: tabs)
     }
 
-    /// بلاطة نوع: أيقونة ملوّنة كبيرة وعليها العدد، وتحتها الاسم — المختارة ممتلئة بلونها
+    /// بلاطة نوع بنفس شكل مربّعات الاختيار الموحّدة (`DSOptionTiles`: قرص `DSOptionTileIcon` + الاسم،
+    /// المختارة بلونها الخفيف وإطارها) + شارة العدد على القرص — كانت مرسومة باليد (تدرّج وظل)
     private func typeTile(_ tab: RequestTab) -> some View {
         let selected = selectedTab == tab
         let count = tab == .all ? cachedTotalCount : itemCount(for: tab)
         let tint = (tab == .all ? pageTint : tab.color).dsReadableGlyph
         let title = tab == .all ? L10n.t("الكل", "All") : chipTitle(tab)
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
         return Button {
             guard !selected else { return }
             UISelectionFeedbackGenerator().selectionChanged()
@@ -1010,146 +953,48 @@ struct AdminAllRequestsView: View {
                 selectedSection = tab.section
             }
         } label: {
-            VStack(spacing: 5) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: tab.icon)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(selected ? .white : tint)
-                        .frame(width: 38, height: 38)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(selected
-                                      ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.78)],
-                                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                                      : AnyShapeStyle(tint.opacity(0.14)))
-                        )
-                        .shadow(color: selected && !reduceMotion ? tint.opacity(0.4) : .clear, radius: 6, x: 0, y: 3)
-                    if count > 0 {
-                        Text(count > 99 ? "99+" : "\(count)")
-                            .font(DS.Font.plex(9.5, weight: .heavy))
-                            .monospacedDigit()
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .frame(minWidth: 17, minHeight: 16)
-                            .background(Capsule().fill(selected ? Color.black.opacity(0.35) : DS.Color.error))
-                            .overlay(Capsule().strokeBorder(DS.Color.surface, lineWidth: 1.5))
-                            .offset(x: 6, y: -5)
-                            .contentTransition(.numericText())
+            VStack(spacing: DS.Spacing.xsm) {
+                DSOptionTileIcon(icon: tab.icon, tint: tint, selected: selected)
+                    .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
+                    .overlay(alignment: .topTrailing) {
+                        if count > 0 {
+                            Text(count > 99 ? "99+" : "\(count)")
+                                .dsFont(.micro)
+                                .monospacedDigit()
+                                .foregroundColor(DS.Color.textOnPrimary)
+                                .padding(.horizontal, DS.Spacing.xs)
+                                .frame(minWidth: DS.Icon.avatarBadge, minHeight: DS.Icon.inline)
+                                .background(Capsule().fill(DS.Color.error))
+                                .overlay(Capsule().strokeBorder(DS.Color.surface, lineWidth: DS.Border.widthBold))
+                                .offset(x: DS.Spacing.xsm, y: -DS.Spacing.xs)
+                                .contentTransition(.numericText())
+                        }
                     }
-                }
-                .scaleEffect(selected && !reduceMotion ? 1.05 : 1)
-                .accessibilityHidden(true)
+                    .scaleEffect(selected && !reduceMotion ? 1.05 : 1)
+                    .accessibilityHidden(true)
 
                 Text(title)
-                    .font(DS.Font.plex(10, weight: .bold))
+                    .dsFont(.micro)
                     .foregroundColor(selected ? tint : DS.Color.fieldLabel)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.8)
-                    .frame(height: 25, alignment: .top)
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
-            .padding(.top, 6)
-            .padding(.bottom, 2)
+            .padding(.top, DS.Spacing.xsm)
+            .padding(.bottom, DS.Spacing.xxs)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(selected ? tint.opacity(0.10) : DS.Color.surface))
-            .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .strokeBorder(selected ? tint.opacity(0.6) : DS.Color.textTertiary.opacity(0.12),
-                              lineWidth: selected ? 1.5 : 1))
-            .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .background(shape.fill(selected ? tint.opacity(DS.Opacity.tintFillSoft) : DS.Color.surface))
+            .overlay(shape.strokeBorder(selected ? tint.opacity(DS.Opacity.selectedStroke)
+                                                 : DS.Color.textTertiary.opacity(DS.Opacity.border),
+                                        lineWidth: selected ? DS.Border.widthBold : DS.Border.width))
+            .trialCardSkin(radius: DS.Radius.md)
+            .contentShape(shape)
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(DSPressStyle())
         .transition(.scale(scale: 0.8).combined(with: .opacity))
         .accessibilityLabel(count > 0 ? "\(title)، \(count)" : title)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-    }
-
-    /// المستوى الأول: «الكل» + أقسام مجال الدور — بطاقات بأيقونات ملوّنة كبيرة وتحتها الاسم
-    /// والعدد، والمختارة مظلّلة بلونها (اختيار المالك ٢٠٢٦-٠٩-٢٧)
-    private var sectionChips: some View {
-        var cards: [(id: RequestSection?, title: String, icon: String, color: Color, count: Int)] = [
-            (nil, L10n.t("الكل", "All"), RequestTab.all.icon, pageTint, cachedTotalCount)
-        ]
-        cards += visibleSections.map { section in
-            (section, section.title, section.icon, section.color, sectionCount(section))
-        }
-        let selected = sectionSelection.wrappedValue
-        return HStack(spacing: 6) {
-            ForEach(cards, id: \.title) { card in
-                sectionCard(title: card.title, icon: card.icon, color: card.color,
-                            count: card.count, isSelected: card.id == selected) {
-                    guard card.id != selected else { return }
-                    UISelectionFeedbackGenerator().selectionChanged()
-                    withAnimation(reduceMotion ? .easeInOut(duration: 0.15)
-                                               : .spring(response: 0.4, dampingFraction: 0.82)) {
-                        sectionSelection.wrappedValue = card.id
-                    }
-                }
-            }
-        }
-    }
-
-    /// بطاقة قسم: أيقونة ملوّنة كبيرة، تحتها الاسم ثم العدد — المختارة ممتلئة الأيقونة ومظلّلة بلونها
-    private func sectionCard(title: String, icon: String, color: Color, count: Int,
-                             isSelected: Bool, action: @escaping () -> Void) -> some View {
-        let tint = color.dsReadableGlyph
-        return Button(action: action) {
-            VStack(spacing: 4) {
-                // المختارة تبقى أيقونتها الممتلئة — وغيرها رسم الاتجاه
-                TrialArt(make: { isSelected ? nil : ArtDispatch.stateIcon($0, icon: icon, tint: tint, size: 40) }) {   // TMP-ART-TRIAL
-                Image(systemName: icon)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(isSelected ? .white : tint)
-                    .frame(width: 40, height: 40)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isSelected ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.8)],
-                                                                         startPoint: .topLeading,
-                                                                         endPoint: .bottomTrailing))
-                                         : AnyShapeStyle(tint.opacity(0.14))))
-                    .shadow(color: isSelected && !reduceMotion ? tint.opacity(0.35) : .clear, radius: 5, x: 0, y: 3)
-                }
-                    .frame(width: 40, height: 40)
-                    .scaleEffect(isSelected && !reduceMotion ? 1.06 : 1)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .dsFieldFont(11.5, weight: .bold)
-                    .foregroundColor(isSelected ? tint : DS.Color.fieldLabel)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Text(count > 0 ? "\(count)" : "—")
-                    .font(DS.Font.plex(11, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundColor(count > 0 ? (isSelected ? .white : tint) : DS.Color.textTertiary)
-                    .padding(.horizontal, 7)
-                    .frame(minWidth: 22, minHeight: 17)
-                    .background(Capsule().fill(count > 0 ? (isSelected ? tint : tint.opacity(0.14)) : Color.clear))
-            }
-            .padding(.vertical, DS.Spacing.sm)
-            .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(isSelected ? tint.opacity(0.10) : DS.Color.surface))
-            .trialCardSkin(radius: 14)   // TMP-ART-TRIAL — قبل الإطار ليبقى إطار الاختيار ظاهراً
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isSelected ? tint.opacity(0.55) : DS.Color.textTertiary.opacity(0.12),
-                              lineWidth: isSelected ? 1.5 : 1))
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(count > 0 ? "\(title)، \(count)" : title)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-    }
-
-    /// المستوى الثاني: كل تبويبات القسم المختار في مجال الدور — حتى الفارغة (طلب المستخدم)
-    private func tabChips(for section: RequestSection) -> some View {
-        let tabs = availableTabs.filter { $0.section == section }
-        return DSFilterChips(
-            options: tabs.map { tab in
-                DSFilterOption(id: tab, title: chipTitle(tab), icon: tab.icon,
-                               count: countOrNil(itemCount(for: tab)))
-            },
-            selection: $selectedTab,
-            tint: section.color.dsReadableGlyph
-        )
     }
 
     /// داخل قسم «الشجرة» لا حاجة لتكرار «(شجرة)» في كل شريحة
@@ -1160,43 +1005,30 @@ struct AdminAllRequestsView: View {
             .replacingOccurrences(of: "Tree · ", with: "")
     }
 
-    /// مجموع طلبات القسم.
-    private func sectionCount(_ section: RequestSection) -> Int {
-        RequestTab.allCases
-            .filter { $0.section == section && !Self.hiddenTabs.contains($0) }
-            .reduce(0) { $0 + itemCount(for: $1) }
-    }
-
     /// شريط ملخّص التحديد — يحلّ محل الفلاتر في وضع التحديد: «إلغاء» · العدد · «تحديد الكل».
     private var selectionSummaryBar: some View {
         // تحديد الكل في التاب الحالي
         let currentIds = currentTabIds
         let allSelected = !currentIds.isEmpty && currentIds.allSatisfy { selectedIds.contains($0) }
         return HStack(spacing: DS.Spacing.xs) {
-            Button {
+            DSChipButton(L10n.t("إلغاء", "Cancel"), tint: DS.Color.error) {
                 withAnimation(DS.Anim.snappy) {
                     isSelectMode = false
                     selectedIds.removeAll()
                 }
-            } label: {
-                Text(L10n.t("إلغاء", "Cancel"))
-                    .font(DS.Font.plex(13.5, weight: .bold))
-                    .foregroundColor(DS.Color.error)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
 
             Spacer(minLength: 0)
 
-            SysStatusChip(text: L10n.t("اختيار \(selectedIds.count)", "Selected \(selectedIds.count)"),
+            DSStatusChip(text: L10n.t("اختيار \(selectedIds.count)", "Selected \(selectedIds.count)"),
                           icon: "checkmark.circle.fill",
                           tint: AppSection.admin.ink)
 
             Spacer(minLength: 0)
 
-            Button {
+            DSChipButton(allSelected
+                         ? L10n.t("إلغاء الكل", "Clear all")
+                         : L10n.t("تحديد الكل", "Select all")) {
                 withAnimation(DS.Anim.snappy) {
                     if allSelected {
                         currentIds.forEach { selectedIds.remove($0) }
@@ -1204,21 +1036,11 @@ struct AdminAllRequestsView: View {
                         currentIds.forEach { selectedIds.insert($0) }
                     }
                 }
-            } label: {
-                Text(allSelected
-                     ? L10n.t("إلغاء الكل", "Clear all")
-                     : L10n.t("تحديد الكل", "Select all"))
-                    .font(DS.Font.plex(13.5, weight: .bold))
-                    .foregroundColor(AppSection.admin.ink)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 3)
+        .padding(.horizontal, DS.Spacing.xs)
         .background(Capsule().fill(DS.Color.surface))
-        .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
+        .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.border), lineWidth: DS.Border.width))
     }
 
     /// شريط العمليات الجماعية أسفل الشاشة: العدد ← «رفض» (لمن يملكه) ← «قبول» الكحلي
@@ -1227,58 +1049,31 @@ struct AdminAllRequestsView: View {
             // عداد المحددين
             VStack(spacing: 0) {
                 Text("\(selectedIds.count)")
-                    .font(DS.Font.plex(18, weight: .bold))
+                    .dsFont(.title)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                 Text(L10n.t("محدد", "selected"))
-                    .font(DS.Font.plex(11, weight: .semibold))
+                    .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
             }
-            .frame(minWidth: 44)
+            .frame(minWidth: DS.Icon.tapTarget)
             .accessibilityElement(children: .combine)
 
             Spacer(minLength: 0)
 
             // زر الرفض — يظهر فقط لمن يملك الصلاحية
             if authVM.canRejectRequests {
-                Button {
+                DSButton(L10n.t("رفض", "Reject"), icon: "xmark.circle.fill", role: .destructive, tint: DS.Color.reject, fullWidth: false) {
                     showBulkRejectConfirm = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14, weight: .bold))
-                        Text(L10n.t("رفض", "Reject"))
-                            .font(DS.Font.plex(14, weight: .bold))
-                    }
-                    .foregroundColor(DS.Color.error)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .frame(minHeight: 44)
-                    .background(DS.Color.error.opacity(0.10), in: Capsule())
-                    .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.28), lineWidth: 1))
-                    .contentShape(Capsule())
                 }
                 .disabled(adminRequestVM.isLoading)
-                .buttonStyle(DSScaleButtonStyle())
             }
 
-            // زر القبول
-            Button {
+            // زر القبول — الزرّ الواحد بتعبئة القسم
+            DSButton(L10n.t("قبول", "Approve"), icon: "checkmark.circle.fill", fullWidth: false) {
                 showBulkApproveConfirm = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14, weight: .bold))
-                    Text(L10n.t("قبول", "Approve"))
-                        .font(DS.Font.plex(14, weight: .bold))
-                }
-                .foregroundColor(DSActionFill.label(enabled: !adminRequestVM.isLoading))
-                .padding(.horizontal, DS.Spacing.lg)
-                .frame(minHeight: 44)
-                .background(DSActionFill.style(enabled: !adminRequestVM.isLoading), in: Capsule())
-                .contentShape(Capsule())
             }
             .disabled(adminRequestVM.isLoading)
-            .buttonStyle(DSScaleButtonStyle())
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.sm)
@@ -1286,8 +1081,8 @@ struct AdminAllRequestsView: View {
             DS.Color.surface
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(DS.Color.textTertiary.opacity(0.12))
-                        .frame(height: 1)
+                        .fill(DS.Color.textTertiary.opacity(DS.Opacity.border))
+                        .frame(height: DS.Border.width)
                 }
                 .ignoresSafeArea(edges: .bottom)
         )
@@ -1337,11 +1132,8 @@ struct AdminAllRequestsView: View {
                 .reviewListRow(top: DS.Spacing.sm, bottom: DS.Spacing.sm)
 
             if isInitialLoading {
-                SysStateCard(icon: "tray.full.fill",
-                             title: L10n.t("جارٍ تحميل الطلبات…", "Loading requests…"),
-                             tint: pageTint,
-                             isLoading: true)
-                    .padding(.top, DS.Spacing.xs)
+                DSPageLoader(L10n.t("جارٍ تحميل الطلبات…", "Loading requests…"), fillsSpace: false)
+                    .padding(.top, DS.Spacing.xl)
                     .dsStaggerIn(1)
                     .reviewListRow()
             } else {
@@ -1376,7 +1168,7 @@ struct AdminAllRequestsView: View {
     private var tabRows: some View {
         // زر الموافقة على الكل — أبناء فقط
         if selectedTab == .children && adminRequestVM.childAddRequests.count > 1 {
-            SysActionButton(
+            DSActionButton(
                 title: L10n.t(
                     "الموافقة على الكل (\(adminRequestVM.childAddRequests.count))",
                     "Approve All (\(adminRequestVM.childAddRequests.count))"
@@ -1584,39 +1376,9 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Select Mode Helpers
 
-    @ViewBuilder
+    /// «تحديد الكل» انتقل إلى `selectionSummaryBar` أعلى الشاشة — بقيت الدالّة فارغة لاستدعاءاتها
     private func selectAllButton(ids: [UUID]) -> some View {
-        // "تحديد الكل" انتقل إلى selectionSummaryBar أعلى الشاشة — هذا أصبح no-op
-        // (احتفظنا بالاستدعاءات لتجنّب تعديل 12 موقعاً في tabContent)
-        if false {
-            let allSelected = ids.allSatisfy { selectedIds.contains($0) }
-            Button {
-                withAnimation(DS.Anim.snappy) {
-                    if allSelected {
-                        ids.forEach { selectedIds.remove($0) }
-                    } else {
-                        ids.forEach { selectedIds.insert($0) }
-                    }
-                }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: allSelected ? "checkmark.circle.fill" : "circle.dotted")
-                        .font(DS.Font.scaled(15, weight: .semibold))
-                    Text(allSelected
-                        ? L10n.t("إلغاء تحديد الكل", "Deselect All")
-                        : L10n.t("تحديد الكل (\(ids.count))", "Select All (\(ids.count))")
-                    )
-                    .font(DS.Font.callout)
-                }
-                .foregroundColor(AppSection.admin.ink)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.xs)
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .listRowBackground(AppSection.admin.ink.opacity(0.05))
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
-        }
+        EmptyView()
     }
 
     /// صف طلب موحّد بإطار صفوف المربّعات (`.dsRowBox()`): المحتوى (أيقونة الحقل + العنوان +
@@ -1653,7 +1415,7 @@ struct AdminAllRequestsView: View {
             HStack(alignment: .center, spacing: DS.Spacing.sm) {
                 if isSelectMode {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(DS.Font.scaled(22, weight: .regular))
+                        .dsGlyph(DS.Glyph.xxl, weight: .regular)
                         .foregroundColor(isSelected ? AppSection.admin.ink : DS.Color.textTertiary)
                         .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
                         .accessibilityHidden(true)
@@ -1662,17 +1424,18 @@ struct AdminAllRequestsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 // سهم — إشارة إن الصف يفتح التفاصيل (خارج وضع التحديد)
                 if !isSelectMode {
-                    SysChevron()
+                    DSChevron()
                 }
             }
             .dsRowBox()
             .overlay {
                 if isSelected {
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(AppSection.admin.ink.opacity(0.05))
+                        .fill(AppSection.admin.ink.opacity(DS.Opacity.tintFillSoft))
                         .overlay(
                             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .strokeBorder(AppSection.admin.ink.opacity(0.55), lineWidth: 1.5)
+                                .strokeBorder(AppSection.admin.ink.opacity(DS.Opacity.selectedStroke),
+                                              lineWidth: DS.Border.widthBold)
                         )
                         .allowsHitTesting(false)
                 }
@@ -1683,7 +1446,7 @@ struct AdminAllRequestsView: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 4, trailing: DS.Spacing.lg))
+        .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
         // الموافقة/الرفض عبر السحب — خارج وضع التحديد فقط
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !isSelectMode, canApprove(forTab ?? selectedTab), let onApprove {
@@ -1967,7 +1730,7 @@ struct AdminAllRequestsView: View {
             title: member.fullName.isEmpty ? L10n.t("بدون اسم", "(no name)") : member.displayFullName,
             subtitle: added
         ) {
-            SysStatusChip(text: issue.asTab.title, tint: color)
+            DSStatusChip(text: issue.asTab.title, tint: color)
         }
     }
 
@@ -2009,7 +1772,7 @@ struct AdminAllRequestsView: View {
     private func treeEditRow(request: AdminRequest, action: TreeEditAction, color: Color) -> some View {
         let payload = request.treeEditPayload
         let newDisplay = treeEditNewValue(payload: payload, action: action)
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: action.iconName,
                              tint: color,
                              title: L10n.t(action.arabicLabel, action.englishLabel),
@@ -2021,16 +1784,16 @@ struct AdminAllRequestsView: View {
                 rowExtras {
                     // قيمة جديدة حسب الإجراء
                     if let newDisplay {
-                        HStack(spacing: 4) {
+                        HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "arrow.forward.circle.fill")
-                                .font(.system(size: 10.5, weight: .bold))
+                                .dsGlyph(DS.Glyph.xs)
                                 .foregroundColor(DS.Color.success)
                                 .accessibilityHidden(true)
                             Text(L10n.t("القيمة الجديدة:", "New:"))
-                                .font(DS.Font.plex(11))
+                                .dsFont(.footnote)
                                 .foregroundColor(DS.Color.textTertiary)
                             Text(newDisplay)
-                                .dsFieldFont(12, weight: .bold)
+                                .dsFieldFont(.chip)
                                 .foregroundColor(DS.Color.fieldLabel)
                                 .lineLimit(1)
                         }
@@ -2435,16 +2198,14 @@ struct AdminAllRequestsView: View {
 
     /// بطاقة «لا توجد طلبات» الموحّدة — للقائمة كلها أو للتبويب المختار
     private var emptyState: some View {
-        SysStateCard(
-            icon: "checkmark.circle.fill",
-            title: L10n.t("لا توجد طلبات معلقة", "No pending requests"),
-            hint: (totalCount == 0 || selectedTab == .all)
-                ? L10n.t("كل الطلبات متابَعة — ما فيه شي ينتظر قرارك",
-                         "All caught up — nothing is awaiting your decision")
-                : L10n.t("لا شيء في «\(selectedTab.title)» الآن",
-                         "Nothing in \(selectedTab.title) right now"),
-            tint: DS.Color.success
-        )
+        DSEmptyView(L10n.t("لا توجد طلبات معلقة", "No pending requests"),
+                    message: (totalCount == 0 || selectedTab == .all)
+                        ? L10n.t("كل الطلبات متابَعة — ما فيه شي ينتظر قرارك",
+                                 "All caught up — nothing is awaiting your decision")
+                        : L10n.t("لا شيء في «\(selectedTab.title)» الآن",
+                                 "Nothing in \(selectedTab.title) right now"),
+                    tint: DS.Color.success, style: .compact)
+            .padding(.vertical, DS.Spacing.xl)
     }
 
     // MARK: - Join Request Row
@@ -2467,11 +2228,11 @@ struct AdminAllRequestsView: View {
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(alignment: .center, spacing: DS.Spacing.md) {
-                joinPersonAvatar(member, ring: hasMatches ? DS.Color.success : DS.Color.warning, size: 44)
+                joinPersonAvatar(member, ring: hasMatches ? DS.Color.success : DS.Color.warning, size: Self.joinAvatar)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(member.displayFullName)
-                        .dsFieldFont(14.5, weight: .bold)
+                        .dsFieldFont(.headlineCompact)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -2482,7 +2243,7 @@ struct AdminAllRequestsView: View {
 
                 if let age {
                     Text(age)
-                        .font(DS.Font.plex(11, weight: .semibold))
+                        .dsFont(.caption)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize()
                 }
@@ -2499,7 +2260,7 @@ struct AdminAllRequestsView: View {
                         }
                     }
                 }
-                .padding(.leading, 56)   // تحت الاسم (الصورة ٤٤ + المسافة)
+                .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
             }
 
             if hasMatches {
@@ -2508,25 +2269,28 @@ struct AdminAllRequestsView: View {
         }
     }
 
+    /// صورة المنضم في صفّه (= مساحة الضغط) وفي بطاقة تفاصيله
+    private static let joinAvatar: CGFloat = DS.Icon.tapTarget
+
     /// سطر حالة هادئ بلا شارات: «٣ مطابقات في الشجرة» أو «اسم جديد» · «من الموقع»
     private func joinStatusLine(matches: Int, fromWeb: Bool) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: DS.Spacing.xs) {
             Image(systemName: matches > 0 ? "checkmark.seal.fill" : "sparkles")
-                .font(.system(size: 10, weight: .bold))
+                .dsGlyph(DS.Glyph.xsCompact)
                 .accessibilityHidden(true)
             Text(matches > 0 ? L10n.t("\(matches) مطابقة في الشجرة", "\(matches) in the tree")
                              : L10n.t("اسم جديد", "New name"))
             if fromWeb {
                 Text("·").foregroundColor(DS.Color.textTertiary)
                 Image(systemName: "globe")
-                    .font(.system(size: 10, weight: .bold))
+                    .dsGlyph(DS.Glyph.xsCompact)
                     .foregroundColor(DS.Color.info.dsReadableGlyph)
                     .accessibilityHidden(true)
                 Text(L10n.t("من الموقع", "From website"))
                     .foregroundColor(DS.Color.info.dsReadableGlyph)
             }
         }
-        .font(DS.Font.plex(11.5, weight: .semibold))
+        .dsFont(.caption)
         .foregroundColor(matches > 0 ? DS.Color.success.dsReadableGlyph : DS.Color.textSecondary)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
@@ -2538,7 +2302,7 @@ struct AdminAllRequestsView: View {
             ?? member.fullName.trimmingCharacters(in: .whitespaces).first ?? "؟"
         let ringColor = ring.dsReadableGlyph
         return ZStack {
-            Circle().fill(AppSection.admin.ink.opacity(0.08))
+            Circle().fill(AppSection.admin.ink.opacity(DS.Opacity.tintFillSoft))
             if let raw = member.avatarUrl, !raw.isEmpty, let url = URL(string: raw) {
                 CachedAsyncImage(url: url) { img in
                     img.resizable().scaledToFill()
@@ -2553,22 +2317,19 @@ struct AdminAllRequestsView: View {
             }
         }
         .frame(width: size, height: size)
-        .overlay(Circle().strokeBorder(ringColor, lineWidth: size > 60 ? 3 : 2))
+        .overlay(Circle().strokeBorder(ringColor, lineWidth: size > Self.joinAvatar ? DS.Border.widthBold * 2 : DS.Border.widthBold))
         .accessibilityHidden(true)
     }
 
-    /// زر تواصل دائري صغير (واتساب/اتصال) بمساحة ضغط ٤٤ نقطة
+    /// زر تواصل (واتساب/اتصال): قرص الحالة المجسّم بلون المعنى، بمساحة ضغط ٤٤ نقطة
     private func roundContactButton(icon: String, tint: Color, label: String,
                                     action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(tint.dsReadableGlyph)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(tint.dsReadableGlyph.opacity(0.12)))
-                .padding(5)
+        let pad = (DS.Icon.tapTarget - DS.Icon.rowCompact) / 2
+        return Button(action: action) {
+            DSStateIcon(icon, tint: tint.dsReadableGlyph, size: DS.Icon.rowCompact, mapsChrome: false)
+                .padding(pad)
                 .contentShape(Rectangle())
-                .padding(-5)
+                .padding(-pad)
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(label)
@@ -2579,32 +2340,23 @@ struct AdminAllRequestsView: View {
     private func joinBestMatches(for member: FamilyMember, results: [JoinMatch]) -> some View {
         let isExpanded = expandedMatchMembers.contains(member.id)
         let visible = isExpanded ? results : Array(results.prefix(1))
-        VStack(spacing: 6) {
+        VStack(spacing: DS.Spacing.xsm) {
             ForEach(visible, id: \.member.id) { match in
                 joinMatchRow(match: match, pendingMember: member)
             }
             if results.count > 1 && !isExpanded {
-                Button {
+                // الشريحة الموحّدة في وسط السطر
+                DSChipButton(L10n.t("عرض كل المطابقات (\(results.count))",
+                                    "Show all matches (\(results.count))"),
+                             icon: "chevron.down", tint: AppSection.admin.ink) {
                     withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
                         _ = expandedMatchMembers.insert(member.id)
                     }
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Text(L10n.t("عرض كل المطابقات (\(results.count))",
-                                    "Show all matches (\(results.count))"))
-                            .font(DS.Font.plex(11.5, weight: .bold))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .bold))
-                            .accessibilityHidden(true)
-                    }
-                    .foregroundColor(AppSection.admin.ink)
-                    .frame(maxWidth: .infinity, minHeight: 36)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(DSScaleButtonStyle())
+                .frame(maxWidth: .infinity)
             }
         }
-        .padding(.leading, 56)   // تحت الاسم (الصورة ٤٤ + المسافة)
+        .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
     }
 
     // MARK: - تنسيق تاريخ التسجيل مع الوقت
@@ -2632,9 +2384,10 @@ struct AdminAllRequestsView: View {
 
         return HStack(spacing: DS.Spacing.sm) {
             // نسبة التطابق كحلقة صغيرة
-            SysRing(progress: Double(matchPercent) / 100, tint: AppSection.admin.ink, lineWidth: 3, size: 36) {
+            DSRing(progress: Double(matchPercent) / 100, tint: AppSection.admin.ink,
+                   lineWidth: DS.Border.widthBold * 2, size: DS.Icon.rowLarge) {
                 Text(L10n.t("\(matchPercent)٪", "\(matchPercent)%"))
-                    .font(DS.Font.plex(10, weight: .bold))
+                    .dsFont(.micro)
                     .foregroundColor(AppSection.admin.ink)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -2642,9 +2395,9 @@ struct AdminAllRequestsView: View {
             }
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(match.member.displayFullName)
-                    .dsFieldFont(13, weight: .bold)
+                    .dsFieldFont(.rowTitleCompact)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
 
@@ -2653,13 +2406,13 @@ struct AdminAllRequestsView: View {
                         "\(match.matchCount) من \(totalParts) أسماء متطابقة",
                         "\(match.matchCount) of \(totalParts) names match"
                     ))
-                    .dsFieldFont(11)
+                    .dsFieldFont(.footnote)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
 
                     if match.isRegistrationMatch {
-                        SysStatusChip(text: L10n.t("تسجيل", "Reg"), tint: AppSection.admin.ink)
+                        DSStatusChip(text: L10n.t("تسجيل", "Reg"), tint: AppSection.admin.ink)
                     }
                 }
 
@@ -2672,30 +2425,16 @@ struct AdminAllRequestsView: View {
 
             Spacer(minLength: 0)
 
-            Button {
+            // «ربط» — الشريحة الموحّدة ممتلئة بتعبئة القسم
+            DSChipButton(L10n.t("ربط", "Link"), isSelected: true) {
                 mergeTarget = (pendingMember: pendingMember, treeMember: match.member)
                 showMergeConfirm = true
-            } label: {
-                Text(L10n.t("ربط", "Link"))
-                    .font(DS.Font.plex(12.5, weight: .bold))
-                    .foregroundColor(DSActionFill.label())
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(height: 32)
-                    .background(DSActionFill.style(), in: Capsule())
-                    // مساحة ضغط ٤٤ نقطة والشكل كما هو
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                    .padding(.vertical, -6)
             }
-            .buttonStyle(DSScaleButtonStyle())
             .accessibilityLabel(L10n.t("ربط بـ \(match.member.displayFullName)",
                                        "Link to \(match.member.displayFullName)"))
         }
-        .padding(DS.Spacing.sm)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
+        // البطاقة الواحدة
+        .dsCard(padding: DS.Spacing.sm)
     }
 
     // MARK: - Registration Matches
@@ -2929,7 +2668,7 @@ struct AdminAllRequestsView: View {
 
     private func newsRow(for post: NewsPost) -> some View {
         let tint = newsTypeColor(post.type)
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "newspaper.fill",
                              tint: tint,
                              title: L10n.t("خبر", "News"),
@@ -2941,7 +2680,7 @@ struct AdminAllRequestsView: View {
                 previewText(post.content)
                 // النوع + التاريخ + إشارة صور إن وُجدت
                 HStack(spacing: DS.Spacing.sm) {
-                    SysStatusChip(text: post.type, tint: tint)
+                    DSStatusChip(text: post.type, tint: tint)
                     metaItem("clock", formatRegistrationDate(String(post.created_at)))
                     if !post.mediaURLs.isEmpty {
                         metaItem("photo.fill", "\(post.mediaURLs.count)")
@@ -2954,7 +2693,7 @@ struct AdminAllRequestsView: View {
     // MARK: - Report Row
 
     private func reportRow(for request: AdminRequest) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "exclamationmark.triangle.fill",
                              tint: DS.Color.error,
                              title: L10n.t("بلاغ", "Report"),
@@ -2977,7 +2716,7 @@ struct AdminAllRequestsView: View {
         let newPhone = KuwaitPhone.display(request.newValue)
         let memberName = request.member?.fullName ?? "Member"
 
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "phone.arrow.right",
                              tint: AppSection.admin.ink,
                              title: L10n.t("طلب تغيير رقم", "Phone Change"),
@@ -3001,7 +2740,7 @@ struct AdminAllRequestsView: View {
     private func diwaniyaRow(for diwaniya: Diwaniya) -> some View {
         let schedule = diwaniya.scheduleText ?? ""
         let address = diwaniya.address ?? ""
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "tent.fill",
                              tint: DS.Color.gridDiwaniya,
                              title: L10n.t("طلب ديوانية", "Diwaniya Request"),
@@ -3025,7 +2764,7 @@ struct AdminAllRequestsView: View {
     // MARK: - Archive Row
 
     private func archiveRow(for item: ArchiveItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: item.categoryIcon,
                              tint: DS.Color.warning,
                              title: L10n.t("عنصر أرشيف", "Archive Item"),
@@ -3046,7 +2785,7 @@ struct AdminAllRequestsView: View {
 
     private func deceasedRow(for request: AdminRequest) -> some View {
         let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "bolt.heart.fill",
                              tint: DS.Color.error,
                              title: L10n.t("تسجيل وفاة", "Deceased"),
@@ -3056,7 +2795,8 @@ struct AdminAllRequestsView: View {
             }
 
             rowExtras {
-                if let requester {
+                // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
+                if let requester, requester.id != request.memberId {
                     requesterLine(requester)
                 }
                 if let details = request.details, !details.isEmpty {
@@ -3074,7 +2814,7 @@ struct AdminAllRequestsView: View {
 
     private func childRow(for request: AdminRequest) -> some View {
         let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "person.badge.plus",
                              tint: DS.Color.info,
                              title: L10n.t("إضافة ابن", "Child Add"),
@@ -3084,7 +2824,8 @@ struct AdminAllRequestsView: View {
             }
 
             rowExtras {
-                if let requester {
+                // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
+                if let requester, requester.id != request.memberId {
                     requesterLine(requester)
                 }
                 if let details = request.details, !details.isEmpty {
@@ -3102,7 +2843,7 @@ struct AdminAllRequestsView: View {
 
     private func photoRow(for request: AdminRequest) -> some View {
         let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "camera.badge.ellipsis",
                              tint: DS.Color.neonBlue,
                              title: L10n.t("اقتراح صورة", "Photo Suggestion"),
@@ -3112,7 +2853,8 @@ struct AdminAllRequestsView: View {
             }
 
             rowExtras {
-                if let requester {
+                // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
+                if let requester, requester.id != request.memberId {
                     requesterLine(requester)
                 }
                 if let details = request.details, !details.isEmpty {
@@ -3123,14 +2865,13 @@ struct AdminAllRequestsView: View {
                         CachedAsyncImage(url: url) { img in
                             img.resizable()
                                 .scaledToFill()
-                                .frame(width: 44, height: 44)
+                                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                                 .clipped()
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
                         } placeholder: {
                             RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                                 .fill(DS.Color.surface)
-                                .frame(width: 44, height: 44)
-                                .overlay(ProgressView().tint(AppSection.admin.ink))
+                                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                         }
                         .accessibilityHidden(true)
                     }
@@ -3161,7 +2902,7 @@ struct AdminAllRequestsView: View {
             : (request.newValue ?? "—")
         let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
 
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             // الصف الأول: الأيقونة + نوع الطلب + الاسم الحالي + عمر الطلب
             requestRowHeader(icon: "rectangle.and.pencil.and.ellipsis",
                              tint: DS.Color.neonPurple,
@@ -3171,7 +2912,8 @@ struct AdminAllRequestsView: View {
             }
 
             rowExtras {
-                if let requester {
+                // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
+                if let requester, requester.id != request.memberId {
                     requesterLine(requester)
                 }
                 // الاسم: الحالي ← الجديد (سطر مدمج)
@@ -3241,12 +2983,12 @@ struct AdminAllRequestsView: View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: icon, tint: tint)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .font(DS.Font.plex(14.5))
+                    .dsFieldFont(.body)
                     .foregroundColor(valueColor)
                     .lineLimit(2)
             }
@@ -3318,7 +3060,7 @@ struct AdminAllRequestsView: View {
     // MARK: - Project Row
 
     private func projectRow(for project: Project) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             HStack(alignment: .center, spacing: DS.Spacing.sm) {
                 projectLogo(project)
                 rowTitles(title: L10n.t("طلب مشروع", "Project Request"), subtitle: project.title)
@@ -3349,8 +3091,8 @@ struct AdminAllRequestsView: View {
             } placeholder: {
                 DSFieldIcon(name: "briefcase.fill", tint: DS.Color.neonPurple)
             }
-            .frame(width: 32, height: 32)
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .frame(width: DS.Icon.row, height: DS.Icon.row)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous))
             .accessibilityHidden(true)
         } else {
             DSFieldIcon(name: "briefcase.fill", tint: DS.Color.neonPurple)
@@ -3360,45 +3102,16 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Shared Components
 
-    private func accentBar(color: Color) -> some View {
-        LinearGradient(
-            colors: [color, color.opacity(0.7)],
-            startPoint: .leading, endPoint: .trailing
-        )
-        .frame(height: 4)
-        .cornerRadius(DS.Radius.full)
-    }
-
-    private func iconCircle(icon: String, color: Color, size: CGFloat = 44) -> some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [color.opacity(0.2), color.opacity(0.08)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size, height: size)
-            Image(systemName: icon)
-                .foregroundColor(color)
-                .font(DS.Font.scaled(size * 0.4, weight: .semibold))
-        }
-    }
-
-    private func memberAvatar(urlStr: String?, name: String) -> some View {
-        DSMemberAvatar(name: name, avatarUrl: urlStr, size: 40, roleColor: DS.Color.primary)
-    }
-
     /// سطر معلومة بأيقونة صغيرة (الموعد، العنوان، القسم…) — Plex 12 بلون القيم
     private func detailRow(icon: String, text: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 10.5, weight: .semibold))
+        HStack(spacing: DS.Spacing.xsm) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.xs, weight: .semibold)
                 .foregroundColor(DS.Color.textTertiary)
-                .frame(width: 14)
+                .frame(width: DS.Glyph.md)
                 .accessibilityHidden(true)
             Text(text)
-                .dsFieldFont(12)
+                .dsFieldFont(.subtitle)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(2)
         }
@@ -3406,26 +3119,24 @@ struct AdminAllRequestsView: View {
 
     /// بلوك التفاصيل داخل الصف — عنوان صغير + النص (٣ أسطر) على بطاقة خفيفة
     private func contentBlock(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(L10n.t("التفاصيل", "Details"))
-                .font(DS.Font.plex(10.5, weight: .bold))
+                .dsFont(.badgeCompact)
                 .foregroundColor(DS.Color.textTertiary)
             Text(text)
-                .dsFieldFont(12.5)
+                .dsFieldFont(.calloutCompact)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-            .fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1))
+        .padding(.vertical, DS.Spacing.xsm)
+        // البطاقة الواحدة (زواياها الصغيرة داخل الصف)
+        .dsCard(padding: nil, radius: DS.Radius.sm)
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: - قطع صف الطلب الموحّد (نفس `SysRow` في صفحات الإدارة)
+    // MARK: - قطع صف الطلب الموحّد (نفس `DSRow` في صفحات الإدارة)
 
     /// رأس الصف: أيقونة الحقل بلون النوع + العنوان (Plex 13.5 عريض) + الوصف (Plex 12) + طرف
     /// (شارة الحالة عادةً).
@@ -3448,37 +3159,37 @@ struct AdminAllRequestsView: View {
     }
 
     private func rowTitles(title: String, subtitle: String?) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(title)
-                .dsFieldFont(13.5, weight: .bold)
+                .dsFieldFont(.rowTitle)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .dsFieldFont(12)
+                    .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
             }
         }
     }
 
-    /// أسطر إضافية تحت الرأس — تبدأ تحت العنوان (بعد عمود الأيقونة ٣٢ + ٨)
+    /// أسطر إضافية تحت الرأس — تبدأ تحت العنوان (بعد عمود الأيقونة + المسافة)
     private func rowExtras<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             content()
         }
-        .padding(.leading, 40)
+        .padding(.leading, DS.Icon.row + DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// معلومة صغيرة: أيقونة + نص (Plex 11) — التاريخ، الهاتف، مقدّم الطلب…
     private func metaItem(_ icon: String, _ text: String, color: Color = DS.Color.textTertiary) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon)
-                .font(.system(size: 9.5, weight: .semibold))
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.micro, weight: .semibold)
                 .accessibilityHidden(true)
             Text(text)
-                .font(DS.Font.plex(11))
+                .dsFont(.footnote)
                 .monospacedDigit()
                 .lineLimit(1)
         }
@@ -3496,7 +3207,7 @@ struct AdminAllRequestsView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
             Text(trimmed)
-                .dsFieldFont(12)
+                .dsFieldFont(.subtitle)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -3508,52 +3219,28 @@ struct AdminAllRequestsView: View {
         HStack(spacing: DS.Spacing.xs) {
             if let old {
                 Text(old)
-                    .dsFieldFont(12)
+                    .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
-                    .strikethrough(true, color: DS.Color.error.opacity(0.5))
+                    .strikethrough(true, color: DS.Color.error.opacity(DS.Opacity.disabled))
                     .monospacedDigit()
                     .lineLimit(1)
             }
             Image(systemName: "arrow.forward")
-                .font(.system(size: 10.5, weight: .semibold))
+                .dsGlyph(DS.Glyph.xs, weight: .semibold)
                 .foregroundColor(DS.Color.textTertiary)
                 .accessibilityHidden(true)
             Text(new)
-                .font(DS.Font.plex(12.5, weight: .bold))
+                .dsFont(.sectionTitle)
                 .foregroundColor(AppSection.admin.ink)
                 .monospacedDigit()
                 .lineLimit(1)
         }
     }
 
-    /// زر واتساب صغير داخل الصف — كبسولة خضراء خفيفة ومساحة ضغط ٤٤ نقطة
-    private func whatsAppButton(_ url: URL) -> some View {
-        Button {
-            UIApplication.shared.open(url)
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "message.fill")
-                    .font(.system(size: 10.5, weight: .bold))
-                Text(L10n.t("واتساب", "WhatsApp"))
-                    .font(DS.Font.plex(11.5, weight: .bold))
-            }
-            .foregroundColor(DS.Color.success)
-            .padding(.horizontal, DS.Spacing.sm + 2)
-            .frame(height: 28)
-            .background(DS.Color.success.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(DS.Color.success.opacity(0.25), lineWidth: 1))
-            // مساحة ضغط ٤٤ نقطة والشكل كما هو
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            .padding(.vertical, -8)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
     /// شارة «بانتظار» — بعمر الطلب إن عُرف تاريخه (اليوم، أمس، ٣ أيام…)
     private func pendingChip(_ date: Date?) -> some View {
         let text = date.map { ageText(days: daysWaiting(since: $0)) } ?? L10n.t("بانتظار", "Pending")
-        return SysStatusChip(text: text, icon: "clock", tint: DS.Color.warning)
+        return DSStatusChip(text: text, icon: "clock", tint: DS.Color.warning)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(date == nil ? text : L10n.t("بانتظار: \(text)", "Pending: \(text)"))
     }
@@ -3597,10 +3284,23 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Request Detail Box
 
+    /// أسباب «طلب آخر» الداخلية التي يرسلها تعديل الملف الشخصي (EditProfileView) ← عنوان عربي مفهوم.
+    /// كانت تظهر للإدارة كما هي («profile_marital») تحت «السبب» وبعنوان «طلب آخر».
+    static func profileReasonTitle(_ reason: String?) -> String? {
+        guard let reason, reason.hasPrefix("profile_") else { return nil }
+        switch reason {
+        case "profile_marital": return L10n.t("تغيير الحالة الاجتماعية", "Marital Status Change")
+        case "profile_bio": return L10n.t("تعديل السيرة الذاتية", "Bio Update")
+        case "profile_phone_hidden": return L10n.t("إظهار أو إخفاء الرقم", "Phone Visibility")
+        default: return L10n.t("تعديل الملف الشخصي", "Profile Update")
+        }
+    }
+
     /// مربّع تفاصيل الطلب بمنتصف الشاشة — نفس تصميم المربّعات الموحّد (طلب المالك):
     /// رأس كحلي بأيقونة نوع الطلب ووقته، الصورة (إن وُجدت)، قسم «بيانات الطلب» بصفوف،
-    /// ثم قسم «الإجراءات» (تعديل الرقم، رفض، حذف نهائي). الشريط السفلي: الموافقة كحلي
-    /// يمين و«إغلاق» يسار — عناصر صحة الشجرة للعرض فقط («إغلاق» وحده).
+    /// ثم شريط أزرار المربّع نفسه (طلب المالك ٢٠٢٦-١٠-٠٧ «أدمج أزرار الإجراءات مع بوكس العمل»):
+    /// صفّ «تعديل الرقم / رفض / حذف نهائي» فوق صفّ «الموافقة / إغلاق» — بنفس الصلاحيات.
+    /// عناصر صحة الشجرة للعرض فقط («إغلاق» وحده).
     private func requestDetailSheet(_ detail: RequestDetail) -> some View {
         let meta = detailMeta(for: detail)
         return DSComposer(
@@ -3613,6 +3313,7 @@ struct AdminAllRequestsView: View {
             showsAction: detailHasDecision(detail),
             cancelTitle: L10n.t("إغلاق", "Close"),
             canSubmit: !adminRequestVM.isLoading,
+            extraActions: detailExtraActions(for: detail),
             onSubmit: { approveDetail(detail) },
             onCancel: { selectedDetail = nil }
         ) {
@@ -3651,12 +3352,11 @@ struct AdminAllRequestsView: View {
         return true
     }
 
-    /// محتوى المربّع: الصورة (إن وُجدت) ← «بيانات الطلب» ← «الإجراءات»
+    /// محتوى المربّع: الصورة (إن وُجدت) ← «بيانات الطلب» (الإجراءات في شريط أزرار المربّع)
     @ViewBuilder
     private func detailBoxContent(_ detail: RequestDetail, meta: DetailMeta) -> some View {
         if case .join(let member) = detail {
             joinDetailContent(member)
-            detailActionsSection(for: detail)
         } else {
             genericDetailBoxContent(detail, meta: meta)
         }
@@ -3674,24 +3374,24 @@ struct AdminAllRequestsView: View {
         let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         // ١) بطاقة الشخص
-        VStack(spacing: 6) {
-            joinPersonAvatar(member, ring: results.isEmpty ? DS.Color.warning : DS.Color.success, size: 74)
-                .padding(.bottom, 2)
+        VStack(spacing: DS.Spacing.xsm) {
+            joinPersonAvatar(member, ring: results.isEmpty ? DS.Color.warning : DS.Color.success, size: DS.Icon.avatarLarge)
+                .padding(.bottom, DS.Spacing.xxs)
             Text(member.fullName)
-                .font(DS.Font.plex(17, weight: .bold))
+                .dsFont(.title)
                 .foregroundColor(DS.Color.fieldLabel)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 5) {
+            HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: fromWeb ? "globe" : "iphone")
-                    .font(.system(size: 11, weight: .bold))
+                    .dsGlyph(DS.Glyph.smCompact)
                     .accessibilityHidden(true)
                 Text(fromWeb
                      ? (uname.isEmpty ? L10n.t("سجّل من الموقع", "Signed up on the website")
                                       : L10n.t("سجّل من الموقع · \u{2066}@\(uname)\u{2069}", "Website · @\(uname)"))
                      : L10n.t("سجّل من التطبيق برقم الجوال", "Signed up in the app by phone"))
             }
-            .dsFieldFont(12, weight: .semibold)
+            .dsFieldFont(.chip)
             .foregroundColor(fromWeb ? DS.Color.info.dsReadableGlyph : DS.Color.fieldValue)
         }
         .frame(maxWidth: .infinity)
@@ -3708,7 +3408,7 @@ struct AdminAllRequestsView: View {
                             label: L10n.t("الهاتف", "Phone"),
                             value: phone.isEmpty ? L10n.t("غير مسجّل", "Not set") : KuwaitPhone.display(phone)) {
                     if !phone.isEmpty {
-                        HStack(spacing: 6) {
+                        HStack(spacing: DS.Spacing.xsm) {
                             if let wa = KuwaitPhone.whatsappURL(phone) {
                                 roundContactButton(icon: "message.fill", tint: DS.Color.success,
                                                    label: L10n.t("واتساب", "WhatsApp")) {
@@ -3724,14 +3424,14 @@ struct AdminAllRequestsView: View {
                         }
                     }
                 }
-                Divider().padding(.leading, 44)
+                Divider().padding(.leading, DS.Icon.row + DS.Spacing.sm + DS.Spacing.xs)
                 joinFactRow(icon: "calendar", tint: DS.Color.neonPurple,
                             label: L10n.t("تاريخ الميلاد", "Birth date"),
                             value: birth.isEmpty ? L10n.t("غير مذكور", "Not given") : birth) { EmptyView() }
             }
-            .padding(.horizontal, DS.Spacing.sm + 2)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.background))
+            .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
+            // البطاقة الواحدة (صندوق فوق بطاقة القسم)
+            .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
         }
 
         // ٣) في الشجرة — المطابقات بزر «ربط»، أو اسم جديد
@@ -3741,18 +3441,12 @@ struct AdminAllRequestsView: View {
                           trailing: results.isEmpty ? nil : "\(results.count)",
                           index: 2) {
             if results.isEmpty {
-                HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                    DSFieldIcon(name: "person.badge.plus", tint: DS.Color.warning)
-                    Text(L10n.t("لا يوجد اسم مطابق في الشجرة — عند «ربط بالشجرة» يُضاف عضواً جديداً.",
-                                "No matching name in the tree — linking adds them as a new member."))
-                        .dsFieldFont(12.5, weight: .medium)
-                        .foregroundColor(DS.Color.fieldValue)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-                .dsRowBox()
+                // الملاحظة الموحّدة
+                DSNoteCard(L10n.t("لا يوجد اسم مطابق في الشجرة — عند «ربط بالشجرة» يُضاف عضواً جديداً.",
+                                  "No matching name in the tree — linking adds them as a new member."),
+                           icon: "person.badge.plus", tint: DS.Color.warning)
             } else {
-                VStack(spacing: 6) {
+                VStack(spacing: DS.Spacing.xsm) {
                     ForEach(results, id: \.member.id) { match in
                         joinMatchRow(match: match, pendingMember: member)
                     }
@@ -3767,12 +3461,12 @@ struct AdminAllRequestsView: View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: icon, tint: tint)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
-                    .font(DS.Font.plex(11, weight: .semibold))
+                    .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
                 Text(value)
-                    .dsFieldFont(14.5, weight: .bold)
+                    .dsFieldFont(.headlineCompact)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -3782,7 +3476,7 @@ struct AdminAllRequestsView: View {
             Spacer(minLength: DS.Spacing.xs)
             trailing()
         }
-        .frame(minHeight: 54)
+        .frame(minHeight: DS.Icon.tapTarget + DS.Spacing.sm)
     }
 
     @ViewBuilder
@@ -3798,8 +3492,6 @@ struct AdminAllRequestsView: View {
                           index: 1) {
             detailContent(for: detail)
         }
-
-        detailActionsSection(for: detail)
     }
 
     private func detailInfoTitle(_ detail: RequestDetail) -> String {
@@ -3817,103 +3509,54 @@ struct AdminAllRequestsView: View {
         CachedAsyncImage(url: url) { img in
             img.resizable().scaledToFill()
         } placeholder: {
-            Circle().fill(color.opacity(0.12))
-                .overlay(ProgressView().tint(color))
+            Circle().fill(color.opacity(DS.Opacity.tintFill))
         }
-        .frame(width: 88, height: 88)
+        .frame(width: DS.Icon.photoPickerCompact, height: DS.Icon.photoPickerCompact)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(color.opacity(0.25), lineWidth: 1.5))
-        .shadow(color: color.opacity(0.22), radius: 10, x: 0, y: 5)
+        .overlay(Circle().strokeBorder(color.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.widthBold))
+        .dsSubtleShadow()
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xs)
         .accessibilityHidden(true)   // صورة زخرفية فوق البيانات — الصورة المقترحة لها صفّها
     }
 
-    /// قسم «الإجراءات» — كل ما عدا الموافقة (التي في الشريط السفلي)، بنفس الصلاحيات السابقة:
-    /// تعديل/إضافة رقم فعلي (طلب انضمام + canModerate)، رفض (canRejectRequests)،
-    /// حذف نهائي (canDeleteMembers). عناصر صحة الشجرة بلا إجراءات.
-    @ViewBuilder
-    private func detailActionsSection(for detail: RequestDetail) -> some View {
-        let phoneMember = detailPhoneEditMember(detail)
+    /// أزرار المربّع الأخرى (في شريطه السفلي فوق «الموافقة / إغلاق») — بنفس الصلاحيات السابقة:
+    /// تعديل/إضافة رقم فعلي (طلب انضمام + canModerate)، رفض (canRejectRequests)، حذف نهائي
+    /// (canDeleteMembers، معطّل أثناء العمل). عناصر صحة الشجرة بلا إجراءات.
+    private func detailExtraActions(for detail: RequestDetail) -> [DSComposerAction] {
         let decision = detailHasDecision(detail)
-        let showReject = decision && authVM.canRejectRequests
-        let showDelete = decision && authVM.canDeleteMembers
-        if phoneMember != nil || showReject || showDelete {
-            DSComposerSection(title: L10n.t("الإجراءات", "Actions"),
-                              icon: "hand.tap.fill",
-                              tint: AppSection.admin.ink,
-                              index: 2) {
-                // تعديل / إضافة رقم فعلي قبل الربط
-                if let member = phoneMember {
-                    detailActionButton(
-                        title: L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"),
-                        icon: "phone.badge.plus",
-                        color: AppSection.admin.ink
-                    ) {
-                        phoneEditPendingMember = member
-                    }
-                }
-
-                if showReject || showDelete {
-                    HStack(spacing: DS.Spacing.sm) {
-                        if showReject {
-                            detailActionButton(
-                                title: L10n.t("رفض", "Reject"),
-                                icon: "xmark",
-                                color: DS.Color.warning
-                            ) {
-                                rejectReasonText = ""
-                                rejectReasonDetail = detail
-                                showRejectReason = true
-                            }
-                        }
-                        // حذف نهائي — يمسح الطلب كلياً (للمالك/المدير فقط)
-                        if showDelete {
-                            detailActionButton(
-                                title: L10n.t("حذف نهائي", "Delete Permanently"),
-                                icon: "trash",
-                                color: DS.Color.error
-                            ) {
-                                deleteConfirmDetail = detail
-                            }
-                            .disabled(adminRequestVM.isLoading)
-                        }
-                    }
-                }
-            }
+        var items: [DSComposerAction] = []
+        // تعديل / إضافة رقم فعلي قبل الربط
+        if let member = detailPhoneEditMember(detail) {
+            items.append(DSComposerAction(id: "phone", title: L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"),
+                                          icon: "phone.badge.plus", role: .cancel) {
+                phoneEditPendingMember = member
+            })
         }
+        if decision && authVM.canRejectRequests {
+            // الرفض برتقالي والحذف النهائي أحمر — لونان مختلفان (طلب المالك)
+            items.append(DSComposerAction(id: "reject", title: L10n.t("رفض", "Reject"),
+                                          icon: "xmark", role: .destructive, tint: DS.Color.reject) {
+                rejectReasonText = ""
+                rejectReasonDetail = detail
+                showRejectReason = true
+            })
+        }
+        // حذف نهائي — يمسح الطلب كلياً (للمالك/المدير فقط)
+        if decision && authVM.canDeleteMembers {
+            items.append(DSComposerAction(id: "delete", title: L10n.t("حذف نهائي", "Delete Permanently"),
+                                          icon: "trash", role: .destructive,
+                                          isEnabled: !adminRequestVM.isLoading) {
+                deleteConfirmDetail = detail
+            })
+        }
+        return items
     }
 
     /// العضو المعلّق الذي يُعدَّل رقمه — لطلبات الانضمام فقط ولمن يملك canModerate
     private func detailPhoneEditMember(_ detail: RequestDetail) -> FamilyMember? {
         guard authVM.canModerate, case .join(let member) = detail else { return nil }
         return member
-    }
-
-    /// زر إجراء واضح داخل قسم «الإجراءات» — نص وأيقونة بلون الإجراء على خلفية خفيفة منه
-    private func detailActionButton(title: String, icon: String, color: Color,
-                                    action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xs + 2) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .bold))
-                Text(title)
-                    .font(DS.Font.plex(14, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundColor(color)
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(color.opacity(0.12)))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(color.opacity(0.25), lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        }
-        .buttonStyle(DSScaleButtonStyle())
     }
 
     /// metadata موحَّدة لكل نوع طلب — يُستخدم في hero + actions.
@@ -3979,7 +3622,9 @@ struct AdminAllRequestsView: View {
                          imageUrl: a.thumbnailUrl)
         case .treeEdit(let request, let action):
             return .init(icon: action.iconName, color: treeEditColor(action),
-                         title: L10n.t(action.arabicLabel, action.englishLabel),
+                         // «طلب آخر» من تعديل الملف الشخصي يحمل عنوانه الحقيقي (تغيير الحالة الاجتماعية…)
+                         title: Self.profileReasonTitle(request.treeEditPayload?.reason)
+                             ?? L10n.t(action.arabicLabel, action.englishLabel),
                          timestamp: request.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: request.member?.avatarUrl)
         case .healthMember(let member, let issue):
@@ -4179,6 +3824,12 @@ struct AdminAllRequestsView: View {
             let memberName = payload?.targetMemberName
                 ?? request.member?.fullName
                 ?? L10n.t("عضو", "Member")
+            // مقدّم الطلب هو العضو نفسه (مقارنة كمعرّفات — الآيفون يرسل حروفاً كبيرة) → يظهر مرة
+            // واحدة بعنوان «صاحب الطلب» بدل «العضو» + «مقدّم التعديل» (طلب المالك ٢٠٢٦-١٠-٠٧)
+            let targetId = payload?.targetMemberId.flatMap { UUID(uuidString: $0) } ?? request.memberId
+            let selfRequest = targetId == request.requesterId
+            let memberLabel = selfRequest ? L10n.t("صاحب الطلب", "Requester") : L10n.t("العضو", "Member")
+            let showsMemberRow = action != .editName && action != .add
             switch action {
             case .editName:
                 comparisonCard(
@@ -4189,7 +3840,7 @@ struct AdminAllRequestsView: View {
                     icon: "person.fill"
                 )
             case .editPhone:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: AppSection.admin.ink)
                 comparisonCard(
                     oldLabel: L10n.t("الرقم الحالي", "Current"),
@@ -4199,21 +3850,21 @@ struct AdminAllRequestsView: View {
                     icon: "phone.fill"
                 )
             case .deceased:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: AppSection.admin.ink)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Death Date"),
                              value: death, color: DS.Color.error)
                 }
             case .addDeathDate:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: AppSection.admin.ink)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Death Date"),
                              value: death, color: DS.Color.error)
                 }
             case .addPhoto:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: AppSection.admin.ink)
                 if let photoStr = payload?.newPhotoUrl, let url = URL(string: photoStr) {
                     photoCard(url: url)
@@ -4226,25 +3877,27 @@ struct AdminAllRequestsView: View {
                              value: parent, color: AppSection.admin.ink)
                 }
             case .delete:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: DS.Color.error)
             case .editBirth:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: AppSection.admin.ink)
                 if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
                     infoCard(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New Birth Date"),
                              value: newDate, color: DS.Color.warning)
                 }
             case .other:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: DS.Color.accent)
             }
-            if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
+            if !(selfRequest && showsMemberRow),
+               let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                 infoCard(icon: "person.crop.circle.badge.checkmark",
-                         label: L10n.t("مقدّم التعديل", "Requested by"),
+                         label: selfRequest ? L10n.t("صاحب الطلب", "Requester") : L10n.t("مقدّم التعديل", "Requested by"),
                          value: requester.fullName, color: DS.Color.info)
             }
-            if let reason = payload?.reason, !reason.isEmpty {
+            // سبب داخلي من تعديل الملف الشخصي (profile_marital…) لا يُعرض كما هو — عنوانه في رأس المربّع
+            if let reason = payload?.reason, !reason.isEmpty, Self.profileReasonTitle(reason) == nil {
                 longTextCard(icon: "text.bubble.fill",
                              label: L10n.t("السبب", "Reason"), text: reason)
             }
@@ -4289,12 +3942,12 @@ struct AdminAllRequestsView: View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: icon, tint: color)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .dsFieldFont(14.5)
+                    .dsFieldFont(.body)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
             }
@@ -4313,19 +3966,19 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: icon, tint: color)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(label)
-                        .dsFieldFont(12, weight: .heavy)
+                        .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(value)
-                        .dsFieldFont(14.5)
+                        .dsFieldFont(.body)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.up.forward")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(color.opacity(0.7))
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(color.dsReadableGlyph)
                     .accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity)
@@ -4351,12 +4004,12 @@ struct AdminAllRequestsView: View {
                 DSFieldIcon(name: icon, tint: AppSection.admin.ink)
                     .accessibilityHidden(true)
                 Text(label)
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Spacer(minLength: 0)
             }
             Text(text)
-                .font(DS.Font.plex(14.5))
+                .dsFieldFont(.body)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -4373,14 +4026,14 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: icon, tint: DS.Color.error)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(oldLabel)
-                        .dsFieldFont(12, weight: .heavy)
+                        .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(oldValue)
-                        .dsFieldFont(14.5)
+                        .dsFieldFont(.body)
                         .foregroundColor(DS.Color.fieldValue)
-                        .strikethrough(true, color: DS.Color.error.opacity(0.5))
+                        .strikethrough(true, color: DS.Color.error.opacity(DS.Opacity.disabled))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -4388,20 +4041,20 @@ struct AdminAllRequestsView: View {
 
             // سهم تحت عمود الأيقونات: من القديم إلى الجديد
             Image(systemName: "arrow.down")
-                .font(.system(size: 11, weight: .bold))
+                .dsGlyph(DS.Glyph.smCompact)
                 .foregroundColor(DS.Color.textTertiary)
-                .frame(width: 32)
+                .frame(width: DS.Icon.row)
                 .accessibilityHidden(true)
 
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: icon, tint: DS.Color.success)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(newLabel)
-                        .font(DS.Font.plex(12, weight: .heavy))
+                        .dsFieldFont(.label)
                         .foregroundColor(DS.Color.success)
                     Text(newValue)
-                        .font(DS.Font.plex(14.5, weight: .bold))
+                        .dsFieldFont(.headline)
                         .foregroundColor(DS.Color.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -4413,20 +4066,24 @@ struct AdminAllRequestsView: View {
         .accessibilityElement(children: .combine)   // «الحالي… الجديد…» عنصراً واحداً
     }
 
+    /// ارتفاع مكان الصورة المقترحة قبل تحميلها، وارتفاع صورة الخبر في شبكة الصور
+    private static let photoCardPlaceholder: CGFloat = 200
+    private static let newsMediaTileHeight: CGFloat = 90
+
     /// صورة كبيرة (للصور المقترحة) بنفس إطار صفوف المربّعات.
     private func photoCard(url: URL) -> some View {
         CachedAsyncImage(url: url) { img in
             img.resizable().scaledToFit()
         } placeholder: {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background)
-                .frame(height: 200)
-                .overlay(ProgressView().tint(AppSection.admin.ink))
+                .frame(height: Self.photoCardPlaceholder)
+                .overlay(DSPageLoader(size: DS.Icon.rowLarge, fillsSpace: false))
         }
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
+                .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width)
         )
         // صورة محتوى (المقترحة/الجديدة) — اسم واضح بدل «صورة» بلا وصف
         .accessibilityElement(children: .ignore)
@@ -4575,174 +4232,7 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    // legacy helpers — لم تعد ضرورية لكن نتركها للتوافق مع أي استدعاءات أخرى
-    private func detailHeader(icon: String, color: Color, title: String, iconSize: CGFloat = 40) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            iconCircle(icon: icon, color: color, size: iconSize)
-            Text(title)
-                .font(DS.Font.title3)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textPrimary)
-            Spacer()
-        }
-        .padding(.bottom, DS.Spacing.sm)
-    }
-
-    /// مجال الطلب المعروض في التفاصيل — لإخفاء الأزرار عمّن لا يملك اعتماده
-    private func detailIsContent(_ detail: RequestDetail) -> Bool {
-        switch detail {
-        case .news, .project, .archive, .diwaniya, .photo, .report: return true
-        default: return false
-        }
-    }
-
-    private func canApproveDetail(_ detail: RequestDetail) -> Bool {
-        if case .report = detail { return authVM.canModerateContent }
-        return detailIsContent(detail) ? authVM.canApproveContent : authVM.canApproveTreeRequests
-    }
-
-    @ViewBuilder
-    private func detailActions(for detail: RequestDetail) -> some View {
-        if canApproveDetail(detail) {
-        DSApproveRejectButtons(
-            approveTitle: {
-                switch detail {
-                case .join: return L10n.t("ربط بالشجرة", "Link to Tree")
-                default: return L10n.t("موافقة", "Approve")
-                }
-            }(),
-            rejectTitle: L10n.t("رفض", "Reject"),
-            isLoading: adminRequestVM.isLoading,
-            showReject: canApproveDetail(detail) && (detailIsContent(detail) || authVM.canRejectRequests),
-            useCapsule: true
-        ) {
-            // موافقة
-            Task {
-                switch detail {
-                case .join(let member):
-                    await MainActor.run {
-                        memberToLink = member
-                        selectedDetail = nil
-                    }
-                case .news(let post):
-                    await newsVM.approveNewsPost(postId: post.id)
-                    selectedDetail = nil
-                case .report(let request):
-                    await adminRequestVM.approveNewsReport(request: request)
-                    selectedDetail = nil
-                case .phone(let request):
-                    await adminRequestVM.approvePhoneChangeRequest(request: request)
-                    selectedDetail = nil
-                case .nameChange(let request):
-                    await adminRequestVM.approveNameChangeRequest(request: request)
-                    selectedDetail = nil
-                case .diwaniya(let diwaniya):
-                    if let adminId = authVM.currentUser?.id {
-                        await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId)
-                    }
-                    selectedDetail = nil
-                case .deceased(let request):
-                    await adminRequestVM.approveDeceasedRequest(request: request)
-                    selectedDetail = nil
-                case .child(let request):
-                    await adminRequestVM.acknowledgeChildAddRequest(request: request)
-                    selectedDetail = nil
-                case .photo(let request):
-                    await adminRequestVM.approvePhotoSuggestion(request: request)
-                    selectedDetail = nil
-                case .project(let project):
-                    if let adminId = authVM.currentUser?.id {
-                        await projectsVM.approveProject(id: project.id, approvedBy: adminId)
-                    }
-                    selectedDetail = nil
-                case .archive(let item):
-                    await archiveVM.approveItem(item)
-                    selectedDetail = nil
-                case .treeEdit(let request, _):
-                    await adminRequestVM.approveTreeEditRequest(request: request)
-                    selectedDetail = nil
-                case .healthMember:
-                    selectedDetail = nil
-                }
-            }
-        } onReject: {
-            // رفض
-            Task {
-                switch detail {
-                case .join(let member):
-                    await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
-                    selectedDetail = nil
-                case .news(let post):
-                    await newsVM.rejectNewsPost(postId: post.id)
-                    selectedDetail = nil
-                case .report(let request):
-                    await adminRequestVM.rejectNewsReport(request: request)
-                    selectedDetail = nil
-                case .phone(let request):
-                    await adminRequestVM.rejectPhoneChangeRequest(request: request)
-                    selectedDetail = nil
-                case .nameChange(let request):
-                    await adminRequestVM.rejectNameChangeRequest(request: request)
-                    selectedDetail = nil
-                case .diwaniya(let diwaniya):
-                    await diwaniyaVM.rejectDiwaniya(id: diwaniya.id)
-                    selectedDetail = nil
-                case .deceased(let request):
-                    await adminRequestVM.rejectDeceasedRequest(request: request)
-                    selectedDetail = nil
-                case .child(let request):
-                    await adminRequestVM.rejectChildAddRequest(request: request)
-                    selectedDetail = nil
-                case .photo(let request):
-                    await adminRequestVM.rejectPhotoSuggestion(request: request)
-                    selectedDetail = nil
-                case .project(let project):
-                    await projectsVM.rejectProject(id: project.id)
-                    selectedDetail = nil
-                case .archive(let item):
-                    await archiveVM.rejectItem(item)
-                    selectedDetail = nil
-                case .treeEdit(let request, _):
-                    await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil)
-                    selectedDetail = nil
-                case .healthMember:
-                    selectedDetail = nil
-                }
-            }
-        }
-        .padding(.top, DS.Spacing.md)
-        }
-    }
-
-    private func detailField(_ label: String, _ value: String, color: Color = DS.Color.textPrimary) -> some View {
-        DSCard(padding: DS.Spacing.md) {
-            HStack {
-                Text(label)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-                Text(value)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(color)
-                    .multilineTextAlignment(.trailing)
-            }
-        }
-    }
-
-    private func detailFullText(_ label: String, _ text: String) -> some View {
-        DSCard(padding: DS.Spacing.md) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Text(label)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                Text(text)
-                    .font(DS.Font.body)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
+    // (المساعدات القديمة detailHeader / detailActions / detailField / detailFullText حُذفت — بلا مرجع)
 
     /// صور الخبر داخل «بيانات الطلب» — صفوف عادية لا LazyVGrid (الشبكة الكسولة
     /// تُبلِّغ ارتفاعاً ناقصاً داخل المربّع فيُقصّ آخر صف)
@@ -4754,7 +4244,7 @@ struct AdminAllRequestsView: View {
                 DSFieldIcon(name: "photo.on.rectangle", tint: DS.Color.accent)
                     .accessibilityHidden(true)
                 Text(L10n.t("الصور", "Images"))
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Spacer(minLength: 0)
             }
@@ -4778,14 +4268,13 @@ struct AdminAllRequestsView: View {
     private func newsMediaTile(_ url: URL) -> some View {
         Color.clear
             .frame(maxWidth: .infinity)
-            .frame(height: 90)
+            .frame(height: Self.newsMediaTileHeight)
             .overlay(
                 CachedAsyncImage(url: url) { img in
                     img.resizable().scaledToFill()
                 } placeholder: {
                     Rectangle()
                         .fill(DS.Color.surface)
-                        .overlay(ProgressView().tint(AppSection.admin.ink))
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))

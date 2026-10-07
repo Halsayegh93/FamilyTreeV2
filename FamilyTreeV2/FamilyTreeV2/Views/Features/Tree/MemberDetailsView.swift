@@ -46,7 +46,6 @@ struct MemberDetailsView: View {
     /// حظر العضو / إلغاء حظره (Guideline 1.2) — بجانب «إبلاغ»
     @State private var blockTarget: BlockTarget? = nil
     @ObservedObject private var blockedStore = BlockedMembersStore.shared
-    @State private var showChildrenSheet = false
     /// شريط العائلة (الأب والأبناء) مخفي بالبداية (طلب المالك)
     @State private var familyOpen = false
     /// حجم الشيت: متوسط = صورة+اسم+قرابة+عمر فقط، كبير = كل المعلومات.
@@ -143,8 +142,9 @@ struct MemberDetailsView: View {
                     ScrollViewReader { scrollProxy in
                     ScrollView(showsIndicators: false) {
                         if isLandscape {
-                            // الوضع الأفقي: الشيت يملأ الشاشة — نعرض كل التفاصيل على عمودين
-                            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                            // الوضع الأفقي: المربّع الأطول (حتى ارتفاع الشاشة) بكل التفاصيل على عمودين —
+                            // الصورة والاسم والإجراءات يميناً، والمعلومات والعائلة والسيرة يساراً، ويتمرّر
+                            HStack(alignment: .top, spacing: DS.Landscape.columnSpacing) {
                                 VStack(spacing: DS.Spacing.md) {
                                     compactHeroSection
                                         .padding(.top, DS.Spacing.lg)
@@ -156,23 +156,31 @@ struct MemberDetailsView: View {
 
                                 VStack(spacing: DS.Spacing.md) {
                                     infoGrid
-                                        .padding(.horizontal, DS.Spacing.lg)
+
+                                    familyStrip
 
                                     bioCard
-                                        .padding(.horizontal, DS.Spacing.lg)
 
                                     pendingRequestsCard
-                                        .padding(.horizontal, DS.Spacing.lg)
 
                                     if !centered {
                                         actionButtonsSection
-                                            .padding(.horizontal, DS.Spacing.lg)
                                     }
                                 }
+                                .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.top, DS.Spacing.lg)
                                 .frame(maxWidth: .infinity)
                             }
-                            .padding(.bottom, DS.Spacing.xxxl)
+                            .padding(.bottom, centered ? DS.Spacing.md : DS.Spacing.xxxl)
+                            // المربّع على قدر المحتوى كله (مصغّراً وموسّعاً — لا زرّ «عرض التفاصيل» أفقياً)
+                            .background(
+                                GeometryReader { geo in
+                                    let h = chromeReady ? geo.size.height + panelChromeH : 0
+                                    Color.clear
+                                        .preference(key: SheetContentHeightKey.self, value: h)
+                                        .preference(key: DSPanelCollapsedHeightKey.self, value: h)
+                                }
+                            )
                         } else {
                         VStack(spacing: DS.Spacing.md) {
                             // الرأس: الصورة والاسم والقرابة وزر التفاصيل — ارتفاعه = المربّع المصغّر
@@ -210,7 +218,7 @@ struct MemberDetailsView: View {
                             } else {
                                 // تلميح: اسحب لأعلى لعرض المزيد
                                 Text(L10n.t("اسحب لأعلى لعرض التفاصيل", "Swipe up for details"))
-                                    .font(DS.Font.caption1)
+                                    .dsFont(.caption)
                                     .foregroundColor(DS.Color.textTertiary)
                                     .padding(.top, DS.Spacing.md)
                             }
@@ -226,7 +234,8 @@ struct MemberDetailsView: View {
                         )
                         }
                     }
-                    .scrollDisabled(centered && detent != .large)
+                    // أفقياً كل التفاصيل ظاهرة فتتمرّر دائماً؛ العمودي كما هو
+                    .scrollDisabled(centered && detent != .large && !isLandscape)
                     .onChange(of: detent) { newValue in
                         if centered, newValue != .large {
                             withAnimation(DS.Anim.smooth) { scrollProxy.scrollTo("detailsTop", anchor: .top) }
@@ -342,30 +351,10 @@ struct MemberDetailsView: View {
     // MARK: - عضو محذوف
 
     private var deletedMemberView: some View {
-        VStack(spacing: DS.Spacing.xxl) {
-            Spacer(minLength: 80)
-            // TMP-ART-TRIAL: رسم الاتجاه المختار — «الحالي» الدائرة القديمة نفسها
-            TrialArt(make: { $0 == .emblem ? nil
-                             : ArtDispatch.empty($0, place: nil, icon: "person.slash.fill", tint: DS.Color.textTertiary) }) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.textTertiary.opacity(0.15))
-                    .frame(width: 100, height: 100)
-                Image(systemName: "person.slash.fill")
-                    .font(DS.Font.scaled(36))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            }
-            .accessibilityHidden(true)   // زخرفة — النص تحتها يشرح
-            Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
-                .font(DS.Font.title3)
-                .foregroundColor(DS.Color.textSecondary)
-            Text(L10n.t("البيانات غير متوفرة", "Data unavailable"))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textTertiary)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+        // الحالة الفارغة الواحدة: المجسّم + العنوان + سطر
+        DSEmptyView(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"),
+                    message: L10n.t("البيانات غير متوفرة", "Data unavailable"),
+                    icon: "person.slash.fill", tint: DS.Color.textTertiary)
     }
 
     // MARK: - Hero Section (Compact circular)
@@ -373,25 +362,12 @@ struct MemberDetailsView: View {
     /// «عرض التفاصيل» / «إخفاء التفاصيل» — يوسّع المربّع أو يصغّره
     private var detailsToggleButton: some View {
         let expanded = detent == .large
-        return Button {
+        // الزرّ الواحد (٤٤) بعرض محتواه — لون ممتلئ مختلف عن شارة العمر (طلب المالك)
+        return DSButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
+                                 : L10n.t("عرض التفاصيل", "Show details"),
+                        icon: expanded ? "chevron.down" : "chevron.up", fullWidth: false) {
             withAnimation(DS.Anim.snappy) { detent = expanded ? .fraction(0.46) : .large }
-        } label: {
-            Label(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
-                           : L10n.t("عرض التفاصيل", "Show details"),
-                  systemImage: expanded ? "chevron.down" : "chevron.up")
-                .font(DS.Font.plex(13, weight: .bold))
-                // لون ممتلئ مختلف عن شارة العمر (طلب المالك)
-                .foregroundColor(.white)
-                .padding(.horizontal, DS.Spacing.lg)
-                .frame(height: 38)
-                .background(DSActionFill.style(), in: Capsule())
-                .trialCardSkin(radius: 19)   // TMP-ART-TRIAL
-                // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير الحبّة ولا ارتفاع المربّع المصغّر
-                .padding(.vertical, 3)
-                .contentShape(Rectangle())
-                .padding(.vertical, -3)
         }
-        .buttonStyle(DSScaleButtonStyle())
     }
 
     private var compactHeroSection: some View {
@@ -400,12 +376,12 @@ struct MemberDetailsView: View {
                 // (أُزيل التوهّج المموّه خلف الصورة — كان يُقصّ بإطار مربّع، طلب المالك)
                 ZStack {
                     avatarContent
-                        .frame(width: 130, height: 130)
+                        .frame(width: DS.Icon.memberHero, height: DS.Icon.memberHero)
                         .clipShape(Circle())
                         // المتوفّى بالأبيض والأسود (طلب المالك)
                         .grayscale(member.isDeceased == true ? 1 : 0)
-                        // إطار دائري خفيف جداً بلا توهّج (طلب المالك) — TMP-ART-TRIAL: حلقة الاتجاه المختار
-                        .modifier(MemberTrialRing(side: 130, plain: DS.Color.textTertiary.opacity(0.25), plainWidth: 1))
+                        // إطار دائري خفيف جداً بلا توهّج (طلب المالك) — حلقة «مجسّمات» بلون القسم
+                        .modifier(MemberTrialRing(side: DS.Icon.memberHero))
                         .scaleEffect(heroIn || reduceMotion ? 1 : 0.6)
                         .opacity(heroIn ? 1 : 0)
                         .onTapGesture { showAvatarPreview = true }
@@ -419,14 +395,14 @@ struct MemberDetailsView: View {
                     if member.isDeceased == true {
                         Circle()
                             .fill(DS.Color.background)
-                            .frame(width: 36, height: 36)
+                            .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
                             .overlay(
                                 Image(systemName: "heart.slash.fill")
-                                    .font(DS.Font.scaled(18, weight: .bold))
+                                    .dsGlyph(DS.Glyph.xlCompact)
                                     .foregroundColor(DS.Color.textTertiary)
                             )
                             // إطار خفيف لعلامة الوفاة (طلب المالك)
-                            .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
+                            .overlay(Circle().stroke(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
                             .offset(x: 48, y: 48)
                             // القارئ الصوتي: علامة الوفاة تُقرأ كلمةً لا اسم رمز
                             .accessibilityElement(children: .ignore)
@@ -436,8 +412,7 @@ struct MemberDetailsView: View {
             }
 
             Text(member.displayFullName)
-                // أصغر حبّتين (طلب المالك)
-                .font(DS.Font.plex(18, weight: .bold))
+                .dsFont(.title)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -458,12 +433,11 @@ struct MemberDetailsView: View {
         let showKinship = !isViewingSelf && !member.isDeleted
         HStack(spacing: DS.Spacing.sm) {
             if showKinship {
-                quickPill(
-                    icon: "point.3.connected.trianglepath.dotted",
-                    label: L10n.t("صلة القرابة", "Kinship"),
-                    color: DS.Color.warning,
-                    action: showKinshipPath
-                )
+                // شريحة العُدّة (٣٤، ومساحة ضغط ٤٤ داخلها) — نفسها في تفاصيل النساء
+                DSChipButton(L10n.t("صلة القرابة", "Kinship"),
+                             icon: "point.3.connected.trianglepath.dotted",
+                             tint: DS.Color.warning,
+                             size: .small, action: showKinshipPath)
             }
             // العمر جنب القرابة (مع مؤشّر متوفّى)
             agePill
@@ -481,22 +455,24 @@ struct MemberDetailsView: View {
             if let end, end >= byInt, end - byInt < 130 {
                 let age = end - byInt
                 let color = isDeceased ? DS.Color.textSecondary : DS.Color.info
-                HStack(spacing: DS.Spacing.xs) {
-                    pillGlyph(isDeceased ? "heart.slash.fill" : "timelapse", tint: color)
+                // حبّة ساكنة بمقاس شريحة العُدّة وشكلها (جنب شريحة «صلة القرابة»)
+                HStack(spacing: DS.Spacing.xsm) {
+                    Image(systemName: isDeceased ? "heart.slash.fill" : "timelapse")
+                        .dsGlyph(DS.Glyph.sm)
                         .accessibilityHidden(true)   // زخرفة
                     Text("\(age) " + L10n.t("سنة", "yrs"))
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .dsFont(.chip)
                     if isDeceased {
                         Text(L10n.t("· متوفّى", "· deceased"))
-                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .dsFont(.caption)
                     }
                 }
+                .lineLimit(1)
                 .foregroundColor(color)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.xs + 2)
-                .background(color.opacity(0.12))
-                .clipShape(Capsule())
-                .trialCardSkin(radius: Self.pillRadius)   // TMP-ART-TRIAL
+                .padding(.horizontal, DSBox.chipPadding)
+                .frame(height: DSBox.chipHeight)
+                .background(Capsule().fill(color.opacity(DS.Opacity.tintFill)))
+                .overlay(Capsule().strokeBorder(color.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
                 .accessibilityElement(children: .combine)   // الحبّة تُقرأ جملةً واحدة
             }
         }
@@ -508,44 +484,8 @@ struct MemberDetailsView: View {
         return String(s[r])
     }
 
-    /// TMP-ART-TRIAL: رمز الحبّة — رسم الاتجاه المختار، و«الحالي» رمز النظام كما كان
-    private static let pillRadius: CGFloat = 16
-    private func pillGlyph(_ icon: String, tint: Color) -> some View {
-        TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: tint, size: 20)
-                            .map { AnyView($0.frame(width: 20, height: 20)) } }) {
-            Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .semibold))
-        }
-    }
+    // MARK: - التفاصيل
 
-    private func quickPill(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xs) {
-                pillGlyph(icon, tint: color)
-                    .accessibilityHidden(true)   // زخرفة — النص يكفي
-                Text(label)
-                    .font(DS.Font.scaled(12, weight: .bold))
-            }
-            .foregroundColor(color)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs + 2)
-            .background(color.opacity(0.12))
-            .clipShape(Capsule())
-            .trialCardSkin(radius: Self.pillRadius)   // TMP-ART-TRIAL
-            // مساحة ضغط ٤٤ نقطة (حد أبل): الحشو يوسّع منطقة الضغط والسالب يعيد الحجم
-            // كما كان — الحبّة وارتفاع المربّع المصغّر بلا تغيير
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            .padding(.vertical, -8)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    // MARK: - Father Cell (مسار لأعلى — الأب)
-
-    /// خلية الأب القابلة للضغط — تنقل الشيت والشجرة للأب (مسار لأعلى في الشجرة).
-    /// تظهر فقط عند وجود أب، وتحاكي خلايا الأم/الزوج في شيت النساء (relationCell).
-    @ViewBuilder
     /// جسم التفاصيل: شبكة أيقونات (المعلومات + الأب + الأبناء) ← السيرة ← الطلبات ← الأزرار
     private var detailsBody: some View {
         // الأقسام تدخل تباعاً عند «عرض التفاصيل» (نفس حركة مربّعات الإضافة)
@@ -575,6 +515,9 @@ struct MemberDetailsView: View {
 
     // MARK: شريط العائلة — الأب والأبناء بشكل جديد (طلب المالك)
 
+    /// عدد الأبناء في السطر الواحد تحت الأب
+    private static let childrenPerRow = 3
+
     /// الأب بصورته وحلقة ذهبية، ثم فاصل، ثم الأبناء بصور صغيرة تتمرّر أفقياً.
     /// الضغط على أي صورة يفتح صاحبها.
     @ViewBuilder
@@ -594,8 +537,7 @@ struct MemberDetailsView: View {
                     // الأب بالمنتصف بخلفية خفيفة بعرض القسم (طلب المالك)
                     if let father {
                         Button { openMemberInTree(father.id) } label: {
-                            familyBubble(father, size: 50, ring: chromeInk,
-                                         caption: L10n.t("الأب", "Father"))
+                            familyBubble(father, size: 50, caption: L10n.t("الأب", "Father"))
                                 .padding(.vertical, DS.Spacing.sm)
                                 .frame(maxWidth: .infinity)
                                 .dsRowBox()
@@ -606,20 +548,20 @@ struct MemberDetailsView: View {
                         .accessibilityLabel(L10n.t("الأب، \(father.firstName)", "Father, \(father.firstName)"))
                     }
 
-                    // الأبناء: صفوف من أربعة، كل صف متمركز (طلب المالك)
+                    // الأبناء: كل ٣ أبناء في سطر تحت الأب، كل سطر متمركز — ٧ أبناء = ٣ أسطر (٣+٣+١)
+                    // (طلب المالك ٢٠٢٦-١٠-٠٧؛ كانت صفوفاً من أربعة)
                     if !children.isEmpty {
                         VStack(spacing: DS.Spacing.sm) {
                             Text(L10n.t("الأبناء", "Children") + " · \(children.count)")
-                                .dsFieldFont(12, weight: .heavy)
+                                .dsFont(.familyLabel)   // ١١ ثقيل كما كان
                                 .foregroundColor(DS.Color.fieldLabel)
                                 .frame(maxWidth: .infinity)
-                            VStack(spacing: 4) {
-                                ForEach(Array(stride(from: 0, to: children.count, by: 4)), id: \.self) { start in
+                            VStack(spacing: DS.Spacing.xs) {
+                                ForEach(Array(stride(from: 0, to: children.count, by: Self.childrenPerRow)), id: \.self) { start in
                                     HStack(alignment: .top, spacing: DS.Spacing.md) {
-                                        ForEach(children[start..<min(start + 4, children.count)]) { child in
+                                        ForEach(children[start..<min(start + Self.childrenPerRow, children.count)]) { child in
                                             Button { openMemberInTree(child.id) } label: {
-                                                familyBubble(child, size: 42, ring: chromeInk.opacity(0.35),
-                                                             caption: nil)
+                                                familyBubble(child, size: 42, caption: nil)
                                             }
                                             .buttonStyle(DSScaleButtonStyle())
                                             // القارئ الصوتي: الاسم (+ «متوفّى») بلا حرف الصورة البديلة
@@ -649,17 +591,17 @@ struct MemberDetailsView: View {
     }
 
     /// صورة دائرية بحلقة + الاسم الأول تحتها (+ وصف فوق الاسم للأب) — بلون القسم
-    private func familyBubble(_ m: FamilyMember, size: CGFloat, ring: Color, caption: String?) -> some View {
-        VStack(spacing: 4) {
+    private func familyBubble(_ m: FamilyMember, size: CGFloat, caption: String?) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
             ZStack {
                 if let url = m.avatarUrl, let imgUrl = URL(string: url) {
                     CachedAsyncImage(url: imgUrl) { img in img.resizable().scaledToFill() }
-                    placeholder: { Circle().fill(chromeInk.opacity(0.10)) }
+                    placeholder: { Circle().fill(chromeInk.opacity(DS.Opacity.tintFill)) }
                     .frame(width: size, height: size)
                     .clipShape(Circle())
                 } else {
                     Circle()
-                        .fill(chromeInk.opacity(0.10))
+                        .fill(chromeInk.opacity(DS.Opacity.tintFill))
                         .frame(width: size, height: size)
                         .overlay(
                             Text(String(m.firstName.prefix(1)))
@@ -668,18 +610,20 @@ struct MemberDetailsView: View {
                         )
                 }
             }
-            // TMP-ART-TRIAL: حلقة الاتجاه المختار — «الحالي» الحلقة القديمة بلون القسم
-            .modifier(MemberTrialRing(side: size, plain: ring, plainWidth: 1.5, inset: -2))
+            // حلقة «مجسّمات» — «الحالي» الحلقة القديمة بلون القسم
+            .modifier(MemberTrialRing(side: size, inset: -DS.Spacing.xxs))
             // المتوفّى بالأبيض والأسود (طلب المالك)
             .grayscale(m.isDeceased == true ? 1 : 0)
 
+            // خط العائلة كما كان قبل التوحيد (طلب المالك ٢٠٢٦-١٠-٠٧ «الخط صغير أبيه نفس السابق»):
+            // «الأب» ١٠٫٥ عريض، والاسم ١١٫٥ عريض
             if let caption {
                 Text(caption)
-                    .font(DS.Font.plex(10.5, weight: .bold))
+                    .dsFont(.badgeCompact)
                     .foregroundColor(chromeInk)
             }
             Text(m.firstName)
-                .font(DS.Font.plex(11.5, weight: .bold))
+                .dsFont(.chipCompact)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -735,12 +679,12 @@ struct MemberDetailsView: View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: tile.icon, tint: tile.color)
                 .accessibilityHidden(true)   // زخرفة
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(tile.label)
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(tile.value)
-                    .dsFieldFont(14)
+                    .dsFieldFont(.body)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
@@ -753,136 +697,7 @@ struct MemberDetailsView: View {
         .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
     }
 
-    // MARK: - Basic Info Card
-
-    private struct StatItem: Identifiable {
-        let id = UUID()
-        let value: String
-        let label: String
-        let color: Color
-    }
-
-    private func computeStats(isDeceased: Bool, birthYear: String?, deathYear: String?) -> [StatItem] {
-        var s: [StatItem] = []
-        // ملاحظة: العمر انتقل إلى حبّة جنب زر القرابة (agePill) — لا يُكرّر هنا.
-        if let byStr = birthYear {
-            s.append(.init(value: byStr, label: L10n.t("سنة الميلاد", "Birth year"), color: DS.Color.textPrimary))
-        }
-        if isDeceased {
-            if let dy = deathYear {
-                s.append(.init(value: dy, label: L10n.t("سنة الوفاة", "Death year"), color: DS.Color.error))
-            } else {
-                s.append(.init(value: L10n.t("متوفّى", "Deceased"), label: L10n.t("الحالة", "Status"), color: DS.Color.textSecondary))
-            }
-        } else {
-            s.append(.init(value: L10n.t("نشِط", "Active"), label: L10n.t("الحالة", "Status"), color: DS.Color.success))
-        }
-        return s
-    }
-
-    private struct ChipData: Identifiable {
-        let id = UUID()
-        let icon: String
-        let text: String
-        let label: String
-        let color: Color
-        var ltr: Bool = false
-    }
-
-    private func buildChips(isDeceased: Bool, birthYear: String?, deathYear: String?, phone: String, phoneHidden: Bool) -> [ChipData] {
-        var c: [ChipData] = []
-        if let by = birthYear {
-            c.append(.init(icon: "birthday.cake", text: by, label: L10n.t("الميلاد", "Birth"), color: DS.Color.primary))
-        }
-        if let byStr = birthYear, let by = Int(byStr) {
-            let end = isDeceased ? Int(deathYear ?? "") : Calendar.current.component(.year, from: Date())
-            if let end = end, end >= by, end - by < 130 {
-                c.append(.init(icon: "timelapse", text: "\(end - by)", label: L10n.t("العمر", "Age"), color: DS.Color.warning))
-            }
-        }
-        if isDeceased, let dy = deathYear {
-            c.append(.init(icon: "calendar.badge.exclamationmark", text: dy, label: L10n.t("الوفاة", "Death"), color: DS.Color.error))
-        }
-        if !isDeceased, !phone.isEmpty {
-            c.append(.init(
-                icon: "phone.fill",
-                text: phoneHidden ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone),
-                label: L10n.t("الهاتف", "Phone"),
-                color: DS.Color.success, ltr: !phoneHidden
-            ))
-        }
-        return c
-    }
-
-    /// دائرة معلومة صغيرة: أيقونة في دائرة ملوّنة + قيمة + تسمية.
-    private func circleView(_ c: ChipData) -> some View {
-        VStack(spacing: 5) {
-            ZStack {
-                Circle()
-                    .fill(c.color.opacity(0.12))
-                    .frame(width: 42, height: 42)
-                Image(systemName: c.icon)
-                    .font(DS.Font.scaled(18, weight: .semibold))
-                    .foregroundColor(c.color)
-            }
-            Text(c.text)
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .environment(\.layoutDirection, c.ltr ? .leftToRight : LanguageManager.shared.layoutDirection)
-            Text(c.label)
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
-        }
-        .frame(width: 64)
-    }
-
-    /// خانة إحصائية: رقم بارز + تسمية صغيرة.
-    private func statCell(_ s: StatItem) -> some View {
-        VStack(spacing: 3) {
-            Text(s.value)
-                .font(DS.Font.title3)
-                .fontWeight(.semibold)
-                .foregroundColor(s.color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-            Text(s.label)
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 2)
-    }
-
-    /// صف تفصيلي احترافي: أيقونة دائرية ملوّنة + تسمية + قيمة بمحاذاة النهاية.
-    private func detailRow(icon: String, color: Color, label: String, value: String, ltrValue: Bool = false) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 34, height: 34)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .semibold))
-                    .foregroundColor(color)
-            }
-            Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .environment(\.layoutDirection, ltrValue ? .leftToRight : LanguageManager.shared.layoutDirection)
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-    }
+    // MARK: - Basic Info
 
     private struct InfoRowData {
         let icon: String
@@ -951,266 +766,12 @@ struct MemberDetailsView: View {
         return prefix.allSatisfy(\.isNumber) ? prefix : trimmed
     }
 
-    private func infoRow(icon: String, label: String, value: String, color: Color) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(color)
-            }
-            Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-    }
-
-    // MARK: - Family Card
-
-    @ViewBuilder
-    private var familyCard: some View {
-        if cachedFather != nil || !cachedChildren.isEmpty {
-            DSCard(padding: 0) {
-                VStack(spacing: 0) {
-                    DSSectionHeader(
-                        title: L10n.t("العائلة", "Family"),
-                        icon: "person.2.fill",
-                        iconColor: DS.Color.success
-                    )
-
-                    // دائرتان قابلتان للضغط: «الأب» + «الأبناء (N)».
-                    HStack(alignment: .top, spacing: DS.Spacing.xxxl) {
-                        if let father = cachedFather {
-                            Button { openMemberInTree(father.id) } label: {
-                                familyCircle(
-                                    member: father,
-                                    label: L10n.t("الأب", "Father"),
-                                    sub: father.firstName,
-                                    count: nil,
-                                    color: DS.Color.success
-                                )
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                        }
-                        if !cachedChildren.isEmpty {
-                            Button { showChildrenSheet = true } label: {
-                                familyCircle(
-                                    member: nil,
-                                    label: L10n.t("الأبناء", "Children"),
-                                    sub: childrenCountText,
-                                    count: cachedChildren.count,
-                                    color: DS.Color.primary
-                                )
-                            }
-                            .buttonStyle(DSScaleButtonStyle())
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.md)
-                    .padding(.horizontal, DS.Spacing.md)
-                }
-            }
-            .sheet(isPresented: $showChildrenSheet) { childrenSheet }
-        }
-    }
-
     private func openMemberInTree(_ id: UUID) {
         // الشيت يبقى مفتوح — يتحدث محتواه + الشجرة تتزامن خلفه.
         currentMemberId = id
         NotificationCenter.default.post(
             name: .openMemberInTree, object: nil, userInfo: ["memberId": id]
         )
-    }
-
-    /// دائرة عائلة: صورة الأب أو عدد الأبناء + تسمية تحتها.
-    private func familyCircle(member: FamilyMember?, label: String, sub: String, count: Int?, color: Color) -> some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 64, height: 64)
-                    .overlay(Circle().stroke(color.opacity(0.35), lineWidth: 1.5))
-                if let m = member {
-                    if let urlStr = m.avatarUrl, let url = URL(string: urlStr) {
-                        CachedAsyncImage(url: url) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: {
-                            Text(String(m.firstName.prefix(1)))
-                                .font(DS.Font.title2).fontWeight(.bold).foregroundColor(color)
-                        }
-                        .frame(width: 64, height: 64)
-                        .clipShape(Circle())
-                    } else {
-                        Text(String(m.firstName.prefix(1)))
-                            .font(DS.Font.title2).fontWeight(.bold).foregroundColor(color)
-                    }
-                } else {
-                    Text("\(count ?? 0)")
-                        .font(DS.Font.title1)
-                        .fontWeight(.bold)
-                        .foregroundColor(color)
-                }
-            }
-            Text(label)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-            Text(sub)
-                .font(DS.Font.footnote)
-                .fontWeight(.semibold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(width: 92)
-    }
-
-    /// شيت قائمة الأبناء — شبكة صور تُفتح عند الضغط على دائرة «الأبناء».
-    private var childrenSheet: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 4),
-                    spacing: DS.Spacing.md
-                ) {
-                    ForEach(cachedChildren) { child in
-                        Button {
-                            showChildrenSheet = false
-                            openMemberInTree(child.id)
-                        } label: {
-                            childTileFirstName(child)
-                        }
-                        .buttonStyle(DSScaleButtonStyle())
-                    }
-                }
-                .padding(DS.Spacing.lg)
-            }
-            .background(DS.Color.background.ignoresSafeArea())
-            .navigationTitle(L10n.t("الأبناء", "Children") + " (\(cachedChildren.count))")
-            .navigationBarTitleDisplayMode(.inline)
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-
-    private func childTileFirstName(_ child: FamilyMember) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            ZStack {
-                if let url = child.avatarUrl, let imgUrl = URL(string: url) {
-                    CachedAsyncImage(url: imgUrl) { img in
-                        img.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle().fill(chromeInk.opacity(0.12))
-                    }
-                    .frame(width: 38, height: 38)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(chromeInk.opacity(0.18), lineWidth: 1))
-                } else {
-                    ZStack {
-                        Circle()
-                            .fill(chromeInk.opacity(0.12))
-                            .frame(width: 38, height: 38)
-                        Text(String(child.firstName.prefix(1)))
-                            .font(DS.Font.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(chromeInk)
-                    }
-                    .overlay(Circle().stroke(chromeInk.opacity(0.18), lineWidth: 1))
-                }
-
-                if child.isDeceased == true {
-                    Circle()
-                        .fill(DS.Color.background)
-                        .frame(width: 14, height: 14)
-                        .overlay(
-                            Image(systemName: "heart.slash.fill")
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(DS.Color.textTertiary)
-                        )
-                        .offset(x: 15, y: 15)
-                }
-            }
-
-            Text(child.firstName)
-                .font(DS.Font.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    /// صف الأبناء مع chevron قابل للتوسعة
-    private func childrenRow(label: String, value: String, color: Color, expanded: Bool) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: "person.3.fill")
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(color)
-            }
-            Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-            Image(systemName: "chevron.down")
-                .font(DS.Font.scaled(11, weight: .semibold))
-                .foregroundColor(DS.Color.textTertiary)
-                .rotationEffect(.degrees(expanded ? 180 : 0))
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-    }
-
-    private var childrenCountText: String {
-        let n = cachedChildren.count
-        if L10n.isArabic {
-            if n == 1 { return "ابن واحد" }
-            if n == 2 { return "ابنان" }
-            if n <= 10 { return "\(n) أبناء" }
-            return "\(n) ابن"
-        }
-        return n == 1 ? "1 child" : "\(n) children"
-    }
-
-    private func familyRow(icon: String, label: String, value: String, color: Color) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(color)
-            }
-            Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
-            Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-            Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .semibold))
-                .foregroundColor(DS.Color.textTertiary)
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
     }
 
     // MARK: - Bio Card
@@ -1235,28 +796,10 @@ struct MemberDetailsView: View {
                     .dsRowBox()
 
                     if authVM.isAdmin || isViewingSelf {
-                        Button {
+                        // الزرّ الواحد (٤٤) بدور الحذف — أحمر
+                        DSButton(L10n.t("حذف السيرة", "Delete Biography"), icon: "trash", role: .destructive) {
                             showDeleteBioAlert = true
-                        } label: {
-                            HStack(spacing: DS.Spacing.sm) {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 12.5, weight: .bold))
-                                    .accessibilityHidden(true)   // زخرفة — النص يكفي
-                                Text(L10n.t("حذف السيرة", "Delete Biography"))
-                                    .font(DS.Font.plex(13, weight: .bold))
-                            }
-                            .foregroundColor(DS.Color.error)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 40)
-                            .background(DS.Color.error.opacity(0.08),
-                                        in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
-                            // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير ارتفاع الزر الظاهر
-                            .padding(.vertical, 2)
-                            .contentShape(Rectangle())
-                            .padding(.vertical, -2)
                         }
-                        .buttonStyle(DSScaleButtonStyle())
                     }
                 }
             }
@@ -1266,41 +809,35 @@ struct MemberDetailsView: View {
     private func bioStationRow(index: Int, total: Int, station: FamilyMember.BioStation) -> some View {
         HStack(alignment: .top, spacing: DS.Spacing.md) {
             VStack(spacing: 0) {
+                // نقطة الخط الزمني على قرص خفيف بلون القسم (مقاس عنوان القسم)
                 ZStack {
                     Circle()
-                        .fill(chromeInk.opacity(0.15))
-                        .frame(width: 24, height: 24)
+                        .fill(chromeInk.opacity(DS.Opacity.tintFill))
+                        .frame(width: DS.Icon.section, height: DS.Icon.section)
                     Circle()
                         .fill(chromeGradient)
-                        .frame(width: 10, height: 10)
+                        .frame(width: DS.Spacing.sm, height: DS.Spacing.sm)
                 }
 
                 if index < total - 1 {
                     Rectangle()
-                        .fill(chromeInk.opacity(0.2))
-                        .frame(width: 2)
+                        .fill(chromeInk.opacity(DS.Opacity.tintFillStrong))
+                        .frame(width: DS.Spacing.xxs)
                         .frame(maxHeight: .infinity)
                 }
             }
-            .frame(width: 24)
+            .frame(width: DS.Icon.section)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 if let year = station.year, !year.isEmpty {
-                    Text(year)
-                        .font(DS.Font.caption1)
-                        .fontWeight(.bold)
-                        .foregroundColor(chromeInk)
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, 2)
-                        .background(chromeInk.opacity(0.10))
-                        .clipShape(Capsule())
+                    DSStatusChip(text: year, tint: chromeInk, size: .mini)
                 }
                 Text(station.title)
-                    .font(DS.Font.calloutBold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                 if !station.details.isEmpty {
                     Text(station.details)
-                        .font(DS.Font.subheadline)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1356,21 +893,16 @@ struct MemberDetailsView: View {
         return HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: icon, tint: color)
                 .accessibilityHidden(true)   // زخرفة
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(L10n.t(actionLabelAr, actionLabelEn))
-                    .dsFieldFont(12, weight: .heavy)
+                    .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("قيد المراجعة", "Under review"))
-                    .dsFieldFont(12.5)
+                    .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
             }
             Spacer(minLength: 0)
-            Text(L10n.t("معلّق", "Pending"))
-                .font(DS.Font.plex(11, weight: .bold))
-                .foregroundColor(DS.Color.warning)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 3)
-                .background(DS.Color.warning.opacity(0.12), in: Capsule())
+            DSStatusChip(text: L10n.t("معلّق", "Pending"), tint: DS.Color.warning, size: .mini)
         }
         .dsRowBox()
         .accessibilityElement(children: .combine)   // الطلب وحالته عنصراً واحداً
@@ -1515,17 +1047,10 @@ struct MemberDetailsView: View {
             }
         } label: {
             // مربّع نوع الطلب — مثل مربّعات التصنيف في «خبر جديد»
-            VStack(spacing: 6) {
-                TrialArt(make: { ArtDispatch.stateIcon($0, icon: action.iconName, tint: tint, size: 42) }) {   // TMP-ART-TRIAL
-                Image(systemName: action.iconName)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(tint)
-                    .frame(width: 42, height: 42)
-                    .background(Circle().fill(tint.opacity(0.14)))
-                }
-                .frame(width: 42, height: 42)
+            VStack(spacing: DS.Spacing.xsm) {
+                DSStateIcon(action.iconName, tint: tint, size: DS.Icon.tile, mapsChrome: false)
                 Text(editActionLabel(for: action))
-                    .dsFieldFont(12, weight: .bold)
+                    .dsFieldFont(.chip)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -1534,7 +1059,7 @@ struct MemberDetailsView: View {
             .padding(.vertical, DS.Spacing.xs)
             .dsRowBox()
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(DSPressStyle())
         .accessibilityLabel(editActionLabel(for: action))
     }
 
@@ -1548,40 +1073,15 @@ struct MemberDetailsView: View {
     ) -> some View {
         Button(action: action) {
             VStack(spacing: DS.Spacing.xs) {
-                ZStack {
-                    if filled {
-                        Circle()
-                            .fill(chromeGradient)
-                            .frame(width: 62, height: 62)
-                            .trialCardSkin(radius: 31)   // TMP-ART-TRIAL
-                            .dsSubtleShadow()
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(22, weight: .semibold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                    } else {
-                        // TMP-ART-TRIAL: رسم الاتجاه المختار — «الحالي» الدائرة القديمة نفسها
-                        TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: tint, size: 62)
-                                            .map { AnyView($0.frame(width: 62, height: 62)) } }) {
-                        ZStack {
-                        Circle()
-                            .fill(tint.opacity(0.12))
-                            .frame(width: 62, height: 62)
-                            .overlay(Circle().stroke(tint.opacity(0.30), lineWidth: 1.5))
-                        Image(systemName: icon)
-                            .font(DS.Font.scaled(22, weight: .semibold))
-                            .foregroundColor(tint)
-                        }
-                        }
-                    }
-                }
-                .accessibilityHidden(true)   // زخرفة — التسمية تحتها تكفي
+                // القرص المجسّم الواحد (`DSStateIcon`) بلون الإجراء
+                DSStateIcon(icon, tint: tint, size: DS.Icon.sizeLg, mapsChrome: !filled)
+                    .accessibilityHidden(true)   // زخرفة — التسمية تحتها تكفي
                 Text(label)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.semibold)
+                    .dsFont(.caption)
                     .foregroundColor(DS.Color.textSecondary)
             }
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(DSPressStyle())
     }
 
     // MARK: - إعلان وفاة (مكان ثابت — طلب المالك «وين الوفاة؟»)
@@ -1605,21 +1105,10 @@ struct MemberDetailsView: View {
     }
 
     private var deathAnnounceButton: some View {
-        let tint = chromeInk // بلون القسم مثل المربّع الذي يفتحه
-        return Button { openDeathAnnouncement() } label: {
-            HStack(spacing: 7) {
-                Image(systemName: NewsTypeHelper.icon(for: "وفاة"))
-                    .font(.system(size: 14, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(L10n.t("إعلان وفاة", "Death announcement"))
-                    .font(DS.Font.plex(14.5, weight: .bold))
-            }
-            .foregroundColor(tint.dsReadableGlyph)
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .background(tint.opacity(0.14),
-                        in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
+        // زرّ إضافي = الزرّ الواحد بدور الثانوي (رمادي) — الإجراء الرئيسي تحته بلون القسم
+        DSButton(L10n.t("إعلان وفاة", "Death announcement"), icon: NewsTypeHelper.icon(for: "وفاة"),
+                 role: .cancel) {
+            openDeathAnnouncement()
         }
     }
 
@@ -1652,63 +1141,51 @@ struct MemberDetailsView: View {
         VStack(spacing: DS.Spacing.sm) {
             // إعلان وفاة — للمتوفى الذي لم يُعلن عنه، لمن يعتمد الوفيات
             if showsDeathAnnounce { deathAnnounceButton }
-        HStack(spacing: DS.Spacing.sm) {
+        // صفّ الأزرار بمواصفة `DSBox` الواحدة (الإجراء بلون القسم، «إغلاق» رمادي، الأيقونات مربّعة بنفس الارتفاع)
+        HStack(spacing: DSBox.buttonSpacing) {
             if let primary = primaryPanelAction {
-                Button(action: primary.run) {
-                    HStack(spacing: 7) {
-                        Image(systemName: primary.icon).font(.system(size: 14, weight: .bold))
-                            .accessibilityHidden(true)   // زخرفة — النص يكفي
-                        Text(primary.title).font(DS.Font.plex(15, weight: .bold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).frame(height: 48)
-                    .background(DSActionFill.style(),
-                                in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
-                }
+                DSButton(primary.title, icon: primary.icon, action: primary.run)
             }
             // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
             if !isViewingSelf && !member.isDeleted {
                 Button { showReportConfirm = true } label: {
-                    Image(systemName: "exclamationmark.bubble.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(DS.Color.warning)
-                        .frame(width: 48, height: 48)
-                        .background(DS.Color.warning.opacity(0.12),
-                                    in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
+                    squareIcon("exclamationmark.bubble.fill", tint: DS.Color.warning)
                 }
+                .buttonStyle(DSPressStyle())
                 .accessibilityLabel(L10n.t("إبلاغ", "Report"))
             }
             // حظر العضو بجانب «إبلاغ» (Guideline 1.2) — ولإلغاء الحظر إن كان محظوراً
             if canShowBlock {
                 Button { requestBlockToggle() } label: {
-                    Image(systemName: isMemberBlocked ? "hand.raised.slash.fill" : "hand.raised.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(isMemberBlocked ? DS.Color.textSecondary : DS.Color.error)
-                        .frame(width: 48, height: 48)
-                        .background((isMemberBlocked ? DS.Color.textSecondary : DS.Color.error).opacity(0.12),
-                                    in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
+                    squareIcon(isMemberBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
+                               tint: isMemberBlocked ? DS.Color.textSecondary : DS.Color.error)
                 }
+                .buttonStyle(DSPressStyle())
                 .accessibilityLabel(isMemberBlocked ? L10n.t("إلغاء حظر العضو", "Unblock member")
                                                     : L10n.t("حظر العضو", "Block member"))
             }
             PanelCloseButton()
         }
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.sm)
-        .padding(.bottom, DS.Spacing.md)
+        // نفس شريط أزرار مربّعات العمل (`DSComposer`): هوامشه وخطّه الشعري من `DSBox`
+        .padding(.horizontal, DSBox.footerHorizontal)
+        .padding(.top, DSBox.footerTop)
+        .padding(.bottom, DSBox.footerBottom)
         .background(
             DS.Color.background
                 .overlay(alignment: .top) {
-                    Rectangle().fill(DS.Color.textTertiary.opacity(0.12)).frame(height: 1)
+                    Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke)).frame(height: DS.Border.width)
                 }
         )
+    }
+
+    /// زرّ أيقونة مربّع بارتفاع الزرّ الواحد (إبلاغ، حظر) بلون معناه الخفيف
+    private func squareIcon(_ symbol: String, tint: Color) -> some View {
+        Image(systemName: symbol)
+            .dsGlyph(DS.Glyph.lg)
+            .foregroundColor(tint)
+            .frame(width: DSBox.buttonHeight, height: DSBox.buttonHeight)
+            .background(tint.opacity(DS.Opacity.tintFill), in: DSBox.buttonShape)
     }
 
     /// رأس ملوّن مثل مربّعات الإضافة (فوق الصورة، بلا تداخل) — يظهر فقط مع showsHeaderBand
@@ -1771,41 +1248,40 @@ struct MemberDetailsView: View {
                 CachedAsyncImage(url: imageUrl) { img in
                     img.resizable().scaledToFill()
                 } placeholder: {
-                    ProgressView().tint(chromeInk)
+                    // أثناء تحميل الصورة: الصورة الافتراضية نفسها (بلا دوّارة)
+                    defaultAvatar
                 }
             } else {
-                // الصورة الافتراضية بلون القسم (طلب المالك ٢٠٢٦-١٠-٠٥)
-                LinearGradient(
-                    colors: [chromeInk.opacity(0.20), DS.Color.accent.opacity(0.12)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .overlay(
-                    // TMP-ART-TRIAL: رمز العضو بالاتجاه المختار — «الحالي» رمز النظام كما كان
-                    GeometryReader { g in
-                        let side = min(g.size.width, g.size.height) * 0.58
-                        TrialArt(make: { ArtDispatch.stateIcon($0, icon: "person.fill", tint: chromeInk, size: side)
-                                            .map { AnyView($0.frame(width: side, height: side)) } }) {
-                            Image(systemName: "person.fill")
-                                .font(DS.Font.scaled(50))
-                                .foregroundColor(chromeInk.opacity(0.5))
-                        }
-                        .frame(width: g.size.width, height: g.size.height)
-                    }
-                    .accessibilityHidden(true)
-                )
+                defaultAvatar
             }
         }
     }
 
+    /// الصورة الافتراضية بلون القسم (طلب المالك ٢٠٢٦-١٠-٠٥): أرضية خفيفة + قرص العضو المجسّم
+    private var defaultAvatar: some View {
+        LinearGradient(
+            colors: [chromeInk.opacity(DS.Opacity.tintFillStrong), DS.Color.accent.opacity(DS.Opacity.tintFill)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .overlay(
+            GeometryReader { g in
+                let side = min(g.size.width, g.size.height) * 0.58
+                DSStateIcon("person.fill", tint: chromeInk, size: side, mapsChrome: false)
+                    .frame(width: g.size.width, height: g.size.height)
+            }
+            .accessibilityHidden(true)
+        )
+    }
+
     private var avatarPreviewOverlay: some View {
         ZStack(alignment: .topTrailing) {
-            DS.Color.overlayDark.opacity(0.92).ignoresSafeArea()
+            DS.Color.overlayDark.opacity(DS.Opacity.mediaDim).ignoresSafeArea()
 
             GeometryReader { _ in
                 avatarContent
-                    .frame(width: 300, height: 300)
-                    .background(chromeInk.opacity(0.15))
+                    .frame(width: DS.Icon.avatarPreview, height: DS.Icon.avatarPreview)
+                    .background(chromeInk.opacity(DS.Opacity.tintFill))
                     .clipShape(Circle())
                     .overlay(Circle().stroke(chromeGradient, lineWidth: 4))
                     .dsGlowShadow()
@@ -1842,7 +1318,7 @@ struct MemberDetailsView: View {
                 lastAvatarPreviewScale = 1
                 showAvatarPreview = false
             }
-            .padding()
+            .padding(DS.Spacing.lg)
         }
     }
 }
@@ -1870,90 +1346,34 @@ private struct PanelCloseButton: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        Button {
+        // «إغلاق» = زرّ الإلغاء في مواصفة `DSBox` الواحدة
+        Button(L10n.t("إغلاق", "Close")) {
             if let panelClose { panelClose() } else { dismiss() }
-        } label: {
-            Text(L10n.t("إغلاق", "Close"))
-                .font(DS.Font.plex(15, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-                .frame(maxWidth: .infinity).frame(height: 48)
-                .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(DS.Color.mutedBackground.opacity(0.8)))
-                .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(DSBoxButtonStyle(role: .cancel))
     }
 }
 
-// MARK: - TMP-ART-TRIAL: حلقة الصور الدائرية (الصورة، الأب، الأبناء) بحسب الاتجاه المختار
+// MARK: - حلقة الصور الدائرية (الصورة، الأب، الأبناء) بأسلوب «مجسّمات»
 
-/// «الحالي»: الحلقة القديمة نفسها (لونها يُمرَّر). الاتجاهات: طين ناعم، حافة زجاج، خط ذهبي، حاشية سدو — بلون القسم
+/// طين ناعم: حافة متدرجة بلون القسم وظلّ لطيف تحتها — شفافياتها من لمسة الطين الواحدة (`DS.Card`)
 private struct MemberTrialRing: ViewModifier {
     let side: CGFloat
-    let plain: Color
-    var plainWidth: CGFloat = 1
     /// سالب = الحلقة خارج الصورة (فقاعات العائلة)
     var inset: CGFloat = 0
-    @AppStorage(ArtTrial.storageKey) private var raw = ArtTrial.emblem.rawValue
     @Environment(\.dsSection) private var section
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
         let s = section ?? .home
         let dark = scheme == .dark
-        let w = max(1.8, side * 0.03)
-        switch ArtTrial(rawValue: raw) ?? .emblem {
-        case .emblem:
-            content.overlay(Circle().stroke(plain, lineWidth: plainWidth).padding(inset))
-        case .soft3d:
-            content
-                .overlay(Circle().strokeBorder(LinearGradient(colors: [.white.opacity(dark ? 0.25 : 0.95), s.ink.opacity(0.35)],
-                                                              startPoint: .top, endPoint: .bottom), lineWidth: w)
-                    .padding(inset))
-                .shadow(color: s.deep.opacity(dark ? 0.40 : 0.18), radius: side * 0.07, x: 0, y: side * 0.035)
-        case .glass:
-            content.overlay(Circle().strokeBorder(LinearGradient(colors: [.white.opacity(dark ? 0.45 : 0.95), s.ink.opacity(0.5),
-                                                                          .white.opacity(dark ? 0.15 : 0.55)],
-                                                                 startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: w)
+        let w = max(DS.Card.highlightWidth, side * 0.03)
+        content
+            .overlay(Circle().strokeBorder(LinearGradient(colors: [DS.Color.textOnPrimary.opacity(dark ? DS.Card.highlightDark : DS.Card.highlightLight),
+                                                                   s.ink.opacity(DS.Opacity.tintStroke)],
+                                                          startPoint: .top, endPoint: .bottom), lineWidth: w)
                 .padding(inset))
-        case .gold:
-            content.overlay(Circle().strokeBorder(LinearGradient(colors: [Color(hex: "#E7C27A"), Color(hex: "#C9973F")],
-                                                                 startPoint: .topLeading, endPoint: .bottomTrailing)
-                                                    .opacity(dark ? 0.85 : 1), lineWidth: w)
-                .padding(inset))
-        case .sadu:
-            content.overlay(MemberSaduRing(deep: s.deep, width: max(4, side * 0.055), count: side >= 100 ? 12 : 6)
-                .padding(inset))
-        }
-    }
-}
-
-/// حلقة سدو: طوق بلون القسم الغامق وعليه عيون كريمية بقلب أحمر
-private struct MemberSaduRing: View {
-    let deep: Color
-    let width: CGFloat
-    let count: Int
-
-    var body: some View {
-        GeometryReader { g in
-            let d = min(g.size.width, g.size.height)
-            let r = d / 2 - width / 2
-            ZStack {
-                Circle().strokeBorder(deep, lineWidth: width)
-                ForEach(0..<count, id: \.self) { i in
-                    let a = Double(i) / Double(count) * 2 * .pi - .pi / 2
-                    ZStack {
-                        Rectangle().fill(Color(hex: "#F3E7CF"))
-                            .frame(width: width * 0.62, height: width * 0.62).rotationEffect(.degrees(45))
-                        Rectangle().fill(Color(hex: "#B3262E"))
-                            .frame(width: width * 0.26, height: width * 0.26).rotationEffect(.degrees(45))
-                    }
-                    .position(x: d / 2 + r * CGFloat(cos(a)), y: d / 2 + r * CGFloat(sin(a)))
-                }
-            }
-            .frame(width: d, height: d)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+            .shadow(color: s.deep.opacity(dark ? DS.Card.shadowDark : DS.Card.shadowLight),
+                    radius: side * 0.07, x: 0, y: side * 0.035)
     }
 }

@@ -17,7 +17,7 @@ struct DSOTPField: View {
                 .focused($focused)
                 // مخفي بصرياً لا وظيفياً — يبقى مستقبِلاً للوحة المفاتيح
                 .opacity(0.001)
-                .frame(height: 56)
+                .frame(height: DSBox.otpBoxHeight + DS.Spacing.xsm)
                 .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
 
             HStack(spacing: DS.Spacing.xs + 2) {
@@ -47,26 +47,26 @@ struct DSOTPField: View {
         let isFilled = !digit.isEmpty
 
         return Text(digit)
-            .font(DS.Font.plex(22, weight: .bold))
+            .dsFont(.codeDigitCompact)
             .foregroundColor(DS.Color.textPrimary)
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
+            .frame(height: DSBox.otpBoxHeight)
             .background(DS.Color.surface, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .strokeBorder(
                         isActive ? DS.Color.primary
-                        : isFilled ? DS.Color.primary.opacity(0.35)
+                        : isFilled ? DS.Color.primary.opacity(DS.Opacity.tintStroke)
                         : DS.Color.inactiveBorder,
-                        lineWidth: isActive ? 2 : 1
+                        lineWidth: isActive ? DS.Border.width * 2 : DS.Border.width
                     )
             )
             .overlay {
                 if isActive && !isFilled {
-                    RoundedRectangle(cornerRadius: 1)
+                    Capsule()
                         .fill(DS.Color.primary)
-                        .frame(width: 2, height: 20)
-                        .opacity(0.8)
+                        .frame(width: DS.Border.width * 2, height: DS.Icon.countBadge)
+                        .opacity(DS.Opacity.dimmed)
                 }
             }
             .animation(DS.Anim.quick, value: isActive)

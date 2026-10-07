@@ -12,16 +12,27 @@ struct TreeTabContainer: View {
     /// التبديل «العائلة/النساء» يبني الشجرة من جديد، فلو عاش فيها لأعاد الدخول مع كل تبديل
     /// واختفى الشريط الذي ضُغط عليه لحظة — التبديل يبقى تلاشياً متقاطعاً كما هو.
     @State private var chromeAppeared = false
+    @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
+
+    /// «شجرة النساء» ظاهرة؟ — مفتاح في «الإدارة ← إعدادات التطبيق ← الميزات» (طلب المالك ٢٠٢٦-١٠-٠٧)
+    private var womenTreeEnabled: Bool { appSettingsVM.settings.womenTreeEnabled ?? true }
 
     var body: some View {
         Group {
-            if treeTab == 1 {
+            if treeTab == 1 && womenTreeEnabled {
                 WomenTreeView(selectedTab: $selectedTab, treeTab: $treeTab)
             } else {
-                TreeView(selectedTab: $selectedTab, treeTab: $treeTab)
+                // مخفية: شجرة العائلة وحدها بلا مبدّل «العائلة/النساء»
+                TreeView(selectedTab: $selectedTab, treeTab: womenTreeEnabled ? $treeTab : nil)
             }
         }
+        // أُخفيت والمستخدم على تبويب النساء → يرجع لشجرة العائلة
+        .onChange(of: womenTreeEnabled) { enabled in
+            if !enabled { treeTab = 0 }
+        }
         .environment(\.treeChromeAppeared, chromeAppeared)
+        // قسم الشجرة دائماً (العُدّة المشتركة تأخذ لونها من البيئة — هنا مرة لكل الشجرتين)
+        .dsSection(.tree)
         .onAppear {
             guard !chromeAppeared else { return }
             chromeAppeared = true
@@ -45,40 +56,59 @@ extension EnvironmentValues {
     }
 }
 
-/// تبويب علوي كبسولي [شجرة العائلة / النساء] — مطابق للأندرويد و iOS الأصلي.
-/// المختار بلون تبويب الشجرة (AppSection.tree) — النص الأبيض واضح في الوضعين.
+/// تبويب [شجرة العائلة / النساء] — المبدّل الواحد `DSSegmentedSwitch` بمقاسه المدمّج (`.compact`: ٣٠، نص ١١،
+/// بعرض نصّه — مقاس شريط الأدوات قبل التوحيد). المختار بتعبئة قسم الشجرة (البيئة).
 struct FamilyTreeTabBar: View {
     @Binding var selection: Int
-    /// TMP-ART-TRIAL: لمسة الاتجاه على الشريحة المختارة («الحالي» بلا تغيير)
-    @AppStorage(ArtTrial.storageKey) private var artRaw = ArtTrial.emblem.rawValue
 
     var body: some View {
-        HStack(spacing: 2) {
-            segment(L10n.t("شجرة العائلة", "Family"), 0)
-            segment(L10n.t("النساء", "Women"), 1)
+        DSSegmentedSwitch(options: FamilyTreeTabs.options, selection: $selection, size: .compact)
+    }
+}
+
+/// نفس التبويب في الشريط الجانبي العمودي (الوضع الأفقي) — شريحتان مصغّرتان من العُدّة (`DSChipButton(.mini)`)
+/// فوق بعض بالعنوانين القصيرين «العائلة» / «النساء»
+struct FamilyTreeSideTabs: View {
+    @Binding var selection: Int
+
+    var body: some View {
+        VStack(spacing: DS.Spacing.xs) {
+            ForEach(FamilyTreeTabs.shortOptions) { option in
+                DSChipButton(option.title, isSelected: selection == option.id, size: .mini) {
+                    guard selection != option.id else { return }
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(DS.Anim.snappy) { selection = option.id }
+                }
+            }
         }
-        .padding(3)
-        .background(DS.Color.surface.opacity(0.8), in: Capsule())   // أغمق (طلب المالك)
-        .overlay(Capsule().strokeBorder(AppSection.tree.ink.opacity(0.25), lineWidth: 1))
-        .dsSubtleShadow()
-        .dynamicTypeSize(.large)
+    }
+}
+
+/// خيارا تبويب الشجرة — مكان واحد للنص والرمز
+enum FamilyTreeTabs {
+    static var options: [DSSegmentOption<Int>] {
+        [DSSegmentOption(id: 0, title: L10n.t("شجرة العائلة", "Family"), icon: AppSection.tree.symbol),
+         DSSegmentOption(id: 1, title: L10n.t("النساء", "Women"), icon: "person.2.fill")]
     }
 
-    private func segment(_ label: String, _ idx: Int) -> some View {
-        Button {
-            withAnimation(DS.Anim.snappy) { selection = idx }
-        } label: {
-            Text(label)
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(selection == idx ? .white : DS.Color.textSecondary)
-                .lineLimit(1)
-                .padding(.horizontal, DS.Spacing.sm)
-                .frame(minHeight: 30)                       // مقاس مدمّج أصغر للبار العلوي
-                .background(Capsule().fill(selection == idx ? AppSection.tree.fill : Color.clear))
-                .modifier(TreeArtSkin(art: selection == idx ? (ArtTrial(rawValue: artRaw) ?? .emblem) : .emblem,
-                                      onFill: true, compact: true))   // TMP-ART-TRIAL
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
+    /// العنوانان القصيران للشريط الجانبي الضيّق (الوضع الأفقي): «العائلة» / «النساء»
+    static var shortOptions: [DSSegmentOption<Int>] {
+        [DSSegmentOption(id: 0, title: L10n.t("العائلة", "Family"), icon: AppSection.tree.symbol),
+         DSSegmentOption(id: 1, title: L10n.t("النساء", "Women"), icon: "person.2.fill")]
+    }
+}
+
+extension View {
+    /// بطاقة أدوات الشجرة الزجاجية فوق الكانفس (شجرة العائلة والنساء، الشريط العلوي والجانبي) — مكان واحد:
+    /// زجاج النظام + لمسة الطين (`DSClaySkin`) + إطار البطاقة الشعري + ظلّ خفيف.
+    /// زواياها ١٦ (`DS.Radius.lg`) كما كانت قبل التوحيد — أنعم من بطاقات الصفحات (١٢) فوق الكانفس
+    func treeToolbarCard() -> some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+        return self
+            .dsGlass(shape)
+            .modifier(DSClaySkin(radius: DS.Radius.lg, glassBacked: true, section: .tree))
+            .overlay(shape.strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke),
+                                        lineWidth: DS.Card.strokeWidth))
+            .dsSubtleShadow()
     }
 }

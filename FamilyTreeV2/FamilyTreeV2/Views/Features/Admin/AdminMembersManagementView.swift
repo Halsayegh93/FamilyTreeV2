@@ -44,6 +44,19 @@ struct AdminMembersManagementView: View {
             case .families:   return DS.Color.accent
             }
         }
+
+        /// وصف رأس الصفحة لكل قسم — كان في بطاقة رأس كل قسم (`DSPageHero`)، وصار في الرأس الملوّن
+        var subtitle: String {
+            switch self {
+            case .overview:   return L10n.t("الحسابات والسجل والعوائل", "Accounts, registry, families")
+            case .accounts:   return L10n.t("عضو واحد في كل مرة — أكمل نواقصه ثم اسحب للتالي",
+                                            "One member at a time — fill the gaps, then swipe to the next")
+            case .directory:  return L10n.t("تصفّح الفروع، أو ابحث بالاسم أو الرقم",
+                                            "Browse branches, or search by name or phone")
+            case .families:   return L10n.t("يختار العضو عائلته منها، وتظهر بآخر اسمه في التطبيق.",
+                                            "Members pick from this list; it appears at the end of their name.")
+            }
+        }
     }
 
     @State private var selectedTab: Tab = .overview
@@ -52,51 +65,42 @@ struct AdminMembersManagementView: View {
     @State private var issueFocus: AdminActivateAccountsView.IssueFocus = .all
     /// أُحصيت الأرقام مرة على الأقل — قبلها «—» بدل أصفار مضلِّلة
     @State private var statsReady = false
-    @Namespace private var tabNamespace
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// لون مجال «الشجرة والأعضاء»
     private let tint = DS.Color.composerProject
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
+        VStack(spacing: 0) {
+            tabBar
+                .padding(.top, DS.Spacing.sm)
+                .padding(.bottom, DS.Spacing.xs)
 
-            VStack(spacing: 0) {
-                tabBar
-                    .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xs)
+            switch selectedTab {
+            case .overview:
+                overviewTab
 
-                switch selectedTab {
-                case .overview:
-                    overviewTab
+            case .accounts:
+                accountsTab
 
-                case .accounts:
-                    accountsTab
+            case .directory:
+                // رأس هذه الصفحة فوق السجل — لا رأس ثانٍ
+                AdminMembersDirectoryView(showsHeader: false)
+                    .environmentObject(authVM)
+                    .environmentObject(memberVM)
 
-                case .directory:
-                    AdminMembersDirectoryView()
-                        .environmentObject(authVM)
-                        .environmentObject(memberVM)
-
-                case .families:
-                    AdminFamilyNamesView()
-                        .environmentObject(authVM)
-                }
+            case .families:
+                AdminFamilyNamesView()
+                    .environmentObject(authVM)
             }
         }
-        .navigationTitle(L10n.t("إدارة الأعضاء", "Members Management"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        // الرأس الملوّن الموحّد (طلب المالك ٢٠٢٦-١٠-٠٧) — وصفه وصف القسم المختار
+        .dsSubPageHeader(L10n.t("إدارة الأعضاء", "Members Management"), subtitle: selectedTab.subtitle) {
             // تسجيل عضو جديد — نُقل من اللوحة الرئيسية إلى حيث ينتمي
             // للمالك والمدير فقط (canRegisterMembers) — كان يظهر للمراقب
             if authVM.canRegisterMembers {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showRegisterMember = true } label: {
-                        Image(systemName: "person.badge.plus")
-                            .font(DS.Font.scaled(15, weight: .semibold))
-                    }
-                    .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register new member"))
+                DSHeaderButton(symbol: "person.badge.plus",
+                               label: L10n.t("تسجيل عضو جديد", "Register new member")) {
+                    showRegisterMember = true
                 }
             }
             // «الأرقام المحظورة» انتقلت إلى «النظام ← الفريق والأمان» في لوحة الإدارة
@@ -135,7 +139,7 @@ struct AdminMembersManagementView: View {
 
                 // نفس زر الشريط العلوي — ظاهر هنا لأنه أكثر إجراء يُطلب من هذه الصفحة
                 if authVM.canRegisterMembers {
-                    SysActionButton(title: L10n.t("تسجيل عضو جديد", "Register new member"),
+                    DSActionButton(title: L10n.t("تسجيل عضو جديد", "Register new member"),
                                     icon: "person.badge.plus") {
                         showRegisterMember = true
                     }
@@ -151,21 +155,16 @@ struct AdminMembersManagementView: View {
 
     private func heroValue(_ n: Int) -> String { statsReady ? "\(n)" : "—" }
 
+    /// الأرقام السريعة — العنوان والوصف في الرأس الملوّن
     private var overviewHero: some View {
-        DSPageHero(
-            title: L10n.t("إدارة الأعضاء", "Members Management"),
-            subtitle: L10n.t("الحسابات والسجل والعوائل", "Accounts, registry, families"),
-            icon: "person.2.badge.gearshape",
-            tint: tint,
-            stats: [
-                DSHeroStat(value: heroValue(stats.total),
-                           label: L10n.t("الأفراد", "Members"), icon: "person.3.fill"),
-                DSHeroStat(value: heroValue(stats.active),
-                           label: L10n.t("مفعّلة", "Active"), icon: "checkmark.seal.fill"),
-                DSHeroStat(value: heroValue(stats.pending),
-                           label: L10n.t("بانتظار التفعيل", "Pending"), icon: "clock.badge.questionmark")
-            ]
-        )
+        DSStatsRow([
+            DSHeroStat(value: heroValue(stats.total),
+                       label: L10n.t("الأفراد", "Members"), icon: "person.3.fill"),
+            DSHeroStat(value: heroValue(stats.active),
+                       label: L10n.t("مفعّلة", "Active"), icon: "checkmark.seal.fill"),
+            DSHeroStat(value: heroValue(stats.pending),
+                       label: L10n.t("بانتظار التفعيل", "Pending"), icon: "clock.badge.questionmark")
+        ], tint: tint)
     }
 
     // MARK: - الحسابات
@@ -218,8 +217,8 @@ struct AdminMembersManagementView: View {
     private var accountsGlance: some View {
         let sum = max(1, stats.active + stats.pending + stats.frozen)
         func pct(_ v: Int) -> Int { Int((Double(v) / Double(sum) * 100).rounded()) }
-        return VStack(alignment: .leading, spacing: 7) {
-            SysDistributionBar(segments: [
+        return VStack(alignment: .leading, spacing: DSBox.sectionInnerSpacing) {
+            DSDistributionBar(segments: [
                 .init(id: "active", value: stats.active, tint: DS.Color.success),
                 .init(id: "pending", value: stats.pending, tint: DS.Color.warning),
                 .init(id: "frozen", value: stats.frozen, tint: DS.Color.error)
@@ -237,17 +236,17 @@ struct AdminMembersManagementView: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.horizontal, 2)
-        .padding(.bottom, 2)
+        .padding(.horizontal, DS.Spacing.xxs)
+        .padding(.bottom, DS.Spacing.xxs)
         .accessibilityElement(children: .combine)
     }
 
     private func legendItem(_ title: String, _ percent: Int, _ color: Color) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 7, height: 7)
+        HStack(spacing: DS.Spacing.xs) {
+            Circle().fill(color).frame(width: DS.Icon.legendDotCompact, height: DS.Icon.legendDotCompact)
                 .accessibilityHidden(true)
             Text(L10n.t("\(title) \(percent)٪", "\(title) \(percent)%"))
-                .font(DS.Font.plex(10.5, weight: .semibold))
+                .dsFont(.micro)
                 .foregroundColor(DS.Color.textSecondary)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -260,9 +259,9 @@ struct AdminMembersManagementView: View {
                              value: Int, valueTint: Color,
                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            SysRow(icon: icon, tint: tint, title: title, subtitle: subtitle) {
-                SysStatusChip(text: heroValue(value), tint: valueTint)
-                SysChevron()
+            DSRow(icon: icon, tint: tint, title: title, subtitle: subtitle) {
+                DSStatusChip(text: heroValue(value), tint: valueTint)
+                DSChevron()
             }
             .contentShape(Rectangle())
         }
@@ -320,9 +319,9 @@ struct AdminMembersManagementView: View {
         let ringTint = completeness >= 0.9 ? DS.Color.success
             : (completeness >= 0.6 ? DS.Color.warning : DS.Color.error)
         return HStack(spacing: DS.Spacing.md) {
-            SysRing(progress: statsReady ? completeness : 0, tint: ringTint, lineWidth: 6, size: 56) {
+            DSRing(progress: statsReady ? completeness : 0, tint: ringTint, lineWidth: DS.Spacing.xsm, size: DS.Icon.sizeLg) {
                 Text(statsReady ? L10n.t("\(pct)٪", "\(pct)%") : "—")
-                    .dsFieldFont(13, weight: .bold)
+                    .dsFieldFont(.rowTitleCompact)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -330,13 +329,13 @@ struct AdminMembersManagementView: View {
             }
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(L10n.t("اكتمال البيانات", "Data completeness"))
-                    .dsFieldFont(13.5, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("الميلاد والجنس وصور الحسابات وتواريخ الوفاة",
                             "Birth dates, gender, account photos and death dates"))
-                    .dsFieldFont(12)
+                    .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -356,15 +355,15 @@ struct AdminMembersManagementView: View {
             issueFocus = focus
             selectedTab = .accounts
         } label: {
-            SysRow(icon: icon, tint: tint, title: title, subtitle: subtitle) {
+            DSRow(icon: icon, tint: tint, title: title, subtitle: subtitle) {
                 if !statsReady {
-                    SysStatusChip(text: "—", tint: DS.Color.textTertiary)
+                    DSStatusChip(text: "—", tint: DS.Color.textTertiary)
                 } else if value == 0 {
-                    SysStatusChip(text: L10n.t("مكتمل", "Complete"), icon: "checkmark", tint: DS.Color.success)
+                    DSStatusChip(text: L10n.t("مكتمل", "Complete"), icon: "checkmark", tint: DS.Color.success)
                 } else {
-                    SysStatusChip(text: "\(value)", tint: DS.Color.warning)
+                    DSStatusChip(text: "\(value)", tint: DS.Color.warning)
                 }
-                SysChevron()
+                DSChevron()
             }
             .contentShape(Rectangle())
         }
@@ -429,51 +428,11 @@ struct AdminMembersManagementView: View {
             .environmentObject(adminRequestVM)
     }
 
-    // MARK: - شريط الأقسام — حاوية واحدة، والمختار كحلي ينزلق بين الأقسام
+    // MARK: - شريط الأقسام — المبدّل الموحّد (`DSSegmentedSwitch`)، المختار بتعبئة القسم
 
     private var tabBar: some View {
-        HStack(spacing: 0) {
-            ForEach(Tab.allCases, id: \.self) { tab in
-                tabButton(for: tab)
-            }
-        }
-        .padding(3)
-        .background(Capsule().fill(DS.Color.surface))
-        .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.12), lineWidth: 1))
-        .padding(.horizontal, DS.Spacing.lg)
-    }
-
-    private func tabButton(for tab: Tab) -> some View {
-        let isSelected = selectedTab == tab
-
-        return Button {
-            guard !isSelected else { return }
-            UISelectionFeedbackGenerator().selectionChanged()
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) { selectedTab = tab }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 12, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(tab.title)
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundColor(isSelected ? .white : DS.Color.textSecondary)
-            .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .background {
-                if isSelected {
-                    Capsule()
-                        .fill(DSActionFill.style())
-                        .matchedGeometryEffect(id: "membersTab", in: tabNamespace)
-                }
-            }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(tab.title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        DSSegmentedSwitch(options: Tab.allCases.map { DSSegmentOption(id: $0, title: $0.title, icon: $0.icon) },
+                          selection: $selectedTab)
+            .padding(.horizontal, DS.Spacing.lg)
     }
 }

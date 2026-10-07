@@ -16,7 +16,9 @@ struct ProjectPhotosEditor: View {
     @State private var pickerItems: [PhotosPickerItem] = []
 
     private var total: Int { existingUrls.count + newImages.count }
-    private let columns = [GridItem(.adaptive(minimum: 84), spacing: DS.Spacing.sm)]
+    /// ضلع المصغّرة (نفس خانة «إضافة») — من مقاسات الهيكل
+    private static let tileSide: CGFloat = DSBox.photoTile * 1.5
+    private let columns = [GridItem(.adaptive(minimum: tileSide), spacing: DS.Spacing.sm)]
 
     var body: some View {
         // نفس شكل أقسام مربّعات الإضافة (طلب المالك)
@@ -48,22 +50,24 @@ struct ProjectPhotosEditor: View {
                     PhotosPicker(selection: $pickerItems,
                                  maxSelectionCount: projectPhotosLimit - total,
                                  matching: .images) {
-                        VStack(spacing: 4) {
+                        VStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "plus")
-                                .font(DS.Font.scaled(18, weight: .bold))
+                                .dsGlyph(DS.Glyph.xlCompact)
                             Text(L10n.t("إضافة", "Add"))
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .dsFont(.badge)
                         }
                         .foregroundColor(AppSection.projects.ink)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 84)
+                        .frame(height: Self.tileSide)
+                        // خانة «إضافة» المتقطّعة الموحّدة
                         .background(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .fill(AppSection.projects.ink.opacity(0.08))
+                            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                                .fill(AppSection.projects.ink.opacity(DS.Opacity.tintFillSoft))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .strokeBorder(AppSection.projects.ink.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
+                            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                                .strokeBorder(AppSection.projects.ink.opacity(DSAddChipLabel.strokeOpacity),
+                                              style: DSAddChipLabel.dash)
                         )
                     }
                 }
@@ -87,62 +91,23 @@ struct ProjectPhotosEditor: View {
     private func thumb<C: View>(@ViewBuilder _ content: () -> C, onRemove: @escaping () -> Void) -> some View {
         content()
             .frame(maxWidth: .infinity)
-            .frame(height: 84)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .frame(height: Self.tileSide)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
             .overlay(alignment: .topLeading) {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
-                        .font(DS.Font.scaled(10, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 22, height: 22)
-                        .background(Circle().fill(Color.black.opacity(0.55)))
-                        .padding(5)
+                        .dsGlyph(DS.Glyph.micro)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .frame(width: DS.Icon.section, height: DS.Icon.section)
+                        .background(Circle().fill(DS.Color.shadowOverlay))
+                        .padding(DS.Spacing.xs)
                         // مساحة ضغط ٤٤ نقطة حول الشارة الصغيرة (حد أبل) والشكل كما هو
-                        .frame(width: 44, height: 44, alignment: .topLeading)
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget, alignment: .topLeading)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.t("حذف الصورة", "Remove photo"))
             }
-    }
-}
-
-/// معرض صور المشروع في صفحته — صف أفقي، والضغط يفتح الصورة بملء الشاشة
-struct ProjectPhotosGallery: View {
-    let urls: [String]
-    @State private var viewerIndex: Int?
-
-    var body: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("صور المشروع", "Project Photos"),
-                icon: "photo.on.rectangle.angled",
-                trailing: "\(urls.count)",
-                iconColor: DS.Color.primary
-            )
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(Array(urls.enumerated()), id: \.offset) { idx, url in
-                        Button { viewerIndex = idx } label: {
-                            CachedAsyncImage(url: URL(string: url)) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: { DS.Color.mutedBackground }
-                            .frame(width: 140, height: 105)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        }
-                        .buttonStyle(DSScaleButtonStyle())
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.md)
-            }
-        }
-        .fullScreenCover(item: Binding(
-            get: { viewerIndex.map { ProjectPhotoIndex(id: $0) } },
-            set: { viewerIndex = $0?.id }
-        )) { start in
-            ProjectPhotoViewer(urls: urls, startIndex: start.id)
-        }
     }
 }
 
@@ -156,17 +121,9 @@ struct ProjectPhotosMosaic: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Text(L10n.t("صور المشروع", "Project Photos"))
-                    .font(DS.Font.plex(13, weight: .bold))
-                Spacer()
-                Text("\(urls.count)")
-                    .font(DS.Font.plex(12, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            .foregroundColor(DS.Color.textSecondary)
+            // عنوان القسم الموحّد (قرص مجسّم + عنوان + العدد)
+            DSSectionTitle(title: L10n.t("صور المشروع", "Project Photos"), icon: "photo.on.rectangle.angled",
+                           tint: AppSection.projects.ink, trailing: "\(urls.count)", iconSize: DS.Icon.inline)
 
             if urls.count == 1 {
                 tile(0, height: 210)
@@ -187,10 +144,8 @@ struct ProjectPhotosMosaic: View {
                 }
             }
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .dsSubtleShadow()
+        // البطاقة الواحدة (`.dsCard`)
+        .dsCard(padding: DS.Spacing.lg)
         .fullScreenCover(item: Binding(
             get: { viewerIndex.map { ProjectPhotoIndex(id: $0) } },
             set: { viewerIndex = $0?.id }
@@ -213,14 +168,14 @@ struct ProjectPhotosMosaic: View {
             .overlay {
                 if extra > 0 {
                     ZStack {
-                        Color.black.opacity(0.45)
+                        DS.Color.shadowHeavy
                         Text("+\(extra)")
-                            .font(DS.Font.plex(20, weight: .bold))
-                            .foregroundColor(.white)
+                            .dsFont(.emptyTitle)
+                            .foregroundColor(DS.Color.textOnPrimary)
                     }
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(L10n.t("صورة \(index + 1)", "Photo \(index + 1)"))
@@ -239,13 +194,13 @@ private struct ProjectPhotoViewer: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.black.ignoresSafeArea()
+            DS.Color.overlayDark.ignoresSafeArea()
             TabView(selection: $index) {
                 ForEach(Array(urls.enumerated()), id: \.offset) { idx, url in
                     ZoomableImage(onZoomChange: { zoomed = $0 }) {
                         CachedAsyncImage(url: URL(string: url)) { img in
                             img.resizable().scaledToFit()
-                        } placeholder: { ProgressView().tint(.white) }
+                        } placeholder: { DSPageLoader(section: .projects) }
                     }
                     .tag(idx)
                 }
@@ -255,17 +210,11 @@ private struct ProjectPhotoViewer: View {
 
             HStack {
                 Text("\(index + 1) / \(urls.count)")
-                    .font(DS.Font.plex(13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.85))
+                    .dsFont(.rowTitleCompact)
+                    .foregroundColor(DS.Color.overlayText)
                 Spacer()
-                Button { dismiss() } label: {
-                    Text(L10n.t("إغلاق", "Close"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .frame(height: 36)
-                        .background(Capsule().fill(Color.white.opacity(0.18)))
-                }
+                // زرّ الإغلاق الموحّد فوق الوسائط
+                DSCloseButton(context: .onMedia) { dismiss() }
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.sm)

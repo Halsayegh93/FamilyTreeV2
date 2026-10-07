@@ -42,14 +42,11 @@ struct CategoriesManagerView: View {
                 .categoryListRow(top: DS.Spacing.sm, bottom: DS.Spacing.xs)
 
             if isInitialLoading {
-                SysStateCard(icon: "tag.fill",
-                             title: L10n.t("جارٍ تحميل التصنيفات…", "Loading categories…"),
-                             tint: pageTint,
-                             isLoading: true)
+                DSPageLoader(L10n.t("جارٍ تحميل التصنيفات…", "Loading categories…"), fillsSpace: false)
                     .dsStaggerIn(1)
                     .categoryListRow(top: DS.Spacing.md, bottom: DS.Spacing.xxxl)
             } else if loadFailed {
-                SysStateCard(icon: "wifi.exclamationmark",
+                DSStateCard(icon: "wifi.exclamationmark",
                              title: L10n.t("تعذّر تحميل التصنيفات", "Couldn't load categories"),
                              hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                              tint: DS.Color.error,
@@ -70,7 +67,7 @@ struct CategoriesManagerView: View {
                     .dsStaggerIn(2)
                     // العنوان يظهر مع الصفوف (بعد التحميل) — فتبدأ الصفوف بعده
                     .onAppear(perform: startRowsCascade)
-                    .categoryListRow(top: DS.Spacing.sm, bottom: 2)
+                    .categoryListRow(top: DS.Spacing.sm, bottom: DS.Spacing.xxs)
 
                 if items.isEmpty {
                     emptySection
@@ -93,9 +90,11 @@ struct CategoriesManagerView: View {
         .environment(\.editMode, editModeBinding)
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 0)
-        .background(DS.Color.background.ignoresSafeArea())
-        .navigationTitle(L10n.t("التصنيفات", "Categories"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(L10n.t("التصنيفات", "Categories"),
+                         subtitle: canEdit
+                            ? L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب", "Name, icon, colour, hide and order")
+                            : L10n.t("تتصفّح للقراءة — التعديل للمالك", "Read-only — the owner edits"))
         .task { await loadCategories() }
         .refreshable { await loadCategories() }
         // تعديل/إضافة تصنيف — مربّع بمنتصف الشاشة بدل الورقة السفلية
@@ -162,22 +161,15 @@ struct CategoriesManagerView: View {
         let all = CategorySection.allCases.flatMap { store.list($0, activeOnly: false) }
         let visible = all.filter(\.isActive).count
         let pending = isInitialLoading || loadFailed
-        return DSPageHero(
-            title: L10n.t("التصنيفات", "Categories"),
-            subtitle: canEdit
-                ? L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب", "Name, icon, colour, hide and order")
-                : L10n.t("تتصفّح للقراءة — التعديل للمالك", "Read-only — the owner edits"),
-            icon: "tag.fill",
-            tint: pageTint,
-            stats: [
+        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
+        return DSStatsRow([
                 DSHeroStat(value: pending ? "—" : "\(all.count)",
                            label: L10n.t("الكل", "All"), icon: "tag.fill"),
                 DSHeroStat(value: pending ? "—" : "\(visible)",
                            label: L10n.t("ظاهر", "Visible"), icon: "eye.fill"),
                 DSHeroStat(value: pending ? "—" : "\(all.count - visible)",
                            label: L10n.t("مخفي", "Hidden"), icon: "eye.slash.fill")
-            ]
-        )
+        ], tint: pageTint)
     }
 
     // MARK: - القسم (الأخبار / مكتبة العائلة)
@@ -203,19 +195,19 @@ struct CategoriesManagerView: View {
 
     /// نفس نص التوضيح السابق — سطر صغير تحت الفلاتر
     private var hintRow: some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(alignment: .top, spacing: DS.Spacing.xsm) {
             Image(systemName: canEdit ? "info.circle.fill" : "lock.fill")
-                .font(.system(size: 11.5, weight: .bold))
+                .dsGlyph(DS.Glyph.smCompact)
                 .foregroundColor(canEdit ? pageTint : DS.Color.textTertiary)
-                .padding(.top, 2)
+                .padding(.top, DS.Spacing.xxs)
                 .accessibilityHidden(true)
             Text(footerText)
-                .dsFieldFont(11.5)
+                .dsFieldFont(.footnote)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 2)
+        .padding(.horizontal, DS.Spacing.xxs)
         .accessibilityElement(children: .combine)
     }
 
@@ -234,7 +226,7 @@ struct CategoriesManagerView: View {
 
     /// عنوان القسم المختار — للمالك «اسحب لإعادة الترتيب» (كما كان)، ولغيره عدد التصنيفات
     private func sectionTitle(count: Int) -> some View {
-        SysSectionTitle(title: L10n.t("تصنيفات \(section.title)", "\(section.title) categories"),
+        DSSectionTitle(title: L10n.t("تصنيفات \(section.title)", "\(section.title) categories"),
                         icon: sectionIcon(section),
                         tint: pageTint,
                         trailing: canEdit
@@ -275,18 +267,17 @@ struct CategoriesManagerView: View {
 
     /// لا تصنيفات في القسم المختار
     private var emptySection: some View {
-        SysStateCard(icon: "tag.slash.fill",
-                     title: L10n.t("لا توجد تصنيفات", "No categories"),
-                     hint: canEdit && section.allowsAdding
+        DSEmptyView(L10n.t("لا توجد تصنيفات", "No categories"),
+                    message: canEdit && section.allowsAdding
                         ? L10n.t("أضف تصنيفاً من الزر أدناه", "Add one with the button below")
                         : nil,
-                     tint: DS.Color.textTertiary)
+                    style: .compact)
     }
 
     @ViewBuilder
     private var addSection: some View {
         if canEdit && section.allowsAdding {
-            SysActionButton(title: L10n.t("إضافة تصنيف", "Add category"), icon: "plus.circle.fill") {
+            DSActionButton(title: L10n.t("إضافة تصنيف", "Add category"), icon: "plus.circle.fill") {
                 showAdd = true
             }
             .dsStaggerIn(4)
@@ -299,23 +290,23 @@ struct CategoriesManagerView: View {
     private func row(_ category: ContentCategory) -> some View {
         let count = store.itemCount(category)
         return HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: category.iconKey,
+            DSFieldIcon(name: category.symbol,
                         tint: category.isActive ? category.color : DS.Color.textTertiary)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                HStack(spacing: DS.Spacing.xsm) {
                     Text(category.nameAr)
-                        .dsFieldFont(13.5, weight: .bold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(category.isActive ? DS.Color.fieldLabel : DS.Color.textTertiary)
                         .lineLimit(1)
                     // عدد العناصر — رقم فقط جنب الاسم (طلب المالك)
-                    SysStatusChip(text: "\(count)", tint: count > 0 ? category.color : DS.Color.textTertiary)
+                    DSStatusChip(text: "\(count)", tint: count > 0 ? category.color : DS.Color.textTertiary)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(L10n.t("\(count) عنصر", count == 1 ? "1 item" : "\(count) items"))
                 }
                 Text(category.nameEn)
-                    .dsFieldFont(12)
+                    .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
             }
@@ -324,7 +315,7 @@ struct CategoriesManagerView: View {
             Spacer(minLength: 0)
 
             if !category.isActive {
-                SysStatusChip(text: L10n.t("مخفي", "Hidden"), icon: "eye.slash.fill", tint: DS.Color.textTertiary)
+                DSStatusChip(text: L10n.t("مخفي", "Hidden"), icon: "eye.slash.fill", tint: DS.Color.textTertiary)
             }
             // حذف من برّا — للتصنيف الفارغ غير الأساسي فقط
             if canEdit && count == 0 && !store.isProtected(category) {
@@ -332,14 +323,14 @@ struct CategoriesManagerView: View {
                     pendingDelete = category
                 } label: {
                     Image(systemName: "trash")
-                        .font(.system(size: 13, weight: .bold))
+                        .dsGlyph(DS.Glyph.mdCompact)
                         .foregroundColor(DS.Color.error)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(DS.Color.error.opacity(0.10)))
+                        .frame(width: DS.Icon.discSmall, height: DS.Icon.discSmall)
+                        .background(Circle().fill(DS.Color.error.opacity(DS.Opacity.tintFill)))
                         // مساحة ضغط ٤٤ نقطة والشكل كما هو
-                        .frame(width: 44, height: 44)
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                         .contentShape(Rectangle())
-                        .padding(.vertical, -7)
+                        .padding(.vertical, -DS.Spacing.xsm)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.t("حذف التصنيف", "Delete category"))
@@ -361,7 +352,7 @@ struct CategoriesManagerView: View {
 
 private extension View {
     /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
-    func categoryListRow(top: CGFloat = 4, bottom: CGFloat = 4) -> some View {
+    func categoryListRow(top: CGFloat = DS.Spacing.xs, bottom: CGFloat = DS.Spacing.xs) -> some View {
         self
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
@@ -454,10 +445,7 @@ struct CategoryEditSheet: View {
             }
 
             if let errorText {
-                Text(errorText)
-                    .font(DS.Font.plex(12, weight: .semibold))
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -468,16 +456,16 @@ struct CategoryEditSheet: View {
     /// معاينة شارة التصنيف كما ستظهر
     private var preview: some View {
         HStack(spacing: DS.Spacing.xs) {
-            Image(systemName: iconKey).font(DS.Font.scaled(12, weight: .bold))
+            Image(systemName: CategoryPalette.symbol(iconKey)).dsGlyph(DS.Glyph.sm)
                 .accessibilityHidden(true)
             Text(nameAr.isEmpty ? L10n.t("اسم التصنيف", "Category name") : nameAr)
-                .font(DS.Font.plex(13, weight: .bold))
+                .dsFont(.rowTitleCompact)
         }
-        .foregroundColor(.white)
+        .foregroundColor(DS.Color.textOnPrimary)
         .padding(.horizontal, DS.Spacing.md)
-        .frame(height: 32)
+        .frame(height: DS.Icon.row)
         .background(Capsule().fill(accent))
-        .opacity(isActive ? 1 : 0.45)
+        .opacity(isActive ? 1 : DS.Opacity.disabled)
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xs)
     }
@@ -503,17 +491,17 @@ struct CategoryEditSheet: View {
                           tint: DS.Color.info, index: 2) {
             // صفوف عادية لا LazyVGrid — الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً فيُقصّ آخر صف
             // (المسافة ٦ + نقطة ضغط زائدة فوق وتحت كل زر = نفس الفراغ الظاهر ٨ كما كان)
-            gridRows(CategoryPalette.icons, columns: 5, spacing: 6) { icon in
+            gridRows(CategoryPalette.icons, columns: 5, spacing: DS.Spacing.xsm) { icon in
                 Button { iconKey = icon } label: {
-                    Image(systemName: icon)
-                        .font(DS.Font.scaled(16, weight: .bold))
-                        .foregroundColor(iconKey == icon ? .white : accent)
+                    Image(systemName: CategoryPalette.symbol(icon))
+                        .dsGlyph(DS.Glyph.lg)
+                        .foregroundColor(iconKey == icon ? DS.Color.textOnPrimary : accent)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 42)
+                        .frame(height: DS.Icon.tapTarget - DS.Spacing.xxs)
                         .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(iconKey == icon ? accent : accent.opacity(0.10)))
+                            .fill(iconKey == icon ? accent : accent.opacity(DS.Opacity.tintFill)))
                         // مساحة ضغط ٤٤ (توصية أبل) — الزر الظاهر ٤٢ كما هو
-                        .frame(height: 44)
+                        .frame(height: DS.Icon.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -533,11 +521,14 @@ struct CategoryEditSheet: View {
                 Button { colorKey = key } label: {
                     Circle()
                         .fill(CategoryPalette.color(key))
-                        .frame(width: 32, height: 32)
-                        .overlay(Circle().strokeBorder(Color.white, lineWidth: colorKey == key ? 3 : 0))
-                        .overlay(Circle().strokeBorder(CategoryPalette.color(key), lineWidth: colorKey == key ? 1.5 : 0).padding(-3))
+                        .frame(width: DS.Icon.row, height: DS.Icon.row)
+                        .overlay(Circle().strokeBorder(DS.Color.textOnPrimary,
+                                                       lineWidth: colorKey == key ? DS.Border.widthBold * 2 : 0))
+                        .overlay(Circle().strokeBorder(CategoryPalette.color(key),
+                                                       lineWidth: colorKey == key ? DS.Border.widthBold : 0)
+                            .padding(-DS.Spacing.xxs))
                         // مساحة ضغط ٤٤ (توصية أبل)
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -545,7 +536,7 @@ struct CategoryEditSheet: View {
                 .accessibilityLabel(CategoryEditA11yNames.color(key))
                 .accessibilityAddTraits(colorKey == key ? .isSelected : [])
             }
-            .padding(.vertical, -6)
+            .padding(.vertical, -DS.Spacing.xsm)
         }
     }
 
@@ -557,13 +548,13 @@ struct CategoryEditSheet: View {
                             tint: isActive ? DS.Color.success : DS.Color.textTertiary)
                     .accessibilityHidden(true)
                 Toggle(isOn: $isActive) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(L10n.t("ظاهر للأعضاء", "Visible to members"))
-                            .dsFieldFont(13.5, weight: .bold)
+                            .dsFieldFont(.rowTitle)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(L10n.t("الإخفاء يشيله من الاختيارات، والمحتوى القديم يبقى بتصنيفه",
                                     "Hiding removes it from choices; existing content keeps it"))
-                            .font(DS.Font.plex(11))
+                            .dsFont(.footnote)
                             .foregroundColor(DS.Color.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -577,7 +568,7 @@ struct CategoryEditSheet: View {
     /// شبكة غير كسولة: صفوف من `columns` عناصر، والصف الناقص يُكمَّل بفراغ
     /// (`hSpacing` المسافة بين الخانات — ٠ للألوان حتى تأخذ كل خانة أوسع مساحة ضغط)
     private func gridRows<Item: Hashable, Cell: View>(_ items: [Item], columns: Int, spacing: CGFloat,
-                                                      hSpacing: CGFloat = 8,
+                                                      hSpacing: CGFloat = DS.Spacing.sm,
                                                       @ViewBuilder cell: @escaping (Item) -> Cell) -> some View {
         VStack(spacing: spacing) {
             ForEach(Array(stride(from: 0, to: items.count, by: columns)), id: \.self) { start in
@@ -587,7 +578,7 @@ struct CategoryEditSheet: View {
                         cell(item).frame(maxWidth: .infinity)
                     }
                     ForEach(0..<(columns - (end - start)), id: \.self) { _ in
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: DS.Border.width)
                     }
                 }
             }
@@ -598,23 +589,16 @@ struct CategoryEditSheet: View {
     private func deleteCard(_ category: ContentCategory) -> some View {
         let count = store.itemCount(category)
         return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Button {
+            // الزرّ الواحد بالأحمر — معطّل (نفس الشكل خافتاً) ما دام فيه عناصر
+            DSButton(L10n.t("حذف التصنيف نهائياً", "Delete category permanently"), icon: "trash",
+                     role: .destructive) {
                 confirmDelete = true
-            } label: {
-                Label(L10n.t("حذف التصنيف نهائياً", "Delete category permanently"), systemImage: "trash")
-                    .font(DS.Font.plex(13.5, weight: .bold))
-                    .foregroundColor(count == 0 ? DS.Color.error : DS.Color.textTertiary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill((count == 0 ? DS.Color.error : DS.Color.textTertiary).opacity(0.10)))
             }
-            .buttonStyle(DSScaleButtonStyle())
             .disabled(count > 0)
             if count > 0 {
                 Text(L10n.t("فيه \(count) عنصر — ما ينحذف إلا وهو فاضي. تقدر تخفيه بدل الحذف.",
                             "It has \(count) items — only empty categories can be deleted. You can hide it instead."))
-                    .font(DS.Font.plex(11, weight: .medium))
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -664,7 +648,7 @@ private enum CategoryEditA11yNames {
         case "megaphone.fill":     return L10n.t("مكبّر صوت", "Megaphone")
         case "heart.fill":         return L10n.t("قلب", "Heart")
         case "figure.child":       return L10n.t("طفل", "Child")
-        case "heart.slash.fill":   return L10n.t("قلب مشطوب", "Crossed-out heart")
+        case "heart.slash.fill":   return L10n.t("قبر", "Grave")
         case "hands.clap.fill":    return L10n.t("تصفيق", "Clapping hands")
         case "envelope.open.fill": return L10n.t("ظرف مفتوح", "Open envelope")
         case "bell.badge.fill":    return L10n.t("جرس", "Bell")

@@ -3,7 +3,8 @@ import SwiftUI
 // MARK: - «دليل الاستخدام» (كان «التعليمات») — من علامة المعلومات في الرئيسية (طلب المالك ٢٠٢٦-٠٩-٢٧)
 //
 // فصول (طلب المالك: «أضيف دليل الاستخدام للواجهات الأخرى»): الشجرة، الرئيسية، الديوانيات،
-// حسابي، الإشعارات — ترحيب بقائمة الفصول ← نقاط الفصل ← «أنهيت الفصل» ← الفصل التالي،
+// حسابي، الإشعارات، ثم (٢٠٢٦-١٠-٠٧، «حتى في التعليمات في دليل الاستخدام») إضافة خبر، المكتبة،
+// المشاريع، التواصل — ترحيب بقائمة الفصول ← نقاط الفصل ← «أنهيت الفصل» ← الفصل التالي،
 // وشريط تقدّم مقسّم أعلى كل فصل (يُضغط للانتقال)،
 // وكل نقطة تدخل بحركة مرتّبة (الرقم ← العنوان ← اللقطة ← الشرح) — ومع «تقليل الحركة» بلا حركة.
 //
@@ -124,7 +125,7 @@ struct AppGuideBox: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 346)
+                .frame(height: GuideMetrics.slideHeight)   // بطاقة النقطة كاملة مع ظلّها
                 .id(chapter.id)          // فصل جديد = صفحات جديدة من أولها
             }
             .padding(.bottom, DS.Spacing.xs)
@@ -138,37 +139,28 @@ struct AppGuideBox: View {
     /// شريط الفصل: رجوع لكل الفصول + اسم الفصل بلونه
     private func chapterBar(_ chapter: GuideChapter) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            Button {
+            // رجوع لكل الفصول — الشريحة الواحدة
+            DSChipButton(L10n.t("كل الفصول", "All chapters"),
+                         icon: L10n.isArabic ? "chevron.right" : "chevron.left",
+                         tint: DS.Color.actionNavy) {
                 withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) { chapterIndex = nil }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                        .font(.system(size: 11.5, weight: .bold))
-                    Text(L10n.t("كل الفصول", "All chapters"))
-                        .font(DS.Font.plex(12.5, weight: .bold))
-                }
-                .foregroundColor(DS.Color.actionNavy.dsReadableGlyph)
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-                .background(Capsule().fill(DS.Color.actionNavy.dsReadableGlyph.opacity(0.10)))
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(DSScaleButtonStyle())
+            .padding(.vertical, DS.Spacing.xsm)
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 5) {
+            // اسم الفصل بلونه — شارة بنفس مقاس الشريحة
+            HStack(spacing: DS.Spacing.xsm) {
                 Image(systemName: chapter.icon)
-                    .font(.system(size: 12, weight: .bold))
+                    .dsGlyph(DS.Glyph.sm)
                     .accessibilityHidden(true)
                 Text(chapter.title)
-                    .font(DS.Font.plex(12.5, weight: .bold))
+                    .dsFont(.chip)
             }
             .foregroundColor(chapter.tint.dsReadableGlyph)
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .background(Capsule().fill(chapter.tint.dsReadableGlyph.opacity(0.12)))
+            .padding(.horizontal, DSBox.chipPadding)
+            .frame(height: DSBox.chipHeight)
+            .background(Capsule().fill(chapter.tint.dsReadableGlyph.opacity(DS.Opacity.tintFill)))
         }
     }
 
@@ -177,6 +169,8 @@ struct AppGuideBox: View {
         switch slide {
         case .step(let i):
             GuidePageView(page: pages[i], number: i + 1, total: pages.count,
+                          chapterIcon: chapter?.icon ?? "book.pages.fill",
+                          chapterTint: chapter?.tint ?? DS.Color.actionNavy,
                           isCurrent: isCurrent, reduceMotion: reduceMotion)
         case .done:
             GuideDoneView(isCurrent: isCurrent, reduceMotion: reduceMotion,
@@ -216,49 +210,62 @@ struct AppGuideBox: View {
         return b.map { "\(v) (\($0))" } ?? v
     }
 
+    /// بطاقتان بلغة أقسام المربّعات: التطبيق (أيقونته الحقيقية + الاسم + الإصدار) ثم «عمل هذا التطبيق»
     private var aboutContent: some View {
-        VStack(spacing: DS.Spacing.md) {
-            Image("AppIconImage")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 76, height: 76)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
-                .accessibilityHidden(true)
+        VStack(spacing: DSBox.sectionSpacing) {
+            HStack(spacing: DS.Spacing.md) {
+                Image("AppIconImage")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: DSBox.logoSide, height: DSBox.logoSide)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                    .dsCardShadow()
+                    .accessibilityHidden(true)
 
-            VStack(spacing: 4) {
-                Text(L10n.t("تطبيق عائلة المحمدعلي", "Al-Mohammad Ali Family App"))
-                    .font(DS.Font.plex(17, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t("الإصدار \(appVersion)", "Version \(appVersion)"))
-                    .font(DS.Font.plex(13, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(L10n.t("تطبيق عائلة المحمدعلي", "Al-Mohammad Ali Family App"))
+                        .font(DSBox.titleFont)
+                        .foregroundColor(DS.Color.fieldLabel)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                    HStack(spacing: DS.Spacing.xsm) {
+                        // اللمسة الذهبية الواحدة
+                        DSGoldDot(size: DS.Icon.legendDotCompact)
+                        Text(L10n.t("الإصدار \(appVersion)", "Version \(appVersion)"))
+                            .dsFieldFont(.calloutMedium)
+                            .foregroundColor(DS.Color.fieldValue)
+                            .monospacedDigit()
+                    }
+                }
+                Spacer(minLength: 0)
             }
+            .padding(DS.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dsCard(padding: nil)
+            .accessibilityElement(children: .combine)
+            .dsStaggerIn(1)
 
-            VStack(spacing: 3) {
-                Text("عمل هذا التطبيق")
-                    .font(DS.Font.plex(11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text("حسن الصايغ")
-                    .font(DS.Font.plex(16, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
-                Text("Made by Hasan Al-Sayegh")
-                    .font(DS.Font.plex(13, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
-                    .environment(\.layoutDirection, .leftToRight)
+            DSComposerSection(title: "عمل هذا التطبيق", icon: "hammer.fill", index: 2) {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSFieldIcon(name: "person.fill")
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs / 2) {
+                        Text("حسن الصايغ")
+                            .dsFieldFont(.headline)
+                            .foregroundColor(DS.Color.fieldLabel)
+                        Text("Made by Hasan Al-Sayegh")
+                            .dsFieldFont(.calloutCompactMedium)
+                            .foregroundColor(DS.Color.fieldValue)
+                            .environment(\.layoutDirection, .leftToRight)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(minHeight: DSBox.fieldMinHeight)
+                .dsRowBox()
+                .accessibilityElement(children: .combine)
             }
-            .padding(.vertical, DS.Spacing.sm)
-            .padding(.horizontal, DS.Spacing.lg)
-            .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
         }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.sm)
-        .accessibilityElement(children: .combine)
+        .padding(.bottom, DS.Spacing.xs)
     }
 }
 
@@ -330,18 +337,29 @@ private struct GuideChapter: Identifiable {
     let tint: Color
     let pages: [GuidePage]
 
+    /// كل فصل بلون قسمه من `AppSection` (عائلة البحري الواحدة) — الإشعارات من الرئيسية
     static var all: [GuideChapter] {
         [
             GuideChapter(id: "tree", title: L10n.t("الشجرة", "Tree"), icon: "tree.fill",
-                         tint: DS.Color.composerProject, pages: GuidePage.tree),
+                         tint: AppSection.tree.fill, pages: GuidePage.tree),
             GuideChapter(id: "home", title: L10n.t("الرئيسية", "Home"), icon: "house.fill",
-                         tint: DS.Color.actionNavy, pages: GuidePage.home),
-            GuideChapter(id: "diwaniyas", title: L10n.t("الديوانيات", "Diwaniyas"), icon: "map.fill",
-                         tint: DS.Color.composerDiwaniya, pages: GuidePage.diwaniyas),
+                         tint: AppSection.home.fill, pages: GuidePage.home),
+            // رمز الديوانيات الموحّد «مجلس» (sofa.fill) — قرار المالك ٢٠٢٦-١٠-٠٧ (كان map.fill)
+            GuideChapter(id: "diwaniyas", title: L10n.t("الديوانيات", "Diwaniyas"), icon: "sofa.fill",
+                         tint: AppSection.diwaniyas.fill, pages: GuidePage.diwaniyas),
             GuideChapter(id: "profile", title: L10n.t("حسابي", "My Account"), icon: "person.crop.circle.fill",
-                         tint: DS.Color.actionNavy, pages: GuidePage.profile),
+                         tint: AppSection.profile.fill, pages: GuidePage.profile),
             GuideChapter(id: "notifications", title: L10n.t("الإشعارات", "Notifications"), icon: "bell.badge.fill",
-                         tint: DS.Color.composerDiwaniya, pages: GuidePage.notifications)
+                         tint: AppSection.home.fill, pages: GuidePage.notifications),
+            // فصول أقسام الرئيسية (٢٠٢٦-١٠-٠٧) — كل فصل بلون قسمه؛ «التواصل» = رسائل الإدارة → لون الإدارة
+            GuideChapter(id: "addNews", title: L10n.t("إضافة خبر", "Add a post"), icon: "newspaper.fill",
+                         tint: AppSection.news.fill, pages: GuidePage.addNews),
+            GuideChapter(id: "library", title: L10n.t("المكتبة", "Library"), icon: "books.vertical.fill",
+                         tint: AppSection.library.fill, pages: GuidePage.library),
+            GuideChapter(id: "projects", title: L10n.t("المشاريع", "Projects"), icon: "briefcase.fill",
+                         tint: AppSection.projects.fill, pages: GuidePage.projects),
+            GuideChapter(id: "contact", title: L10n.t("التواصل", "Contact"), icon: "envelope.fill",
+                         tint: AppSection.admin.fill, pages: GuidePage.contact)
         ]
     }
 }
@@ -365,8 +383,8 @@ extension GuidePage {
                       visual: .rect(image: "GuideHomeTiles", rect: CGRect(x: 0.03, y: 0.02, width: 0.94, height: 0.595),
                                     aspect: shotAspect)),
             GuidePage(title: L10n.t("الأخبار والمناسبات", "News & occasions"),
-                      text: L10n.t("اضغط لتفتح كل الأخبار، وتفاعل بالإعجاب والتعليق، وأضف خبرك من زر الإضافة.",
-                                   "Tap to open all news, like and comment, and add your own from the add button."),
+                      text: L10n.t("اضغط لتفتح كل الأخبار، وتفاعل بالإعجاب والتعليق، وأضف خبرك من زر + داخل صفحة الأخبار.",
+                                   "Tap to open all news, like and comment, and add your own from the + button inside the news page."),
                       visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.04, y: 0.028, width: 0.92, height: 0.816),
                                     aspect: shotAspect))
         ]
@@ -400,8 +418,8 @@ extension GuidePage {
     fileprivate static var profile: [GuidePage] {
         [
             GuidePage(title: L10n.t("تعديل بياناتك", "Edit your info"),
-                      text: L10n.t("اضغط القلم لتعديل صورتك وبياناتك — أول ٣ تعديلات مباشرة، وبعدها بموافقة الإدارة.",
-                                   "Tap the pencil to edit your photo and info — the first 3 changes apply directly, then admin approval."),
+                      text: L10n.t("اضغط القلم لتعديل صورتك وبياناتك — أول ٣ تعديلات لكل حقل مباشرة، وبعدها بموافقة الإدارة.",
+                                   "Tap the pencil to edit your photo and info — the first 3 changes to each field apply directly, then admin approval."),
                       visual: .spot(image: "GuideProfileTop", at: CGPoint(x: 0.169, y: 0.707),
                                     radius: 0.07, aspect: shotAspect)),
             GuidePage(title: L10n.t("رمز QR", "QR code"),
@@ -414,9 +432,16 @@ extension GuidePage {
                                    "Scan a relative's code to see how you're related."),
                       visual: .spot(image: "GuideProfileInfo", at: CGPoint(x: 0.336, y: 0.299),
                                     radius: 0.08, aspect: shotAspect)),
+            // «طلباتي» بترتيب الصفحة: المعلومات ← طلباتي ← عائلتي
+            // TODO-SHOT: حسابي — قسم «طلباتي» بطلبين معلّقين «تحت المراجعة» وزر «سحب» (مكانه تحت المعلومات)
+            GuidePage(title: L10n.t("طلباتي", "My requests"),
+                      text: L10n.t("طلباتك المرسلة للإدارة تظهر هنا «تحت المراجعة» — واضغط «سحب» لإلغاء أي طلب.",
+                                   "Requests you sent to the admins show here «Under review» — tap «Withdraw» to cancel one."),
+                      visual: .rect(image: "GuideProfileInfo", rect: CGRect(x: 0.045, y: 0.79, width: 0.915, height: 0.2),
+                                    aspect: shotAspect)),
             GuidePage(title: L10n.t("عائلتي", "My family"),
-                      text: L10n.t("أضف أبناءك وزوجتك واختر الأم من هنا.",
-                                   "Add your children and wife, and choose the mother here."),
+                      text: L10n.t("يظهر لما تكون حالتك «متزوج»: أضف زوجتك واختر أمك، و«إضافة ابن» لابن أو بنت بموافقة الإدارة.",
+                                   "Shows when your status is «Married»: add your wife and pick your mother; «Add child» adds a son or daughter after admin approval."),
                       visual: .rect(image: "GuideProfileFamily", rect: CGRect(x: 0.045, y: 0.321, width: 0.915, height: 0.503),
                                     aspect: shotAspect)),
             GuidePage(title: L10n.t("الإعدادات", "Settings"),
@@ -446,6 +471,108 @@ extension GuidePage {
                                     aspect: shotAspect))
         ]
     }
+
+    // MARK: فصول أقسام الرئيسية (٢٠٢٦-١٠-٠٧) — مسودّة نصوص لمراجعة المالك؛ اللقطات مؤقتة من لقطات الرئيسية
+    // حتى تُلتقط لقطاتها في الدفعة ٦ (بعد اعتماد الشكل الجديد) وتُقاس الإحداثيات من جديد.
+
+    /// مواضع بلاطات الأقسام في لقطة `GuideHomeTiles` (نِسَب من اليسار)
+    private static let libraryTile = CGRect(x: 0.664, y: 0.34, width: 0.294, height: 0.265)
+    private static let projectsTile = CGRect(x: 0.351, y: 0.34, width: 0.296, height: 0.265)
+    private static let contactTile = CGRect(x: 0.039, y: 0.34, width: 0.297, height: 0.265)
+
+    fileprivate static var addNews: [GuidePage] {
+        [
+            // TODO-SHOT: صفحة «الأخبار والمناسبات» (قسم الأخبار) وزر + ظاهر أسفلها
+            GuidePage(title: L10n.t("زر الإضافة", "The add button"),
+                      text: L10n.t("افتح «الأخبار والمناسبات» من الرئيسية، واضغط زر + أسفل الصفحة.",
+                                   "Open «News & occasions» from Home, then tap the + button at the bottom."),
+                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.04, y: 0.028, width: 0.92, height: 0.816),
+                                    aspect: shotAspect)),
+            // TODO-SHOT: مربّع «خبر جديد» — قسم «التصنيف» بمربّعات الأنواع، واحد منها مختار
+            GuidePage(title: L10n.t("التصنيف", "Category"),
+                      text: L10n.t("اختر نوع خبرك: إعلان أو زواج أو مولود أو وفاة… ثم اكتبه.",
+                                   "Pick the type: announcement, wedding, newborn, obituary… then write it."),
+                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.081, y: 0.234, width: 0.839, height: 0.218),
+                                    aspect: shotAspect)),
+            // TODO-SHOT: مربّع «خبر جديد» — شريط الصور (صورتان) وزر «تصويت» بجانبه
+            GuidePage(title: L10n.t("صور وتصويت", "Photos & polls"),
+                      text: L10n.t("أضف حتى ٥ صور، أو حوّله تصويتاً بخيارين إلى أربعة.",
+                                   "Add up to 5 photos, or turn it into a poll with two to four options."),
+                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.081, y: 0.686, width: 0.839, height: 0.11),
+                                    aspect: shotAspect)),
+            // TODO-SHOT: مربّع «خبر جديد» — أسفله زر «إرسال للمراجعة» وملاحظة «يحتاج موافقة الإدارة قبل الظهور»
+            GuidePage(title: L10n.t("إرسال للمراجعة", "Submit"),
+                      text: L10n.t("اضغط «إرسال للمراجعة» — ويظهر خبرك للعائلة بعد موافقة الإدارة.",
+                                   "Tap «Submit» — your post appears to the family after admin approval."),
+                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.04, y: 0.028, width: 0.92, height: 0.816),
+                                    aspect: shotAspect))
+        ]
+    }
+
+    fileprivate static var library: [GuidePage] {
+        [
+            // TODO-SHOT: الرئيسية — بلاطة «مكتبة العائلة» بالشكل الجديد (يُعاد قياس الإطار)
+            GuidePage(title: L10n.t("افتح المكتبة", "Open the library"),
+                      text: L10n.t("من بلاطة «مكتبة العائلة» في الرئيسية: وثائق وصور من تاريخ العائلة.",
+                                   "From the «Family Library» tile on Home: documents and photos from the family's history."),
+                      visual: .rect(image: "GuideHomeTiles", rect: libraryTile, aspect: shotAspect)),
+            // TODO-SHOT: صفحة المكتبة بثلاثة عناصر، ثم تفاصيل عنصر وزر «حفظ أو مشاركة»
+            GuidePage(title: L10n.t("اضغط العنصر", "Tap an item"),
+                      text: L10n.t("يفتح تفاصيله وملفه — ومنه تحفظه أو تشاركه.",
+                                   "Opens its details and file — save or share it from there."),
+                      visual: .rect(image: "GuideHomeTiles", rect: libraryTile, aspect: shotAspect)),
+            // TODO-SHOT: صفحة المكتبة وزر + ظاهر، أو مربّع «إضافة إلى المكتبة»
+            GuidePage(title: L10n.t("أضف للمكتبة", "Add to the library"),
+                      text: L10n.t("اضغط + وأضف صورة أو ملف PDF بعنوانه وسنته — ويظهر للجميع بعد موافقة الإدارة.",
+                                   "Tap + and add a photo or PDF with its title and year — everyone sees it after admin approval."),
+                      visual: .rect(image: "GuideHomeTiles", rect: libraryTile, aspect: shotAspect))
+        ]
+    }
+
+    fileprivate static var projects: [GuidePage] {
+        [
+            // TODO-SHOT: الرئيسية — بلاطة «مشاريع العائلة» بالشكل الجديد (يُعاد قياس الإطار)
+            GuidePage(title: L10n.t("افتح المشاريع", "Open projects"),
+                      text: L10n.t("من بلاطة «مشاريع العائلة»: مشاريع أفراد العائلة ومحلاتهم.",
+                                   "From the «Family Projects» tile: family members' projects and businesses."),
+                      visual: .rect(image: "GuideHomeTiles", rect: projectsTile, aspect: shotAspect)),
+            // TODO-SHOT: تفاصيل مشروع — مربّعات «حسابات المشروع» (اتصال، واتساب، إنستغرام، الموقع)
+            GuidePage(title: L10n.t("حسابات التواصل", "Contact accounts"),
+                      text: L10n.t("داخل المشروع: اضغط أي حساب للاتصال أو الواتساب أو فتحه — والضغط المطوّل ينسخه.",
+                                   "Inside a project: tap any account to call, WhatsApp or open it — long-press to copy."),
+                      visual: .rect(image: "GuideHomeTiles", rect: projectsTile, aspect: shotAspect)),
+            // TODO-SHOT: صفحة المشاريع وزر + ظاهر، أو مربّع «مشروع جديد»
+            GuidePage(title: L10n.t("أضف مشروعك", "Add yours"),
+                      text: L10n.t("اضغط + وأضف الشعار والاسم والصور والحسابات — يظهر لك فوراً وللجميع بعد الموافقة.",
+                                   "Tap + and add the logo, name, photos and accounts — you see it now, everyone after approval."),
+                      visual: .rect(image: "GuideHomeTiles", rect: projectsTile, aspect: shotAspect)),
+            // TODO-SHOT: تفاصيل مشروع العضو نفسه وزر «تعديل»، وحبّة «طلباتي» بصفحة المشاريع
+            GuidePage(title: L10n.t("صاحب المشروع", "Project owner"),
+                      text: L10n.t("أنت صاحب مشروعك: تعدّله أو تحذفه من داخله، والمعلّق منه في «طلباتي».",
+                                   "You own your project: edit or delete it from inside it; pending ones are under «Mine»."),
+                      visual: .rect(image: "GuideHomeTiles", rect: projectsTile, aspect: shotAspect))
+        ]
+    }
+
+    fileprivate static var contact: [GuidePage] {
+        [
+            // TODO-SHOT: الرئيسية — بلاطة «التواصل» بالشكل الجديد (يُعاد قياس الإطار)
+            GuidePage(title: L10n.t("افتح التواصل", "Open contact"),
+                      text: L10n.t("من بلاطة «التواصل» في الرئيسية تراسل إدارة العائلة مباشرة.",
+                                   "From the «Contact» tile on Home, message the family admins directly."),
+                      visual: .rect(image: "GuideHomeTiles", rect: contactTile, aspect: shotAspect)),
+            // TODO-SHOT: مربّع «تواصل مع الإدارة» — قسم «نوع الرسالة» بالخيارات الأربعة
+            GuidePage(title: L10n.t("نوع الرسالة", "Message type"),
+                      text: L10n.t("اختر: استفسار أو شكوى أو اقتراح أو أخرى، ثم اكتب رسالتك.",
+                                   "Choose inquiry, complaint, suggestion or other, then write your message."),
+                      visual: .rect(image: "GuideHomeTiles", rect: contactTile, aspect: shotAspect)),
+            // TODO-SHOT: مربّع «تواصل مع الإدارة» — حقل «بريدك للرد (اختياري)» ورسالة «وصلت رسالتك»
+            GuidePage(title: L10n.t("الرد", "The reply"),
+                      text: L10n.t("الإدارة ترد عليك بالاتصال أو الواتساب — أو بالبريد إذا كتبته.",
+                                   "The admins reply by call or WhatsApp — or by email if you add it."),
+                      visual: .rect(image: "GuideHomeTiles", rect: contactTile, aspect: shotAspect))
+        ]
+    }
 }
 
 // MARK: - صفحة نقطة واحدة
@@ -454,46 +581,51 @@ private struct GuidePageView: View {
     let page: GuidePage
     let number: Int
     let total: Int
+    /// أيقونة الفصل ولونه (لون قسمه) — قرص «مجسّمات» في عنوان البطاقة
+    let chapterIcon: String
+    let chapterTint: Color
     let isCurrent: Bool
     let reduceMotion: Bool
     @State private var start = Date()
-    /// دخول مرتّب كلما وصلت للنقطة: الرقم ← العنوان ← اللقطة ← الشرح
+    /// دخول مرتّب كلما وصلت للنقطة: القرص ← العنوان ← اللقطة ← الشرح
     @State private var shown = false
 
     var body: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // الرقم + العنوان
+        // بطاقة بلغة أقسام المربّعات: السطح + إطار ١ نقطة + لمسة «مجسّمات»
+        VStack(spacing: DSBox.sectionInnerSpacing) {
+            // قرص الفصل + العنوان + رقم النقطة
             HStack(spacing: DS.Spacing.sm) {
-                Text("\(number)")
-                    .font(DS.Font.plex(15, weight: .heavy))
-                    .foregroundColor(.white)
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(DSActionFill.style()))
+                DSStateIcon(chapterIcon, tint: chapterTint.dsReadableGlyph, size: DSBox.alertIcon, mapsChrome: false)
                     .scaleEffect(shown ? 1 : 0.4)
                     .rotationEffect(.degrees(shown ? 0 : -25))
                     .accessibilityHidden(true)
                 Text(page.title)
-                    .font(DS.Font.plex(18, weight: .bold))
+                    .font(DSBox.titleFont)
                     .foregroundColor(DS.Color.fieldLabel)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .offset(x: shown ? 0 : (L10n.isArabic ? -14 : 14))
                     .opacity(shown ? 1 : 0)
                 Spacer(minLength: 0)
                 Text(L10n.t("\(number) من \(total)", "\(number) of \(total)"))
-                    .font(DS.Font.plex(11.5, weight: .semibold))
-                    .foregroundColor(DS.Color.textTertiary)
+                    .dsFont(.chipCompact)
+                    .foregroundColor(chapterTint.dsReadableGlyph)
                     .monospacedDigit()
+                    .padding(.horizontal, DS.Spacing.sm)
+                    .padding(.vertical, DS.Spacing.xxs + 1)
+                    .background(Capsule().fill(chapterTint.dsReadableGlyph.opacity(DS.Opacity.tintFill)))
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 
             visual
                 .frame(maxWidth: .infinity)
-                .frame(height: 258)
+                .frame(height: GuideMetrics.visualHeight)
                 .scaleEffect(shown ? 1 : 0.94)
                 .opacity(shown ? 1 : 0)
 
             Text(page.text)
-                .dsFieldFont(14, weight: .semibold)
+                .dsFieldFont(.bodySemibold)
                 .foregroundColor(DS.Color.fieldValue)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -501,8 +633,9 @@ private struct GuidePageView: View {
                 .offset(y: shown ? 0 : 8)
                 .opacity(shown ? 1 : 0)
         }
-        .padding(.horizontal, 2)
+        .padding(DSBox.sectionPadding)
         .frame(maxHeight: .infinity, alignment: .top)
+        .guideCard()
         .onAppear { if isCurrent { enter() } }
         .onChange(of: isCurrent) { current in
             if current {
@@ -526,7 +659,7 @@ private struct GuidePageView: View {
                 HStack(spacing: DS.Spacing.xs) {
                     GuideTapScene(before: before, after: after, at: at, aspect: aspect, t: 0.95)
                     Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(.system(size: 15, weight: .bold))
+                        .dsGlyph(DS.Glyph.lgCompact)
                         .foregroundColor(DS.Color.textTertiary)
                         .accessibilityHidden(true)
                     GuideTapScene(before: before, after: after, at: at, aspect: aspect, t: 2.5)
@@ -574,17 +707,17 @@ private struct GuideWelcomeView: View {
             TimelineView(.animation(paused: reduceMotion)) { ctx in
                 emblem(t: reduceMotion ? 0 : ctx.date.timeIntervalSinceReferenceDate)
             }
-            .frame(height: 118)
+            .frame(height: GuideMetrics.welcomeArtHeight)
             .scaleEffect(shown ? 1 : 0.85)
             .opacity(shown ? 1 : 0)
             .accessibilityHidden(true)
 
-            VStack(spacing: 4) {
+            VStack(spacing: DS.Spacing.xs) {
                 Text(L10n.t("أهلاً بك في دليل الاستخدام", "Welcome to the User Guide"))
-                    .font(DS.Font.plex(19, weight: .bold))
+                    .dsFont(.pageTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("اختر الواجهة التي تريد التعرّف عليها", "Choose the screen you want to learn"))
-                    .dsFieldFont(13.5)
+                    .dsFieldFont(.bodyCompact)
                     .foregroundColor(DS.Color.fieldValue)
             }
             .multilineTextAlignment(.center)
@@ -592,19 +725,21 @@ private struct GuideWelcomeView: View {
             .offset(y: shown ? 0 : 8)
             .accessibilityElement(children: .combine)
 
-            // الفصول بعمودين (صفوف عادية لا شبكة كسولة — حتى يُقاس ارتفاع المربّع صح)
-            VStack(spacing: 6) {
-                ForEach(Array(stride(from: 0, to: chapters.count, by: 2)), id: \.self) { start in
-                    HStack(spacing: 6) {
-                        ForEach(start..<min(start + 2, chapters.count), id: \.self) { index in
-                            chapterRow(chapters[index], index: index)
-                                .opacity(shown ? 1 : 0)
-                                .offset(y: shown || reduceMotion ? 0 : 12)
-                                .animation(reduceMotion ? nil
-                                           : .spring(response: 0.5, dampingFraction: 0.8).delay(0.12 + Double(index) * 0.05),
-                                           value: shown)
+            // الفصول بعمودين داخل بطاقة قسم (صفوف عادية لا شبكة كسولة — حتى يُقاس ارتفاع المربّع صح)
+            DSComposerSection(title: L10n.t("كل الفصول", "All chapters"), icon: "book.pages.fill", index: 1) {
+                VStack(spacing: DS.Spacing.xsm) {
+                    ForEach(Array(stride(from: 0, to: chapters.count, by: 2)), id: \.self) { start in
+                        HStack(spacing: DS.Spacing.xsm) {
+                            ForEach(start..<min(start + 2, chapters.count), id: \.self) { index in
+                                chapterRow(chapters[index], index: index)
+                                    .opacity(shown ? 1 : 0)
+                                    .offset(y: shown || reduceMotion ? 0 : 12)
+                                    .animation(reduceMotion ? nil
+                                               : .spring(response: 0.5, dampingFraction: 0.8).delay(0.12 + Double(index) * 0.05),
+                                               value: shown)
+                            }
+                            if start + 1 >= chapters.count { Spacer(minLength: 0).frame(maxWidth: .infinity) }
                         }
-                        if start + 1 >= chapters.count { Spacer(minLength: 0).frame(maxWidth: .infinity) }
                     }
                 }
             }
@@ -620,33 +755,21 @@ private struct GuideWelcomeView: View {
     private func chapterRow(_ chapter: GuideChapter, index: Int) -> some View {
         Button { onOpen(index) } label: {
             HStack(spacing: DS.Spacing.sm) {
-                // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الحالية
-                TrialArt(make: { ArtDispatch.stateIcon($0, icon: chapter.icon, tint: chapter.tint.dsReadableGlyph, size: 34) }) {
-                    Image(systemName: chapter.icon)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(chapter.tint.dsReadableGlyph)
-                        .frame(width: 34, height: 34)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(chapter.tint.dsReadableGlyph.opacity(0.13)))
-                }
-                    .frame(width: 34, height: 34)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 1) {
+                // أيقونة «مجسّمات»
+                DSStateIcon(chapter.icon, tint: chapter.tint.dsReadableGlyph, size: DS.Icon.rowCompact, mapsChrome: false)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs / 2) {
                     Text(chapter.title)
-                        .dsFieldFont(14.5, weight: .bold)
+                        .dsFieldFont(.headlineCompact)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(L10n.t("\(chapter.pages.count) نقاط", "\(chapter.pages.count) points"))
-                        .dsFieldFont(12)
+                        .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, DS.Spacing.sm)
-            .frame(maxWidth: .infinity, minHeight: 52)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
-            .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
+            .frame(maxWidth: .infinity, minHeight: DSFieldMetrics.toggleRowHeight)
+            .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
             .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
@@ -699,18 +822,15 @@ private struct GuideDoneView: View {
     let nextTitle: String?
     @State private var shown = false
 
-    private let confetti: [Color] = [DS.Color.primary, DS.Color.success, DS.Color.accent,
-                                     DS.Color.composerLibrary, DS.Color.female, DS.Color.composerDiwaniya]
 
     var body: some View {
         VStack(spacing: DS.Spacing.md) {
             ZStack {
                 if !reduceMotion {
+                    // دفعة نقاط ذهبية صغيرة — اللمسة الواحدة (بدل النقاط الملوّنة)
                     ForEach(0..<12, id: \.self) { i in
                         let a = Double(i) / 12 * 2 * .pi
-                        Circle()
-                            .fill(confetti[i % confetti.count])
-                            .frame(width: i.isMultiple(of: 2) ? 9 : 6, height: i.isMultiple(of: 2) ? 9 : 6)
+                        DSGoldDot(size: i.isMultiple(of: 2) ? 9 : 6)
                             .offset(x: shown ? cos(a) * 92 : 0, y: shown ? sin(a) * 92 : 0)
                             .opacity(shown ? 0 : 1)
                     }
@@ -730,19 +850,19 @@ private struct GuideDoneView: View {
                     .scaleEffect(shown ? 1 : 0.3)
                     .opacity(shown ? 1 : 0)
             }
-            .frame(height: 190)
+            .frame(height: GuideMetrics.doneArtHeight)
             .accessibilityHidden(true)
 
-            VStack(spacing: 6) {
+            VStack(spacing: DS.Spacing.xsm) {
                 Text(nextTitle == nil ? L10n.t("جاهز!", "All set!")
                                       : L10n.t("أنهيت فصل «\(chapterTitle)»", "«\(chapterTitle)» done"))
-                    .font(DS.Font.plex(22, weight: .bold))
+                    .dsFont(.celebrationTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(nextTitle.map { L10n.t("التالي: «\($0)» — أو اختر من «كل الفصول»",
                                             "Next: «\($0)» — or pick from «All chapters»") }
                      ?? L10n.t("صرت تعرف أساسيات التطبيق — استمتع به",
                                "You know the app basics now — enjoy it"))
-                    .dsFieldFont(14)
+                    .dsFieldFont(.body)
                     .foregroundColor(DS.Color.fieldValue)
                     .multilineTextAlignment(.center)
             }
@@ -750,8 +870,10 @@ private struct GuideDoneView: View {
             .opacity(shown ? 1 : 0)
             .accessibilityElement(children: .combine)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, DS.Spacing.md)
+        .padding(DSBox.sectionPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .guideCard()
         .onAppear { if isCurrent { enter() } }
         .onChange(of: isCurrent) { if $0 { enter() } }
     }
@@ -938,16 +1060,16 @@ private struct GuideToolbarScene: View {
 
             LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
                 ForEach(items) { item in
-                    VStack(spacing: 5) {
+                    VStack(spacing: DS.Spacing.xs + 1) {
                         look(item.look)
-                            .frame(height: 40)
+                            .frame(height: GuideMetrics.toolbarLook)
                         Text(item.title)
-                            .dsFieldFont(13, weight: .bold)
+                            .dsFieldFont(.rowTitleCompact)
                             .foregroundColor(DS.Color.fieldLabel)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                         Text(item.detail)
-                            .dsFieldFont(11.5)
+                            .dsFieldFont(.footnote)
                             .foregroundColor(DS.Color.fieldValue)
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
@@ -955,13 +1077,9 @@ private struct GuideToolbarScene: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.vertical, DS.Spacing.sm)
-                    .padding(.horizontal, 6)
-                    .frame(maxWidth: .infinity, minHeight: 96, alignment: .top)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.background))
-                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
-                    .trialCardSkin(radius: DS.Radius.md)   // TMP-ART-TRIAL
+                    .padding(.horizontal, DS.Spacing.xsm)
+                    .frame(maxWidth: .infinity, minHeight: GuideMetrics.toolbarCardMinHeight, alignment: .top)
+                    .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
                     .accessibilityElement(children: .combine)
                 }
             }
@@ -973,7 +1091,7 @@ private struct GuideToolbarScene: View {
     private func look(_ look: Look) -> some View {
         switch look {
         case .circle(let icon):
-            Image(systemName: icon)
+            Image(dsSymbol: icon)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(DS.Color.primary)
                 .frame(width: 40, height: 40)
@@ -1004,21 +1122,53 @@ private struct GuideToolbarScene: View {
 
 // MARK: - أدوات مشتركة
 
-/// لقطة بإطار مدوّر وطبقة رسم فوقها بنفس مقاسها (الإحداثيات من اليسار دائماً)
+/// مقاسات رسوم الدليل (لوحات متحرّكة — ليست أجزاء واجهة): مكانها الواحد هنا
+private enum GuideMetrics {
+    /// شريحة النقطة كاملة مع ظلّها، ولقطتها داخلها
+    static let slideHeight: CGFloat = 376
+    static let visualHeight: CGFloat = 252
+    /// شعار صفحة الترحيب، ورسم «أنهيت الفصل»
+    static let welcomeArtHeight: CGFloat = 118
+    static let doneArtHeight: CGFloat = 190
+    /// بطاقات أزرار الشجرة: مكان شكل الزرّ وأقل ارتفاع للبطاقة
+    static let toolbarLook: CGFloat = 40
+    static let toolbarCardMinHeight: CGFloat = 96
+    /// هامش جانبي يحفظ ظلّ البطاقة داخل صفحات الـ TabView
+    static let cardInset: CGFloat = 3
+}
+
+/// لقطة بإطار موحّد (كل لقطات الدليل): زوايا الصفوف، إطار ١ نقطة، وظلّ خفيف — وطبقة رسم فوقها
+/// بنفس مقاسها (الإحداثيات من اليسار دائماً)
 private struct GuideShot<Content: View, Overlay: View>: View {
     let aspect: CGFloat
     @ViewBuilder let content: () -> Content
     @ViewBuilder let overlay: (CGSize) -> Overlay
 
     var body: some View {
+        let frame = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
         content()
             .aspectRatio(aspect, contentMode: .fit)
             .overlay { GeometryReader { g in overlay(g.size) } }
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.textTertiary.opacity(0.22), lineWidth: 1))
+            .clipShape(frame)
+            .overlay(frame.strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.tintFillStrong), lineWidth: DS.Border.width))
+            .dsCardShadow()
             .environment(\.layoutDirection, .leftToRight)
     }
+}
+
+/// بطاقة شريحة الدليل بلغة أقسام المربّعات (السطح + إطار ١ نقطة + لمسة «مجسّمات») — بهامش يحفظ ظلّها
+/// داخل صفحات الـ TabView
+private struct GuideCard: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .dsCard(padding: nil)
+            .padding(.horizontal, GuideMetrics.cardInset)
+            .padding(.bottom, DS.Spacing.sm)
+    }
+}
+
+private extension View {
+    func guideCard() -> some View { modifier(GuideCard()) }
 }
 
 /// الإصبع: أبيض بحدّ أسود — واضح على اللقطات الفاتحة والداكنة

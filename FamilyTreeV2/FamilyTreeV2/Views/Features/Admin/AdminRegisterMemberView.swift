@@ -2,8 +2,8 @@ import SwiftUI
 
 // MARK: - تسجيل عضو جديد — بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧)
 //
-// بطاقة رأس تتابع اكتمال النموذج ← أقسام المربّعات: الصورة، البيانات الأساسية،
-// تاريخ الميلاد، رقم الهاتف ← زر «إضافة العضو» كحلي.
+// الرأس الملوّن الموحّد ← صفّ أرقام يتابع اكتمال النموذج ← أقسام المربّعات: الصورة، البيانات
+// الأساسية، تاريخ الميلاد، رقم الهاتف ← زر «إضافة العضو» بالزرّ الواحد («أسلوب واحد» ٢٠٢٦-١٠-٠٧).
 // منطق النموذج كما هو تماماً: نفس الحقول والحدود والتحقّق والحفظ (`adminAddMember`)
 // ورسالتا النجاح والخطأ.
 struct AdminRegisterMemberView: View {
@@ -42,52 +42,49 @@ struct AdminRegisterMemberView: View {
     }
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                if isLandscape {
-                    // الوضع الأفقي: الرأس والصورة بعمود، والحقول بعمود
-                    HStack(alignment: .top, spacing: DS.Spacing.lg) {
-                        VStack(spacing: DS.Spacing.md) {
-                            hero
-                            photoSection
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        VStack(spacing: DS.Spacing.md) {
-                            basicsSection
-                            birthDateSection
-                            phoneSection
-                            submitButton
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xxxl)
-                } else {
+        ScrollView(showsIndicators: false) {
+            if isLandscape {
+                // الوضع الأفقي: الرأس والصورة بعمود، والحقول بعمود
+                HStack(alignment: .top, spacing: DS.Spacing.lg) {
                     VStack(spacing: DS.Spacing.md) {
                         hero
-                        // الصورة الشخصية — في الأعلى مثل فورم التسجيل
                         photoSection
-                        // الاسم الرباعي + اسم العائلة
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    VStack(spacing: DS.Spacing.md) {
                         basicsSection
                         birthDateSection
-                        // رقم الهاتف (خاص بالإدارة — اختياري)
                         phoneSection
-                        // زر الإرسال
                         submitButton
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
-                    .padding(.bottom, DS.Spacing.xxxl)
+                    .frame(maxWidth: .infinity)
                 }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xxxl)
+            } else {
+                VStack(spacing: DS.Spacing.md) {
+                    hero
+                    // الصورة الشخصية — في الأعلى مثل فورم التسجيل
+                    photoSection
+                    // الاسم الرباعي + اسم العائلة
+                    basicsSection
+                    birthDateSection
+                    // رقم الهاتف (خاص بالإدارة — اختياري)
+                    phoneSection
+                    // زر الإرسال
+                    submitButton
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xxxl)
             }
-            .scrollDismissesKeyboard(.interactively)
         }
-        .navigationTitle(L10n.t("تسجيل عضو جديد", "Register New Member"))
-        .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.interactively)
+        // الرأس الملوّن الموحّد (بدل شريط النظام وبطاقة الرأس)
+        .dsSubPageHeader(L10n.t("تسجيل عضو جديد", "Register New Member"),
+                         subtitle: L10n.t("أدخل بيانات العضو الجديد", "Enter the new member's details"))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .dsAlert(L10n.t("تم التسجيل", "Registered"), isPresented: $showingSuccess, moment: .newMember) {
             Button(L10n.t("حسناً", "OK")) { dismiss() }
@@ -106,24 +103,18 @@ struct AdminRegisterMemberView: View {
         }
     }
 
-    // MARK: - بطاقة الرأس — تتابع اكتمال النموذج
+    // MARK: - صفّ الأرقام — يتابع اكتمال النموذج (العنوان والوصف في الرأس الملوّن)
 
     private var hero: some View {
         let requiredDone = (isValidName(trimmedFullName) ? 1 : 0) + (isValidName(trimmedFamilyName) ? 1 : 0)
-        return DSPageHero(
-            title: L10n.t("تسجيل عضو جديد", "Register New Member"),
-            subtitle: L10n.t("أدخل بيانات العضو الجديد", "Enter the new member's details"),
-            icon: "person.badge.plus",
-            tint: tint,
-            stats: [
-                DSHeroStat(value: L10n.t("\(requiredDone) من 2", "\(requiredDone) of 2"),
-                           label: L10n.t("الحقول المطلوبة", "Required fields"), icon: "checklist"),
-                DSHeroStat(value: selectedImage == nil ? "—" : "✓",
-                           label: L10n.t("الصورة", "Photo"), icon: "camera.fill"),
-                DSHeroStat(value: phoneNumber.isEmpty ? "—" : "✓",
-                           label: L10n.t("الرقم", "Phone"), icon: "phone.fill")
-            ]
-        )
+        return DSStatsRow([
+            DSHeroStat(value: L10n.t("\(requiredDone) من 2", "\(requiredDone) of 2"),
+                       label: L10n.t("الحقول المطلوبة", "Required fields"), icon: "checklist"),
+            DSHeroStat(value: selectedImage == nil ? "—" : "✓",
+                       label: L10n.t("الصورة", "Photo"), icon: "camera.fill"),
+            DSHeroStat(value: phoneNumber.isEmpty ? "—" : "✓",
+                       label: L10n.t("الرقم", "Phone"), icon: "phone.fill")
+        ], tint: tint)
     }
 
     // MARK: - Photo Section — كاميرا على الصورة مباشرة (نفس فورم التسجيل)
@@ -147,7 +138,7 @@ struct AdminRegisterMemberView: View {
                     "سوف تُستخدم كصورة في شجرة العائلة",
                     "Will be used as the member's photo in the family tree"
                 ))
-                .font(DS.Font.plex(11.5))
+                .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .multilineTextAlignment(.center)
             }
@@ -218,23 +209,18 @@ struct AdminRegisterMemberView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     DSFieldIcon(name: "gift.fill", tint: DS.Color.warning)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(L10n.t("تاريخ الميلاد", "Birth Date"))
-                            .dsFieldFont(12, weight: .heavy)
+                            .dsFieldFont(.label)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(DSDateText.display(birthDate))
-                            .dsFieldFont(14.5, weight: .semibold)
+                            .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "pencil")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(tint)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(tint.opacity(0.10)))
-                        .accessibilityHidden(true)
+                    DSStateIcon("pencil", tint: tint, size: DS.Icon.discSmall, mapsChrome: false)
                 }
-                .frame(minHeight: 36)
+                .frame(minHeight: DSBox.fieldMinHeight)
                 .dsRowBox()
                 .contentShape(Rectangle())
             }
@@ -304,23 +290,19 @@ struct AdminRegisterMemberView: View {
                 }
             }
         } label: {
-            HStack(spacing: 7) {
+            // وجه الزرّ الواحد (`DSButtonFace`) — يبدو معطّلاً حتى يكتمل ويبقى قابلاً للضغط
+            HStack(spacing: DSBox.buttonSpacing) {
                 if memberVM.isLoading {
-                    ProgressView().tint(.white).scaleEffect(0.85)
+                    ProgressView().tint(DS.Color.textOnPrimary).scaleEffect(0.85)
                 } else {
                     Image(systemName: "person.badge.plus")
-                        .font(.system(size: 14, weight: .bold))
+                        .dsGlyph(DSButtonSize.regular.glyph)
                 }
                 Text(L10n.t("إضافة العضو", "Add Member"))
-                    .font(DS.Font.plex(14.5, weight: .bold))
             }
-            .foregroundColor(DSActionFill.label(enabled: looksEnabled))
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(DSActionFill.style(enabled: looksEnabled),
-                        in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .modifier(DSButtonFace(enabled: looksEnabled))
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(DSPressStyle())
         .disabled(memberVM.isLoading)
         .padding(.top, DS.Spacing.xs)
         .dsStaggerIn(5)
@@ -330,10 +312,10 @@ struct AdminRegisterMemberView: View {
     private func validationError(_ text: String) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 11, weight: .bold))
+                .dsGlyph(DS.Glyph.smCompact)
                 .accessibilityHidden(true)
             Text(text)
-                .font(DS.Font.plex(12, weight: .semibold))
+                .dsFont(.caption)
         }
         .foregroundColor(DS.Color.error)
         .padding(.leading, DS.Spacing.sm)

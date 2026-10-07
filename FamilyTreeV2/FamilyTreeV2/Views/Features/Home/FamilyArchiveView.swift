@@ -10,6 +10,8 @@ struct FamilyArchiveView: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var notificationVM: NotificationViewModel
     @StateObject private var archiveVM = FamilyArchiveViewModel()
+    /// يعيد رسم الصفحة لمّا تصل التصنيفات المحدّثة (أسماء «التصنيفات» في الإدارة بدل الافتراضية)
+    @ObservedObject private var categoryStore = CategoryStore.shared
 
     /// nil = الكل
     @State private var selectedCategory: ArchiveItem.Category? = nil
@@ -38,7 +40,7 @@ struct FamilyArchiveView: View {
     /// حتى تبقى البطاقة مربّعة فعلاً ولا تتمدّد خارج القسم (طلب المالك).
     private var cardSide: CGFloat {
         let width = UIScreen.main.bounds.width
-        let columns: CGFloat = isLandscape ? max(2, floor((width - DS.Spacing.lg * 2) / 210)) : 2
+        let columns: CGFloat = isLandscape ? max(2, floor((width - DS.Spacing.lg * 2) / DS.Landscape.gridCardMinWidth)) : 2
         let gaps = DS.Spacing.sm * (columns - 1)
         let side = (width - DS.Spacing.lg * 2 - gaps) / columns
         return max(130, side)
@@ -46,7 +48,7 @@ struct FamilyArchiveView: View {
 
     private var gridColumns: [GridItem] {
         if isLandscape {
-            return [GridItem(.adaptive(minimum: 190, maximum: .infinity), spacing: DS.Spacing.sm, alignment: .top)]
+            return [GridItem(.adaptive(minimum: DS.Landscape.gridCardMinWidth, maximum: .infinity), spacing: DS.Spacing.sm, alignment: .top)]
         }
         return [
             GridItem(.flexible(), spacing: DS.Spacing.sm),
@@ -71,14 +73,11 @@ struct FamilyArchiveView: View {
                 // التصنيفات أُزيلت، وزر التحديد انتقل لهيدر الصفحة (للإدارة فقط)
 
                 if archiveVM.isLoading && archiveVM.items.isEmpty {
-                    Spacer()
-                    ProgressView().tint(AppSection.library.ink)
-                    Spacer()
+                    // التحميل الموحّد: مجسّم المكتبة يتنفّس
+                    DSPageLoader(section: .library)
                 } else if archiveVM.items(in: selectedCategory).isEmpty {
-                    Spacer()
                     emptyState
                         .dsStaggerIn(0)   // الحالة الفارغة تصعد وتظهر (تلاشٍ فقط مع «تقليل الحركة»)
-                    Spacer()
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
@@ -109,8 +108,8 @@ struct FamilyArchiveView: View {
                                         } label: {
                                             cardMenuBadge
                                         }
-                                        .padding(.trailing, 4)
-                                        .padding(.top, 2)
+                                        .padding(.trailing, DS.Spacing.xs)
+                                        .padding(.top, DS.Spacing.xxs)
                                     }
                                 }
                                 .contextMenu {
@@ -153,7 +152,10 @@ struct FamilyArchiveView: View {
         .animation(DS.Anim.snappy, value: selectionMode)
         .task {
             archiveVM.configure(authVM: authVM, notificationVM: notificationVM)
+            // التصنيفات بأحدث أسمائها (قد تكون تغيّرت من جهاز آخر) — بالتوازي مع العناصر
+            async let categories: Void = categoryStore.fetch()
             await archiveVM.fetchItems()
+            await categories
         }
         .onReceive(NotificationCenter.default.publisher(for: .subPageStartSelection)) { note in
             guard authVM.isAdmin, (note.userInfo?["page"] as? String) == "archive" else { return }
@@ -173,7 +175,8 @@ struct FamilyArchiveView: View {
         .transaction { t in
             if showingUpload { t.disablesAnimations = true }
         }
-        .sheet(item: $selectedItem) { item in
+        // صفحة العنصر — المربّع الطويل الموحّد من الأسفل (بدل ورقة النظام)
+        .dsTallBox(item: $selectedItem) { item in
             ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item))
         }
         .fullScreenCover(item: $itemToEdit) { item in
@@ -189,6 +192,7 @@ struct FamilyArchiveView: View {
             set: { if !$0 { itemToReport = nil } }
         )) {
             TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
+                .dsAlertField()
             Button(L10n.t("إبلاغ", "Report"), role: .destructive) {
                 let target = itemToReport
                 let reason = reportReason
@@ -281,51 +285,34 @@ struct FamilyArchiveView: View {
 
     private var selectionTopBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Button {
-                exitSelectionMode()
-            } label: {
-                Text(L10n.t("إلغاء", "Cancel"))
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(DS.Color.error)
-            }
+            DSChipButton(L10n.t("إلغاء", "Cancel"), tint: DS.Color.error) { exitSelectionMode() }
             Spacer()
             Text(L10n.t("اختيار \(selectedIDs.count)", "Selected \(selectedIDs.count)"))
-                .font(DS.Font.scaled(13, weight: .bold))
+                .dsFont(.rowTitleCompact)
                 .foregroundColor(DS.Color.textPrimary)
             Spacer()
-            Button {
+            DSChipButton(allInCategorySelected ? L10n.t("إلغاء الكل", "Clear all")
+                                               : L10n.t("تحديد الكل", "Select all")) {
                 toggleSelectAllInCategory()
-            } label: {
-                Text(allInCategorySelected ? L10n.t("إلغاء الكل", "Clear all")
-                                           : L10n.t("تحديد الكل", "Select all"))
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(AppSection.library.ink)
             }
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .strokeBorder(AppSection.library.ink.opacity(0.18), lineWidth: 1)
-        )
+        .padding(.horizontal, DS.Spacing.xs)
+        // البطاقة الواحدة (`.dsCard`)
+        .dsCard(padding: DS.Spacing.xxs)
     }
 
     private func selectionCheckmark(for id: UUID) -> some View {
         let isSelected = selectedIDs.contains(id)
         return Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-            .font(.system(size: 22, weight: .bold))
-            .foregroundColor(isSelected ? .white : DS.Color.textPrimary.opacity(0.7))
+            .dsGlyph(DS.Glyph.xxl)
+            .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
             .background(
                 Circle()
-                    .fill(isSelected ? AppSection.library.ink : Color.white.opacity(0.85))
-                    .frame(width: 22, height: 22)
+                    .fill(isSelected ? AppSection.library.ink : DS.Color.overlayText)
+                    .frame(width: DS.Icon.section, height: DS.Icon.section)
             )
-            .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-            .padding(10)
+            .dsSubtleShadow()
+            .padding(DS.Spacing.sm)
     }
 
     private var selectionBottomBar: some View {
@@ -378,26 +365,16 @@ struct FamilyArchiveView: View {
         .dsGlass(Rectangle())
         .overlay(
             Rectangle()
-                .fill(DS.Color.textTertiary.opacity(0.15))
-                .frame(height: 0.5),
+                .fill(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke))
+                .frame(height: DS.Border.width),
             alignment: .top
         )
     }
 
+    /// زرّ شريط التحديد — الزرّ الواحد بلون معناه (الحذف أحمر)
     private func actionPill(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(DS.Font.scaled(12, weight: .bold))
-                Text(label)
-                    .font(DS.Font.scaled(13, weight: .bold))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, 9)
-            .background(Capsule().fill(color))
-        }
-        .buttonStyle(DSScaleButtonStyle())
+        DSButton(label, icon: icon, role: color == DS.Color.error ? .destructive : nil,
+                 tint: color == DS.Color.error ? nil : color, fullWidth: false, action: action)
     }
 
     // MARK: - Selection Helpers
@@ -432,46 +409,10 @@ struct FamilyArchiveView: View {
         }
     }
 
-    // MARK: - Category Picker
-
-    // MARK: - Premium Filter Bar
-    // التصميم: حاوية ultraThinMaterial. الفلتر النشط = pill ممتدّ بلون فئته + اسم + عدّاد.
-    // البقية = أيقونات دائرية بلون باهت. النقر على أيقونة يبدّل النشط بـ matched geometry.
-
-    private var allCategoryAccent: Color { AppSection.library.ink }
-    private var allCategoryIcon: String { "square.grid.2x2.fill" }
-
-    private func accentColor(for category: ArchiveItem.Category?) -> Color {
-        category?.accentColor ?? allCategoryAccent
-    }
-
-    private func icon(for category: ArchiveItem.Category?) -> String {
-        category?.iconName ?? allCategoryIcon
-    }
-
-    private func title(for category: ArchiveItem.Category?) -> String {
-        if let c = category {
-            return L10n.t(c.displayName, c.displayNameEn)
-        }
-        return L10n.t("الكل", "All")
-    }
-
     // MARK: - Archive Card
 
     /// أيقونة PDF احتياطية (لو ما توفّر ملف لتوليد المصغّرة).
-    private var pdfIconPlaceholder: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "doc.text.fill")
-                .font(.system(size: 36, weight: .light))
-                .foregroundColor(AppSection.library.ink.opacity(0.85))
-            Text("PDF")
-                .font(DS.Font.scaled(11, weight: .black))
-                .foregroundColor(AppSection.library.ink)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 1)
-                .background(Capsule().fill(AppSection.library.ink.opacity(0.15)))
-        }
-    }
+    private var pdfIconPlaceholder: some View { ArchivePDFPlaceholder() }
 
     /// هل توجد إجراءات للمستخدم الحالي على هذا العنصر؟ (لإظهار/إخفاء زر القائمة)
     private func menuHasActions(for item: ArchiveItem) -> Bool {
@@ -543,12 +484,12 @@ struct FamilyArchiveView: View {
     /// شارة زر القائمة الظاهر (•••) — دائرة زجاجية صغيرة.
     private var cardMenuBadge: some View {
         Image(systemName: "ellipsis")
-            .font(DS.Font.scaled(13, weight: .black))
+            .dsGlyph(DS.Glyph.mdCompact, weight: .black)
             .foregroundColor(DS.Color.textSecondary)
-            .frame(width: 26, height: 26)
+            .frame(width: DS.Icon.discMini, height: DS.Icon.discMini)
             .background(Circle().fill(DS.Color.surface))
-            .overlay(Circle().strokeBorder(DS.Color.textTertiary.opacity(0.35), lineWidth: 1))
-            .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)
+            .overlay(Circle().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
+            .dsSubtleShadow()
     }
 
     // MARK: - بطاقة المكتبة — «ملف أرشيفي»
@@ -561,16 +502,16 @@ struct FamilyArchiveView: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             // لسان الملف
-            HStack(spacing: 4) {
+            HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: item.categoryIcon)
-                    .font(DS.Font.scaled(9, weight: .bold))
+                    .dsGlyph(DS.Glyph.micro)
                 Text(item.categoryDisplayName)
-                    .font(DS.Font.plex(10, weight: .bold))
+                    .dsFont(.micro)
                     .lineLimit(1)
             }
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.textOnPrimary)
             .padding(.horizontal, DS.Spacing.sm)
-            .frame(height: 22)
+            .frame(height: DS.Icon.section)
             .background(
                 UnevenCorners(radius: DS.Radius.sm, bottomLeading: true, bottomTrailing: true)
                     .fill(accent)
@@ -584,7 +525,7 @@ struct FamilyArchiveView: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                        .strokeBorder(accent.opacity(0.22), lineWidth: 1)
+                        .strokeBorder(accent.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width)
                 )
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.top, DS.Spacing.xs)
@@ -592,75 +533,55 @@ struct FamilyArchiveView: View {
                 .overlay(alignment: .bottomLeading) { fileKindBadge(for: item) }
                 .overlay(alignment: .topLeading) {
                     statusStack(for: item)
-                        .padding(.horizontal, DS.Spacing.sm + 4)
+                        .padding(.horizontal, DS.Spacing.md)
                         .padding(.top, DS.Spacing.sm)
                 }
 
             // خط فاصل رفيع ثم العنوان
             Rectangle()
-                .fill(accent.opacity(0.25))
-                .frame(height: 1)
+                .fill(accent.opacity(DS.Opacity.tintStroke))
+                .frame(height: DS.Border.width)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.top, DS.Spacing.sm)
 
             Text(item.title)
-                .font(DS.Font.plex(12.5, weight: .bold))
+                .dsFont(.sectionTitle)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: DS.Icon.row, alignment: .topLeading)
                 .padding(.horizontal, DS.Spacing.sm)
-                .padding(.top, 5)
+                .padding(.top, DS.Spacing.xs)
 
             Spacer(minLength: 0)
 
             uploaderStrip(for: item, accent: accent)
         }
         .frame(width: cardSide, height: cardSide, alignment: .top)
-        .background(
-            // ورقة: تدرّج خفيف بلون التصنيف من الأعلى
-            LinearGradient(
-                colors: [accent.opacity(0.07), DS.Color.surface],
-                startPoint: .top, endPoint: .center
-            )
-            .background(DS.Color.surface)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        // ورقة: تدرّج خفيف بلون التصنيف من الأعلى
+        .background(LinearGradient(colors: [accent.opacity(DS.Opacity.tintFillSoft), .clear],
+                                   startPoint: .top, endPoint: .center))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
+        // البطاقة الواحدة (`.dsCard`) + إطار الحالة (بانتظار/مرفوض/مخفي) فوقها
+        .dsCard(padding: nil)
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(borderColor(for: item), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                .strokeBorder(borderColor(for: item), lineWidth: DS.Border.width)
         )
-        .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
-        .opacity(item.approvalStatus == .rejected ? 0.55 : (item.isHidden || item.approvalStatus == .pending ? 0.75 : 1.0))
-        .dsSubtleShadow()
+        .opacity(item.approvalStatus == .rejected ? DS.Opacity.disabled
+                 : (item.isHidden || item.approvalStatus == .pending ? DS.Opacity.dimmed : 1.0))
     }
 
     /// شريط المُضيف أسفل البطاقة — صورة العضو + الاسم المختصر، والتاريخ على الطرف الثاني
     private func uploaderStrip(for item: ArchiveItem, accent: Color) -> some View {
         let member = memberVM.member(byId: item.uploadedBy)
-        return HStack(spacing: 5) {
-            // صورة العضو — حرف أول إن لم تكن له صورة
-            Group {
-                if let avatar = member?.avatarUrl, let url = URL(string: avatar) {
-                    CachedAsyncImage(url: url) { img in
-                        img.resizable().scaledToFill()
-                    } placeholder: {
-                        accent.opacity(0.25)
-                    }
-                } else {
-                    ZStack {
-                        accent.opacity(0.22)
-                        Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(8, weight: .bold))
-                            .foregroundColor(accent)
-                    }
-                }
-            }
-            .frame(width: 18, height: 18)
-            .clipShape(Circle())
+        return HStack(spacing: DS.Spacing.xs) {
+            // صورة العضو — الصورة الموحّدة (حرف أول إن لم تكن له صورة)
+            DSMemberAvatar(name: member?.firstName ?? "؟", avatarUrl: member?.avatarUrl,
+                           size: DS.Icon.inline, roleColor: accent)
 
             Text(member?.displayName ?? uploaderName(for: item) ?? L10n.t("غير معروف", "Unknown"))
-                .font(DS.Font.plex(10, weight: .semibold))
+                .dsFont(.micro)
                 .foregroundColor(DS.Color.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -668,32 +589,18 @@ struct FamilyArchiveView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, DS.Spacing.sm)
-        .frame(height: 30)
+        .frame(height: DS.Icon.discSmall)
         .frame(maxWidth: .infinity)
-        .background(accent.opacity(0.10))
+        .background(accent.opacity(DS.Opacity.tintFill))
     }
 
     /// ختم السنة — مائل قليلاً بحدود متقطّعة مثل أختام الأرشيف
     @ViewBuilder
     private func yearStamp(for item: ArchiveItem, accent: Color) -> some View {
         if let year = item.year {
-            Text(String(year))
-                .font(DS.Font.plex(11, weight: .bold))
-                .foregroundColor(accent)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(DS.Color.surface.opacity(0.92))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .strokeBorder(accent.opacity(0.75),
-                                      style: StrokeStyle(lineWidth: 1.2, dash: [3, 2]))
-                )
-                .rotationEffect(.degrees(-7))
-                .padding(.horizontal, DS.Spacing.sm + 4)
-                .padding(.bottom, 6)
+            ArchiveYearStamp(year: year, accent: accent, filled: true)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xsm)
         }
     }
 
@@ -701,14 +608,9 @@ struct FamilyArchiveView: View {
     @ViewBuilder
     private func fileKindBadge(for item: ArchiveItem) -> some View {
         if item.isPDF {
-            Text("PDF")
-                .font(DS.Font.plex(9, weight: .black))
-                .foregroundColor(.white)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(DS.Color.error.opacity(0.92)))
-                .padding(.horizontal, DS.Spacing.sm + 4)
-                .padding(.bottom, 6)
+            ArchivePDFBadge()
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.bottom, DS.Spacing.xsm)
         }
     }
 
@@ -716,7 +618,7 @@ struct FamilyArchiveView: View {
     @ViewBuilder
     private func preview(for item: ArchiveItem, accent: Color) -> some View {
         ZStack {
-            accent.opacity(0.10)
+            accent.opacity(DS.Opacity.tintFill)
 
             if item.isImage, let url = URL(string: item.fileUrl) {
                 // scaledToFill داخل إطار ثابت — كل الوثائق بنفس المساحة
@@ -724,14 +626,14 @@ struct FamilyArchiveView: View {
                 CachedAsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
-                    ProgressView().tint(accent)
+                    DSPageLoader(section: .library, size: DS.Icon.state, fillsSpace: false)
                 }
             } else if item.isPDF {
                 if let thumb = item.thumbnailUrl, let turl = URL(string: thumb) {
                     CachedAsyncImage(url: turl) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
-                        ProgressView().tint(accent)
+                        DSPageLoader(section: .library, size: DS.Icon.state, fillsSpace: false)
                     }
                 } else if let furl = URL(string: item.fileUrl) {
                     PDFThumbnailView(url: furl)
@@ -740,8 +642,8 @@ struct FamilyArchiveView: View {
                 }
             } else {
                 Image(systemName: item.categoryIcon)
-                    .font(.system(size: 40, weight: .light))
-                    .foregroundColor(accent.opacity(0.8))
+                    .dsGlyph(DS.Icon.sizeSm, weight: .light)
+                    .foregroundColor(accent)
             }
         }
     }
@@ -769,47 +671,35 @@ struct FamilyArchiveView: View {
 
     private func borderColor(for item: ArchiveItem) -> Color {
         switch item.approvalStatus {
-        case .rejected: return DS.Color.error.opacity(0.35)
-        case .pending:  return DS.Color.warning.opacity(0.35)
-        case .approved: return item.isHidden ? DS.Color.textTertiary.opacity(0.30)
-                                             : AppSection.library.ink.opacity(0.08)
+        case .rejected: return DS.Color.error.opacity(DS.Opacity.tintStroke)
+        case .pending:  return DS.Color.warning.opacity(DS.Opacity.tintStroke)
+        case .approved: return item.isHidden ? DS.Color.textTertiary.opacity(DS.Opacity.tintStroke) : .clear
         }
     }
 
     /// شارة حالة موحّدة (capsule صغيرة بأيقونة + نص).
     private func statusBadge(icon: String, label: String, color: Color) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
-            Text(label).font(DS.Font.scaled(11, weight: .bold))
+        // فوق الصورة: ممتلئة بلون معناها حتى تُقرأ
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(dsSymbol: icon).dsGlyph(DS.Glyph.xs)
+            Text(label).dsFont(.badge)
         }
-        .foregroundColor(.white)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
+        .foregroundColor(DS.Color.textOnPrimary)
+        .padding(.horizontal, DS.Spacing.xsm)
+        .padding(.vertical, DS.Spacing.xxs)
         .background(Capsule().fill(color))
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: DS.Spacing.md) {
-            // كتاب تتقلّب صفحته بلون المكتبة (رسومات متحرّكة — طلب المالك ٢٠٢٦-١٠-٠٤)
-            EmptyStateArt(icon: selectedCategory?.iconName ?? "archivebox",
-                          tint: AppSection.HomeTile.library.ink, kind: .library)
-            Text(L10n.t("لا توجد عناصر في هذا القسم بعد",
-                       "No items in this section yet"))
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-                .multilineTextAlignment(.center)
-            // أي مستخدم يقدر يضيف — مع تنبيه للأعضاء بحاجة الموافقة
-            Text(authVM.isAdmin
-                 ? L10n.t("اضغط + لإضافة عنصر", "Tap + to add an item")
-                 : L10n.t("اضغط + لإضافة عنصر (سيُعرض بعد موافقة الإدارة)",
-                          "Tap + to add (visible after admin approval)"))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textTertiary)
-                .multilineTextAlignment(.center)
-        }
-        .padding()
+        // الصفحة الفاضية الموحّدة: مجسّم المكتبة + عنوان + سطر (أي مستخدم يضيف — للأعضاء بعد الموافقة)
+        DSEmptyView(L10n.t("لا توجد عناصر في هذا القسم بعد", "No items in this section yet"),
+                    message: authVM.isAdmin
+                        ? L10n.t("اضغط + لإضافة عنصر", "Tap + to add an item")
+                        : L10n.t("اضغط + لإضافة عنصر (سيُعرض بعد موافقة الإدارة)",
+                                 "Tap + to add (visible after admin approval)"),
+                    section: .library)
     }
 }
 
@@ -921,10 +811,7 @@ struct ArchiveUploadSheet: View {
             }
 
             if let errorBanner {
-                Label(errorBanner, systemImage: "exclamationmark.triangle.fill")
-                    .font(DS.Font.plex(12))
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                DSNoteCard(errorBanner, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.8), value: pickedFileData != nil)
@@ -947,35 +834,24 @@ struct ArchiveUploadSheet: View {
     private func sourceCard(icon: String, title: String, subtitle: String, delay: Double,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 7) {
-                // TMP-ART-TRIAL: أيقونة الاتجاه المختار، وإلا الدائرة الطافية الحالية
-                TrialArt(make: { ArtDispatch.stateIcon($0, icon: icon, tint: tint, size: 56) }) {
-                    ZStack {
-                        Circle().fill(tint.opacity(0.14)).frame(width: 56, height: 56)
-                        Circle().strokeBorder(tint.opacity(0.35), lineWidth: 1).frame(width: 56, height: 56)
-                        Image(systemName: icon)
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(tint)
-                            .offset(y: floatIcons ? -3 : 2)
-                            .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true).delay(delay),
-                                       value: floatIcons)
-                    }
-                }
-                .frame(width: 56, height: 56)
-                .accessibilityHidden(true)   // زخرفة — العنوان والوصف يُقرآن
+            VStack(spacing: DS.Spacing.xsm) {
+                // قرص «مجسّمات» الموحّد
+                DSStateIcon(icon, tint: tint, size: DSBox.photoTile)
+                    .accessibilityHidden(true)   // زخرفة — العنوان والوصف يُقرآن
                 Text(title)
-                    .font(DS.Font.plex(14, weight: .bold))
+                    .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                 Text(subtitle)
-                    .font(DS.Font.plex(11))
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, DS.Spacing.md)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).fill(DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(tint.opacity(0.4), style: StrokeStyle(lineWidth: 1.2, dash: [6, 4])))
-            .trialCardSkin(radius: DS.Radius.lg)   // TMP-ART-TRIAL
+            // خانة «إضافة» المتقطّعة الموحّدة (نفس `DSAddChipLabel`)
+            .background(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous).fill(DS.Color.background))
+            .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                .strokeBorder(tint.opacity(DSAddChipLabel.strokeOpacity), style: DSAddChipLabel.dash))
+            .trialCardSkin(radius: DS.Card.radius)
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -992,150 +868,61 @@ struct ArchiveUploadSheet: View {
                     .frame(maxWidth: .infinity)
                     .clipped()
                     .overlay(alignment: .bottom) {
-                        LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
-                            .frame(height: 60)
+                        LinearGradient(colors: [.clear, DS.Color.shadowOverlay], startPoint: .top, endPoint: .bottom)
+                            .frame(height: DS.Icon.sizeLg)
                     }
                     .overlay(alignment: .bottomLeading) {
                         Label(size, systemImage: "photo")
-                            .font(DS.Font.plex(11, weight: .semibold))
-                            .foregroundColor(.white)
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .padding(DS.Spacing.sm)
                     }
             } else {
                 HStack(spacing: DS.Spacing.md) {
                     ZStack(alignment: .bottomTrailing) {
                         Image(systemName: "doc.richtext.fill")
-                            .font(.system(size: 34, weight: .regular))
+                            .dsGlyph(DS.Icon.row, weight: .regular)
                             .foregroundColor(tint)
                             .accessibilityHidden(true)
-                        Text("PDF")
-                            .font(.system(size: 8.5, weight: .heavy))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 4).padding(.vertical, 1.5)
-                            .background(RoundedRectangle(cornerRadius: 3).fill(DS.Color.error))
-                            .offset(x: 6, y: 4)
+                        ArchivePDFBadge()
+                            .offset(x: DS.Spacing.xsm, y: DS.Spacing.xs)
                     }
-                    .frame(width: 52, height: 58)
-                    VStack(alignment: .leading, spacing: 3) {
+                    .frame(width: DS.Icon.state, height: DS.Icon.sizeLg)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(pickedFileName.isEmpty ? L10n.t("ملف مختار", "Selected file") : pickedFileName)
-                            .font(DS.Font.plex(13.5, weight: .bold))
+                            .dsFont(.rowTitle)
                             .foregroundColor(DS.Color.textPrimary)
                             .lineLimit(2)
                         Text(size)
-                            .font(DS.Font.plex(11))
+                            .dsFont(.footnote)
                             .foregroundColor(DS.Color.textTertiary)
                     }
                     Spacer(minLength: 0)
                 }
                 .padding(DS.Spacing.md)
             }
-            // الشريط ٣٦ نقطة ← مساحة ضغط ٤٤ (٤ فوق وتحت) بلا تغيير في التخطيط: فوقه
-            // المعاينة (لا تُضغط) وتحته هامش القسم
+            // «تغيير» و«إزالة» بالشريحة الموحّدة (مساحة ضغط ٤٤)
             HStack(spacing: DS.Spacing.sm) {
-                Button {
+                DSChipButton(L10n.t("تغيير", "Change"), icon: "arrow.triangle.2.circlepath", tint: tint) {
                     if pickedMimeType == "application/pdf" { showFileImporter = true } else { showPhotoPicker = true }
-                } label: {
-                    Label(L10n.t("تغيير", "Change"), systemImage: "arrow.triangle.2.circlepath")
-                        .font(DS.Font.plex(12, weight: .bold))
-                        .foregroundColor(tint)
-                        .frame(maxWidth: .infinity).frame(height: 36)
-                        .tapArea(vertical: 4)
                 }
-                Rectangle().fill(DS.Color.textTertiary.opacity(0.15)).frame(width: 1, height: 20)
-                    .accessibilityHidden(true)
-                Button {
+                Spacer(minLength: 0)
+                DSChipButton(L10n.t("إزالة", "Remove"), icon: "trash", tint: DS.Color.error) {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         pickedFileData = nil
                         pickedFileName = ""
                         pickedMimeType = ""
                         photoItem = nil
                     }
-                } label: {
-                    Label(L10n.t("إزالة", "Remove"), systemImage: "trash")
-                        .font(DS.Font.plex(12, weight: .bold))
-                        .foregroundColor(DS.Color.error)
-                        .frame(maxWidth: .infinity).frame(height: 36)
-                        .tapArea(vertical: 4)
                 }
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, DS.Spacing.sm)
+            .frame(maxWidth: .infinity)
             .background(DS.Color.background)
         }
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(tint.opacity(0.35), lineWidth: 1))
-    }
-
-    private func categoryChip(_ key: String) -> some View {
-        let selected = categoryKey == key
-        return Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) { categoryKey = key }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: ArchiveItem.categoryIcon(key))
-                    .font(.system(size: 12, weight: .bold))
-                Text(ArchiveItem.categoryName(key))
-                    .font(DS.Font.plex(12.5, weight: .bold))
-                    .lineLimit(1)
-            }
-            .foregroundColor(selected ? .white : DS.Color.textSecondary)
-            .padding(.horizontal, 13)
-            .frame(height: 36)
-            .background(Capsule().fill(selected ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.8)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(DS.Color.background)))
-            .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.18), lineWidth: 1))
-            .shadow(color: selected ? tint.opacity(0.35) : .clear, radius: 6, y: 2)
-            .scaleEffect(selected ? 1.03 : 1)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-    }
-
-    // MARK: - Category Menu + Boxed Field
-
-    /// صندوق إدخال موحّد الارتفاع — لمحاذاة الحقول في صف عمودين.
-    @ViewBuilder
-    private func boxedField<C: View>(@ViewBuilder content: () -> C) -> some View {
-        content()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, DS.Spacing.sm)
-            .frame(height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
-            )
-    }
-
-    /// منيو اختيار القسم — يظهر كحقل أنيق بدل شريط الكبسولات.
-    private var categoryMenu: some View {
-        Menu {
-            ForEach(ArchiveItem.selectableCategoryKeys, id: \.self) { key in
-                Button {
-                    categoryKey = key
-                } label: {
-                    Label(ArchiveItem.categoryName(key), systemImage: ArchiveItem.categoryIcon(key))
-                }
-            }
-        } label: {
-            boxedField {
-                HStack(spacing: 6) {
-                    Image(systemName: ArchiveItem.categoryIcon(categoryKey))
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(AppSection.library.ink)
-                    Text(ArchiveItem.categoryName(categoryKey))
-                        .font(DS.Font.scaled(14))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                    Spacer(minLength: 2)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-            }
-        }
+        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+            .strokeBorder(tint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
     }
 
     // MARK: - Actions
@@ -1297,56 +1084,7 @@ struct ArchiveEditSheet: View {
                 ArchiveCategoryChips(key: $categoryKey, tint: tint)
             }
             if let errorBanner {
-                Label(errorBanner, systemImage: "exclamationmark.triangle.fill")
-                    .font(DS.Font.plex(12))
-                    .foregroundColor(DS.Color.error)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    /// صندوق إدخال موحّد الارتفاع — لمحاذاة الحقول في صف عمودين.
-    @ViewBuilder
-    private func editBoxedField<C: View>(@ViewBuilder content: () -> C) -> some View {
-        content()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, DS.Spacing.sm)
-            .frame(height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.18), lineWidth: 1)
-            )
-    }
-
-    /// منيو اختيار القسم — يظهر كحقل أنيق بدل شريط الكبسولات.
-    private var editCategoryMenu: some View {
-        Menu {
-            ForEach(ArchiveItem.selectableCategoryKeys, id: \.self) { key in
-                Button {
-                    categoryKey = key
-                } label: {
-                    Label(ArchiveItem.categoryName(key), systemImage: ArchiveItem.categoryIcon(key))
-                }
-            }
-        } label: {
-            editBoxedField {
-                HStack(spacing: 6) {
-                    Image(systemName: ArchiveItem.categoryIcon(categoryKey))
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                        .foregroundColor(AppSection.library.ink)
-                    Text(ArchiveItem.categoryName(categoryKey))
-                        .font(DS.Font.scaled(14))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                    Spacer(minLength: 2)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
+                DSNoteCard(errorBanner, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
     }
@@ -1388,189 +1126,138 @@ struct ArchiveItemViewer: View {
     // الوثيقة تُعرض مثبّتة على ورقة بيضاء بظل خفيف، وتحتها بطاقة فهرسة
     // فيها التصنيف وختم السنة والعنوان والوصف ومن أضافها (طلب المالك).
     var body: some View {
-        NavigationStack {
-            ZStack {
-                LinearGradient(
-                    colors: [accent.opacity(0.10), DS.Color.background],
-                    startPoint: .top, endPoint: .center
-                )
+        VStack(spacing: 0) {
+            // الرأس الموحّد (`DSSubPageHeader`) بلون المكتبة: × للإغلاق، وزرّ الحفظ/المشاركة في الطرف
+            DSSubPageHeader(title: item.title, subtitle: item.categoryDisplayName, section: .library,
+                            nav: .close, onBack: { dismiss() }) {
+                DSHeaderButton(symbol: downloading ? "hourglass" : "square.and.arrow.down",
+                               label: L10n.t("حفظ أو مشاركة", "Save or share")) {
+                    Task { await downloadAndShare() }
+                }
+                .disabled(downloading)
+            }
+
+            VStack(spacing: DS.Spacing.md) {
+                documentSheet
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.top, DS.Spacing.md)
+
+                indexCard
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.bottom, DS.Spacing.md)
+            }
+            .frame(maxHeight: .infinity)
+            .background(
+                LinearGradient(colors: [accent.opacity(DS.Opacity.tintFill), DS.Color.background],
+                               startPoint: .top, endPoint: .center)
                 .ignoresSafeArea()
-
-                VStack(spacing: DS.Spacing.md) {
-                    documentSheet
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.md)
-
-                    indexCard
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.bottom, DS.Spacing.md)
-                }
-            }
-            .navigationTitle(item.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    DSToolbarCancelButton(title: L10n.t("إغلاق", "Close")) { dismiss() }
-                }
-                ToolbarItem(placement: DSToolbar.confirmPlacement) {
-                    Button {
-                        Task { await downloadAndShare() }
-                    } label: {
-                        if downloading {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "square.and.arrow.down")
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(AppSection.library.ink)
-                        }
-                    }
-                    .disabled(downloading)
-                    .accessibilityLabel(L10n.t("حفظ أو مشاركة", "Save or share"))
-                }
-            }
-            .sheet(isPresented: $showShare) {
-                if let url = shareURL {
-                    ShareSheet(items: [url])
-                }
+            )
+        }
+        .sheet(isPresented: $showShare) {
+            if let url = shareURL {
+                ShareSheet(items: [url])
             }
         }
+        .dsSectionPage(.library)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     /// الوثيقة مثبّتة على ورقة بظل — الصور تتكبّر بضغطتين
     private var documentSheet: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .fill(DS.Color.surface)
-                .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 6)
-
-            Group {
-                if item.isPDF, let url = URL(string: item.fileUrl) {
-                    ArchivePDFView(url: url)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                } else if item.isImage, let url = URL(string: item.fileUrl) {
-                    // تكبير بالقرصة أو بضغطتين + تحريك بالسحب (طلب المالك)
-                    ZoomableImage(onZoomChange: { zoomed = $0 }) {
-                        CachedAsyncImage(url: url) { image in
-                            image.resizable().scaledToFit()
-                        } placeholder: {
-                            ProgressView().tint(accent)
-                        }
+        Group {
+            if item.isPDF, let url = URL(string: item.fileUrl) {
+                ArchivePDFView(url: url)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            } else if item.isImage, let url = URL(string: item.fileUrl) {
+                // تكبير بالقرصة أو بضغطتين + تحريك بالسحب (طلب المالك)
+                ZoomableImage(onZoomChange: { zoomed = $0 }) {
+                    CachedAsyncImage(url: url) { image in
+                        image.resizable().scaledToFit()
+                    } placeholder: {
+                        DSPageLoader(section: .library)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                } else {
-                    VStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "doc.questionmark")
-                            .font(.system(size: 48))
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(L10n.t("لا يمكن عرض هذا الملف داخل التطبيق",
-                                   "This file can't be previewed in the app"))
-                            .font(DS.Font.plex(13, weight: .medium))
-                            .foregroundColor(DS.Color.textSecondary)
-                            .multilineTextAlignment(.center)
-                        Button {
-                            Task { await downloadAndShare() }
-                        } label: {
-                            Text(L10n.t("حفظ الملف", "Save file"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .frame(height: 40)
-                                .background(Capsule().fill(accent))
-                        }
-                    }
-                    .padding(DS.Spacing.lg)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            } else {
+                // الحالة الموحّدة: مجسّم + عنوان + زرّ الحفظ
+                DSEmptyView(L10n.t("لا يمكن عرض هذا الملف داخل التطبيق", "This file can't be previewed in the app"),
+                            section: .library, icon: "doc.questionmark",
+                            actionTitle: L10n.t("حفظ الملف", "Save file"), actionIcon: "square.and.arrow.down",
+                            compact: true) {
+                    Task { await downloadAndShare() }
                 }
             }
-            .padding(DS.Spacing.sm)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // الورقة = البطاقة الواحدة (`.dsCard`)
+        .dsCard()
     }
 
     /// بطاقة فهرسة: تصنيف + ختم سنة + عنوان + وصف + من أضافها ومتى
     private var indexCard: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                HStack(spacing: 4) {
-                    Image(systemName: item.categoryIcon)
-                        .font(DS.Font.scaled(10, weight: .bold))
-                    Text(item.categoryDisplayName)
-                        .font(DS.Font.plex(11, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(accent))
+                DSStatusChip(text: item.categoryDisplayName, icon: item.categoryIcon, tint: accent)
 
                 if item.isPDF || !item.formattedSize.isEmpty {
                     Text([item.isPDF ? "PDF" : nil, item.formattedSize.isEmpty ? nil : item.formattedSize]
                             .compactMap { $0 }.joined(separator: " · "))
-                        .font(DS.Font.plex(10, weight: .semibold))
+                        .dsFont(.micro)
                         .foregroundColor(DS.Color.textTertiary)
                 }
 
                 Spacer(minLength: 0)
 
                 if let year = item.year {
-                    Text(String(year))
-                        .font(DS.Font.plex(12, weight: .bold))
-                        .foregroundColor(accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .strokeBorder(accent.opacity(0.75),
-                                              style: StrokeStyle(lineWidth: 1.2, dash: [3, 2]))
-                        )
-                        .rotationEffect(.degrees(-7))
+                    ArchiveYearStamp(year: year, accent: accent)
                 }
             }
 
             Text(item.title)
-                .font(DS.Font.plex(17, weight: .bold))
+                .dsFont(.title)
                 .foregroundColor(DS.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if let desc = item.description, !desc.isEmpty {
                 Text(desc)
-                    .font(DS.Font.plex(13, weight: .regular))
+                    .dsFont(.callout)
                     .foregroundColor(DS.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Rectangle()
-                .fill(accent.opacity(0.22))
-                .frame(height: 1)
+                .fill(accent.opacity(DS.Opacity.tintStroke))
+                .frame(height: DS.Border.width)
 
             HStack(spacing: DS.Spacing.sm) {
                 if let uploaderName, !uploaderName.isEmpty {
-                    HStack(spacing: 4) {
+                    HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .dsGlyph(DS.Glyph.micro)
                         Text(uploaderName)
-                            .font(DS.Font.plex(11, weight: .semibold))
+                            .dsFont(.caption)
                             .lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
                 Text(item.createdAt.formatted(date: .abbreviated, time: .omitted))
-                    .font(DS.Font.plex(11, weight: .medium))
+                    .dsFont(.footnote)
             }
             .foregroundColor(DS.Color.textTertiary)
         }
         .padding(DS.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Color.surface)
+        // شريط لون التصنيف على الحافة — داخل حدود البطاقة الواحدة
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(LinearGradient(colors: [accent, accent.opacity(0.6)],
-                                     startPoint: .top, endPoint: .bottom))
-                .frame(width: 5)
+                .fill(accent)
+                .frame(width: DS.Spacing.xs)
         }
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .dsSubtleShadow()
+        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
+        .dsCard(padding: nil)
     }
 
     /// تحميل الملف لمجلد مؤقت ثم فتح share sheet للحفظ في Files / مشاركة.
@@ -1654,18 +1341,9 @@ private struct PDFThumbnailView: View {
                 )
                 .clipped()
             } else if failed {
-                VStack(spacing: 6) {
-                    Image(systemName: "doc.text.fill")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundColor(AppSection.library.ink.opacity(0.85))
-                    Text("PDF")
-                        .font(DS.Font.scaled(11, weight: .black))
-                        .foregroundColor(AppSection.library.ink)
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(Capsule().fill(AppSection.library.ink.opacity(0.15)))
-                }
+                ArchivePDFPlaceholder()
             } else {
-                ProgressView().tint(AppSection.library.ink)
+                DSPageLoader(section: .library, size: DS.Icon.state, fillsSpace: false)
             }
         }
         .task(id: url) { await load() }
@@ -1736,67 +1414,66 @@ struct UnevenCorners: Shape {
 }
 
 
-/// أقسام المكتبة ككبسولات قابلة للاختيار — مشتركة بين الإضافة والتعديل
+/// أقسام المكتبة — الفلاتر الموحّدة (`DSFilterChips`) — مشتركة بين الإضافة والتعديل
 struct ArchiveCategoryChips: View {
     @Binding var key: String
     var tint: Color = DS.Color.tileLibrary
-    /// «تقليل الحركة» (توصية أبل): بلا تكبير للمختار
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            // بلا حشوة عمودية هنا: الكبسولة تحمل حشوة ٤ نقاط لمساحة الضغط (داخل حدود التمرير)
-            HStack(spacing: DS.Spacing.sm) {
-                ForEach(ArchiveItem.selectableCategoryKeys, id: \.self) { k in
-                    chip(k)
-                }
-            }
-        }
-    }
-
-    private func chip(_ k: String) -> some View {
-        let selected = key == k
-        return Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) { key = k }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: ArchiveItem.categoryIcon(k))
-                    .font(.system(size: 12, weight: .bold))
-                    .accessibilityHidden(true)
-                Text(ArchiveItem.categoryName(k))
-                    .font(DS.Font.plex(12.5, weight: .bold))
-                    .lineLimit(1)
-            }
-            .foregroundColor(selected ? .white : DS.Color.textSecondary)
-            .padding(.horizontal, 13)
-            .frame(height: 36)
-            .background(Capsule().fill(selected ? AnyShapeStyle(LinearGradient(colors: [tint, tint.opacity(0.8)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(DS.Color.background)))
-            .overlay(Capsule().strokeBorder(selected ? Color.clear : DS.Color.textTertiary.opacity(0.18), lineWidth: 1))
-            .shadow(color: selected ? tint.opacity(0.35) : .clear, radius: 6, y: 2)
-            .scaleEffect(selected && !reduceMotion ? 1.03 : 1)
-            // الكبسولة ٣٦ ← مساحة ضغط ٤٤ نقطة (توصية أبل) — الشكل كما هو
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        DSFilterChips(options: ArchiveItem.selectableCategoryKeys.map {
+                          DSFilterOption(id: $0, title: ArchiveItem.categoryName($0), icon: ArchiveItem.categoryIcon($0))
+                      },
+                      selection: $key, tint: tint)
     }
 }
 
-// MARK: - مساحة ضغط أكبر (توصية أبل: ٤٤ نقطة)
+// MARK: - قطع «الملف الأرشيفي» المشتركة (البطاقة، صفحة العنصر، مربّع الإضافة)
 
-private extension View {
-    /// يكبّر منطقة اللمس حول عنصر صغير بلا تغيير في شكله ولا في التخطيط: الحشوة تُضاف
-    /// لمنطقة اللمس ثم تُسترد من التخطيط. القيم محسوبة لكل عنصر حتى لا تتداخل مع جيرانه.
-    func tapArea(top: CGFloat = 0, leading: CGFloat = 0, bottom: CGFloat = 0, trailing: CGFloat = 0) -> some View {
-        self
-            .padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
-            .contentShape(Rectangle())
-            .padding(EdgeInsets(top: -top, leading: -leading, bottom: -bottom, trailing: -trailing))
+/// ختم السنة — مائل قليلاً بحدود متقطّعة مثل أختام الأرشيف
+struct ArchiveYearStamp: View {
+    let year: Int
+    let accent: Color
+    /// على الصورة: بسطح يفصله عنها
+    var filled: Bool = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Icon.discRadiusSmall / 2, style: .continuous)
+        Text(String(year))
+            .dsFont(.badge)
+            .foregroundColor(accent)
+            .padding(.horizontal, DS.Spacing.xsm)
+            .padding(.vertical, DS.Spacing.xxs)
+            .background(shape.fill(filled ? DS.Color.surface : .clear))
+            .overlay(shape.strokeBorder(accent.opacity(DS.Opacity.selectedStroke), style: DSAddChipLabel.dash))
+            .rotationEffect(.degrees(-7))
     }
+}
 
-    func tapArea(horizontal: CGFloat = 0, vertical: CGFloat = 0) -> some View {
-        tapArea(top: vertical, leading: horizontal, bottom: vertical, trailing: horizontal)
+/// شارة «PDF» الحمراء الصغيرة
+struct ArchivePDFBadge: View {
+    var body: some View {
+        Text("PDF")
+            .dsFont(.micro)
+            .foregroundColor(DS.Color.textOnPrimary)
+            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.vertical, DS.Spacing.xxs / 2)
+            .background(Capsule().fill(DS.Color.error))
+    }
+}
+
+/// أيقونة PDF احتياطية (لو ما توفّرت مصغّرة)
+struct ArchivePDFPlaceholder: View {
+    var body: some View {
+        VStack(spacing: DS.Spacing.xsm) {
+            Image(systemName: "doc.text.fill")
+                .dsGlyph(DS.Icon.rowLarge, weight: .light)
+                .foregroundColor(AppSection.library.ink)
+            Text("PDF")
+                .dsFont(.badge)
+                .foregroundColor(AppSection.library.ink)
+                .padding(.horizontal, DS.Spacing.xsm)
+                .padding(.vertical, DS.Spacing.xxs / 2)
+                .background(Capsule().fill(AppSection.library.ink.opacity(DS.Opacity.tintFill)))
+        }
     }
 }

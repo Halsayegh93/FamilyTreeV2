@@ -337,7 +337,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = AlmohamadAli;
+				INFOPLIST_KEY_CFBundleDisplayName = "عائلة المحمدعلي";
 				INFOPLIST_KEY_OTP_FALLBACK_URL = "https://poxyxsgvzwmnmewytsiw.supabase.co/functions/v1/otp-fallback";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -377,7 +377,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = AlmohamadAli;
+				INFOPLIST_KEY_CFBundleDisplayName = "عائلة المحمدعلي";
 				INFOPLIST_KEY_OTP_FALLBACK_URL = "https://poxyxsgvzwmnmewytsiw.supabase.co/functions/v1/otp-fallback";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

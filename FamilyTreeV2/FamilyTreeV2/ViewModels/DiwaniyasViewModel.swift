@@ -7,8 +7,6 @@ import Combine
 class DiwaniyasViewModel: ObservableObject {
     private let cacheSession = CacheManager.shared.session
 
-    static weak var tmpLast: DiwaniyasViewModel? // TMP-SHOT
-    init() { DiwaniyasViewModel.tmpLast = self } // TMP-SHOT
     @Published var diwaniyas: [Diwaniya] = []
     @Published var pendingDiwaniyas: [Diwaniya] = []
     @Published var isLoading = false

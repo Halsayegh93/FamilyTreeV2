@@ -43,10 +43,7 @@ struct AdminAnalyticsView: View {
         // نمو الأعضاء يُحسب مرة واحدة — لبطاقة الرأس («جديد هذا الشهر») ولقسم النمو
         let growth = monthlyGrowth()
 
-        return ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
+        return ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
                     heroSection(newThisMonth: growth.last?.count ?? 0)
 
@@ -56,7 +53,7 @@ struct AdminAnalyticsView: View {
                             .dsStaggerIn(1)
                     } else {
                         // الوضع الأفقي: الأقسام على عمودين
-                        AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
+                        AdaptiveCardStack(spacing: DS.Spacing.md) {
                             // ملخص عام
                             overviewSection
 
@@ -94,10 +91,11 @@ struct AdminAnalyticsView: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xxxl)
-            }
         }
-        .navigationTitle(L10n.t("إحصائيات متقدمة", "Analytics"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(L10n.t("إحصائيات متقدمة", "Analytics"),
+                         subtitle: L10n.t("العائلة بالأرقام — الأدوار والأعمار والنمو",
+                                          "The family in numbers — roles, ages and growth"))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             // جلب بيانات شجرة النساء إن لم تكن محمّلة (كاش التبويب يغني عن الجلب غالباً)
@@ -126,13 +124,8 @@ struct AdminAnalyticsView: View {
     private func heroSection(newThisMonth: Int) -> some View {
         let ready = totalMembers > 0
         let alivePct = AnalyticsPercent.value(activeMembers.count, of: totalMembers)
-        return DSPageHero(
-            title: L10n.t("إحصائيات متقدمة", "Analytics"),
-            subtitle: L10n.t("العائلة بالأرقام — الأدوار والأعمار والنمو",
-                             "The family in numbers — roles, ages and growth"),
-            icon: "chart.bar.xaxis",
-            tint: pageTint,
-            stats: [
+        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
+        return DSStatsRow([
                 DSHeroStat(value: ready ? totalMembers.formatted() : "—",
                            label: L10n.t("أفراد العائلة", "Members"), icon: "person.3.fill"),
                 DSHeroStat(value: ready ? L10n.t("\(alivePct)٪", "\(alivePct)%") : "—",
@@ -140,8 +133,7 @@ struct AdminAnalyticsView: View {
                 DSHeroStat(value: ready ? signed(newThisMonth) : "—",
                            label: L10n.t("جديد هذا الشهر", "New this month"),
                            icon: "chart.line.uptrend.xyaxis")
-            ]
-        )
+        ], tint: pageTint)
     }
 
     /// «+١٢» — الإشارة قبل الرقم في السطر العربي أيضاً
@@ -155,22 +147,19 @@ struct AdminAnalyticsView: View {
     @ViewBuilder
     private var membersStateCard: some View {
         if memberVM.membersLoadFailed {
-            SysStateCard(icon: "wifi.exclamationmark",
+            DSStateCard(icon: "wifi.exclamationmark",
                          title: L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
                          hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                          tint: DS.Color.error,
                          actionTitle: L10n.t("إعادة المحاولة", "Retry"),
                          action: { Task { await memberVM.fetchAllMembers(force: true) } })
         } else if memberVM.allMembers.isEmpty {
-            SysStateCard(icon: "chart.bar.xaxis",
-                         title: L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"),
-                         tint: pageTint,
-                         isLoading: true)
+            DSPageLoader(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"), fillsSpace: false)
+                .padding(.top, DS.Spacing.lg)
         } else {
-            SysStateCard(icon: "chart.bar.xaxis",
-                         title: L10n.t("لا توجد بيانات كافية", "No data available"),
-                         hint: L10n.t("أضف أعضاء للشجرة لعرض الإحصائيات", "Add members to the tree to see analytics"),
-                         tint: pageTint)
+            DSEmptyView(L10n.t("لا توجد بيانات كافية", "No data available"),
+                        message: L10n.t("أضف أعضاء للشجرة لعرض الإحصائيات", "Add members to the tree to see analytics"), style: .compact)
+                .padding(.top, DS.Spacing.lg)
         }
     }
 
@@ -189,14 +178,14 @@ struct AdminAnalyticsView: View {
                                  trailing: L10n.t("\(total.formatted()) فرد", "\(total.formatted()) members"),
                                  index: 1) {
             HStack(spacing: DS.Spacing.md) {
-                SysRing(progress: total > 0 ? Double(alive) / Double(total) : 0,
-                        tint: DS.Color.success, lineWidth: 8, size: 92) {
+                DSRing(progress: total > 0 ? Double(alive) / Double(total) : 0,
+                        tint: DS.Color.success, lineWidth: DS.Spacing.sm, size: DS.Icon.ring) {
                     ringCenter(value: L10n.t("\(pct)٪", "\(pct)%"), caption: L10n.t("أحياء", "Alive"))
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L10n.t("الأحياء \(pct)٪", "Alive \(pct)%"))
 
-                VStack(spacing: 6) {
+                VStack(spacing: DS.Spacing.xsm) {
                     valueLine(icon: "person.2.fill", tint: pageTint,
                               label: L10n.t("إجمالي", "Total"), value: total)
                     valueLine(icon: "heart.fill", tint: DS.Color.success,
@@ -225,7 +214,7 @@ struct AdminAnalyticsView: View {
                                  tint: pageTint,
                                  trailing: L10n.t("\(sum.formatted()) حي", "\(sum.formatted()) alive"),
                                  index: 2) {
-            VStack(spacing: 10) {
+            VStack(spacing: DS.Spacing.sm) {
                 AnalyticsBarRow(label: L10n.t("مدير", "Admin"), count: admins, total: total,
                                 color: FamilyMember.UserRole.admin.color)
                 AnalyticsBarRow(label: L10n.t("مراقب", "Monitor"), count: monitors, total: total,
@@ -253,7 +242,7 @@ struct AdminAnalyticsView: View {
                                  trailing: known ? L10n.t("\((males + females).formatted()) حي",
                                                           "\((males + females).formatted()) alive") : nil,
                                  index: 3) {
-            VStack(spacing: 10) {
+            VStack(spacing: DS.Spacing.sm) {
                 HStack(alignment: .top, spacing: DS.Spacing.sm) {
                     // عدد الذكور معروف دائماً (من الأعضاء) — النسبة فقط تنتظر شجرة النساء
                     genderBlock(title: L10n.t("ذكور", "Males"), count: males, total: total,
@@ -266,7 +255,7 @@ struct AdminAnalyticsView: View {
                 }
                 // لمحة النسبة — بعد معرفة أرقام شجرة النساء (قبلها تبدو ١٠٠٪ ذكوراً)
                 if known {
-                    SysDistributionBar(segments: [
+                    DSDistributionBar(segments: [
                         .init(id: "male", value: males, tint: DS.Color.male),
                         .init(id: "female", value: females, tint: DS.Color.female)
                     ], height: 12)
@@ -281,21 +270,21 @@ struct AdminAnalyticsView: View {
                              alignment: HorizontalAlignment, countKnown: Bool, shareKnown: Bool) -> some View {
         let value = countKnown ? count.formatted() : "—"
         let share = shareKnown ? AnalyticsPercent.text(count, of: total) : "—"
-        return VStack(alignment: alignment, spacing: 1) {
-            HStack(spacing: 5) {
-                Circle().fill(color).frame(width: 7, height: 7)
+        return VStack(alignment: alignment, spacing: DS.Spacing.xxs) {
+            HStack(spacing: DS.Spacing.xs) {
+                Circle().fill(color).frame(width: DS.Icon.legendDotCompact, height: DS.Icon.legendDotCompact)
                 Text(title)
-                    .dsFieldFont(12, weight: .bold)
+                    .dsFieldFont(.chip)
                     .foregroundColor(DS.Color.fieldLabel)
             }
             Text(value)
-                .font(DS.Font.plex(20, weight: .bold))
+                .dsFont(.emptyTitle)
                 .foregroundColor(DS.Color.fieldLabel)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(share)
-                .dsFieldFont(11, weight: .semibold)
+                .dsFieldFont(.caption)
                 .foregroundColor(DS.Color.fieldValue)
                 .monospacedDigit()
         }
@@ -313,7 +302,7 @@ struct AdminAnalyticsView: View {
         let linked = women.filter { WomenStore.linkedUserByWoman[$0.id] != nil }.count
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            SysSectionTitle(title: L10n.t("شجرة النساء", "Women Tree"),
+            DSSectionTitle(title: L10n.t("شجرة النساء", "Women Tree"),
                             icon: "figure.dress.line.vertical.figure",
                             tint: pageTint)
 
@@ -343,23 +332,21 @@ struct AdminAnalyticsView: View {
     @ViewBuilder
     private var womenStateCard: some View {
         if womenFailed {
-            SysStateCard(icon: "wifi.exclamationmark",
+            DSStateCard(icon: "wifi.exclamationmark",
                          title: L10n.t("تعذّر تحميل بيانات النساء", "Couldn't load women data"),
                          hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
                          tint: DS.Color.error,
                          actionTitle: L10n.t("إعادة المحاولة", "Retry"),
                          action: { Task { await loadWomen() } })
         } else if womenLoading || !womenAttempted {
-            SysStateCard(icon: "figure.dress.line.vertical.figure",
-                         title: L10n.t("جاري تحميل بيانات النساء…", "Loading women data…"),
-                         tint: pageTint,
-                         isLoading: true)
+            DSPageLoader(L10n.t("جاري تحميل بيانات النساء…", "Loading women data…"), fillsSpace: false)
+                .padding(.vertical, DS.Spacing.md)
         } else {
-            SysStateCard(icon: "figure.dress.line.vertical.figure",
-                         title: L10n.t("لا توجد بيانات بعد", "No data yet"),
-                         hint: L10n.t("تظهر هنا أرقام شجرة النساء بعد إضافتهن",
-                                      "Women tree numbers appear here once they're added"),
-                         tint: DS.Color.textTertiary)
+            DSEmptyView(L10n.t("لا توجد بيانات بعد", "No data yet"),
+                        message: L10n.t("تظهر هنا أرقام شجرة النساء بعد إضافتهن",
+                                        "Women tree numbers appear here once they're added"),
+                        style: .compact)
+                .dsCard(padding: nil)
         }
     }
 
@@ -378,14 +365,14 @@ struct AdminAnalyticsView: View {
                                  trailing: L10n.t("الأحياء", "Alive"),
                                  index: 5) {
             HStack(spacing: DS.Spacing.md) {
-                SysRing(progress: Double(married) / Double(total),
-                        tint: DS.Color.success, lineWidth: 8, size: 84) {
-                    ringCenter(value: L10n.t("\(pct)٪", "\(pct)%"), caption: L10n.t("متزوج", "Married"), size: 18)
+                DSRing(progress: Double(married) / Double(total),
+                        tint: DS.Color.success, lineWidth: DS.Spacing.sm) {
+                    ringCenter(value: L10n.t("\(pct)٪", "\(pct)%"), caption: L10n.t("متزوج", "Married"), role: .title)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L10n.t("متزوج \(pct)٪", "Married \(pct)%"))
 
-                VStack(spacing: 6) {
+                VStack(spacing: DS.Spacing.xsm) {
                     valueLine(icon: "heart.fill", tint: DS.Color.success,
                               label: L10n.t("متزوج", "Married"), value: married,
                               share: AnalyticsPercent.text(married, of: total))
@@ -427,7 +414,7 @@ struct AdminAnalyticsView: View {
         let generations = treeDepth(all: all, ids: ids, childIndex: buildChildIndex(all))
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            SysSectionTitle(title: L10n.t("نظرة على الشجرة", "Tree Insights"),
+            DSSectionTitle(title: L10n.t("نظرة على الشجرة", "Tree Insights"),
                             icon: "tree.fill",
                             tint: pageTint)
 
@@ -503,7 +490,7 @@ struct AdminAnalyticsView: View {
             : 0
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            SysSectionTitle(title: L10n.t("إحصائيات الوفيات", "Deceased Insights"),
+            DSSectionTitle(title: L10n.t("إحصائيات الوفيات", "Deceased Insights"),
                             icon: "hourglass",
                             tint: pageTint,
                             trailing: L10n.t("\(deceased.count.formatted()) متوفى",
@@ -526,11 +513,11 @@ struct AdminAnalyticsView: View {
                     "محسوبة من \(lifespans.count) متوفّى لديهم تاريخ ميلاد ووفاة",
                     "Based on \(lifespans.count) deceased with both birth & death dates"
                 ))
-                .font(DS.Font.plex(11, weight: .medium))
+                .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 2)
+                .padding(.horizontal, DS.Spacing.xxs)
             }
         }
         .dsStaggerIn(6)
@@ -564,7 +551,7 @@ struct AdminAnalyticsView: View {
                                  tint: pageTint,
                                  trailing: L10n.t("الأحياء", "Alive"),
                                  index: 6) {
-            VStack(spacing: 10) {
+            VStack(spacing: DS.Spacing.sm) {
                 AnalyticsBarRow(label: L10n.t("أقل من ١٨", "Under 18"), count: under18, total: total, color: pageTint)
                 AnalyticsBarRow(label: "18–29", count: age18to30, total: total, color: pageTint)
                 AnalyticsBarRow(label: "30–49", count: age30to50, total: total, color: pageTint)
@@ -628,10 +615,10 @@ struct AdminAnalyticsView: View {
 
             Text(L10n.t("أُضيف \(sum.formatted()) خلال آخر ٦ أشهر",
                         "\(sum.formatted()) added in the last 6 months"))
-                .font(DS.Font.plex(11, weight: .medium))
+                .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .monospacedDigit()
-                .padding(.horizontal, 2)
+                .padding(.horizontal, DS.Spacing.xxs)
         }
     }
 
@@ -646,7 +633,7 @@ struct AdminAnalyticsView: View {
 
         // الأخبار من مجال «المحتوى والبلاغات» — عنوانها بلونه
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            SysSectionTitle(title: L10n.t("إحصائيات الأخبار", "News Statistics"),
+            DSSectionTitle(title: L10n.t("إحصائيات الأخبار", "News Statistics"),
                             icon: "newspaper.fill",
                             tint: DS.Color.composerLibrary)
 
@@ -677,50 +664,50 @@ struct AdminAnalyticsView: View {
     }
 
     /// النسبة داخل الحلقة: الرقم كبيراً وتحته ما يعنيه
-    private func ringCenter(value: String, caption: String, size: CGFloat = 20) -> some View {
+    private func ringCenter(value: String, caption: String, role: DS.TextRole = .emptyTitle) -> some View {
         VStack(spacing: 0) {
             Text(value)
-                .font(DS.Font.plex(size, weight: .bold))
+                .dsFont(role)
                 .foregroundColor(DS.Color.fieldLabel)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(caption)
-                .font(DS.Font.plex(9.5, weight: .semibold))
+                .dsFont(.microCompact)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, DS.Spacing.xsm)
     }
 
     /// سطر رقم بجانب الحلقة: أيقونة صغيرة + العنوان + الرقم (+ النسبة) — مثل أسطر «حالة الإشعارات»
     private func valueLine(icon: String, tint: Color, label: String, value: Int, share: String? = nil) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
+        HStack(spacing: DS.Spacing.xsm) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.xs)
                 .foregroundColor(tint)
-                .frame(width: 18)
+                .frame(width: DS.Icon.inline)
                 .accessibilityHidden(true)
             Text(label)
-                .dsFieldFont(12, weight: .semibold)
+                .dsFieldFont(.chip)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            Spacer(minLength: 4)
+            Spacer(minLength: DS.Spacing.xs)
             Text(value.formatted())
-                .font(DS.Font.plex(15, weight: .bold))
+                .dsFont(.headline)
                 .foregroundColor(DS.Color.fieldLabel)
                 .monospacedDigit()
                 .lineLimit(1)
             if let share {
                 Text(share)
-                    .font(DS.Font.plex(10.5, weight: .semibold))
+                    .dsFont(.micro)
                     .foregroundColor(DS.Color.textTertiary)
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    .frame(minWidth: 32, alignment: .trailing)
+                    .frame(minWidth: DS.Icon.row, alignment: .trailing)
             }
         }
         .accessibilityElement(children: .combine)
@@ -764,39 +751,39 @@ private struct AnalyticsBarRow: View {
 
         HStack(spacing: DS.Spacing.sm) {
             Text(label)
-                .dsFieldFont(12.5, weight: .bold)
+                .dsFieldFont(.sectionTitle)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .frame(width: 92, alignment: .leading)
+                .frame(width: DS.Chart.barLabelWidth, alignment: .leading)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(color.opacity(0.14))
+                        .fill(color.opacity(DS.Opacity.tintFill))
                     Capsule()
                         .fill(color)
                         .frame(width: shown || reduceMotion
-                               ? max(geo.size.width * fraction, count > 0 ? 6 : 0)
+                               ? max(geo.size.width * fraction, count > 0 ? DS.Chart.barMinLength : 0)
                                : 0)
                 }
             }
-            .frame(height: 10)
+            .frame(height: DS.Chart.barHeight)
 
             // الرقم بخط واضح + النسبة تحته
             VStack(alignment: .trailing, spacing: 0) {
                 Text(count.formatted())
-                    .dsFieldFont(14, weight: .bold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .monospacedDigit()
                 Text(share)
-                    .font(DS.Font.plex(10, weight: .medium))
+                    .dsFont(.micro)
                     .foregroundColor(DS.Color.textTertiary)
                     .monospacedDigit()
             }
             .lineLimit(1)
             .minimumScaleFactor(0.7)
-            .frame(width: 58, alignment: .trailing)
+            .frame(width: DS.Chart.barValueWidth, alignment: .trailing)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.t("\(label): \(count.formatted())، \(share)",
@@ -826,22 +813,23 @@ private struct AnalyticsGrowthColumns: View {
                 let isCurrent = index == months.count - 1
                 VStack(spacing: DS.Spacing.xs) {
                     Text(month.count.formatted())
-                        .dsFieldFont(11, weight: .bold)
+                        .dsFieldFont(.badge)
                         .foregroundColor(isCurrent ? tint : DS.Color.fieldValue)
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
 
                     RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                        .fill(LinearGradient(colors: [tint, tint.opacity(0.7)],
+                        .fill(LinearGradient(colors: [tint, tint.opacity(DS.Opacity.dimmed)],
                                              startPoint: .top, endPoint: .bottom))
-                        .opacity(isCurrent ? 1 : 0.5)
+                        .opacity(isCurrent ? 1 : DS.Opacity.disabled)
                         .frame(height: shown || reduceMotion
-                               ? max(CGFloat(month.count) / CGFloat(maxCount) * 100, 4)
-                               : 4)
+                               ? max(CGFloat(month.count) / CGFloat(maxCount) * DS.Chart.columnMaxHeight,
+                                     DS.Chart.columnMinHeight)
+                               : DS.Chart.columnMinHeight)
 
                     Text(month.label)
-                        .font(DS.Font.plex(10.5, weight: .semibold))
+                        .dsFont(.micro)
                         .foregroundColor(isCurrent ? DS.Color.fieldLabel : DS.Color.textTertiary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -852,7 +840,7 @@ private struct AnalyticsGrowthColumns: View {
             }
         }
         // ارتفاع ثابت — البطاقة لا تتمدّد أثناء ارتفاع الأعمدة
-        .frame(maxWidth: .infinity, minHeight: 142, alignment: .bottom)
+        .frame(maxWidth: .infinity, minHeight: DS.Chart.columnsAreaHeight, alignment: .bottom)
         .onAppear {
             guard !reduceMotion else { shown = true; return }
             withAnimation(.spring(response: 0.6, dampingFraction: 0.82).delay(0.25)) { shown = true }
