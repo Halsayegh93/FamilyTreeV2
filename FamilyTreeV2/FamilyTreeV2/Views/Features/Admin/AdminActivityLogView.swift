@@ -95,6 +95,8 @@ struct AdminActivityLogView: View {
         NotificationKind.adminEditChildAdd.rawValue,
         NotificationKind.adminEditChildRemove.rawValue,
         NotificationKind.memberDelete.rawValue,
+        // «إضافة عضو جديد» يصل للإدارة باسمها — كان فلتر «شخصي» يخفيه (ن-١٠ فحص ٢٠٢٦-١٠-٠٧)
+        "member_add",
         NotificationKind.womenAdd.rawValue,
         NotificationKind.womenEdit.rawValue,
         NotificationKind.womenDelete.rawValue,
@@ -113,6 +115,9 @@ struct AdminActivityLogView: View {
         NotificationKind.diwaniyaRejected.rawValue,
         NotificationKind.projectApproved.rawValue,
         NotificationKind.projectRejected.rawValue,
+        // المكتبة — كان فلتر «شخصي» يخفي نشاطها كله (ن-١٠ فحص ٢٠٢٦-١٠-٠٧)
+        NotificationKind.archiveApproved.rawValue,
+        NotificationKind.archiveRejected.rawValue,
     ]
 
     /// طلبات الأعضاء (انضمام، ربط، تعديل شجرة…)
@@ -133,6 +138,16 @@ struct AdminActivityLogView: View {
         NotificationKind.galleryPending.rawValue,
         NotificationKind.diwaniyaPending.rawValue,
         NotificationKind.projectPending.rawValue,
+        // عنصر مكتبة ينتظر الموافقة، وطلب تعديل العائلة — يصلان للإدارة (ن-١٠ فحص ٢٠٢٦-١٠-٠٧)
+        NotificationKind.archivePending.rawValue,
+        RequestType.familyChange.rawValue,
+    ]
+
+    /// «النظام»: إعلانات الإدارة للعائلة — تُنسخ لكل جهاز (فهي موجّهة لي أيضاً)، فكان فلتر «شخصي»
+    /// يخفيها وتبقى الشريحة صفراً دائماً (ن-١٠ فحص ٢٠٢٦-١٠-٠٧)
+    private static let systemKinds: Set<String> = [
+        NotificationKind.admin.rawValue,
+        "admin_broadcast",
     ]
 
     /// السجل شامل: كل حركة في التطبيق بلا استثناء (طلب المالك)
@@ -144,7 +159,8 @@ struct AdminActivityLogView: View {
     }
 
     /// كل أنواع حركات السجل المعروفة (الأعضاء، النساء، المحتوى، الطلبات)
-    private static let activityKinds: Set<String> = memberKinds.union(womenKinds).union(contentKinds).union(requestKinds)
+    private static let activityKinds: Set<String> = memberKinds.union(womenKinds).union(contentKinds)
+        .union(requestKinds).union(systemKinds)
 
     /// موجّه لي ونوعه ليس حركة إدارية = إشعار شخصي
     private static func isPersonal(_ n: AppNotification, myId: UUID?) -> Bool {

@@ -44,6 +44,11 @@ final class KeyboardDismisser: NSObject, UIGestureRecognizerDelegate {
     }
 
     @objc private func tapped() {
+        Self.endEditing()
+    }
+
+    /// يُنهي الكتابة الآن (بعد إرسال حقل مثلاً) — نفس ما تفعله الضغطة خارج الحقل
+    static func endEditing() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 

@@ -456,7 +456,8 @@ struct CategoryEditSheet: View {
     /// معاينة شارة التصنيف كما ستظهر
     private var preview: some View {
         HStack(spacing: DS.Spacing.xs) {
-            Image(systemName: CategoryPalette.symbol(iconKey)).dsGlyph(DS.Glyph.sm)
+            // ن-١ فحص ٢٠٢٦-١٠-٠٧: رمز «وفاة» (القبر) من الأصول — `systemName` كان يظهره فارغاً
+            Image(dsSymbol: CategoryPalette.symbol(iconKey)).dsGlyph(DS.Glyph.sm)
                 .accessibilityHidden(true)
             Text(nameAr.isEmpty ? L10n.t("اسم التصنيف", "Category name") : nameAr)
                 .dsFont(.rowTitleCompact)
@@ -493,7 +494,8 @@ struct CategoryEditSheet: View {
             // (المسافة ٦ + نقطة ضغط زائدة فوق وتحت كل زر = نفس الفراغ الظاهر ٨ كما كان)
             gridRows(CategoryPalette.icons, columns: 5, spacing: DS.Spacing.xsm) { icon in
                 Button { iconKey = icon } label: {
-                    Image(systemName: CategoryPalette.symbol(icon))
+                    // رمز القبر المخصّص يُرسم من الأصول (ن-١ فحص ٢٠٢٦-١٠-٠٧)
+                    Image(dsSymbol: CategoryPalette.symbol(icon))
                         .dsGlyph(DS.Glyph.lg)
                         .foregroundColor(iconKey == icon ? DS.Color.textOnPrimary : accent)
                         .frame(maxWidth: .infinity)

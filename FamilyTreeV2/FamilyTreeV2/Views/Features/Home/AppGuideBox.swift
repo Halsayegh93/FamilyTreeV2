@@ -299,26 +299,26 @@ private struct GuidePage {
                       text: L10n.t("يظهر أبناء العضو تحته، واضغط عليها مرة ثانية لإخفائهم.",
                                    "The member's children appear below; tap it again to hide them."),
                       visual: .tap(before: "GuideTreeBefore", after: "GuideTreeAfter",
-                                   at: CGPoint(x: 0.5, y: 0.7095), aspect: treeAspect)),
+                                   at: CGPoint(x: 0.5, y: 0.71), aspect: treeAspect)),
             GuidePage(title: L10n.t("اضغط على الاسم", "Tap the name"),
                       text: L10n.t("تنفتح تفاصيل العضو: معلوماته وعائلته وصلة القرابة.",
                                    "The member's details open: info, family and kinship."),
                       visual: .tap(before: "GuideNameBefore", after: "GuideNameAfter",
-                                   at: CGPoint(x: 0.5, y: 0.4854), aspect: nameAspect)),
+                                   at: CGPoint(x: 0.5, y: 0.485), aspect: nameAspect)),
             GuidePage(title: L10n.t("الرقم فوق الصورة", "The number on the photo"),
                       text: L10n.t("عدد أبناء العضو — والسهم يعني إنك تقدر تفتحهم.",
                                    "How many children the member has — the arrow means you can open them."),
-                      visual: .spot(image: "GuideTreeBefore", at: CGPoint(x: 0.4378, y: 0.634),
+                      visual: .spot(image: "GuideTreeBefore", at: CGPoint(x: 0.435, y: 0.629),
                                     radius: 0.075, aspect: treeAspect)),
             GuidePage(title: L10n.t("أنت هنا", "You are here"),
                       text: L10n.t("الإطار الأخضر وعلامة «أنت هنا» تبيّن مكانك في الشجرة.",
                                    "The green ring and «You» mark show your place in the tree."),
-                      visual: .spot(image: "GuideTreeAfter", at: CGPoint(x: 0.5, y: 0.755),
+                      visual: .spot(image: "GuideTreeAfter", at: CGPoint(x: 0.5, y: 0.757),
                                     radius: 0.14, aspect: treeAspect)),
             GuidePage(title: L10n.t("المتوفّى", "Deceased"),
                       text: L10n.t("صورته رمادية، وتحت اسمه شريط أحمر فيه سنة الوفاة ثم الميلاد.",
                                    "Their photo is grey, with a red strip under the name showing the death then birth year."),
-                      visual: .spot(image: "GuideTreeBefore", at: CGPoint(x: 0.5, y: 0.355),
+                      visual: .spot(image: "GuideTreeBefore", at: CGPoint(x: 0.5, y: 0.35),
                                     radius: 0.15, aspect: treeAspect)),
             GuidePage(title: L10n.t("أزرار الشجرة", "Tree buttons"),
                       text: L10n.t("هذي الأزرار في أعلى الشجرة.",
@@ -370,22 +370,22 @@ extension GuidePage {
             GuidePage(title: L10n.t("الجرس", "The bell"),
                       text: L10n.t("إشعاراتك هنا: الردود والموافقات وأخبار العائلة — والنقطة الحمراء تعني جديد.",
                                    "Your notifications: replies, approvals and family news — a red dot means new."),
-                      visual: .spot(image: "GuideHomeTop", at: CGPoint(x: 0.172, y: 0.148),
+                      visual: .spot(image: "GuideHomeTop", at: CGPoint(x: 0.174, y: 0.133),
                                     radius: 0.07, aspect: shotAspect)),
             GuidePage(title: L10n.t("علامة المعلومات", "The info mark"),
                       text: L10n.t("تفتح «عن التطبيق» و«دليل الاستخدام» — هذا الدليل.",
                                    "Opens «About» and the «User Guide» — this guide."),
-                      visual: .spot(image: "GuideHomeTop", at: CGPoint(x: 0.082, y: 0.148),
+                      visual: .spot(image: "GuideHomeTop", at: CGPoint(x: 0.08, y: 0.133),
                                     radius: 0.07, aspect: shotAspect)),
             GuidePage(title: L10n.t("أقسام التطبيق", "App sections"),
                       text: L10n.t("كل بلاطة تفتح قسماً: الشجرة، الديوانيات، المكتبة، المشاريع، والتواصل.",
                                    "Each tile opens a section: tree, diwaniyas, library, projects and contact."),
-                      visual: .rect(image: "GuideHomeTiles", rect: CGRect(x: 0.03, y: 0.02, width: 0.94, height: 0.595),
+                      visual: .rect(image: "GuideHomeTiles", rect: CGRect(x: 0.03, y: 0.012, width: 0.94, height: 0.596),
                                     aspect: shotAspect)),
             GuidePage(title: L10n.t("الأخبار والمناسبات", "News & occasions"),
                       text: L10n.t("اضغط لتفتح كل الأخبار، وتفاعل بالإعجاب والتعليق، وأضف خبرك من زر + داخل صفحة الأخبار.",
                                    "Tap to open all news, like and comment, and add your own from the + button inside the news page."),
-                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.04, y: 0.028, width: 0.92, height: 0.816),
+                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.035, y: 0.049, width: 0.931, height: 0.902),
                                     aspect: shotAspect))
         ]
     }
@@ -395,22 +395,22 @@ extension GuidePage {
             GuidePage(title: L10n.t("الفلتر", "Filter"),
                       text: L10n.t("اختر: الكل أو الديوانيات أو الحسينيات — والرقم عددها.",
                                    "Choose all, diwaniyas or husseiniyas — the number is how many."),
-                      visual: .rect(image: "GuideDiwTop", rect: CGRect(x: 0.045, y: 0.05, width: 0.915, height: 0.098),
+                      visual: .rect(image: "GuideDiwTop", rect: CGRect(x: 0.128, y: 0.034, width: 0.844, height: 0.112),
                                     aspect: shotAspect)),
             GuidePage(title: L10n.t("اتصال", "Call"),
                       text: L10n.t("اتصل بصاحب الديوانية مباشرة — وفوقه موعدها وموقعها.",
                                    "Call the host directly — the time and place are right above."),
-                      visual: .spot(image: "GuideDiwTop", at: CGPoint(x: 0.828, y: 0.581),
+                      visual: .spot(image: "GuideDiwTop", at: CGPoint(x: 0.635, y: 0.558),
                                     radius: 0.1, aspect: shotAspect)),
             GuidePage(title: L10n.t("زر الخيارات", "Options"),
                       text: L10n.t("للإبلاغ عن ديوانية — ولصاحبها التعديل والحذف.",
                                    "Report a diwaniya — its host can also edit or delete it."),
-                      visual: .spot(image: "GuideDiwTop", at: CGPoint(x: 0.127, y: 0.307),
+                      visual: .spot(image: "GuideDiwTop", at: CGPoint(x: 0.126, y: 0.296),
                                     radius: 0.075, aspect: shotAspect)),
             GuidePage(title: L10n.t("أضف ديوانيتك", "Add yours"),
                       text: L10n.t("أضف ديوانيتك أو حسينيتك، وتظهر للجميع بعد موافقة الإدارة.",
                                    "Add your diwaniya or husseiniya; everyone sees it after admin approval."),
-                      visual: .spot(image: "GuideDiwAdd", at: CGPoint(x: 0.119, y: 0.785),
+                      visual: .spot(image: "GuideDiwAdd", at: CGPoint(x: 0.119, y: 0.885),
                                     radius: 0.09, aspect: shotAspect))
         ]
     }
@@ -420,34 +420,33 @@ extension GuidePage {
             GuidePage(title: L10n.t("تعديل بياناتك", "Edit your info"),
                       text: L10n.t("اضغط القلم لتعديل صورتك وبياناتك — أول ٣ تعديلات لكل حقل مباشرة، وبعدها بموافقة الإدارة.",
                                    "Tap the pencil to edit your photo and info — the first 3 changes to each field apply directly, then admin approval."),
-                      visual: .spot(image: "GuideProfileTop", at: CGPoint(x: 0.169, y: 0.707),
+                      visual: .spot(image: "GuideProfileTop", at: CGPoint(x: 0.218, y: 0.744),
                                     radius: 0.07, aspect: shotAspect)),
             GuidePage(title: L10n.t("رمز QR", "QR code"),
                       text: L10n.t("يعرض رمزك لتشاركه مع قريبك.",
                                    "Shows your code to share with a relative."),
-                      visual: .spot(image: "GuideProfileInfo", at: CGPoint(x: 0.159, y: 0.299),
-                                    radius: 0.09, aspect: shotAspect)),
+                      visual: .spot(image: "GuideProfileInfo", at: CGPoint(x: 0.131, y: 0.292),
+                                    radius: 0.075, aspect: shotAspect)),
             GuidePage(title: L10n.t("مسح", "Scan"),
                       text: L10n.t("امسح رمز قريبك لتعرف صلة القرابة بينكم.",
                                    "Scan a relative's code to see how you're related."),
-                      visual: .spot(image: "GuideProfileInfo", at: CGPoint(x: 0.336, y: 0.299),
-                                    radius: 0.08, aspect: shotAspect)),
+                      visual: .spot(image: "GuideProfileInfo", at: CGPoint(x: 0.292, y: 0.292),
+                                    radius: 0.09, aspect: shotAspect)),
             // «طلباتي» بترتيب الصفحة: المعلومات ← طلباتي ← عائلتي
-            // TODO-SHOT: حسابي — قسم «طلباتي» بطلبين معلّقين «تحت المراجعة» وزر «سحب» (مكانه تحت المعلومات)
             GuidePage(title: L10n.t("طلباتي", "My requests"),
                       text: L10n.t("طلباتك المرسلة للإدارة تظهر هنا «تحت المراجعة» — واضغط «سحب» لإلغاء أي طلب.",
                                    "Requests you sent to the admins show here «Under review» — tap «Withdraw» to cancel one."),
-                      visual: .rect(image: "GuideProfileInfo", rect: CGRect(x: 0.045, y: 0.79, width: 0.915, height: 0.2),
+                      visual: .rect(image: "GuideProfileRequests", rect: CGRect(x: 0.035, y: 0.21, width: 0.93, height: 0.613),
                                     aspect: shotAspect)),
             GuidePage(title: L10n.t("عائلتي", "My family"),
                       text: L10n.t("يظهر لما تكون حالتك «متزوج»: أضف زوجتك واختر أمك، و«إضافة ابن» لابن أو بنت بموافقة الإدارة.",
                                    "Shows when your status is «Married»: add your wife and pick your mother; «Add child» adds a son or daughter after admin approval."),
-                      visual: .rect(image: "GuideProfileFamily", rect: CGRect(x: 0.045, y: 0.321, width: 0.915, height: 0.503),
+                      visual: .rect(image: "GuideProfileFamily", rect: CGRect(x: 0.035, y: 0.164, width: 0.93, height: 0.707),
                                     aspect: shotAspect)),
             GuidePage(title: L10n.t("الإعدادات", "Settings"),
                       text: L10n.t("المظهر واللغة والإشعارات والخصوصية والأجهزة.",
                                    "Appearance, language, notifications, privacy and devices."),
-                      visual: .spot(image: "GuideProfileTop", at: CGPoint(x: 0.092, y: 0.103),
+                      visual: .spot(image: "GuideProfileTop", at: CGPoint(x: 0.093, y: 0.133),
                                     radius: 0.07, aspect: shotAspect))
         ]
     }
@@ -457,120 +456,117 @@ extension GuidePage {
             GuidePage(title: L10n.t("الإشعارات | المستجدات", "Notifications | Updates"),
                       text: L10n.t("«الإشعارات» ما يخصّك، و«المستجدات» أخبار التطبيق — والرقم الأحمر يعني جديد.",
                                    "«Notifications» are yours, «Updates» are app news — a red number means new."),
-                      visual: .rect(image: "GuideNotifs", rect: CGRect(x: 0.04, y: 0.034, width: 0.92, height: 0.134),
+                      visual: .rect(image: "GuideNotifs", rect: CGRect(x: 0.035, y: 0.026, width: 0.93, height: 0.142),
                                     aspect: shotAspect)),
             GuidePage(title: L10n.t("قراءة الكل وتحديد", "Read all & select"),
                       text: L10n.t("علّم الكل مقروءاً، أو حدّد إشعارات بعينها.",
                                    "Mark everything as read, or select specific notifications."),
-                      visual: .rect(image: "GuideNotifs", rect: CGRect(x: 0.04, y: 0.201, width: 0.92, height: 0.112),
+                      visual: .rect(image: "GuideNotifs", rect: CGRect(x: 0.035, y: 0.175, width: 0.93, height: 0.141),
                                     aspect: shotAspect)),
             GuidePage(title: L10n.t("اضغط الإشعار", "Tap a notification"),
                       text: L10n.t("يفتح تفاصيله — واسحبه لحذفه أو تعليمه مقروءاً.",
                                    "Opens its details — swipe it to delete or mark as read."),
-                      visual: .rect(image: "GuideNotifs", rect: CGRect(x: 0.04, y: 0.492, width: 0.92, height: 0.251),
+                      visual: .rect(image: "GuideNotifs", rect: CGRect(x: 0.035, y: 0.47, width: 0.93, height: 0.276),
                                     aspect: shotAspect))
         ]
     }
 
-    // MARK: فصول أقسام الرئيسية (٢٠٢٦-١٠-٠٧) — مسودّة نصوص لمراجعة المالك؛ اللقطات مؤقتة من لقطات الرئيسية
-    // حتى تُلتقط لقطاتها في الدفعة ٦ (بعد اعتماد الشكل الجديد) وتُقاس الإحداثيات من جديد.
+    // MARK: فصول أقسام الرئيسية (٢٠٢٦-١٠-٠٧) — لقطاتها بالشكل الموحّد الجديد (Guide{News,Library,Project,Contact}*)
 
     /// مواضع بلاطات الأقسام في لقطة `GuideHomeTiles` (نِسَب من اليسار)
-    private static let libraryTile = CGRect(x: 0.664, y: 0.34, width: 0.294, height: 0.265)
-    private static let projectsTile = CGRect(x: 0.351, y: 0.34, width: 0.296, height: 0.265)
-    private static let contactTile = CGRect(x: 0.039, y: 0.34, width: 0.297, height: 0.265)
+    private static let libraryTile = CGRect(x: 0.655, y: 0.32, width: 0.313, height: 0.288)
+    private static let projectsTile = CGRect(x: 0.343, y: 0.32, width: 0.314, height: 0.288)
+    private static let contactTile = CGRect(x: 0.031, y: 0.32, width: 0.314, height: 0.288)
 
     fileprivate static var addNews: [GuidePage] {
         [
-            // TODO-SHOT: صفحة «الأخبار والمناسبات» (قسم الأخبار) وزر + ظاهر أسفلها
             GuidePage(title: L10n.t("زر الإضافة", "The add button"),
                       text: L10n.t("افتح «الأخبار والمناسبات» من الرئيسية، واضغط زر + أسفل الصفحة.",
                                    "Open «News & occasions» from Home, then tap the + button at the bottom."),
-                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.04, y: 0.028, width: 0.92, height: 0.816),
-                                    aspect: shotAspect)),
-            // TODO-SHOT: مربّع «خبر جديد» — قسم «التصنيف» بمربّعات الأنواع، واحد منها مختار
+                      visual: .spot(image: "GuideNewsPage", at: CGPoint(x: 0.119, y: 0.827),
+                                    radius: 0.09, aspect: shotAspect)),
             GuidePage(title: L10n.t("التصنيف", "Category"),
                       text: L10n.t("اختر نوع خبرك: إعلان أو زواج أو مولود أو وفاة… ثم اكتبه.",
                                    "Pick the type: announcement, wedding, newborn, obituary… then write it."),
-                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.081, y: 0.234, width: 0.839, height: 0.218),
+                      visual: .rect(image: "GuideNewsAddTop", rect: CGRect(x: 0.061, y: 0.259, width: 0.878, height: 0.343),
                                     aspect: shotAspect)),
-            // TODO-SHOT: مربّع «خبر جديد» — شريط الصور (صورتان) وزر «تصويت» بجانبه
             GuidePage(title: L10n.t("صور وتصويت", "Photos & polls"),
                       text: L10n.t("أضف حتى ٥ صور، أو حوّله تصويتاً بخيارين إلى أربعة.",
                                    "Add up to 5 photos, or turn it into a poll with two to four options."),
-                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.081, y: 0.686, width: 0.839, height: 0.11),
+                      visual: .rect(image: "GuideNewsAddBottom", rect: CGRect(x: 0.442, y: 0.343, width: 0.483, height: 0.32),
                                     aspect: shotAspect)),
-            // TODO-SHOT: مربّع «خبر جديد» — أسفله زر «إرسال للمراجعة» وملاحظة «يحتاج موافقة الإدارة قبل الظهور»
             GuidePage(title: L10n.t("إرسال للمراجعة", "Submit"),
                       text: L10n.t("اضغط «إرسال للمراجعة» — ويظهر خبرك للعائلة بعد موافقة الإدارة.",
                                    "Tap «Submit» — your post appears to the family after admin approval."),
-                      visual: .rect(image: "GuideHomeNews", rect: CGRect(x: 0.04, y: 0.028, width: 0.92, height: 0.816),
+                      visual: .rect(image: "GuideNewsAddBottom", rect: CGRect(x: 0.306, y: 0.744, width: 0.64, height: 0.218),
                                     aspect: shotAspect))
         ]
     }
 
     fileprivate static var library: [GuidePage] {
         [
-            // TODO-SHOT: الرئيسية — بلاطة «مكتبة العائلة» بالشكل الجديد (يُعاد قياس الإطار)
             GuidePage(title: L10n.t("افتح المكتبة", "Open the library"),
                       text: L10n.t("من بلاطة «مكتبة العائلة» في الرئيسية: وثائق وصور من تاريخ العائلة.",
                                    "From the «Family Library» tile on Home: documents and photos from the family's history."),
                       visual: .rect(image: "GuideHomeTiles", rect: libraryTile, aspect: shotAspect)),
-            // TODO-SHOT: صفحة المكتبة بثلاثة عناصر، ثم تفاصيل عنصر وزر «حفظ أو مشاركة»
+            // صفحة المكتبة ← الضغط على أول عنصر يفتح تفاصيله وزر «حفظ أو مشاركة» أعلاها
             GuidePage(title: L10n.t("اضغط العنصر", "Tap an item"),
                       text: L10n.t("يفتح تفاصيله وملفه — ومنه تحفظه أو تشاركه.",
                                    "Opens its details and file — save or share it from there."),
-                      visual: .rect(image: "GuideHomeTiles", rect: libraryTile, aspect: shotAspect)),
-            // TODO-SHOT: صفحة المكتبة وزر + ظاهر، أو مربّع «إضافة إلى المكتبة»
+                      visual: .tap(before: "GuideLibraryList", after: "GuideLibraryItem",
+                                   at: CGPoint(x: 0.735, y: 0.34), aspect: nameAspect)),
+            // مربّع «إضافة إلى المكتبة» (يفتحه زر +) — قسم «الملف»: صورة أو PDF
             GuidePage(title: L10n.t("أضف للمكتبة", "Add to the library"),
                       text: L10n.t("اضغط + وأضف صورة أو ملف PDF بعنوانه وسنته — ويظهر للجميع بعد موافقة الإدارة.",
                                    "Tap + and add a photo or PDF with its title and year — everyone sees it after admin approval."),
-                      visual: .rect(image: "GuideHomeTiles", rect: libraryTile, aspect: shotAspect))
+                      visual: .rect(image: "GuideLibraryAdd", rect: CGRect(x: 0.061, y: 0.245, width: 0.878, height: 0.485),
+                                    aspect: shotAspect))
         ]
     }
 
     fileprivate static var projects: [GuidePage] {
         [
-            // TODO-SHOT: الرئيسية — بلاطة «مشاريع العائلة» بالشكل الجديد (يُعاد قياس الإطار)
             GuidePage(title: L10n.t("افتح المشاريع", "Open projects"),
                       text: L10n.t("من بلاطة «مشاريع العائلة»: مشاريع أفراد العائلة ومحلاتهم.",
                                    "From the «Family Projects» tile: family members' projects and businesses."),
                       visual: .rect(image: "GuideHomeTiles", rect: projectsTile, aspect: shotAspect)),
-            // TODO-SHOT: تفاصيل مشروع — مربّعات «حسابات المشروع» (اتصال، واتساب، إنستغرام، الموقع)
             GuidePage(title: L10n.t("حسابات التواصل", "Contact accounts"),
                       text: L10n.t("داخل المشروع: اضغط أي حساب للاتصال أو الواتساب أو فتحه — والضغط المطوّل ينسخه.",
                                    "Inside a project: tap any account to call, WhatsApp or open it — long-press to copy."),
-                      visual: .rect(image: "GuideHomeTiles", rect: projectsTile, aspect: shotAspect)),
-            // TODO-SHOT: صفحة المشاريع وزر + ظاهر، أو مربّع «مشروع جديد»
+                      visual: .rect(image: "GuideProjectAccounts", rect: CGRect(x: 0.035, y: 0.094, width: 0.93, height: 0.816),
+                                    aspect: shotAspect)),
+            // مربّع «مشروع جديد» (يفتحه زر +): الشعار والاسم والصور والحسابات
             GuidePage(title: L10n.t("أضف مشروعك", "Add yours"),
                       text: L10n.t("اضغط + وأضف الشعار والاسم والصور والحسابات — يظهر لك فوراً وللجميع بعد الموافقة.",
                                    "Tap + and add the logo, name, photos and accounts — you see it now, everyone after approval."),
-                      visual: .rect(image: "GuideHomeTiles", rect: projectsTile, aspect: shotAspect)),
-            // TODO-SHOT: تفاصيل مشروع العضو نفسه وزر «تعديل»، وحبّة «طلباتي» بصفحة المشاريع
+                      visual: .rect(image: "GuideProjectsAdd", rect: CGRect(x: 0.05, y: 0.16, width: 0.9, height: 0.83),
+                                    aspect: nameAspect)),
+            // تفاصيل مشروع العضو نفسه — زر «تعديل» (القلم) أعلاها
             GuidePage(title: L10n.t("صاحب المشروع", "Project owner"),
                       text: L10n.t("أنت صاحب مشروعك: تعدّله أو تحذفه من داخله، والمعلّق منه في «طلباتي».",
                                    "You own your project: edit or delete it from inside it; pending ones are under «Mine»."),
-                      visual: .rect(image: "GuideHomeTiles", rect: projectsTile, aspect: shotAspect))
+                      visual: .spot(image: "GuideProjectOwner", at: CGPoint(x: 0.233, y: 0.142),
+                                    radius: 0.07, aspect: shotAspect))
         ]
     }
 
     fileprivate static var contact: [GuidePage] {
         [
-            // TODO-SHOT: الرئيسية — بلاطة «التواصل» بالشكل الجديد (يُعاد قياس الإطار)
             GuidePage(title: L10n.t("افتح التواصل", "Open contact"),
                       text: L10n.t("من بلاطة «التواصل» في الرئيسية تراسل إدارة العائلة مباشرة.",
                                    "From the «Contact» tile on Home, message the family admins directly."),
                       visual: .rect(image: "GuideHomeTiles", rect: contactTile, aspect: shotAspect)),
-            // TODO-SHOT: مربّع «تواصل مع الإدارة» — قسم «نوع الرسالة» بالخيارات الأربعة
             GuidePage(title: L10n.t("نوع الرسالة", "Message type"),
                       text: L10n.t("اختر: استفسار أو شكوى أو اقتراح أو أخرى، ثم اكتب رسالتك.",
                                    "Choose inquiry, complaint, suggestion or other, then write your message."),
-                      visual: .rect(image: "GuideHomeTiles", rect: contactTile, aspect: shotAspect)),
-            // TODO-SHOT: مربّع «تواصل مع الإدارة» — حقل «بريدك للرد (اختياري)» ورسالة «وصلت رسالتك»
+                      visual: .rect(image: "GuideContactType", rect: CGRect(x: 0.061, y: 0.256, width: 0.878, height: 0.339),
+                                    aspect: shotAspect)),
+            // مربّع «تواصل مع الإدارة» — قسم «بريد الرد» وحقل «بريدك للرد (اختياري)»
             GuidePage(title: L10n.t("الرد", "The reply"),
                       text: L10n.t("الإدارة ترد عليك بالاتصال أو الواتساب — أو بالبريد إذا كتبته.",
                                    "The admins reply by call or WhatsApp — or by email if you add it."),
-                      visual: .rect(image: "GuideHomeTiles", rect: contactTile, aspect: shotAspect))
+                      visual: .rect(image: "GuideContactReply", rect: CGRect(x: 0.061, y: 0.471, width: 0.878, height: 0.271),
+                                    aspect: shotAspect))
         ]
     }
 }
@@ -1093,7 +1089,7 @@ private struct GuideToolbarScene: View {
         case .circle(let icon):
             Image(dsSymbol: icon)
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(DS.Color.primary)
+                .foregroundColor(AppSection.tree.ink)   // بلون شريط الشجرة الحقيقي (أخضر الشجرة)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(DS.Color.surface))
                 .overlay(Circle().strokeBorder(DS.Color.textTertiary.opacity(0.25), lineWidth: 1))

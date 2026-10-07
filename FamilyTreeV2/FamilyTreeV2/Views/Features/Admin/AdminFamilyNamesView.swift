@@ -212,6 +212,8 @@ struct AdminFamilyNamesView: View {
     private func submitAdd() {
         let name = newName
         newName = ""
+        // لوحة المفاتيح تُغلق بعد الإضافة كما كانت (ضاع `addFocused = false` في التوحيد — ن-١١ فحص ٢٠٢٦-١٠-٠٧)
+        KeyboardDismisser.endEditing()
         Task { await vm.add(name) }
     }
 }

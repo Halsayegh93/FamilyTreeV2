@@ -88,7 +88,8 @@ struct DSSegmentedSwitch<ID: Hashable>: View {
         } label: {
             HStack(spacing: DS.Spacing.xsm) {
                 if size != .compact {
-                    Image(systemName: option.icon)
+                    // رمز النظام أو المخصّص من الأصول (ن-١ فحص ٢٠٢٦-١٠-٠٧)
+                    Image(dsSymbol: option.icon)
                         .dsGlyph(glyph)
                         .accessibilityHidden(true)
                 }

@@ -1201,6 +1201,9 @@ enum DSBox {
     static let buttonSpacing: CGFloat = 7
     static var buttonFont: Font { DS.Font.role(.button) }
     static var buttonFontLarge: Font { DS.Font.role(.buttonLarge) }
+    /// نص الزرّ سطر واحد يصغر حتى هذه النسبة قبل أن يُقصّ (مع الخط الكبير في الجهاز) — والارتفاع
+    /// `buttonHeight` حدّ أدنى يكبر مع الخط (ن-٥ فحص ٢٠٢٦-١٠-٠٧: كان «حفظ/إضافة/نشر» يلتفّ ويُقصّ)
+    static let buttonLabelMinScale: CGFloat = 0.7
     /// شريط الأزرار السفلي لمربّع العمل: هوامشه (١٦/٨/١٢ ← ١١/٦/٨)
     static let footerHorizontal: CGFloat = 11
     static let footerTop: CGFloat = 6
@@ -1430,8 +1433,8 @@ struct DSButtonFace: ViewModifier {
         return content
             .font(size.font)
             .foregroundColor(cancel ? DS.Color.textPrimary : .white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+            // سطر واحد يصغر بدل الالتفاف والقصّ، والارتفاع حدّ أدنى (ن-٥ فحص ٢٠٢٦-١٠-٠٧)
+            .dsButtonLabelFit()
             .padding(.horizontal, fullWidth ? 0 : DS.Spacing.lg)
             .frame(maxWidth: fullWidth ? (capped ? DS.Landscape.buttonMaxWidth : .infinity) : nil)
             .frame(minHeight: size.height)
@@ -1453,6 +1456,14 @@ struct DSButtonFace: ViewModifier {
         } else {
             DSBox.buttonShape.fill(DSActionFill.style())
         }
+    }
+}
+
+extension View {
+    /// نص الزرّ الواحد: سطر واحد يصغر حتى `DSBox.buttonLabelMinScale` — يُستعمل في `DSButtonFace` وزرّ
+    /// الإجراء في `DSComposer` (المكان الواحد لسلوك النص مع الخط الكبير، ن-٥ فحص ٢٠٢٦-١٠-٠٧)
+    func dsButtonLabelFit() -> some View {
+        lineLimit(1).minimumScaleFactor(DSBox.buttonLabelMinScale)
     }
 }
 

@@ -91,6 +91,8 @@ enum DSMotion {
     static let enable = Animation.easeInOut(duration: 0.25)
     /// «تقليل الحركة»: تلاشٍ قصير بدل أي حركة
     static let fade = Animation.easeOut(duration: 0.2)
+    /// مهلة بين إغلاق مربّع وفتح/إغلاق ما بعده (لا يُعرض اثنان في اللحظة نفسها)
+    static let boxHandoff: TimeInterval = 0.35
 
     /// تأخير عنصر في التسلسل
     static func staggerDelay(_ index: Int, base: Double) -> Double {
@@ -382,9 +384,9 @@ struct DSComposer<Content: View>: View {
             // الإجراءات الأخرى — بنفس الزرّ الواحد، زرّان بالصفّ، فوق صفّ «الإجراء / إلغاء»
             if !extraActions.isEmpty {
                 VStack(spacing: DSBox.buttonSpacing) {
-                    ForEach(Array(stride(from: 0, to: extraActions.count, by: 2)), id: \.self) { start in
+                    ForEach(extraRows.indices, id: \.self) { row in
                         HStack(spacing: DSBox.buttonSpacing) {
-                            ForEach(extraActions[start..<min(start + 2, extraActions.count)]) { extraButton($0) }
+                            ForEach(extraRows[row]) { extraButton($0) }
                         }
                     }
                 }
@@ -422,14 +424,16 @@ struct DSComposer<Content: View>: View {
                 if isBusy {
                     ProgressView().tint(.white).scaleEffect(0.85)
                 } else {
-                    Image(systemName: actionIcon).dsGlyph(DSButtonSize.regular.glyph)
+                    Image(dsSymbol: actionIcon).dsGlyph(DSButtonSize.regular.glyph)
                         .opacity(actionEnabled ? 1 : DSActionFill.labelDisabledOpacity)
                 }
                 Text(actionTitle).font(DSBox.buttonFont)
                     .opacity(actionEnabled ? 1 : DSActionFill.labelDisabledOpacity)
             }
             .foregroundColor(DSActionFill.label())
-            .frame(maxWidth: .infinity).frame(height: DSBox.buttonHeight)
+            // نفس نص الزرّ الواحد: سطر يصغر بدل الالتفاف والقصّ، والارتفاع ٤٤ حدّ أدنى يكبر مع الخط (ن-٥)
+            .dsButtonLabelFit()
+            .frame(maxWidth: .infinity).frame(minHeight: DSBox.buttonHeight)
             // نفس DSActionFill.style(enabled:) — لكن الشفافية على الطبقة فتتحرّك بسلاسة
             // (الشكل من الهيكل الموحّد `DSBox` — نفس زرّ التنبيه)
             .background(
@@ -441,6 +445,24 @@ struct DSComposer<Content: View>: View {
             .modifier(DSReadyGlow(isReady: canSubmit, armed: entranceSettled, cornerRadius: DSBox.buttonRadius))
         }
         .disabled(!canSubmit || isBusy)
+    }
+
+    /// صفوف الإجراءات الأخرى: زرّان بالصفّ، وما عُلّم `fullRow` وحده بعرض الصفّ (ن-٥ فحص ٢٠٢٦-١٠-٠٧:
+    /// «تعديل / إضافة رقم فعلي» صار نصف عرض بجانب «رفض» وكان بعرض كامل)
+    private var extraRows: [[DSComposerAction]] {
+        var rows: [[DSComposerAction]] = []
+        var pair: [DSComposerAction] = []
+        for item in extraActions {
+            if item.fullRow {
+                if !pair.isEmpty { rows.append(pair); pair = [] }
+                rows.append([item])
+            } else {
+                pair.append(item)
+                if pair.count == 2 { rows.append(pair); pair = [] }
+            }
+        }
+        if !pair.isEmpty { rows.append(pair) }
+        return rows
     }
 
     /// زرّ إجراء آخر — وجه الزرّ الواحد بدوره (الحذف/الرفض أحمر، الثانوي رمادي، أو لون معنى)
@@ -944,7 +966,8 @@ struct DSExtraChip: View {
         let tint = self.tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph
         return Button(action: action) {
             HStack(spacing: DS.Spacing.xsm) {
-                Image(systemName: summary == nil ? "plus" : icon)
+                // `dsSymbol`: الرمز قد يكون مخصّصاً من الأصول (القبر — ن-١ فحص ٢٠٢٦-١٠-٠٧)
+                Image(dsSymbol: summary == nil ? "plus" : icon)
                     .dsGlyph(DS.Glyph.smCompact)
                 if summary == nil {
                     Image(dsSymbol: icon).dsGlyph(DS.Glyph.smCompact, weight: .semibold)
@@ -1077,7 +1100,9 @@ struct DSExtraBox<Content: View>: View {
                         .font(DSBox.buttonFont)
                         .foregroundColor(DSActionFill.label())
                         .opacity(doneEnabled ? 1 : DSActionFill.labelDisabledOpacity)
-                        .frame(maxWidth: .infinity).frame(height: DSBox.buttonHeight)
+                        // سطر يصغر بدل القصّ، والارتفاع حدّ أدنى يكبر مع الخط (ن-٥ فحص ٢٠٢٦-١٠-٠٧)
+                        .dsButtonLabelFit()
+                        .frame(maxWidth: .infinity).frame(minHeight: DSBox.buttonHeight)
                         // نفس DSActionFill.style(enabled:) — الشفافية على الطبقة فتتحرّك بسلاسة
                         .background(
                             DSBox.buttonShape
@@ -1095,7 +1120,8 @@ struct DSExtraBox<Content: View>: View {
                 Text(L10n.t("إلغاء", "Cancel"))
                     .font(DSBox.buttonFont)
                     .foregroundColor(DS.Color.textPrimary)
-                    .frame(maxWidth: .infinity).frame(height: DSBox.buttonHeight)
+                    .dsButtonLabelFit()
+                    .frame(maxWidth: .infinity).frame(minHeight: DSBox.buttonHeight)
                     .background(DSBox.buttonShape.fill(DS.Color.mutedBackground.opacity(0.8)))
             }
         }
@@ -1522,5 +1548,7 @@ struct DSComposerAction: Identifiable {
     var role: ButtonRole? = nil
     var tint: Color? = nil
     var isEnabled: Bool = true
+    /// true = صفّ مستقل بعرض كامل (لا يُقرن بزرّ آخر)
+    var fullRow: Bool = false
     let action: () -> Void
 }

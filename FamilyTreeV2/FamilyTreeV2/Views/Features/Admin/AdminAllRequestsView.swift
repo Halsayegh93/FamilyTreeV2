@@ -3528,8 +3528,9 @@ struct AdminAllRequestsView: View {
         var items: [DSComposerAction] = []
         // تعديل / إضافة رقم فعلي قبل الربط
         if let member = detailPhoneEditMember(detail) {
+            // صفّ مستقل بعرض كامل كما كان قبل التوحيد (ن-٥ فحص ٢٠٢٦-١٠-٠٧)
             items.append(DSComposerAction(id: "phone", title: L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"),
-                                          icon: "phone.badge.plus", role: .cancel) {
+                                          icon: "phone.badge.plus", role: .cancel, fullRow: true) {
                 phoneEditPendingMember = member
             })
         }

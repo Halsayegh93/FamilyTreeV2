@@ -558,6 +558,12 @@ final class DSPopupPresenter {
 }
 
 private final class DSAlertLatest<A: View, M: View> {
+    /// العنوان أيضاً من أحدث رسم (م-١ فحص ٢٠٢٦-١٠-٠٧): كان يُقرأ من الرسم السابق فيظهر فارغاً
+    /// («تجميد حساب فلان؟» بلا اسم) أو قديماً («تم الربط بنجاح» فوق رسالة فشل)
+    var title: String?
+    /// ولحظة الفرح والأيقونة كذلك — لا تظهر لحظة «نجاح» فوق نتيجة فشل
+    var moment: FTMoments.Moment??
+    var icon: String??
     var actions: (() -> A)?
     var message: (() -> M)??
 }
@@ -577,6 +583,9 @@ private struct DSAlertModifier<A: View, M: View>: ViewModifier {
     @Environment(\.dsSection) private var section
 
     func body(content: Content) -> some View {
+        latest.title = title
+        latest.moment = .some(moment)
+        latest.icon = .some(icon)
         latest.actions = actions
         latest.message = message
         return content
@@ -590,15 +599,15 @@ private struct DSAlertModifier<A: View, M: View>: ViewModifier {
     private func present() {
         let binding = $isPresented
         let view = DSAlertBody(
-            title: title,
+            title: latest.title ?? title,
             actions: (latest.actions ?? actions)(),
             message: (latest.message ?? message)?(),
             onDismiss: {
                 // بعد ظهور أثر الضغط — ثم تُغلق النافذة عبر onChange
                 DispatchQueue.main.async { binding.wrappedValue = false }
             },
-            moment: moment,
-            icon: icon
+            moment: latest.moment ?? moment,
+            icon: latest.icon ?? icon
         )
         shownID = DSPopupPresenter.shared.show(view, section: section ?? AppSection.current)
     }

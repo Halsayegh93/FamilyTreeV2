@@ -499,6 +499,9 @@ struct DSChipButton: View {
     var isLoading: Bool = false
     let action: () -> Void
     @Environment(\.dsSection) private var section
+    /// المعطّل (للقراءة فقط مثلاً) يخفت بشفافية الزرّ الواحد — كان «حفظ» الممتلئ يبدو فعّالاً
+    /// وهو لا يعمل (ن-١١ فحص ٢٠٢٦-١٠-٠٧)
+    @Environment(\.isEnabled) private var isEnabled
 
     init(_ title: String, icon: String? = nil, tint: Color = DS.Color.primary, isSelected: Bool = false,
          count: Int? = nil, size: DSChipSize = .regular, isLoading: Bool = false, action: @escaping () -> Void) {
@@ -562,6 +565,8 @@ struct DSChipButton: View {
             }
             .overlay(Capsule().strokeBorder(isSelected ? Color.clear : ink.opacity(DS.Opacity.tintStroke),
                                             lineWidth: DS.Border.width))
+            // المعطّل بنفس شفافية الزرّ الواحد المعطّل (ن-١١)
+            .opacity(isEnabled ? 1 : DSActionFill.disabledOpacity)
             // مساحة ضغط ٤٤ (حدّ أبل) بلا أن تكبّر الصفّ
             .dsTapArea(width: DS.Icon.tapTarget, height: height)
         }

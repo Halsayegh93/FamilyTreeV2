@@ -503,7 +503,8 @@ struct FamilyArchiveView: View {
         return VStack(alignment: .leading, spacing: 0) {
             // لسان الملف
             HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: item.categoryIcon)
+                // رمز التصنيف قد يكون القبر المخصّص — `dsSymbol` يرسمه (ن-١ فحص ٢٠٢٦-١٠-٠٧)
+                Image(dsSymbol: item.categoryIcon)
                     .dsGlyph(DS.Glyph.micro)
                 Text(item.categoryDisplayName)
                     .dsFont(.micro)
@@ -641,7 +642,8 @@ struct FamilyArchiveView: View {
                     pdfIconPlaceholder
                 }
             } else {
-                Image(systemName: item.categoryIcon)
+                // رمز التصنيف قد يكون القبر المخصّص (ن-١ فحص ٢٠٢٦-١٠-٠٧)
+                Image(dsSymbol: item.categoryIcon)
                     .dsGlyph(DS.Icon.sizeSm, weight: .light)
                     .foregroundColor(accent)
             }

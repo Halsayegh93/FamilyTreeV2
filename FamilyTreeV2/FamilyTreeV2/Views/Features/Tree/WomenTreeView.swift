@@ -66,6 +66,8 @@ struct WomenTreeView: View {
                 allWomen: allMembers,
                 me: authVM.currentUser,
                 canEdit: authVM.canEditMembers,
+                // الحذف للمالك والمدير فقط (`canDeleteMembers`) — المراقب يعدّل ولا يحذف (م-٣ فحص ٢٠٢٦-١٠-٠٧)
+                canDelete: authVM.canDeleteMembers,
                 onChanged: { await reloadWomen() },
                 onOpenMember: { id in
                     // أغلق المربّع الحالي ثم افتح بروفايل الزوجة بعد التحميل الجديد
@@ -148,6 +150,8 @@ private struct WomanDetailSheet: View {
     let me: FamilyMember?
     /// صلاحية التعديل (إدارة).
     var canEdit: Bool = false
+    /// صلاحية الحذف — المالك والمدير فقط حسب جدول الأدوار (م-٣ فحص ٢٠٢٦-١٠-٠٧)
+    var canDelete: Bool = false
     /// يُستدعى بعد أي إضافة/تعديل/حذف لإعادة تحميل الشجرة.
     var onChanged: (() async -> Void)? = nil
     /// يفتح تفاصيل عضو آخر (مثلاً بروفايل الزوجة بعد ربطها من العائلة).
@@ -182,7 +186,6 @@ private struct WomanDetailSheet: View {
     // «الإدارة» = مربّع الإجراءات وحده (طلب المالك ٢٠٢٦-١٠-٠٧ «أبي الإجراءات تظهر بروحها»)، ومنه
     // تُفتح مربّعاتها: «إدارة السجل» (نفس مربّع شجرة العائلة)، الإضافة، الوفاة، الترتيب، الاختيار من العائلة
     @State private var showAdminBox = false
-    @State private var busy = false
     /// مسودّة النماذج وما يُفتح فوق مربّع الإجراءات (كائن مرجعي — انظر `WomanAdminDraft`)
     @StateObject private var draft = WomanAdminDraft()
 
@@ -285,6 +288,14 @@ private struct WomanDetailSheet: View {
         detailsLayout
             // «الإدارة» — مربّع الإجراءات بمنتصف الشاشة، وكل إجراء يفتح مربّعه فوقه
             .dsCenterBox(isPresented: $showAdminBox) { WomanDraftScope(draft: draft) { actionsBox } }
+            // خطأ كتابة (م-٢ فحص ٢٠٢٦-١٠-٠٧): رسالة السيرفر في مربّع تنبيه، والمربّع المفتوح يبقى كما هو
+            .dsAlert(draft.writeError?.title ?? "",
+                     isPresented: Binding(get: { draft.writeError != nil },
+                                          set: { if !$0 { draft.writeError = nil } })) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) { draft.writeError = nil }
+            } message: {
+                Text(draft.writeError?.message ?? "")
+            }
             // فتح بروفايل إحدى الزوجات (عند تعدّدهن)
             .confirmationDialog(L10n.t("الزوجات", "Wives"),
                                 isPresented: $showWifeNav, titleVisibility: .visible) {
@@ -328,7 +339,7 @@ private struct WomanDetailSheet: View {
                     emptyTitle: L10n.t("لا توجد إناث متاحات في الشجرة", "No available family women"),
                     onAddByName: { query in
                         draft.showWifePicker = false; wifeSearch = ""
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { startAdd(.wife, name: query) }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { startAdd(.wife, name: query) }
                     },
                     rowHint: L10n.t("ربطها زوجةً له", "Link as his wife"),
                     onPick: { linkWife($0.id) },
@@ -805,6 +816,8 @@ private struct WomanDetailSheet: View {
     private func openDeathBox() {
         loadRecordDraft()
         draft.deceased.toggle()
+        // نقطة البداية بعد القلب — «إلغاء» بلا تعديل لا يسأل «تجاهل التعديلات؟» (ن-٢ فحص ٢٠٢٦-١٠-٠٧)
+        draft.datesStart = datesSignature
         draft.showDeath = true
     }
 
@@ -852,8 +865,11 @@ private struct WomanDetailSheet: View {
                                 icon: "heart.slash", color: DS.Color.warning) { openDeathBox() })
         list.append(AdminAction(id: "edit", title: L10n.t("تعديل البيانات", "Edit details"),
                                 icon: "pencil", color: DS.Color.primary) { openEditBox() })
-        list.append(AdminAction(id: "delete", title: L10n.t("حذف", "Delete"),
-                                icon: "trash", color: DS.Color.error) { draft.showDelete = true })
+        // الحذف للمالك والمدير فقط (م-٣)، ومن المدخل الواحد `requestDelete`
+        if canDelete {
+            list.append(AdminAction(id: "delete", title: L10n.t("حذف", "Delete"),
+                                    icon: "trash", color: DS.Color.error) { requestDelete() })
+        }
         return list
     }
 
@@ -870,7 +886,7 @@ private struct WomanDetailSheet: View {
                 showsAction: false,
                 cancelTitle: L10n.t("إغلاق", "Close"),
                 canSubmit: false,
-                isBusy: busy,
+                isBusy: draft.busy,
                 isBehindExtra: draft.boxOnTop,
                 onSubmit: {},
                 onCancel: { showAdminBox = false }
@@ -893,7 +909,7 @@ private struct WomanDetailSheet: View {
                         }
                     }
                 }
-                .disabled(busy)
+                .disabled(draft.busy)
             }
         )
     }
@@ -933,7 +949,7 @@ private struct WomanDetailSheet: View {
             actionTitle: L10n.t("حفظ", "Save"),
             actionIcon: "checkmark",
             canSubmit: !draft.name.trimmingCharacters(in: .whitespaces).isEmpty,
-            isBusy: busy,
+            isBusy: draft.busy,
             hasUnsavedChanges: adminFormHasChanges,
             onSubmit: performSave,
             onCancel: { draft.showEdit = false }
@@ -943,7 +959,8 @@ private struct WomanDetailSheet: View {
             datesCard.dsStaggerIn(2)
             if woman.isFemale { maritalCard.dsStaggerIn(3) }
             lineageCard.dsStaggerIn(4)
-            deleteButton.dsStaggerIn(5)
+            // زرّ الحذف لمن يملك الحذف فقط (م-٣ فحص ٢٠٢٦-١٠-٠٧)
+            if canDelete { deleteButton.dsStaggerIn(5) }
         }
     }
 
@@ -957,8 +974,9 @@ private struct WomanDetailSheet: View {
             actionTitle: L10n.t("حفظ", "Save"),
             actionIcon: "checkmark",
             canSubmit: true,
-            isBusy: busy,
-            hasUnsavedChanges: adminFormHasChanges,
+            isBusy: draft.busy,
+            // يقارن بما فُتح عليه المربّع (المفتاح مقلوب أصلاً) لا بالسجل — ن-٢ فحص ٢٠٢٦-١٠-٠٧
+            hasUnsavedChanges: datesSignature != draft.datesStart,
             onSubmit: performSave,
             onCancel: { draft.showDeath = false }
         ) {
@@ -976,7 +994,7 @@ private struct WomanDetailSheet: View {
             actionTitle: L10n.t("حفظ", "Save"),
             actionIcon: "checkmark",
             canSubmit: true,
-            isBusy: busy,
+            isBusy: draft.busy,
             // ترتيب جديد لم يُحفظ → «إلغاء» يسأل قبل التجاهل
             hasUnsavedChanges: orderChanged,
             onSubmit: performSave,
@@ -1212,7 +1230,7 @@ private struct WomanDetailSheet: View {
     // MARK: حذف السجل — الزرّ الواحد بالأحمر، والتأكيد كما هو
     private var deleteButton: some View {
         DSButton(L10n.t("حذف السجل نهائياً", "Permanently Delete"), icon: "trash.fill", role: .destructive) {
-            draft.showDelete = true
+            requestDelete()
         }
     }
 
@@ -1228,6 +1246,10 @@ private struct WomanDetailSheet: View {
     private var draftBirthKey: String? { draft.hasBirth ? Self.dayKey(draft.birth) : nil }
     private var draftDeathKey: String? { draft.deceased && draft.hasDeath ? Self.dayKey(draft.death) : nil }
     private var orderChanged: Bool { draft.ordered.map(\.id) != children.map(\.id) }
+    /// بطاقة «التواريخ والحالة» كما هي الآن (الميلاد · الوفاة · تاريخها) — لمقارنة مربّع الوفاة بنقطة بدايته
+    private var datesSignature: String {
+        [draftBirthKey ?? "", draft.deceased ? "1" : "0", draftDeathKey ?? ""].joined(separator: "|")
+    }
 
     private var adminFormHasChanges: Bool {
         draft.name.trimmingCharacters(in: .whitespaces) != startName
@@ -1257,9 +1279,9 @@ private struct WomanDetailSheet: View {
                 // الزرّ الواحد (تعبئة القسم) — دوّارته أثناء العمل
                 DSButton(L10n.t("الإدارة", "Manage"),
                          icon: "person.badge.shield.checkmark.fill",
-                         isLoading: busy) { showAdminBox = true }
+                         isLoading: draft.busy) { showAdminBox = true }
                     // نفس تعطيل بطاقة الإدارة أثناء العمل
-                    .disabled(busy)
+                    .disabled(draft.busy)
             }
             WomanPanelCloseButton()
         }
@@ -1301,7 +1323,7 @@ private struct WomanDetailSheet: View {
             actionTitle: L10n.t("إضافة", "Add"),
             actionIcon: "plus",
             canSubmit: !draft.addName.trimmingCharacters(in: .whitespaces).isEmpty,
-            isBusy: busy,
+            isBusy: draft.busy,
             hasUnsavedChanges: addFormHasChanges(kind),
             onSubmit: { performAdd(kind) },
             onCancel: { draft.addKind = nil }
@@ -1388,25 +1410,47 @@ private struct WomanDetailSheet: View {
 
     /// ربط أنثى موجودة كزوجة لهذه العقدة (لعقدة ذكر).
     private func linkWife(_ womanId: UUID) {
-        draft.closeBoxes(); showAdminBox = false; wifeSearch = ""; busy = true
-        Task {
-            try? await WomenStore.setHusbandId(womanId: womanId, husbandId: woman.id)
-            await onChanged?()
-            await MainActor.run {
-                busy = false
-                // افتح بروفايل الزوجة المختارة (وإلا أغلق المربّع)
-                if let open = onOpenMember { open(womanId) } else { dismiss() }
-            }
-        }
+        runWrite(failTitle: L10n.t("تعذّر الربط", "Couldn't link"), {
+            try await WomenStore.setHusbandId(womanId: womanId, husbandId: woman.id)
+        }, onSuccess: {
+            // افتح بروفايل الزوجة المختارة (وإلا أغلق المربّع)
+            if let open = onOpenMember { open(womanId) } else { dismiss() }
+        })
     }
 
     /// ربط هذه الأنثى بزوج من ذكور العائلة.
     private func linkHusband(_ maleId: UUID) {
-        showHusbandPicker = false; wifeSearch = ""; busy = true
-        Task {
-            try? await WomenStore.setHusbandId(womanId: woman.id, husbandId: maleId)
-            await onChanged?()
-            await MainActor.run { busy = false; dismiss() }
+        runWrite(failTitle: L10n.t("تعذّر الربط", "Couldn't link")) {
+            try await WomenStore.setHusbandId(womanId: woman.id, husbandId: maleId)
+        }
+    }
+
+    // MARK: - الكتابة — مسار واحد لكل كتابات شجرة النساء (م-٢ فحص ٢٠٢٦-١٠-٠٧)
+
+    /// المربّع يبقى مفتوحاً بدوّارته أثناء الكتابة. النجاح: يُعاد التحميل وتُغلق المربّعات ثم التفاصيل
+    /// (أو `onSuccess`). الفشل — ومنه رفض حارس روابط العائلة — يعرض رسالة السيرفر ويبقى المربّع كما هو؛
+    /// كان `try?` / `catch {}` يغلقه كأن العملية نجحت.
+    private func runWrite(failTitle: String,
+                          _ write: @escaping () async throws -> Void,
+                          onSuccess: (@MainActor () -> Void)? = nil) {
+        guard !draft.busy else { return }
+        draft.busy = true
+        Task { @MainActor in
+            do {
+                try await write()
+                await onChanged?()
+                draft.busy = false
+                draft.closeBoxes(); showAdminBox = false
+                showHusbandPicker = false; wifeSearch = ""
+                // بعد إغلاق المربّعات — لا يُغلق التفاصيل والمربّعات فوقها في اللحظة نفسها
+                try? await Task.sleep(nanoseconds: UInt64(DSMotion.boxHandoff * 1_000_000_000))
+                if let onSuccess { onSuccess() } else { dismiss() }
+            } catch {
+                // ما كُتب قبل الخطأ (حفظ من أكثر من خطوة) يظهر في الشجرة
+                await onChanged?()
+                draft.busy = false
+                draft.writeError = WomanWriteError(title: failTitle, message: WomenStore.failureMessage(error))
+            }
         }
     }
 
@@ -1421,22 +1465,19 @@ private struct WomanDetailSheet: View {
         let birth = draft.addHasBirth ? Self.dayKey(draft.addBirth) : nil
         let married = draft.addMarried
         let daughter = kind == .child && draft.addGender == "female"
-        draft.addName = ""; draft.closeBoxes(); showAdminBox = false; busy = true
-        Task {
-            do {
-                switch kind {
-                case .child where daughter:
-                    try await WomenStore.addChild(parentId: woman.id, name: name, sortOrder: nextSort, gender: "female", parentFullName: woman.fullName, birthDate: birth, isMarried: married)
-                case .child:
-                    try await WomenStore.addChild(parentId: woman.id, name: name, sortOrder: nextSort, gender: "male", parentFullName: woman.fullName, birthDate: birth)
-                case .wife:
-                    try await WomenStore.addWife(husbandId: woman.id, name: name, birthDate: birth, isMarried: married)
-                case .mother:
-                    try await WomenStore.addMother(childId: woman.id, name: name, birthDate: birth, isMarried: married)
-                }
-                await onChanged?()
-            } catch { }
-            await MainActor.run { busy = false; dismiss() }
+        let sort = nextSort
+        // الخطأ يُعرض والمربّع يبقى بما كُتب فيه (م-٢ فحص ٢٠٢٦-١٠-٠٧) — كان `catch { }` يغلقه بصمت
+        runWrite(failTitle: L10n.t("تعذّرت الإضافة", "Couldn't add")) {
+            switch kind {
+            case .child where daughter:
+                try await WomenStore.addChild(parentId: woman.id, name: name, sortOrder: sort, gender: "female", parentFullName: woman.fullName, birthDate: birth, isMarried: married)
+            case .child:
+                try await WomenStore.addChild(parentId: woman.id, name: name, sortOrder: sort, gender: "male", parentFullName: woman.fullName, birthDate: birth)
+            case .wife:
+                try await WomenStore.addWife(husbandId: woman.id, name: name, birthDate: birth, isMarried: married)
+            case .mother:
+                try await WomenStore.addMother(childId: woman.id, name: name, birthDate: birth, isMarried: married)
+            }
         }
     }
 
@@ -1464,32 +1505,34 @@ private struct WomanDetailSheet: View {
             draft.closeBoxes()
             return
         }
-        draft.closeBoxes(); showAdminBox = false; busy = true
-        Task {
-            var saved = true
+        let woman = self.woman
+        let canAnnounce = canEdit
+        runWrite(failTitle: L10n.t("تعذّر الحفظ", "Couldn't save"), {
             if fieldsChanged {
-                saved = (try? await WomenStore.update(id: woman.id, fullName: name,
-                                                      isDeceased: deceased,
-                                                      deathDate: deathToWrite, birthDate: birthToWrite,
-                                                      gender: woman.gender, isHidden: woman.isHiddenFromTree)) != nil
+                try await WomenStore.update(id: woman.id, fullName: name,
+                                            isDeceased: deceased,
+                                            deathDate: deathToWrite, birthDate: birthToWrite,
+                                            gender: woman.gender, isHidden: woman.isHiddenFromTree)
             }
             if woman.isFemale, married != (woman.isMarried == true) {
-                try? await WomenStore.setMarried(id: woman.id, married)
+                try await WomenStore.setMarried(id: woman.id, married)
             }
             if reorder {
-                try? await WomenStore.reorder(orderedIds: orderIds)
+                try await WomenStore.reorder(orderedIds: orderIds)
             }
-            await onChanged?()
-            await MainActor.run { busy = false; dismiss() }
+        }, onSuccess: {
+            dismiss()
             // وفاة امرأة سُجّلت الآن → مربّع «إعلان وفاة» بصيغة المؤنث
             // (الرجال المنعكسون هنا تُسجَّل وفاتهم من شجرة الرجال)
-            if saved, deceased, !wasDeceased, woman.isFemale {
-                await DeathAnnouncementPresenter.offer(
-                    DeathAnnouncementTarget(id: woman.id, name: name, isFemale: true,
-                                            deathDate: deathToWrite),
-                    canAnnounce: canEdit)
+            if deceased, !wasDeceased, woman.isFemale {
+                Task {
+                    await DeathAnnouncementPresenter.offer(
+                        DeathAnnouncementTarget(id: woman.id, name: name, isFemale: true,
+                                                deathDate: deathToWrite),
+                        canAnnounce: canAnnounce)
+                }
             }
-        }
+        })
     }
 
     /// تحويل نص التاريخ لـDate (yyyy-MM-dd)
@@ -1498,23 +1541,25 @@ private struct WomanDetailSheet: View {
         return Self.dayFormatter.date(from: String(raw.prefix(10)))
     }
 
+    /// المدخل الواحد للحذف — مربّع «حذف» في الإدارة و«حذف السجل نهائياً» في «إدارة السجل» يمرّان من هنا،
+    /// ثم التأكيد نفسه ثم `performDelete` (م-٢/م-٣ فحص ٢٠٢٦-١٠-٠٧)
+    private func requestDelete() {
+        guard canDelete else { return }
+        draft.showDelete = true
+    }
+
+    /// الحذف — إن رفضه السيرفر (أبناء/بنات/زوجة مرتبطون) تظهر رسالته ويبقى المربّع مفتوحاً
     private func performDelete() {
-        draft.closeBoxes(); showAdminBox = false; busy = true
-        Task {
-            try? await WomenStore.delete(id: woman.id)
-            await onChanged?()
-            await MainActor.run { busy = false; dismiss() }
+        guard canDelete else { return }
+        runWrite(failTitle: L10n.t("تعذّر الحذف", "Couldn't delete")) {
+            try await WomenStore.delete(id: woman.id)
         }
     }
 
     /// تعيين أمّ العضو (من زوجات الأب) أو إزالتها.
     private func setMother(_ motherId: UUID?) {
-        draft.closeBoxes(); wifeSearch = ""
-        showAdminBox = false; busy = true
-        Task {
-            try? await WomenStore.setMotherId(childId: woman.id, motherId: motherId)
-            await onChanged?()
-            await MainActor.run { busy = false; dismiss() }
+        runWrite(failTitle: L10n.t("تعذّر الحفظ", "Couldn't save")) {
+            try await WomenStore.setMotherId(childId: woman.id, motherId: motherId)
         }
     }
 
@@ -1579,6 +1624,12 @@ private final class WomanAdminDraft: ObservableObject {
     @Published var showWifePicker = false
     @Published var showWifeSource = false
     @Published var showDelete = false
+    /// كتابة جارية — في المسودّة حتى يراها المربّع المفتوح فوق التفاصيل (يبقى مفتوحاً بدوّارته)
+    @Published var busy = false
+    /// خطأ آخر كتابة — يظهر في `dsAlert` والمربّع يبقى مفتوحاً (م-٢ فحص ٢٠٢٦-١٠-٠٧)
+    @Published var writeError: WomanWriteError? = nil
+    /// بطاقة التواريخ لحظة فتح مربّع الوفاة (ن-٢)
+    var datesStart = ""
 
     /// مربّع مفتوح فوق مربّع الإجراءات → يتقلّص خلفه قليلاً
     var boxOnTop: Bool {
@@ -1590,6 +1641,12 @@ private final class WomanAdminDraft: ObservableObject {
         showEdit = false; showDeath = false; showReorder = false
         showMother = false; showWifePicker = false; showWifeSource = false
     }
+}
+
+/// خطأ كتابة في شجرة النساء: عنوان الرسالة + نص السيرفر (أو النص العام) — م-٢ فحص ٢٠٢٦-١٠-٠٧
+private struct WomanWriteError {
+    let title: String
+    let message: String
 }
 
 /// يعيد بناء محتوى المربّع مع كل تغيّر في المسودّة

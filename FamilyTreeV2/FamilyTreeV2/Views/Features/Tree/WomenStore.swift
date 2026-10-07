@@ -220,6 +220,14 @@ enum WomenStore {
             .rpc("set_self_mother", params: ["p_mother_id": AnyEncodable(motherId?.uuidString)]).execute()
     }
 
+    /// نص خطأ الكتابة للمستخدم (م-٢ فحص ٢٠٢٦-١٠-٠٧): رسالة السيرفر العربية حين يرفض حارس روابط العائلة
+    /// الحذف (`hint = family_links_protected`، كما في شجرة العائلة) — وإلا رسالة عامة
+    static func failureMessage(_ error: Error) -> String {
+        if let pg = error as? PostgrestError, pg.hint == "family_links_protected" { return pg.message }
+        return L10n.t("لم يتم الحفظ. تحقّق من الاتصال وحاول مرة أخرى.",
+                      "Not saved. Check your connection and try again.")
+    }
+
     static func delete(id: UUID) async throws {
         try await SupabaseConfig.client.from("women_members").delete().eq("id", value: id.uuidString).execute()
     }
