@@ -54,7 +54,9 @@ struct ShareRootView: View {
 
     var body: some View {
         ZStack {
-            ShareDS.Palette.background.ignoresSafeArea()
+            // ما فوق المربّع شفاف بتعتيم خفيف — المربّع على قدر محتواه أسفل الشاشة (طلب المالك ٢٠٢٦-١٠-٠٧)
+            Color.black.opacity(0.25).ignoresSafeArea()
+                .onTapGesture { onClose() }
                 // أسماء التصنيفات الحالية من السيرفر (مثل «مجلة العائلة») — يبقى الاختيار على نفس المفتاح
                 .task {
                     guard let live = await ShareUploader.fetchCategories() else { return }
@@ -97,6 +99,8 @@ struct ShareRootView: View {
 
     private var card: some View {
         VStack(spacing: 0) {
+          // الرأس + المحتوى + الأزرار بارتفاعها الطبيعي — مربّع على قدر المحتوى أسفل الشاشة (طلب المالك ٢٠٢٦-١٠-٠٧)
+          VStack(spacing: 0) {
             // رأس مربّع العمل الموحّد (`DSComposerHeader`)
             ShareBoxHeader(title: "مكتبة العائلة", subtitle: "رفع ملف من المشاركة", icon: "archivebox.fill")
 
@@ -131,10 +135,16 @@ struct ShareRootView: View {
                     .padding(.top, ShareDS.Box.footerTop)
                     .padding(.bottom, contentBottomInset)
             }
-
-            Spacer(minLength: 0)
+          }
+          // سطح المربّع بزاويتين علويتين مستديرتين (الشكل يمتد تحت الحافة فتختفي السفليتان) — iOS 16
+          .background(ShareDS.Palette.background)
+          .mask(RoundedRectangle(cornerRadius: ShareDS.Box.cardRadius, style: .continuous)
+                    .padding(.bottom, -ShareDS.Box.cardRadius))
+          .background(ShareDS.Palette.background.ignoresSafeArea(edges: .bottom)
+                        .padding(.top, ShareDS.Box.cardRadius))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // المربّع أسفل الشاشة بارتفاعه الطبيعي، وما فوقه للتعتيم
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     // MARK: - نموذج الرفع

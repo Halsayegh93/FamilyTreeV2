@@ -151,6 +151,8 @@ enum ShareDS {
         static let sectionSpacing: CGFloat = 8
         static let sectionPadding: CGFloat = 8       // = `DS.Card.padding`
         static let sectionRadius: CGFloat = 12       // = `DS.Card.radius`
+        /// زاويتا المربّع العلويتان (مثل شيت النظام / `DSBox.radius`)
+        static let cardRadius: CGFloat = 24
         static let sectionInnerSpacing: CGFloat = 7
         static let sectionIcon: CGFloat = 16
         static let fieldIcon: CGFloat = 22
