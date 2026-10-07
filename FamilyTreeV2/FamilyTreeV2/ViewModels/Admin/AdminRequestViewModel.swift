@@ -799,7 +799,7 @@ class AdminRequestViewModel: ObservableObject {
 
                 Log.info("[TreeEdit] Approved: \(payload?.action ?? request.newValue ?? "")")
                 if let deathToAnnounce {
-                    let canAnnounce = self.authVM?.canApproveTreeRequests == true
+                    let canAnnounce = self.authVM?.isAdmin == true   // للمالك والمدير (السيرفر 20261007130000)
                     Task { await DeathAnnouncementPresenter.offer(deathToAnnounce, canAnnounce: canAnnounce) }
                 }
             } catch {
@@ -1078,7 +1078,7 @@ class AdminRequestViewModel: ObservableObject {
                         id: request.memberId,
                         name: memberName.isEmpty ? (before?.fullName ?? "") : memberName,
                         isFemale: before?.isFemale ?? false)
-                    let canAnnounce = self.authVM?.canApproveTreeRequests == true
+                    let canAnnounce = self.authVM?.isAdmin == true   // للمالك والمدير (السيرفر 20261007130000)
                     Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
                 }
 

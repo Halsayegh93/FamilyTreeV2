@@ -68,6 +68,7 @@ struct WomenTreeView: View {
                 canEdit: authVM.canEditMembers,
                 // الحذف للمالك والمدير فقط (`canDeleteMembers`) — المراقب يعدّل ولا يحذف (م-٣ فحص ٢٠٢٦-١٠-٠٧)
                 canDelete: authVM.canDeleteMembers,
+                canAnnounceDeath: authVM.isAdmin,
                 onChanged: { await reloadWomen() },
                 onOpenMember: { id in
                     // أغلق المربّع الحالي ثم افتح بروفايل الزوجة بعد التحميل الجديد
@@ -152,6 +153,8 @@ private struct WomanDetailSheet: View {
     var canEdit: Bool = false
     /// صلاحية الحذف — المالك والمدير فقط حسب جدول الأدوار (م-٣ فحص ٢٠٢٦-١٠-٠٧)
     var canDelete: Bool = false
+    /// عرض «إعلان وفاة» بعد تسجيلها — للمالك والمدير (السيرفر يفرضه منذ 20261007130000)
+    var canAnnounceDeath: Bool = false
     /// يُستدعى بعد أي إضافة/تعديل/حذف لإعادة تحميل الشجرة.
     var onChanged: (() async -> Void)? = nil
     /// يفتح تفاصيل عضو آخر (مثلاً بروفايل الزوجة بعد ربطها من العائلة).
@@ -1506,7 +1509,7 @@ private struct WomanDetailSheet: View {
             return
         }
         let woman = self.woman
-        let canAnnounce = canEdit
+        let canAnnounce = canAnnounceDeath
         runWrite(failTitle: L10n.t("تعذّر الحفظ", "Couldn't save"), {
             if fieldsChanged {
                 try await WomenStore.update(id: woman.id, fullName: name,

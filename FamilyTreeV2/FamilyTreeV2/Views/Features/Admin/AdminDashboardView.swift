@@ -739,8 +739,8 @@ struct AdminDashboardView: View {
                                  icon: "person.2.badge.gearshape", tint: DS.Color.composerProject,
                                  target: .members))
         }
-        // إعلان وفاة — مكان ثابت: نفس من يعتمد الوفيات
-        if authVM.canApproveTreeRequests {
+        // إعلان وفاة — للمالك والمدير (نشر المحتوى والإشعارات، والسيرفر يفرضه)
+        if authVM.isAdmin {
             list.append(DashTile(id: "members.deaths",
                                  title: L10n.t("إعلان وفاة", "Obituary"),
                                  caption: loaded && recentDeathsCount > 0

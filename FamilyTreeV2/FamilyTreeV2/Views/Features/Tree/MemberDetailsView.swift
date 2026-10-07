@@ -1086,14 +1086,14 @@ struct MemberDetailsView: View {
 
     // MARK: - إعلان وفاة (مكان ثابت — طلب المالك «وين الوفاة؟»)
 
-    /// يظهر للمتوفى الذي لم يُعلن عنه بعد، لمن يعتمد الوفيات (المالك والمدير والمراقب)
+    /// يظهر للمتوفى الذي لم يُعلن عنه بعد، للمالك والمدير (نشر المحتوى والإشعارات — السيرفر يفرضه)
     private var showsDeathAnnounce: Bool {
-        member.isDeceased == true && authVM.canApproveTreeRequests && deathAnnounced == false
+        member.isDeceased == true && authVM.isAdmin && deathAnnounced == false
             && DeathRecency.isRecent(member.deathDate)
     }
 
     private func refreshDeathAnnounced() async {
-        guard member.isDeceased == true, authVM.canApproveTreeRequests else { return }
+        guard member.isDeceased == true, authVM.isAdmin else { return }
         let ids = await DeathAnnouncementPresenter.announcedIDs()
         deathAnnounced = ids.contains(member.id)
     }

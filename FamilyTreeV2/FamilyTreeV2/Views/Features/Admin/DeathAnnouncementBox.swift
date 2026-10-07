@@ -293,6 +293,11 @@ struct DeathAnnouncementBox: View {
         if code == "22023" {
             return L10n.t("العضو غير مسجّل كمتوفى.", "The member isn't marked as deceased.")
         }
+        // السيرفر يرفض إعلان وفاة قديمة (أكثر من ٣٠ يوماً) — 20261007130000
+        if text.contains("death_not_recent") || ((error as? PostgrestError)?.hint ?? "") == "death_not_recent" {
+            return L10n.t("لا يمكن إعلان وفاة قديمة — الإعلان متاح خلال ٣٠ يوماً من الوفاة.",
+                          "Old deaths can't be announced — announcements are allowed within 30 days.")
+        }
         return L10n.t("تعذّر النشر — تأكّد من الاتصال وحاول مرة ثانية.",
                       "Couldn't publish — check your connection and try again.")
     }

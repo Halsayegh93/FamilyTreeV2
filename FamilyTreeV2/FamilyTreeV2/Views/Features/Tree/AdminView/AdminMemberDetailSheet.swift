@@ -969,7 +969,7 @@ struct AdminMemberDetailSheet: View {
                         name: nameChanged ? capturedFullName : auditMemberName,
                         isFemale: capturedGender == "female",
                         deathDate: DeathRecency.string(from: capturedDeathDate))
-                    let canAnnounce = authVM.canApproveTreeRequests
+                    let canAnnounce = authVM.isAdmin   // إعلان الوفاة للمالك والمدير (السيرفر 20261007130000)
                     Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
                 }
             }
