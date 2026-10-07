@@ -42,11 +42,42 @@ private struct FamilyLayout {
 }
 
 /// خطوط أب واحد مع كل أبنائه (كل الصفوف) — تُبنى مرة مع التخطيط بعد المرآة لا كل إطار.
-private struct ConnectorGroup {
+private struct ConnectorGroup: Equatable {
     var pid: UUID? = nil       // الأب — لرسم خطوط آخر أب فُتح بالتدريج
     var path = Path()          // الخطوط العادية
     var kinPath = Path()       // طريق القرابة — ذهبي وأسمك
     var dots: [CGPoint] = []   // نقاط تفرّع الأبناء عن الخط الأفقي
+}
+
+/// خطوط كل الآباء وأبنائهم في لوحة واحدة — طبقة مستقلة متساوية (`.equatable()`) فلا يُعاد رسمها مع كل إطار
+/// سحب/تكبير (كانت تُرسم من جديد بكل إطار لأن جسم الشجرة يُعاد مع الإزاحة — فحص «اللاق» ٢٠٢٦-١٠-٠٧). نفس الرسم.
+private struct TreeConnectorsLayer: View, Equatable {
+    let connectors: [ConnectorGroup]
+    let size: CGSize
+    /// خطوط الأب المفتوح للتو تُرسم بالتدريج في طبقتها
+    let skip: UUID?
+    let dark: Bool
+
+    var body: some View {
+        let lineLayers = TreeArtLines.layers(width: 2, dark: dark)
+        let lineDark = dark
+        let connectors = self.connectors, skip = self.skip
+        Canvas { ctx, _ in
+            for g in connectors where skip == nil || g.pid != skip {
+                TreeArtLines.stroke(&ctx, g.path, lineLayers)
+                for d in g.dots {
+                    TreeArtLines.dot(&ctx, at: d, r: 3, dark: lineDark)
+                }
+                if !g.kinPath.isEmpty {
+                    ctx.stroke(g.kinPath, with: .color(DS.Color.warning),
+                               style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+                }
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
 }
 
 /// مسار جاهز كشكل — لرسم خطوط الأب المفتوح للتو بالتدريج (`trim`) من الأب نحو الأبناء.
@@ -278,21 +309,9 @@ struct TreeView: View {
                                     // طبقات الخط ونقطة التفرّع بأسلوب «مجسّمات» (أنبوب طين بلمعة)
                                     let lineLayers = TreeArtLines.layers(width: 2, dark: colorScheme == .dark)
                                     let lineDark = colorScheme == .dark
-                                    Canvas { ctx, _ in
-                                        for g in layout.connectors where drawOnId == nil || g.pid != drawOnId {
-                                            TreeArtLines.stroke(&ctx, g.path, lineLayers)
-                                            for d in g.dots {
-                                                TreeArtLines.dot(&ctx, at: d, r: 3, dark: lineDark)
-                                            }
-                                            if !g.kinPath.isEmpty {
-                                                ctx.stroke(g.kinPath, with: .color(DS.Color.warning),
-                                                           style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
-                                            }
-                                        }
-                                    }
-                                    .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
-                                    .allowsHitTesting(false)
-                                    .accessibilityHidden(true)
+                                    TreeConnectorsLayer(connectors: layout.connectors, size: layout.size,
+                                                        skip: drawOnId, dark: lineDark)
+                                        .equatable()
                                     // خطوط آخر أب فُتح: تمتدّ من الأب نحو الأبناء، ثم تظهر نقاط التفرّع
                                     if let id = drawOnId, let g = layout.connectors.first(where: { $0.pid == id }) {
                                         ZStack(alignment: .topLeading) {   // نفس طبقات الخط
@@ -1163,9 +1182,12 @@ struct TreeView: View {
             level: layout.depth[m.id] ?? 0,
             currentLocationMemberID: currentLocationMemberID,
             isKinshipHighlighted: kinshipHighlightedIds.contains(m.id),
+            searchedSnapshot: searchedMemberID,
             onTap: { selectedMember = m },
             onToggle: { toggleNode(m) }
         )
+        // العقدة لا يُعاد بناؤها مع كل إطار سحب/تكبير ما لم تتغيّر بياناتها (فحص «اللاق»)
+        .equatable()
         .frame(width: NODE_W, height: h, alignment: .top)
         .position(x: p.x + NODE_W / 2, y: p.y + h / 2)
     }
@@ -1368,7 +1390,7 @@ private struct TreeToolPop: ViewModifier {
 
 
 // MARK: - 3. عقدة الفرد — Liquid Glass
-struct TreeMemberNode: View {
+struct TreeMemberNode: View, Equatable {
     let member: FamilyMember
     let isExpanded: Bool
     @Binding var searchedMemberID: UUID?
@@ -1378,8 +1400,18 @@ struct TreeMemberNode: View {
     var level: Int = 0
     let currentLocationMemberID: UUID?
     var isKinshipHighlighted: Bool = false
+    /// قيمة البحث وقت بناء العقدة — للمقارنة (الربط يقرأ القيمة الحالية دائماً فلا يصلح لها)
+    var searchedSnapshot: UUID? = nil
     let onTap: () -> Void
     let onToggle: () -> Void
+
+    /// العقدة تُعاد فقط إن تغيّرت بياناتها (الإغلاقات تشير لنفس حالة الشجرة)
+    static func == (a: TreeMemberNode, b: TreeMemberNode) -> Bool {
+        a.member == b.member && a.isExpanded == b.isExpanded && a.hasChildren == b.hasChildren
+            && a.childrenCount == b.childrenCount && a.showName == b.showName && a.level == b.level
+            && a.currentLocationMemberID == b.currentLocationMemberID
+            && a.isKinshipHighlighted == b.isKinshipHighlighted && a.searchedSnapshot == b.searchedSnapshot
+    }
     @State private var shouldLoadImage = false
     @State private var isPulsing = false
     @State private var arrowGlow = false

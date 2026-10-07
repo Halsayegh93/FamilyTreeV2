@@ -1149,9 +1149,12 @@ private struct DSExtraBoxModifier<Item: Identifiable, Box: View>: ViewModifier {
     @Binding var item: Item?
     let box: (Item) -> Box
     @Environment(\.dsSection) private var section
+    @Environment(\.ftAnimationsPaused) private var pausedAbove
 
     func body(content: Content) -> some View {
         content
+            // المربّع تحت المربّع الإضافي تسكن حركته (كما في `dsCenterBox`)
+            .environment(\.ftAnimationsPaused, pausedAbove || item != nil)
             .fullScreenCover(item: $item) { it in
                 box(it)
                     .dsSection(section ?? AppSection.current)
@@ -1277,7 +1280,6 @@ struct DSComposerLogoPicker: View {
     @State private var pickerItem: PhotosPickerItem?
     @State private var rawImage: UIImage?
     @State private var showCropper = false
-    @State private var spin = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showPicker = false
 
@@ -1307,7 +1309,7 @@ struct DSComposerLogoPicker: View {
                         Circle()
                             .strokeBorder(tint.opacity(0.55), style: StrokeStyle(lineWidth: 1.6, dash: [6, 5]))
                             .frame(width: size, height: size)
-                            .rotationEffect(.degrees(spin ? 360 : 0))
+                            .modifier(DSAmbientSpin())
                         // ما بداخل الدائرة يتبع قطرها (الدائرة أصغر الآن — `DSBox.logoSide`)
                         VStack(spacing: 2) {
                             Image(systemName: "camera.fill").font(.system(size: size * 0.28, weight: .semibold))
@@ -1364,10 +1366,6 @@ struct DSComposerLogoPicker: View {
                 })
             }
         }
-        .onAppear {
-            guard !reduceMotion else { return }   // الإطار ثابت مع «تقليل الحركة»
-            withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
-        }
     }
 }
 
@@ -1383,9 +1381,12 @@ private struct DSCenterBoxModifier<Box: View>: ViewModifier {
     let box: () -> Box
     /// لون قسم الواجهة التي فتحت المربّع — يُعاد وضعه داخل المربّع
     @Environment(\.dsSection) private var section
+    @Environment(\.ftAnimationsPaused) private var pausedAbove
 
     func body(content: Content) -> some View {
         content
+            // حركة المجسّمات خلف المربّع المفتوح تسكن (لا يُعاد تركيب الصفحة المعتّمة كل إطار — فحص «اللاق»)
+            .environment(\.ftAnimationsPaused, pausedAbove || isPresented)
             .fullScreenCover(isPresented: $isPresented, onDismiss: onDismiss) {
                 DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true) { box() }
                     .dsSection(section ?? AppSection.current)
@@ -1402,9 +1403,12 @@ private struct DSCenterBoxItemModifier<Item: Identifiable, Box: View>: ViewModif
     let box: (Item) -> Box
     /// لون قسم الواجهة التي فتحت المربّع — يُعاد وضعه داخل المربّع
     @Environment(\.dsSection) private var section
+    @Environment(\.ftAnimationsPaused) private var pausedAbove
 
     func body(content: Content) -> some View {
         content
+            // حركة المجسّمات خلف المربّع المفتوح تسكن (كما في `dsCenterBox(isPresented:)`)
+            .environment(\.ftAnimationsPaused, pausedAbove || item != nil)
             .fullScreenCover(item: $item, onDismiss: onDismiss) { value in
                 DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true) { box(value) }
                     .dsSection(section ?? AppSection.current)

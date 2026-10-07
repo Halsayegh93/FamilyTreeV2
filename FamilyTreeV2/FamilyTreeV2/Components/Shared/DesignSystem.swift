@@ -506,6 +506,14 @@ enum DS {
         static let shadowDark: Double = 0.35
         static let shadowRadius: CGFloat = 6
         static let shadowY: CGFloat = 3
+        /// الشكل الذي يُلقي الظلّ تحت البطاقة/المربّع أصغر بنقطة — يبقى مخفياً تحت حافّتها المنعّمة (بلا خيط فاتح)
+        static let shadowInset: CGFloat = 1
+        /// مفتاح الظلال الواحد (فحص «اللاق» ٢٠٢٦-١٠-٠٧) لبطاقات «مجسّمات» (`DSClaySkin`/`.dsCard`) والمربّعات
+        /// (`dsBoxChrome`): `false` = الظلّ كما اعتمده المالك (ظلّ «كل المحتوى» — كل أيقونة ونص داخل البطاقة يلقي ظلاً
+        /// خفيفاً، ويُعاد حسابه خارج الشاشة مع كل إطار تمرير/حركة). `true` = ظلّ الشكل نفسه تحت البطاقة: يُرسم مرة
+        /// (تركيب الشاشة أخفّ ~٢٫٣× في المربّعات والبطاقات) لكن تختفي الظلال الداخلية الخفيفة تحت الأيقونات والنصوص
+        /// (فرق ≤ ٧٪ في الفاتح، شبه معدوم في الداكن). لا يُقلب إلا بموافقة المالك.
+        static let shapeShadows = false
     }
 
     // MARK: Shadow — ظلال عصرية أنيقة
@@ -687,6 +695,18 @@ extension View {
                     radius: DS.Shadow.card.radius,
                     x: DS.Shadow.card.x,
                     y: DS.Shadow.card.y)
+    }
+
+    /// نفس `dsCardShadow()` لبطاقة مقصوصة بشكل معروف: الظلّ يُلقى من الشكل تحتها (يُرسم مرة ويبقى) بدل ظلّ
+    /// كل المحتوى الذي يُعاد حسابه مع كل إطار (فحص «اللاق» ٢٠٢٦-١٠-٠٧). `fill` = ما خلف البطاقة (يظهر
+    /// من خلال سطح شبه شفاف كما كان) — الشكل أصغر بـ`DS.Card.shadowInset` فيبقى مخفياً تحت حافّتها.
+    func dsCardShadow<S: InsettableShape>(in shape: S, fill: Color = DS.Color.background) -> some View {
+        background(
+            shape.inset(by: DS.Card.shadowInset).fill(fill)
+                .dsCardShadow()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        )
     }
 
     /// زر دائري فوق الهيدر الملوّن — زجاج iOS 27 اللامع (طلب المالك):
@@ -1255,15 +1275,26 @@ struct DSBoxChrome: ViewModifier {
     var strong: Bool = false
     @Environment(\.colorScheme) private var colorScheme
 
-    func body(content: Content) -> some View {
-        content
+    @ViewBuilder func body(content: Content) -> some View {
+        let shade = Color.black.opacity(strong ? 0.3 : 0.25)
+        let framed = content
             .clipShape(DSBox.shape)
             .overlay(
                 DSBox.shape.strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2)
                                                               : Color.black.opacity(0.06),
                                          lineWidth: colorScheme == .dark ? 1.25 : 1)
             )
-            .shadow(color: .black.opacity(strong ? 0.3 : 0.25), radius: strong ? 28 : 24, x: 0, y: strong ? 12 : 10)
+        if !DS.Card.shapeShadows {
+            framed.shadow(color: shade, radius: strong ? 28 : 24, x: 0, y: strong ? 12 : 10)
+        } else {
+            // الظلّ من شكل المربّع نفسه تحته (معتم ومخفي) — يُرسم مرة بدل ظلّ كل المحتوى مع كل إطار
+            framed.background(
+                DSBox.shape.inset(by: DS.Card.shadowInset).fill(Color.black)
+                    .shadow(color: shade, radius: strong ? 28 : 24, x: 0, y: strong ? 12 : 10)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            )
+        }
     }
 }
 

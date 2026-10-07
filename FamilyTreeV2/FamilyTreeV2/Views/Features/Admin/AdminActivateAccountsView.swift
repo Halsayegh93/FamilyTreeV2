@@ -981,7 +981,6 @@ private struct StationPhotoCircle: View {
     let image: UIImage?
     var tint: Color = AppSection.admin.ink
     var size: CGFloat = DS.Icon.photoPicker
-    @State private var spin = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -1000,10 +999,6 @@ private struct StationPhotoCircle: View {
                 .accessibilityHidden(true)   // مقروءة من اسم الزر أعلاه
         }
         .frame(maxWidth: .infinity)
-        .onAppear {
-            guard !reduceMotion else { return }   // الإطار ثابت مع «تقليل الحركة»
-            withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
-        }
     }
 
     private var caption: String {
@@ -1027,7 +1022,7 @@ private struct StationPhotoCircle: View {
                 Circle()
                     .strokeBorder(tint.opacity(DS.Opacity.selectedStroke),
                                   style: StrokeStyle(lineWidth: DS.Border.widthBold, dash: [DS.Spacing.xsm, DS.Spacing.xs]))
-                    .rotationEffect(.degrees(spin ? 360 : 0))
+                    .modifier(DSAmbientSpin())
                 VStack(spacing: DS.Spacing.xxs) {
                     Image(systemName: "camera.fill").dsGlyph(DS.Glyph.xxl, weight: .semibold)
                     Text(L10n.t("صورة", "Photo")).dsFont(.badge)

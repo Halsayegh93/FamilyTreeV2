@@ -229,6 +229,11 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 
 ### «المكان الواحد» — where every knob lives («أسلوب واحد»، طلب المالك ٢٠٢٦-١٠-٠٧)
 
+**Rule: no `repeatForever` for continuous motion** (فحص اللاق ٢٠٢٦-١٠-٠٨): ambient motion goes through the one shared clock —
+`TrialObjectMotion` (breathing + glint, `FTAmbientClock`, 15 fps, pauses off-screen / while scrolling / behind a box) and
+`DSAmbientSpin` (30 fps) — never a per-view `withAnimation(.repeatForever)` or `Timer.publish`; they re-composite the whole
+screen every frame even at rest.
+
 **Rule: no literals at call sites.** A size, font, colour, radius, opacity, spacing or button shape is written ONCE in the
 files below and screens reference the token/component. Value repeats and has no token → add the token there first.
 Meaning colours (error/success/warning, female, news types, deceased grey, `DS.Color.reject`) stay meaning colours.

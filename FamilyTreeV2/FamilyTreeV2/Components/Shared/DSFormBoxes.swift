@@ -284,7 +284,7 @@ struct DSLifeDatesBox: View {
                 .frame(minHeight: inBox ? DSFieldMetrics.toggleRowHeight - DSFieldMetrics.boxHeightReduction
                                         : DSFieldMetrics.toggleRowHeight)
                 .modifier(BoxChrome(fill: deceasedTint.opacity(isDeceased ? 0.14 : 0.07),
-                                    stroke: deceasedTint.opacity(0.35)))
+                                    stroke: deceasedTint.opacity(0.35), solid: false))
             }
 
             if showsDeceased && isDeceased {
@@ -300,6 +300,8 @@ struct DSLifeDatesBox: View {
     private struct BoxChrome: ViewModifier {
         let fill: Color
         let stroke: Color
+        /// السطح معتم (انظر `DSClaySkin.solid`)
+        var solid: Bool = true
         func body(content: Content) -> some View {
             content
                 .background(fill, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
@@ -307,7 +309,7 @@ struct DSLifeDatesBox: View {
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .stroke(stroke, lineWidth: DS.Border.width)
                 )
-                .trialCardSkin(radius: DS.Radius.md)
+                .trialCardSkin(radius: DS.Radius.md, solid: solid)
         }
     }
 

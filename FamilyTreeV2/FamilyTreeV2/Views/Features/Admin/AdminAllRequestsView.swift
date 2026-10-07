@@ -988,7 +988,7 @@ struct AdminAllRequestsView: View {
             .overlay(shape.strokeBorder(selected ? tint.opacity(DS.Opacity.selectedStroke)
                                                  : DS.Color.textTertiary.opacity(DS.Opacity.border),
                                         lineWidth: selected ? DS.Border.widthBold : DS.Border.width))
-            .trialCardSkin(radius: DS.Radius.md)
+            .trialCardSkin(radius: DS.Radius.md, solid: !selected)   // المختار بلون شفّاف
             .contentShape(shape)
         }
         .buttonStyle(DSPressStyle())

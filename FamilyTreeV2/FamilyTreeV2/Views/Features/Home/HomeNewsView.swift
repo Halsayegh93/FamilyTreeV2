@@ -580,7 +580,8 @@ struct HomeNewsView: View {
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .strokeBorder(DS.Color.overlayIcon, lineWidth: DS.Border.width)
             )
-            .dsCardShadow()
+            // الظلّ من شكل المربّع تحته — نفس الظلّ (المربّع مقصوص معتم)، يُرسم مرة بدل كل إطار (فحص «اللاق»)
+            .dsCardShadow(in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(title)
