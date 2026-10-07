@@ -31,18 +31,8 @@ struct FamilyTreeV2App: App {
 
     /// يفرض النمط على UIWindow — يضمن تطبيقه على الشيتات والتنبيهات أيضاً
     private func applyWindowStyle() {
-        let style: UIUserInterfaceStyle
-        switch appearanceMode {
-        case "light": style = .light
-        case "dark":  style = .dark
-        default:      style = .unspecified
-        }
-        for scene in UIApplication.shared.connectedScenes {
-            guard let windowScene = scene as? UIWindowScene else { continue }
-            for window in windowScene.windows {
-                window.overrideUserInterfaceStyle = style
-            }
-        }
+        // المكان الواحد لتطبيق الوضع على كل النوافذ (`AppAppearance`)
+        AppAppearance.apply(appearanceMode, animated: false)
     }
 
     var body: some Scene {

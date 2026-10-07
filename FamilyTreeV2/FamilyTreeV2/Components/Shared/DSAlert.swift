@@ -534,11 +534,8 @@ final class DSPopupPresenter {
 
     /// مظهر التطبيق: إعداد المستخدم أولاً، وإلا نمط نافذة التطبيق الرئيسية
     static func appInterfaceStyle(in scene: UIWindowScene) -> UIUserInterfaceStyle {
-        switch UserDefaults.standard.string(forKey: "appearanceMode") {
-        case "light": return .light
-        case "dark":  return .dark
-        default: break
-        }
+        let chosen = AppAppearance.style(for: UserDefaults.standard.string(forKey: AppAppearance.storageKey))
+        if chosen != .unspecified { return chosen }
         // «تلقائي»: اتبع نافذة التطبيق (قد تكون مفروضة من مكان آخر)
         if let main = scene.windows.first(where: { $0.rootViewController is UIHostingController<AnyView> == false }),
            main.overrideUserInterfaceStyle != .unspecified {

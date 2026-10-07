@@ -19,74 +19,43 @@ struct SettingsView: View {
 
     @State private var showEditProfile = false
     @State private var showLinkedDevices = false
-    /// كل مربّعات الإعدادات تفتح بمنتصف الشاشة (طلب المالك) بدل صفحة جديدة
+    /// كل مربّعات الإعدادات تفتح بمنتصف الشاشة (طلب المالك) بدل صفحة جديدة —
+    /// «مربّعات بمجموعات» (اختيار المالك ٢٠٢٦-١٠-٠٧): كل مربّع يفتح جزءه وحده
     @State private var showNotifications = false
+    @State private var showPrivacy = false
     @State private var showAppearance = false
+    @State private var showLanguage = false
+    @State private var showGuide = false
+    @State private var showContactForm = false
     @State private var showAbout = false
     @State private var showTerms = false
     @State private var showDeleteConfirmation = false
     /// حذف الحساب جارٍ — طبقة انتظار حتى يكتمل ويُسجَّل الخروج
     @State private var isDeletingAccount = false
+    /// وضع العرض: المربّعات بشبكة أدوات «وضع العرض» (أكثر في الصف) — العمودي مربّعان في الصف
+    @Environment(\.dsLandscape) private var landscape
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
+    /// مربّعان في الصف عمودياً
+    private static let portraitColumns = 2
+
     var body: some View {
-        // تصميم مرتب (طلب المالك): بطاقة الحساب أعلى، ثم شبكة الإعدادات
-        // السريعة، ثم المعلومات، وحذف الحساب زر في الأسفل.
+        // «مربّعات بمجموعات» (اختيار المالك ٢٠٢٦-١٠-٠٧): بطاقة الهوية أعلى، ثم ثلاث مجموعات قصيرة
+        // (التفضيلات · الحساب · المساعدة) كل مربّع فيها يعرض قيمته الحالية ويفتح جزءه وحده،
+        // وحذف الحساب زر في الأسفل.
         ScrollView {
             VStack(spacing: DS.Spacing.xl) {
-                // بطاقة هوية للعائلة، ثم مجموعات قصيرة كل مربّع فيها يعرض قيمته الحالية
                 profileCard
 
-                // مربّعات بدل القائمة (طلب المالك) — كل مربّع يعرض قيمته الحالية.
-                // الحركة (طلب المالك ٢٠٢٦-٠٩-٢٧): العنوان ثم المربّعات واحداً بعد الآخر
-                // (بدل دخول الصف كاملاً دفعة واحدة) — نفس إيقاع المربّعات. «تقليل الحركة»: تلاشٍ فقط
-                groupTitle(t("التفضيلات", "Preferences"), icon: "slider.horizontal.3")
-                    .dsStaggerIn(1)
-                HStack(spacing: DS.Spacing.md) {
-                    Button { showNotifications = true } label: {
-                        valueTile(icon: "bell.badge.fill", color: DS.Color.warning,
-                                  title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
-                                  value: notificationsEnabled ? t("مفعّلة", "On") : t("موقوفة", "Off"))
-                    }
-                    .dsStaggerIn(2)
-                    Button { showAppearance = true } label: {
-                        valueTile(icon: "paintbrush.fill", color: DS.Color.accent,
-                                  title: t("المظهر واللغة", "Appearance & Language"),
-                                  value: "\(appearanceLabel) · \(langManager.selectedLanguage == "ar" ? "العربية" : "English")")
-                    }
-                    .dsStaggerIn(3)
-                    Button { showLinkedDevices = true } label: {
-                        valueTile(icon: "iphone.gen3", color: DS.Color.info,
-                                  title: t("الأجهزة المرتبطة", "Linked Devices"),
-                                  value: t("\(notificationVM.linkedDevices.count) جهاز", "\(notificationVM.linkedDevices.count) devices"),
-                                  // العدد يصل بعد الجلب — يتبدّل بلفّة أرقام بدل القفز
-                                  liveNumber: true)
-                    }
-                    .dsStaggerIn(4)
-                }
-                // المربّعات بارتفاع واحد (أطولها) — بلا رقم ثابت
-                .fixedSize(horizontal: false, vertical: true)
-                .buttonStyle(DSScaleButtonStyle())
-
-                groupTitle(t("عن التطبيق", "About"), icon: "info.circle.fill")
-                    .dsStaggerIn(5)
-                HStack(spacing: DS.Spacing.md) {
-                    Button { showAbout = true } label: {
-                        valueTile(icon: "app.badge.fill", color: DS.Color.secondary,
-                                  title: t("عن التطبيق", "About"),
-                                  value: AppVersion.string)
-                    }
-                    .dsStaggerIn(6)
-                    Button { showTerms = true } label: {
-                        valueTile(icon: "doc.text.fill", color: chromeInk,
-                                  title: t("الخصوصية والشروط", "Privacy & Terms"),
-                                  value: t("كيف نحمي بياناتك", "How we protect you"))
-                    }
-                    .dsStaggerIn(7)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .buttonStyle(DSScaleButtonStyle())
+                // الحركة (طلب المالك ٢٠٢٦-٠٩-٢٧): عنوان المجموعة ثم مربّعاتها واحداً بعد الآخر
+                // — نفس إيقاع المربّعات. «تقليل الحركة»: تلاشٍ فقط
+                tileGroup(t("التفضيلات", "Preferences"), icon: "slider.horizontal.3",
+                          tiles: preferenceTiles, startIndex: preferencesStart)
+                tileGroup(t("الحساب", "Account"), icon: "person.crop.circle.fill",
+                          tiles: accountTiles, startIndex: accountStart)
+                tileGroup(t("المساعدة", "Help"), icon: "questionmark.circle.fill",
+                          tiles: helpTiles, startIndex: helpStart)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.md)
@@ -104,12 +73,13 @@ struct SettingsView: View {
             .padding(.vertical, DS.Spacing.sm)
             .background(DS.Color.background)
             // الشريط السفلي آخر التسلسل (بعد آخر مربّع)
-            .dsStaggerIn(8)
+            .dsStaggerIn(helpStart + helpTiles.count + 1)
         }
         // الرأس الملوّن الموحّد للصفحات الفرعية (بدل بطاقة الرأس و«إغلاق») — × في الطرف لأنها ورقة
         .dsSubPageHeader(t("الإعدادات", "Settings"), nav: .close)
         .environment(\.layoutDirection, langManager.layoutDirection)
         // نموذج طويل فيه كتابة وتمرير — مربّع طويل من الأسفل (توصية أبل)
+        // (نفس المربّع من قلم بطاقة الهوية ومن مربّع «تعديل الملف»)
         .dsTallBox(isPresented: $showEditProfile) {
             if let c = authVM.currentUser { EditProfileView(member: c) }
         }
@@ -117,13 +87,30 @@ struct SettingsView: View {
             LinkedDevicesSettingsSheet().environmentObject(appSettingsVM)
         }
         .dsTallBox(isPresented: $showNotifications) {   // قائمة إعدادات طويلة — مربّع طويل (توصية أبل)
-            NotificationsAndPrivacyView()
+            NotificationsAndPrivacyView(focus: .notifications)
+                .environmentObject(authVM)
+                .environmentObject(memberVM)
+                .environmentObject(notificationVM)
+        }
+        .dsCenterBox(isPresented: $showPrivacy) {
+            NotificationsAndPrivacyView(focus: .privacy)
                 .environmentObject(authVM)
                 .environmentObject(memberVM)
                 .environmentObject(notificationVM)
         }
         .dsCenterBox(isPresented: $showAppearance, onBackgroundTap: { showAppearance = false }) {
-            AppearanceSettingsView().environmentObject(appSettingsVM)
+            AppearanceSettingsView(focus: .appearance).environmentObject(appSettingsVM)
+        }
+        .dsCenterBox(isPresented: $showLanguage, onBackgroundTap: { showLanguage = false }) {
+            AppearanceSettingsView(focus: .language).environmentObject(appSettingsVM)
+        }
+        // «دليل الاستخدام» — نفس مربّع علامة المعلومات في الرئيسية، مفتوحاً على الدليل
+        .dsCenterBox(isPresented: $showGuide, onBackgroundTap: { showGuide = false }) {
+            AppGuideBox(startOn: .guide).environmentObject(authVM)
+        }
+        // التواصل مع الإدارة — نفس مربّع «التواصل» في الرئيسية
+        .dsCenterBox(isPresented: $showContactForm) {
+            MemberContactFormView().environmentObject(authVM)
         }
         .dsCenterBox(isPresented: $showAbout, onBackgroundTap: { showAbout = false }) { AboutView() }
         .dsTallBox(isPresented: $showTerms) { PrivacyPolicyView() }   // قراءة طويلة — مربّع طويل (توصية أبل)
@@ -253,6 +240,86 @@ struct SettingsView: View {
             .padding(.bottom, -DS.Spacing.sm)
     }
 
+    // MARK: - المجموعات: عنوان + شبكة مربّعات
+
+    /// مربّع إعداد واحد في مجموعة
+    private struct SettingsTile: Identifiable {
+        let id: String
+        let icon: String
+        let color: Color
+        let title: String
+        let value: String
+        /// قيمة رقمية تصل بعد الظهور (عدد الأجهزة) — تتبدّل بلفّة أرقام
+        var liveNumber = false
+        let action: () -> Void
+    }
+
+    /// عنوان المجموعة ثم مربّعاتها — عمودياً مربّعان في الصف، وأفقياً شبكة أدوات «وضع العرض»
+    /// (`DS.Landscape.tileMinWidth`). المربّعات في الصف بارتفاع واحد (أطولها) — بلا رقم ثابت.
+    @ViewBuilder
+    private func tileGroup(_ title: String, icon: String, tiles: [SettingsTile], startIndex: Int) -> some View {
+        groupTitle(title, icon: icon)
+            .dsStaggerIn(startIndex)
+        LazyVGrid(columns: landscape
+                    ? [GridItem(.adaptive(minimum: DS.Landscape.tileMinWidth), spacing: DS.Spacing.md)]
+                    : Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.md), count: Self.portraitColumns),
+                  spacing: DS.Spacing.md) {
+            ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
+                Button(action: tile.action) {
+                    valueTile(icon: tile.icon, color: tile.color, title: tile.title, value: tile.value,
+                              liveNumber: tile.liveNumber)
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .dsStaggerIn(startIndex + 1 + index)
+            }
+        }
+    }
+
+    /// تسلسل الدخول: كل مجموعة تبدأ بعد آخر مربّع في التي قبلها
+    private var preferencesStart: Int { 1 }
+    private var accountStart: Int { preferencesStart + preferenceTiles.count + 1 }
+    private var helpStart: Int { accountStart + accountTiles.count + 1 }
+
+    /// «التفضيلات»: الإشعارات · الخصوصية · المظهر · اللغة — كلٌّ يفتح جزءه من مربّعه
+    private var preferenceTiles: [SettingsTile] {
+        [SettingsTile(id: "notifications", icon: "bell.badge.fill", color: DS.Color.warning,
+                      title: t("الإشعارات", "Notifications"),
+                      value: notificationsEnabled ? t("مفعّلة", "On") : t("موقوفة", "Off")) { showNotifications = true },
+         SettingsTile(id: "privacy", icon: "lock.fill", color: DS.Color.secondary,
+                      title: t("الخصوصية", "Privacy"), value: privacyLabel) { showPrivacy = true },
+         SettingsTile(id: "appearance", icon: "circle.lefthalf.filled", color: DS.Color.accent,
+                      title: t("المظهر", "Appearance"), value: appearanceLabel) { showAppearance = true },
+         SettingsTile(id: "language", icon: "character.bubble.fill", color: chromeInk,
+                      title: t("اللغة", "Language"), value: languageLabel) { showLanguage = true }]
+    }
+
+    /// «الحساب»: تعديل الملف (نفس مربّع القلم) · الأجهزة المرتبطة
+    private var accountTiles: [SettingsTile] {
+        [SettingsTile(id: "editProfile", icon: "square.and.pencil", color: chromeInk,
+                      title: t("تعديل الملف", "Edit Profile"),
+                      value: t("الصورة والبيانات والسيرة", "Photo, details & bio")) { showEditProfile = true },
+         SettingsTile(id: "devices", icon: "iphone.gen3", color: DS.Color.info,
+                      title: t("الأجهزة المرتبطة", "Linked Devices"),
+                      value: t("\(notificationVM.linkedDevices.count) جهاز", "\(notificationVM.linkedDevices.count) devices"),
+                      // العدد يصل بعد الجلب — يتبدّل بلفّة أرقام بدل القفز
+                      liveNumber: true) { showLinkedDevices = true }]
+    }
+
+    /// «المساعدة»: دليل الاستخدام · تواصل مع الإدارة · عن التطبيق · الخصوصية والشروط
+    private var helpTiles: [SettingsTile] {
+        [SettingsTile(id: "guide", icon: "book.pages.fill", color: DS.Color.accent,
+                      title: t("دليل الاستخدام", "User Guide"),
+                      value: t("تعرّف على التطبيق", "Learn the app")) { showGuide = true },
+         SettingsTile(id: "contact", icon: "envelope.fill", color: DS.Color.info,
+                      title: t("تواصل مع الإدارة", "Contact the Admins"),
+                      value: t("راسلنا ويصلك الرد", "You'll get a reply")) { showContactForm = true },
+         SettingsTile(id: "about", icon: "app.badge.fill", color: DS.Color.secondary,
+                      title: t("عن التطبيق", "About"), value: AppVersion.string) { showAbout = true },
+         SettingsTile(id: "terms", icon: "doc.text.fill", color: chromeInk,
+                      title: t("الخصوصية والشروط", "Privacy & Terms"),
+                      value: t("كيف نحمي بياناتك", "How we protect you")) { showTerms = true }]
+    }
+
     private func cardFact(icon: String, title: String, value: String) -> some View {
         HStack(spacing: DS.Spacing.xsm) {
             Image(dsSymbol: icon)
@@ -298,12 +365,28 @@ struct SettingsView: View {
         .dsCard(padding: nil)
     }
 
-    // MARK: - المجموعات (كل مربّع يعرض قيمته الحالية)
+    // MARK: - القيم الحالية (كل مربّع يعرض قيمته — بنفس أسماء الاختيارات داخل مربّعه)
     private var appearanceLabel: String {
         switch appearanceMode {
         case "dark": return t("داكن", "Dark")
         case "light": return t("فاتح", "Light")
-        default: return t("تلقائي", "Auto")
+        default: return t("حسب الجهاز", "System")
+        }
+    }
+
+    private var languageLabel: String {
+        langManager.selectedLanguage == "ar" ? "العربية" : "English"
+    }
+
+    /// ملخّص الخصوصية: ما المخفي عن الأعضاء (الرقم، الميلاد) — يتحدّث مع المفتاح لأن الحفظ يحدّث الحساب
+    private var privacyLabel: String {
+        let phoneHidden = authVM.currentUser?.isPhoneHidden ?? false
+        let birthHidden = authVM.currentUser?.isBirthDateHidden ?? false
+        switch (phoneHidden, birthHidden) {
+        case (true, true): return t("الرقم والميلاد مخفيان", "Phone & birth date hidden")
+        case (true, false): return t("رقمك مخفي", "Phone hidden")
+        case (false, true): return t("ميلادك مخفي", "Birth date hidden")
+        case (false, false): return t("رقمك ظاهر", "Phone visible")
         }
     }
 
@@ -370,6 +453,36 @@ struct NotificationsAndPrivacyView: View {
 
     private enum TestState { case idle, sending, sent, failed }
 
+    /// الجزء المعروض — «مربّعات بمجموعات» (اختيار المالك ٢٠٢٦-١٠-٠٧): مربّع «الإشعارات» ومربّع «الخصوصية»
+    /// في الإعدادات يفتح كلٌّ منهما جزءه وحده من هذه الشاشة نفسها (`all` = الجزآن معاً)
+    enum Focus { case all, notifications, privacy }
+    let focus: Focus
+
+    init(focus: Focus = .all) { self.focus = focus }
+
+    private var showsNotifications: Bool { focus != .privacy }
+    private var showsPrivacy: Bool { focus != .notifications }
+    /// رقم قسم الخصوصية في تسلسل الدخول — أول قسم حين يُعرض وحده
+    private var privacyIndex: Int { showsNotifications ? 3 : 0 }
+
+    private var boxTitle: String {
+        switch focus {
+        case .all: return t("الإشعارات والخصوصية", "Notifications & Privacy")
+        case .notifications: return t("الإشعارات", "Notifications")
+        case .privacy: return t("الخصوصية", "Privacy")
+        }
+    }
+
+    private var boxSubtitle: String {
+        switch focus {
+        case .all: return t("تحكّم بالتنبيهات ومن يشوف بياناتك", "Control alerts and who sees your data")
+        case .notifications: return t("تحكّم بالتنبيهات التي تصلك", "Control the alerts you get")
+        case .privacy: return t("من يشوف بياناتك ومن حظرته", "Who sees your data, and who you blocked")
+        }
+    }
+
+    private var boxIcon: String { focus == .privacy ? "lock.fill" : "bell.badge.fill" }
+
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     /// نوع واحد من الإشعارات (مفتاحه في notification_prefs)
@@ -405,9 +518,9 @@ struct NotificationsAndPrivacyView: View {
     /// كما كانت، فالشريط السفلي «إغلاق» فقط.
     var body: some View {
         DSComposer(
-            title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
-            subtitle: t("تحكّم بالتنبيهات ومن يشوف بياناتك", "Control alerts and who sees your data"),
-            icon: "bell.badge.fill",
+            title: boxTitle,
+            subtitle: boxSubtitle,
+            icon: boxIcon,
             tint: DS.Color.actionNavy,
             actionTitle: "",
             showsAction: false,
@@ -416,12 +529,16 @@ struct NotificationsAndPrivacyView: View {
             onSubmit: {},
             onCancel: { dismiss() }
         ) {
-            statusSection
-            typesSection
-            badgeSection
-            privacySection
-            // الأعضاء المحظورون — إلغاء الحظر من هنا (Guideline 1.2)
-            BlockedMembersSection(index: 4)
+            if showsNotifications {
+                statusSection
+                typesSection
+                badgeSection
+            }
+            if showsPrivacy {
+                privacySection
+                // الأعضاء المحظورون — إلغاء الحظر من هنا (Guideline 1.2)
+                BlockedMembersSection(index: privacyIndex + 1)
+            }
         }
         .environment(\.layoutDirection, langManager.layoutDirection)
         .onAppear {
@@ -430,10 +547,13 @@ struct NotificationsAndPrivacyView: View {
             isBirthDateHidden = authVM.currentUser?.isBirthDateHidden ?? false
         }
         .task {
+            // أنواع الإشعارات وحالة الجهاز لجزء الإشعارات فقط
+            guard showsNotifications else { return }
             prefs = await memberVM.fetchNotificationPrefs()
             await refreshSystemStatus()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            guard showsNotifications else { return }
             Task { await refreshSystemStatus() }
         }
         .onChange(of: notificationsEnabled) { newValue in
@@ -507,7 +627,7 @@ struct NotificationsAndPrivacyView: View {
 
     private var privacySection: some View {
         DSComposerSection(title: t("الخصوصية", "Privacy"), icon: "lock.fill",
-                          tint: DS.Color.accent, index: 3) {
+                          tint: DS.Color.accent, index: privacyIndex) {
             VStack(spacing: DS.Spacing.sm) {
                 switchRow(icon: "phone.down.fill", color: DS.Color.accent,
                           title: t("إخفاء رقم الهاتف", "Hide phone number"),
@@ -692,6 +812,34 @@ struct AppearanceSettingsView: View {
     /// «تقليل الحركة» (توصية أبل): علامة الاختيار تظهر بتلاشٍ فقط بلا تكبير
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// الجزء المعروض — «مربّعات بمجموعات» (اختيار المالك ٢٠٢٦-١٠-٠٧): مربّع «المظهر» ومربّع «اللغة»
+    /// في الإعدادات يفتح كلٌّ منهما قسمه وحده من هذا المربّع نفسه (`all` = القسمان معاً)
+    enum Focus { case all, appearance, language }
+    let focus: Focus
+
+    init(focus: Focus = .all) { self.focus = focus }
+
+    private var showsAppearance: Bool { focus != .language }
+    private var showsLanguage: Bool { focus != .appearance }
+
+    private var boxTitle: String {
+        switch focus {
+        case .all: return t("المظهر واللغة", "Appearance & Language")
+        case .appearance: return t("المظهر", "Appearance")
+        case .language: return t("اللغة", "Language")
+        }
+    }
+
+    private var boxSubtitle: String {
+        switch focus {
+        case .all: return t("شكل التطبيق ولغته", "How the app looks and reads")
+        case .appearance: return t("فاتح أو داكن أو حسب جهازك", "Light, dark or like your device")
+        case .language: return t("لغة التطبيق على جهازك", "The app's language on your device")
+        }
+    }
+
+    private var boxIcon: String { focus == .language ? "character.bubble.fill" : "paintbrush.fill" }
+
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     private var appearanceOptions: [DSOptionTile<String>] {
@@ -714,9 +862,9 @@ struct AppearanceSettingsView: View {
 
     var body: some View {
         DSComposer(
-            title: t("المظهر واللغة", "Appearance & Language"),
-            subtitle: t("شكل التطبيق ولغته", "How the app looks and reads"),
-            icon: "paintbrush.fill",
+            title: boxTitle,
+            subtitle: boxSubtitle,
+            icon: boxIcon,
             tint: DS.Color.composerLibrary,
             actionTitle: "",
             showsAction: false,
@@ -725,30 +873,36 @@ struct AppearanceSettingsView: View {
             onSubmit: {},
             onCancel: { dismiss() }
         ) {
-            DSComposerSection(title: t("المظهر", "Appearance"), icon: "circle.lefthalf.filled",
-                              tint: DS.Color.accent, index: 0) {
-                VStack(spacing: DS.Spacing.sm) {
-                    // مربّعات الاختيار الواحد المشتركة
-                    DSOptionTiles(appearanceOptions, selection: $appearanceMode, columns: 3)
-                    note(appearanceDescription)
+            if showsAppearance {
+                DSComposerSection(title: t("المظهر", "Appearance"), icon: "circle.lefthalf.filled",
+                                  tint: DS.Color.accent, index: 0) {
+                    VStack(spacing: DS.Spacing.sm) {
+                        // مربّعات الاختيار الواحد المشتركة
+                        DSOptionTiles(appearanceOptions, selection: $appearanceMode, columns: 3)
+                            // التغيير لحظي على كل النوافذ — لا ينتظر إغلاق المربّع (طلب المالك ٢٠٢٦-١٠-٠٧)
+                            .onChange(of: appearanceMode) { mode in AppAppearance.apply(mode) }
+                        note(appearanceDescription)
+                    }
                 }
             }
 
-            DSComposerSection(title: t("اللغة", "Language"), icon: "character.bubble.fill",
-                              tint: DS.Color.primary, index: 1) {
-                VStack(spacing: DS.Spacing.sm) {
-                    DSOptionTiles(languageOptions, selection: languageSelection, columns: 2)
-                    note(langManager.languageChosenByUser
-                         ? t("اخترت لغتك بنفسك — لا تتأثر بلغة التطبيق الرسمية.",
-                             "You chose your language — the app's official language won't change it.")
-                         : t("تتبع لغة التطبيق الرسمية التي تحددها الإدارة.",
-                             "Following the app's official language set by the admins."))
+            if showsLanguage {
+                DSComposerSection(title: t("اللغة", "Language"), icon: "character.bubble.fill",
+                                  tint: DS.Color.primary, index: showsAppearance ? 1 : 0) {
+                    VStack(spacing: DS.Spacing.sm) {
+                        DSOptionTiles(languageOptions, selection: languageSelection, columns: 2)
+                        note(langManager.languageChosenByUser
+                             ? t("اخترت لغتك بنفسك — لا تتأثر بلغة التطبيق الرسمية.",
+                                 "You chose your language — the app's official language won't change it.")
+                             : t("تتبع لغة التطبيق الرسمية التي تحددها الإدارة.",
+                                 "Following the app's official language set by the admins."))
 
-                    if langManager.languageChosenByUser {
-                        // إجراء ثانوي — الزرّ الواحد الرمادي
-                        DSButton(t("الرجوع للغة التطبيق الرسمية", "Use the app's official language"),
-                                 icon: "arrow.uturn.backward", role: .cancel) {
-                            langManager.followOfficialLanguage(appSettingsVM.settings.defaultLanguage)
+                        if langManager.languageChosenByUser {
+                            // إجراء ثانوي — الزرّ الواحد الرمادي
+                            DSButton(t("الرجوع للغة التطبيق الرسمية", "Use the app's official language"),
+                                     icon: "arrow.uturn.backward", role: .cancel) {
+                                langManager.followOfficialLanguage(appSettingsVM.settings.defaultLanguage)
+                            }
                         }
                     }
                 }

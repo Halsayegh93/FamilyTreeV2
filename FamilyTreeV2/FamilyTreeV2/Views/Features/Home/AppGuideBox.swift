@@ -29,6 +29,12 @@ struct AppGuideBox: View {
 
     enum InfoSection: Hashable { case guide, about }
 
+    /// القسم الذي يفتح عليه — علامة المعلومات في الرئيسية على «عن التطبيق»، ومربّع
+    /// «دليل الاستخدام» في الإعدادات على الدليل (٢٠٢٦-١٠-٠٧)
+    init(startOn: InfoSection = .about) {
+        _section = State(initialValue: startOn)
+    }
+
     /// شرائح الفصل: نقاطه ← «أنهيت الفصل»
     private enum Slide: Hashable { case step(Int), done }
 
