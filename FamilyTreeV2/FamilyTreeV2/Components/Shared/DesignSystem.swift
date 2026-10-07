@@ -1687,6 +1687,8 @@ extension DS {
         static let columnMinWidth: CGFloat = 340
         /// أقل عرض لمربّع أداة في شبكات الأدوات (لوحة الإدارة) — ٤ أعمدة تقريباً بدل ٢–٣
         static let tileMinWidth: CGFloat = 170
+        /// أقل عرض للمربّع الصغير (مربّعات الإعدادات المضغوطة، ٣ في الصف عمودياً) — ٥ تقريباً في الصف أفقياً
+        static let compactTileMinWidth: CGFloat = 130
         /// أقل عرض لبطاقة في شبكات البطاقات (المكتبة، المشاريع) — ٣–٤ أعمدة بدل عمودين
         static let gridCardMinWidth: CGFloat = 200
         /// أقل عرض لصورة في شبكة الألبوم

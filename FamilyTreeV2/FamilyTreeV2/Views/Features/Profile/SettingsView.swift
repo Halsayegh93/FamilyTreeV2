@@ -32,13 +32,14 @@ struct SettingsView: View {
     @State private var showDeleteConfirmation = false
     /// حذف الحساب جارٍ — طبقة انتظار حتى يكتمل ويُسجَّل الخروج
     @State private var isDeletingAccount = false
-    /// وضع العرض: المربّعات بشبكة أدوات «وضع العرض» (أكثر في الصف) — العمودي مربّعان في الصف
+    /// وضع العرض: المربّعات الصغيرة بشبكة تكيّفية (`DS.Landscape.compactTileMinWidth`) — العمودي ثلاثة في الصف
     @Environment(\.dsLandscape) private var landscape
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
-    /// مربّعان في الصف عمودياً
-    private static let portraitColumns = 2
+    /// ثلاثة مربّعات صغيرة في الصف عمودياً (طلب المالك ٢٠٢٦-١٠-٠٧ «صغّر المربّعات») — كثافة مربّعات
+    /// أدوات لوحة الإدارة الصغيرة
+    private static let portraitColumns = 3
 
     var body: some View {
         // «مربّعات بمجموعات» (اختيار المالك ٢٠٢٦-١٠-٠٧): بطاقة الهوية أعلى، ثم ثلاث مجموعات قصيرة
@@ -254,16 +255,16 @@ struct SettingsView: View {
         let action: () -> Void
     }
 
-    /// عنوان المجموعة ثم مربّعاتها — عمودياً مربّعان في الصف، وأفقياً شبكة أدوات «وضع العرض»
-    /// (`DS.Landscape.tileMinWidth`). المربّعات في الصف بارتفاع واحد (أطولها) — بلا رقم ثابت.
+    /// عنوان المجموعة ثم مربّعاتها الصغيرة — عمودياً ثلاثة في الصف، وأفقياً شبكة تكيّفية أكثف
+    /// (`DS.Landscape.compactTileMinWidth`). المربّعات في الصف بارتفاع واحد (أطولها) — بلا رقم ثابت.
     @ViewBuilder
     private func tileGroup(_ title: String, icon: String, tiles: [SettingsTile], startIndex: Int) -> some View {
         groupTitle(title, icon: icon)
             .dsStaggerIn(startIndex)
         LazyVGrid(columns: landscape
-                    ? [GridItem(.adaptive(minimum: DS.Landscape.tileMinWidth), spacing: DS.Spacing.md)]
-                    : Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.md), count: Self.portraitColumns),
-                  spacing: DS.Spacing.md) {
+                    ? [GridItem(.adaptive(minimum: DS.Landscape.compactTileMinWidth), spacing: DS.Spacing.sm)]
+                    : Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: Self.portraitColumns),
+                  spacing: DS.Spacing.sm) {
             ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
                 Button(action: tile.action) {
                     valueTile(icon: tile.icon, color: tile.color, title: tile.title, value: tile.value,
@@ -337,15 +338,16 @@ struct SettingsView: View {
         }
     }
 
-    /// مربّع إعداد (طلب المالك): أيقونة ملوّنة، العنوان، والقيمة الحالية تحته — البطاقة الواحدة
+    /// مربّع إعداد صغير (طلب المالك ٢٠٢٦-١٠-٠٧ «صغّر المربّعات»): قرص مجسّم بحجم أيقونة الصف، العنوان
+    /// بدور مضغوط، والقيمة الحالية تحته بدور التلميح — حشوة أضيق، نفس كثافة مربّعات أدوات لوحة الإدارة.
     /// `liveNumber`: قيمة رقمية تصل بعد الظهور (مثل عدد الأجهزة) — تتبدّل بلفّة أرقام
     private func valueTile(icon: String, color: Color, title: String, value: String,
                            liveNumber: Bool = false) -> some View {
-        VStack(spacing: DS.Spacing.xsm) {
-            DSStateIcon(icon, tint: color, size: DS.Icon.sizeSm)
+        VStack(spacing: DS.Spacing.xs) {
+            DSStateIcon(icon, tint: color, size: DS.Icon.row)
                 .accessibilityHidden(true)   // زخرفة — العنوان والقيمة يكفيان
             Text(title)
-                .dsFont(.chipCompact)
+                .dsFont(.rowTitleCompact)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -353,14 +355,14 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             Text(value)
-                .dsFont(.captionCompact)
+                .dsFont(.caption)
                 .foregroundColor(color.dsChrome(in: section).dsReadableGlyph)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .modifier(SettingsLiveNumber(active: liveNumber, value: value))
         }
         .padding(.horizontal, DS.Spacing.xs)
-        .padding(.vertical, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .dsCard(padding: nil)
     }
