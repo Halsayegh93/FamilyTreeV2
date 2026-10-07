@@ -16,9 +16,11 @@ struct ShareRootView: View {
 
     @SwiftUI.State private var title = ""
     @SwiftUI.State private var note = ""
-    @SwiftUI.State private var category: ShareUploader.LiveCategory = ShareUploader.builtInCategories[0]
-    /// تصنيفات المكتبة بأسمائها الحالية من السيرفر («التصنيفات» في الإدارة) — المدمجة حتى تصل
-    @SwiftUI.State private var categories: [ShareUploader.LiveCategory] = ShareUploader.builtInCategories
+    @SwiftUI.State private var category: ShareUploader.LiveCategory =
+        (ShareUploader.cachedCategories() ?? ShareUploader.builtInCategories)[0]
+    /// تصنيفات المكتبة كما في «التصنيفات» بالإدارة: آخر نسخة من التطبيق، ثم السيرفر إن أمكن، والمدمجة آخراً
+    @SwiftUI.State private var categories: [ShareUploader.LiveCategory] =
+        ShareUploader.cachedCategories() ?? ShareUploader.builtInCategories
     /// وجهة الملف — الصور تقبل الوجهتين، وPDF للمكتبة فقط
     @SwiftUI.State private var destination: Destination = .library
 

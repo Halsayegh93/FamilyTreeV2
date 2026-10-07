@@ -36,7 +36,7 @@ enum ShareUploader {
 
         var title: String {
             switch self {
-            case .documents: return "مستندات"
+            case .documents: return "وثائق"   // نفس الاسم المدمج في التطبيق
             case .books:     return "كتب"
             case .oldPhotos: return "صور قديمة"
             case .other:     return "أخرى"
@@ -86,6 +86,19 @@ enum ShareUploader {
                 ?? Category(rawValue: row.key)?.icon ?? "folder.fill"
             return LiveCategory(key: row.key, title: row.name_ar, icon: icon)
         }
+    }
+
+    /// آخر تصنيفات حمّلها التطبيق (CategoryStore ينشرها لحاوية App Group) — لا تحتاج شبكة ولا جلسة
+    static func cachedCategories() -> [LiveCategory]? {
+        guard let data = UserDefaults(suiteName: SharedSessionStore.appGroupId)?.data(forKey: "shared.archiveCategories"),
+              let list = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] else { return nil }
+        let items = list.compactMap { d -> LiveCategory? in
+            guard let key = d["key"], let name = d["name_ar"] else { return nil }
+            let icon = d["icon"].flatMap { UIImage(systemName: $0) != nil ? $0 : nil }
+                ?? Category(rawValue: key)?.icon ?? "folder.fill"
+            return LiveCategory(key: key, title: name, icon: icon)
+        }
+        return items.isEmpty ? nil : items
     }
 
     static var builtInCategories: [LiveCategory] {

@@ -217,6 +217,21 @@ final class CategoryStore: ObservableObject {
             }
         }
         Self.snapshot = map
+        Self.publishArchiveCategoriesForShareExtension(rows)
+    }
+
+    /// مفتاح نسخة تصنيفات المكتبة في حاوية App Group — يقرؤه امتداد المشاركة (ShareUploader.cachedCategories)
+    static let sharedArchiveCategoriesKey = "shared.archiveCategories"
+
+    /// امتداد المشاركة يعرض نفس تصنيفات «التصنيفات» في الإدارة (طلب المالك ٢٠٢٦-١٠-٠٧) حتى بلا جلسة صالحة:
+    /// قراءة الجدول تحتاج دخولاً، فنحفظ آخر نسخة حمّلها التطبيق (الظاهرة، بالترتيب، بالرمز المعروض)
+    private static func publishArchiveCategoriesForShareExtension(_ rows: [ContentCategory]) {
+        let list: [[String: String]] = rows
+            .filter { $0.section == CategorySection.archive.rawValue && $0.isActive }
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map { ["key": $0.key, "name_ar": $0.nameAr, "icon": $0.symbol] }
+        guard !list.isEmpty, let data = try? JSONSerialization.data(withJSONObject: list) else { return }
+        UserDefaults(suiteName: SharedSessionStore.appGroupId)?.set(data, forKey: sharedArchiveCategoriesKey)
     }
 
     // MARK: التعديل — للمالك فقط (سياسة الجدول)
