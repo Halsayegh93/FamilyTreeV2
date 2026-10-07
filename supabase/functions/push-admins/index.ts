@@ -53,6 +53,8 @@ Deno.serve(async (req) => {
       const { data: member, error } = await supabase.from("profiles").select("id,status").eq("id", payload.request_id).maybeSingle();
       if (error) return json(503, { ok: false, message: "Request lookup failed" });
       if (!member || member.id !== auth.profileId || member.status !== "pending") return json(403, { ok: false, message: "Request not authorized" });
+      // الطلب المحفوظ يولّد الإشعار والدفع عبر قاعدة البيانات؛ يشمل النسخ القديمة.
+      return json(200, { ok: true, handled_by: "saved_join_request" });
     } else {
       const { data: saved, error } = await supabase.from("admin_requests")
         .select("id,requester_id,member_id,request_type,status").eq("id", payload.request_id).maybeSingle();

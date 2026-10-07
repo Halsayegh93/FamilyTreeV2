@@ -24,6 +24,7 @@ serve(async (req) => {
     const title = record.title || "عائلة المحمدعلي 🌿";
     const notifBody = record.body || "لديك إشعار جديد";
     const kind = record.kind || "notification";
+    const isJoinRequest = record.request_type === "join_request" || record.request_type === "link_request";
 
     const supabase = createServiceClient();
     const { teamId, keyId, bundleId, privateKey } = getApnsConfig();
@@ -118,8 +119,14 @@ serve(async (req) => {
           "apns-priority": "10",
         },
         body: JSON.stringify({
-          aps: { alert: { title, body: notifBody }, sound: "default" },
+          aps: {
+            alert: { title, body: notifBody }, sound: "default",
+            ...(isJoinRequest ? { category: "JOIN_REQUEST" } : {}),
+          },
           kind,
+          ...(typeof record.request_id === "string" ? { request_id: record.request_id } : {}),
+          ...(typeof record.request_type === "string" ? { request_type: record.request_type } : {}),
+          ...(typeof record.notification_id === "string" ? { notification_id: record.notification_id } : {}),
         }),
       });
       if (res.ok) {
