@@ -147,6 +147,10 @@ enum DS {
         static let warning = SwiftUI.Color.adaptive(light: "#9A6A0A", dark: "#F0B040") // Amber — يعدّي AA للنص بالوضع الفاتح
         static let error   = SwiftUI.Color.adaptive(light: "#D32F2F", dark: "#EF5350") // أحمر صافي
         static let info    = brand // كحلي ثابت (معنى: معلومة) — لا يتبع القسم
+        /// تعبئة بنص أبيض للتنبيه والنجاح (زرّ «افتح إعدادات الجهاز»، «قبول»…): الدرجة العميقة في الوضعين —
+        /// `warning`/`success` في الداكن حبرٌ فاتح للنص، والأبيض فوقه كان ~٢:١ (فحص ٢٠٢٦-١٠-٠٨)؛ هنا ≥٤٫٥:١
+        static let warningFill = SwiftUI.Color(hex: "#9A6A0A")
+        static let successFill = SwiftUI.Color(hex: "#157F3C")
 
         // Role Colors — باستيل ناعم
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }
@@ -303,74 +307,95 @@ enum DS {
             static let bold     = "IBMPlexSansArabic-Bold"
         }
 
-        /// خط IBM Plex Sans Arabic مع دعم Dynamic Type — يُستخدم للعناوين وهوية الاسم
-        static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
-            let name: String
+        /// اسم ملف الوزن (Plex فيه أربعة أوزان: الأثقل من العريض يُرسم عريضاً)
+        static func plexName(_ weight: SwiftUI.Font.Weight) -> String {
             switch weight {
-            case .black, .heavy, .bold: name = Plex.bold
-            case .semibold:             name = Plex.semibold
-            case .medium:               name = Plex.medium
-            default:                    name = Plex.regular
+            case .black, .heavy, .bold: return Plex.bold
+            case .semibold:             return Plex.semibold
+            case .medium:               return Plex.medium
+            default:                    return Plex.regular
             }
-            return .custom(name, size: size, relativeTo: textStyle(for: size))
         }
 
-        /// اختيار TextStyle المناسب للحجم — يضمن تكيّف الخط المخصّص مع Dynamic Type
+        /// خط IBM Plex Sans Arabic مع دعم Dynamic Type — يكبر ويصغر مع «حجم النص» في إعدادات الجهاز
+        /// بنفس نسبة نمط Apple الأقرب لحجمه (`textStyle(for:)`)
+        static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
+            .custom(plexName(weight), size: size, relativeTo: textStyle(for: size))
+        }
+
+        /// نفس الخط مقيّداً بنمط Apple معيّن (أدوار النص) — الحجم الأساسي ثم يتبع إعداد الجهاز
+        static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular,
+                         relativeTo style: SwiftUI.Font.TextStyle) -> SwiftUI.Font {
+            .custom(plexName(weight), size: size, relativeTo: style)
+        }
+
+        /// مطابقة خط الآيفون بالعين (طلب المالك ٢٠٢٦-١٠-٠٨ «يطابق شكل خط الآيفون»): خط الهوية أكبر بصرياً من
+        /// خط النظام بنفس الرقم (قياس: الحروف أطول ١١٪ والسطر ١٤٪) — فكل دور نصّ يُرسم بحجمه × هذا المعامل.
+        /// المعامل الواحد لحجم النص في التطبيق كله؛ مقاسات الرسم الثابتة (`TextRole(size:)`) مستثناة.
+        static let opticalScale: CGFloat = 0.9
+
+        // MARK: مقاسات Apple الافتراضية (حجم النص «كبير» — الافتراضي في الآيفون)
+        // طلب المالك ٢٠٢٦-١٠-٠٨: «حجم الخط في التطبيق وجميع النصوص … على حجم الخط الافتراضي في الآيفون».
+        // كل أدوار النص (`DS.TextRole`) مبنية على هذه الأحجام ومقيّدة بنمطها، فتتبع إعداد «حجم النص» في الجهاز.
+        /// الحجم الافتراضي لنمط Apple (HIG — Dynamic Type، الإعداد «كبير»)
+        static func appleSize(_ style: SwiftUI.Font.TextStyle) -> CGFloat {
+            switch style {
+            case .largeTitle:  return 34
+            case .title:       return 28
+            case .title2:      return 22
+            case .title3:      return 20
+            case .headline:    return 17
+            case .body:        return 17
+            case .callout:     return 16
+            case .subheadline: return 15
+            case .footnote:    return 13
+            case .caption:     return 12
+            case .caption2:    return 11
+            @unknown default:  return 17
+            }
+        }
+
+        /// نمط Apple الأقرب لحجم بالنقاط (على مقاسات Apple الافتراضية أعلاه) — يقيّد الحجم الحرّ بـ Dynamic Type
         static func textStyle(for size: CGFloat) -> SwiftUI.Font.TextStyle {
-            // نطاقات نصف مفتوحة — الأحجام الكسرية (١٢٫٥، ١٣٫٥) كانت تتكبّر مثل العناوين الكبيرة
             switch size {
-            case ..<12.5: return .caption
-            case ..<13.5: return .footnote
-            case ..<15.5: return .subheadline
-            case ..<16.5: return .callout
-            case ..<17.5: return .body
-            case ..<19.5: return .headline
-            case ..<21.5: return .title3
-            case ..<27.5: return .title2
-            default:      return .title
+            case ..<11.5: return .caption2     // ١١
+            case ..<12.5: return .caption      // ١٢
+            case ..<14:   return .footnote     // ١٣
+            case ..<15.5: return .subheadline  // ١٥
+            case ..<16.5: return .callout      // ١٦
+            case ..<18.5: return .body         // ١٧
+            case ..<21:   return .title3       // ٢٠
+            case ..<25:   return .title2       // ٢٢
+            case ..<31:   return .title        // ٢٨
+            default:      return .largeTitle   // ٣٤
             }
         }
 
-        // العناوين — IBM Plex Sans Arabic (الصوت الطباعي للهوية)، مع دعم Dynamic Type
-        static let hero        = SwiftUI.Font.custom(Plex.bold, size: 34, relativeTo: .largeTitle)
-        static let largeTitle  = SwiftUI.Font.custom(Plex.bold, size: 34, relativeTo: .largeTitle)
-        static let title1      = SwiftUI.Font.custom(Plex.bold, size: 28, relativeTo: .title)
-        static let title2      = SwiftUI.Font.custom(Plex.bold, size: 22, relativeTo: .title2)
-        static let title3      = SwiftUI.Font.custom(Plex.semibold, size: 20, relativeTo: .title3)
-        static let headline    = SwiftUI.Font.custom(Plex.semibold, size: 17, relativeTo: .headline)
-        // نص المحتوى — خط الهوية نفسه بأحجام أدوار النص (طلب المالك ٢٠٢٦-١٠-٠٧ «خط الكتابة مو موحّد»:
-        // كان خط النظام هنا فيختلط الخطّان في الشاشة الواحدة)
+        // أنماط Apple بخط الهوية — بأحجامها الافتراضية. العناوين وحدها أكبر من ١٧ (طلب المالك ٢٠٢٦-١٠-٠٨):
+        // كل نصّ غير العناوين (أرقام، أسماء كقيم، حقول) سقفه Body ١٧
+        static var hero: SwiftUI.Font        { largeTitle }
+        static var largeTitle: SwiftUI.Font  { plex(appleSize(.largeTitle) * opticalScale, weight: .bold, relativeTo: .largeTitle) }
+        static var title1: SwiftUI.Font      { plex(appleSize(.title) * opticalScale, weight: .bold, relativeTo: .title) }
+        static var title2: SwiftUI.Font      { plex(appleSize(.title2) * opticalScale, weight: .bold, relativeTo: .title2) }
+        static var title3: SwiftUI.Font      { plex(appleSize(.title3) * opticalScale, weight: .semibold, relativeTo: .title3) }
+        static var headline: SwiftUI.Font    { plex(appleSize(.headline) * opticalScale, weight: .semibold, relativeTo: .headline) }
         static var body: SwiftUI.Font        { role(.body) }
-        static var bodyBold: SwiftUI.Font    { plex(DS.TextRole.body.size, weight: .semibold) }
+        static var bodyBold: SwiftUI.Font    { role(.bodySemibold) }
         static var callout: SwiftUI.Font     { role(.callout) }
-        static var calloutBold: SwiftUI.Font { plex(DS.TextRole.callout.size, weight: .bold) }
+        static var calloutBold: SwiftUI.Font { plex(DS.TextRole.callout.textSize, weight: .bold, relativeTo: .callout) }
         static var subheadline: SwiftUI.Font { role(.subtitle) }
         static var footnote: SwiftUI.Font    { role(.footnote) }
-        static var caption1: SwiftUI.Font    { plex(DS.TextRole.caption.size, weight: .regular) }
-        static var caption2: SwiftUI.Font    { plex(DS.TextRole.micro.size, weight: .regular) }
+        static var caption1: SwiftUI.Font    { plex(appleSize(.caption) * opticalScale, relativeTo: .caption) }
+        static var caption2: SwiftUI.Font    { plex(appleSize(.caption2) * opticalScale, relativeTo: .caption2) }
 
-        /// خط مرن يدعم Dynamic Type - يُستخدم بدل .system(size:weight:)
+        /// خط مرن يدعم Dynamic Type — الحجم المطلوب نفسه مقيّداً بنمط Apple الأقرب (`textStyle(for:)`)؛
+        /// الحجم الصحيح من مقاسات Apple (١١، ١٢، ١٣، ١٥، ١٦، ١٧، ٢٠، ٢٢، ٢٨، ٣٤) = النمط الافتراضي نفسه.
+        /// للنص استعمل دوراً (`DS.TextRole`) — هذا للرموز والرسوم ذات المقاس الحرّ
         static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
-            let style: SwiftUI.Font.TextStyle
-            // نطاقات نصف مفتوحة: الأحجام الكسرية (١٢٫٥، ١٣٫٥) كانت تسقط في default فتظهر بحجم العنوان الكبير
-            // (سؤال الاستطلاع في بطاقة الخبر مثلاً). الأحجام الصحيحة على نفس أنماطها السابقة.
-            switch size {
-            case ..<11.5: style = .caption2
-            case ..<12.5: style = .caption
-            case ..<13.5: style = .footnote
-            case ..<15.5: style = .subheadline
-            case ..<16.5: style = .callout
-            case ..<17.5: style = .body
-            case ..<19.5: style = .headline
-            case ..<21.5: style = .title3
-            case ..<27.5: style = .title2
-            case ..<35.5: style = .title
-            default: style = .largeTitle
-            }
             // خط واحد في التطبيق كله (طلب المالك ٢٠٢٦-١٠-٠٧): خط الهوية بالحجم المطلوب نفسه —
-            // كان خط النظام بأقرب نمط فيختلط الخطّان؛ الأرقام أحادية العرض فقط تبقى بخط النظام
+            // الأرقام أحادية العرض فقط تبقى بخط النظام
             guard design == .monospaced else { return plex(size, weight: weight) }
-            return SwiftUI.Font.system(style, design: design).weight(weight)
+            return SwiftUI.Font.system(textStyle(for: size), design: design).weight(weight)
         }
 
         /// الخط المميّز (display) بحجم مخصّص — لاسم العائلة والعناوين الكبيرة، مع دعم Dynamic Type.
@@ -443,6 +468,8 @@ enum DS {
         // أقراص الأيقونات (المجسّم/الرمز داخل قرص) — مقاس واحد لكل دور (طلب المالك ٢٠٢٦-١٠-٠٧)
         /// مساحة اللمس الدنيا (توصية أبل)
         static let tapTarget: CGFloat = 44
+        /// زرّ الإضافة العائم (`DSFloatingButton` بلا نص) — دائرة ٥٦
+        static let floatingButton: CGFloat = 56
         /// أيقونة عنوان قسم داخل المربّع (= `DSBox.sectionIcon`)
         static let inline: CGFloat = 16
         /// أيقونة عنوان قسم في صفحة / شارة صغيرة
@@ -588,70 +615,108 @@ enum DS {
 
 // MARK: - أدوار النص — «التعديل من مكان واحد» (طلب المالك ٢٠٢٦-١٠-٠٧)
 //
-// كل نص في التطبيق دوره واحد من هذا الجدول (خط IBM Plex Sans Arabic + حجم + وزن). تغيير سطر هنا يغيّر
+// كل نص في التطبيق دوره واحد من هذا الجدول (خط IBM Plex Sans Arabic + نمط Apple + وزن). تغيير سطر هنا يغيّر
 // كل مكان بنفس الدور. كانت الأحجام تُقرَّر في كل شاشة (~١٠٤٠ موضعاً بثلاثين تركيبة).
+// «حجم الخط الافتراضي في الآيفون» (طلب المالك ٢٠٢٦-١٠-٠٨): كل دور = نمط Apple بحجمه الافتراضي
+// (`DS.Font.appleSize`) ومقيّد به (`relativeTo:`)، فيتبع «حجم النص» في إعدادات الجهاز — لا أحجام خاصة بالتطبيق.
 //   • `.dsFont(.rowTitle)` — الحجم كما هو في كل مكان.
-//   • `.dsFieldFont(.rowTitle)` — مثل `dsFieldFont(_:weight:)`: أصغر نقطة داخل المربّعات بالمنتصف.
+//   • `.dsFieldFont(.rowTitle)` — نفس الدور (كان أصغر داخل المربّعات؛ الآن `DSFieldFont.boxReduction` = ٠).
 //   • `DS.Font.role(.rowTitle)` — قيمة `Font` لمن يحتاجها (Label، تركيب نصوص).
 extension DS {
     struct TextRole: Hashable {
         let size: CGFloat
         let weight: SwiftUI.Font.Weight
+        /// نمط Apple الذي يكبر معه الدور مع «حجم النص» في الجهاز
+        let style: SwiftUI.Font.TextStyle
+        /// دور نصّ (يُطابق خط الآيفون بالعين بـ `DS.Font.opticalScale`) — لا لمقاسات الرسم الثابتة
+        let optical: Bool
+
+        /// الحجم المرسوم فعلاً
+        var textSize: CGFloat { optical ? size * DS.Font.opticalScale : size }
+
+        /// دور نصّ = نمط Apple بحجمه الافتراضي + وزن
+        init(_ style: SwiftUI.Font.TextStyle, weight: SwiftUI.Font.Weight = .regular) {
+            self.size = DS.Font.appleSize(style)
+            self.weight = weight
+            self.style = style
+            self.optical = true
+        }
+
+        /// مقاس رسم ثابت (عقد الشجرة، الحرف داخل صورة كبيرة، أرقام رمز التحقق) — يتبع النمط الأقرب لحجمه
+        /// أو نمطاً محدّداً
+        init(size: CGFloat, weight: SwiftUI.Font.Weight, style: SwiftUI.Font.TextStyle? = nil) {
+            self.size = size
+            self.weight = weight
+            self.style = style ?? DS.Font.textStyle(for: size)
+            self.optical = false
+        }
     }
 }
 
 extension DS.TextRole {
-    /// عنوان رأس الصفحة الفرعية / بطاقة رأس الصفحة
-    static let pageTitle    = DS.TextRole(size: 19, weight: .bold)
-    /// عنوان الحالة الفارغة
-    static let emptyTitle   = DS.TextRole(size: 20, weight: .bold)
-    /// عنوان رأس المربّع
-    static let title        = DS.TextRole(size: 17, weight: .bold)
-    /// عنوان التنبيه والبطاقة
-    static let headline     = DS.TextRole(size: 15, weight: .bold)
-    /// نص عادي وقيمة الحقل
-    static let body         = DS.TextRole(size: 14, weight: .regular)
-    /// عنوان الصفّ
-    static let rowTitle     = DS.TextRole(size: 13.5, weight: .bold)
-    /// نص التنبيه والملاحظة
-    static let callout      = DS.TextRole(size: 13, weight: .regular)
-    /// عنوان قسم في صفحة (`DSSectionHeader`)
-    static let sectionTitle = DS.TextRole(size: 12.5, weight: .bold)
-    /// وصف تحت عنوان / صفّ، ووصف رأس المربّع
-    static let subtitle     = DS.TextRole(size: 12, weight: .regular)
-    /// وصف رأس الصفحة الفرعية
-    static let pageSubtitle = DS.TextRole(size: 12, weight: .medium)
-    /// عنوان الحقل في الصفحات (`DSFieldLabel`)
-    static let label        = DS.TextRole(size: 12, weight: .heavy)
-    /// الشرائح والأزرار الصغيرة
-    static let chip         = DS.TextRole(size: 12, weight: .bold)
-    /// نص جانبي وتلميح (طرف عنوان القسم)
-    static let caption      = DS.TextRole(size: 11, weight: .semibold)
-    /// شارة حالة
-    static let badge        = DS.TextRole(size: 11, weight: .bold)
-    /// عنوان قسم داخل المربّع (`DSComposerSection`)
-    static let boxSectionTitle = DS.TextRole(size: 11, weight: .bold)
-    /// ملاحظة صغيرة (فوق أزرار المربّع)
-    static let footnote     = DS.TextRole(size: 11, weight: .regular)
-    /// عدّاد ورقم صغير
-    static let micro        = DS.TextRole(size: 10, weight: .semibold)
-    /// زرّ ٤٤ (المربّعات والصفحات) — ١٥ عريض (كبّرناه، طلب المالك ٢٠٢٦-١٠-٠٧ «كبّر شوي إلغاء والإضافة»)
-    static let button       = DS.TextRole(size: 15, weight: .bold)
-    /// زرّ ٤٨ (الإجراء الرئيسي في شاشات ملء الشاشة)
-    static let buttonLarge  = DS.TextRole(size: 15, weight: .bold)
+    /// عنوان رأس الصفحة الفرعية / بطاقة رأس الصفحة — Title 3 (٢٠)
+    static let pageTitle    = DS.TextRole(.title3, weight: .bold)
+    /// عنوان الحالة الفارغة — Title 3 (٢٠)
+    static let emptyTitle   = DS.TextRole(.title3, weight: .bold)
+    /// رقم إحصاء (داخل الحلقة، صفّ الأرقام، «+N» فوق الصور) — نصّ غير عنوان: سقفه Headline (١٧ عريض)
+    /// (طلب المالك ٢٠٢٦-١٠-٠٨ «لا نصّ أكبر من ١٧ إلا العناوين»؛ كان `emptyTitle` ٢٠)
+    static let statValue    = DS.TextRole(.headline, weight: .bold)
+    /// عنوان رأس المربّع — Headline (١٧)
+    static let title        = DS.TextRole(.headline, weight: .bold)
+    /// عنوان التنبيه والبطاقة — Headline (١٧)
+    static let headline     = DS.TextRole(.headline, weight: .bold)
+    /// نص عادي وقيمة الحقل — Body (١٧)
+    static let body         = DS.TextRole(.body)
+    /// عنوان الصفّ — Body (١٧) شبه عريض
+    static let rowTitle     = DS.TextRole(.body, weight: .semibold)
+    /// نص التنبيه والملاحظة — Callout (١٦)
+    static let callout      = DS.TextRole(.callout)
+    /// عنوان قسم في صفحة (`DSSectionTitle`) — Footnote (١٣)
+    static let sectionTitle = DS.TextRole(.footnote, weight: .bold)
+    /// وصف تحت عنوان / صفّ، ووصف رأس المربّع — Subheadline (١٥)
+    static let subtitle     = DS.TextRole(.subheadline)
+    /// وصف رأس الصفحة الفرعية — Subheadline (١٥)
+    static let pageSubtitle = DS.TextRole(.subheadline, weight: .medium)
+    /// عنوان الحقل في الصفحات (`DSFieldLabel`) — Footnote (١٣)
+    static let label        = DS.TextRole(.footnote, weight: .heavy)
+    /// الشرائح والأزرار الصغيرة — Subheadline (١٥)
+    static let chip         = DS.TextRole(.subheadline, weight: .semibold)
+    /// نص جانبي وتلميح (طرف عنوان القسم) — Caption 1 (١٢)
+    static let caption      = DS.TextRole(.caption, weight: .semibold)
+    /// شارة حالة — Caption 2 (١١)
+    static let badge        = DS.TextRole(.caption2, weight: .bold)
+    /// عنوان قسم داخل المربّع (`DSComposerSection`) — Footnote (١٣)
+    static let boxSectionTitle = DS.TextRole(.footnote, weight: .bold)
+    /// ملاحظة صغيرة (فوق أزرار المربّع) — Footnote (١٣)
+    static let footnote     = DS.TextRole(.footnote)
+    /// عدّاد ورقم صغير — Caption 2 (١١)
+    static let micro        = DS.TextRole(.caption2, weight: .semibold)
+    /// نص الزرّ الواحد (٤٤ في المربّعات والصفحات) — Body (١٧) شبه عريض كأزرار iOS
+    static let button       = DS.TextRole(.body, weight: .semibold)
+    /// زرّ ٤٨ (الإجراء الرئيسي في شاشات ملء الشاشة) — Body (١٧)
+    static let buttonLarge  = DS.TextRole(.body, weight: .semibold)
+}
+
+extension DS.TextRole {
+    /// عنوان رأس التبويب (`MainHeaderView`: اسم القسم، واسم العضو في الرئيسية) — Title 2 (٢٢)
+    static let tabTitle     = DS.TextRole(.title2, weight: .bold)
+    /// «مرحباً بك» فوق اسم العضو في رأس الرئيسية — Footnote (١٣)
+    static let tabGreeting  = DS.TextRole(.footnote, weight: .semibold)
+    /// اسم مربّع القسم في الرئيسية (تحت المجسّم، سطر واحد يصغر إن ضاق) — Subheadline (١٥)
+    static let tileTitle    = DS.TextRole(.subheadline, weight: .bold)
 }
 
 extension DS.Font {
-    /// خط الدور — `DS.Font.role(.rowTitle)`
-    static func role(_ role: DS.TextRole) -> SwiftUI.Font { plex(role.size, weight: role.weight) }
+    /// خط الدور — `DS.Font.role(.rowTitle)`: حجم Apple الافتراضي للدور، مقيّداً بنمطه (Dynamic Type)
+    static func role(_ role: DS.TextRole) -> SwiftUI.Font { plex(role.textSize, weight: role.weight, relativeTo: role.style) }
 }
 
 extension View {
     /// خط الدور بحجمه في كل مكان
     func dsFont(_ role: DS.TextRole) -> some View { font(DS.Font.role(role)) }
 
-    /// خط الدور — أصغر نقطة داخل المربّعات بالمنتصف (مثل `dsFieldFont(_:weight:)`)
-    func dsFieldFont(_ role: DS.TextRole) -> some View { dsFieldFont(role.size, weight: role.weight) }
+    /// خط الدور لعنوان الحقل وقيمته — نفس `dsFont` (كان أصغر داخل المربّعات؛ `DSFieldFont.boxReduction` = ٠)
+    func dsFieldFont(_ role: DS.TextRole) -> some View { modifier(DSFieldRoleFontModifier(role: role)) }
 
     /// رمز SF بمقاس ثابت من `DS.Glyph` — `.dsGlyph(DS.Glyph.md)`
     func dsGlyph(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> some View {
@@ -946,7 +1011,7 @@ struct DSFloatingButton: View {
             // علامة فقط (بلا نص) → دائرة ثابتة 56؛ مع نص → كبسولة كما كانت
             .padding(.horizontal, label != nil ? DS.Spacing.xl : 0)
             .padding(.vertical, label != nil ? DS.Spacing.md + 2 : 0)
-            .frame(width: label == nil ? 56 : nil, height: label == nil ? 56 : nil)
+            .frame(width: label == nil ? DS.Icon.floatingButton : nil, height: label == nil ? DS.Icon.floatingButton : nil)
         }
         // شفّاف عادةً، ولونه الطبيعي عند الضغط (طلب المالك)
         .buttonStyle(FloatingButtonStyle(gradient: gradient ?? section?.gradient ?? DS.Color.gradientPrimary,
@@ -1158,6 +1223,9 @@ enum DSBox {
     /// الرأس المضغوط لمربّع التنبيه/التأكيد (طلب المالك ٢٠٢٦-١٠-٠٧ «أقرب لمربّعات العمل»): نفس رأس العمل
     /// (`DSComposerHeader(compact:)`) بارتفاع ٥٦، مجسّم ٣٠، ونسخة مائلة شفافة ٨٠ بشفافية ٠٫١٨
     static let compactHeaderHeight: CGFloat = 56
+    /// أقل حشوة رأسية فوق عنوان الرأس وتحته — الرأس يطول مع خط الجهاز بدل أن يُقصّ (مقاسات Apple ٢٠٢٦-١٠-٠٨)؛
+    /// ٣ = العنوان (١٧) والوصف (١٥) يملآن الرأس المضغوط ٥٦ بالضبط في الحجم الافتراضي
+    static let headerVerticalPadding: CGFloat = 3
     static let compactHeaderIcon: CGFloat = 30
     static let compactWatermark: CGFloat = 80
     static let compactWatermarkOpacity: Double = 0.18
@@ -1184,14 +1252,14 @@ enum DSBox {
     static let sectionIcon: CGFloat = 16
     static var sectionTitleFont: Font { DS.Font.role(.boxSectionTitle) }
     /// صفّ الحقل داخل المربّع: الأيقونة (٢٨ ← ٢٢)، الحشوة الرأسية (٦ ← ٤) والجانبية (١٠ ← ٧)،
-    /// أدنى ارتفاع لصندوق الحقل (٤٢ ← ٣٦ — حدّ اللمس، لا ٣٢)، وخط القيمة (١٣٫٥ ← ١٣ — حدّ القراءة)
-    /// وعنوانه (١١ ← ١٠٫٥) — بعد `DSFieldFont.boxReduction`
+    /// أدنى ارتفاع لصندوق الحقل (٤٢ ← ٣٦ — حدّ اللمس، لا ٣٢)، وخط القيمة = Body وعنوانه = Footnote
+    /// (مقاسات Apple الافتراضية، طلب المالك ٢٠٢٦-١٠-٠٨)
     static let fieldIcon: CGFloat = 22
     static let fieldVerticalPadding: CGFloat = 4
     static let fieldHorizontalPadding: CGFloat = 7
     static let fieldMinHeight: CGFloat = 36
-    static let fieldValueSize: CGFloat = 14
-    static let fieldLabelSize: CGFloat = 11.5
+    static var fieldValueSize: CGFloat { DS.TextRole.body.size }
+    static var fieldLabelSize: CGFloat { DS.TextRole.label.size }
     /// صور المربّع: مربّع الصورة المصغّرة في شريط الصور (٧٦ ← ٥٦) ودائرة الشعار (٩٢ ← ٦٤) — كانت
     /// أرقاماً في الشاشات (٦٨/٨٠/٨٨)، والآن من هنا فقط
     static let photoTile: CGFloat = 56
@@ -1250,6 +1318,8 @@ enum DSBox {
     static let pageWatermarkAngle: Double = -18
     static var pageTitleFont: Font { DS.Font.role(.pageTitle) }
     static var pageSubtitleFont: Font { DS.Font.role(.pageSubtitle) }
+    /// أقصى أسطر وصف الرأس (الطويل يلتفّ والرأس يطول بدل «…»)
+    static let pageSubtitleLines = 2
 
     // أزرار الرجوع/الإغلاق/الإجراء (`DSNavButtons`): فوق الرأس الملوّن ٤٤ (المضغوط ٣٦)، وفوق السطح ٣٨
     static let navButtonOnColor: CGFloat = 44
@@ -1479,7 +1549,8 @@ struct DSButtonFace: ViewModifier {
     @ViewBuilder
     private var fill: some View {
         if let tint {
-            DSBox.buttonShape.fill(tint)
+            // لون المعنى بدرجة تعبئته (النص أبيض) — لا بحبره الفاتح في الداكن
+            DSBox.buttonShape.fill(tint.dsSolidFill)
         } else if role == .destructive {
             DSBox.buttonShape.fill(DS.Color.error)
         } else if role == .cancel {
@@ -1487,6 +1558,38 @@ struct DSButtonFace: ViewModifier {
         } else {
             DSBox.buttonShape.fill(DSActionFill.style())
         }
+    }
+}
+
+/// الاسم الكامل في صفّ قائمة (منتقي الأب، المستلمون، الأجهزة، الفريق…): سطر واحد بالحجم الافتراضي وما دونه كما
+/// كان، ويلتفّ لسطرين حين يكبر «حجم النص» في الجهاز بدل «…» يقصر كلما كبر الخط (فحص ٢٠٢٦-١٠-٠٨)
+struct DSNameLines: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        let grows = typeSize > .large
+        content
+            .lineLimit(grows ? DSBox.nameLinesLargeText : 1)
+            .fixedSize(horizontal: false, vertical: grows)
+    }
+}
+
+extension DSBox {
+    /// أسطر الاسم الكامل في صفّ القائمة مع «حجم النص» الأكبر من الافتراضي (`.dsNameLines()`)
+    static let nameLinesLargeText = 2
+}
+
+extension View {
+    /// الاسم الكامل في صفّ: سطر واحد افتراضياً، سطران مع الخط الأكبر — `DSNameLines`
+    func dsNameLines() -> some View { modifier(DSNameLines()) }
+}
+
+extension Color {
+    /// لون معنى كتعبئة تحت نص أبيض: التنبيه والنجاح بدرجتهما العميقة (`warningFill`/`successFill`) — الباقي كما هو
+    var dsSolidFill: Color {
+        if self == DS.Color.warning { return DS.Color.warningFill }
+        if self == DS.Color.success { return DS.Color.successFill }
+        return self
     }
 }
 
@@ -1624,12 +1727,13 @@ extension DS.Icon {
 
 extension DS.TextRole {
     /// الحرف الأول مكان الصورة: في رأس «حسابي»، وفي معاينة الصورة المكبّرة
-    static let avatarInitial = DS.TextRole(size: 34, weight: .bold)
+    /// — Large Title (٣٤)؛ والكبيرة رسم بمقاس ثابت داخل الدائرة
+    static let avatarInitial = DS.TextRole(.largeTitle, weight: .bold)
     static let avatarInitialLarge = DS.TextRole(size: 96, weight: .bold)
-    /// اسم العائلة الكبير تحت الشعار (الدخول، شاشة البداية)
-    static let heroTitle = DS.TextRole(size: 26, weight: .heavy)
-    /// رقم في مربّعات رمز التحقق
-    static let codeDigit = DS.TextRole(size: 26, weight: .bold)
+    /// اسم العائلة تحت الشعار (الدخول، شاشة البداية) — Title 1 (٢٨)
+    static let heroTitle = DS.TextRole(.title, weight: .heavy)
+    /// رقم في مربّعات رمز التحقق — مستثنى من تغيير الخط (طلب المالك ٢٠٢٦-١٠-٠٨): كما كان ٢٦ مقيّداً بـ Title 2
+    static let codeDigit = DS.TextRole(size: 26, weight: .bold, style: .title2)
 }
 
 extension DS.Opacity {
@@ -1727,7 +1831,8 @@ extension DS {
         /// فراغ إضافي أسفل الصفحات فوق شريط التبويبات العائم أفقياً
         static var tabBarClearance: CGFloat { DS.Icon.tapTarget }
         /// الرئيسية أفقياً: مربّعات الأقسام أقصر بمقدار، بحدّ أدنى — وعمود الأخبار بجانبها (حدّ أدنى وحصّة من العرض)
-        static let homeTileTrim: CGFloat = 18
+        /// (١٨ ← ١٤: اسم المربّع بمقاس Apple ١٥ تحت المجسّم يتّسع مع الخط الأكبر — ٢٠٢٦-١٠-٠٨)
+        static let homeTileTrim: CGFloat = 14
         static let homeTileMinHeight: CGFloat = 66
         static let homeNewsMinWidth: CGFloat = 260
         static let homeNewsShare: CGFloat = 0.36
@@ -1741,7 +1846,8 @@ extension EnvironmentValues {
 }
 
 // MARK: - دفعة 4-W «أسلوب واحد» (٢٠٢٦-١٠-٠٧): شجرة النساء
-// العقدة المصغّرة في شجرة النساء (مربّع ٤٤، مربّع الزوجة ٢٤) أصغر من أصغر دور (`micro` ١٠) — مقاساتها من هنا
+// العقدة المصغّرة في شجرة النساء (مربّع ٤٤، مربّع الزوجة ٢٤) أصغر من أصغر دور (`micro` ١١) — مقاسات رسم ثابتة
+// داخل لوحة الشجرة (لا تتبع مقاسات Apple: تكبيرها يكسر العقد)
 extension DS.TextRole {
     /// سنوات المتوفّى في شريطه، وعدد الأبناء في شارة العقدة
     static let treeNodeMicro = DS.TextRole(size: 8.5, weight: .heavy)
@@ -1756,8 +1862,15 @@ extension DS.Glyph {
 
 // MARK: - دفعة 4 «أسلوب واحد» (٢٠٢٦-١٠-٠٧): الشجرة
 extension DS.TextRole {
-    /// عدد الأبناء على شارة عقدة شجرة العائلة
+    /// عدد الأبناء على شارة عقدة شجرة العائلة — مقاس رسم ثابت داخل العقدة
     static let nodeCount = DS.TextRole(size: 16, weight: .heavy)
+}
+
+extension DynamicTypeSize {
+    /// نصوص عقد الشجرتين (العائلة والنساء) بمقاس رسم ثابت — الكانفس يُكبَّر بالقرص لا بـ«حجم النص» في الجهاز:
+    /// أبعاد العقدة وفجواتها أرقام ثابتة (`NODE_W`/`NAME_H`)، فالاسم الأكبر كان يخرج من عقدته ويركب جارتها
+    /// (فحص ٢٠٢٦-١٠-٠٨ — كانت شجرة النساء وحدها مثبّتة)
+    static let dsTreeNode: DynamicTypeSize = .large
 }
 
 extension DSBox {
@@ -1800,20 +1913,21 @@ extension DSBox {
 }
 
 extension DS.TextRole {
-    /// نص المبدّل الكبير / العادي / المدمّج
-    static let segment        = DS.TextRole(size: 14.5, weight: .bold)
-    static let segmentRegular = DS.TextRole(size: 13, weight: .bold)
-    static let segmentCompact = DS.TextRole(size: 11, weight: .bold)
-    // نصف الدرجة: نفس الدور بنصف نقطة (أو نقطة) أصغر — حيث كانت الشاشة أصغر من الدور الأقرب
-    static let headlineCompact = DS.TextRole(size: 14.5, weight: .bold)
-    static let bodyCompact     = DS.TextRole(size: 13.5, weight: .regular)
-    static let rowTitleCompact = DS.TextRole(size: 13, weight: .bold)
-    static let calloutCompact  = DS.TextRole(size: 12.5, weight: .regular)
-    static let chipCompact     = DS.TextRole(size: 11.5, weight: .bold)
-    static let captionCompact  = DS.TextRole(size: 10.5, weight: .semibold)
-    static let badgeCompact    = DS.TextRole(size: 10.5, weight: .bold)
-    static let footnoteCompact = DS.TextRole(size: 10.5, weight: .regular)
-    static let microCompact    = DS.TextRole(size: 9.5, weight: .semibold)
+    /// نص المبدّل الكبير / العادي — Subheadline (١٥)، والمدمّج (تبويب الشجرة) — Footnote (١٣)
+    static let segment        = DS.TextRole(.subheadline, weight: .semibold)
+    static let segmentRegular = DS.TextRole(.subheadline, weight: .semibold)
+    static let segmentCompact = DS.TextRole(.footnote, weight: .semibold)
+    // «نصف الدرجة» القديمة (نصف نقطة أصغر) — مع مقاسات Apple صارت نفس نمط الدور الأصلي (طلب المالك ٢٠٢٦-١٠-٠٨)؛
+    // الشريحة المضغوطة وحدها أصغر بنمط (Footnote بدل Subheadline)
+    static let headlineCompact = DS.TextRole(.headline, weight: .bold)
+    static let bodyCompact     = DS.TextRole(.body)
+    static let rowTitleCompact = DS.TextRole(.body, weight: .semibold)
+    static let calloutCompact  = DS.TextRole(.callout)
+    static let chipCompact     = DS.TextRole(.footnote, weight: .semibold)
+    static let captionCompact  = DS.TextRole(.caption, weight: .semibold)
+    static let badgeCompact    = DS.TextRole(.caption2, weight: .bold)
+    static let footnoteCompact = DS.TextRole(.footnote)
+    static let microCompact    = DS.TextRole(.caption2, weight: .semibold)
 }
 
 extension DS.Glyph {
@@ -1862,25 +1976,25 @@ extension DSBox {
 
 // MARK: - قسم «العائلة» في تفاصيل العضو (طلب المالك ٢٠٢٦-١٠-٠٧: الخط كما كان قبل التوحيد)
 extension DS.TextRole {
-    /// «الأبناء · N» فوق صور الأبناء
-    static let familyLabel = DS.TextRole(size: 11, weight: .heavy)
-    /// قيمة صفّ العلاقة (الأم/الزوج) في «العائلة»
-    static let familyValue = DS.TextRole(size: 13, weight: .regular)
+    /// «الأبناء · N» فوق صور الأبناء — Footnote (١٣)
+    static let familyLabel = DS.TextRole(.footnote, weight: .heavy)
+    /// قيمة صفّ العلاقة (الأم/الزوج) في «العائلة» — Callout (١٦)
+    static let familyValue = DS.TextRole(.callout)
 }
 
 // MARK: - دفعة 5 «أسلوب واحد» (٢٠٢٦-١٠-٠٧): آخر الأوزان التي كانت أرقاماً في المكوّنات المشتركة والدليل
 extension DS.TextRole {
     /// نص المحتوى بوزن أثقل: عريض (صفّ فرع مختار)، شبه عريض (قيمة تاريخ، شرح نقطة الدليل)، متوسط (مفتاح)
-    static let bodyStrong   = DS.TextRole(size: 14, weight: .bold)
-    static let bodySemibold = DS.TextRole(size: 14, weight: .semibold)
-    static let bodyMedium   = DS.TextRole(size: 14, weight: .medium)
-    /// نص ملاحظة بوزن متوسط (قيمة «قبل/بعد»، رقم الإصدار) — ونصف درجته (تلميح فوق صورة، سطر تحت اسم)
-    static let calloutMedium        = DS.TextRole(size: 13, weight: .medium)
-    static let calloutCompactMedium = DS.TextRole(size: 12.5, weight: .medium)
-    /// عنوان نهاية فصل الدليل (= `DS.Font.title2`)
-    static let celebrationTitle = DS.TextRole(size: 22, weight: .bold)
-    /// رقم في خانة رمز التحقق داخل المربّع (`DSOTPField`) — أصغر من `codeDigit` (شاشة الدخول)
-    static let codeDigitCompact = DS.TextRole(size: 22, weight: .bold)
+    static let bodyStrong   = DS.TextRole(.body, weight: .bold)
+    static let bodySemibold = DS.TextRole(.body, weight: .semibold)
+    static let bodyMedium   = DS.TextRole(.body, weight: .medium)
+    /// نص ملاحظة بوزن متوسط (قيمة «قبل/بعد»، رقم الإصدار، تلميح فوق صورة، سطر تحت اسم) — Callout (١٦)
+    static let calloutMedium        = DS.TextRole(.callout, weight: .medium)
+    static let calloutCompactMedium = DS.TextRole(.callout, weight: .medium)
+    /// عنوان نهاية فصل الدليل (= `DS.Font.title2`) — Title 2 (٢٢)
+    static let celebrationTitle = DS.TextRole(.title2, weight: .bold)
+    /// رقم في خانة رمز التحقق داخل المربّع (`DSOTPField`) — مستثنى من تغيير الخط: كما كان ٢٢ مقيّداً بـ Title 2
+    static let codeDigitCompact = DS.TextRole(size: 22, weight: .bold, style: .title2)
 }
 
 extension DSBox {

@@ -464,7 +464,7 @@ struct CategoryEditSheet: View {
         }
         .foregroundColor(DS.Color.textOnPrimary)
         .padding(.horizontal, DS.Spacing.md)
-        .frame(height: DS.Icon.row)
+        .frame(minHeight: DS.Icon.row)   // يطول مع «حجم النص» بدل قصّ الاسم
         .background(Capsule().fill(accent))
         .opacity(isActive ? 1 : DS.Opacity.disabled)
         .frame(maxWidth: .infinity)

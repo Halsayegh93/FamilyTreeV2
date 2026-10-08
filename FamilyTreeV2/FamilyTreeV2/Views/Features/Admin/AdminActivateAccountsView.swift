@@ -500,7 +500,7 @@ struct AdminActivateAccountsView: View {
         }
         .foregroundColor(stationTint)
         .padding(.leading, DSBox.chipPadding)
-        .frame(height: DSBox.chipHeight)
+        .frame(minHeight: DSBox.chipHeight)
         .background(Capsule().fill(stationTint.opacity(DS.Opacity.tintFill)))
         .overlay(Capsule().strokeBorder(stationTint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
     }
@@ -820,7 +820,7 @@ struct LinkFatherSheet: View {
                     Text(father.displayFullName)
                         .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .medium)
                         .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
-                        .lineLimit(1)
+                        .dsNameLines()
                     if father.isDeceased == true {
                         Text(L10n.t("متوفى", "Deceased"))
                             .dsFont(.footnote)

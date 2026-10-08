@@ -527,9 +527,23 @@ struct DSComposerHeader: View {
         // الكحلي ← لون القسم. طرفا التدرّج لونان مصمتان (الأساسي ← الأفتح) بدل شفافية ٠٫٧٢:
         // كانت تفتّح الرأس فوق الخلفية البيضاء فينزل الوصف الأبيض الصغير عن ٤٫٥:١
         let tint = self.tint.dsChromeFill(in: section)
-        return ZStack {
+        // التسلسل: الأيقونة تقفز ← العنوان ← الوصف (DSMotion)
+        return HStack(spacing: dense ? DS.Spacing.sm + 2 : DS.Spacing.md) {
+            iconBadge
+            titles
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, dense ? DSBox.alertPadding : DS.Spacing.lg)
+        .padding(.vertical, DSBox.headerVerticalPadding)
+        .frame(maxWidth: .infinity)
+        // الشكل القديم للرأس لكن أصغر قليلاً (طلب المالك ٢٠٢٦-١٠-٠٦ «خل شكله القديم بس شوي أصغر»): ٨٠ بدل ٨٦
+        // — والمضغوط (التنبيه/التأكيد، وكل رأس في وضع العرض) ٥٦. حدّ أدنى: يطول مع خط الجهاز وعنوان التنبيه
+        // على سطرين (مقاسات Apple، طلب المالك ٢٠٢٦-١٠-٠٨) بدل أن يُقصّ
+        .frame(minHeight: compact ? DSBox.compactHeaderHeight : (landscape ? DS.Landscape.boxHeaderHeight : DSBox.headerHeight))
+        .background {
             // المجسّم نفسه كبيراً ومائلاً وشفافاً في الطرف الآخر من الرأس (طلب المالك ٢٠٢٦-١٠-٠٧
             // «أيقونة الشكل على جنب مائلة شفافة حجم أكبر بالاتجاه الثاني») — زخرفة فقط، تُقصّ بحدود الرأس
+            // ولا تغيّر مقاسه
             FT5STrial.headerIcon(icon: icon, tint: tint)
                 .frame(width: dense ? DS.Landscape.boxWatermark : 118, height: dense ? DS.Landscape.boxWatermark : 118)
                 .rotationEffect(.degrees(-18))
@@ -540,18 +554,7 @@ struct DSComposerHeader: View {
                 .accessibilityHidden(true)
                 .id("wm-\(icon)")
                 .transition(.opacity)
-
-            // التسلسل: الأيقونة تقفز ← العنوان ← الوصف (DSMotion)
-            HStack(spacing: dense ? DS.Spacing.sm + 2 : DS.Spacing.md) {
-                iconBadge
-                titles
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, dense ? DSBox.alertPadding : DS.Spacing.lg)
         }
-        // الشكل القديم للرأس لكن أصغر قليلاً (طلب المالك ٢٠٢٦-١٠-٠٦ «خل شكله القديم بس شوي أصغر»): ٨٠ بدل ٨٦
-        // — والمضغوط (التنبيه/التأكيد، وكل رأس في وضع العرض) ٥٦
-        .frame(height: compact ? DSBox.compactHeaderHeight : (landscape ? DS.Landscape.boxHeaderHeight : DSBox.headerHeight))
         .clipped()
         .background {
             // Color.clear بمقاس الرأس تماماً — الطبقات فوقه لا تغيّر مقاسه (الهالة ١٥٠ أطول من الرأس)
@@ -979,7 +982,7 @@ struct DSExtraChip: View {
             .foregroundColor(summary == nil ? DS.Color.textSecondary : tint)
             // نفس الشريحة الواحدة (`DSBox.chipHeight`)
             .padding(.horizontal, DSBox.chipPadding)
-            .frame(height: DSBox.chipHeight)
+            .frame(minHeight: DSBox.chipHeight)
             .background(Capsule().fill(summary == nil ? Color.clear : tint.opacity(DS.Opacity.tintFill)))
             .overlay(
                 Capsule().strokeBorder(summary == nil ? DS.Color.textTertiary.opacity(0.4) : tint.opacity(0.45),
@@ -1076,10 +1079,10 @@ struct DSExtraBox<Content: View>: View {
             DSStateIcon(icon, tint: fillTint.dsReadableGlyph, size: DSBox.composerIcon, mapsChrome: false)
             .modifier(DSIconPop())
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(DS.Font.plex(16, weight: .bold)).foregroundColor(DS.Color.textPrimary)
+                Text(title).dsFont(.title).foregroundColor(DS.Color.textPrimary)
                     .dsEntrance(delay: 0.12, x: -8, animation: DSMotion.text)
                 if let subtitle {
-                    Text(subtitle).font(DS.Font.plex(11.5)).foregroundColor(DS.Color.textSecondary)
+                    Text(subtitle).dsFont(.subtitle).foregroundColor(DS.Color.textSecondary)
                         .dsEntrance(delay: 0.17, x: -8, animation: DSMotion.text)
                 }
             }
@@ -1316,6 +1319,8 @@ struct DSComposerLogoPicker: View {
                             Text(L10n.t("شعار", "Logo")).font(DS.Font.plex(max(9.5, size * 0.155), weight: .bold))
                         }
                         .foregroundColor(tint)
+                        // رسم داخل الدائرة بمقاسها — لا يكبر مع خط الجهاز فيغطّي الكاميرا
+                        .dynamicTypeSize(.large)
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {

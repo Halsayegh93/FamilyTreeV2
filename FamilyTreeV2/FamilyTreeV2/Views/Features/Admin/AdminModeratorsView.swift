@@ -328,18 +328,17 @@ struct AdminModeratorsView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                // الاسم والمجال يلتفّان والصفّ يطول مع «حجم النص» في الجهاز (كانا يُقصّان «…» بالخط الكبير)
                 Text(member.displayFullName)
                     .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
-                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let scope = RoleGuide.forRole(shownRole)?.mandate {
                     Text(scope)
                         .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let phone = member.phoneNumber, !phone.isEmpty {
@@ -483,8 +482,7 @@ struct AdminModeratorsView: View {
                 Text(guide.mandate)
                     .dsFieldFont(.subtitle)
                     .foregroundColor(DS.Color.fieldValue)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
                 // العضو: عدد الأحياء في الشجرة لا يعني أنهم يستخدمون التطبيق
                 if guide.title == L10n.t("العضو", "Member"), let usage = usageStats {
                     Text(L10n.t("فعّالون (رقم + جهاز): \(usage.active)",
@@ -742,7 +740,7 @@ struct AddModeratorSheet: View {
                     Text(member.displayFullName)
                         .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
-                        .lineLimit(1)
+                        .dsNameLines()
 
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         Text(KuwaitPhone.display(phone))

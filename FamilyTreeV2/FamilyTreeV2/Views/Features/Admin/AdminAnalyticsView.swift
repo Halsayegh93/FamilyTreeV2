@@ -278,7 +278,7 @@ struct AdminAnalyticsView: View {
                     .foregroundColor(DS.Color.fieldLabel)
             }
             Text(value)
-                .dsFont(.emptyTitle)
+                .dsFont(.statValue)
                 .foregroundColor(DS.Color.fieldLabel)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -664,7 +664,7 @@ struct AdminAnalyticsView: View {
     }
 
     /// النسبة داخل الحلقة: الرقم كبيراً وتحته ما يعنيه
-    private func ringCenter(value: String, caption: String, role: DS.TextRole = .emptyTitle) -> some View {
+    private func ringCenter(value: String, caption: String, role: DS.TextRole = .statValue) -> some View {
         VStack(spacing: 0) {
             Text(value)
                 .dsFont(role)

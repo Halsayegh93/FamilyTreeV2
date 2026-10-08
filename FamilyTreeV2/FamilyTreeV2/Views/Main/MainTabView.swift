@@ -143,11 +143,6 @@ struct MainTabView: View {
         // أيقونة التبويب المختار بلون قسمه
         .tint(selectedSection.ink)
         .dsTabBarBackground()
-        .overlay(alignment: .top) {
-            OfflineBanner()
-                .padding(.top, DS.Spacing.xs)
-                .zIndex(999)
-        }
         .onReceive(NotificationCenter.default.publisher(for: .openAdminRequests)) { _ in
             guard authVM.canModerate else { return }
             withAnimation { selectedTab = 4 }

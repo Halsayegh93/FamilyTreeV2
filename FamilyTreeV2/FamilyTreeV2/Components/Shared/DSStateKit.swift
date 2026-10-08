@@ -544,7 +544,7 @@ struct DSChipButton: View {
                                                   : size == .small ? DS.Glyph.smCompact : DS.Glyph.xs)
                 }
                 Text(title)
-                    .dsFont(size == .mini ? .badge : .chip)
+                    .dsFont(size == .mini ? .badge : size == .small ? .chipCompact : .chip)
                     .lineLimit(1)
                 if let count {
                     Text("\(count)")
@@ -555,10 +555,10 @@ struct DSChipButton: View {
             }
             .foregroundColor(isSelected ? .white : ink)
             .padding(.horizontal, padding)
-            .frame(height: height)
+            .frame(minHeight: height)
             .background {
                 if isSelected {
-                    Capsule().fill(chrome ? DSActionFill.style() : AnyShapeStyle(tint.dsChromeFill(in: section)))
+                    Capsule().fill(chrome ? DSActionFill.style() : AnyShapeStyle(tint.dsChromeFill(in: section).dsSolidFill))
                 } else {
                     Capsule().fill(ink.opacity(DS.Opacity.tintFill))
                 }
@@ -856,7 +856,7 @@ struct DSAddChipLabel: View {
         .foregroundColor(ink)
         .padding(.horizontal, DSBox.chipPadding)
         .frame(maxWidth: fullWidth ? .infinity : nil)
-        .frame(height: fullWidth ? DSBox.buttonHeight : DSBox.chipHeight)
+        .frame(minHeight: fullWidth ? DSBox.buttonHeight : DSBox.chipHeight)
         .overlay {
             if fullWidth {
                 RoundedRectangle(cornerRadius: DSBox.buttonRadius, style: .continuous).strokeBorder(line, style: Self.dash)

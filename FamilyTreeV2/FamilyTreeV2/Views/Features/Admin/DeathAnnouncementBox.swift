@@ -437,7 +437,7 @@ struct DeathAnnouncementsPage: View {
                     .dsFont(.chip)
                     .foregroundColor(isDone ? DS.Color.success : DS.Color.textOnPrimary)
                     .padding(.horizontal, DSBox.chipPadding)
-                    .frame(height: DSBox.chipHeightSmall)
+                    .frame(minHeight: DSBox.chipHeightSmall)
                     .background {
                         if isDone {
                             Capsule().fill(DS.Color.success.opacity(DS.Opacity.tintFill))

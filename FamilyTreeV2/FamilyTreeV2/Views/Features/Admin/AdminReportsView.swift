@@ -785,7 +785,7 @@ struct AdminReportsView: View {
                         Text(member.displayFullName)
                             .dsFieldFont(.rowTitle)
                             .foregroundColor(DS.Color.fieldLabel)
-                            .lineLimit(1)
+                            .dsNameLines()
                         if deceased {
                             Image(systemName: "leaf.fill")
                                 .dsGlyph(DS.Glyph.micro, weight: .semibold)

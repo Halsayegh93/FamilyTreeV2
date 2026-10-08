@@ -92,7 +92,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                                             .overlay(Capsule().stroke(DS.Color.overlayIconBorder, lineWidth: 1))
                                     } else {
                                         Text(customSubtitle)
-                                            .font(DS.Font.scaled(11, weight: .medium))
+                                            .dsFont(.micro)
                                             .foregroundColor(DS.Color.overlayText)
                                             .lineLimit(1)
                                             .minimumScaleFactor(0.7)
@@ -109,7 +109,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                                     .foregroundColor(DS.Color.overlayText)
                             }
                             Text(customTitle)
-                                .font(DS.Font.scaled(subtitleAbove ? 24 : 21, weight: .black))
+                                .dsFont(.tabTitle)
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
@@ -144,10 +144,10 @@ struct MainHeaderView<TrailingContent: View>: View {
 
                             VStack(alignment: .leading, spacing: isLandscape ? 0 : 3) {
                                 Text(L10n.t("مرحباً بك", "Welcome Back"))
-                                    .font(DS.Font.scaled(isLandscape ? 10 : 12, weight: .semibold))
+                                    .dsFont(isLandscape ? .micro : .tabGreeting)
                                     .foregroundColor(DS.Color.overlayText)
                                 Text(authVM.currentUser?.displayName ?? "Member")
-                                    .font(DS.Font.scaled(isLandscape ? 17 : 21, weight: .bold))
+                                    .dsFont(isLandscape ? .title : .tabTitle)
                                     .foregroundColor(DS.Color.textOnPrimary)
                                     .lineLimit(1)
                                     .minimumScaleFactor(isLandscape ? 0.7 : 1.0)

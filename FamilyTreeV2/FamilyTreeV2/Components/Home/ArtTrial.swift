@@ -446,7 +446,7 @@ struct TrialCenteredTile: View {
                     .modifier(TrialObjectMotion(side: side, stagger: stagger, entrance: entrance))
                 .frame(height: side + 2)
                 Text(title)
-                    .font(DS.Font.scaled(13, weight: .black))
+                    .dsFont(.tileTitle)
                     .foregroundColor(.white)
                     .lineLimit(1)   // الاسم سطر واحد في كل المربّعات (يصغر قليلاً إن ضاق)
                     .minimumScaleFactor(0.7)

@@ -560,7 +560,7 @@ struct AdminNotificationsView: View {
                     Text(member.displayFullName)
                         .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
-                        .lineLimit(1)
+                        .dsNameLines()
 
                     if let phone = member.phoneNumber, !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         HStack(spacing: DS.Spacing.xs) {

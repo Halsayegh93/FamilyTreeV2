@@ -676,7 +676,9 @@ struct ProfileView: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSStateIcon(icon, tint: color, size: DS.Icon.rowLarge)
                     .accessibilityHidden(true)   // زخرفة — العنوان يكفي للقارئ الصوتي
-                Text(title).dsFont(.chip).foregroundColor(color.dsReadableGlyph).lineLimit(1)
+                Text(title).dsFont(.chip).foregroundColor(color.dsReadableGlyph)
+                    // سطران مع الخط الكبير بدل «…» (مقاسات Apple، ٢٠٢٦-١٠-٠٨)
+                    .lineLimit(2).minimumScaleFactor(0.85).fixedSize(horizontal: false, vertical: true)
             }
             // خانة إضافة: صندوق الصفوف بإطار متقطّع بلونها (نفس خانات «+» المشتركة)
             .profileCell(dashed: color)

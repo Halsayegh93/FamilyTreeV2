@@ -70,10 +70,10 @@ struct DSSegmentedSwitch<ID: Hashable>: View {
             .strokeBorder(DS.Color.textTertiary.opacity(colorScheme == .dark ? 0.28 : 0.18), lineWidth: 1))
         .shadow(color: .black.opacity(colorScheme == .dark || size == .compact ? 0 : 0.05), radius: 8, x: 0, y: 3)
         if size == .compact {
-            // بعرض نصّه وحجم خط ثابت (كان تبويب الشجرة لا يكبر مع الخط فلا يدفع أزرار الشريط)
-            bar.fixedSize().dynamicTypeSize(.large)
+            // بعرض نصّه، ويتبع «حجم النص» في الجهاز (طلب المالك ٢٠٢٦-١٠-٠٨) بسقف لا يدفع أزرار شريط الشجرة
+            bar.fixedSize().dynamicTypeSize(...DynamicTypeSize.xLarge)
         } else {
-            bar.dynamicTypeSize(...DynamicTypeSize.large)
+            bar.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
     }
 
@@ -110,7 +110,8 @@ struct DSSegmentedSwitch<ID: Hashable>: View {
             .foregroundColor(selected ? .white : DS.Color.textSecondary)
             .padding(.horizontal, size == .compact ? DS.Spacing.sm : 0)
             .frame(maxWidth: size == .compact ? nil : .infinity)
-            .frame(height: height)
+            // حدّ أدنى — يطول مع «حجم النص» في الجهاز بدل أن يُقصّ النص (فحص ٢٠٢٦-١٠-٠٨)
+            .frame(minHeight: height)
             .background {
                 if selected {
                     Capsule()

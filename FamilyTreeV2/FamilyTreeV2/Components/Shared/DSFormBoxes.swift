@@ -65,8 +65,9 @@ extension EnvironmentValues {
 }
 
 enum DSFieldFont {
-    /// كم تصغر عناوين الحقول وقيمها داخل المربّعات (كان ١ — «صغّر خطوط المربّعات شوي»، طلب المالك ٢٠٢٦-١٠-٠٧)
-    static let boxReduction: CGFloat = 2
+    /// كم تصغر عناوين الحقول وقيمها داخل المربّعات — ٠: مقاسات Apple الافتراضية في كل مكان
+    /// (طلب المالك ٢٠٢٦-١٠-٠٨ «حجم الخط الافتراضي في الآيفون»؛ كانت ٢ ثم ١)
+    static let boxReduction: CGFloat = 0
 }
 
 /// صناديق الحقول داخل المربّعات أصغر قليلاً أيضاً (طلب المالك: «وحتى المربعات بعد شوي»)
@@ -92,7 +93,23 @@ private struct DSFieldFontModifier: ViewModifier {
     @Environment(\.dsInCenterBox) private var inBox
 
     func body(content: Content) -> some View {
-        content.font(DS.Font.plex(inBox ? size - DSFieldFont.boxReduction : size, weight: weight))
+        // الحجم هنا مقاس Apple لدور (`DSBox.fieldValueSize` ١٧ = Body، `fieldLabelSize` ١٣ = Footnote) — يُرسم
+        // بمعامل خط الآيفون نفسه كباقي الأدوار ومقيّداً بنمطه (فحص ٢٠٢٦-١٠-٠٨: كان بلا المعامل فيظهر عنوان
+        // الحقل وقيمته أكبر ١١٪ من بقية نص المربّع)
+        let base = inBox ? size - DSFieldFont.boxReduction : size
+        content.font(DS.Font.plex(base * DS.Font.opticalScale, weight: weight,
+                                  relativeTo: DS.Font.textStyle(for: size)))
+    }
+}
+
+/// خط دور النص للحقل — بنمط Apple للدور (Dynamic Type)، و`boxReduction` داخل المربّعات
+struct DSFieldRoleFontModifier: ViewModifier {
+    let role: DS.TextRole
+    @Environment(\.dsInCenterBox) private var inBox
+
+    func body(content: Content) -> some View {
+        content.font(DS.Font.plex(inBox ? role.textSize - DSFieldFont.boxReduction : role.textSize,
+                                  weight: role.weight, relativeTo: role.style))
     }
 }
 
@@ -403,8 +420,9 @@ struct DSGenderPicker: View {
             }
             .foregroundColor(selected ? tint : DS.Color.textSecondary)
             .padding(.horizontal, DS.Spacing.md)
-            .frame(height: inBox ? DSFieldMetrics.optionRowHeight - DSFieldMetrics.boxHeightReduction
-                                 : DSFieldMetrics.optionRowHeight)
+            // حدّ أدنى يطول مع «حجم النص» في الجهاز (كان ارتفاعاً ثابتاً يضيق على «ذكر/أنثى» بالخط الكبير)
+            .frame(minHeight: inBox ? DSFieldMetrics.optionRowHeight - DSFieldMetrics.boxHeightReduction
+                                    : DSFieldMetrics.optionRowHeight)
             .background(selected ? tint.opacity(DS.Opacity.tintFill) : DS.Color.background,
                         in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(

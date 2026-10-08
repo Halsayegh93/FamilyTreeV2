@@ -15,7 +15,9 @@ struct PhoneNumberTextField: UIViewRepresentable {
         let tf = UITextField()
         tf.delegate = context.coordinator
         tf.placeholder = placeholder
-        tf.font = font
+        // يتبع «حجم النص» في الجهاز (يكبر ويصغر معه)
+        tf.adjustsFontForContentSizeCategory = true
+        tf.font = UIFontMetrics.default.scaledFont(for: font)
         tf.keyboardType = keyboardType
         tf.textAlignment = textAlignment
         tf.textColor = UIColor(DS.Color.textPrimary)
@@ -35,7 +37,7 @@ struct PhoneNumberTextField: UIViewRepresentable {
         if uiView.text != text {
             uiView.text = text
         }
-        uiView.font = font
+        uiView.font = UIFontMetrics.default.scaledFont(for: font)
         uiView.placeholder = placeholder
     }
 
@@ -86,11 +88,13 @@ struct DSPhoneField: View {
     /// بدون إطار/خلفية — للاستخدام داخل صف على سطر واحد.
     var bordered: Bool = true
 
-    private var fieldHeight: CGFloat { compact ? 44 : 56 }
-    private var innerHeight: CGFloat { compact ? 30 : 40 }
-    private var numberFontSize: CGFloat { compact ? 15 : 18 }
+    /// نسبة «حجم النص» في الجهاز — الحقل يطول مع الخط الأكبر (ولا يقصر عن مقاسه تحت الافتراضي)
+    @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
+    private var fieldHeight: CGFloat { (compact ? 44 : 56) * max(1, textScale) }
+    private var innerHeight: CGFloat { (compact ? 30 : 40) * max(1, textScale) }
+    /// أرقام الهاتف: سقف النص ١٧ (Body) — المضغوط ١٥ (طلب المالك ٢٠٢٦-١٠-٠٨؛ كانت ١٨)
+    private var numberFontSize: CGFloat { compact ? DS.TextRole.subtitle.size : DS.TextRole.body.size }
     private var flagFontSize: CGFloat { compact ? 15 : 18 }
-    private var codeFontSize: CGFloat { compact ? 13 : 15 }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -107,7 +111,7 @@ struct DSPhoneField: View {
                 HStack(spacing: DS.Spacing.xs) {
                     Text(country.flag).font(DS.Font.scaled(flagFontSize))
                     Text(country.dialingCode)
-                        .font(DS.Font.scaled(codeFontSize, weight: .bold))
+                        .dsFont(compact ? .chip : .bodySemibold)
                         .foregroundStyle(DS.Color.textPrimary)
                     Image(systemName: "chevron.down")
                         .font(DS.Font.scaled(compact ? 9 : 10, weight: .bold))

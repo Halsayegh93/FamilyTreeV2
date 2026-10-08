@@ -108,7 +108,7 @@ struct AdminPushHealthView: View {
                 DSRing(progress: Double(rate) / 100, tint: color, lineWidth: DS.Spacing.sm, size: DS.Icon.ring) {
                     VStack(spacing: 0) {
                         Text("\(rate)%")
-                            .dsFont(.emptyTitle)
+                            .dsFont(.statValue)
                             .foregroundColor(DS.Color.fieldLabel)
                             .monospacedDigit()
                         Text(L10n.t("معدل الصحة", "Health Rate"))
@@ -288,7 +288,7 @@ struct AdminPushHealthView: View {
                 Text(owner.fullName)
                     .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
-                    .lineLimit(1)
+                    .dsNameLines()
                 Text("\(owner.deviceName) · \(formatRelative(owner.updatedAt))")
                     .dsFieldFont(.footnote)
                     .foregroundColor(DS.Color.fieldValue)

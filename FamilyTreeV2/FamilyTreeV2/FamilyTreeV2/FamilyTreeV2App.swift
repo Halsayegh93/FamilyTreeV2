@@ -60,6 +60,18 @@ struct FamilyTreeV2App: App {
                     applyWindowStyle()
                     // الضغط في أي مكان يُخفي لوحة المفاتيح (طلب المالك)
                     KeyboardDismisser.shared.install()
+                    // بلا اتصال: شاشة البداية فوق التطبيق حتى يرجع (طلب المالك ٢٠٢٦-١٠-٠٨)
+                    OfflineHold.shared.install(authVM: appState.authVM)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .networkRestoredAfterHold)) { _ in
+                    Task {
+                        await self.appState.authVM.checkUserProfile()
+                        guard self.appState.authVM.status == .fullyAuthenticated else { return }
+                        async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
+                        async let n: () = self.appState.newsVM.fetchNews(force: true)
+                        async let notif: () = self.appState.notificationVM.fetchNotifications(force: true)
+                        _ = await (m, n, notif)
+                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                     Task {

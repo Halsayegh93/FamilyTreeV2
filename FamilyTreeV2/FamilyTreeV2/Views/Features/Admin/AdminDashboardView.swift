@@ -573,7 +573,7 @@ struct AdminDashboardView: View {
         }
         .foregroundColor(color)
         .padding(.horizontal, DS.Spacing.sm)
-        .frame(height: DSBox.chipHeightCompact)
+        .frame(minHeight: DSBox.chipHeightCompact)
         .background(Capsule().fill(color.opacity(DS.Opacity.tintFill)))
         .accessibilityElement(children: .combine)
     }

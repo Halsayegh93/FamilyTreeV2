@@ -170,7 +170,7 @@ struct ProjectPhotosMosaic: View {
                     ZStack {
                         DS.Color.shadowHeavy
                         Text("+\(extra)")
-                            .dsFont(.emptyTitle)
+                            .dsFont(.statValue)
                             .foregroundColor(DS.Color.textOnPrimary)
                     }
                 }

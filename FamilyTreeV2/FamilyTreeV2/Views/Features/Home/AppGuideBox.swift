@@ -22,6 +22,8 @@ import SwiftUI
 struct AppGuideBox: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// ارتفاع شريحة النقطة يكبر مع خط الجهاز (نص النقطة بمقاس Apple — ٢٠٢٦-١٠-٠٨) فلا يُقصّ سطرها الثالث
+    @ScaledMetric(relativeTo: .body) private var slideHeight: CGFloat = GuideMetrics.slideHeight
     @State private var page = 0
     @State private var section: InfoSection = .about
     /// الفصل المفتوح — nil = صفحة الترحيب وقائمة الفصول
@@ -131,7 +133,7 @@ struct AppGuideBox: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: GuideMetrics.slideHeight)   // بطاقة النقطة كاملة مع ظلّها
+                .frame(height: slideHeight)   // بطاقة النقطة كاملة مع ظلّها
                 .id(chapter.id)          // فصل جديد = صفحات جديدة من أولها
             }
             .padding(.bottom, DS.Spacing.xs)
@@ -165,7 +167,7 @@ struct AppGuideBox: View {
             }
             .foregroundColor(chapter.tint.dsReadableGlyph)
             .padding(.horizontal, DSBox.chipPadding)
-            .frame(height: DSBox.chipHeight)
+            .frame(minHeight: DSBox.chipHeight)
             .background(Capsule().fill(chapter.tint.dsReadableGlyph.opacity(DS.Opacity.tintFill)))
         }
     }
@@ -1126,8 +1128,9 @@ private struct GuideToolbarScene: View {
 
 /// مقاسات رسوم الدليل (لوحات متحرّكة — ليست أجزاء واجهة): مكانها الواحد هنا
 private enum GuideMetrics {
-    /// شريحة النقطة كاملة مع ظلّها، ولقطتها داخلها
-    static let slideHeight: CGFloat = 376
+    /// شريحة النقطة كاملة مع ظلّها (في الحجم الافتراضي — يكبر مع خط الجهاز)، ولقطتها داخلها؛
+    /// ٣٧٦ ← ٤٠٤: ثلاثة أسطر من نص النقطة بمقاس Apple (Body ١٧) تحت اللقطة
+    static let slideHeight: CGFloat = 404
     static let visualHeight: CGFloat = 252
     /// شعار صفحة الترحيب، ورسم «أنهيت الفصل»
     static let welcomeArtHeight: CGFloat = 118

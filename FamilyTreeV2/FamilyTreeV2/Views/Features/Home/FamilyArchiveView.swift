@@ -512,7 +512,7 @@ struct FamilyArchiveView: View {
             }
             .foregroundColor(DS.Color.textOnPrimary)
             .padding(.horizontal, DS.Spacing.sm)
-            .frame(height: DS.Icon.section)
+            .frame(minHeight: DS.Icon.section)   // يطول مع «حجم النص» بدل قصّ الاسم
             .background(
                 UnevenCorners(radius: DS.Radius.sm, bottomLeading: true, bottomTrailing: true)
                     .fill(accent)
@@ -590,7 +590,7 @@ struct FamilyArchiveView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, DS.Spacing.sm)
-        .frame(height: DS.Icon.discSmall)
+        .frame(minHeight: DS.Icon.discSmall)   // يطول مع «حجم النص» بدل قصّ الاسم
         .frame(maxWidth: .infinity)
         .background(accent.opacity(DS.Opacity.tintFill))
     }

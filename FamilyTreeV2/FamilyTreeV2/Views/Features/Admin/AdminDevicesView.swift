@@ -204,7 +204,7 @@ struct AdminDevicesView: View {
                     Text(group.member?.displayFullName ?? t("عضو غير معروف", "Unknown Member"))
                         .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
-                        .lineLimit(1)
+                        .dsNameLines()
 
                     HStack(spacing: DS.Spacing.xs) {
                         if let member = group.member {

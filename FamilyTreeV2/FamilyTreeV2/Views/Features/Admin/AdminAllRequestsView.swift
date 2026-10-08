@@ -2399,7 +2399,7 @@ struct AdminAllRequestsView: View {
                 Text(match.member.displayFullName)
                     .dsFieldFont(.rowTitleCompact)
                     .foregroundColor(DS.Color.fieldLabel)
-                    .lineLimit(1)
+                    .dsNameLines()
 
                 HStack(spacing: DS.Spacing.xs) {
                     Text(L10n.t(

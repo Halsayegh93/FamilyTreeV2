@@ -1070,11 +1070,17 @@ private struct FamilyRequestCard: View {
     let onCancel: () -> Void
     let onSend: (String) -> Void
     @State private var selected: String?
+    /// ارتفاع القائمة الفعلي — يُقاس فيطول مع «حجم النص» في الجهاز (كان تقديراً ثابتاً ٤٤ للصفّ)
+    @State private var listHeight: CGFloat = 0
 
     var body: some View {
         DSCenterCard(onBackgroundTap: onCancel, title: L10n.t("طلب تغيير العائلة", "Request family change"),
                      icon: "person.3.fill") {
 
+            if options.isEmpty {
+                // لا عوائل معتمدة بعد (أو تعذّر الجلب) — كان المربّع فارغاً بين الرأس والأزرار
+                DSEmptyView(L10n.t("لا توجد عوائل بعد", "No families yet"), style: .inline)
+            } else {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.sm) {
                     ForEach(options, id: \.self) { name in
@@ -1103,10 +1109,11 @@ private struct FamilyRequestCard: View {
                         .accessibilityAddTraits(selected == name ? .isSelected : [])
                     }
                 }
+                .readHeight($listHeight)
             }
             // على قدر المحتوى (طلب المالك) — التمرير فقط لو زادت عن ثلثي الشاشة
-            .frame(height: min(CGFloat(options.count) * (DS.Icon.tapTarget + DS.Spacing.sm) - DS.Spacing.sm,
-                               UIScreen.main.bounds.height * 0.62))
+            .frame(height: min(listHeight, UIScreen.main.bounds.height * 0.62))
+            }
 
             // صفّ أزرار الهيكل الموحّد (نفس ترتيب وشكل كل المربّعات)
             DSBoxButtons {

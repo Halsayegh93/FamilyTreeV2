@@ -9,14 +9,9 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        ZStack(alignment: .top) {
-            NavigationStack {
-                RootView()
-            }
-
-            OfflineBanner()
-                .padding(.top, DS.Spacing.xxxl)
-                .animation(DS.Anim.snappy, value: NetworkMonitor.shared.isConnected)
+        // بلا اتصال: شاشة البداية فوق كل شيء (`OfflineHold`) بدل شريطي الاتصال
+        NavigationStack {
+            RootView()
         }
     }
 }

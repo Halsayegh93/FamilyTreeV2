@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SplashScreenView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    /// بلا اتصال بالشبكة (`OfflineHold`): نفس الشاشة، ومكان النقاط صفحة «لا يوجد اتصال» بالأيقونة
+    var waitingForNetwork = false
     /// شعار التطبيق — الحلقات حوله نِسَب منه
     private let logo = DS.Icon.appLogo
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -138,7 +140,14 @@ struct SplashScreenView: View {
                 Spacer()
 
                 // التحقق علق (بلا اتصال أو الخادم لا يرد) → رسالة و«إعادة المحاولة» بدل الدوران بلا نهاية (ج-٦)
-                if authVM.launchCheckStalled {
+                if waitingForNetwork {
+                    // بلا اتصال: صفحة «لا يوجد اتصال» بالأيقونة (طلب المالك ٢٠٢٦-١٠-٠٨) — بلا زر، تكمل وحدها
+                    DSEmptyView(L10n.t("لا يوجد اتصال", "No Connection"),
+                                message: L10n.t("يكمل التطبيق تلقائياً عند عودة الاتصال.",
+                                                "The app continues automatically once you're back online."),
+                                icon: "wifi.slash", tint: DS.Color.warning, compact: true)
+                        .opacity(textOpacity)
+                } else if authVM.launchCheckStalled {
                     connectionProblem
                         .opacity(textOpacity)
                 } else {
@@ -156,10 +165,14 @@ struct SplashScreenView: View {
                                     .animation(reduceMotion ? .easeInOut(duration: 0.25) : DS.Anim.bouncy, value: dotCount)
                             }
                         }
-                        Text(L10n.t("جاري التحقق", "Verifying") + String(repeating: ".", count: dotCount))
+                        // العرض محجوز للنص بنقاطه الثلاث (يتبع حجم خط الجهاز) — لا يقفز النص مع النقاط
+                        Text(statusText + "...")
+                            .hidden()
+                            .overlay(alignment: .leading) {
+                                Text(statusText + String(repeating: ".", count: dotCount))
+                            }
                             .dsFont(.callout)
                             .foregroundColor(DS.Color.textSecondary)
-                            .frame(width: 140)
                             .animation(.none, value: dotCount)
                     }
                     .opacity(textOpacity)
@@ -223,6 +236,8 @@ struct SplashScreenView: View {
             }
         }
     }
+
+    private var statusText: String { L10n.t("جاري التحقق", "Verifying") }
 
     /// التحقق علق (ج-٦): بلا اتصال والجلسة تحتاج تجديداً، أو الخادم لا يرد — التطبيق يعيد المحاولة
     /// تلقائياً كل لحظات ويكمل وحده عند عودة الاتصال، وهذا الزر يعيدها فوراً.

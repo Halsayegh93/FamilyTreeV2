@@ -473,7 +473,7 @@ struct AdminMemberDetailSheet: View {
                                 Text(father.displayFullName)
                                     .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
                                     .foregroundColor(DS.Color.textPrimary)
-                                    .lineLimit(1)
+                                    .dsNameLines()
                             } else {
                                 Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
                                     .dsFieldFont(.body)
@@ -1437,7 +1437,7 @@ private struct FatherPickerRow: View, Equatable {
                 Text(member.displayFullName)
                     .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
                     .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
-                    .lineLimit(1)
+                    .dsNameLines()
                     .truncationMode(.tail)
 
                 Spacer(minLength: DS.Spacing.xs)

@@ -790,6 +790,9 @@ struct HomeNewsView: View {
                 }
                 .disabled(newsVM.isLoadingMoreNews || newsVM.isLoadingNews)
                 .padding(.horizontal, DS.Spacing.lg)
+                // يترك مكان زرّ الإضافة العائم في طرفه — كان الزرّ العائم فوق «تحميل أخبار أقدم» (فحص ٢٠٢٦-١٠-٠٨)
+                .padding(.trailing, authVM.currentUser?.role != .pending
+                         ? DS.Icon.floatingButton + DS.Spacing.xl - DS.Spacing.sm : 0)
                 .padding(.vertical, DS.Spacing.sm)
                 .background(DS.Color.background)
             }

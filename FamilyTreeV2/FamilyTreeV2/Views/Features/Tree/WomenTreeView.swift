@@ -26,12 +26,30 @@ struct WomenTreeView: View {
                         .dsStaggerIn(0)
                 }
             } else if allMembers.isEmpty {
-                ZStack {
-                    DS.Color.background.ignoresSafeArea()
+                // الرأس ومبدّل [شجرة العائلة / النساء] يبقيان — كانت الحالة الفارغة (أو فشل الجلب) بلا رأس ولا
+                // مبدّل، فيعلق المستخدم في «النساء» ولا يرجع لشجرة العائلة (فحص ٢٠٢٦-١٠-٠٨)
+                VStack(spacing: 0) {
+                    if verticalSizeClass != .compact {
+                        MainHeaderView(
+                            selectedTab: $selectedTab,
+                            showingNotifications: $showingNotifications,
+                            title: L10n.t("النساء", "Women"),
+                            subtitle: nil,
+                            icon: AppSection.tree.symbol,
+                            backgroundGradient: AppSection.tree.gradient,
+                            subtitleChip: true
+                        )
+                    }
+                    if let treeTab {
+                        FamilyTreeTabBar(selection: treeTab)
+                            .padding(.top, DS.Spacing.sm)
+                    }
                     DSEmptyView(L10n.t("لا توجد بيانات للنساء بعد", "No women data yet"), section: .tree)
                         // الحالة الفارغة تدخل بتلاشٍ وصعود خفيف — «تقليل الحركة»: تلاشٍ فقط
                         .dsStaggerIn(0)
+                        .frame(maxHeight: .infinity)
                 }
+                .background(DS.Color.background.ignoresSafeArea())
             } else {
                 VStack(spacing: 0) {
                     // الوضع الأفقي: بلا هيدر — مساحة كاملة للشجرة (طلب المالك)
@@ -576,7 +594,7 @@ private struct WomanDetailSheet: View {
                 .lineLimit(1)
                 .foregroundColor(color)
                 .padding(.horizontal, DSBox.chipPadding)
-                .frame(height: DSBox.chipHeight)
+                .frame(minHeight: DSBox.chipHeight)
                 .background(Capsule().fill(color.opacity(DS.Opacity.tintFill)))
                 .overlay(Capsule().strokeBorder(color.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
                 .accessibilityElement(children: .combine)   // الحبّة تُقرأ جملةً واحدة

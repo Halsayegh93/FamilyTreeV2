@@ -63,7 +63,7 @@ struct DSStatTile: View {
                 }
             }
             Text(value)
-                .dsFont(.emptyTitle)
+                .dsFont(.statValue)
                 .foregroundColor(DS.Color.fieldLabel)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -175,7 +175,7 @@ struct DSFilterChips<ID: Hashable>: View {
                         .foregroundColor(selected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                         .padding(.horizontal, DSBox.chipPadding)
                         // ارتفاع الشريحة الواحدة (`DSBox.chipHeight`) — كان ٣٦
-                        .frame(height: DSBox.chipHeight)
+                        .frame(minHeight: DSBox.chipHeight)
                         .background {
                             if selected {
                                 Capsule().fill(DSActionFill.style())

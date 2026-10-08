@@ -829,7 +829,7 @@ struct WomenClassicTreeView: View {
             }
         }
         // نصوص العقدة بمقاسها الثابت مثل خطوط النظام سابقاً — الكانفس يُكبَّر بالقرص لا بحجم الخط
-        .dynamicTypeSize(.large)
+        .dynamicTypeSize(.dsTreeNode)
         .frame(width: NODE_W, height: layout.heights[m.id] ?? NODE_H, alignment: .top)  // ارتفاع ثابت → الأسماء بنفس المستوى
         .position(x: p.x + NODE_W / 2, y: p.y + (layout.heights[m.id] ?? NODE_H) / 2)
         // دخول متدرّج: أبناء العقدة المتوسّعة ينزلون واحدًا بعد الآخر

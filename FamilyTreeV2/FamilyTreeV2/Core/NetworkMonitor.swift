@@ -12,6 +12,8 @@ final class NetworkMonitor: ObservableObject {
 
     @Published private(set) var isConnected: Bool = true
     @Published private(set) var connectionType: NWInterface.InterfaceType?
+    /// وصلت أول قراءة للشبكة — قبلها `isConnected` افتراضي (true) لا حقيقي
+    @Published private(set) var hasStatus: Bool = false
 
     /// فلاج عام لإظهار alert "لا يوجد اتصال" — أي ViewModel يستدعي
     /// `requireOnline()` يضبط هذا الفلاج، وRootView يعرض الـalert.
@@ -43,7 +45,8 @@ final class NetworkMonitor: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let wasConnected = self.isConnected
-                self.isConnected = path.status == .satisfied
+                self.isConnected = self.debugForced ?? (path.status == .satisfied)
+                self.hasStatus = true
 
                 if path.usesInterfaceType(.wifi) {
                     self.connectionType = .wifi
@@ -64,7 +67,28 @@ final class NetworkMonitor: ObservableObject {
             }
         }
         monitor.start(queue: queue)
+        #if DEBUG
+        scheduleDebugOffline()
+        #endif
     }
+
+    /// تجربة المحاكي فقط: `-tmpOfflineFrom <ث> -tmpOfflineTo <ث>` — انقطاع مصطنع بين الثانيتين
+    private var debugForced: Bool?
+
+    #if DEBUG
+    private func scheduleDebugOffline() {
+        let d = UserDefaults.standard
+        guard d.object(forKey: "tmpOfflineFrom") != nil else { return }
+        let from = d.double(forKey: "tmpOfflineFrom"), to = d.double(forKey: "tmpOfflineTo")
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(from * 1e9))
+            debugForced = false; isConnected = false; hasStatus = true
+            guard to > from else { return }
+            try? await Task.sleep(nanoseconds: UInt64((to - from) * 1e9))
+            debugForced = nil; isConnected = true
+        }
+    }
+    #endif
 
     deinit {
         monitor.cancel()

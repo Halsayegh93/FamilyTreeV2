@@ -470,7 +470,7 @@ struct MemberDetailsView: View {
                 .lineLimit(1)
                 .foregroundColor(color)
                 .padding(.horizontal, DSBox.chipPadding)
-                .frame(height: DSBox.chipHeight)
+                .frame(minHeight: DSBox.chipHeight)
                 .background(Capsule().fill(color.opacity(DS.Opacity.tintFill)))
                 .overlay(Capsule().strokeBorder(color.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
                 .accessibilityElement(children: .combine)   // الحبّة تُقرأ جملةً واحدة

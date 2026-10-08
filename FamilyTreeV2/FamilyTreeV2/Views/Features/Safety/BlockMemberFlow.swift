@@ -184,8 +184,7 @@ struct BlockedMembersSection: View {
                 Text(entry.name)
                     .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .dsNameLines()
                 Text(L10n.t("محظور منذ \(Self.dateText(entry.blockedAt))",
                             "Blocked since \(Self.dateText(entry.blockedAt))"))
                     .dsFont(.footnote)

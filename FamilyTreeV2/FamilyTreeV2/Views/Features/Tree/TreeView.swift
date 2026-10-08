@@ -1188,6 +1188,8 @@ struct TreeView: View {
         )
         // العقدة لا يُعاد بناؤها مع كل إطار سحب/تكبير ما لم تتغيّر بياناتها (فحص «اللاق»)
         .equatable()
+        // نصوص العقدة بمقاس رسم ثابت (مثل شجرة النساء) — أبعاد العقدة ثابتة والكانفس يُكبَّر بالقرص
+        .dynamicTypeSize(.dsTreeNode)
         .frame(width: NODE_W, height: h, alignment: .top)
         .position(x: p.x + NODE_W / 2, y: p.y + h / 2)
     }

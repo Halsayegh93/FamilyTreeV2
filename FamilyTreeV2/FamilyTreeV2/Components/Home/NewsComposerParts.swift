@@ -130,7 +130,7 @@ struct NewsPollPreview: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, DS.Spacing.sm)
-                .frame(height: DSBox.chipHeight)
+                .frame(minHeight: DSBox.chipHeight)   // يطول مع «حجم النص» بدل قصّ الخيار
                 .background(
                     // شريط نسبة تجميلي (معاينة شكل التصويت)
                     GeometryReader { g in

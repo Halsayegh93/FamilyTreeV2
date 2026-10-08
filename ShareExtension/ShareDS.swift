@@ -42,23 +42,32 @@ enum ShareDS {
     }
 
     // MARK: الخط — IBM Plex Sans Arabic بأدوار النص (`DS.TextRole`)
+    // = مقاسات Apple الافتراضية (حجم النص «كبير») مقيّدة بنمطها — تتبع «حجم النص» في الجهاز
+    // (طلب المالك ٢٠٢٦-١٠-٠٨ «حجم الخط الافتراضي في الآيفون»)
     struct TextRole {
         let size: CGFloat
         let weight: Font.Weight
+        let style: Font.TextStyle
 
-        static let title           = TextRole(size: 17, weight: .bold)      // عنوان رأس المربّع
-        static let subtitle        = TextRole(size: 12, weight: .regular)   // وصف رأس المربّع
-        static let headline        = TextRole(size: 15, weight: .bold)
-        static let body            = TextRole(size: 14, weight: .regular)
-        static let rowTitle        = TextRole(size: 13.5, weight: .bold)
-        static let callout         = TextRole(size: 13, weight: .regular)
-        static let chip            = TextRole(size: 12, weight: .bold)
-        static let caption         = TextRole(size: 11, weight: .semibold)
-        static let footnote        = TextRole(size: 11, weight: .regular)
-        static let boxSectionTitle = TextRole(size: 11, weight: .bold)
-        static let fieldLabel      = TextRole(size: 11.5, weight: .heavy)   // `DSBox.fieldLabelSize`
-        static let fieldValue      = TextRole(size: 14, weight: .regular)   // `DSBox.fieldValueSize`
-        static let button          = TextRole(size: 15, weight: .bold)
+        init(_ style: Font.TextStyle, weight: Font.Weight = .regular) {
+            self.size = Typeface.appleSize(style)
+            self.weight = weight
+            self.style = style
+        }
+
+        static let title           = TextRole(.headline, weight: .bold)      // عنوان رأس المربّع — ١٧
+        static let subtitle        = TextRole(.subheadline)                  // وصف رأس المربّع — ١٥
+        static let headline        = TextRole(.headline, weight: .bold)      // ١٧
+        static let body            = TextRole(.body)                         // ١٧
+        static let rowTitle        = TextRole(.body, weight: .semibold)      // ١٧
+        static let callout         = TextRole(.callout)                      // ١٦
+        static let chip            = TextRole(.subheadline, weight: .semibold) // ١٥
+        static let caption         = TextRole(.caption, weight: .semibold)   // ١٢
+        static let footnote        = TextRole(.footnote)                     // ١٣
+        static let boxSectionTitle = TextRole(.footnote, weight: .bold)      // ١٣
+        static let fieldLabel      = TextRole(.footnote, weight: .heavy)     // `DSBox.fieldLabelSize` — ١٣
+        static let fieldValue      = TextRole(.body)                         // `DSBox.fieldValueSize` — ١٧
+        static let button          = TextRole(.body, weight: .semibold)      // ١٧
     }
 
     enum Typeface {
@@ -67,30 +76,59 @@ enum ShareDS {
         static let semibold = "IBMPlexSansArabic-SemiBold"
         static let bold     = "IBMPlexSansArabic-Bold"
 
-        /// = `DS.Font.plex` (مع Dynamic Type)
-        static func plex(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-            let name: String
+        static func name(_ weight: Font.Weight) -> String {
             switch weight {
-            case .black, .heavy, .bold: name = bold
-            case .semibold:             name = semibold
-            case .medium:               name = medium
-            default:                    name = regular
+            case .black, .heavy, .bold: return bold
+            case .semibold:             return semibold
+            case .medium:               return medium
+            default:                    return regular
             }
-            return .custom(name, size: size, relativeTo: textStyle(for: size))
         }
 
-        static func role(_ role: TextRole) -> Font { plex(role.size, weight: role.weight) }
+        /// = `DS.Font.plex` (مع Dynamic Type)
+        static func plex(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+            .custom(name(weight), size: size, relativeTo: textStyle(for: size))
+        }
+
+        /// = `DS.Font.opticalScale` — مطابقة خط الآيفون بالعين (خط الهوية أكبر بصرياً بنفس الرقم)
+        static let opticalScale: CGFloat = 0.9
+
+        /// = `DS.Font.role` — حجم Apple الافتراضي للدور × معامل المطابقة، مقيّداً بنمطه
+        static func role(_ role: TextRole) -> Font {
+            .custom(name(role.weight), size: role.size * opticalScale, relativeTo: role.style)
+        }
+
+        /// = `DS.Font.appleSize`
+        static func appleSize(_ style: Font.TextStyle) -> CGFloat {
+            switch style {
+            case .largeTitle:  return 34
+            case .title:       return 28
+            case .title2:      return 22
+            case .title3:      return 20
+            case .headline:    return 17
+            case .body:        return 17
+            case .callout:     return 16
+            case .subheadline: return 15
+            case .footnote:    return 13
+            case .caption:     return 12
+            case .caption2:    return 11
+            @unknown default:  return 17
+            }
+        }
 
         /// = `DS.Font.textStyle(for:)`
         static func textStyle(for size: CGFloat) -> Font.TextStyle {
             switch size {
+            case ..<11.5: return .caption2
             case ..<12.5: return .caption
-            case ..<13.5: return .footnote
+            case ..<14:   return .footnote
             case ..<15.5: return .subheadline
             case ..<16.5: return .callout
-            case ..<17.5: return .body
-            case ..<19.5: return .headline
-            default:      return .title3
+            case ..<18.5: return .body
+            case ..<21:   return .title3
+            case ..<25:   return .title2
+            case ..<31:   return .title
+            default:      return .largeTitle
             }
         }
     }

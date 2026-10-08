@@ -107,8 +107,10 @@ struct DSSubPageHeader<Trailing: View>: View {
                         Text(subtitle)
                             .font(DSBox.pageSubtitleFont)
                             .foregroundColor(DS.Color.overlayText)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            // الوصف الطويل سطران (الرأس يطول — `minHeight`) بدل «…» مع مقاسات Apple
+                            .lineLimit(compact ? 1 : DSBox.pageSubtitleLines)
+                            .minimumScaleFactor(0.8)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .accessibilityElement(children: .combine)
