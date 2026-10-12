@@ -313,15 +313,16 @@ struct OccasionComposerView: View {
     // MARK: الاسم (من الشجرة أو كتابة)
 
     private func nameSection(_ title: String) -> some View {
-        OccasionFormCard(title: title, hint: L10n.t("يطلع بسطر واحد ويصغر تلقائياً إذا طال", "One line — shrinks automatically when long")) {
+        OccasionFormCard(title: title, hint: L10n.t("بسطر واحد — أقصى شي ٦ أسماء ويصغر تلقائياً", "One line — up to 6 names, shrinks automatically")) {
             if let m = vm.member {
+                let formats = OccasionNameFormat.distinct(for: m)
                 selectedMember(m)
                 OccasionFieldLabel(L10n.t("صيغة الاسم", "Name format"))
                 OccasionChips(
-                    options: OccasionNameFormat.allCases.map { "\($0.label) — \($0.apply(m))" },
-                    selected: OccasionNameFormat.allCases.firstIndex(of: vm.nameFormat) ?? 0
+                    options: formats.map { "\($0.format.label) — \($0.text)" },
+                    selected: formats.firstIndex { $0.text == vm.name } ?? 0
                 ) { i in
-                    vm.nameFormat = OccasionNameFormat.allCases[i]
+                    vm.nameFormat = formats[i].format
                 }
             } else {
                 if vm.gender == .male && !vm.family.isEmpty {
