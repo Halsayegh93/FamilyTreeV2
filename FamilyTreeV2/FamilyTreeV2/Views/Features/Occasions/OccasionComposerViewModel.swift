@@ -13,7 +13,7 @@ final class OccasionComposerViewModel: ObservableObject {
     @Published var form = OccasionForm()
     /// العضو المختار من شجرة العائلة (رجال)
     @Published private(set) var member: FamilyMember?
-    @Published var nameFormat: OccasionNameFormat = .three
+    @Published var nameFormat: OccasionNameFormat = OccasionNameFormat.defaultFormat
     @Published var photo = OccasionPhoto()
     /// الصورة الحالية صورة العضو من الشجرة (مو صورة اختارها المستخدم)
     @Published private(set) var photoFromMember = false
@@ -121,7 +121,7 @@ final class OccasionComposerViewModel: ObservableObject {
         form = OccasionForm()
         member = nil
         autoRelations = [:]
-        nameFormat = .three
+        nameFormat = OccasionNameFormat.defaultFormat
         if photoFromMember {
             photo = OccasionPhoto(gray: keepGray)
             photoFromMember = false
