@@ -46,7 +46,8 @@ struct OccasionPostView: View {
 
     // MARK: أدوات
 
-    private func value(_ key: String) -> String { values[key] ?? "" }
+    /// النص النهائي للبوست: بدون تشكيل (الخط ما يضبطه) و«المحمد علي» ما ينقسم — نفس postText في الموقع
+    private func value(_ key: String) -> String { OccasionText.postText(values[key] ?? "") }
 
     private func has(_ key: String) -> Bool {
         !value(key).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -108,6 +109,22 @@ struct OccasionPostView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// الاسم بسطر واحد: يصغر تلقائياً لين يدخل بالعرض (٧ أو ٩ أسماء) — مثل FitLine في الموقع
+    private func fitLine(_ string: String, _ weight: OccasionKit.FontWeight, maxSize: CGFloat, minSize: CGFloat,
+                         width: CGFloat, color: Color, lineHeight: CGFloat) -> some View {
+        let size = OccasionText.fitSize(string, weight: weight, maxSize: maxSize, minSize: minSize, width: width)
+        return Text(string)
+            .font(.custom(weight.postScriptName, fixedSize: size))
+            .foregroundColor(color)
+            .lineLimit(1)
+            // احتياط لو اختلف القياس شوي عن الرسم
+            .minimumScaleFactor(0.6)
+            .multilineTextAlignment(.center)
+            .environment(\.layoutDirection, .rightToLeft)
+            .occasionLineBox(weight, size: size, lineHeight: lineHeight)
+            .frame(maxWidth: width)
+    }
+
     // MARK: التهاني (عقد قران، مولود، مولودة، أجر وعافية، تخرج)
 
     private var happyPost: some View {
@@ -120,9 +137,9 @@ struct OccasionPostView: View {
 
         let column = VStack(spacing: 0) {
             if has("intro") {
-                text(value("intro"), .semibold, L.intro, color: th.intro, lineHeight: 1.4)
+                text(value("intro"), .semibold, L.intro, color: th.intro, lineHeight: 1.4, balanceWidth: L.cw)
             }
-            text(value("name"), .extrabold, L.name, color: Color(hex: "#172536"), lineHeight: 1.25, balanceWidth: L.cw)
+            fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 14, width: L.cw, color: Color(hex: "#172536"), lineHeight: 1.25)
                 .shadow(color: .white.opacity(0.9), radius: 0, x: 0, y: 2)
                 .shadow(color: th.shadow.opacity(0.20), radius: 12, x: 0, y: 12)
                 .padding(.top, 4)
@@ -178,7 +195,7 @@ struct OccasionPostView: View {
         let column = VStack(spacing: 4) {
             if has("lead") { text(value("lead"), .semibold, L.l1, color: .white, lineHeight: 1.4) }
             if has("title") { text(value("title"), .extrabold, L.l2, color: P.soft, lineHeight: 1.35) }
-            text(value("name"), .extrabold, L.name, color: P.gold, lineHeight: 1.24, balanceWidth: L.cw)
+            fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 14, width: L.cw, color: P.gold, lineHeight: 1.24)
                 .shadow(color: .black.opacity(0.65), radius: 13, x: 0, y: 10)
             if has("relation") {
                 OccasionDivider(color: P.goldLine)
@@ -235,7 +252,7 @@ struct OccasionPostView: View {
                 VStack(spacing: 0) {
                     if has("lead") { text(value("lead"), .semibold, L.l1, color: .white, lineHeight: 1.4) }
                     if has("title") { text(value("title"), .extrabold, L.l2, color: P.soft, lineHeight: 1.35) }
-                    text(value("name"), .extrabold, L.name, color: P.gold, lineHeight: 1.22, balanceWidth: 900)
+                    fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 18, width: 984, color: P.gold, lineHeight: 1.22)
                         .shadow(color: .black.opacity(0.65), radius: 13, x: 0, y: 10)
                 }
             ),
@@ -293,7 +310,7 @@ struct OccasionPostView: View {
                 VStack(spacing: 8) {
                     if has("from") { text(value("from"), .semibold, L.from, color: ink, lineHeight: 1.35).modifier(OccasionLightShadow()) }
                     text("بأحر التعازي وأصدق المواساة إلى", .regular, L.sub, color: muted, lineHeight: 1.4)
-                    text(value("to"), .extrabold, L.to, color: ink, lineHeight: 1.25, balanceWidth: 940)
+                    fitLine(value("to"), .extrabold, maxSize: L.to, minSize: 18, width: 984, color: ink, lineHeight: 1.25)
                         .modifier(OccasionLightShadow())
                         .padding(.top, 8)
                 }
@@ -301,7 +318,7 @@ struct OccasionPostView: View {
             AnyView(
                 VStack(spacing: 6) {
                     if has("lead") { text(value("lead"), .regular, L.lead, color: muted, lineHeight: 1.4) }
-                    text(value("name"), .extrabold, L.name, color: ink, lineHeight: 1.25, balanceWidth: 940)
+                    fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 18, width: 984, color: ink, lineHeight: 1.25)
                         .modifier(OccasionLightShadow())
                 }
             ),
@@ -591,6 +608,26 @@ extension View {
 
 /// توزيع النص على سطرين متقاربين إذا ما وسعه سطر واحد (مثل text-wrap: balance)
 enum OccasionText {
+    /// التنوين والحركات على آخر حرف تطلع مزاحة بخط URW (ما فيه مواضع لها) — نشيلها من نص البوست،
+    /// و«المحمد علي» (وعبد/أبو + الاسم) ما ينقسمون على سطرين. نفس postText في الموقع.
+    static func postText(_ s: String) -> String {
+        guard !s.isEmpty else { return s }
+        var scalars = String.UnicodeScalarView()
+        scalars.append(contentsOf: s.unicodeScalars.filter { !((0x064B...0x0652).contains($0.value) || $0.value == 0x0670) })
+        var out = String(scalars)
+        out = out.replacingOccurrences(of: "المحمد\\s+علي", with: "المحمد\u{00A0}علي", options: .regularExpression)
+        out = out.replacingOccurrences(of: "(^|[\\s،(])(عبد|أبو|ابو|بو)\\s+(?=\\S)", with: "$1$2\u{00A0}", options: .regularExpression)
+        return out
+    }
+
+    /// أكبر حجم خط (بين الأصغر والأكبر) يخلي النص بسطر واحد داخل العرض — نفس fitFontSize في الموقع
+    static func fitSize(_ text: String, weight: OccasionKit.FontWeight, maxSize: CGFloat, minSize: CGFloat, width: CGFloat) -> CGFloat {
+        guard !text.isEmpty, let font = UIFont(name: weight.postScriptName, size: maxSize) else { return maxSize }
+        let w = (text as NSString).size(withAttributes: [.font: font]).width
+        guard w > width else { return maxSize }
+        return max(minSize, floor(maxSize * width * 0.97 / w))
+    }
+
     static func balanced(_ text: String, weight: OccasionKit.FontWeight, size: CGFloat, maxWidth: CGFloat) -> String {
         guard !text.contains("\n"), let font = UIFont(name: weight.postScriptName, size: size) else { return text }
         let attrs: [NSAttributedString.Key: Any] = [.font: font]

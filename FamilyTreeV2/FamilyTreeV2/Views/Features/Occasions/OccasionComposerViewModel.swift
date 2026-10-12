@@ -4,67 +4,228 @@ import Photos
 import PhotosUI
 import ImageIO
 
-/// حالة شاشة «بوستات المناسبات»: القالب، مكان النشر، النصوص، الصورة، والتصدير.
+/// حالة شاشة «بوستات المناسبات»: القالب، مكان النشر، الاختيارات، الاسم من الشجرة، الصورة، والتصدير.
+/// النصوص تطلع من الاختيارات (OccasionCompose) — نفس منطق الموقع.
 @MainActor
 final class OccasionComposerViewModel: ObservableObject {
     @Published private(set) var template: OccasionTemplate
     @Published var placement: OccasionPlacement
-    @Published private(set) var gender: OccasionGender = .male
-    @Published var values: [String: String]
+    @Published var form = OccasionForm()
+    /// العضو المختار من شجرة العائلة (رجال)
+    @Published private(set) var member: FamilyMember?
+    @Published var nameFormat: OccasionNameFormat = .three
     @Published var photo = OccasionPhoto()
+    /// الصورة الحالية صورة العضو من الشجرة (مو صورة اختارها المستخدم)
+    @Published private(set) var photoFromMember = false
+    @Published private(set) var isLoadingMemberPhoto = false
     @Published private(set) var isWorking = false
     @Published var message: String?
     @Published var shareItem: OccasionShareItem?
+
+    /// بيانات من القاعدة للاختيارات
+    @Published private(set) var family = OccasionFamilyIndex([])
+    @Published private(set) var diwaniyas: [Diwaniya] = []
+    @Published private(set) var familyNames: [String] = []
+
+    /// سطور القرابة اللي تعبّت تلقائياً من الشجرة — تتبدّل لو تغيّر العضو وما عدّلها المستخدم
+    private var autoRelations: [String: String] = [:]
+    private var avatarTask: Task<Void, Never>?
 
     let kit = OccasionKit.shared
     let templates = OccasionTemplate.all
     let placements = OccasionPlacement.all
 
+    static let relationKeys = ["relation", "rel2", "rel3"]
+
     init() {
-        let first = OccasionTemplate.all[0]
-        template = first
+        template = OccasionTemplate.all[0]
         placement = OccasionPlacement.all[0]
-        values = first.defaults(.male)
     }
 
     var size: OccasionSize { placement.size }
+    var gender: OccasionGender { form.gender }
+    var isDeath: Bool { template.kind == .death || template.kind == .deathText }
 
     /// مفتاح الملفات المطلوبة — يتغيّر مع القالب أو المقاس
     var assetKey: String { "\(template.id)-\(size.rawValue)" }
 
-    // MARK: اختيارات
+    /// الاسم في البوست: من الشجرة بالصيغة المختارة، أو المكتوب
+    var name: String {
+        if let member { return nameFormat.apply(member) }
+        return form.txt("nameTyped")
+    }
 
-    func select(_ next: OccasionTemplate) {
-        guard next.id != template.id else { return }
-        let oldDefaults = template.defaults(gender)
-        var fresh = next.defaults(gender)
-        // نحتفظ بالاسم إذا انكتب
-        if let name = values["name"], name != oldDefaults["name"], !name.isEmpty {
-            fresh["name"] = name
-        }
-        template = next
-        values = fresh
-        photo.gray = next.kind == .death
+    /// نصوص البوست النهائية
+    var values: [String: String] { OccasionCompose.values(template, form, name: name) }
+
+    // MARK: البيانات
+
+    func updateFamily(_ all: [FamilyMember]) {
+        family = OccasionFamilyIndex(all)
+        // العضو المختار يتحدّث لو تغيّرت بياناته
+        if let m = member, let fresh = family.byId[m.id] { member = fresh }
+    }
+
+    func updateDiwaniyas(_ list: [Diwaniya]) {
+        diwaniyas = list.filter { $0.approvalStatus == ApprovalStatus.approved.rawValue && $0.isClosed != true }
+    }
+
+    func updateFamilyNames(_ names: [String]) {
+        familyNames = names
+    }
+
+    // MARK: الاختيارات
+
+    func sel(_ key: String) -> Int { form.sel(key) }
+
+    func setSel(_ key: String, _ index: Int) { form.selections[key] = index }
+
+    func text(_ key: String) -> Binding<String> {
+        Binding(get: { [weak self] in self?.form.txt(key) ?? "" },
+                set: { [weak self] in self?.form.texts[key] = $0 })
+    }
+
+    /// مكان العزاء: لو كان ديوانية معتمدة، تتعبّى المنطقة من عنوانها
+    func venuePlace(_ side: String) -> Binding<String> {
+        Binding(get: { [weak self] in self?.form.txt("\(side)Place") ?? "" },
+                set: { [weak self] value in
+                    guard let self else { return }
+                    self.form.texts["\(side)Place"] = value
+                    if let d = self.diwaniyas.first(where: { $0.title == value }),
+                       let area = OccasionChoices.area(inAddress: d.address) {
+                        self.form.texts["\(side)Area"] = area
+                    }
+                })
     }
 
     func setGender(_ next: OccasionGender) {
-        guard next != gender else { return }
-        let oldDefaults = template.defaults(gender)
-        let newDefaults = template.defaults(next)
-        // الحقول اللي ما تعدّلت تتحوّل للصيغة الجديدة، واللي انكتب يبقى مثل ما هو
-        for (key, newValue) in newDefaults where values[key] == nil || values[key] == oldDefaults[key] {
-            values[key] = newValue
+        guard next != form.gender else { return }
+        // أسماء الشجرة (جدول الأعضاء) للرجال — للمؤنث نكتب الاسم
+        if next == .female, member != nil { clearMember() }
+        form.gender = next
+    }
+
+    func select(_ next: OccasionTemplate) {
+        guard next.id != template.id else { return }
+        template = next
+        // اختيارات خاصة بكل قالب (قوائمها تختلف) ترجع للأول
+        for key in ["opening", "occasion", "dua"] { form.selections[key] = nil }
+        photo.gray = next.kind == .death
+    }
+
+    /// يبدأ من جديد (يحتفظ بالقالب ومكان النشر)
+    func resetForm() {
+        let keepGray = photo.gray
+        avatarTask?.cancel()
+        isLoadingMemberPhoto = false
+        form = OccasionForm()
+        member = nil
+        autoRelations = [:]
+        nameFormat = .three
+        if photoFromMember {
+            photo = OccasionPhoto(gray: keepGray)
+            photoFromMember = false
         }
-        gender = next
     }
 
-    func resetTexts() {
-        values = template.defaults(gender)
+    // MARK: الاسم من الشجرة
+
+    func pickMember(_ m: FamilyMember) {
+        member = m
+        let sons = family.sonsLine(m)
+        let next: [String: String] = [
+            "relation": sons.isEmpty ? family.fatherLine(m) : sons,
+            "rel2": sons,
+            "rel3": family.brothersLine(m),
+        ]
+        // نعبّي الفاضي أو اللي تعبّى تلقائياً من عضو سابق — اللي كتبه المستخدم ما نلمسه
+        for key in Self.relationKeys {
+            let current = form.txt(key)
+            if current.isEmpty || current == autoRelations[key] { form.texts[key] = next[key] ?? "" }
+        }
+        autoRelations = next
+        form.gender = .male
+
+        // صورة العضو السابق تنشال فوراً (حتى ما يطلع اسم عضو بصورة عضو ثاني لو فشل التحميل)
+        if photoFromMember {
+            photo = OccasionPhoto(gray: photo.gray)
+            photoFromMember = false
+        }
+        let url = (m.avatarUrl ?? "").isEmpty ? nil : URL(string: m.avatarUrl ?? "")
+        if let url, photo.image == nil {
+            loadMemberPhoto(url, memberId: m.id)
+        } else {
+            // صورة اختارها المستخدم بنفسه تبقى
+            avatarTask?.cancel()
+            isLoadingMemberPhoto = false
+        }
     }
 
-    func binding(for key: String) -> Binding<String> {
-        Binding(get: { [weak self] in self?.values[key] ?? "" },
-                set: { [weak self] in self?.values[key] = $0 })
+    func clearMember() {
+        member = nil
+        for key in Self.relationKeys {
+            if let auto = autoRelations[key], !auto.isEmpty, form.txt(key) == auto { form.texts[key] = "" }
+        }
+        autoRelations = [:]
+        avatarTask?.cancel()
+        isLoadingMemberPhoto = false
+        if photoFromMember {
+            photo = OccasionPhoto(gray: photo.gray)
+            photoFromMember = false
+        }
+    }
+
+    /// سطور مقترحة من الشجرة للعضو المختار
+    var relationSuggestions: [String] {
+        guard let m = member else { return [] }
+        return [family.sonsLine(m), family.fatherLine(m), family.brothersLine(m)].filter { !$0.isEmpty }
+    }
+
+    var sonsSuggestion: [String] {
+        guard let m = member else { return [] }
+        let line = family.sonsLine(m)
+        return line.isEmpty ? [] : [line]
+    }
+
+    var brothersSuggestion: [String] {
+        guard let m = member else { return [] }
+        let line = family.brothersLine(m)
+        return line.isEmpty ? [] : [line]
+    }
+
+    /// أبناء العضو (الأحدث أولاً) — اقتراحات اسم المولود
+    var babyNameSuggestions: [String] {
+        guard let m = member, template.id == "newborn" else { return [] }
+        return family.childrenNewestFirst(m.id).prefix(6).map { OccasionFamilyIndex.firstName($0) }
+    }
+
+    private func loadMemberPhoto(_ url: URL, memberId: UUID) {
+        avatarTask?.cancel()
+        isLoadingMemberPhoto = true
+        avatarTask = Task { [weak self] in
+            // التنزيل وفك الصورة خارج الخيط الرئيسي
+            let image = await Task.detached(priority: .userInitiated) {
+                await Self.fetchImage(url, maxPixel: 1600)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.isLoadingMemberPhoto = false
+            // العضو تغيّر، أو المستخدم اختار صورة بنفسه أثناء التحميل
+            guard self.member?.id == memberId, self.photo.image == nil || self.photoFromMember else { return }
+            guard let image else {
+                self.message = L10n.t("ما قدرنا نحمّل صورة العضو — تقدر تختار صورة بنفسك.",
+                                      "Couldn't load the member's photo — you can choose one yourself.")
+                return
+            }
+            // أبيض وأسود حسب القالب الحالي (اختيار القالب يضبطه)
+            self.photo = OccasionPhoto(image: image, zoom: 1, x: 50, y: 40, gray: self.photo.gray)
+            self.photoFromMember = true
+        }
+    }
+
+    nonisolated private static func fetchImage(_ url: URL, maxPixel: Int) async -> UIImage? {
+        guard let result = try? await URLSession.shared.data(from: url),
+              let http = result.1 as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+        return downscaled(result.0, maxPixel: maxPixel)
     }
 
     func prepareAssets() async {
@@ -77,14 +238,17 @@ final class OccasionComposerViewModel: ObservableObject {
         guard let item else { return }
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
-                  let image = Self.downscaled(data, maxPixel: 1600) else {
+                  let image = await Task.detached(priority: .userInitiated, operation: { Self.downscaled(data, maxPixel: 1600) }).value else {
                 message = L10n.t("ما قدرنا نفتح الصورة — جرّب صورة ثانية.", "Couldn't open the photo — try another one.")
                 return
             }
+            avatarTask?.cancel()
+            isLoadingMemberPhoto = false
             photo.image = image
             photo.zoom = 1
             photo.x = 50
             photo.y = 40
+            photoFromMember = false
         } catch {
             Log.error("Occasion photo load failed: \(error.localizedDescription)")
             message = L10n.t("ما قدرنا نفتح الصورة — جرّب صورة ثانية.", "Couldn't open the photo — try another one.")
@@ -92,15 +256,18 @@ final class OccasionComposerViewModel: ObservableObject {
     }
 
     func removePhoto() {
+        avatarTask?.cancel()
+        isLoadingMemberPhoto = false
         photo.image = nil
         photo.zoom = 1
         photo.x = 50
         photo.y = 40
+        photoFromMember = false
     }
 
-    /// يصغّر صورة الجوال ويثبّت اتجاهها بدون فك الصورة الأصلية كاملة في الذاكرة
+    /// يصغّر الصورة ويثبّت اتجاهها بدون فك الصورة الأصلية كاملة في الذاكرة
     /// (الصورة تبقى على الجهاز — ما تنرفع لأي مكان)
-    private static func downscaled(_ data: Data, maxPixel: Int) -> UIImage? {
+    nonisolated private static func downscaled(_ data: Data, maxPixel: Int) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,

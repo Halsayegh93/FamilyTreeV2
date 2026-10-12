@@ -149,16 +149,6 @@ enum OccasionGender: String, CaseIterable, Identifiable {
     var title: String { self == .male ? L10n.t("مذكّر", "Masculine") : L10n.t("مؤنّث", "Feminine") }
 }
 
-struct OccasionField: Identifiable {
-    let key: String
-    let label: String
-    var multiline: Bool = false
-    /// اتركه فاضي ليختفي من التصميم
-    var optional: Bool = false
-    var group: String? = nil
-    var id: String { key }
-}
-
 struct OccasionTemplate: Identifiable {
     let id: String
     let title: String
@@ -172,8 +162,6 @@ struct OccasionTemplate: Identifiable {
     var verseTopSquare: CGFloat = 0
     var verseScale: CGFloat = 1
     let hasPhoto: Bool
-    let fields: [OccasionField]
-    let defaults: (OccasionGender) -> [String: String]
 
     /// الملفات المطلوبة من occasion-kit لهذا القالب والمقاس
     func assetPaths(for size: OccasionSize) -> [String] {
@@ -196,176 +184,26 @@ struct OccasionTemplate: Identifiable {
     }
 }
 
-private func happyFields(extra: [OccasionField] = []) -> [OccasionField] {
-    [
-        OccasionField(key: "intro", label: L10n.t("سطر التهنئة", "Greeting line")),
-        OccasionField(key: "name", label: L10n.t("الاسم", "Name")),
-        OccasionField(key: "occasion", label: L10n.t("المناسبة", "Occasion")),
-    ] + extra + [
-        OccasionField(key: "dua", label: L10n.t("الدعاء", "Prayer"), multiline: true, optional: true),
-    ]
-}
-
-private var venueFields: [OccasionField] {
-    let men = L10n.t("عزاء الرجال", "Men's condolences")
-    let women = L10n.t("عزاء النساء", "Women's condolences")
-    return [
-        OccasionField(key: "menPlace", label: L10n.t("المكان", "Place"), group: men),
-        OccasionField(key: "menArea", label: L10n.t("المنطقة", "Area"), optional: true, group: men),
-        OccasionField(key: "menTimes", label: L10n.t("الأوقات", "Times"), optional: true, group: men),
-        OccasionField(key: "womenPlace", label: L10n.t("المكان", "Place"), group: women),
-        OccasionField(key: "womenArea", label: L10n.t("المنطقة", "Area"), optional: true, group: women),
-        OccasionField(key: "womenTimes", label: L10n.t("الأوقات", "Times"), optional: true, group: women),
-    ]
-}
-
-private let venueDefaults: [String: String] = [
-    "menPlace": "[اسم المكان]", "menArea": "[المنطقة]", "menTimes": "[الأوقات]",
-    "womenPlace": "[اسم المكان]", "womenArea": "[المنطقة]", "womenTimes": "[الأوقات]",
-]
-
-private func deathDua(_ g: OccasionGender) -> [String: String] {
-    g == .male
-        ? ["dua1": "نسأل الله تعالى أن يتغمده برحمته الواسعة وأن يلهم ذويه الصبر والسلوان",
-           "dua2": "وأن يحشره مع النبي المصطفى وآله الطاهرين"]
-        : ["dua1": "نسأل الله تعالى أن يتغمدها برحمته الواسعة وأن يلهم ذويها الصبر والسلوان",
-           "dua2": "وأن يحشرها مع النبي المصطفى وآله الطاهرين"]
-}
-
-private func merged(_ parts: [String: String]...) -> [String: String] {
-    parts.reduce(into: [String: String]()) { acc, p in acc.merge(p) { _, new in new } }
-}
-
+/// النصوص نفسها تطلع من الاختيارات (OccasionChoices / OccasionCompose) — هنا شكل القالب فقط
 extension OccasionTemplate {
     static var all: [OccasionTemplate] {
         [
-            OccasionTemplate(
-                id: "wedding", title: L10n.t("عقد قران", "Wedding"), icon: "heart.circle.fill", kind: .happy,
-                theme: .gold, verse: .wed, verseTopPost: 40, verseTopSquare: 10, hasPhoto: true,
-                fields: happyFields(),
-                defaults: { g in
-                    g == .male
-                        ? ["intro": "تهنئة وتبريك للأخ العزيز", "name": "[الاسم الكامل]", "occasion": "بمناسبة عقد قرانه",
-                           "dua": "نسأل الله عز وجل أن يبارك له هذا الزواج، ويرزقه الذرية الصالحة"]
-                        : ["intro": "تهنئة وتبريك للأخت العزيزة", "name": "[الاسم الكامل]", "occasion": "بمناسبة عقد قرانها",
-                           "dua": "نسأل الله عز وجل أن يبارك لها هذا الزواج، ويرزقها الذرية الصالحة"]
-                }
-            ),
-            OccasionTemplate(
-                id: "newborn", title: L10n.t("قدوم مولود", "Newborn boy"), icon: "gift.fill", kind: .happy,
-                theme: .sky, verse: .babySky, verseTopPost: 60, verseTopSquare: 20, hasPhoto: true,
-                fields: happyFields(extra: [OccasionField(key: "sub", label: L10n.t("اسم المولود", "Baby's name"))]),
-                defaults: { g in
-                    g == .male
-                        ? ["intro": "نتقدم بالتهنئة للأخ العزيز", "name": "[الاسم الكامل]", "occasion": "لقدوم مولوده", "sub": "[اسم المولود]",
-                           "dua": "نسأل الله تعالى أن يجعله قرة عين لوالديه الكريمين، وأن ينبته نباتا حسنا"]
-                        : ["intro": "نتقدم بالتهنئة للأخت العزيزة", "name": "[الاسم الكامل]", "occasion": "لقدوم مولودها", "sub": "[اسم المولود]",
-                           "dua": "نسأل الله تعالى أن يجعله قرة عين لوالديه الكريمين، وأن ينبته نباتا حسنا"]
-                }
-            ),
-            OccasionTemplate(
-                id: "newbornGirl", title: L10n.t("قدوم مولودة", "Newborn girl"), icon: "sparkles", kind: .happy,
-                theme: .rose, verse: .babyRose, verseTopPost: 60, verseTopSquare: 20, hasPhoto: true,
-                fields: happyFields(extra: [OccasionField(key: "sub", label: L10n.t("اسم المولودة", "Baby's name"))]),
-                defaults: { g in
-                    g == .male
-                        ? ["intro": "نتقدم بالتهنئة للأخ العزيز", "name": "[الاسم الكامل]", "occasion": "لقدوم مولودته", "sub": "[اسم المولودة]",
-                           "dua": "نسأل الله تعالى أن يجعلها قرة عين لوالديها الكريمين، وأن ينبتها نباتا حسنا"]
-                        : ["intro": "نتقدم بالتهنئة للأخت العزيزة", "name": "[الاسم الكامل]", "occasion": "لقدوم مولودتها", "sub": "[اسم المولودة]",
-                           "dua": "نسأل الله تعالى أن يجعلها قرة عين لوالديها الكريمين، وأن ينبتها نباتا حسنا"]
-                }
-            ),
-            OccasionTemplate(
-                id: "recovery", title: L10n.t("أجر وعافية", "Get well"), icon: "cross.case.fill", kind: .happy,
-                theme: .green, verse: .sick, verseScale: 0.86, hasPhoto: true,
-                fields: happyFields(),
-                defaults: { g in
-                    g == .male
-                        ? ["intro": "نسألكم الدعاء للأخ العزيز", "name": "[الاسم الكامل]", "occasion": "أجر وعافية",
-                           "dua": "اللهم ألبسه ثوب الصحة والعافية، واشفه شفاء لا يغادر سقما"]
-                        : ["intro": "نسألكم الدعاء للأخت العزيزة", "name": "[الاسم الكامل]", "occasion": "أجر وعافية",
-                           "dua": "اللهم ألبسها ثوب الصحة والعافية، واشفها شفاء لا يغادر سقما"]
-                }
-            ),
-            OccasionTemplate(
-                id: "graduation", title: L10n.t("تهنئة تخرج", "Graduation"), icon: "graduationcap.fill", kind: .happy,
-                theme: .navy, verse: .grad, verseScale: 0.86, hasPhoto: true,
-                fields: happyFields(extra: [OccasionField(key: "sub", label: L10n.t("المرحلة أو الجامعة", "School or university"))]),
-                defaults: { g in
-                    g == .male
-                        ? ["intro": "نتقدم بالتهنئة للأخ العزيز", "name": "[الاسم الكامل]", "occasion": "لتخرجه من", "sub": "[المرحلة أو الجامعة]",
-                           "dua": "نسأل الله تعالى أن يجعله بوابة لمستقبل زاهر ومليء بالإنجازات، ويرزقه التوفيق"]
-                        : ["intro": "نتقدم بالتهنئة للأخت العزيزة", "name": "[الاسم الكامل]", "occasion": "لتخرجها من", "sub": "[المرحلة أو الجامعة]",
-                           "dua": "نسأل الله تعالى أن يجعله بوابة لمستقبل زاهر ومليء بالإنجازات، ويرزقها التوفيق"]
-                }
-            ),
-            OccasionTemplate(
-                id: "death", title: L10n.t("إعلان وفاة — مع صورة", "Obituary — photo"), icon: "moon.stars.fill", kind: .death,
-                hasPhoto: true,
-                fields: [
-                    OccasionField(key: "lead", label: L10n.t("السطر الأول", "First line")),
-                    OccasionField(key: "title", label: L10n.t("اللقب", "Title")),
-                    OccasionField(key: "name", label: L10n.t("اسم الفقيد", "Name of the deceased")),
-                    OccasionField(key: "relation", label: L10n.t("صلة القرابة", "Relation"), optional: true),
-                ] + venueFields + [
-                    OccasionField(key: "dua1", label: L10n.t("الدعاء — السطر الأول", "Prayer — line 1"), optional: true),
-                    OccasionField(key: "dua2", label: L10n.t("الدعاء — السطر الثاني", "Prayer — line 2"), optional: true),
-                ],
-                defaults: { g in
-                    merged(
-                        ["lead": "انتقل إلى رحمة الله تعالى", "title": g == .male ? "المرحوم الحاج" : "المرحومة الحاجة",
-                         "name": "[اسم الفقيد]", "relation": "[صلة القرابة]"],
-                        venueDefaults, deathDua(g)
-                    )
-                }
-            ),
-            OccasionTemplate(
-                id: "deathText", title: L10n.t("إعلان وفاة — بدون صورة", "Obituary — details"), icon: "doc.text.fill", kind: .deathText,
-                hasPhoto: false,
-                fields: [
-                    OccasionField(key: "lead", label: L10n.t("السطر الأول", "First line")),
-                    OccasionField(key: "title", label: L10n.t("اللقب", "Title")),
-                    OccasionField(key: "name", label: L10n.t("اسم الفقيد", "Name of the deceased")),
-                    OccasionField(key: "rel1", label: L10n.t("القرابة — سطر ١", "Relations — line 1"), optional: true),
-                    OccasionField(key: "rel2", label: L10n.t("القرابة — سطر ٢", "Relations — line 2"), optional: true),
-                    OccasionField(key: "rel3", label: L10n.t("القرابة — سطر ٣", "Relations — line 3"), optional: true),
-                    OccasionField(key: "funeral", label: L10n.t("التشييع", "Funeral"), optional: true),
-                    OccasionField(key: "condolence", label: L10n.t("بداية العزاء", "Condolences start"), optional: true),
-                ] + venueFields + [
-                    OccasionField(key: "dua1", label: L10n.t("الدعاء — السطر الأول", "Prayer — line 1"), optional: true),
-                    OccasionField(key: "dua2", label: L10n.t("الدعاء — السطر الثاني", "Prayer — line 2"), optional: true),
-                ],
-                defaults: { g in
-                    merged(
-                        ["lead": "انتقل إلى رحمة الله تعالى", "title": g == .male ? "المرحوم الحاج" : "المرحومة الحاجة",
-                         "name": "[اسم الفقيد]",
-                         "rel1": "[زوج / زوجة: الاسم]", "rel2": "[والد / والدة كل من: الأسماء]", "rel3": "[شقيق / شقيقة كل من: الأسماء]",
-                         "funeral": "التشييع [اليوم] الساعة [الوقت] في [المقبرة]",
-                         "condolence": "العزاء ابتداء من يوم [اليوم والتاريخ]"],
-                        venueDefaults, deathDua(g)
-                    )
-                }
-            ),
-            OccasionTemplate(
-                id: "solace", title: L10n.t("مشاركة عزاء", "Condolences"), icon: "hands.sparkles.fill", kind: .solace,
-                verse: .sabr, hasPhoto: false,
-                fields: [
-                    OccasionField(key: "from", label: L10n.t("من", "From")),
-                    OccasionField(key: "to", label: L10n.t("إلى (العائلة)", "To (family)")),
-                    OccasionField(key: "lead", label: L10n.t("سطر الوفاة", "Bereavement line")),
-                    OccasionField(key: "name", label: L10n.t("اسم الفقيد", "Name of the deceased")),
-                    OccasionField(key: "dua", label: L10n.t("الدعاء", "Prayer"), multiline: true, optional: true),
-                ],
-                defaults: { g in
-                    ["from": "تتقدم عائلة المحمد علي",
-                     "to": "[عائلة ... الكرام]",
-                     "lead": g == .male ? "بوفاة المغفور له بإذن الله تعالى" : "بوفاة المغفور لها بإذن الله تعالى",
-                     "name": "[اسم الفقيد]",
-                     "dua": g == .male
-                        ? "راجين المولى العلي القدير أن يتغمد الفقيد بواسع رحمته ويسكنه فسيح جناته، وأن يلهم ذويه الصبر والسلوان"
-                        : "راجين المولى العلي القدير أن يتغمد الفقيدة بواسع رحمته ويسكنها فسيح جناته، وأن يلهم ذويها الصبر والسلوان"]
-                }
-            ),
+            OccasionTemplate(id: "wedding", title: L10n.t("عقد قران", "Wedding"), icon: "heart.circle.fill", kind: .happy,
+                             theme: .gold, verse: .wed, verseTopPost: 40, verseTopSquare: 10, hasPhoto: true),
+            OccasionTemplate(id: "newborn", title: L10n.t("قدوم مولود", "Newborn boy"), icon: "gift.fill", kind: .happy,
+                             theme: .sky, verse: .babySky, verseTopPost: 60, verseTopSquare: 20, hasPhoto: true),
+            OccasionTemplate(id: "newbornGirl", title: L10n.t("قدوم مولودة", "Newborn girl"), icon: "sparkles", kind: .happy,
+                             theme: .rose, verse: .babyRose, verseTopPost: 60, verseTopSquare: 20, hasPhoto: true),
+            OccasionTemplate(id: "recovery", title: L10n.t("أجر وعافية", "Get well"), icon: "cross.case.fill", kind: .happy,
+                             theme: .green, verse: .sick, verseScale: 0.86, hasPhoto: true),
+            OccasionTemplate(id: "graduation", title: L10n.t("تهنئة تخرج", "Graduation"), icon: "graduationcap.fill", kind: .happy,
+                             theme: .navy, verse: .grad, verseScale: 0.86, hasPhoto: true),
+            OccasionTemplate(id: "death", title: L10n.t("إعلان وفاة — مع صورة", "Obituary — photo"), icon: "moon.stars.fill",
+                             kind: .death, hasPhoto: true),
+            OccasionTemplate(id: "deathText", title: L10n.t("إعلان وفاة — بدون صورة", "Obituary — details"), icon: "doc.text.fill",
+                             kind: .deathText, hasPhoto: false),
+            OccasionTemplate(id: "solace", title: L10n.t("مشاركة عزاء", "Condolences"), icon: "hands.sparkles.fill",
+                             kind: .solace, verse: .sabr, hasPhoto: false),
         ]
     }
 }
@@ -388,13 +226,13 @@ struct HappyLayout {
         switch s {
         case .post:
             return HappyLayout(pad: OccasionInsets(top: 52, side: 44, bottom: 30), verseMul: 1, k: 1, pleft: -96, cw: 540,
-                               intro: 34, name: 56, occ: 44, sub: 46, dua: 28, duaW: 500, lh: 184, lineW: 250, divTop: 22, divBottom: 18)
+                               intro: 34, name: 50, occ: 44, sub: 46, dua: 28, duaW: 500, lh: 184, lineW: 250, divTop: 22, divBottom: 18)
         case .square:
             return HappyLayout(pad: OccasionInsets(top: 34, side: 44, bottom: 22), verseMul: 0.78, k: 0.8, pleft: -70, cw: 560,
-                               intro: 31, name: 52, occ: 40, sub: 42, dua: 25, duaW: 500, lh: 138, lineW: 230, divTop: 16, divBottom: 12)
+                               intro: 31, name: 46, occ: 40, sub: 42, dua: 25, duaW: 500, lh: 138, lineW: 230, divTop: 16, divBottom: 12)
         case .story:
             return HappyLayout(pad: OccasionInsets(top: 250, side: 44, bottom: 250), verseMul: 1.04, k: 1, pleft: -96, cw: 540,
-                               intro: 36, name: 60, occ: 46, sub: 48, dua: 29, duaW: 500, lh: 200, lineW: 250, divTop: 24, divBottom: 20)
+                               intro: 36, name: 54, occ: 46, sub: 48, dua: 29, duaW: 500, lh: 200, lineW: 250, divTop: 24, divBottom: 20)
         }
     }
 }
@@ -409,13 +247,13 @@ struct DeathLayout {
         switch s {
         case .post:
             return DeathLayout(pad: OccasionInsets(top: 34, side: 48, bottom: 22), leadMul: 0.72, verseMul: 0.73, k: 0.8, pleft: -72, cw: 560,
-                               l1: 32, l2: 38, name: 64, rel: 27, relW: 480, cols: 1, dua: 26, lh: 150, lineW: 250, divTop: 12, divBottom: 14)
+                               l1: 32, l2: 38, name: 58, rel: 27, relW: 480, cols: 1, dua: 26, lh: 150, lineW: 250, divTop: 12, divBottom: 14)
         case .square:
             return DeathLayout(pad: OccasionInsets(top: 24, side: 48, bottom: 16), leadMul: 0.56, verseMul: 0.56, k: 0.66, pleft: -64, cw: 580,
-                               l1: 28, l2: 33, name: 56, rel: 24, relW: 460, cols: 0.9, dua: 23, lh: 112, lineW: 220, divTop: 10, divBottom: 12)
+                               l1: 28, l2: 33, name: 50, rel: 24, relW: 460, cols: 0.9, dua: 23, lh: 112, lineW: 220, divTop: 10, divBottom: 12)
         case .story:
             return DeathLayout(pad: OccasionInsets(top: 250, side: 48, bottom: 250), leadMul: 0.78, verseMul: 0.8, k: 0.9, pleft: -78, cw: 560,
-                               l1: 34, l2: 40, name: 66, rel: 28, relW: 480, cols: 1.04, dua: 27, lh: 170, lineW: 250, divTop: 14, divBottom: 16)
+                               l1: 34, l2: 40, name: 60, rel: 28, relW: 480, cols: 1.04, dua: 27, lh: 170, lineW: 250, divTop: 14, divBottom: 16)
         }
     }
 }
@@ -430,13 +268,13 @@ struct DeathTextLayout {
         switch s {
         case .post:
             return DeathTextLayout(pad: OccasionInsets(top: 30, side: 48, bottom: 20), leadMul: 0.64, verseMul: 0.64,
-                                   l1: 32, l2: 38, name: 84, relF: 26, relLH: 1.55, fun: 30, con: 28, cols: 1, dua: 25, lh: 140, lineW: 250, divBottom: 10)
+                                   l1: 32, l2: 38, name: 74, relF: 26, relLH: 1.55, fun: 30, con: 28, cols: 1, dua: 25, lh: 140, lineW: 250, divBottom: 10)
         case .square:
             return DeathTextLayout(pad: OccasionInsets(top: 22, side: 48, bottom: 14), leadMul: 0.5, verseMul: 0.52,
-                                   l1: 26, l2: 30, name: 62, relF: 22, relLH: 1.45, fun: 26, con: 24, cols: 0.85, dua: 22, lh: 100, lineW: 220, divBottom: 8)
+                                   l1: 26, l2: 30, name: 56, relF: 22, relLH: 1.45, fun: 26, con: 24, cols: 0.85, dua: 22, lh: 100, lineW: 220, divBottom: 8)
         case .story:
             return DeathTextLayout(pad: OccasionInsets(top: 250, side: 48, bottom: 250), leadMul: 0.72, verseMul: 0.74,
-                                   l1: 34, l2: 40, name: 88, relF: 28, relLH: 1.6, fun: 32, con: 30, cols: 1.04, dua: 27, lh: 160, lineW: 250, divBottom: 12)
+                                   l1: 34, l2: 40, name: 80, relF: 28, relLH: 1.6, fun: 32, con: 30, cols: 1.04, dua: 27, lh: 160, lineW: 250, divBottom: 12)
         }
     }
 }
@@ -449,14 +287,14 @@ struct SolaceLayout {
     static func of(_ s: OccasionSize) -> SolaceLayout {
         switch s {
         case .post:
-            return SolaceLayout(pad: OccasionInsets(top: 50, side: 48, bottom: 28), verseMul: 0.9, title: 84, from: 42, sub: 30, to: 72,
-                                lead: 30, name: 66, dua: 28, lh: 170, lineW: 250)
+            return SolaceLayout(pad: OccasionInsets(top: 50, side: 48, bottom: 28), verseMul: 0.9, title: 84, from: 42, sub: 30, to: 68,
+                                lead: 30, name: 62, dua: 28, lh: 170, lineW: 250)
         case .square:
-            return SolaceLayout(pad: OccasionInsets(top: 34, side: 48, bottom: 18), verseMul: 0.8, title: 72, from: 38, sub: 28, to: 62,
-                                lead: 28, name: 58, dua: 25, lh: 128, lineW: 230)
+            return SolaceLayout(pad: OccasionInsets(top: 34, side: 48, bottom: 18), verseMul: 0.8, title: 72, from: 38, sub: 28, to: 58,
+                                lead: 28, name: 52, dua: 25, lh: 128, lineW: 230)
         case .story:
-            return SolaceLayout(pad: OccasionInsets(top: 250, side: 48, bottom: 250), verseMul: 1, title: 96, from: 48, sub: 34, to: 82,
-                                lead: 34, name: 76, dua: 31, lh: 220, lineW: 250)
+            return SolaceLayout(pad: OccasionInsets(top: 250, side: 48, bottom: 250), verseMul: 1, title: 96, from: 48, sub: 34, to: 76,
+                                lead: 34, name: 70, dua: 31, lh: 220, lineW: 250)
         }
     }
 }
