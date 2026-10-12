@@ -28,6 +28,10 @@
 	<string>يحتاج التطبيق للوصول إلى مكتبة الصور لاختيار صور الملف الشخصي والأخبار</string>
 	<key>NSCameraUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صور الملف الشخصي ومسح الباركود</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>يحتاج التطبيق إذن الإضافة إلى الصور لحفظ بوستات المناسبات التي تصممها</string>
+	<key>OCCASION_KIT_BASE_URL</key>
+	<string>https://app.almohali.com/occasion-kit/</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
