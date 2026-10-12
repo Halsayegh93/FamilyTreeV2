@@ -427,6 +427,14 @@ struct AdminDashboardView: View {
                 badge: adminRequestVM.unreadContactMessagesCount
             ) { AdminInboxView() }
 
+            // بوستات المناسبات — لكل الإدارة والمشرفين (canModerate)
+            AdminTile(
+                title: L10n.t("بوستات المناسبات", "Occasion Posts"),
+                subtitle: L10n.t("تهنئة، وفاة، عزاء — جاهزة للنشر", "Congrats, obituaries, condolences"),
+                icon: "photo.on.rectangle.angled",
+                color: DS.Color.accent
+            ) { OccasionComposerView() }
+
             if authVM.canEditMembers {
                 AdminTile(
                     title: L10n.t("إدارة الأعضاء", "Members"),
