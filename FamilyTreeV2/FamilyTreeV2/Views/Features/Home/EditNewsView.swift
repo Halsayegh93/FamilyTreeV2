@@ -73,7 +73,7 @@ struct EditNewsView: View {
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
-            .background(DS.Color.surfaceElevated)
+            .background(DS.Color.background)
             .navigationTitle(L10n.t("تعديل الخبر", "Edit Post"))
             .navigationBarTitleDisplayMode(.inline)
             // «حفظ» أعلى يمين و«إلغاء» الأحمر يسار — مثل بقية الأوراق (طلب المالك)

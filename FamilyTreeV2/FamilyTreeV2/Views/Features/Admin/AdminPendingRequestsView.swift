@@ -826,7 +826,7 @@ struct LinkToExistingMemberSheet: View {
                                     Spacer()
                                     if isSelected {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(DS.Color.gradientPrimary)
+                                            .foregroundStyle(DS.Color.primary)
                                             .transition(.scale.combined(with: .opacity))
                                     }
                                 }

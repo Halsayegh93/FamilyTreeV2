@@ -97,7 +97,7 @@ struct ApprovalSheet: View {
                         if selectedFather?.id == father.id {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(DS.Font.scaled(20))
-                                .foregroundStyle(DS.Color.gradientPrimary)
+                                .foregroundStyle(DS.Color.primary)
                         } else {
                             Image(systemName: "circle")
                                 .font(DS.Font.scaled(20))
@@ -122,6 +122,7 @@ struct ApprovalSheet: View {
                     .accessibilityLabel(L10n.t("اختيار \(father.fullName) كأب", "Select \(father.fullName) as father"))
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
 
                 // زر التأكيد النهائي — DSPrimaryButton gradient
                 DSPrimaryButton(
@@ -138,6 +139,7 @@ struct ApprovalSheet: View {
             .padding(DS.Spacing.lg)
             // الوضع الأفقي: تمرير حتى لا يُقتص المحتوى
             .modifier(LandscapeScrollWrapper(isLandscape: isLandscape))
+            .background(DS.Color.background)
             .navigationTitle(L10n.t("إجراءات الموافقة", "Approval Actions"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

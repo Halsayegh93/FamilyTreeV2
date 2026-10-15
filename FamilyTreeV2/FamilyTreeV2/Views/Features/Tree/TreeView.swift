@@ -388,7 +388,7 @@ struct TreeView: View {
                             title: L10n.t("شجرة العائلة", "Family Tree"),
                             subtitle: "\(cachedVisibleMembers.count) " + L10n.t("فرد", "members"),
                             icon: "leaf.fill",
-                            backgroundGradient: DS.Color.gradientPrimary,
+                            backgroundGradient: DS.Color.gradientBand,
                             subtitleChip: true
                         )
 
@@ -1302,7 +1302,7 @@ struct TreeView: View {
                         .frame(width: 80, height: 80)
                     Image(systemName: "leaf.arrow.triangle.circlepath")
                         .font(DS.Font.scaled(36, weight: .medium))
-                        .foregroundStyle(DS.Color.gradientPrimary)
+                        .foregroundStyle(DS.Color.primary)
                 }
 
                 VStack(spacing: DS.Spacing.sm) {

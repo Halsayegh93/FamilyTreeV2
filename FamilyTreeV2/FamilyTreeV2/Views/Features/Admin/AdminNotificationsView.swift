@@ -519,7 +519,7 @@ struct AdminNotificationsView: View {
                 .font(DS.Font.scaled(17))
                 .foregroundStyle(
                     selectedMemberIds.contains(member.id)
-                        ? AnyShapeStyle(DS.Color.gradientPrimary)
+                        ? AnyShapeStyle(DS.Color.primary)
                         : AnyShapeStyle(DS.Color.textTertiary)
                 )
 

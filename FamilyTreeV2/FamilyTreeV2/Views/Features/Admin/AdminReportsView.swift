@@ -784,7 +784,7 @@ struct AdminReportsView: View {
             Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                 .font(DS.Font.scaled(20))
                 .foregroundStyle(
-                    selected ? AnyShapeStyle(DS.Color.gradientPrimary) : AnyShapeStyle(DS.Color.textTertiary)
+                    selected ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.textTertiary)
                 )
 
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {

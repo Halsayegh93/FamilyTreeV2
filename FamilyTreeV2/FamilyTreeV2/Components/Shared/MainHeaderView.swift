@@ -184,7 +184,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                                         .foregroundColor(.white)
                                         .padding(.horizontal, 5)
                                         .padding(.vertical, 2)
-                                        .background(DS.Color.error)
+                                        .background(DS.Color.errorFill)
                                         .clipShape(Capsule())
                                         .offset(x: 6, y: -4)
                                 }
@@ -246,7 +246,7 @@ struct MainHeaderView<TrailingContent: View>: View {
 
     private var headerBackground: some View {
         ZStack {
-            (backgroundGradient ?? DS.Color.gradientPrimary)
+            (backgroundGradient ?? DS.Color.gradientBand)
             DS.Color.headerVeil
         }
         // أفقياً: يمتد من أول الشاشة لآخرها (يتجاوز حواف الأمان الجانبية)

@@ -448,7 +448,7 @@ struct FamilyProjectsView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, 9)
-                .background(Capsule().fill(DS.Color.error))
+                .background(Capsule().fill(DS.Color.errorFill))
             }
             .buttonStyle(DSScaleButtonStyle())
             .disabled(selectedIDs.isEmpty)

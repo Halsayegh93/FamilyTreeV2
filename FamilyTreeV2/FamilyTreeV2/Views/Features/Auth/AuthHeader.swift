@@ -70,7 +70,7 @@ extension View {
         .frame(maxWidth: .infinity)
         .background(
             ZStack {
-                DS.Color.gradientPrimary
+                DS.Color.gradientBand
                 DS.Color.headerVeil
             }
             .ignoresSafeArea(edges: .top)

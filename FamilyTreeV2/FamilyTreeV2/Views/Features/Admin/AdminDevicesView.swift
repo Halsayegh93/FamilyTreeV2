@@ -117,7 +117,7 @@ struct AdminDevicesView: View {
                 .foregroundColor(.white)
                 .padding(DS.Spacing.md)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(removalFailed ? DS.Color.error : DS.Color.success))
+                    .fill(removalFailed ? DS.Color.errorFill : DS.Color.success))
                 .padding(DS.Spacing.lg)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
