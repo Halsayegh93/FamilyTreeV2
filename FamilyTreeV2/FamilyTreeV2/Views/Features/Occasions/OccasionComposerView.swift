@@ -3,8 +3,8 @@ import UIKit
 import PhotosUI
 
 /// بوستات المناسبات — للإدارة والمشرفين (canModerate).
-/// كل شي اختيار بدل الكتابة: القالب، مكان النشر (يحدد المقاس)، الاختيارات، الاسم من شجرة العائلة
-/// (وتنزل معه صورته وسطور القرابة)، ثم حفظ في الصور أو مشاركة.
+/// كل شي اختيار بدل الكتابة: القالب، النموذج (١ أو ٢)، مكان النشر (يحدد المقاس)، الاختيارات، الاسم من شجرة العائلة
+/// (وتنزل معه صورته وسطور القرابة)، الصورة («مع صورة / بدون صورة» للتهاني)، ثم حفظ في الصور أو مشاركة.
 struct OccasionComposerView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -71,9 +71,11 @@ struct OccasionComposerView: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.xxl) {
                     preview.id("preview")
                     templateSection
+                    if vm.template.hasModel1 { modelSection }
                     placementSection
                     detailsSection
-                    if vm.template.hasPhoto { photoSection }
+                    // التهاني: القسم دايماً (فيه «بدون صورة»)؛ الوفاة مع صورة: الصورة؛ الباقي بدون صورة
+                    if vm.template.photoOptional || vm.showsPhoto { photoSection }
                     actions
                 }
                 .padding(DS.Spacing.lg)
@@ -86,7 +88,7 @@ struct OccasionComposerView: View {
 
     private func postView() -> OccasionPostView {
         OccasionPostView(template: vm.template, size: vm.size, values: vm.values, photo: vm.photo,
-                         kit: kit, revision: kit.revision)
+                         kit: kit, revision: kit.revision, model: vm.model, withPhoto: vm.withPhoto)
     }
 
     // MARK: المعاينة
@@ -239,6 +241,56 @@ struct OccasionComposerView: View {
         }
     }
 
+    // MARK: النموذج
+
+    private var modelSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            DSSectionHeader(title: L10n.t("النموذج", "Design"), icon: "rectangle.on.rectangle")
+            HStack(spacing: DS.Spacing.sm) {
+                ForEach(OccasionModel.allCases) { m in
+                    modelCard(m)
+                }
+            }
+        }
+    }
+
+    private func modelCard(_ m: OccasionModel) -> some View {
+        let on = vm.effectiveModel == m
+        return Button {
+            withAnimation(DS.Anim.quick) { vm.model = m }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                // دائرة فوق (١) أو سداسي (٢) — نفس رسمة الموقع
+                Image(systemName: m == .m1 ? "circle.circle" : "hexagon")
+                    .font(DS.Font.scaled(20, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(m.title)
+                        .font(DS.Font.plex(15, weight: .bold))
+                    // القالب أو النسخة اللي ما فيها صورة (مشاركة العزاء، الوفاة بدون صورة، «بدون صورة») يقول «بدون صورة»
+                    Text(vm.showsPhoto ? m.subtitle : L10n.t("بدون صورة", "No photo"))
+                        .font(DS.Font.plex(12))
+                        .opacity(0.8)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.textPrimary)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(maxWidth: .infinity, minHeight: 60)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(on ? AnyShapeStyle(DS.Color.gradientPrimary) : AnyShapeStyle(DS.Color.cardBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(on ? Color.clear : DS.Color.cardBorder, lineWidth: 1)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
     // MARK: مكان النشر
 
     private var placementSection: some View {
@@ -313,15 +365,16 @@ struct OccasionComposerView: View {
     // MARK: الاسم (من الشجرة أو كتابة)
 
     private func nameSection(_ title: String) -> some View {
-        OccasionFormCard(title: title, hint: L10n.t("يطلع بسطر واحد ويصغر تلقائياً إذا طال", "One line — shrinks automatically when long")) {
+        OccasionFormCard(title: title, hint: L10n.t("بسطر واحد — أقصى شي ٦ أسماء ويصغر تلقائياً", "One line — up to 6 names, shrinks automatically")) {
             if let m = vm.member {
+                let formats = OccasionNameFormat.distinct(for: m)
                 selectedMember(m)
                 OccasionFieldLabel(L10n.t("صيغة الاسم", "Name format"))
                 OccasionChips(
-                    options: OccasionNameFormat.allCases.map { "\($0.label) — \($0.apply(m))" },
-                    selected: OccasionNameFormat.allCases.firstIndex(of: vm.nameFormat) ?? 0
+                    options: formats.map { "\($0.format.label) — \($0.text)" },
+                    selected: formats.firstIndex { $0.text == vm.name } ?? 0
                 ) { i in
-                    vm.nameFormat = OccasionNameFormat.allCases[i]
+                    vm.nameFormat = formats[i].format
                 }
             } else {
                 if vm.gender == .male && !vm.family.isEmpty {
@@ -636,6 +689,26 @@ struct OccasionComposerView: View {
     private var photoSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             DSSectionHeader(title: L10n.t("الصورة", "Photo"), icon: "photo.fill")
+            if vm.template.photoOptional {
+                OccasionChips(options: [L10n.t("مع صورة", "With photo"), L10n.t("بدون صورة", "No photo")],
+                              selected: vm.withPhoto ? 0 : 1) { i in
+                    withAnimation(DS.Anim.quick) { vm.withPhoto = i == 0 }
+                }
+                if !vm.showsPhoto {
+                    Text(L10n.t("مكان الصورة يروح للآية والاسم — بخط أكبر.", "The photo's space goes to the verse and the name, in larger type."))
+                        .font(DS.Font.caption1)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+            if vm.showsPhoto {
+                photoControls
+            }
+        }
+    }
+
+    /// اختيار الصورة وضبطها (تظهر لما يكون في البوست صورة)
+    private var photoControls: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.md) {
                 PhotosPicker(selection: $pickerItem, matching: .images) {
                     Label(vm.photo.image == nil ? L10n.t("اختيار صورة", "Choose photo") : L10n.t("تغيير الصورة", "Change photo"),

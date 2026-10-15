@@ -274,8 +274,12 @@ struct OccasionAreaGroup: Identifiable {
 
 // MARK: - صيغة الاسم (من شجرة العائلة) — نفس دوال الأسماء في FamilyMember
 
+/// أقصى عدد أسماء في البوست (بعدها يصغر الخط كثير) — الافتراضي «سداسي»
 enum OccasionNameFormat: String, CaseIterable, Identifiable {
-    case three, four, five, full
+    case three, four, five, six
+
+    static let maxWords = 6
+    static let defaultFormat: OccasionNameFormat = .six
 
     var id: String { rawValue }
 
@@ -284,7 +288,7 @@ enum OccasionNameFormat: String, CaseIterable, Identifiable {
         case .three: return L10n.t("ثلاثي", "3 names")
         case .four: return L10n.t("رباعي", "4 names")
         case .five: return L10n.t("خماسي", "5 names")
-        case .full: return L10n.t("كامل", "Full")
+        case .six: return L10n.t("سداسي", "6 names")
         }
     }
 
@@ -293,8 +297,34 @@ enum OccasionNameFormat: String, CaseIterable, Identifiable {
         case .three: return m.shortFullName
         case .four: return m.fourPartName
         case .five: return m.fivePartName
-        case .full: return m.displayFullName
+        case .six: return Self.sixPartName(m)
         }
+    }
+
+    /// الخمسة الأولى + العائلة (نفس قاعدة fivePartName بكلمة زيادة)
+    static func sixPartName(_ m: FamilyMember) -> String {
+        let parts = m.nameWordsWithFamily
+        guard parts.count > maxWords, let family = parts.last else {
+            return parts.isEmpty ? m.fullName : parts.joined(separator: " ")
+        }
+        return (parts.prefix(maxWords - 1) + [family]).joined(separator: " ")
+    }
+
+    /// الصيغ المختلفة فقط (الاسم القصير يطلع نفسه بأكثر من صيغة)
+    static func distinct(for m: FamilyMember) -> [(format: OccasionNameFormat, text: String)] {
+        var out: [(format: OccasionNameFormat, text: String)] = []
+        for f in allCases {
+            let text = f.apply(m)
+            if out.last?.text != text { out.append((format: f, text: text)) }
+        }
+        return out
+    }
+
+    /// الاسم المكتوب: أقصى شي ٦ أسماء (الخمسة الأولى + الأخير، وهو العائلة عادة)
+    static func capped(_ name: String) -> String {
+        let words = name.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard words.count > maxWords, let last = words.last else { return words.joined(separator: " ") }
+        return (words.prefix(maxWords - 1) + [last]).joined(separator: " ")
     }
 }
 
@@ -340,7 +370,7 @@ enum OccasionCompose {
                 let opening = openings.indices.contains(f.sel("opening")) ? openings[f.sel("opening")] : (openings.first ?? "")
                 out["intro"] = OccasionChoices.composeIntro(opening, honor: honor)
             }
-            let typed = clean(name)
+            let typed = OccasionNameFormat.capped(name)
             out["name"] = typed.isEmpty ? "[الاسم الكامل]" : typed
             if t.id == "graduation" {
                 let inst = f.sel("inst") == -1
@@ -366,14 +396,14 @@ enum OccasionCompose {
             let format = formats.indices.contains(f.sel("toFmt")) ? formats[f.sel("toFmt")] : formats[0]
             out["to"] = OccasionChoices.composeSolaceTo(format: format, family: f.txt("toFamily"))
             out["lead"] = pick(OccasionChoices.solaceLeads(g), f.sel("slead"), custom: f.txt("sleadCustom"))
-            let typed = clean(name)
+            let typed = OccasionNameFormat.capped(name)
             out["name"] = typed.isEmpty ? (g == .male ? "[اسم الفقيد]" : "[اسم الفقيدة]") : typed
             out["dua"] = pick(OccasionChoices.duas("solace", g), f.sel("dua"), custom: f.txt("duaCustom"))
 
         case .death, .deathText:
             out["lead"] = pick(OccasionChoices.deathLeads(g), f.sel("lead"), custom: f.txt("leadCustom"))
             out["title"] = pick(OccasionChoices.deathTitles(g), f.sel("title"), custom: f.txt("titleCustom"))
-            let typed = clean(name)
+            let typed = OccasionNameFormat.capped(name)
             out["name"] = typed.isEmpty ? (g == .male ? "[اسم الفقيد]" : "[اسم الفقيدة]") : typed
 
             if t.kind == .death {

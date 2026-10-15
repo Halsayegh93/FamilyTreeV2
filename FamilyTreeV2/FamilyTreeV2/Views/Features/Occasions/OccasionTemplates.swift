@@ -1,10 +1,11 @@
 import SwiftUI
 import CoreGraphics
 
-// MARK: - بوستات المناسبات — نموذج ٢ (صورة جانبية داخل إطار سداسي)
+// MARK: - بوستات المناسبات — نموذج ١ (صورة دائرية فوق) ونموذج ٢ (صورة جانبية داخل إطار سداسي)
 //
 // نسخة مطابقة لتعريفات الموقع: familytree-web/src/lib/occasions/templates.ts
 // أي تعديل على النصوص أو الألوان أو المقاسات لازم ينعكس في الثنين.
+// كل قالب له نسختين: مع صورة وبدون صورة (التهاني يختارها المستخدم؛ الوفاة قالبين؛ مشاركة العزاء بدون صورة).
 // ملاحظة: الألوان هنا ألوان «التصميم المعتمد» للبوست نفسه (مثل ملفات الصور)،
 // وليست ألوان واجهة — لذلك ما تمر على DS.Color.
 
@@ -63,6 +64,30 @@ struct OccasionPlacement: Identifiable, Hashable {
     }
 }
 
+// MARK: النموذج
+
+/// نموذج ١ (صورة دائرية فوق، اسم كبير، كبسولة متدرجة) أو نموذج ٢ (صورة جانبية داخل إطار سداسي)
+enum OccasionModel: String, CaseIterable, Identifiable {
+    case m1, m2
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .m1: return L10n.t("نموذج ١", "Design 1")
+        case .m2: return L10n.t("نموذج ٢", "Design 2")
+        }
+    }
+
+    /// شكل الصورة في النموذج
+    var subtitle: String {
+        switch self {
+        case .m1: return L10n.t("صورة دائرية فوق", "Round photo on top")
+        case .m2: return L10n.t("صورة سداسية جانبية", "Hexagon photo at the side")
+        }
+    }
+}
+
 // MARK: الألوان
 
 enum OccasionAvatar: String {
@@ -109,6 +134,56 @@ struct OccasionTheme {
                                     line: Color(hex: "#C9A24A"), shadow: Color(red: 11 / 255, green: 22 / 255, blue: 40 / 255))
 }
 
+/// نموذج ١ للتهاني (ملفات التصميم Wedding/Main/BabyGirl/Recovery/Graduation) — نفس M1_THEMES في الموقع
+struct OccasionM1Theme {
+    /// occasion-kit/m1/bg/<bg>.jpg (2160×2700)
+    let bg: String
+    /// occasion-kit/m1/frame/<frame>.png (800×800)
+    let frame: String
+    let root: Color
+    let intro: Color
+    /// تدرّج الكبسولة: linear-gradient(100deg, …)
+    let pill: [Gradient.Stop]
+    let pillText: Color
+    /// ظل الكبسولة: 0 14px 28px (pillA1) و 0 2px 5px (pillA2)
+    let pillShadow: Color
+    let pillA1: Double
+    let pillA2: Double
+    /// عرض المخطوطة وإزاحتها من فوق في المنشور (النسخة مع صورة)
+    let verseWidth: CGFloat
+    let verseTop: CGFloat
+
+    private static func stops(_ list: [(String, CGFloat)]) -> [Gradient.Stop] {
+        list.map { Gradient.Stop(color: Color(hex: $0.0), location: $0.1) }
+    }
+
+    static let wed = OccasionM1Theme(
+        bg: "wed", frame: "wed", root: Color(hex: "#FCF7EC"), intro: Color(hex: "#8A6A22"),
+        pill: stops([("#B4862A", 0), ("#D8AF4C", 0.2), ("#F3DFA0", 0.45), ("#CDA040", 0.68), ("#E6C877", 0.86), ("#B4862A", 1)]),
+        pillText: Color(hex: "#172536"), pillShadow: Color(red: 122 / 255, green: 94 / 255, blue: 34 / 255), pillA1: 0.34, pillA2: 0.3,
+        verseWidth: 932, verseTop: 120)
+    static let baby = OccasionM1Theme(
+        bg: "baby", frame: "baby", root: Color(hex: "#F5FAFE"), intro: Color(hex: "#1F6FA3"),
+        pill: stops([("#4F9FD3", 0), ("#74B9E6", 0.22), ("#C6E6F8", 0.46), ("#62ADDD", 0.68), ("#9FD2F0", 0.86), ("#4F9FD3", 1)]),
+        pillText: Color(hex: "#172536"), pillShadow: Color(red: 23 / 255, green: 86 / 255, blue: 127 / 255), pillA1: 0.3, pillA2: 0.26,
+        verseWidth: 972, verseTop: 120)
+    static let girl = OccasionM1Theme(
+        bg: "girl", frame: "girl", root: Color(hex: "#FDF5F3"), intro: Color(hex: "#9A4E5B"),
+        pill: stops([("#B96F79", 0), ("#D4959C", 0.2), ("#F6D8D3", 0.45), ("#C9848D", 0.68), ("#EBBEBA", 0.86), ("#B96F79", 1)]),
+        pillText: Color(hex: "#172536"), pillShadow: Color(red: 125 / 255, green: 63 / 255, blue: 73 / 255), pillA1: 0.3, pillA2: 0.26,
+        verseWidth: 972, verseTop: 120)
+    static let sick = OccasionM1Theme(
+        bg: "sick", frame: "sick", root: Color(hex: "#F6FBF8"), intro: Color(hex: "#216C4F"),
+        pill: stops([("#1F6548", 0), ("#2B7D5C", 0.22), ("#4A9E7C", 0.46), ("#236F51", 0.68), ("#3A8E6B", 0.86), ("#1F6548", 1)]),
+        pillText: Color(hex: "#FFFFFF"), pillShadow: Color(red: 22 / 255, green: 76 / 255, blue: 56 / 255), pillA1: 0.34, pillA2: 0.28,
+        verseWidth: 852, verseTop: 0)
+    static let grad = OccasionM1Theme(
+        bg: "grad", frame: "grad", root: Color(hex: "#FCF7EC"), intro: Color(hex: "#8A6A22"),
+        pill: stops([("#0F1E36", 0), ("#1B3558", 0.22), ("#3A5F90", 0.46), ("#152B4C", 0.68), ("#274876", 0.86), ("#0F1E36", 1)]),
+        pillText: Color(hex: "#F3DFA0"), pillShadow: Color(red: 11 / 255, green: 22 / 255, blue: 40 / 255), pillA1: 0.36, pillA2: 0.3,
+        verseWidth: 692, verseTop: 0)
+}
+
 /// إعلان الوفاة: ذهبي فاتح (شامبين) على الأسود
 enum OccasionDeathPalette {
     static let root = Color(hex: "#14171C")
@@ -135,6 +210,19 @@ struct OccasionVerse {
     static let sabrLead = OccasionVerse(file: "sabr-lead", width: 652, height: 205, label: "وَبَشِّرِ الصَّابِرِينَ الَّذِينَ إِذَا أَصَابَتْهُم مُّصِيبَةٌ قَالُوا")
     static let inna = OccasionVerse(file: "inna", width: 872, height: 289, label: "إِنَّا لِلَّهِ وَإِنَّا إِلَيْهِ رَاجِعُونَ")
     static let sabr = OccasionVerse(file: "sabr", width: 952, height: 210, label: "وَبَشِّرِ الصَّابِرِينَ الَّذِينَ إِذَا أَصَابَتْهُم مُّصِيبَةٌ قَالُوا إِنَّا لِلَّهِ وَإِنَّا إِلَيْهِ رَاجِعُونَ")
+    // نفس المخطوطات على سطرين — للنسخ اللي بدون صورة (المساحة أكبر فالآية أكبر)
+    static let wed2 = OccasionVerse(file: "wed-2", width: 932, height: 510, label: wed.label)
+    static let babySky2 = OccasionVerse(file: "baby-sky-2", width: 812, height: 418, label: babySky.label)
+    static let babyRose2 = OccasionVerse(file: "baby-rose-2", width: 812, height: 418, label: babyRose.label)
+}
+
+/// التهاني بدون صورة: المخطوطة (سطرين لما تتوفر) وعرضها وإزاحتها من فوق في المنشور لكل نموذج — من ملفات التصميم *-NP
+struct OccasionNoPhotoSpec {
+    let verse: OccasionVerse
+    let m1Width: CGFloat
+    let m1Top: CGFloat
+    let m2Width: CGFloat
+    let m2Top: CGFloat
 }
 
 // MARK: القوالب
@@ -161,17 +249,55 @@ struct OccasionTemplate: Identifiable {
     var verseTopPost: CGFloat = 0
     var verseTopSquare: CGFloat = 0
     var verseScale: CGFloat = 1
+    /// فيه صورة؟ (التهاني: النسخة الافتراضية — المستخدم يقدر يختار «بدون صورة»)
     let hasPhoto: Bool
+    /// نموذج ١ للتهاني (بدونه = ما له تصميم نموذج ١)
+    var m1: OccasionM1Theme? = nil
+    /// التهاني بدون صورة
+    var noPhoto: OccasionNoPhotoSpec? = nil
 
-    /// الملفات المطلوبة من occasion-kit لهذا القالب والمقاس
-    func assetPaths(for size: OccasionSize) -> [String] {
+    /// له تصميم «نموذج ١»؟
+    var hasModel1: Bool { kind == .happy ? m1 != nil : true }
+
+    /// النموذج اللي ينرسم فعلاً (القالب اللي ما له نموذج ١ يرجع لنموذج ٢)
+    func effectiveModel(_ model: OccasionModel) -> OccasionModel { model == .m1 && hasModel1 ? .m1 : .m2 }
+
+    /// المستخدم يختار «مع صورة / بدون صورة»؟ (التهاني فقط — الوفاة قالبين، ومشاركة العزاء بدون صورة)
+    var photoOptional: Bool { kind == .happy && noPhoto != nil }
+
+    /// فيه صورة؟ withPhoto = اختيار المستخدم للتهاني (نفسه في النموذجين)
+    func showsPhoto(_ withPhoto: Bool) -> Bool { photoOptional ? withPhoto : hasPhoto }
+
+    /// الملفات المطلوبة من occasion-kit لهذا القالب والمقاس والنموذج والنسخة
+    func assetPaths(for size: OccasionSize, model: OccasionModel = .m2, withPhoto: Bool = true) -> [String] {
+        let photo = showsPhoto(withPhoto)
         var paths: [String] = []
+        if effectiveModel(model) == .m1 {
+            // نموذج ١: خلفية وحدة لكل قالب تغطي أي مقاس (occasion-kit/m1)
+            switch kind {
+            case .happy:
+                if let m1 {
+                    paths.append("m1/bg/\(m1.bg).jpg")
+                    if photo { paths.append("m1/frame/\(m1.frame).png") }
+                }
+                if let v = photo ? verse : (noPhoto?.verse ?? verse) { paths.append("verse/\(v.file).png") }
+                paths.append("logo/navy.png")
+            case .death:
+                paths += ["m1/bg/death.jpg", "m1/frame/white.png", "verse/sabr-lead.png", "verse/inna.png", "logo/white.png"]
+            case .deathText:
+                paths += ["m1/bg/death.jpg", "verse/sabr-lead.png", "verse/inna.png", "logo/white.png"]
+            case .solace:
+                paths += ["m1/bg/solace.jpg", "verse/sabr.png", "logo/navy.png"]
+            }
+            return paths
+        }
         switch kind {
         case .happy:
             if let theme {
-                paths += ["bg/\(theme.bg)-\(size.rawValue).jpg", "frame/\(theme.frame).png"]
+                paths.append("bg/\(theme.bg)-\(size.rawValue).jpg")
+                if photo { paths.append("frame/\(theme.frame).png") }
             }
-            if let verse { paths.append("verse/\(verse.file).png") }
+            if let v = photo ? verse : (noPhoto?.verse ?? verse) { paths.append("verse/\(v.file).png") }
             paths.append("logo/navy.png")
         case .death:
             paths += ["bg/death-\(size.rawValue).jpg", "frame/goldnight.png", "verse/sabr-lead.png", "verse/inna.png", "logo/white.png"]
@@ -189,15 +315,20 @@ extension OccasionTemplate {
     static var all: [OccasionTemplate] {
         [
             OccasionTemplate(id: "wedding", title: L10n.t("عقد قران", "Wedding"), icon: "heart.circle.fill", kind: .happy,
-                             theme: .gold, verse: .wed, verseTopPost: 40, verseTopSquare: 10, hasPhoto: true),
+                             theme: .gold, verse: .wed, verseTopPost: 40, verseTopSquare: 10, hasPhoto: true, m1: .wed,
+                             noPhoto: OccasionNoPhotoSpec(verse: .wed2, m1Width: 876, m1Top: 40, m2Width: 857, m2Top: 20)),
             OccasionTemplate(id: "newborn", title: L10n.t("قدوم مولود", "Newborn boy"), icon: "gift.fill", kind: .happy,
-                             theme: .sky, verse: .babySky, verseTopPost: 60, verseTopSquare: 20, hasPhoto: true),
+                             theme: .sky, verse: .babySky, verseTopPost: 60, verseTopSquare: 20, hasPhoto: true, m1: .baby,
+                             noPhoto: OccasionNoPhotoSpec(verse: .babySky2, m1Width: 844, m1Top: 50, m2Width: 812, m2Top: 30)),
             OccasionTemplate(id: "newbornGirl", title: L10n.t("قدوم مولودة", "Newborn girl"), icon: "sparkles", kind: .happy,
-                             theme: .rose, verse: .babyRose, verseTopPost: 60, verseTopSquare: 20, hasPhoto: true),
+                             theme: .rose, verse: .babyRose, verseTopPost: 60, verseTopSquare: 20, hasPhoto: true, m1: .girl,
+                             noPhoto: OccasionNoPhotoSpec(verse: .babyRose2, m1Width: 844, m1Top: 50, m2Width: 812, m2Top: 30)),
             OccasionTemplate(id: "recovery", title: L10n.t("أجر وعافية", "Get well"), icon: "cross.case.fill", kind: .happy,
-                             theme: .green, verse: .sick, verseScale: 0.86, hasPhoto: true),
+                             theme: .green, verse: .sick, verseScale: 0.86, hasPhoto: true, m1: .sick,
+                             noPhoto: OccasionNoPhotoSpec(verse: .sick, m1Width: 784, m1Top: 50, m2Width: 784, m2Top: 30)),
             OccasionTemplate(id: "graduation", title: L10n.t("تهنئة تخرج", "Graduation"), icon: "graduationcap.fill", kind: .happy,
-                             theme: .navy, verse: .grad, verseScale: 0.86, hasPhoto: true),
+                             theme: .navy, verse: .grad, verseScale: 0.86, hasPhoto: true, m1: .grad,
+                             noPhoto: OccasionNoPhotoSpec(verse: .grad, m1Width: 637, m1Top: 50, m2Width: 623, m2Top: 30)),
             OccasionTemplate(id: "death", title: L10n.t("إعلان وفاة — مع صورة", "Obituary — photo"), icon: "moon.stars.fill",
                              kind: .death, hasPhoto: true),
             OccasionTemplate(id: "deathText", title: L10n.t("إعلان وفاة — بدون صورة", "Obituary — details"), icon: "doc.text.fill",
@@ -295,6 +426,85 @@ struct SolaceLayout {
         case .story:
             return SolaceLayout(pad: OccasionInsets(top: 250, side: 48, bottom: 250), verseMul: 1, title: 96, from: 48, sub: 34, to: 76,
                                 lead: 34, name: 70, dua: 31, lh: 220, lineW: 250)
+        }
+    }
+}
+
+/// نموذج ٢ — التهاني بدون صورة (M2-*-NP): الآية فوق، النص في الوسط، الشعار بين خطين
+struct HappyNoPhotoLayout {
+    let pad: OccasionInsets
+    let cw: CGFloat, verseMul: CGFloat, topMul: CGFloat
+    let intro: CGFloat, name: CGFloat, occ: CGFloat, sub: CGFloat, dua: CGFloat, duaW: CGFloat
+    let lh: CGFloat, lineW: CGFloat, divTop: CGFloat, divBottom: CGFloat
+
+    static func of(_ s: OccasionSize) -> HappyNoPhotoLayout {
+        switch s {
+        case .post:
+            return HappyNoPhotoLayout(pad: OccasionInsets(top: 58, side: 44, bottom: 30), cw: 940, verseMul: 1, topMul: 1,
+                                      intro: 38, name: 84, occ: 52, sub: 54, dua: 31, duaW: 760, lh: 184, lineW: 250, divTop: 24, divBottom: 20)
+        case .square:
+            return HappyNoPhotoLayout(pad: OccasionInsets(top: 34, side: 44, bottom: 22), cw: 940, verseMul: 0.72, topMul: 0.3,
+                                      intro: 32, name: 70, occ: 44, sub: 46, dua: 26, duaW: 740, lh: 136, lineW: 230, divTop: 16, divBottom: 12)
+        case .story:
+            return HappyNoPhotoLayout(pad: OccasionInsets(top: 250, side: 44, bottom: 250), cw: 940, verseMul: 1.04, topMul: 0,
+                                      intro: 40, name: 88, occ: 54, sub: 56, dua: 32, duaW: 780, lh: 200, lineW: 250, divTop: 26, divBottom: 22)
+        }
+    }
+}
+
+/// نموذج ١: كل الأرقام من ملفات التصميم مضروبة في k (المنشور k = 1 هو التصميم نفسه) — نفس M1_*_LAYOUT في الموقع
+struct OccasionM1Layout {
+    let pad: OccasionInsets
+    let k: CGFloat
+    /// نسبة إزاحة المخطوطة من فوق
+    let verseTopMul: CGFloat
+
+    private static func make(_ top: CGFloat, _ side: CGFloat, _ bottom: CGFloat, k: CGFloat, verseTopMul: CGFloat = 0) -> OccasionM1Layout {
+        OccasionM1Layout(pad: OccasionInsets(top: top, side: side, bottom: bottom), k: k, verseTopMul: verseTopMul)
+    }
+
+    /// التهاني مع صورة (Wedding/Main/BabyGirl/Recovery/Graduation)
+    static func happy(_ s: OccasionSize) -> OccasionM1Layout {
+        switch s {
+        case .post: return make(34, 50, 26, k: 1, verseTopMul: 1)
+        case .story: return make(250, 50, 250, k: 1)
+        case .square: return make(24, 50, 18, k: 0.78, verseTopMul: 0.15)
+        }
+    }
+
+    /// التهاني بدون صورة (Wedding-NP …): الآية أكبر، الاسم ٩٢، الكبسولة ٤٠، الدعاء ٣٠
+    static func happyNoPhoto(_ s: OccasionSize) -> OccasionM1Layout {
+        switch s {
+        case .post: return make(44, 56, 26, k: 1, verseTopMul: 1)
+        case .story: return make(250, 56, 250, k: 1.04)
+        case .square: return make(26, 56, 18, k: 0.76, verseTopMul: 0.25)
+        }
+    }
+
+    /// إعلان وفاة مع صورة (Condolence-Photo): الحلقة البيضاء بين الآية والاسم
+    static func deathPhoto(_ s: OccasionSize) -> OccasionM1Layout {
+        switch s {
+        case .post: return make(30, 56, 20, k: 1)
+        case .story: return make(250, 56, 250, k: 1.04)
+        case .square: return make(20, 56, 12, k: 0.76)
+        }
+    }
+
+    /// إعلان وفاة بدون صورة (Condolence) بالتفاصيل كاملة
+    static func deathText(_ s: OccasionSize) -> OccasionM1Layout {
+        switch s {
+        case .post: return make(34, 56, 20, k: 1)
+        case .story: return make(250, 56, 250, k: 1.04)
+        case .square: return make(22, 56, 12, k: 0.76)
+        }
+    }
+
+    /// مشاركة عزاء (Solace) — التصميم نفسه ستوري 1080×1920
+    static func solace(_ s: OccasionSize) -> OccasionM1Layout {
+        switch s {
+        case .story: return make(236, 60, 206, k: 1)
+        case .post: return make(50, 60, 28, k: 0.88)
+        case .square: return make(34, 60, 18, k: 0.75)
         }
     }
 }

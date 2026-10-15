@@ -13,7 +13,11 @@ final class OccasionComposerViewModel: ObservableObject {
     @Published var form = OccasionForm()
     /// العضو المختار من شجرة العائلة (رجال)
     @Published private(set) var member: FamilyMember?
-    @Published var nameFormat: OccasionNameFormat = .three
+    @Published var nameFormat: OccasionNameFormat = OccasionNameFormat.defaultFormat
+    /// نموذج ١ (صورة دائرية فوق) أو نموذج ٢ (صورة سداسية جانبية) — الافتراضي نموذج ٢ مثل الموقع
+    @Published var model: OccasionModel = .m2
+    /// التهاني: «مع صورة» أو «بدون صورة» (يبقى لما يتغيّر القالب مثل النموذج)
+    @Published var withPhoto = true
     @Published var photo = OccasionPhoto()
     /// الصورة الحالية صورة العضو من الشجرة (مو صورة اختارها المستخدم)
     @Published private(set) var photoFromMember = false
@@ -46,8 +50,16 @@ final class OccasionComposerViewModel: ObservableObject {
     var gender: OccasionGender { form.gender }
     var isDeath: Bool { template.kind == .death || template.kind == .deathText }
 
-    /// مفتاح الملفات المطلوبة — يتغيّر مع القالب أو المقاس
-    var assetKey: String { "\(template.id)-\(size.rawValue)" }
+    /// النموذج اللي ينرسم فعلاً
+    var effectiveModel: OccasionModel { template.effectiveModel(model) }
+
+    /// فيه صورة في البوست الحالي؟ (التهاني حسب «مع صورة / بدون صورة»)
+    var showsPhoto: Bool { template.showsPhoto(withPhoto) }
+
+    /// مفتاح الملفات المطلوبة — يتغيّر مع القالب أو المقاس أو النموذج أو النسخة
+    var assetKey: String { "\(template.id)-\(size.rawValue)-\(effectiveModel.rawValue)-\(showsPhoto)" }
+
+    private var assetPaths: [String] { template.assetPaths(for: size, model: model, withPhoto: withPhoto) }
 
     /// الاسم في البوست: من الشجرة بالصيغة المختارة، أو المكتوب
     var name: String {
@@ -121,7 +133,7 @@ final class OccasionComposerViewModel: ObservableObject {
         form = OccasionForm()
         member = nil
         autoRelations = [:]
-        nameFormat = .three
+        nameFormat = OccasionNameFormat.defaultFormat
         if photoFromMember {
             photo = OccasionPhoto(gray: keepGray)
             photoFromMember = false
@@ -229,7 +241,7 @@ final class OccasionComposerViewModel: ObservableObject {
     }
 
     func prepareAssets() async {
-        await kit.prepare(template.assetPaths(for: size))
+        await kit.prepare(assetPaths)
     }
 
     // MARK: الصورة
@@ -283,8 +295,9 @@ final class OccasionComposerViewModel: ObservableObject {
 
     /// يرسم البوست بمقاسه الحقيقي (1080 × الارتفاع) بكسل
     func render() async -> UIImage? {
-        guard await kit.prepare(template.assetPaths(for: size)), kit.fontsReady else { return nil }
-        let view = OccasionPostView(template: template, size: size, values: values, photo: photo, kit: kit, revision: kit.revision)
+        guard await kit.prepare(assetPaths), kit.fontsReady else { return nil }
+        let view = OccasionPostView(template: template, size: size, values: values, photo: photo, kit: kit, revision: kit.revision,
+                                    model: model, withPhoto: withPhoto)
         let renderer = ImageRenderer(content: view)
         renderer.proposedSize = ProposedViewSize(size.canvas)
         renderer.scale = 1
@@ -325,8 +338,9 @@ final class OccasionComposerViewModel: ObservableObject {
             message = renderFailedMessage
             return
         }
+        let variant = template.photoOptional && !withPhoto ? "-nophoto" : ""
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("almohali-\(template.id)-\(size.rawValue).png")
+            .appendingPathComponent("almohali-\(template.id)\(variant)-\(effectiveModel.rawValue)-\(size.rawValue).png")
         do {
             try data.write(to: url, options: .atomic)
             shareItem = OccasionShareItem(url: url)

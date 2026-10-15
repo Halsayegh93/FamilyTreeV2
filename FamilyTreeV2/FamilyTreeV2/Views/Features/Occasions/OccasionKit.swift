@@ -102,7 +102,9 @@ final class OccasionKit: ObservableObject {
                 group.addTask {
                     guard let url = try? await Self.download(path, base: base, dir: dir) else { return (path, nil, nil) }
                     if path.hasPrefix("fonts/") { return (path, url, nil) }
-                    let img = Self.decode(url, maxPixel: path.hasPrefix("bg/") ? 1920 : 1100)
+                    // الخلفيات (ونموذج ١: خلفية وحدة تغطي أي مقاس) بدقة الستوري، والباقي يكفيه 1100
+                    let isBackground = path.hasPrefix("bg/") || path.hasPrefix("m1/bg/")
+                    let img = Self.decode(url, maxPixel: isBackground ? 1920 : 1100)
                     if img == nil { try? FileManager.default.removeItem(at: url) }   // ملف تالف — ينزل من جديد المرة الجاية
                     return (path, url, img)
                 }

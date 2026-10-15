@@ -1,9 +1,9 @@
 import SwiftUI
 import UIKit
 
-// MARK: - رسم بوست المناسبة بمقاسه الحقيقي (نقطة = بكسل) — نموذج ٢
+// MARK: - رسم بوست المناسبة بمقاسه الحقيقي (نقطة = بكسل) — نموذج ٢، ونموذج ١ في OccasionModel1View.swift
 //
-// نفس تخطيط الموقع (familytree-web/src/components/occasions/OccasionPost.tsx).
+// نفس تخطيط الموقع (familytree-web/src/components/occasions/OccasionPost.tsx)، وكل قالب مع صورة وبدون صورة.
 // الرسم بإحداثيات ثابتة من اليسار لليمين (LTR) حتى يطلع نفس الشكل مهما كانت لغة التطبيق؛
 // النص العربي ينرسم صح تلقائياً، والصورة دائماً يسار والنص يمين مثل التصميم المعتمد.
 
@@ -24,8 +24,12 @@ struct OccasionPostView: View {
     let kit: OccasionKit
     /// يتغيّر لما تتوفّر ملفات جديدة — يضمن تحديث الرسم
     let revision: Int
+    /// نموذج ١ أو نموذج ٢ (القالب اللي ما له نموذج ١ يرجع لنموذج ٢)
+    var model: OccasionModel = .m2
+    /// التهاني: «مع صورة» أو «بدون صورة» (الوفاة قالبين، ومشاركة العزاء بدون صورة)
+    var withPhoto: Bool = true
 
-    private var canvas: CGSize { size.canvas }
+    var canvas: CGSize { size.canvas }
 
     var body: some View {
         content
@@ -36,26 +40,37 @@ struct OccasionPostView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch template.kind {
-        case .happy: happyPost
-        case .death: deathPost
-        case .deathText: deathTextPost
-        case .solace: solacePost
+        if template.effectiveModel(model) == .m1 {
+            switch template.kind {
+            case .happy:
+                if template.showsPhoto(withPhoto) { m1HappyPost } else { m1HappyNoPhotoPost }
+            case .death: m1DeathPhotoPost
+            case .deathText: m1DeathTextPost
+            case .solace: m1SolacePost
+            }
+        } else {
+            switch template.kind {
+            case .happy:
+                if template.showsPhoto(withPhoto) { happyPost } else { happyNoPhotoPost }
+            case .death: deathPost
+            case .deathText: deathTextPost
+            case .solace: solacePost
+            }
         }
     }
 
     // MARK: أدوات
 
     /// النص النهائي للبوست: بدون تشكيل (الخط ما يضبطه) و«المحمد علي» ما ينقسم — نفس postText في الموقع
-    private func value(_ key: String) -> String { OccasionText.postText(values[key] ?? "") }
+    func value(_ key: String) -> String { OccasionText.postText(values[key] ?? "") }
 
-    private func has(_ key: String) -> Bool {
+    func has(_ key: String) -> Bool {
         !value(key).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func image(_ path: String) -> UIImage? { kit.image(path) }
+    func image(_ path: String) -> UIImage? { kit.image(path) }
 
-    private func canvasBackground(root: Color, bg: String) -> some View {
+    func canvasBackground(root: Color, bg: String) -> some View {
         ZStack {
             root
             if let ui = image("bg/\(bg)-\(size.rawValue).jpg") {
@@ -65,7 +80,7 @@ struct OccasionPostView: View {
         .frame(width: canvas.width, height: canvas.height)
     }
 
-    private func verse(_ v: OccasionVerse, scale: CGFloat, top: CGFloat = 0, pull: CGFloat = 30) -> some View {
+    func verse(_ v: OccasionVerse, scale: CGFloat, top: CGFloat = 0, pull: CGFloat = 30) -> some View {
         let w = (v.width * scale).rounded()
         let h = w * v.height / v.width
         return Group {
@@ -80,7 +95,7 @@ struct OccasionPostView: View {
         .padding(.bottom, -pull)
     }
 
-    private func footer(logo: String, color: Color, lh: CGFloat, lineW: CGFloat, mb: CGFloat) -> some View {
+    func footer(logo: String, color: Color, lh: CGFloat, lineW: CGFloat, mb: CGFloat) -> some View {
         HStack(spacing: 28) {
             LinearGradient(colors: [color.opacity(0), color], startPoint: .leading, endPoint: .trailing)
                 .frame(width: lineW, height: 2)
@@ -96,8 +111,8 @@ struct OccasionPostView: View {
         .padding(.bottom, mb)
     }
 
-    private func text(_ string: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, color: Color,
-                      lineHeight: CGFloat, balanceWidth: CGFloat? = nil) -> some View {
+    func text(_ string: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, color: Color,
+              lineHeight: CGFloat, balanceWidth: CGFloat? = nil) -> some View {
         let shown = balanceWidth.map { OccasionText.balanced(string, weight: weight, size: size, maxWidth: $0) } ?? string
         return Text(shown)
             .font(.custom(weight.postScriptName, fixedSize: size))
@@ -110,8 +125,8 @@ struct OccasionPostView: View {
     }
 
     /// الاسم بسطر واحد: يصغر تلقائياً لين يدخل بالعرض (٧ أو ٩ أسماء) — مثل FitLine في الموقع
-    private func fitLine(_ string: String, _ weight: OccasionKit.FontWeight, maxSize: CGFloat, minSize: CGFloat,
-                         width: CGFloat, color: Color, lineHeight: CGFloat) -> some View {
+    func fitLine(_ string: String, _ weight: OccasionKit.FontWeight, maxSize: CGFloat, minSize: CGFloat,
+                 width: CGFloat, color: Color, lineHeight: CGFloat) -> some View {
         let size = OccasionText.fitSize(string, weight: weight, maxSize: maxSize, minSize: minSize, width: width)
         return Text(string)
             .font(.custom(weight.postScriptName, fixedSize: size))
@@ -171,6 +186,58 @@ struct OccasionPostView: View {
                 }
                 .frame(width: rowW, height: rowH, alignment: .topLeading)
             ),
+            AnyView(footer(logo: "navy", color: th.line, lh: L.lh, lineW: L.lineW, mb: -10)),
+        ]
+
+        return ZStack(alignment: .top) {
+            canvasBackground(root: th.root, bg: th.bg)
+            OccasionSpacedColumn(items: items)
+                .padding(.top, L.pad.top)
+                .padding(.horizontal, L.pad.side)
+                .padding(.bottom, L.pad.bottom)
+                .frame(width: canvas.width, height: canvas.height)
+        }
+    }
+
+    // MARK: التهاني بدون صورة (M2-Wedding-NP/Main-NP/BabyGirl-NP/Recovery-NP/Graduation-NP)
+    // مساحة الصورة تروح للآية (بسطرين لما تتوفر) والنص بعرض البوست، والشعار بين خطين مثل النسخة مع صورة.
+
+    private var happyNoPhotoPost: some View {
+        let L = HappyNoPhotoLayout.of(size)
+        let th = template.theme ?? .gold
+        let np = template.noPhoto
+        let v = np?.verse ?? template.verse ?? .wed
+        let vWidth = (np?.m2Width ?? v.width) * L.verseMul
+        let vTop = (np?.m2Top ?? 0) * L.topMul
+
+        let column = VStack(spacing: 0) {
+            if has("intro") {
+                text(value("intro"), .semibold, L.intro, color: th.intro, lineHeight: 1.4, balanceWidth: L.cw)
+            }
+            fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 14, width: L.cw, color: Color(hex: "#172536"), lineHeight: 1.25)
+                .shadow(color: .white.opacity(0.9), radius: 0, x: 0, y: 2)
+                .shadow(color: Color(red: 23 / 255, green: 37 / 255, blue: 54 / 255).opacity(0.20), radius: 12, x: 0, y: 12)
+                .padding(.top, 4)
+            if has("occasion") {
+                text(value("occasion"), .extrabold, L.occ, color: th.acc, lineHeight: 1.35, balanceWidth: L.cw)
+                    .padding(.top, 16)
+            }
+            if has("sub") {
+                text(value("sub"), .extrabold, L.sub, color: th.sub, lineHeight: 1.3, balanceWidth: L.cw)
+            }
+            if has("dua") {
+                OccasionDivider(color: th.line)
+                    .padding(.top, L.divTop)
+                    .padding(.bottom, L.divBottom)
+                text(value("dua"), .regular, L.dua, color: Color(hex: "#3E4A5A"), lineHeight: 1.7, balanceWidth: L.duaW)
+                    .frame(maxWidth: L.duaW)
+            }
+        }
+        .frame(width: L.cw)
+
+        let items: [AnyView] = [
+            AnyView(verse(v, scale: vWidth / v.width, top: vTop)),
+            AnyView(column),
             AnyView(footer(logo: "navy", color: th.line, lh: L.lh, lineW: L.lineW, mb: -10)),
         ]
 
@@ -343,36 +410,36 @@ struct OccasionPostView: View {
 
     // MARK: قطع الوفاة
 
-    private func deathVerses(lead: CGFloat, main: CGFloat, leadPull: CGFloat, mainPull: CGFloat) -> some View {
+    func deathVerses(lead: CGFloat, main: CGFloat, leadPull: CGFloat, mainPull: CGFloat) -> some View {
         VStack(spacing: 0) {
             verse(.sabrLead, scale: lead, pull: leadPull)
             verse(.inna, scale: main, pull: mainPull)
         }
     }
 
-    private func deathDua(size s: CGFloat) -> some View {
+    func deathDua(size s: CGFloat) -> some View {
         VStack(spacing: 0) {
             if has("dua1") { text(value("dua1"), .regular, s, color: OccasionDeathPalette.dua, lineHeight: 1.6) }
             if has("dua2") { text(value("dua2"), .regular, s, color: OccasionDeathPalette.dua, lineHeight: 1.6) }
         }
     }
 
-    private func venues(scale s: CGFloat) -> some View {
+    /// عزاء الرجال والنساء. accent = لون «عــزاء …» والدبوس (نموذج ٢ ذهبي، نموذج ١ أبيض)، line = الخط الفاصل بينهم
+    func venues(scale s: CGFloat, accent: Color = OccasionDeathPalette.gold, line: Color = OccasionDeathPalette.goldLine) -> some View {
         let men = has("menPlace")
         let women = has("womenPlace")
         // من اليسار لليمين: النساء ثم الرجال (في التصميم RTL: الرجال يمين)
         return HStack(spacing: 22 * s) {
             if women {
-                OccasionVenue(label: "النساء", place: value("womenPlace"), area: value("womenArea"), times: value("womenTimes"), scale: s)
+                OccasionVenue(label: "النساء", place: value("womenPlace"), area: value("womenArea"), times: value("womenTimes"), scale: s, accent: accent)
                     .frame(maxWidth: .infinity)
             }
             if men && women {
-                LinearGradient(colors: [OccasionDeathPalette.goldLine.opacity(0), OccasionDeathPalette.goldLine, OccasionDeathPalette.goldLine.opacity(0)],
-                               startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [line.opacity(0), line, line.opacity(0)], startPoint: .top, endPoint: .bottom)
                     .frame(width: 2, height: 128 * s)
             }
             if men {
-                OccasionVenue(label: "الرجال", place: value("menPlace"), area: value("menArea"), times: value("menTimes"), scale: s)
+                OccasionVenue(label: "الرجال", place: value("menPlace"), area: value("menArea"), times: value("menTimes"), scale: s, accent: accent)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -512,6 +579,8 @@ struct OccasionVenue: View {
     let area: String
     let times: String
     let scale: CGFloat
+    /// لون «عــزاء …» والدبوس (نموذج ٢ ذهبي، نموذج ١ أبيض)
+    var accent: Color = OccasionDeathPalette.gold
 
     var body: some View {
         let P = OccasionDeathPalette.self
@@ -534,15 +603,15 @@ struct OccasionVenue: View {
                 }
             }
             .frame(maxWidth: 250 * s, alignment: .trailing)
-            OccasionPin(color: P.gold)
+            OccasionPin(color: accent)
                 .frame(width: 54 * s, height: 54 * s)
             VStack(spacing: 0) {
                 Text("عــزاء")
                     .font(.custom(OccasionKit.FontWeight.semibold.postScriptName, fixedSize: 29 * s))
-                    .foregroundColor(P.gold)
+                    .foregroundColor(accent)
                 Text(label)
                     .font(.custom(OccasionKit.FontWeight.semibold.postScriptName, fixedSize: 29 * s))
-                    .foregroundColor(P.gold)
+                    .foregroundColor(accent)
                 if !times.trimmingCharacters(in: .whitespaces).isEmpty {
                     Text(times)
                         .font(.custom(OccasionKit.FontWeight.regular.postScriptName, fixedSize: 22 * s))
@@ -587,12 +656,14 @@ struct OccasionPin: View {
     }
 }
 
-/// ظل النص الفاتح (مثل text-shadow في التصميم)
+/// ظل النص الفاتح (مثل text-shadow في التصميم) — k لنموذج ١ في المقاسات المصغّرة
 struct OccasionLightShadow: ViewModifier {
+    var k: CGFloat = 1
+
     func body(content: Content) -> some View {
         content
-            .shadow(color: .white.opacity(0.95), radius: 0, x: 0, y: 2)
-            .shadow(color: Color(red: 27 / 255, green: 32 / 255, blue: 38 / 255).opacity(0.20), radius: 12, x: 0, y: 12)
+            .shadow(color: .white.opacity(0.95), radius: 0, x: 0, y: 2 * k)
+            .shadow(color: Color(red: 27 / 255, green: 32 / 255, blue: 38 / 255).opacity(0.20), radius: 12 * k, x: 0, y: 12 * k)
     }
 }
 
