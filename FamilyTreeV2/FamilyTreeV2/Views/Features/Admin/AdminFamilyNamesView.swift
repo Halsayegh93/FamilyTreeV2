@@ -83,7 +83,7 @@ struct AdminFamilyNamesView: View {
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(DS.Color.gradientPrimary)
+                    .fill(DS.Color.gradientBand)
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .fill(DS.Color.headerVeil)
             }

@@ -223,7 +223,7 @@ struct AdminInboxView: View {
 
     private func swipeActions(for msg: AdminRequest) -> [DSSwipeAction] {
         var actions = [
-            DSSwipeAction(icon: "trash.fill", title: L10n.t("حذف", "Delete"), color: DS.Color.error) {
+            DSSwipeAction(icon: "trash.fill", title: L10n.t("حذف", "Delete"), color: DS.Color.errorFill) {
                 messageToDelete = msg
             }
         ]
@@ -271,7 +271,7 @@ struct AdminInboxView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.vertical, 12)
-                .background(Capsule().fill(DS.Color.error))
+                .background(Capsule().fill(DS.Color.errorFill))
             }
             .buttonStyle(.plain)
             .disabled(selectedIDs.isEmpty || isDeleting)

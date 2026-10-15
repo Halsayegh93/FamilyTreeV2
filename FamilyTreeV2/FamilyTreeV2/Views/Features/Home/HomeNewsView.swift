@@ -345,7 +345,7 @@ struct HomeNewsView: View {
         .frame(maxWidth: .infinity)
         .background(
             ZStack {
-                DS.Color.gradientPrimary
+                DS.Color.gradientBand
                 // نفس طبقة MainHeaderView — بدونها يطلع الهيدر أفتح
                 DS.Color.headerVeil
             }
@@ -676,7 +676,7 @@ struct HomeNewsView: View {
             title: L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali"),
             subtitle: L10n.t("تطبيق العائلة", "Family App"),
             icon: "tree.fill",
-            backgroundGradient: DS.Color.gradientPrimary,
+            backgroundGradient: DS.Color.gradientBand,
             hideNotificationBell: true
         ) {
             // الجرس ثم علامة «عن التطبيق» بعده (طلب المالك)

@@ -194,18 +194,21 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 
 ### Colors — `DS.Color`
 
-- **Brand:** `primary` (#2B7A9F Ocean Blue), `primaryDark` (#1E5474), `primaryLight` (#78ACC3), `accent` (#516F80 Slate Blue), `accentDark` (#344B59), `accentLight` (#8A9EA9)
-- **Neon Accents:** `neonBlue` (#5D8AA8), `neonPurple` (#89A6B1), `neonCyan` (#A3C4D3), `neonPink` (#D3AEB1)
-- **Semantic:** `success` (#2F5C3E), `warning` (#B88E33), `error` (#8C2A2A), `info` (#496885)
-- **Surfaces:** `background`, `surface`, `surfaceElevated` (auto light/dark mode via system colors)
-- **Text:** `textPrimary`, `textSecondary`, `textTertiary`, `textOnPrimary`
-- **Grid:** `gridTree` (#344B59), `gridAlerts` (#8C2A2A), `gridDiwaniya` (#2B7A9F), `gridContact` (#516F80)
-- **Gradients:** `gradientPrimary`, `gradientAccent`, `gradientWarm`, `gradientCool`, `gradientDark`, `gradientAuth`, `gradientFire`, `gradientOcean`, `gradientNeon`
+Visual identity (October 2026) follows the designer's guide: navy #172536, gold #B89A5A, cream #F2EBDD. The token names and values match the website (`familytree-web/src/app/globals.css`) and the «المحمد علي» design system. Values are light / dark.
+
+- **Brand:** `primary` navy (#172536 / #7FA8D6), `primaryDark` (#0F1824 / #2B5F90), `primaryLight` (#5D6672 / #A9C4E4), `accent` = gold-text for text on light surfaces (#725D31 / #B89A5A), `accentDark` (#5A4927 / #9C8045), `accentLight` = gold for lines and frames (#B89A5A in both modes). `secondary` (forest green) stays a supporting color.
+- **Gold rule:** gold text on light backgrounds uses `accent` (#725D31); the brighter #B89A5A is text only on navy.
+- **Supporting accents:** `neonBlue` (#172536, band), `neonPurple` (slate), `neonCyan` (forest), `neonPink` (burgundy rose)
+- **Semantic:** `success` (#216C4F), `warning` (#875C0A), `error` (#C0282A), `info` (= `primary`). Red badges and pills with white text use `errorFill` (#C0282A in both modes); `error` is for text and icons.
+- **Surfaces:** `background` sand (#FCF7EC / #14171C), `surface` and `cardBackground` white (#FFFFFF / #1C1F25), `cardBackgroundSoft` cream (#F2EBDD / #23272E), `cardBorder` line (#DCCFB4 / #343A44), `cardBorderStrong` line-strong (#8A7B60 / #6B7380) for edges that must be visible (buttons, fields)
+- **Text:** `textPrimary` ink (#172536 / #FFFFFF), `textSecondary` ink-muted (#4A5560 / #C9CED5), `textTertiary`, `textOnPrimary`
+- **Grid:** `gridTree` (= `primary`), `gridAlerts` (= `error`), `gridDiwaniya` (= `secondary`), `gridContact` (= `accent`)
+- **Gradients:** `gradientPrimary`, `gradientAccent`, `gradientWarm`, `gradientCool`, `gradientDark`, `gradientAuth`, `gradientFire`, `gradientOcean`, `gradientNeon`. The identity uses flat color: `gradientPrimary` (navy #172536; #2B5F90 in dark so buttons and selected states stand out from dark cards) and `gradientAccent` are solid fills that keep their names for compatibility. Headers and hero panels use `gradientBand` (band: #172536; #1B2638 in dark, as on the website). Use these as fills only; navy text and icons use `primary`. Cards, buttons and fields have no glass; Liquid Glass stays on the tab bar, `dsGlass` and `glassPill()`.
 - Hex colors via `Color(hex: "#XXXXXX")` extension
 
 ### Typography — `DS.Font`
 
-- Uses the system font (SF) — `.system(.style, design: .default)`
+- IBM Plex Sans Arabic for all UI text, titles and body (`DS.Font.Plex.*`, `Font.custom(_:size:relativeTo:)` so Dynamic Type still works). `DS.Font.scaled()` stays on the system font.
 - Scale: `hero`, `largeTitle`, `title1`-`title3`, `headline`, `body`, `bodyBold`, `callout`, `calloutBold`, `subheadline`, `footnote`, `caption1`, `caption2`
 - Dynamic Type: use `DS.Font.scaled(size, weight:)` instead of `.system(size:)` — maps sizes to appropriate text styles
 
@@ -223,7 +226,7 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 
 ### Shadows — `DS.Shadow`
 
-- `card` (black 0.06, r:10, y:3), `subtle` (black 0.03, r:5, y:2), `glow` (gold 0.15, r:12, y:4), `glowAccent` (green 0.12, r:10, y:4), `neon` (gold 0.15, r:12, y:3), `none`
+- `card` (black 0.06, r:8, y:2), `subtle` (black 0.03, r:4, y:1), `glow` (navy 0.16, r:14, y:4), `glowAccent` (gold 0.16, r:12, y:4), `neon` (navy 0.14, r:12, y:3), `none`
 
 ### Animations — `DS.Anim`
 
@@ -237,10 +240,10 @@ IMPORTANT: Always use existing DS components before creating custom views.
 | Component | Use For |
 |---|---|
 | `DSCard` | Standard solid card container with border stroke + shadow |
-| `DSGradientCard` | Gradient background card with glass overlay |
+| `DSGradientCard` | Card on a solid brand fill (navy by default) |
 | `DSGlowCard` | Card with colored border accent |
-| `DSPrimaryButton` | Full-width gradient CTA (height: 58), supports `useGradient` and custom `color` |
-| `DSSecondaryButton` | Outlined secondary action (height: 52) |
+| `DSPrimaryButton` | Full-width navy CTA (height: 58), flat fill, supports `useGradient` and custom `color` |
+| `DSSecondaryButton` | White surface, line-strong edge, navy label (height: 52) |
 | `DSTextField` | Text input with icon, label, focus glow, and secure mode |
 | `DSIcon` | Icon with circular tinted background (customizable size) |
 | `DSActionRow` | Navigable row with icon, subtitle, badge, and RTL-aware chevron |
@@ -267,7 +270,7 @@ IMPORTANT: Always use existing DS components before creating custom views.
 - `.glassBackground(radius:)` — Solid background with border
 - `.glassPill()` — Capsule shape with border
 - `.dsCardShadow()` / `.dsSubtleShadow()` / `.dsGlowShadow()` / `.dsNeonShadow()` / `.dsAccentGlow()`
-- `.dsGradientBackground()` — Primary gradient background
+- `.dsGradientBackground()` — Band (deep navy) background
 - `.dsBoldPress(_)` — Scale 0.95 bounce on press
 - `.languageHorizontalOffset(_:y:)` — RTL-aware horizontal offset (from `DirectionalOffset.swift`)
 

@@ -1237,7 +1237,7 @@ struct FatherPickerSheet: View {
                                 if selectedId == nil {
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(DS.Font.scaled(18))
-                                        .foregroundStyle(DS.Color.gradientPrimary)
+                                        .foregroundStyle(DS.Color.primary)
                                 }
                             }
                             .contentShape(Rectangle())
@@ -1389,7 +1389,7 @@ private struct FatherPickerRow: View, Equatable {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(DS.Font.scaled(18))
-                        .foregroundStyle(DS.Color.gradientPrimary)
+                        .foregroundStyle(DS.Color.primary)
                 }
             }
             .contentShape(Rectangle())

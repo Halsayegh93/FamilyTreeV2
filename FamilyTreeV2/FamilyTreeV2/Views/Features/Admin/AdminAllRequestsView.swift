@@ -1230,7 +1230,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(.white)
                         .frame(minWidth: 18, minHeight: 18)
                         .padding(.horizontal, 4)
-                        .background(Capsule().fill(DS.Color.error))
+                        .background(Capsule().fill(DS.Color.errorFill))
                         .overlay(Capsule().strokeBorder(DS.Color.background, lineWidth: 1.5))
                 }
             }
@@ -1606,7 +1606,7 @@ struct AdminAllRequestsView: View {
                 Button(role: .destructive, action: onDelete) {
                     Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
                 }
-                .tint(DS.Color.error)
+                .tint(DS.Color.errorFill)
             }
         }
     }
@@ -3505,7 +3505,7 @@ struct AdminAllRequestsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(DS.Spacing.sm)
-        .background(DS.Color.surfaceElevated)
+        .background(DS.Color.cardBackgroundSoft)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
     }
 

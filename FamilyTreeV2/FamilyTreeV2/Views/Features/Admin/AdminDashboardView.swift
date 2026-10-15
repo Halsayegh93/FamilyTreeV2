@@ -149,7 +149,7 @@ struct AdminDashboardView: View {
                         title: L10n.t("الادارة", "Admin Dashboard"),
                         subtitle: L10n.t("المراجعة والإعدادات والتقارير", "Review, settings and reports"),
                         icon: "shield.lefthalf.filled",
-                        backgroundGradient: DS.Color.gradientPrimary,
+                        backgroundGradient: DS.Color.gradientBand,
                         hasDropShadow: false
                     )
 
@@ -669,7 +669,7 @@ struct AdminTile<Destination: View>: View {
                             .padding(.vertical, 1)
                             // الشارة حمراء دائماً — لون المربّع كان يجعل
                             // بعضها باهتاً فلا يُقرأ كتنبيه يحتاج إجراءً.
-                            .background(Capsule().fill(DS.Color.error))
+                            .background(Capsule().fill(DS.Color.errorFill))
                             .offset(x: 8, y: -3)
                     }
                 }

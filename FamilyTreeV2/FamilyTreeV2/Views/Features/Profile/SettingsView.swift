@@ -228,7 +228,7 @@ struct SettingsView: View {
         }
         .background(
             ZStack(alignment: .bottomLeading) {
-                DS.Color.gradientPrimary
+                DS.Color.gradientBand
                 Image(systemName: "tree.fill")
                     .font(.system(size: 130, weight: .regular))
                     .foregroundColor(.white.opacity(0.07))

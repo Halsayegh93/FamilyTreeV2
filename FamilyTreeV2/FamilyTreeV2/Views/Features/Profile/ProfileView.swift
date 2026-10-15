@@ -65,7 +65,7 @@ struct ProfileView: View {
                             title: L10n.t("حسابي", "My Profile"),
                             subtitle: L10n.t("الملف الشخصي والإعدادات", "Profile and settings"),
                             icon: "person.fill",
-                            backgroundGradient: DS.Color.gradientPrimary,
+                            backgroundGradient: DS.Color.gradientBand,
                             hideNotificationBell: true
                         ) {
                             // زر الإعدادات — يفتح كل تفضيلات التطبيق
@@ -991,6 +991,8 @@ struct ProfileView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(DS.Color.background)
             .navigationTitle(L10n.t("إضافة زوجة", "Add Wife"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -349,7 +349,7 @@ struct FamilyArchiveView: View {
             // حذف
             actionPill(icon: "trash.fill",
                        label: L10n.t("حذف", "Delete"),
-                       color: DS.Color.error) {
+                       color: DS.Color.errorFill) {
                 showBatchDeleteAlert = true
             }
             .disabled(isEmpty)

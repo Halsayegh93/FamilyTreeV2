@@ -140,7 +140,7 @@ struct QRScannerView: View {
                     Text(result.relationship)
                         .font(DS.Font.title2)
                         .fontWeight(.bold)
-                        .foregroundStyle(DS.Color.gradientPrimary)
+                        .foregroundStyle(DS.Color.primary)
                         .multilineTextAlignment(.center)
 
                     if let ancestor = result.commonAncestor, ancestor.id != member.id {

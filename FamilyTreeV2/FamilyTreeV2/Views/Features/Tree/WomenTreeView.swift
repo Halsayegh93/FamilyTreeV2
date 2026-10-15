@@ -41,7 +41,7 @@ struct WomenTreeView: View {
                             title: L10n.t("النساء", "Women"),
                             subtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
                             icon: "leaf.fill",
-                            backgroundGradient: DS.Color.gradientPrimary,
+                            backgroundGradient: DS.Color.gradientBand,
                             subtitleChip: true
                         )
                     }
@@ -861,6 +861,8 @@ private struct WomanDetailSheet: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(DS.Color.background)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

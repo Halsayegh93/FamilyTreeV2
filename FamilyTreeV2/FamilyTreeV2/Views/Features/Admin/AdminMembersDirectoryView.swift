@@ -529,7 +529,7 @@ struct AdminMembersDirectoryView: View {
                         .font(DS.Font.scaled(11, weight: .bold))
                         .foregroundColor(.white)
                         .padding(4)
-                        .background(DS.Color.error)
+                        .background(DS.Color.errorFill)
                         .clipShape(Circle())
                         .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
                 }

@@ -226,7 +226,7 @@ struct NotificationsCenterView: View {
         .frame(maxWidth: .infinity)
         .background(
             ZStack {
-                DS.Color.gradientPrimary
+                DS.Color.gradientBand
                 // نفس طبقة MainHeaderView — بدونها يطلع الهيدر أفتح
                 DS.Color.headerVeil
             }
@@ -574,7 +574,7 @@ struct NotificationsCenterView: View {
                             .padding(.horizontal, 3)
                             .background(
                                 Capsule()
-                                    .fill(isSelected ? Color.white : DS.Color.error)
+                                    .fill(isSelected ? Color.white : DS.Color.errorFill)
                             )
                             .transition(.scale.combined(with: .opacity))
                     }

@@ -140,7 +140,7 @@ extension View {
         var actions: [DSSwipeAction] = []
         if canDelete {
             actions.append(DSSwipeAction(icon: "trash.fill", title: L10n.t("حذف", "Delete"),
-                                         color: DS.Color.error, action: onDelete))
+                                         color: DS.Color.errorFill, action: onDelete))
         }
         if canReport {
             actions.append(DSSwipeAction(icon: "flag.fill", title: L10n.t("إبلاغ", "Report"),
