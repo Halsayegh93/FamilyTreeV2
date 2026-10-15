@@ -108,18 +108,18 @@ struct SplashScreenView: View {
                         Rectangle()
                             .fill(
                                 LinearGradient(
-                                    colors: [DS.Color.secondary.opacity(0), DS.Color.secondary.opacity(0.7)],
+                                    colors: [DS.Color.accentLight.opacity(0), DS.Color.accentLight.opacity(0.7)],
                                     startPoint: .leading, endPoint: .trailing
                                 )
                             )
                             .frame(width: 40, height: 1)
                         Image(systemName: "diamond.fill")
                             .font(.system(size: 7, weight: .bold))
-                            .foregroundColor(DS.Color.secondary)
+                            .foregroundColor(DS.Color.accentLight)
                         Rectangle()
                             .fill(
                                 LinearGradient(
-                                    colors: [DS.Color.secondary.opacity(0.7), DS.Color.secondary.opacity(0)],
+                                    colors: [DS.Color.accentLight.opacity(0.7), DS.Color.accentLight.opacity(0)],
                                     startPoint: .leading, endPoint: .trailing
                                 )
                             )

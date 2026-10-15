@@ -1,41 +1,40 @@
 import SwiftUI
 
 // MARK: - Design Tokens — المحمدعلي Family App
-// Theme: Formal Heritage | كحلي ملكي + ذهبي + أخضر غابي + عنّابي | Light & Dark Mode
+// الهوية الموحدة: ألوان دليل المصمم — كحلي #172536 + ذهبي #B89A5A + كريمي #F2EBDD | Light & Dark Mode
+// القيم من نظام التصميم «المحمد علي» (tokens.json) — نفس قيم الموقع. ألوان الأقسام الداعمة
+// (أخضر غابي، عنّابي، ألوان الأخبار والأدوار) باقية كما هي.
 enum DS {
 
     // MARK: Colors
     enum Color {
-        // Brand — كحلي ملكي رسمي (أفتح في الداكن ليبقى مقروءاً)
-        static let primary       = SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#7FA8D6") // Royal Navy
-        static let primaryDark   = SwiftUI.Color.adaptive(light: "#14365A", dark: "#2B5F90") // Deep Navy
-        static let primaryLight  = SwiftUI.Color.adaptive(light: "#5B84AE", dark: "#A9C4E4") // Soft Navy
+        // Brand — كحلي المصمم (navy)، أفتح في الداكن ليبقى مقروءاً
+        static let primary       = SwiftUI.Color.adaptive(light: "#172536", dark: "#7FA8D6") // navy
+        static let primaryDark   = SwiftUI.Color.adaptive(light: "#0F1824", dark: "#2B5F90") // كحلي أغمق
+        static let primaryLight  = SwiftUI.Color.adaptive(light: "#5D6672", dark: "#A9C4E4") // كحلي فاتح
         static let secondary     = SwiftUI.Color.adaptive(light: "#2E6B4F", dark: "#6FB394") // Forest Green
         static let secondaryDark = SwiftUI.Color.adaptive(light: "#1F4F39", dark: "#3E8566") // Deep Forest
         static let secondaryLight = SwiftUI.Color.adaptive(light: "#6FA88C", dark: "#9ACDB5") // Sage
-        static let accent        = SwiftUI.Color.adaptive(light: "#A07A2C", dark: "#D4B062") // Heritage Gold
-        static let accentDark    = SwiftUI.Color.adaptive(light: "#7A5B1C", dark: "#A8842F") // Deep Gold
-        static let accentLight   = SwiftUI.Color.adaptive(light: "#C9A75E", dark: "#E6CB8E") // Light Gold
+        static let accent        = SwiftUI.Color.adaptive(light: "#725D31", dark: "#B89A5A") // gold-text — ذهبي المصمم أغمق للنص (٦:١ على الأبيض)
+        static let accentDark    = SwiftUI.Color.adaptive(light: "#5A4927", dark: "#9C8045") // ذهبي غامق
+        static let accentLight   = SwiftUI.Color.adaptive(light: "#B89A5A", dark: "#D3BC8A") // gold — ذهبي المصمم للخطوط والإطارات
 
         // Supporting Accents
-        static let neonBlue     = SwiftUI.Color.adaptive(light: "#14365A", dark: "#A9C4E4") // Deep Navy
+        static let neonBlue     = SwiftUI.Color.adaptive(light: "#172536", dark: "#A9C4E4") // band
         static let neonPurple   = SwiftUI.Color.adaptive(light: "#4A5D78", dark: "#9FB0C8") // Slate
         static let neonCyan     = SwiftUI.Color.adaptive(light: "#2E6B4F", dark: "#6FB394") // Forest
         static let neonPink     = SwiftUI.Color.adaptive(light: "#8C2F45", dark: "#C9667D") // Burgundy Rose
 
         // Gradients
-        // التدرّج الرئيسي — كحلي غامق → كحلي ملكي بثلاث درجات متقاربة (رسمي وهادئ).
-        // ثابت الدرجات في الوضعين حتى يبقى النص الأبيض فوقه واضحاً دائماً.
+        // الهوية: الأزرار والهيدرات والبطاقات بلون واحد بدون تدرّج — يبقى الاسم للتوافق.
+        // ثابت الدرجة: كحلي المصمم في الفاتح، والكحلي الغامق (band) في الداكن — النص الأبيض واضح فوقهما.
+        static let primaryFill = SwiftUI.Color.adaptive(light: "#172536", dark: "#1B2638")
         static let gradientPrimary = LinearGradient(
-            colors: [
-                SwiftUI.Color.adaptive(light: "#102B47", dark: "#0E2238"),
-                SwiftUI.Color.adaptive(light: "#1F4E79", dark: "#173A5E"),
-                SwiftUI.Color.adaptive(light: "#2C6396", dark: "#23507D")
-            ],
+            colors: [primaryFill, primaryFill],
             startPoint: .bottomTrailing, endPoint: .topLeading
         )
         static let gradientAccent = LinearGradient(
-            colors: [accentLight, accent, accentDark],
+            colors: [accent, accent],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         static let gradientSecondary = LinearGradient(
@@ -94,32 +93,33 @@ enum DS {
         static let tintAdmin    = primary
 
         // Surfaces — الكروت لازم تبان فوق الخلفية
-        static let background       = SwiftUI.Color(.systemBackground)
-        static let surface          = SwiftUI.Color(.secondarySystemBackground)
-        static let surfaceElevated  = SwiftUI.Color(.tertiarySystemBackground)
-        static let cardBackground   = SwiftUI.Color(.secondarySystemBackground)
-        static let cardBackgroundSoft = SwiftUI.Color(.tertiarySystemBackground)
-        static let cardBorder       = SwiftUI.Color.adaptive(light: "#E5E7EB", dark: "#2A2F3A")
-        static let cardBorderStrong = SwiftUI.Color.adaptive(light: "#D1D5DB", dark: "#3A404C")
+        // الهوية: خلفية رملية والكروت بيضاء فوقها
+        static let background       = SwiftUI.Color.adaptive(light: "#FCF7EC", dark: "#14171C") // sand
+        static let surface          = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25") // surface
+        static let surfaceElevated  = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#23272E")
+        static let cardBackground   = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25") // surface
+        static let cardBackgroundSoft = SwiftUI.Color.adaptive(light: "#F2EBDD", dark: "#23272E") // sand-deep = كريمي المصمم
+        static let cardBorder       = SwiftUI.Color.adaptive(light: "#DCCFB4", dark: "#343A44") // line
+        static let cardBorderStrong = SwiftUI.Color.adaptive(light: "#8A7B60", dark: "#6B7380") // line-strong
         static let sectionFill      = SwiftUI.Color.gray.opacity(0.08)
-        static let actionRowFill    = SwiftUI.Color(.secondarySystemBackground)
-        static let actionRowOverlay = SwiftUI.Color(.tertiarySystemBackground)
+        static let actionRowFill    = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25")
+        static let actionRowOverlay = SwiftUI.Color.adaptive(light: "#F2EBDD", dark: "#23272E")
         static let headerVeil       = SwiftUI.Color.white.opacity(0.08)
         static let headerBorder     = SwiftUI.Color.white.opacity(0.16)
-        /// خلفية أزرار الهيدر — بين درجتي تدرّج الهيدر الكحلي، فتبدو من لونه
-        static let headerControlFill = SwiftUI.Color.adaptive(light: "#1A4470", dark: "#16395E")
+        /// خلفية أزرار الهيدر — أفتح بدرجة من لون الهيدر الكحلي، فتبدو منه
+        static let headerControlFill = SwiftUI.Color.adaptive(light: "#2A3A52", dark: "#26344B")
 
         // Text
-        static let textPrimary   = SwiftUI.Color.adaptive(light: "#0A0E18", dark: "#F0F4FF") // Deep Navy / Cool White
-        static let textSecondary = SwiftUI.Color.adaptive(light: "#5A6070", dark: "#8A90A0") // Slate
+        static let textPrimary   = SwiftUI.Color.adaptive(light: "#172536", dark: "#FFFFFF") // ink
+        static let textSecondary = SwiftUI.Color.adaptive(light: "#4A5560", dark: "#C9CED5") // ink-muted
         static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // Slate — مقروء (AA)
         static let textOnPrimary = SwiftUI.Color.white
         static let textGold      = accent // ذهبي
 
         // Semantic
-        static let success = SwiftUI.Color.adaptive(light: "#157F3C", dark: "#45BC72") // Emerald — يعدّي AA (~5:1) كنص وكتعبئة
-        static let warning = SwiftUI.Color.adaptive(light: "#9A6A0A", dark: "#F0B040") // Amber — يعدّي AA للنص بالوضع الفاتح
-        static let error   = SwiftUI.Color.adaptive(light: "#D32F2F", dark: "#EF5350") // أحمر صافي
+        static let success = SwiftUI.Color.adaptive(light: "#216C4F", dark: "#4A9E7C") // success — يعدّي AA كنص
+        static let warning = SwiftUI.Color.adaptive(light: "#875C0A", dark: "#F0B040") // warning — يعدّي AA كنص
+        static let error   = SwiftUI.Color.adaptive(light: "#C0282A", dark: "#F47370") // danger — يعدّي AA كنص
         static let info    = primary // كحلي
 
         // Role Colors — باستيل ناعم
@@ -290,15 +290,15 @@ enum DS {
         static let title2      = SwiftUI.Font.custom(Plex.bold, size: 22, relativeTo: .title2)
         static let title3      = SwiftUI.Font.custom(Plex.semibold, size: 20, relativeTo: .title3)
         static let headline    = SwiftUI.Font.custom(Plex.semibold, size: 17, relativeTo: .headline)
-        // نص المحتوى — خط النظام للوضوح الأقصى
-        static let body        = SwiftUI.Font.system(.body, design: .default)
-        static let bodyBold    = SwiftUI.Font.system(.body, design: .default).weight(.semibold)
-        static let callout     = SwiftUI.Font.system(.callout, design: .default)
-        static let calloutBold = SwiftUI.Font.system(.callout, design: .default).weight(.bold)
-        static let subheadline = SwiftUI.Font.system(.subheadline, design: .default)
-        static let footnote    = SwiftUI.Font.system(.footnote, design: .default)
-        static let caption1    = SwiftUI.Font.system(.caption, design: .default)
-        static let caption2    = SwiftUI.Font.system(.caption2, design: .default)
+        // نص المحتوى — IBM Plex Sans Arabic أيضاً (الهوية: خط واحد لكل الواجهة)، مع Dynamic Type
+        static let body        = SwiftUI.Font.custom(Plex.regular, size: 17, relativeTo: .body)
+        static let bodyBold    = SwiftUI.Font.custom(Plex.semibold, size: 17, relativeTo: .body)
+        static let callout     = SwiftUI.Font.custom(Plex.regular, size: 16, relativeTo: .callout)
+        static let calloutBold = SwiftUI.Font.custom(Plex.bold, size: 16, relativeTo: .callout)
+        static let subheadline = SwiftUI.Font.custom(Plex.regular, size: 15, relativeTo: .subheadline)
+        static let footnote    = SwiftUI.Font.custom(Plex.regular, size: 13, relativeTo: .footnote)
+        static let caption1    = SwiftUI.Font.custom(Plex.regular, size: 12, relativeTo: .caption)
+        static let caption2    = SwiftUI.Font.custom(Plex.regular, size: 11, relativeTo: .caption2)
 
         /// خط مرن يدعم Dynamic Type - يُستخدم بدل .system(size:weight:)
         static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
@@ -375,9 +375,9 @@ enum DS {
         static let card     = ShadowStyle(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
         static let subtle   = ShadowStyle(color: .black.opacity(0.03), radius: 4, x: 0, y: 1)
         // ظلال «التوهّج» — بلمسة لون العلامة الحالية (أزرق/نيلي) بعد توحيدها مع الهوية
-        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#14365A").opacity(0.16), radius: 14, x: 0, y: 4)
-        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#A07A2C").opacity(0.16), radius: 12, x: 0, y: 4)
-        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#14365A").opacity(0.14), radius: 12, x: 0, y: 3)
+        static let glow     = ShadowStyle(color: SwiftUI.Color(hex: "#172536").opacity(0.16), radius: 14, x: 0, y: 4)
+        static let glowAccent = ShadowStyle(color: SwiftUI.Color(hex: "#B89A5A").opacity(0.16), radius: 12, x: 0, y: 4)
+        static let neon     = ShadowStyle(color: SwiftUI.Color(hex: "#172536").opacity(0.14), radius: 12, x: 0, y: 3)
         static let none     = ShadowStyle(color: .clear, radius: 0, x: 0, y: 0)
     }
 
@@ -547,26 +547,26 @@ extension View {
         self.background(DS.Color.gradientPrimary)
     }
 
-    /// كرت زجاجي — Liquid Glass card
+    /// كرت — سطح أبيض بحد خفيف (الهوية: بدون زجاج). الاسم باقٍ للتوافق.
     func glassCard(radius: CGFloat = DS.Radius.xl) -> some View {
         self
-            .background(.ultraThinMaterial)
+            .background(DS.Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(SwiftUI.Color.white.opacity(0.2), lineWidth: 0.5)
+                    .stroke(DS.Color.cardBorder, lineWidth: 1)
             )
             .dsCardShadow()
     }
 
-    /// خلفية زجاجية — Liquid Glass background
+    /// خلفية — سطح أبيض بحد خفيف (الهوية: بدون زجاج). الاسم باقٍ للتوافق.
     func glassBackground(radius: CGFloat = DS.Radius.lg) -> some View {
         self
-            .background(.thinMaterial)
+            .background(DS.Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(SwiftUI.Color.white.opacity(0.15), lineWidth: 0.5)
+                    .stroke(DS.Color.cardBorder, lineWidth: 1)
             )
     }
 
@@ -588,7 +588,7 @@ extension View {
 
 // MARK: - Reusable Components
 
-/// كرت موحد — Liquid Glass card
+/// كرت موحد — سطح أبيض، حد line، زوايا xl، ظل خفيف (الهوية)
 struct DSCard<Content: View>: View {
     let content: Content
     var padding: CGFloat = DS.Spacing.lg
@@ -602,25 +602,16 @@ struct DSCard<Content: View>: View {
         VStack(spacing: 0) { content }
             .padding(padding)
             .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                        .fill(DS.Color.cardBackground)
-                    Circle()
-                        .fill(DS.Color.primary.opacity(0.06))
-                        .frame(width: 200, height: 200)
-                        .blur(radius: 55)
-                        .offset(x: 120, y: -80)
-                    Circle()
-                        .fill(DS.Color.secondary.opacity(0.04))
-                        .frame(width: 140, height: 140)
-                        .blur(radius: 50)
-                        .offset(x: -60, y: 100)
-                }
-                // الدوائر الزخرفية تخرج عن حدود البطاقة — كانت تلتقط اللمس فوق
-                // أزرار البطاقة المجاورة (مثل «إزالة» آخر جهاز في كل عضو)
-                .allowsHitTesting(false)
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .fill(DS.Color.cardBackground)
+                    .allowsHitTesting(false)
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .stroke(DS.Color.cardBorder, lineWidth: 1)
+                    .allowsHitTesting(false)
+            )
             // منطقة اللمس = حدود البطاقة فقط
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             .dsCardShadow()
@@ -640,10 +631,7 @@ struct DSGradientCard<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) { content }
             .background(
-                ZStack {
-                    gradient
-                    SwiftUI.Color.white.opacity(0.06)
-                }
+                gradient
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             .overlay(
@@ -666,7 +654,7 @@ struct DSGlowCard<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) { content }
-            .background(.ultraThinMaterial)
+            .background(DS.Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
@@ -769,22 +757,18 @@ struct DSPrimaryButton: View {
             // minHeight بدل الارتفاع الثابت — يسمح للنص بالنمو بدل القص في أحجام Dynamic Type الكبيرة
             .frame(minHeight: 58)
             .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .fill(
-                            useGradient
-                                ? AnyShapeStyle(DS.Color.gradientPrimary)
-                                : AnyShapeStyle(isLoading ? color.opacity(0.7) : color)
-                        )
-                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
-                        .padding(1)
-                }
+                // الهوية: تعبئة بلون واحد بدون لمعة زجاجية
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(
+                        useGradient
+                            ? AnyShapeStyle(DS.Color.gradientPrimary)
+                            : AnyShapeStyle(isLoading ? color.opacity(0.7) : color)
+                    )
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(SwiftUI.Color.white.opacity(0.22), lineWidth: 1)
+                    .stroke(SwiftUI.Color.white.opacity(0.12), lineWidth: 1)
             )
             .shadow(color: color.opacity(useGradient ? 0.22 : 0.16), radius: 14, x: 0, y: 6)
         }
@@ -793,14 +777,14 @@ struct DSPrimaryButton: View {
     }
 }
 
-/// زر ثانوي — Bold glass + حدود
+/// زر ثانوي — سطح أبيض بحد line-strong ونص كحلي (الهوية)
 struct DSSecondaryButton: View {
     let title: String
     let icon: String?
     let action: () -> Void
-    var color: Color = DS.Color.secondary
+    var color: Color = DS.Color.primary
 
-    init(_ title: String, icon: String? = nil, color: Color = DS.Color.secondary, action: @escaping () -> Void) {
+    init(_ title: String, icon: String? = nil, color: Color = DS.Color.primary, action: @escaping () -> Void) {
         self.title = title
         self.icon = icon
         self.color = color
@@ -826,18 +810,18 @@ struct DSSecondaryButton: View {
             .frame(maxWidth: .infinity)
             // minHeight بدل الارتفاع الثابت — يسمح للنص بالنمو بدل القص في أحجام Dynamic Type الكبيرة
             .frame(minHeight: 52)
-            .background(.ultraThinMaterial)
+            .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(color.opacity(0.25), lineWidth: 0.7)
+                    .stroke(DS.Color.cardBorderStrong, lineWidth: 1)
             )
         }
         .buttonStyle(DSBoldButtonStyle())
     }
 }
 
-/// حقل إدخال — Bold Glass style مع glow focus
+/// حقل إدخال — سطح أبيض بحد line-strong، وعند التركيز حد بلون الأيقونة (الهوية)
 struct DSTextField: View {
     @Environment(\.layoutDirection) private var layoutDirection
     var label: String
@@ -891,11 +875,11 @@ struct DSTextField: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .background(isFocused ? .thinMaterial : .ultraThinMaterial)
+        .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(isFocused ? iconColor.opacity(0.4) : Color.white.opacity(0.15), lineWidth: isFocused ? 1.2 : 0.5)
+                .stroke(isFocused ? iconColor : DS.Color.cardBorderStrong, lineWidth: isFocused ? 1.5 : 1)
                 .animation(DS.Anim.quick, value: isFocused)
         )
         .shadow(color: isFocused ? iconColor.opacity(0.1) : .clear, radius: 8, x: 0, y: 3)
