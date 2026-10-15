@@ -174,12 +174,15 @@ struct OccasionComposerView: View {
                 ProgressView()
                     .frame(width: 44, height: 44)
             } else {
-                barButton("square.and.arrow.down", label: L10n.t("حفظ في الصور", "Save to Photos")) {
-                    Task { await vm.saveToPhotos() }
+                Group {
+                    barButton("square.and.arrow.down", label: L10n.t("حفظ في الصور", "Save to Photos")) {
+                        Task { await vm.saveToPhotos() }
+                    }
+                    barButton("square.and.arrow.up", label: L10n.t("مشاركة", "Share")) {
+                        Task { await vm.share() }
+                    }
                 }
-                barButton("square.and.arrow.up", label: L10n.t("مشاركة", "Share")) {
-                    Task { await vm.share() }
-                }
+                .opacity(vm.missing.isEmpty ? 1 : 0.5)
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -365,17 +368,9 @@ struct OccasionComposerView: View {
     // MARK: الاسم (من الشجرة أو كتابة)
 
     private func nameSection(_ title: String) -> some View {
-        OccasionFormCard(title: title, hint: L10n.t("بسطر واحد — أقصى شي ٦ أسماء ويصغر تلقائياً", "One line — up to 6 names, shrinks automatically")) {
+        OccasionFormCard(title: title, hint: L10n.t("سطر واحد — إذا طال ينختصر تلقائياً", "One line — shortened automatically if long")) {
             if let m = vm.member {
-                let formats = OccasionNameFormat.distinct(for: m)
                 selectedMember(m)
-                OccasionFieldLabel(L10n.t("صيغة الاسم", "Name format"))
-                OccasionChips(
-                    options: formats.map { "\($0.format.label) — \($0.text)" },
-                    selected: formats.firstIndex { $0.text == vm.name } ?? 0
-                ) { i in
-                    vm.nameFormat = formats[i].format
-                }
             } else {
                 if vm.gender == .male && !vm.family.isEmpty {
                     Button {
@@ -396,6 +391,21 @@ struct OccasionComposerView: View {
                         : L10n.t("اكتب الاسم", "Type the name")
                 )
             }
+            if vm.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                OccasionRequiredHint(L10n.t("مطلوب — اختر الاسم من الشجرة أو اكتبه", "Required — pick the name from the tree or type it"))
+            } else {
+                formatPicker("name")
+            }
+        }
+    }
+
+    /// صيغة عنصر اسم (سداسي … ثلاثي) — تظهر لما يكون فيه أكثر من صيغة
+    @ViewBuilder
+    private func formatPicker(_ key: String) -> some View {
+        if let r = vm.nameResolution(key) {
+            OccasionNameFormatPicker(resolution: r) { n in
+                withAnimation(DS.Anim.quick) { vm.setNameCount(key, n) }
+            }
         }
     }
 
@@ -403,7 +413,7 @@ struct OccasionComposerView: View {
         HStack(spacing: DS.Spacing.md) {
             OccasionMemberAvatar(member: m, size: 44)
             VStack(alignment: .leading, spacing: 2) {
-                Text(vm.name)
+                Text(vm.nameResolution("name")?.option.name ?? vm.name)
                     .font(DS.Font.calloutBold)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
@@ -443,8 +453,8 @@ struct OccasionComposerView: View {
     private var happyForm: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             happyRecipient
-            nameSection(L10n.t("الاسم", "Name"))
             happyGreeting
+            nameSection(L10n.t("الاسم", "Name"))
             if vm.template.id == "graduation" {
                 graduationCard
             } else {
@@ -515,6 +525,10 @@ struct OccasionComposerView: View {
             hint: kids.isEmpty ? nil : L10n.t("أبناؤه من الشجرة — الأحدث أولاً", "His children from the tree — newest first")
         ) {
             OccasionQuickText(text: vm.text("sub"), suggestions: kids, placeholder: L10n.t("اكتب الاسم", "Type the name"))
+            if vm.form.txt("sub").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                OccasionRequiredHint(isBoy ? L10n.t("مطلوب — اكتب اسم المولود", "Required — type the baby's name")
+                                           : L10n.t("مطلوب — اكتب اسم المولودة", "Required — type the baby's name"))
+            }
         }
     }
 
@@ -540,6 +554,7 @@ struct OccasionComposerView: View {
                 OccasionFormCard(title: L10n.t("صلة القرابة", "Relation"), hint: L10n.t("اتركها فاضية لتختفي", "Leave empty to hide")) {
                     OccasionQuickText(text: vm.text("relation"), suggestions: vm.relationSuggestions,
                                       placeholder: L10n.t("مثال: والد كل من: علي، حسين", "e.g. والد كل من: علي، حسين"))
+                    formatPicker("relation")
                 }
             } else {
                 relationsCard
@@ -578,12 +593,15 @@ struct OccasionComposerView: View {
         return OccasionFormCard(title: L10n.t("القرابة", "Relatives"), hint: L10n.t("أي سطر فاضي يختفي", "Empty lines are hidden")) {
             OccasionFieldLabel(L10n.t("الزوج / الزوجة", "Spouse"))
             OccasionTextInput(text: vm.text("rel1"), placeholder: male ? "زوج: الاسم" : "زوجة: الاسم")
+            formatPicker("rel1")
             OccasionFieldLabel(L10n.t("الأبناء", "Children"))
             OccasionQuickText(text: vm.text("rel2"), suggestions: vm.sonsSuggestion,
                               placeholder: male ? "والد كل من: الأسماء" : "والدة كل من: الأسماء")
+            formatPicker("rel2")
             OccasionFieldLabel(L10n.t("الإخوان", "Brothers"))
             OccasionQuickText(text: vm.text("rel3"), suggestions: vm.brothersSuggestion,
                               placeholder: male ? "شقيق كل من: الأسماء" : "شقيقة كل من: الأسماء")
+            formatPicker("rel3")
         }
     }
 
@@ -620,6 +638,11 @@ struct OccasionComposerView: View {
             toggle: toggle(side)
         ) {
             OccasionFieldLabel(L10n.t("المكان", "Place"))
+            OccasionHusseiniyaMenu(
+                place: vm.form.txt("\(side)Place"),
+                onPick: { h in withAnimation(DS.Anim.quick) { vm.setVenuePlace(side, h.name) } },
+                onOther: { withAnimation(DS.Anim.quick) { vm.pickOtherHusseiniya(side) } }
+            )
             OccasionQuickText(
                 text: vm.venuePlace(side),
                 suggestions: vm.diwaniyas.map(\.title) + OccasionChoices.venuePresets(vm.gender),
@@ -664,6 +687,11 @@ struct OccasionComposerView: View {
             OccasionFormCard(title: L10n.t("إلى", "To"), hint: L10n.t("اسم العائلة المعزّى فيها", "The bereaved family")) {
                 OccasionQuickText(text: vm.text("toFamily"), suggestions: Array(vm.familyNames.prefix(16)),
                                   placeholder: L10n.t("مثال: العبدالمحسن", "e.g. العبدالمحسن"))
+                if OccasionChoices.solaceFamily(vm.form.txt("toFamily")).isEmpty {
+                    OccasionRequiredHint(L10n.t("مطلوب — اكتب اسم العائلة", "Required — type the family name"))
+                } else {
+                    formatPicker("to")
+                }
                 OccasionFieldLabel(L10n.t("الصيغة", "Wording"))
                 OccasionChips(
                     options: OccasionChoices.solaceToFormats.map { $0.replacingOccurrences(of: "{x}", with: "…") },
@@ -766,10 +794,16 @@ struct OccasionComposerView: View {
             DSPrimaryButton(L10n.t("حفظ في الصور", "Save to Photos"), icon: "square.and.arrow.down", isLoading: vm.isWorking) {
                 Task { await vm.saveToPhotos() }
             }
+            .opacity(vm.missing.isEmpty ? 1 : 0.5)
             DSSecondaryButton(L10n.t("مشاركة", "Share"), icon: "square.and.arrow.up", color: DS.Color.primary) {
                 Task { await vm.share() }
             }
             .disabled(vm.isWorking)
+            .opacity(vm.missing.isEmpty ? 1 : 0.5)
+            if !vm.missing.isEmpty {
+                OccasionRequiredHint(L10n.t("قبل الحفظ أكمل: ", "Before saving, fill in: ") + vm.missing.joined(separator: "، "))
+                    .frame(maxWidth: .infinity)
+            }
             Text(L10n.t("الصورة تطلع ", "Exports at ") + "\(Int(vm.size.canvas.width))×\(Int(vm.size.canvas.height)) "
                  + L10n.t("بكسل — جاهزة لـ ", "px — ready for ") + vm.placement.title)
                 .font(DS.Font.caption1)

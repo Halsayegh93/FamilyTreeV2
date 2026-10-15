@@ -339,7 +339,66 @@ extension OccasionTemplate {
     }
 }
 
-// MARK: مقاسات التخطيط لكل نوع × مقاس (نفس أرقام الموقع)
+// MARK: سطور الأسماء (كل اسم سطر واحد)
+
+extension OccasionTemplate {
+    /// عناصر الأسماء لكل نموذج ومقاس ونسخة — المصدر الوحيد لأرقامها: البوست يرسم منها، والشاشة تختار منها
+    /// أي صيغة اسم تدخل بسطر (OccasionNames). name = الاسم، to = العائلة في مشاركة العزاء،
+    /// relation / rel1-3 = سطر قرابة فيه اسم شخص واحد (القوائم تلتف مثل التصميم). نفس nameSlots في الموقع.
+    func nameSlots(model: OccasionModel, size: OccasionSize, withPhoto: Bool) -> [String: OccasionNameSlot] {
+        let w = size.canvas.width
+        let photo = showsPhoto(withPhoto)
+        func slot(_ weight: OccasionKit.FontWeight, _ s: CGFloat, _ width: CGFloat, _ lineHeight: CGFloat) -> OccasionNameSlot {
+            OccasionNameSlot(weight: weight, size: s, width: width, lineHeight: lineHeight)
+        }
+        if effectiveModel(model) == .m1 {
+            switch kind {
+            case .happy:
+                let L = photo ? OccasionM1Layout.happy(size) : OccasionM1Layout.happyNoPhoto(size)
+                return ["name": slot(.extrabold, (photo ? 78 : 92) * L.k, w - 2 * L.pad.side, 1.24)]
+            case .death:
+                let L = OccasionM1Layout.deathPhoto(size)
+                let cw = w - 2 * L.pad.side
+                // الكبسولة: حشوة 40 من كل جهة + الإطار
+                return ["name": slot(.extrabold, 74 * L.k, cw, 1.22), "relation": slot(.semibold, 26 * L.k, cw - 82 * L.k, 1.4)]
+            case .deathText:
+                let L = OccasionM1Layout.deathText(size)
+                let cw = w - 2 * L.pad.side
+                // داخل البطاقة: حشوة 44 من كل جهة + الإطار
+                let rel = slot(.regular, 26 * L.k, cw - 92 * L.k, 1.55)
+                return ["name": slot(.extrabold, 80 * L.k, cw, 1.22), "rel1": rel, "rel2": rel, "rel3": rel]
+            case .solace:
+                let L = OccasionM1Layout.solace(size)
+                let cw = w - 2 * L.pad.side
+                return ["to": slot(.extrabold, 82 * L.k, cw, 1.25), "name": slot(.extrabold, 72 * L.k, cw, 1.25)]
+            }
+        }
+        switch kind {
+        case .happy:
+            if !photo {
+                let L = HappyNoPhotoLayout.of(size)
+                return ["name": slot(.extrabold, L.name, L.cw, 1.25)]
+            }
+            let L = HappyLayout.of(size)
+            return ["name": slot(.extrabold, L.name, L.cw, 1.25)]
+        case .death:
+            let L = DeathLayout.of(size)
+            // الكبسولة: النص بعرض relW ناقص الحشوة (40 من كل جهة)
+            return ["name": slot(.extrabold, L.name, L.cw, 1.24), "relation": slot(.semibold, L.rel, L.relW - 80, 1.4)]
+        case .deathText:
+            let L = DeathTextLayout.of(size)
+            let rowW = w - 2 * L.pad.side
+            let rel = slot(.regular, L.relF, min(900, rowW), L.relLH)
+            return ["name": slot(.extrabold, L.name, rowW, 1.22), "rel1": rel, "rel2": rel, "rel3": rel]
+        case .solace:
+            let L = SolaceLayout.of(size)
+            let rowW = w - 2 * L.pad.side
+            return ["to": slot(.extrabold, L.to, rowW, 1.25), "name": slot(.extrabold, L.name, rowW, 1.25)]
+        }
+    }
+}
+
+// MARK: مقاسات التخطيط لكل نوع × مقاس (نفس أرقام الموقع — أحجام الأسماء من ملفات التصميم)
 
 struct OccasionInsets {
     let top: CGFloat
@@ -357,13 +416,13 @@ struct HappyLayout {
         switch s {
         case .post:
             return HappyLayout(pad: OccasionInsets(top: 52, side: 44, bottom: 30), verseMul: 1, k: 1, pleft: -96, cw: 540,
-                               intro: 34, name: 50, occ: 44, sub: 46, dua: 28, duaW: 500, lh: 184, lineW: 250, divTop: 22, divBottom: 18)
+                               intro: 34, name: 56, occ: 44, sub: 46, dua: 28, duaW: 500, lh: 184, lineW: 250, divTop: 22, divBottom: 18)
         case .square:
             return HappyLayout(pad: OccasionInsets(top: 34, side: 44, bottom: 22), verseMul: 0.78, k: 0.8, pleft: -70, cw: 560,
-                               intro: 31, name: 46, occ: 40, sub: 42, dua: 25, duaW: 500, lh: 138, lineW: 230, divTop: 16, divBottom: 12)
+                               intro: 31, name: 51, occ: 40, sub: 42, dua: 25, duaW: 500, lh: 138, lineW: 230, divTop: 16, divBottom: 12)
         case .story:
             return HappyLayout(pad: OccasionInsets(top: 250, side: 44, bottom: 250), verseMul: 1.04, k: 1, pleft: -96, cw: 540,
-                               intro: 36, name: 54, occ: 46, sub: 48, dua: 29, duaW: 500, lh: 200, lineW: 250, divTop: 24, divBottom: 20)
+                               intro: 36, name: 59, occ: 46, sub: 48, dua: 29, duaW: 500, lh: 200, lineW: 250, divTop: 24, divBottom: 20)
         }
     }
 }
@@ -378,13 +437,13 @@ struct DeathLayout {
         switch s {
         case .post:
             return DeathLayout(pad: OccasionInsets(top: 34, side: 48, bottom: 22), leadMul: 0.72, verseMul: 0.73, k: 0.8, pleft: -72, cw: 560,
-                               l1: 32, l2: 38, name: 58, rel: 27, relW: 480, cols: 1, dua: 26, lh: 150, lineW: 250, divTop: 12, divBottom: 14)
+                               l1: 32, l2: 38, name: 64, rel: 27, relW: 480, cols: 1, dua: 26, lh: 150, lineW: 250, divTop: 12, divBottom: 14)
         case .square:
             return DeathLayout(pad: OccasionInsets(top: 24, side: 48, bottom: 16), leadMul: 0.56, verseMul: 0.56, k: 0.66, pleft: -64, cw: 580,
-                               l1: 28, l2: 33, name: 50, rel: 24, relW: 460, cols: 0.9, dua: 23, lh: 112, lineW: 220, divTop: 10, divBottom: 12)
+                               l1: 28, l2: 33, name: 56, rel: 24, relW: 460, cols: 0.9, dua: 23, lh: 112, lineW: 220, divTop: 10, divBottom: 12)
         case .story:
             return DeathLayout(pad: OccasionInsets(top: 250, side: 48, bottom: 250), leadMul: 0.78, verseMul: 0.8, k: 0.9, pleft: -78, cw: 560,
-                               l1: 34, l2: 40, name: 60, rel: 28, relW: 480, cols: 1.04, dua: 27, lh: 170, lineW: 250, divTop: 14, divBottom: 16)
+                               l1: 34, l2: 40, name: 68, rel: 28, relW: 480, cols: 1.04, dua: 27, lh: 170, lineW: 250, divTop: 14, divBottom: 16)
         }
     }
 }
@@ -399,13 +458,13 @@ struct DeathTextLayout {
         switch s {
         case .post:
             return DeathTextLayout(pad: OccasionInsets(top: 30, side: 48, bottom: 20), leadMul: 0.64, verseMul: 0.64,
-                                   l1: 32, l2: 38, name: 74, relF: 26, relLH: 1.55, fun: 30, con: 28, cols: 1, dua: 25, lh: 140, lineW: 250, divBottom: 10)
+                                   l1: 32, l2: 38, name: 84, relF: 26, relLH: 1.55, fun: 30, con: 28, cols: 1, dua: 25, lh: 140, lineW: 250, divBottom: 10)
         case .square:
             return DeathTextLayout(pad: OccasionInsets(top: 22, side: 48, bottom: 14), leadMul: 0.5, verseMul: 0.52,
-                                   l1: 26, l2: 30, name: 56, relF: 22, relLH: 1.45, fun: 26, con: 24, cols: 0.85, dua: 22, lh: 100, lineW: 220, divBottom: 8)
+                                   l1: 26, l2: 30, name: 68, relF: 22, relLH: 1.45, fun: 26, con: 24, cols: 0.85, dua: 22, lh: 100, lineW: 220, divBottom: 8)
         case .story:
             return DeathTextLayout(pad: OccasionInsets(top: 250, side: 48, bottom: 250), leadMul: 0.72, verseMul: 0.74,
-                                   l1: 34, l2: 40, name: 80, relF: 28, relLH: 1.6, fun: 32, con: 30, cols: 1.04, dua: 27, lh: 160, lineW: 250, divBottom: 12)
+                                   l1: 34, l2: 40, name: 89, relF: 28, relLH: 1.6, fun: 32, con: 30, cols: 1.04, dua: 27, lh: 160, lineW: 250, divBottom: 12)
         }
     }
 }
@@ -418,14 +477,14 @@ struct SolaceLayout {
     static func of(_ s: OccasionSize) -> SolaceLayout {
         switch s {
         case .post:
-            return SolaceLayout(pad: OccasionInsets(top: 50, side: 48, bottom: 28), verseMul: 0.9, title: 84, from: 42, sub: 30, to: 68,
-                                lead: 30, name: 62, dua: 28, lh: 170, lineW: 250)
+            return SolaceLayout(pad: OccasionInsets(top: 50, side: 48, bottom: 28), verseMul: 0.9, title: 84, from: 42, sub: 30, to: 72,
+                                lead: 30, name: 66, dua: 28, lh: 170, lineW: 250)
         case .square:
-            return SolaceLayout(pad: OccasionInsets(top: 34, side: 48, bottom: 18), verseMul: 0.8, title: 72, from: 38, sub: 28, to: 58,
-                                lead: 28, name: 52, dua: 25, lh: 128, lineW: 230)
+            return SolaceLayout(pad: OccasionInsets(top: 34, side: 48, bottom: 18), verseMul: 0.8, title: 72, from: 38, sub: 28, to: 62,
+                                lead: 28, name: 57, dua: 25, lh: 128, lineW: 230)
         case .story:
-            return SolaceLayout(pad: OccasionInsets(top: 250, side: 48, bottom: 250), verseMul: 1, title: 96, from: 48, sub: 34, to: 76,
-                                lead: 34, name: 70, dua: 31, lh: 220, lineW: 250)
+            return SolaceLayout(pad: OccasionInsets(top: 224, side: 48, bottom: 196), verseMul: 1, title: 96, from: 48, sub: 34, to: 82,
+                                lead: 34, name: 76, dua: 31, lh: 230, lineW: 250)
         }
     }
 }

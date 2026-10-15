@@ -124,7 +124,8 @@ struct OccasionPostView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// الاسم بسطر واحد: يصغر تلقائياً لين يدخل بالعرض (٧ أو ٩ أسماء) — مثل FitLine في الموقع
+    /// سطر واحد بحجم التصميم؛ إذا ما دخل يصغر بقدر ما يدخل بس ما ينزل عن minSize — مثل OneLine في الموقع.
+    /// ارتفاع السطر يبقى بحجم التصميم (lineHeight × maxSize) — فما يتحرك شي ثاني في البوست، بس الحروف أصغر.
     func fitLine(_ string: String, _ weight: OccasionKit.FontWeight, maxSize: CGFloat, minSize: CGFloat,
                  width: CGFloat, color: Color, lineHeight: CGFloat) -> some View {
         let size = OccasionText.fitSize(string, weight: weight, maxSize: maxSize, minSize: minSize, width: width)
@@ -136,9 +137,32 @@ struct OccasionPostView: View {
             .minimumScaleFactor(0.6)
             .multilineTextAlignment(.center)
             .environment(\.layoutDirection, .rightToLeft)
-            .occasionLineBox(weight, size: size, lineHeight: lineHeight)
+            .occasionLineBox(weight, size: size, lineHeight: lineHeight * maxSize / max(size, 1))
             .frame(maxWidth: width)
     }
+
+    /// سطر اسم واحد (الاسم، العائلة، اسم في سطر القرابة). مواصفاته من nameSlots — نفس اللي تختار منه الشاشة الصيغة،
+    /// فالصيغة المختارة تدخل بحجم التصميم (أو ٨٥٪ منه على الأقل)
+    func nameLine(_ key: String, color: Color) -> some View {
+        let slot = template.nameSlots(model: model, size: size, withPhoto: withPhoto)[key]
+            ?? OccasionNameSlot(weight: .extrabold, size: 56, width: 540, lineHeight: 1.25)
+        let string = value(key)
+        let minSize = slot.size * OccasionNames.minScale
+        // نادر: حتى أقصر صيغة ما دخلت بأصغر حجم — سطرين متوازنين بأصغر حجم (مثل الموقع) بدل ما يصغر أكثر
+        let tooLong = (OccasionNames.measure(string, weight: slot.weight, size: minSize) ?? 0) > slot.width + 0.5
+        return Group {
+            if tooLong {
+                text(string, slot.weight, minSize, color: color, lineHeight: slot.lineHeight, balanceWidth: slot.width)
+                    .frame(maxWidth: slot.width)
+            } else {
+                fitLine(string, slot.weight, maxSize: slot.size, minSize: minSize,
+                        width: slot.width, color: color, lineHeight: slot.lineHeight)
+            }
+        }
+    }
+
+    /// سطر القرابة فيه اسم شخص واحد؟ (سطر واحد بصيغة تدخل) — القوائم تلتف مثل التصميم
+    func isNameLine(_ key: String) -> Bool { OccasionNames.relationName(value(key)) != nil }
 
     // MARK: التهاني (عقد قران، مولود، مولودة، أجر وعافية، تخرج)
 
@@ -154,10 +178,12 @@ struct OccasionPostView: View {
             if has("intro") {
                 text(value("intro"), .semibold, L.intro, color: th.intro, lineHeight: 1.4, balanceWidth: L.cw)
             }
-            fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 14, width: L.cw, color: Color(hex: "#172536"), lineHeight: 1.25)
-                .shadow(color: .white.opacity(0.9), radius: 0, x: 0, y: 2)
-                .shadow(color: th.shadow.opacity(0.20), radius: 12, x: 0, y: 12)
-                .padding(.top, 4)
+            if has("name") {
+                nameLine("name", color: Color(hex: "#172536"))
+                    .shadow(color: .white.opacity(0.9), radius: 0, x: 0, y: 2)
+                    .shadow(color: th.shadow.opacity(0.20), radius: 12, x: 0, y: 12)
+                    .padding(.top, 4)
+            }
             if has("occasion") {
                 text(value("occasion"), .extrabold, L.occ, color: th.acc, lineHeight: 1.35)
                     .padding(.top, 14)
@@ -214,10 +240,12 @@ struct OccasionPostView: View {
             if has("intro") {
                 text(value("intro"), .semibold, L.intro, color: th.intro, lineHeight: 1.4, balanceWidth: L.cw)
             }
-            fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 14, width: L.cw, color: Color(hex: "#172536"), lineHeight: 1.25)
-                .shadow(color: .white.opacity(0.9), radius: 0, x: 0, y: 2)
-                .shadow(color: Color(red: 23 / 255, green: 37 / 255, blue: 54 / 255).opacity(0.20), radius: 12, x: 0, y: 12)
-                .padding(.top, 4)
+            if has("name") {
+                nameLine("name", color: Color(hex: "#172536"))
+                    .shadow(color: .white.opacity(0.9), radius: 0, x: 0, y: 2)
+                    .shadow(color: Color(red: 23 / 255, green: 37 / 255, blue: 54 / 255).opacity(0.20), radius: 12, x: 0, y: 12)
+                    .padding(.top, 4)
+            }
             if has("occasion") {
                 text(value("occasion"), .extrabold, L.occ, color: th.acc, lineHeight: 1.35, balanceWidth: L.cw)
                     .padding(.top, 16)
@@ -262,20 +290,29 @@ struct OccasionPostView: View {
         let column = VStack(spacing: 4) {
             if has("lead") { text(value("lead"), .semibold, L.l1, color: .white, lineHeight: 1.4) }
             if has("title") { text(value("title"), .extrabold, L.l2, color: P.soft, lineHeight: 1.35) }
-            fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 14, width: L.cw, color: P.gold, lineHeight: 1.24)
-                .shadow(color: .black.opacity(0.65), radius: 13, x: 0, y: 10)
+            if has("name") {
+                nameLine("name", color: P.gold)
+                    .shadow(color: .black.opacity(0.65), radius: 13, x: 0, y: 10)
+            }
             if has("relation") {
                 OccasionDivider(color: P.goldLine)
                     .padding(.top, L.divTop)
                     .padding(.bottom, L.divBottom)
-                text(value("relation"), .semibold, L.rel, color: .white, lineHeight: 1.4, balanceWidth: L.relW - 80)
-                    .padding(.horizontal, 40)
-                    .padding(.top, 10)
-                    .padding(.bottom, 12)
-                    .background(Capsule().fill(P.gold.opacity(0.07)))
-                    .overlay(Capsule().stroke(P.gold.opacity(0.5), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.45), radius: 15, x: 0, y: 16)
-                    .frame(maxWidth: L.relW)
+                Group {
+                    if isNameLine("relation") {
+                        // اسم شخص واحد: سطر واحد بصيغة تدخل (والكبسولة على قده)
+                        nameLine("relation", color: .white).fixedSize()
+                    } else {
+                        text(value("relation"), .semibold, L.rel, color: .white, lineHeight: 1.4, balanceWidth: L.relW - 80)
+                    }
+                }
+                .padding(.horizontal, 40)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
+                .background(Capsule().fill(P.gold.opacity(0.07)))
+                .overlay(Capsule().stroke(P.gold.opacity(0.5), lineWidth: 1))
+                .shadow(color: .black.opacity(0.45), radius: 15, x: 0, y: 16)
+                .frame(maxWidth: L.relW)
             }
         }
         .frame(width: L.cw, height: rowH)
@@ -311,7 +348,7 @@ struct OccasionPostView: View {
     private var deathTextPost: some View {
         let L = DeathTextLayout.of(size)
         let P = OccasionDeathPalette.self
-        let rels = ["rel1", "rel2", "rel3"].filter { has($0) }.map { value($0) }
+        let rels = ["rel1", "rel2", "rel3"].filter { has($0) }
 
         var items: [AnyView] = [
             AnyView(deathVerses(lead: L.leadMul, main: L.verseMul, leadPull: 30, mainPull: 28)),
@@ -319,16 +356,23 @@ struct OccasionPostView: View {
                 VStack(spacing: 0) {
                     if has("lead") { text(value("lead"), .semibold, L.l1, color: .white, lineHeight: 1.4) }
                     if has("title") { text(value("title"), .extrabold, L.l2, color: P.soft, lineHeight: 1.35) }
-                    fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 18, width: 984, color: P.gold, lineHeight: 1.22)
-                        .shadow(color: .black.opacity(0.65), radius: 13, x: 0, y: 10)
+                    if has("name") {
+                        nameLine("name", color: P.gold)
+                            .shadow(color: .black.opacity(0.65), radius: 13, x: 0, y: 10)
+                    }
                 }
             ),
         ]
         if !rels.isEmpty {
             items.append(AnyView(
                 VStack(spacing: 0) {
-                    ForEach(Array(rels.enumerated()), id: \.offset) { _, line in
-                        text(line, .regular, L.relF, color: P.grey, lineHeight: L.relLH)
+                    ForEach(rels, id: \.self) { key in
+                        // اسم شخص واحد: سطر واحد بصيغة تدخل؛ القوائم تلتف
+                        if isNameLine(key) {
+                            nameLine(key, color: P.grey)
+                        } else {
+                            text(value(key), .regular, L.relF, color: P.grey, lineHeight: L.relLH)
+                        }
                     }
                 }
                 .frame(maxWidth: 900)
@@ -377,16 +421,20 @@ struct OccasionPostView: View {
                 VStack(spacing: 8) {
                     if has("from") { text(value("from"), .semibold, L.from, color: ink, lineHeight: 1.35).modifier(OccasionLightShadow()) }
                     text("بأحر التعازي وأصدق المواساة إلى", .regular, L.sub, color: muted, lineHeight: 1.4)
-                    fitLine(value("to"), .extrabold, maxSize: L.to, minSize: 18, width: 984, color: ink, lineHeight: 1.25)
-                        .modifier(OccasionLightShadow())
-                        .padding(.top, 8)
+                    if has("to") {
+                        nameLine("to", color: ink)
+                            .modifier(OccasionLightShadow())
+                            .padding(.top, 8)
+                    }
                 }
             ),
             AnyView(
                 VStack(spacing: 6) {
                     if has("lead") { text(value("lead"), .regular, L.lead, color: muted, lineHeight: 1.4) }
-                    fitLine(value("name"), .extrabold, maxSize: L.name, minSize: 18, width: 984, color: ink, lineHeight: 1.25)
-                        .modifier(OccasionLightShadow())
+                    if has("name") {
+                        nameLine("name", color: ink)
+                            .modifier(OccasionLightShadow())
+                    }
                 }
             ),
         ]
