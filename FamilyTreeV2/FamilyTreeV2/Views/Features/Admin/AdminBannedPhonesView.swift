@@ -179,7 +179,7 @@ struct AdminBannedPhonesView: View {
                                 .foregroundStyle(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.md)
                                 .padding(.vertical, DS.Spacing.xs)
-                                .background(DS.Color.error)
+                                .background(DS.Color.errorFill)
                                 .clipShape(Capsule())
                         }
                     }

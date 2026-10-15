@@ -199,11 +199,11 @@ Visual identity (October 2026) follows the designer's guide: navy #172536, gold 
 - **Brand:** `primary` navy (#172536 / #7FA8D6), `primaryDark` (#0F1824 / #2B5F90), `primaryLight` (#5D6672 / #A9C4E4), `accent` = gold-text for text on light surfaces (#725D31 / #B89A5A), `accentDark` (#5A4927 / #9C8045), `accentLight` = gold for lines and frames (#B89A5A / #D3BC8A). `secondary` (forest green) stays a supporting color.
 - **Gold rule:** gold text on light backgrounds uses `accent` (#725D31); the brighter #B89A5A is text only on navy.
 - **Supporting accents:** `neonBlue` (#172536, band), `neonPurple` (slate), `neonCyan` (forest), `neonPink` (burgundy rose)
-- **Semantic:** `success` (#216C4F), `warning` (#875C0A), `error` (#C0282A), `info` (= `primary`)
+- **Semantic:** `success` (#216C4F), `warning` (#875C0A), `error` (#C0282A), `info` (= `primary`). Red badges and pills with white text use `errorFill` (#C0282A in both modes); `error` is for text and icons.
 - **Surfaces:** `background` sand (#FCF7EC / #14171C), `surface` and `cardBackground` white (#FFFFFF / #1C1F25), `cardBackgroundSoft` cream (#F2EBDD / #23272E), `cardBorder` line (#DCCFB4 / #343A44), `cardBorderStrong` line-strong (#8A7B60 / #6B7380) for edges that must be visible (buttons, fields)
 - **Text:** `textPrimary` ink (#172536 / #FFFFFF), `textSecondary` ink-muted (#4A5560 / #C9CED5), `textTertiary`, `textOnPrimary`
-- **Grid:** `gridTree` (#344B59), `gridAlerts` (#8C2A2A), `gridDiwaniya` (#2B7A9F), `gridContact` (#516F80)
-- **Gradients:** `gradientPrimary`, `gradientAccent`, `gradientWarm`, `gradientCool`, `gradientDark`, `gradientAuth`, `gradientFire`, `gradientOcean`, `gradientNeon`. The identity uses flat color: `gradientPrimary` (navy; band #1B2638 in dark) and `gradientAccent` are solid fills that keep their names for compatibility. Cards and buttons have no glass; Liquid Glass stays only on the tab bar and `dsGlass`.
+- **Grid:** `gridTree` (= `primary`), `gridAlerts` (= `error`), `gridDiwaniya` (= `secondary`), `gridContact` (= `accent`)
+- **Gradients:** `gradientPrimary`, `gradientAccent`, `gradientWarm`, `gradientCool`, `gradientDark`, `gradientAuth`, `gradientFire`, `gradientOcean`, `gradientNeon`. The identity uses flat color: `gradientPrimary` (navy #172536; #2B5F90 in dark so buttons and selected states stand out from dark cards) and `gradientAccent` are solid fills that keep their names for compatibility. Headers and hero panels use `gradientBand` (band: #172536; #1B2638 in dark, as on the website). Use these as fills only; navy text and icons use `primary`. Cards, buttons and fields have no glass; Liquid Glass stays on the tab bar, `dsGlass` and `glassPill()`.
 - Hex colors via `Color(hex: "#XXXXXX")` extension
 
 ### Typography — `DS.Font`

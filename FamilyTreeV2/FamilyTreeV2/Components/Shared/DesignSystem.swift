@@ -27,10 +27,17 @@ enum DS {
 
         // Gradients
         // الهوية: الأزرار والهيدرات والبطاقات بلون واحد بدون تدرّج — يبقى الاسم للتوافق.
-        // ثابت الدرجة: كحلي المصمم في الفاتح، والكحلي الغامق (band) في الداكن — النص الأبيض واضح فوقهما.
-        static let primaryFill = SwiftUI.Color.adaptive(light: "#172536", dark: "#1B2638")
+        // كحلي المصمم في الفاتح؛ وفي الداكن كحلي أفتح (#2B5F90) حتى يبان الزر والعنصر المختار فوق
+        // البطاقات الداكنة (٢٫٥:١) — والنص الأبيض فوقه ٦٫٧:١. للنص والأيقونات الكحلية استخدم primary لا التدرّج.
+        static let primaryFill = SwiftUI.Color.adaptive(light: "#172536", dark: "#2B5F90")
         static let gradientPrimary = LinearGradient(
             colors: [primaryFill, primaryFill],
+            startPoint: .bottomTrailing, endPoint: .topLeading
+        )
+        // الأشرطة الكحلية الغامقة (band): الهيدرات ولوحات الترحيب — كحلي المصمم، وفي الداكن #1B2638 (نفس band في الموقع)
+        static let bandFill = SwiftUI.Color.adaptive(light: "#172536", dark: "#1B2638")
+        static let gradientBand = LinearGradient(
+            colors: [bandFill, bandFill],
             startPoint: .bottomTrailing, endPoint: .topLeading
         )
         static let gradientAccent = LinearGradient(
@@ -120,6 +127,8 @@ enum DS {
         static let success = SwiftUI.Color.adaptive(light: "#216C4F", dark: "#4A9E7C") // success — يعدّي AA كنص
         static let warning = SwiftUI.Color.adaptive(light: "#875C0A", dark: "#F0B040") // warning — يعدّي AA كنص
         static let error   = SwiftUI.Color.adaptive(light: "#C0282A", dark: "#F47370") // danger — يعدّي AA كنص
+        /// تعبئة الشارات والأزرار الحمراء ذات النص الأبيض — ثابتة في الوضعين (الأبيض فوقها ٥٫٩:١)
+        static let errorFill = SwiftUI.Color.adaptive(light: "#C0282A", dark: "#C0282A")
         static let info    = primary // كحلي
 
         // Role Colors — باستيل ناعم
@@ -244,10 +253,10 @@ enum DS {
         /// الصوت الطباعي المميّز لهوية العائلة التراثية — أدفأ وأكثر تميّزاً من SF Pro.
         /// SF Rounded يدعم العربية (SF Arabic Rounded) فيظهر الدفء على اسم العائلة والعناوين
         /// العربية والإنجليزية معاً، بعكس الخط السيريفي (New York) الذي لا يملك محارف عربية.
-        /// يُطبَّق على العناوين الكبرى فقط؛ ويبقى نص المحتوى على خط النظام (SF Pro) لأقصى وضوح.
+        /// يُطبَّق على الخطوط المرنة (scaled) فقط؛ نصوص الواجهة — العناوين والمحتوى — على IBM Plex Sans Arabic (الهوية).
         static let displayDesign: SwiftUI.Font.Design = .rounded
 
-        // MARK: IBM Plex Sans Arabic — خط الهوية (تجربة)
+        // MARK: IBM Plex Sans Arabic — خط الهوية
         /// أسماء PostScript للأوزان المضافة في Resources/Fonts
         enum Plex {
             static let regular  = "IBMPlexSansArabic-Regular"
@@ -694,7 +703,7 @@ struct DSPulseBadge: View {
             .foregroundColor(.white)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 3)
-            .background(DS.Color.error)
+            .background(DS.Color.errorFill)
             .clipShape(Capsule())
             .scaleEffect(isPulsing ? 1.15 : 1.0)
             .animation(

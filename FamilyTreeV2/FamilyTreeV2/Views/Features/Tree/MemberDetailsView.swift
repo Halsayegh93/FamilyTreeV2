@@ -1442,7 +1442,7 @@ struct MemberDetailsView: View {
                     .frame(width: 300, height: 300)
                     .background(DS.Color.primary.opacity(0.15))
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(DS.Color.gradientPrimary, lineWidth: 4))
+                    .overlay(Circle().stroke(DS.Color.accentLight, lineWidth: 4))
                     .dsGlowShadow()
                     .scaleEffect(avatarPreviewScale, anchor: .center)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)

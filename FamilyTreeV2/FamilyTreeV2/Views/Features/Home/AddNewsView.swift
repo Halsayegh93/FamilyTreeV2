@@ -66,7 +66,7 @@ struct AddNewsView: View {
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
-            .background(DS.Color.surfaceElevated)
+            .background(DS.Color.background)
             .navigationTitle(L10n.t("خبر جديد", "New Post"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

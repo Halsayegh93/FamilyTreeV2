@@ -32,7 +32,7 @@ struct DiwaniyasView: View {
                         title: L10n.t("الديوانيات", "Diwaniyas"),
                         subtitle: "\(filteredDiwaniyas.count) " + L10n.t("موقع ومجلس", "places"),
                         icon: "map.fill",
-                        backgroundGradient: DS.Color.gradientPrimary
+                        backgroundGradient: DS.Color.gradientBand
                     )
 
                     if viewModel.isLoading && filteredDiwaniyas.isEmpty {

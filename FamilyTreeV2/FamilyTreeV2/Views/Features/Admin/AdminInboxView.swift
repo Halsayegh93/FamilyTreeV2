@@ -271,7 +271,7 @@ struct AdminInboxView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.vertical, 12)
-                .background(Capsule().fill(DS.Color.error))
+                .background(Capsule().fill(DS.Color.errorFill))
             }
             .buttonStyle(.plain)
             .disabled(selectedIDs.isEmpty || isDeleting)

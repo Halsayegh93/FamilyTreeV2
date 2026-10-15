@@ -89,7 +89,7 @@ struct WaitingForApprovalView: View {
             Circle()
                 .trim(from: 0, to: 0.7)
                 .stroke(
-                    DS.Color.gradientPrimary,
+                    DS.Color.primary,
                     style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
                 )
                 .frame(width: 130, height: 130)
