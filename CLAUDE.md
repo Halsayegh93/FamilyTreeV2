@@ -196,7 +196,7 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 
 Visual identity (October 2026) follows the designer's guide: navy #172536, gold #B89A5A, cream #F2EBDD. The token names and values match the website (`familytree-web/src/app/globals.css`) and the «المحمد علي» design system. Values are light / dark.
 
-- **Brand:** `primary` navy (#172536 / #7FA8D6), `primaryDark` (#0F1824 / #2B5F90), `primaryLight` (#5D6672 / #A9C4E4), `accent` = gold-text for text on light surfaces (#725D31 / #B89A5A), `accentDark` (#5A4927 / #9C8045), `accentLight` = gold for lines and frames (#B89A5A / #D3BC8A). `secondary` (forest green) stays a supporting color.
+- **Brand:** `primary` navy (#172536 / #7FA8D6), `primaryDark` (#0F1824 / #2B5F90), `primaryLight` (#5D6672 / #A9C4E4), `accent` = gold-text for text on light surfaces (#725D31 / #B89A5A), `accentDark` (#5A4927 / #9C8045), `accentLight` = gold for lines and frames (#B89A5A in both modes). `secondary` (forest green) stays a supporting color.
 - **Gold rule:** gold text on light backgrounds uses `accent` (#725D31); the brighter #B89A5A is text only on navy.
 - **Supporting accents:** `neonBlue` (#172536, band), `neonPurple` (slate), `neonCyan` (forest), `neonPink` (burgundy rose)
 - **Semantic:** `success` (#216C4F), `warning` (#875C0A), `error` (#C0282A), `info` (= `primary`). Red badges and pills with white text use `errorFill` (#C0282A in both modes); `error` is for text and icons.

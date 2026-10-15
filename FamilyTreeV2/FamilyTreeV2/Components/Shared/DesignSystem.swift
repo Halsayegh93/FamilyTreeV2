@@ -17,7 +17,7 @@ enum DS {
         static let secondaryLight = SwiftUI.Color.adaptive(light: "#6FA88C", dark: "#9ACDB5") // Sage
         static let accent        = SwiftUI.Color.adaptive(light: "#725D31", dark: "#B89A5A") // gold-text — ذهبي المصمم أغمق للنص (٦:١ على الأبيض)
         static let accentDark    = SwiftUI.Color.adaptive(light: "#5A4927", dark: "#9C8045") // ذهبي غامق
-        static let accentLight   = SwiftUI.Color.adaptive(light: "#B89A5A", dark: "#D3BC8A") // gold — ذهبي المصمم للخطوط والإطارات
+        static let accentLight   = SwiftUI.Color.adaptive(light: "#B89A5A", dark: "#B89A5A") // gold — ذهبي المصمم للخطوط والإطارات (نفس الموقع في الوضعين)
 
         // Supporting Accents
         static let neonBlue     = SwiftUI.Color.adaptive(light: "#172536", dark: "#A9C4E4") // band
