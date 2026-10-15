@@ -1,0 +1,47 @@
+name: Build check (temporary)
+
+# مؤقت — فرع فحص فقط: يبني التطبيق على الماك بدون توقيع ولا تثبيت على الآيفون،
+# ويطلع أخطاء التجميع كتنبيهات. ينحذف الفرع بعد الفحص.
+on:
+  push:
+    branches: ['claude/build-check-2026-10-15']
+
+jobs:
+  build:
+    runs-on: self-hosted
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build for iOS (no signing, no install)
+        run: |
+          LOG="$RUNNER_TEMP/build.log"
+          STATUS=0
+          xcodebuild build \
+            -project FamilyTreeV2.xcodeproj \
+            -scheme FamilyTreeV2 \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd-check" \
+            CODE_SIGNING_ALLOWED=NO > "$LOG" 2>&1 || STATUS=$?
+
+          # أخطاء التجميع كتنبيهات (الملف والسطر)
+          grep -E '^/.+:[0-9]+:[0-9]+: error: ' "$LOG" | sort -u | head -10 | while IFS= read -r line; do
+            file=$(printf '%s' "$line" | cut -d: -f1); ln=$(printf '%s' "$line" | cut -d: -f2)
+            msg=$(printf '%s' "$line" | cut -d: -f5- | sed 's/%/%25/g')
+            echo "::error file=${file#"$GITHUB_WORKSPACE/"},line=$ln::$msg"
+          done
+          # أخطاء بدون ملف (حزم، توقيع، إعدادات)
+          grep -E 'error:' "$LOG" | grep -vE '^/.+:[0-9]+:[0-9]+: error: ' | sort -u | head -5 | sed 's/%/%25/g; s/^/::warning title=other error::/'
+
+          WARN=$(grep -cE ': warning: ' "$LOG" || true)
+          if grep -q 'BUILD SUCCEEDED' "$LOG"; then
+            echo "::notice title=Build::BUILD SUCCEEDED — $WARN warnings"
+          else
+            echo "::notice title=Build::BUILD FAILED (exit $STATUS) — $WARN warnings"
+            tail -30 "$LOG"
+          fi
+          exit $STATUS
