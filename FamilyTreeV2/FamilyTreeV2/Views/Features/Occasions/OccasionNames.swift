@@ -84,7 +84,7 @@ enum OccasionNames {
 
     private static let joinNext: Set<String> = ["عبد", "أبو", "ابو", "بو"]
 
-    /// كلمات الاسم — «عبد/أبو + الاسم» و«المحمد علي» تنحسب اسم واحد (ما ينفصلون بالبوست أصلاً)
+    /// كلمات الاسم — «عبد/أبو + الاسم» و«المحمد علي» المكتوبة بمسافة تنحسب اسم واحد (ما ينفصلون بالبوست أصلاً)
     static func words(_ name: String) -> [String] {
         let raw = name.split(whereSeparator: \.isWhitespace).map(String.init)
         var out: [String] = []

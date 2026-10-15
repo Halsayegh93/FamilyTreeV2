@@ -61,7 +61,7 @@ struct OccasionPostView: View {
 
     // MARK: أدوات
 
-    /// النص النهائي للبوست: بدون تشكيل (الخط ما يضبطه) و«المحمد علي» ما ينقسم — نفس postText في الموقع
+    /// النص النهائي للبوست: بدون تشكيل (الخط ما يضبطه) و«المحمدعلي» متصلة — نفس postText في الموقع
     func value(_ key: String) -> String { OccasionText.postText(values[key] ?? "") }
 
     func has(_ key: String) -> Bool {
@@ -101,7 +101,7 @@ struct OccasionPostView: View {
                 .frame(width: lineW, height: 2)
             if let ui = image("logo/\(logo).png") {
                 Image(uiImage: ui).resizable().frame(width: lh * ui.size.width / max(ui.size.height, 1), height: lh)
-                    .accessibilityLabel(L10n.t("شعار عائلة المحمد علي", "Al-Mohammad Ali family logo"))
+                    .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
             } else {
                 Color.clear.frame(width: lh * 900 / 831, height: lh)
             }
@@ -728,13 +728,14 @@ extension View {
 /// توزيع النص على سطرين متقاربين إذا ما وسعه سطر واحد (مثل text-wrap: balance)
 enum OccasionText {
     /// التنوين والحركات على آخر حرف تطلع مزاحة بخط URW (ما فيه مواضع لها) — نشيلها من نص البوست،
-    /// و«المحمد علي» (وعبد/أبو + الاسم) ما ينقسمون على سطرين. نفس postText في الموقع.
+    /// و«المحمد علي» المكتوبة بمسافة تصير «المحمدعلي» متصلة مثل الشجرة (كلمة كاملة فقط)،
+    /// و«عبد/أبو + الاسم» ما ينقسمون على سطرين. نفس postText في الموقع.
     static func postText(_ s: String) -> String {
         guard !s.isEmpty else { return s }
         var scalars = String.UnicodeScalarView()
         scalars.append(contentsOf: s.unicodeScalars.filter { !((0x064B...0x0652).contains($0.value) || $0.value == 0x0670) })
         var out = String(scalars)
-        out = out.replacingOccurrences(of: "المحمد\\s+علي", with: "المحمد\u{00A0}علي", options: .regularExpression)
+        out = out.replacingOccurrences(of: "(?<!\\p{L})المحمد\\s+علي(?!\\p{L})", with: "المحمدعلي", options: .regularExpression)
         out = out.replacingOccurrences(of: "(^|[\\s،(])(عبد|أبو|ابو|بو)\\s+(?=\\S)", with: "$1$2\u{00A0}", options: .regularExpression)
         return out
     }

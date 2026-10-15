@@ -292,7 +292,7 @@ extension OccasionPostView {
                 Image(uiImage: ui)
                     .resizable()
                     .frame(width: lh * ui.size.width / max(ui.size.height, 1), height: lh)
-                    .accessibilityLabel(L10n.t("شعار عائلة المحمد علي", "Al-Mohammad Ali family logo"))
+                    .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
             } else {
                 Color.clear.frame(width: lh * 900 / 831, height: lh)
             }
