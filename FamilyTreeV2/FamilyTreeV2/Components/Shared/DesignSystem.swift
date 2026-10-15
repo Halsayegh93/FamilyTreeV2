@@ -85,12 +85,12 @@ enum DS {
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
 
-        // MARK: Feature Gradients — موحد
-        static let gradientHome     = gradientPrimary
-        static let gradientTree     = gradientPrimary
-        static let gradientDiwaniya = gradientPrimary
-        static let gradientProfile  = gradientPrimary
-        static let gradientAdmin    = gradientPrimary
+        // MARK: Feature Gradients — موحد: هيدرات الأقسام على band
+        static let gradientHome     = gradientBand
+        static let gradientTree     = gradientBand
+        static let gradientDiwaniya = gradientBand
+        static let gradientProfile  = gradientBand
+        static let gradientAdmin    = gradientBand
 
         // MARK: Feature Tints — لون واحد موحد
         static let tintHome     = primary
@@ -553,7 +553,7 @@ extension View {
     }
 
     func dsGradientBackground() -> some View {
-        self.background(DS.Color.gradientPrimary)
+        self.background(DS.Color.gradientBand)
     }
 
     /// كرت — سطح أبيض بحد خفيف (الهوية: بدون زجاج). الاسم باقٍ للتوافق.
@@ -632,7 +632,7 @@ struct DSGradientCard<Content: View>: View {
     let gradient: LinearGradient
     let content: Content
 
-    init(gradient: LinearGradient = DS.Color.gradientPrimary, @ViewBuilder content: () -> Content) {
+    init(gradient: LinearGradient = DS.Color.gradientBand, @ViewBuilder content: () -> Content) {
         self.gradient = gradient
         self.content = content()
     }
@@ -1675,6 +1675,9 @@ struct DSEmptyState: View {
     private var buttonBackground: some View {
         if tint == DS.Color.primary {
             DS.Color.gradientPrimary
+        } else if tint == DS.Color.error {
+            // نص الزر أبيض — التعبئة الحمراء الثابتة تبقى مقروءة في الداكن
+            DS.Color.errorFill
         } else {
             tint
         }

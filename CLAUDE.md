@@ -270,7 +270,7 @@ IMPORTANT: Always use existing DS components before creating custom views.
 - `.glassBackground(radius:)` — Solid background with border
 - `.glassPill()` — Capsule shape with border
 - `.dsCardShadow()` / `.dsSubtleShadow()` / `.dsGlowShadow()` / `.dsNeonShadow()` / `.dsAccentGlow()`
-- `.dsGradientBackground()` — Primary gradient background
+- `.dsGradientBackground()` — Band (deep navy) background
 - `.dsBoldPress(_)` — Scale 0.95 bounce on press
 - `.languageHorizontalOffset(_:y:)` — RTL-aware horizontal offset (from `DirectionalOffset.swift`)
 

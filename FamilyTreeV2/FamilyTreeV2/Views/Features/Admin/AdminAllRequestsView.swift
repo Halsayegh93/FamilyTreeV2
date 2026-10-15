@@ -1606,7 +1606,7 @@ struct AdminAllRequestsView: View {
                 Button(role: .destructive, action: onDelete) {
                     Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
                 }
-                .tint(DS.Color.error)
+                .tint(DS.Color.errorFill)
             }
         }
     }

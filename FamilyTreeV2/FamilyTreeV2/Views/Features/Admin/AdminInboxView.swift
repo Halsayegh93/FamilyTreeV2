@@ -223,7 +223,7 @@ struct AdminInboxView: View {
 
     private func swipeActions(for msg: AdminRequest) -> [DSSwipeAction] {
         var actions = [
-            DSSwipeAction(icon: "trash.fill", title: L10n.t("حذف", "Delete"), color: DS.Color.error) {
+            DSSwipeAction(icon: "trash.fill", title: L10n.t("حذف", "Delete"), color: DS.Color.errorFill) {
                 messageToDelete = msg
             }
         ]
