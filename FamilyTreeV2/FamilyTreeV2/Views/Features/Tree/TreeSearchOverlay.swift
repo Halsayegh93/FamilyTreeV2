@@ -597,14 +597,14 @@ struct TreeSearchOverlay: View {
                     } placeholder: {
                         Text(String(result.member.firstName.prefix(1)))
                             .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
+                            .foregroundColor(DS.Color.onTint) // نص فوق لون الدور: داكن في الوضع الداكن
                     }
                     .frame(width: 36, height: 36)
                     .clipShape(Circle())
                 } else {
                     Text(String(result.member.firstName.prefix(1)))
                         .font(DS.Font.scaled(14, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
+                        .foregroundColor(DS.Color.onTint) // نص فوق لون الدور: داكن في الوضع الداكن
                 }
 
                 if result.member.isDeceased ?? false {

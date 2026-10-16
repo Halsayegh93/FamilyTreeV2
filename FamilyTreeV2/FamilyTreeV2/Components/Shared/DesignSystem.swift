@@ -12,45 +12,45 @@ enum DS {
         static let primary       = SwiftUI.Color.adaptive(light: "#172536", dark: "#7FA8D6") // navy
         static let primaryDark   = SwiftUI.Color.adaptive(light: "#0F1824", dark: "#2B5F90") // كحلي أغمق
         static let primaryLight  = SwiftUI.Color.adaptive(light: "#5D6672", dark: "#A9C4E4") // كحلي فاتح
-        // الثانوي = نخلي السدو (الأخضر بدرجته الجديدة المنسجمة مع كحلي المصمم وذهبه)
+        // الثانوي = أخضر العائلة (نفس الأخضر بعمق الكحلي)
         static let secondary     = palm
-        static let secondaryDark = SwiftUI.Color.adaptive(light: "#24442D", dark: "#5E8A69") // نخلي غامق
-        static let secondaryLight = SwiftUI.Color.adaptive(light: "#6E9A7B", dark: "#B5D3BC") // نخلي فاتح
+        static let secondaryDark = SwiftUI.Color.adaptive(light: "#244B44", dark: "#65927D") // أخضر العائلة غامق
+        static let secondaryLight = SwiftUI.Color.adaptive(light: "#759C8A", dark: "#BCD9CB") // أخضر العائلة فاتح
         static let accent        = SwiftUI.Color.adaptive(light: "#725D31", dark: "#B89A5A") // gold-text — ذهبي المصمم أغمق للنص (٦:١ على الأبيض)
         static let accentDark    = SwiftUI.Color.adaptive(light: "#5A4927", dark: "#9C8045") // ذهبي غامق
         static let accentLight   = SwiftUI.Color.adaptive(light: "#B89A5A", dark: "#B89A5A") // gold — ذهبي المصمم للخطوط والإطارات (نفس الموقع في الوضعين)
 
-        // Supporting Accents — أسماء قديمة تشير لألوان السدو
+        // Supporting Accents — أسماء قديمة تشير لعائلة الكحلي والذهبي
         static let neonBlue     = SwiftUI.Color.adaptive(light: "#172536", dark: "#A9C4E4") // band
-        static let neonPurple   = slate   // رصاصي
-        static let neonCyan     = palm    // نخلي
-        static let neonPink     = sadu    // عنّابي السدو
+        static let neonPurple   = slate   // رصاصي العائلة
+        static let neonCyan     = palm    // أخضر العائلة
+        static let neonPink     = sadu    // عنّابي العائلة
 
-        // MARK: ألوان السدو — الألوان الداعمة للأقسام
-        // مستوحاة من نسيج السدو الكويتي والبحر، ومضبوطة على عمق ودفء واحد مع كحلي المصمم (#172536)
+        // MARK: عائلة الكحلي والذهبي — ألوان الأقسام
+        // نفس ألوان التطبيق السابقة (أخضر، بترولي، عنّابي، رصاصي، ذهبي، كحلي) بعمق واحد ولمسة كحلي (#172536)
         // وذهبه (#B89A5A). لكل لون ثلاث درجات:
         //   • اللون نفسه (palm…) — للنص والأيقونات: يعدّي AA على الرملي والأبيض، وأفتح في الداكن.
         //   • Fill — تعبئة المربّعات والشارات بنص أبيض (٧:١ وأكثر، والذهبي ٤٫٨:١). ثابت بالوضعين.
         //   • Deep — الطرف الغامق لتدرّج المربّع.
         // الألوان للأقسام والتصنيفات بس — الحالات (مقبول/ينتظر/خطأ) تبقى success/warning/error.
-        static let palm      = SwiftUI.Color.adaptive(light: "#396245", dark: "#90BB9A") // نخلي — الشجرة والعائلة
-        static let palmFill  = SwiftUI.Color(hex: "#396245")
-        static let palmDeep  = SwiftUI.Color(hex: "#24442D")
-        static let sea       = SwiftUI.Color.adaptive(light: "#28616A", dark: "#85B9C2") // بحري — التواصل
-        static let seaFill   = SwiftUI.Color(hex: "#28616A")
-        static let seaDeep   = SwiftUI.Color(hex: "#14444A")
-        static let sadu      = SwiftUI.Color.adaptive(light: "#883939", dark: "#E19894") // عنّابي السدو — المكتبة والتراث
-        static let saduFill  = SwiftUI.Color(hex: "#883939")
-        static let saduDeep  = SwiftUI.Color(hex: "#612626")
-        static let slate     = SwiftUI.Color.adaptive(light: "#4D5B67", dark: "#B1BDC8") // رصاصي — المحايد
+        static let palm      = SwiftUI.Color.adaptive(light: "#2C614B", dark: "#9ACBB1") // أخضر العائلة — الشجرة والأعضاء
+        static let palmFill  = SwiftUI.Color(hex: "#2C5846")
+        static let palmDeep  = SwiftUI.Color(hex: "#10302B")
+        static let sea       = SwiftUI.Color.adaptive(light: "#2C5D69", dark: "#9AC6D2") // بترولي — التواصل والرسائل
+        static let seaFill   = SwiftUI.Color(hex: "#2C5460")
+        static let seaDeep   = SwiftUI.Color(hex: "#112E3A")
+        static let sadu      = SwiftUI.Color.adaptive(light: "#7B414A", dark: "#EAAAAF") // عنّابي العائلة — المكتبة والصور
+        static let saduFill  = SwiftUI.Color(hex: "#693940")
+        static let saduDeep  = SwiftUI.Color(hex: "#382028")
+        static let slate     = SwiftUI.Color.adaptive(light: "#56606B", dark: "#B4BCC5") // رصاصي العائلة — المحايد والمعلّق
         static let slateFill = SwiftUI.Color(hex: "#4D5B67")
         static let slateDeep = SwiftUI.Color(hex: "#333F49")
         /// كحلي المربّعات: يتدرّج إلى كحلي المصمم
-        static let navyFill  = SwiftUI.Color(hex: "#33496B")
-        static let navyDeep  = SwiftUI.Color(hex: "#172536")
+        static let navyFill  = SwiftUI.Color(hex: "#324561")
+        static let navyDeep  = SwiftUI.Color(hex: "#17263C")
         /// ذهبي المربّعات: أغمق من ذهبي المصمم حتى يُقرأ الأبيض فوقه
-        static let goldFill  = SwiftUI.Color(hex: "#86703F")
-        static let goldDeep  = SwiftUI.Color(hex: "#5A4927")
+        static let goldFill  = SwiftUI.Color(hex: "#806631")
+        static let goldDeep  = SwiftUI.Color(hex: "#40351E")
 
         // Gradients
         // الهوية: الأزرار والهيدرات والبطاقات بلون واحد بدون تدرّج — يبقى الاسم للتوافق.
@@ -71,7 +71,7 @@ enum DS {
             colors: [accent, accent],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
-        // تدرّجات ألوان السدو — من نفس اللون إلى درجته الغامقة فقط (بدون خلط ألوان)
+        // تدرّجات العائلة — من نفس اللون إلى درجته الغامقة فقط (بدون خلط ألوان)
         static let gradientSecondary = LinearGradient(colors: [palmFill, palmDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
         static let gradientWarm  = LinearGradient(colors: [navyFill, navyDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
         static let gradientCool  = LinearGradient(colors: [cardBackgroundSoft, cardBackgroundSoft], startPoint: .leading, endPoint: .trailing)
@@ -99,7 +99,7 @@ enum DS {
 
         // Surfaces — الكروت لازم تبان فوق الخلفية
         // الهوية: خلفية رملية والكروت بيضاء فوقها
-        static let background       = SwiftUI.Color.adaptive(light: "#FCF7EC", dark: "#14171C") // sand
+        static let background       = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#000000") // أبيض صافي / أسود صافي
         static let surface          = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25") // surface
         static let surfaceElevated  = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#23272E")
         static let cardBackground   = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25") // surface
@@ -135,31 +135,31 @@ enum DS {
         static let warningFill = SwiftUI.Color.adaptive(light: "#875C0A", dark: "#875C0A")
         static let info    = primary // كحلي
 
-        // Role Colors — كل دور بلون من ألوان السدو (الشارة: النص باللون فوق نفس اللون ١٢٪)
+        // Role Colors — كل دور بلونه السابق بعمق العائلة (الشارة: النص باللون فوق نفس اللون ١٢٪)
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }
-        static let ownerRole      = accent  // ذهبي
-        static let adminRole      = sadu    // عنّابي السدو
-        static let monitorRole    = palm    // نخلي
-        static let supervisorRole = sea     // بحري
-        static let memberRole     = primary // كحلي
+        static let ownerRole      = SwiftUI.Color.adaptive(light: "#594C7A", dark: "#C2B5E4") // بنفسجي العائلة
+        static let adminRole      = SwiftUI.Color.adaptive(light: "#7E3F42", dark: "#EDA9A8") // وردي عنّابي
+        static let monitorRole    = SwiftUI.Color.adaptive(light: "#286153", dark: "#97CBB9") // أخضر نعناعي
+        static let supervisorRole = SwiftUI.Color.adaptive(light: "#6C4F20", dark: "#D9B88A") // ذهبي
+        static let memberRole     = SwiftUI.Color.adaptive(light: "#32587C", dark: "#9DC2E7") // أزرق
         static let pendingRole    = slate   // رصاصي
 
         // News Type Colors — نفس ألوان البوستات: الزواج ذهبي مثل بوست الزواج، والمولود أزرق مثل بوست المولود
-        static let newsWedding      = SwiftUI.Color.adaptive(light: "#8A6A22", dark: "#C9A24A") // ذهبي بوست الزواج
-        static let newsBirth        = SwiftUI.Color.adaptive(light: "#1F6FA3", dark: "#5FA8DA") // أزرق بوست المولود
-        static let newsDeath        = slate
-        static let newsVote         = primary
+        static let newsWedding      = SwiftUI.Color.adaptive(light: "#944E62", dark: "#F7ACBD") // وردي
+        static let newsBirth        = SwiftUI.Color.adaptive(light: "#316145", dark: "#9DCBAC") // أخضر
+        static let newsDeath        = SwiftUI.Color.adaptive(light: "#53545D", dark: "#BDBDC5") // رمادي
+        static let newsVote         = SwiftUI.Color.adaptive(light: "#415673", dark: "#ABBFDD") // رصاصي مزرق
         static let newsAnnouncement = primary
         static let newsCongrats     = accent
-        static let newsReminder     = sadu
-        static let newsInvitation   = sea
+        static let newsReminder     = newsWedding
+        static let newsInvitation   = SwiftUI.Color.adaptive(light: "#7C3E4C", dark: "#ECA8B2") // عنّابي
 
         // Status Colors
         static let deceased         = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#808080") // رمادي هادي
-        static let currentLocation  = palm // نخلي
-        static let likeAction       = sadu // عنّابي السدو
+        static let currentLocation  = SwiftUI.Color.adaptive(light: "#2C623B", dark: "#9ACDA1") // أخضر
+        static let likeAction       = newsWedding // وردي
         /// لون الإناث في شجرة النساء — وردي تراثي موحّد (بدل القيم المرمّزة يدوياً في WomenTreeView/WomenClassicTreeView)
-        static let female           = SwiftUI.Color.adaptive(light: "#D66F92", dark: "#E48AA8") // وردي
+        static let female           = SwiftUI.Color.adaptive(light: "#92526F", dark: "#F4B1CB") // وردي
         /// الأنثى المتوفّاة في شجرة النساء — وردي أغمق يميّزها عن الحيّة دون أن يفقد هويتها
         /// الأنثى المتوفّاة — بنفسجي خوخي مطفأ: لون مختلف عن وردي الحيّة لكنه من عائلته (طلب المالك)
         static let femaleDeceased   = SwiftUI.Color.adaptive(light: "#7A5578", dark: "#9D7A9B")
@@ -170,15 +170,15 @@ enum DS {
         static let gridTree      = primary
         static let gridAlerts    = error
         static let gridDiwaniya  = secondary
-        static let gridContact   = sea // بحري — التواصل
+        static let gridContact   = sea // بترولي — التواصل
         static let gridMessaging = sea
 
-        // مربّعات الرئيسية — ألوان السدو: كل قسم بلونه، ومن نفس العمق
-        static let tileTree     = palmFill  // نخلي
+        // مربّعات الرئيسية — عائلة الكحلي والذهبي: كل قسم بلونه، ومن نفس العمق
+        static let tileTree     = palmFill  // أخضر
         static let tileDiwaniya = navyFill  // كحلي
-        static let tileLibrary  = saduFill  // عنّابي السدو
+        static let tileLibrary  = saduFill  // عنّابي
         static let tileProjects = goldFill  // ذهبي
-        static let tileContact  = seaFill   // بحري
+        static let tileContact  = seaFill   // بترولي
 
         // الطرف الغامق من تدرّج كل مربّع
         static let tileTreeDeep     = palmDeep

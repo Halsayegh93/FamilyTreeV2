@@ -72,7 +72,7 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: admins.count + monitors.count + index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.fill", color: DS.Color.sea, count: supervisors.count)
+                            sectionHeader(title: L10n.t("المشرفين", "Supervisors"), icon: "star.fill", color: DS.Color.supervisorRole, count: supervisors.count)
                         }
                     }
                     // قسم الصلاحيات
@@ -194,7 +194,7 @@ struct AdminModeratorsView: View {
     private func moderatorRow(member: FamilyMember, index: Int) -> some View {
         HStack(spacing: DS.Spacing.md) {
             ZStack {
-                let roleColor = (member.role == .owner || member.role == .admin) ? DS.Color.adminRole : (member.role == .monitor ? DS.Color.monitorRole : DS.Color.sea)
+                let roleColor = (member.role == .owner || member.role == .admin) ? DS.Color.adminRole : (member.role == .monitor ? DS.Color.monitorRole : DS.Color.supervisorRole)
                 let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.fill" : (member.role == .monitor ? "eye.fill" : "star.fill")
 
                 Circle()
@@ -614,7 +614,7 @@ struct AddModeratorSheet: View {
 
                                         Image(systemName: "plus.circle.fill")
                                             .font(DS.Font.scaled(22))
-                                            .foregroundColor(selectedRole == .admin ? DS.Color.adminRole : (selectedRole == .monitor ? DS.Color.monitorRole : DS.Color.sea))
+                                            .foregroundColor(selectedRole == .admin ? DS.Color.adminRole : (selectedRole == .monitor ? DS.Color.monitorRole : DS.Color.supervisorRole))
                                     }
                                 }
                                 .listRowBackground(DS.Color.surface)

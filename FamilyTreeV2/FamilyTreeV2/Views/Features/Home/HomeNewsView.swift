@@ -499,16 +499,11 @@ struct HomeNewsView: View {
                     stops: [
                         .init(color: .white.opacity(0.10), location: 0),
                         .init(color: .clear, location: 0.32),
-                        .init(color: .black.opacity(0.36), location: 1)
+                        .init(color: DS.Color.navyDeep.opacity(0.46), location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-
-                // لمسة الهوية: خط ذهبي رفيع أسفل المربّع وفي وسطه معيّنات السدو (نفس شريط الهيدر)
-                HomeTileSaduEdge()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .allowsHitTesting(false)
 
                 // أيقونة دائرية أكبر + عدّاد
                 VStack {
@@ -518,7 +513,7 @@ struct HomeNewsView: View {
                             .foregroundColor(.white)
                             .frame(width: 36 * layout.scale, height: 36 * layout.scale)
                             .dsGlass(Circle())
-                            .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                            .overlay(Circle().strokeBorder(DS.Color.accentLight.opacity(0.75), lineWidth: 1))
                             .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
 
                         Spacer()
@@ -591,7 +586,7 @@ struct HomeNewsView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 78, height: 78)
-                .foregroundColor(.white.opacity(0.17))
+                .foregroundColor(DS.Color.accentLight.opacity(0.30))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 .offset(x: 16, y: 12)
         }
@@ -985,28 +980,6 @@ private struct NoBounceIfAvailable: ViewModifier {
             content.scrollBounceBehavior(.basedOnSize)
         } else {
             content
-        }
-    }
-}
-
-/// خط ذهبي رفيع ومعيّنات السدو أسفل مربّعات الرئيسية — من شريط الهيدر وخطوط الشعار في الهوية
-private struct HomeTileSaduEdge: View {
-    var body: some View {
-        // المعيّنات في الطرف المقابل للعنوان (العنوان أسفل البداية)
-        VStack(alignment: .trailing, spacing: 2) {
-            HStack(spacing: 4) {
-                ForEach(0..<3, id: \.self) { i in
-                    Rectangle()
-                        .fill(DS.Color.accentLight)
-                        .frame(width: i == 1 ? 5 : 3.5, height: i == 1 ? 5 : 3.5)
-                        .rotationEffect(.degrees(45))
-                        .opacity(i == 1 ? 1 : 0.8)
-                }
-            }
-            .padding(.trailing, 12)
-            Rectangle()
-                .fill(DS.Color.accentLight)
-                .frame(height: 2)
         }
     }
 }
