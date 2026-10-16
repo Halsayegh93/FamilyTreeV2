@@ -196,14 +196,23 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 
 Visual identity (October 2026) follows the designer's guide: navy #172536, gold #B89A5A, cream #F2EBDD. The token names and values match the website (`familytree-web/src/app/globals.css`) and the «المحمدعلي» design system. Values are light / dark.
 
-- **Brand:** `primary` navy (#172536 / #7FA8D6), `primaryDark` (#0F1824 / #2B5F90), `primaryLight` (#5D6672 / #A9C4E4), `accent` = gold-text for text on light surfaces (#725D31 / #B89A5A), `accentDark` (#5A4927 / #9C8045), `accentLight` = gold for lines and frames (#B89A5A in both modes). `secondary` (forest green) stays a supporting color.
+- **Brand:** `primary` navy (#172536 / #7FA8D6), `primaryDark` (#0F1824 / #2B5F90), `primaryLight` (#5D6672 / #A9C4E4), `accent` = gold-text for text on light surfaces (#725D31 / #B89A5A), `accentDark` (#5A4927 / #9C8045), `accentLight` = gold for lines and frames (#B89A5A in both modes). `secondary` = `palm` (Sadu palette).
 - **Gold rule:** gold text on light backgrounds uses `accent` (#725D31); the brighter #B89A5A is text only on navy.
-- **Supporting accents:** `neonBlue` (#172536, band), `neonPurple` (slate), `neonCyan` (forest), `neonPink` (burgundy rose)
+- **Sadu palette (ألوان السدو) — supporting colours for sections and categories,** tuned to the same depth and warmth as the designer's navy and gold. Each has a text/icon colour (readable on sand, white and dark), a `…Fill` for solid backgrounds under white text (fixed in both modes) and a `…Deep` for the tile gradient:
+  - `palm` (#396245 / #90BB9A, fill #396245 → #24442D): family tree, members, kinship, Diwaniya cards. `secondary`, `neonCyan`, `monitorRole` and `currentLocation` point here.
+  - `sea` (#28616A / #85B9C2, fill #28616A → #14444A): communication — messages, contact, phone. `gridContact`, `gridMessaging`, `supervisorRole`.
+  - `sadu` (#883939 / #E19894, fill #883939 → #612626): heritage — library, archive, photos, likes. `neonPink`, `adminRole`, `likeAction`, `newsReminder`.
+  - `slate` (#4D5B67 / #B1BDC8, fill #4D5B67 → #333F49): neutral and pending. `neonPurple`, `pendingRole`, `newsDeath`.
+  - Tiles also use `navyFill` (#33496B → #172536) and `goldFill` (#86703F → #5A4927).
+  - Home tiles (`tileTree`…`tileContact`): palm, navy, sadu, gold, sea — a tonal gradient from fill to deep, with a gold hairline and Sadu diamonds at the bottom edge (`HomeTileSaduEdge`).
+  - Roles: owner gold (`accent`), admin sadu, monitor palm, supervisor sea, member navy, pending slate. Publicly the owner shows the admin colour.
+  - News types follow the post colours: wedding gold (#8A6A22 / #C9A24A), newborn blue (#1F6FA3 / #5FA8DA).
+  - Rule: Sadu colours are for sections and categories (pick by meaning). `success` / `warning` / `error` are only for real statuses (approved, pending, rejected, errors, destructive actions).
 - **Semantic:** `success` (#216C4F), `warning` (#875C0A), `error` (#C0282A), `info` (= `primary`). Red badges and pills with white text use `errorFill` (#C0282A in both modes); `error` is for text and icons.
 - **Surfaces:** `background` sand (#FCF7EC / #14171C), `surface` and `cardBackground` white (#FFFFFF / #1C1F25), `cardBackgroundSoft` cream (#F2EBDD / #23272E), `cardBorder` line (#DCCFB4 / #343A44), `cardBorderStrong` line-strong (#8A7B60 / #6B7380) for edges that must be visible (buttons, fields)
 - **Text:** `textPrimary` ink (#172536 / #FFFFFF), `textSecondary` ink-muted (#4A5560 / #C9CED5), `textTertiary`, `textOnPrimary`
-- **Grid:** `gridTree` (= `primary`), `gridAlerts` (= `error`), `gridDiwaniya` (= `secondary`), `gridContact` (= `accent`)
-- **Gradients:** `gradientPrimary`, `gradientAccent`, `gradientWarm`, `gradientCool`, `gradientDark`, `gradientAuth`, `gradientFire`, `gradientOcean`, `gradientNeon`. The identity uses flat color: `gradientPrimary` (navy #172536; #2B5F90 in dark so buttons and selected states stand out from dark cards) and `gradientAccent` are solid fills that keep their names for compatibility. Headers and hero panels use `gradientBand` (band: #172536; #1B2638 in dark, as on the website). Use these as fills only; navy text and icons use `primary`. Cards, buttons and fields have no glass; Liquid Glass stays on the tab bar, `dsGlass` and `glassPill()`.
+- **Grid:** `gridTree` (= `primary`), `gridAlerts` (= `error`), `gridDiwaniya` (= `secondary`, palm), `gridContact` (= `sea`)
+- **Gradients:** `gradientPrimary`, `gradientAccent`, `gradientWarm`, `gradientCool`, `gradientDark`, `gradientAuth`, `gradientFire`, `gradientOcean`, `gradientNeon`. The older names are now tonal gradients inside one Sadu colour (fill → deep), never a mix of two colours. The identity uses flat color: `gradientPrimary` (navy #172536; #2B5F90 in dark so buttons and selected states stand out from dark cards) and `gradientAccent` are solid fills that keep their names for compatibility. Headers and hero panels use `gradientBand` (band: #172536; #1B2638 in dark, as on the website). Use these as fills only; navy text and icons use `primary`. Cards, buttons and fields have no glass; Liquid Glass stays on the tab bar, `dsGlass` and `glassPill()`.
 - Hex colors via `Color(hex: "#XXXXXX")` extension
 
 ### Typography — `DS.Font`

@@ -46,7 +46,7 @@ struct AdminMembersDirectoryView: View {
         var color: Color {
             switch self {
             case .all:      return DS.Color.primary
-            case .living:   return DS.Color.success
+            case .living:   return DS.Color.palm
             case .deceased: return DS.Color.textTertiary
             }
         }

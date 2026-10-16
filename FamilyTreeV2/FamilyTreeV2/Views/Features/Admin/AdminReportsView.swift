@@ -33,7 +33,7 @@ struct AdminReportsView: View {
             case .family: return DS.Color.accent
             case .age: return DS.Color.secondary
             case .phone: return DS.Color.primary
-            case .missingPhone: return DS.Color.warning
+            case .missingPhone: return DS.Color.sea
             }
         }
 
@@ -375,7 +375,7 @@ struct AdminReportsView: View {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "calendar")
                                 .font(DS.Font.scaled(11, weight: .semibold))
-                                .foregroundColor(DS.Color.warning)
+                                .foregroundColor(DS.Color.palm)
                             Text("العمر:")
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textSecondary)

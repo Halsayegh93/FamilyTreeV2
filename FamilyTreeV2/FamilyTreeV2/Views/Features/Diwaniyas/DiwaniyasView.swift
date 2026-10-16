@@ -408,11 +408,11 @@ struct DiwaniyasView: View {
                                     Text(L10n.t("اتصال", "Call"))
                                         .font(DS.Font.scaled(12, weight: .bold))
                                 }
-                                .foregroundColor(DS.Color.success)
+                                .foregroundColor(DS.Color.sea)
                                 .padding(.horizontal, DS.Spacing.md)
                                 .padding(.vertical, 8)
-                                .background(DS.Color.success.opacity(0.10), in: Capsule())
-                                .overlay(Capsule().strokeBorder(DS.Color.success.opacity(0.30), lineWidth: 1))
+                                .background(DS.Color.sea.opacity(0.10), in: Capsule())
+                                .overlay(Capsule().strokeBorder(DS.Color.sea.opacity(0.30), lineWidth: 1))
                             }
                             .buttonStyle(DSBoldButtonStyle())
                         }
@@ -435,13 +435,13 @@ struct DiwaniyasView: View {
     private func buildDiwaniyaInfoItems(_ item: Diwaniya) -> [DiwaniyaInfoItem] {
         var items: [DiwaniyaInfoItem] = []
         if let schedule = item.scheduleText, !schedule.isEmpty {
-            items.append(DiwaniyaInfoItem(icon: "clock.fill", color: DS.Color.warning, text: schedule))
+            items.append(DiwaniyaInfoItem(icon: "clock.fill", color: DS.Color.primary, text: schedule))
         }
         if let addr = item.address, !addr.isEmpty {
             items.append(DiwaniyaInfoItem(icon: "mappin.and.ellipse", color: DS.Color.accent, text: addr))
         }
         if let phone = item.contactPhone, !phone.isEmpty {
-            items.append(DiwaniyaInfoItem(icon: "phone.fill", color: DS.Color.success, text: KuwaitPhone.display(phone)))
+            items.append(DiwaniyaInfoItem(icon: "phone.fill", color: DS.Color.sea, text: KuwaitPhone.display(phone)))
         }
         return items
     }
@@ -562,7 +562,7 @@ private struct AddDiwaniyaRequestView: View {
 
                             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                                 HStack(spacing: DS.Spacing.sm) {
-                                    DSIcon("phone.fill", color: DS.Color.success, size: 30, iconSize: 13)
+                                    DSIcon("phone.fill", color: DS.Color.sea, size: 30, iconSize: 13)
                                     Text(L10n.t("رقم الهاتف (اختياري)", "Phone Number (optional)"))
                                         .font(DS.Font.scaled(11))
                                         .foregroundColor(DS.Color.textSecondary)
@@ -586,7 +586,7 @@ private struct AddDiwaniyaRequestView: View {
                                     withAnimation(DS.Anim.quick) { daysOpen.toggle() }
                                 } label: {
                                     HStack(spacing: DS.Spacing.sm) {
-                                        DSIcon("calendar", color: DS.Color.warning, size: 30, iconSize: 13)
+                                        DSIcon("calendar", color: DS.Color.primary, size: 30, iconSize: 13)
                                         Text(L10n.t("أيام الديوانية", "Diwaniya Days"))
                                             .font(DS.Font.scaled(13))
                                             .foregroundColor(DS.Color.textSecondary)
@@ -594,7 +594,7 @@ private struct AddDiwaniyaRequestView: View {
                                         if !daysOpen && !daysDisplayText.isEmpty {
                                             Text(daysDisplayText)
                                                 .font(DS.Font.scaled(11, weight: .semibold))
-                                                .foregroundColor(DS.Color.warning)
+                                                .foregroundColor(DS.Color.primary)
                                                 .lineLimit(1)
                                         }
                                         Image(systemName: daysOpen ? "chevron.up" : "chevron.down")
@@ -620,7 +620,7 @@ private struct AddDiwaniyaRequestView: View {
                                                     .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                     .frame(maxWidth: .infinity)
                                                     .padding(.vertical, 5)
-                                                    .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                    .background(isOn ? DS.Color.navyFill : DS.Color.surface)
                                                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
                                             }
@@ -640,7 +640,7 @@ private struct AddDiwaniyaRequestView: View {
                                     withAnimation(DS.Anim.quick) { timesOpen.toggle() }
                                 } label: {
                                     HStack(spacing: DS.Spacing.sm) {
-                                        DSIcon("clock.fill", color: DS.Color.warning, size: 30, iconSize: 13)
+                                        DSIcon("clock.fill", color: DS.Color.primary, size: 30, iconSize: 13)
                                         Text(L10n.t("أوقات الديوانية", "Diwaniya Times"))
                                             .font(DS.Font.scaled(13))
                                             .foregroundColor(DS.Color.textSecondary)
@@ -648,7 +648,7 @@ private struct AddDiwaniyaRequestView: View {
                                         if !timesOpen && !timeDisplayText.isEmpty {
                                             Text(timeDisplayText)
                                                 .font(DS.Font.scaled(11, weight: .semibold))
-                                                .foregroundColor(DS.Color.warning)
+                                                .foregroundColor(DS.Color.primary)
                                                 .lineLimit(1)
                                         }
                                         Image(systemName: timesOpen ? "chevron.up" : "chevron.down")
@@ -674,7 +674,7 @@ private struct AddDiwaniyaRequestView: View {
                                                     .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                     .frame(maxWidth: .infinity)
                                                     .padding(.vertical, 5)
-                                                    .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                    .background(isOn ? DS.Color.navyFill : DS.Color.surface)
                                                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
                                             }
@@ -970,7 +970,7 @@ private struct EditDiwaniyaView: View {
 
                             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                                 HStack(spacing: DS.Spacing.sm) {
-                                    DSIcon("phone.fill", color: DS.Color.success)
+                                    DSIcon("phone.fill", color: DS.Color.sea)
                                     Text(L10n.t("رقم الهاتف (اختياري)", "Phone Number (optional)"))
                                         .font(DS.Font.caption1)
                                         .foregroundColor(DS.Color.textSecondary)
@@ -994,7 +994,7 @@ private struct EditDiwaniyaView: View {
                                     withAnimation(DS.Anim.quick) { daysOpen.toggle() }
                                 } label: {
                                     HStack(spacing: DS.Spacing.sm) {
-                                        DSIcon("calendar", color: DS.Color.warning)
+                                        DSIcon("calendar", color: DS.Color.primary)
                                         Text(L10n.t("أيام الديوانية", "Diwaniya Days"))
                                             .font(DS.Font.callout)
                                             .foregroundColor(DS.Color.textSecondary)
@@ -1002,7 +1002,7 @@ private struct EditDiwaniyaView: View {
                                         if !daysOpen && !daysDisplayText.isEmpty {
                                             Text(daysDisplayText)
                                                 .font(DS.Font.scaled(11, weight: .semibold))
-                                                .foregroundColor(DS.Color.warning)
+                                                .foregroundColor(DS.Color.primary)
                                                 .lineLimit(1)
                                         }
                                         Image(systemName: daysOpen ? "chevron.up" : "chevron.down")
@@ -1028,7 +1028,7 @@ private struct EditDiwaniyaView: View {
                                                     .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                     .frame(maxWidth: .infinity)
                                                     .padding(.vertical, DS.Spacing.sm)
-                                                    .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                    .background(isOn ? DS.Color.navyFill : DS.Color.surface)
                                                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
                                             }
@@ -1048,7 +1048,7 @@ private struct EditDiwaniyaView: View {
                                     withAnimation(DS.Anim.quick) { timesOpen.toggle() }
                                 } label: {
                                     HStack(spacing: DS.Spacing.sm) {
-                                        DSIcon("clock.fill", color: DS.Color.warning)
+                                        DSIcon("clock.fill", color: DS.Color.primary)
                                         Text(L10n.t("أوقات الديوانية", "Diwaniya Times"))
                                             .font(DS.Font.callout)
                                             .foregroundColor(DS.Color.textSecondary)
@@ -1056,7 +1056,7 @@ private struct EditDiwaniyaView: View {
                                         if !timesOpen && !timeDisplayText.isEmpty {
                                             Text(timeDisplayText)
                                                 .font(DS.Font.scaled(11, weight: .semibold))
-                                                .foregroundColor(DS.Color.warning)
+                                                .foregroundColor(DS.Color.primary)
                                                 .lineLimit(1)
                                         }
                                         Image(systemName: timesOpen ? "chevron.up" : "chevron.down")
@@ -1082,7 +1082,7 @@ private struct EditDiwaniyaView: View {
                                                     .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                                                     .frame(maxWidth: .infinity)
                                                     .padding(.vertical, DS.Spacing.sm)
-                                                    .background(isOn ? DS.Color.warning : DS.Color.surface)
+                                                    .background(isOn ? DS.Color.navyFill : DS.Color.surface)
                                                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
                                                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm).stroke(isOn ? Color.clear : DS.Color.textTertiary.opacity(0.25), lineWidth: 1))
                                             }

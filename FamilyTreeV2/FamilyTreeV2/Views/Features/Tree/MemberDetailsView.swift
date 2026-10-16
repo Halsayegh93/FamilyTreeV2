@@ -309,7 +309,7 @@ struct MemberDetailsView: View {
                 quickPill(
                     icon: "point.3.connected.trianglepath.dotted",
                     label: L10n.t("صلة القرابة", "Kinship"),
-                    color: DS.Color.warning,
+                    color: DS.Color.palm,
                     action: showKinshipPath
                 )
             }
@@ -524,7 +524,7 @@ struct MemberDetailsView: View {
         if let byStr = birthYear, let by = Int(byStr) {
             let end = isDeceased ? Int(deathYear ?? "") : Calendar.current.component(.year, from: Date())
             if let end = end, end >= by, end - by < 130 {
-                c.append(.init(icon: "timelapse", text: "\(end - by)", label: L10n.t("العمر", "Age"), color: DS.Color.warning))
+                c.append(.init(icon: "timelapse", text: "\(end - by)", label: L10n.t("العمر", "Age"), color: DS.Color.primary))
             }
         }
         if isDeceased, let dy = deathYear {
@@ -535,7 +535,7 @@ struct MemberDetailsView: View {
                 icon: "phone.fill",
                 text: phoneHidden ? L10n.t("مخفي", "Hidden") : KuwaitPhone.display(phone),
                 label: L10n.t("الهاتف", "Phone"),
-                color: DS.Color.success, ltr: !phoneHidden
+                color: DS.Color.sea, ltr: !phoneHidden
             ))
         }
         return c
@@ -671,7 +671,7 @@ struct MemberDetailsView: View {
                 icon: "phone.fill",
                 label: L10n.t("الهاتف", "Phone"),
                 value: KuwaitPhone.display(phone),
-                color: DS.Color.success
+                color: DS.Color.sea
             ))
         } else if !isDeceased, m.isPhoneHidden == true, !isSelf, !canMod {
             rows.append(.init(
@@ -736,7 +736,7 @@ struct MemberDetailsView: View {
                     DSSectionHeader(
                         title: L10n.t("العائلة", "Family"),
                         icon: "person.2.fill",
-                        iconColor: DS.Color.success
+                        iconColor: DS.Color.palm
                     )
 
                     // دائرتان قابلتان للضغط: «الأب» + «الأبناء (N)».
@@ -748,7 +748,7 @@ struct MemberDetailsView: View {
                                     label: L10n.t("الأب", "Father"),
                                     sub: father.firstName,
                                     count: nil,
-                                    color: DS.Color.success
+                                    color: DS.Color.palm
                                 )
                             }
                             .buttonStyle(DSScaleButtonStyle())
@@ -1146,10 +1146,10 @@ struct MemberDetailsView: View {
         let icon = action?.iconName ?? "questionmark.circle"
         let color: Color = {
             switch action {
-            case .add: return DS.Color.success
+            case .add: return DS.Color.palm
             case .editName: return DS.Color.info
             case .editPhone: return DS.Color.primary
-            case .editBirth: return DS.Color.warning
+            case .editBirth: return DS.Color.accent
             case .deceased: return DS.Color.textTertiary
             case .addDeathDate: return DS.Color.textTertiary
             case .addPhoto: return DS.Color.primary
@@ -1264,10 +1264,10 @@ struct MemberDetailsView: View {
 
     private func editActionColor(for action: TreeEditAction) -> Color {
         switch action {
-        case .add: return DS.Color.success
+        case .add: return DS.Color.palm
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
-        case .editBirth: return DS.Color.warning
+        case .editBirth: return DS.Color.accent
         case .deceased: return DS.Color.textTertiary
         case .addDeathDate: return DS.Color.textTertiary
         case .addPhoto: return DS.Color.primary

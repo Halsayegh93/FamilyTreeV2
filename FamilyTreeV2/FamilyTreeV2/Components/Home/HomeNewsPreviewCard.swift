@@ -196,7 +196,7 @@ struct HomeNewsPreviewRow: View {
         switch news.role_color {
         case "purple": return DS.Color.adminRole
         case "orange": return DS.Color.supervisorRole
-        case "green":  return DS.Color.success
+        case "green":  return DS.Color.monitorRole
         default:       return DS.Color.primary
         }
     }

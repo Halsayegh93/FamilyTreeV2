@@ -50,10 +50,10 @@ struct AdminActivityLogView: View {
         var color: Color {
             switch self {
             case .all:     return DS.Color.primary
-            case .members: return DS.Color.warning
+            case .members: return DS.Color.palmFill
             case .women:   return DS.Color.female
             case .content: return DS.Color.info
-            case .requests: return DS.Color.warning
+            case .requests: return DS.Color.seaFill
             case .system:  return DS.Color.accent
             }
         }
@@ -461,14 +461,14 @@ struct AdminActivityLogView: View {
             case NotificationKind.adminEditAvatar.rawValue, NotificationKind.adminEditAvatarRemove.rawValue:
                 return ("photo.circle.fill", DS.Color.info)
             default:
-                return ("pencil.circle.fill", DS.Color.warning)
+                return ("pencil.circle.fill", DS.Color.palm)
             }
         }
         if Self.contentKinds.contains(kind) {
             if kind.contains("news") { return ("newspaper.fill", DS.Color.info) }
             if kind.contains("gallery") { return ("photo.stack.fill", DS.Color.info) }
             if kind.contains("diwaniya") { return ("map.fill", DS.Color.primary) }
-            if kind.contains("project") { return ("briefcase.fill", DS.Color.warning) }
+            if kind.contains("project") { return ("briefcase.fill", DS.Color.accent) }
             return ("doc.fill", DS.Color.info)
         }
         return ("gearshape.fill", DS.Color.textSecondary)

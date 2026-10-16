@@ -17,10 +17,10 @@ struct AdminTreeEditRequestsView: View {
 
     private func color(for action: TreeEditAction) -> Color {
         switch action {
-        case .add: return DS.Color.success
+        case .add: return DS.Color.palm
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
-        case .editBirth: return DS.Color.warning
+        case .editBirth: return DS.Color.palm
         case .deceased: return DS.Color.textTertiary
         case .addDeathDate: return DS.Color.textTertiary
         case .addPhoto: return DS.Color.primary
@@ -365,7 +365,7 @@ struct AdminTreeEditRequestsView: View {
 
         case .editBirth:
             if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
-                detailRow(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New birth date"), value: newDate, valueColor: DS.Color.warning)
+                detailRow(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New birth date"), value: newDate, valueColor: DS.Color.palm)
             }
 
         case .other:

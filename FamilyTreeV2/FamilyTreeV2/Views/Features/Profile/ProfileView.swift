@@ -575,7 +575,7 @@ struct ProfileView: View {
                 DSSectionHeader(
                     title: L10n.t("المفضلة", "Favorites"),
                     icon: "heart.fill",
-                    iconColor: DS.Color.error
+                    iconColor: DS.Color.sadu
                 )
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -724,7 +724,7 @@ struct ProfileView: View {
             return .init(icon: "heart.slash", color: DS.Color.textTertiary,
                          title: L10n.t("تسجيل وفاة", "Deceased report"), target: targetName)
         case RequestType.childAdd.rawValue:
-            return .init(icon: "person.badge.plus", color: DS.Color.success,
+            return .init(icon: "person.badge.plus", color: DS.Color.palm,
                          title: L10n.t("إضافة ابن", "Add child"), target: targetName)
         default:
             return .init(icon: "clock", color: DS.Color.warning,
@@ -734,10 +734,10 @@ struct ProfileView: View {
 
     private func treeEditColor(for action: TreeEditAction?) -> Color {
         switch action {
-        case .add: return DS.Color.success
+        case .add: return DS.Color.palm
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
-        case .editBirth: return DS.Color.warning
+        case .editBirth: return DS.Color.palm
         case .deceased, .addDeathDate: return DS.Color.textTertiary
         case .addPhoto: return DS.Color.primary
         case .delete: return DS.Color.error

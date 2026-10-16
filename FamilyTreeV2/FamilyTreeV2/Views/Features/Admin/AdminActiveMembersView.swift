@@ -69,7 +69,7 @@ struct AdminActiveMembersView: View {
                             title: L10n.t("آخر 24 ساعة", "Last 24 Hours"),
                             icon: "clock.arrow.circlepath",
                             trailing: "\(actionRows.count)",
-                            iconColor: DS.Color.warning
+                            iconColor: DS.Color.accent
                         )
 
                         if actionRows.isEmpty {
@@ -206,8 +206,8 @@ struct AdminActiveMembersView: View {
         case "screen_visit":           return source == "web" ? DS.Color.accent : DS.Color.primary
         case "news_add":               return DS.Color.primary
         case "news_comment":           return DS.Color.info
-        case "news_like":              return DS.Color.error
-        case "poll_vote":              return DS.Color.warning
+        case "news_like":              return DS.Color.sadu
+        case "poll_vote":              return DS.Color.primary
         case "web_session":            return DS.Color.accent
         case "device_active":          return DS.Color.primary
         default:

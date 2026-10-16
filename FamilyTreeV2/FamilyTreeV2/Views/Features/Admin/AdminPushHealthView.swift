@@ -139,7 +139,7 @@ struct AdminPushHealthView: View {
             DSSectionHeader(
                 title: L10n.t("صحة رموز التسجيل", "Token Health"),
                 icon: "heart.text.square.fill",
-                iconColor: DS.Color.error
+                iconColor: DS.Color.sea
             )
 
             VStack(spacing: 0) {
@@ -189,7 +189,7 @@ struct AdminPushHealthView: View {
             VStack(spacing: 0) {
                 infoRow(
                     icon: "arrow.up.circle.fill",
-                    iconColor: DS.Color.success,
+                    iconColor: DS.Color.primary,
                     label: L10n.t("آخر تسجيل جهاز", "Last device registered"),
                     value: formatRelative(stats?.lastDeviceRegisteredAt)
                 )

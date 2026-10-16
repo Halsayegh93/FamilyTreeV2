@@ -79,7 +79,7 @@ struct AdminSecuritySettingsView: View {
                                 title: L10n.t("النشاط الآن", "Live Activity"),
                                 subtitle: L10n.t("الدخول والحضور وآخر نشاط", "Sign-ins & recent activity"),
                                 icon: "person.2.fill",
-                                color: DS.Color.success, compact: true
+                                color: DS.Color.palm, compact: true
                             ) {
                                 AdminActiveMembersView()
                                     .environmentObject(authVM)

@@ -319,7 +319,7 @@ struct AdminActivateAccountsView: View {
                                                 } label: {
                                                     Label(L10n.t("ميلاد", "Birth"), systemImage: "calendar.badge.plus")
                                                 }
-                                                .tint(DS.Color.warning)
+                                                .tint(DS.Color.accent)
                                             }
                                         }
                                         .swipeActions(edge: .leading, allowsFullSwipe: false) {

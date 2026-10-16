@@ -184,7 +184,7 @@ struct AdminAppSettingsView: View {
             // السماح بالتسجيل الجديد
             settingToggle(
                 icon: "person.badge.plus",
-                color: DS.Color.success,
+                color: DS.Color.palm,
                 title: L10n.t("السماح بالتسجيل", "Allow Registrations"),
                 subtitle: L10n.t("السماح لأعضاء جدد بالتسجيل في التطبيق", "Allow new registrations"),
                 isOn: appSettingsVM.settings.allowNewRegistrations,
@@ -252,7 +252,7 @@ struct AdminAppSettingsView: View {
             // موافقة الأخبار
             settingToggle(
                 icon: "checkmark.shield.fill",
-                color: DS.Color.warning,
+                color: DS.Color.accent,
                 title: L10n.t("موافقة الأخبار", "News Approval"),
                 subtitle: L10n.t("يتطلب موافقة المدير قبل نشر الأخبار", "Require admin approval"),
                 isOn: appSettingsVM.settings.newsRequiresApproval,
@@ -280,7 +280,7 @@ struct AdminAppSettingsView: View {
             DSSectionHeader(
                 title: L10n.t("الميزات", "Features"),
                 icon: "star.fill",
-                iconColor: DS.Color.warning
+                iconColor: DS.Color.accent
             )
 
             settingToggle(
@@ -323,7 +323,7 @@ struct AdminAppSettingsView: View {
             DSSectionHeader(
                 title: L10n.t("الأمان والصيانة", "Security & Maintenance"),
                 icon: "lock.shield.fill",
-                iconColor: DS.Color.error
+                iconColor: DS.Color.primary
             )
 
             // وضع الصيانة
@@ -345,7 +345,7 @@ struct AdminAppSettingsView: View {
             DSSectionHeader(
                 title: L10n.t("عداد التعديل", "Edit Cooldown"),
                 icon: "timer",
-                iconColor: DS.Color.warning
+                iconColor: DS.Color.palm
             )
 
             // إيقاف / تشغيل العداد

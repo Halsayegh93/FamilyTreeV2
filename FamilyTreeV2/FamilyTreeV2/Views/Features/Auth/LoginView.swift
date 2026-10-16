@@ -504,10 +504,10 @@ struct LoginView: View {
                                 .font(DS.Font.footnote)
                                 .fontWeight(.semibold)
                         }
-                        .foregroundStyle(authVM.isLoading ? DS.Color.textTertiary : DS.Color.success)
+                        .foregroundStyle(authVM.isLoading ? DS.Color.textTertiary : DS.Color.sea)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xs + 2)
-                        .background((authVM.isLoading ? DS.Color.textTertiary : DS.Color.success).opacity(0.10))
+                        .background((authVM.isLoading ? DS.Color.textTertiary : DS.Color.sea).opacity(0.10))
                         .clipShape(Capsule())
                     }
                     .disabled(authVM.isLoading)

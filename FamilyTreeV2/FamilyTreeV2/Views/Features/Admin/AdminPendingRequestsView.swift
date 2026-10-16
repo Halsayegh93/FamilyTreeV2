@@ -321,10 +321,10 @@ struct AdminPendingRequestsView: View {
                             Text(platform == "web" ? L10n.t("الموقع", "Web") : L10n.t("التطبيق", "App"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
-                        .foregroundColor(platform == "web" ? DS.Color.info : DS.Color.success)
+                        .foregroundColor(platform == "web" ? DS.Color.info : DS.Color.primary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background((platform == "web" ? DS.Color.info : DS.Color.success).opacity(0.12))
+                        .background((platform == "web" ? DS.Color.info : DS.Color.primary).opacity(0.12))
                         .clipShape(Capsule())
                     }
 
@@ -749,13 +749,13 @@ struct LinkToExistingMemberSheet: View {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "arrow.down")
                                     .font(DS.Font.scaled(12, weight: .bold))
-                                    .foregroundColor(DS.Color.success)
+                                    .foregroundColor(DS.Color.primary)
                                 Text(L10n.t("سيُربط بـ", "Will link to"))
                                     .font(DS.Font.caption1)
                                     .foregroundColor(DS.Color.textSecondary)
                                 Text(selected.displayFullName)
                                     .font(DS.Font.calloutBold)
-                                    .foregroundColor(DS.Color.success)
+                                    .foregroundColor(DS.Color.primary)
                                     .lineLimit(1)
                                 Spacer()
                                 Button {
@@ -766,7 +766,7 @@ struct LinkToExistingMemberSheet: View {
                                 }
                             }
                             .padding(DS.Spacing.sm)
-                            .background(DS.Color.success.opacity(0.08))
+                            .background(DS.Color.primary.opacity(0.08))
                             .cornerRadius(DS.Radius.md)
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
@@ -807,12 +807,12 @@ struct LinkToExistingMemberSheet: View {
                                 HStack(spacing: DS.Spacing.md) {
                                     ZStack {
                                         Circle()
-                                            .fill(isSelected ? DS.Color.success.opacity(0.15) : DS.Color.primary.opacity(0.08))
+                                            .fill(isSelected ? DS.Color.primary.opacity(0.15) : DS.Color.primary.opacity(0.08))
                                             .frame(width: 38, height: 38)
                                         if isSelected {
                                             Image(systemName: "checkmark")
                                                 .font(DS.Font.scaled(14, weight: .bold))
-                                                .foregroundColor(DS.Color.success)
+                                                .foregroundColor(DS.Color.primary)
                                         } else {
                                             Text(member.fullName.prefix(1))
                                                 .font(DS.Font.scaled(16, weight: .bold))
@@ -834,7 +834,7 @@ struct LinkToExistingMemberSheet: View {
                             }
                             .buttonStyle(DSScaleButtonStyle())
                             .listRowBackground(
-                                isSelected ? DS.Color.success.opacity(0.05) : Color.clear
+                                isSelected ? DS.Color.primary.opacity(0.05) : Color.clear
                             )
                             .listRowSeparator(isSelected ? .hidden : .visible)
                         }

@@ -587,7 +587,7 @@ private struct MessageDetailSheet: View {
                                 replyButton(
                                     title: L10n.t("اتصال", "Call"),
                                     icon: "phone.fill",
-                                    color: DS.Color.success
+                                    color: DS.Color.sea
                                 ) { openURL("tel:\(sanitize(replyPhone))") }
                             }
                             if isEmail {
@@ -804,9 +804,9 @@ struct ContactCategoryInfo {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
         switch trimmed {
         case "شكوى", "complaint", "Complaint":
-            return .init(title: L10n.t("شكوى", "Complaint"), icon: "exclamationmark.bubble.fill", color: DS.Color.error)
+            return .init(title: L10n.t("شكوى", "Complaint"), icon: "exclamationmark.bubble.fill", color: DS.Color.sadu)
         case "اقتراح", "suggestion", "Suggestion":
-            return .init(title: L10n.t("اقتراح", "Suggestion"), icon: "lightbulb.fill", color: DS.Color.success)
+            return .init(title: L10n.t("اقتراح", "Suggestion"), icon: "lightbulb.fill", color: DS.Color.palm)
         case "استفسار", "inquiry", "Inquiry":
             return .init(title: L10n.t("استفسار", "Inquiry"), icon: "questionmark.bubble.fill", color: DS.Color.primary)
         case "أخرى", "other", "Other":

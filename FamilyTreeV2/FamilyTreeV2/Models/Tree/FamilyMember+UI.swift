@@ -8,7 +8,7 @@ extension FamilyMember.UserRole {
     /// اللون العلني — المالك يظهر بنفس لون المدير
     var color: Color {
         switch self {
-        case .owner:      return DS.Color.primary
+        case .owner:      return DS.Color.adminRole // يظهر للأعضاء كمدير
         case .admin:      return DS.Color.adminRole
         case .monitor:    return DS.Color.monitorRole
         case .supervisor: return DS.Color.supervisorRole

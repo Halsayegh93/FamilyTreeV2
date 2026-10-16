@@ -44,7 +44,7 @@ struct AdminAppUpdateView: View {
         }
         var color: Color {
             switch self {
-            case .feature:     return DS.Color.success
+            case .feature:     return DS.Color.accent
             case .fix:         return DS.Color.info
             case .maintenance: return DS.Color.warning
             case .notice:      return DS.Color.primary

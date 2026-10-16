@@ -686,7 +686,7 @@ struct EditProfileView: View {
     }
 
     private var modernPhoneField: some View {
-        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
+        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.sea,
                           label: L10n.t("رقم الهاتف", "Phone Number")) {
             DSPhoneField(
                 country: $selectedPhoneCountry,

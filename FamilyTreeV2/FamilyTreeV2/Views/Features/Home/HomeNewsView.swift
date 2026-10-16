@@ -505,6 +505,11 @@ struct HomeNewsView: View {
                     endPoint: .bottom
                 )
 
+                // لمسة الهوية: خط ذهبي رفيع أسفل المربّع وفي وسطه معيّنات السدو (نفس شريط الهيدر)
+                HomeTileSaduEdge()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .allowsHitTesting(false)
+
                 // أيقونة دائرية أكبر + عدّاد
                 VStack {
                     HStack {
@@ -834,7 +839,7 @@ struct HomeNewsView: View {
         case "purple": return DS.Color.adminRole
         case "orange": return DS.Color.supervisorRole
         case "blue":   return DS.Color.primary
-        case "green":  return DS.Color.success
+        case "green":  return DS.Color.monitorRole
         default:       return DS.Color.primary
         }
     }
@@ -980,6 +985,28 @@ private struct NoBounceIfAvailable: ViewModifier {
             content.scrollBounceBehavior(.basedOnSize)
         } else {
             content
+        }
+    }
+}
+
+/// خط ذهبي رفيع ومعيّنات السدو أسفل مربّعات الرئيسية — من شريط الهيدر وخطوط الشعار في الهوية
+private struct HomeTileSaduEdge: View {
+    var body: some View {
+        // المعيّنات في الطرف المقابل للعنوان (العنوان أسفل البداية)
+        VStack(alignment: .trailing, spacing: 2) {
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { i in
+                    Rectangle()
+                        .fill(DS.Color.accentLight)
+                        .frame(width: i == 1 ? 5 : 3.5, height: i == 1 ? 5 : 3.5)
+                        .rotationEffect(.degrees(45))
+                        .opacity(i == 1 ? 1 : 0.8)
+                }
+            }
+            .padding(.trailing, 12)
+            Rectangle()
+                .fill(DS.Color.accentLight)
+                .frame(height: 2)
         }
     }
 }

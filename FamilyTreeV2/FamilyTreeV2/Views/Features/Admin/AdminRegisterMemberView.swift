@@ -242,7 +242,7 @@ struct AdminRegisterMemberView: View {
     private var phoneSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.md) {
-                DSIcon("phone.fill", color: DS.Color.success)
+                DSIcon("phone.fill", color: DS.Color.sea)
                 Text(L10n.t("رقم الهاتف (اختياري)", "Phone Number (Optional)"))
                     .font(DS.Font.caption1)
                     .foregroundColor(DS.Color.textSecondary)

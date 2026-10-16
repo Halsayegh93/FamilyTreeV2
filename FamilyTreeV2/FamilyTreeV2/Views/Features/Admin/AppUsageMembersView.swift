@@ -211,7 +211,7 @@ struct AppUsageMembersView: View {
 
             // دعوة سريعة للرجوع للتطبيق — اتصال أو واتساب
             if let phone = member.phone, !phone.isEmpty {
-                contactButton(icon: "phone.fill", color: DS.Color.success) {
+                contactButton(icon: "phone.fill", color: DS.Color.seaFill) {
                     let digits = phone.filter { $0.isNumber || $0 == "+" }
                     if let url = URL(string: "tel:\(digits)") { openURL(url) }
                 }

@@ -36,7 +36,7 @@ struct SettingsView: View {
                     // مربّعات بدل القائمة (طلب المالك) — كل مربّع يعرض قيمته الحالية
                     HStack(spacing: DS.Spacing.md) {
                         NavigationLink(destination: NotificationsAndPrivacyView()) {
-                            valueTile(icon: "bell.badge.fill", color: DS.Color.warning,
+                            valueTile(icon: "bell.badge.fill", color: DS.Color.sea,
                                       title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
                                       value: notificationsEnabled ? t("مفعّلة", "On") : t("موقوفة", "Off"))
                         }
@@ -55,7 +55,7 @@ struct SettingsView: View {
 
                     HStack(spacing: DS.Spacing.md) {
                         Button { showAbout = true } label: {
-                            valueTile(icon: "app.badge.fill", color: DS.Color.secondary,
+                            valueTile(icon: "app.badge.fill", color: DS.Color.primary,
                                       title: t("عن التطبيق", "About"),
                                       value: AppVersion.string)
                         }
@@ -260,7 +260,7 @@ struct SettingsView: View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(DS.Font.scaled(16, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.onTint)
                 .frame(width: 38, height: 38)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(color))
             Text(title)
@@ -311,7 +311,7 @@ struct SettingsView: View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: icon)
                 .font(DS.Font.scaled(14, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.onTint)
                 .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm + 1, style: .continuous).fill(color))
             Text(title)
@@ -402,19 +402,19 @@ struct NotificationsAndPrivacyView: View {
 
     private var kinds: [Kind] {
         var list: [Kind] = [
-            Kind(key: "news", icon: "newspaper.fill", color: DS.Color.primary,
+            Kind(key: "news", icon: "newspaper.fill", color: DS.Color.accent,
                  title: t("الأخبار الجديدة", "New posts"), subtitle: t("عند نشر خبر في العائلة", "When a family post is published")),
-            Kind(key: "comments", icon: "bubble.left.fill", color: DS.Color.info,
+            Kind(key: "comments", icon: "bubble.left.fill", color: DS.Color.sea,
                  title: t("التعليقات", "Comments"), subtitle: t("عند تعليق أحد على خبرك", "When someone comments on your post")),
-            Kind(key: "likes", icon: "heart.fill", color: DS.Color.error,
+            Kind(key: "likes", icon: "heart.fill", color: DS.Color.sadu,
                  title: t("الإعجابات", "Likes"), subtitle: t("عند إعجاب أحد بخبرك", "When someone likes your post")),
             Kind(key: "requests", icon: "checkmark.seal.fill", color: DS.Color.success,
                  title: t("الرد على طلباتي", "Replies to my requests"), subtitle: t("قبول أو رفض طلباتك، تفعيل حسابك", "Approvals, rejections, activation")),
-            Kind(key: "profile", icon: "person.crop.circle.badge.checkmark", color: DS.Color.accent,
+            Kind(key: "profile", icon: "person.crop.circle.badge.checkmark", color: DS.Color.palm,
                  title: t("تحديثات ملفي", "My profile updates"), subtitle: t("عند تعديل الإدارة لبياناتك", "When admins edit your profile"))
         ]
         if authVM.canModerate {
-            list.append(Kind(key: "admin_activity", icon: "sparkles", color: DS.Color.warning,
+            list.append(Kind(key: "admin_activity", icon: "sparkles", color: DS.Color.primary,
                              title: t("مستجدات الإدارة", "Admin activity"),
                              subtitle: t("طلبات الشجرة والانضمام والتعديلات", "Tree, join and edit requests")))
         }
@@ -459,12 +459,12 @@ struct NotificationsAndPrivacyView: View {
                     group(t("الخصوصية", "Privacy"),
                           footer: t("بياناتك تبقى محفوظة في الشجرة، بس ما تظهر للأعضاء. الإدارة تشوفها.",
                                     "Your data stays in the tree but is hidden from members. Admins can still see it.")) {
-                        switchRow(icon: "phone.down.fill", color: DS.Color.gridContact,
+                        switchRow(icon: "phone.down.fill", color: DS.Color.primary,
                                   title: t("إخفاء رقم الهاتف", "Hide phone number"),
                                   subtitle: t("ما يظهر رقمك للأعضاء", "Members won't see your number"),
                                   isOn: $isPhoneHidden)
                         rowDivider
-                        switchRow(icon: "calendar.badge.minus", color: DS.Color.gridContact,
+                        switchRow(icon: "calendar.badge.minus", color: DS.Color.primary,
                                   title: t("إخفاء تاريخ الميلاد", "Hide birth date"),
                                   subtitle: t("ما يظهر تاريخ ميلادك للأعضاء", "Members won't see your birth date"),
                                   isOn: $isBirthDateHidden)
@@ -551,7 +551,7 @@ struct NotificationsAndPrivacyView: View {
                 Spacer(minLength: 0)
                 Toggle("", isOn: $notificationsEnabled)
                     .labelsHidden()
-                    .tint(DS.Color.success)
+                    .tint(DS.Color.primary)
             }
 
             if systemBlocked {
@@ -654,7 +654,7 @@ struct NotificationsAndPrivacyView: View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: icon)
                 .font(DS.Font.scaled(14, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.onTint)
                 .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm + 1, style: .continuous).fill(color))
             VStack(alignment: .leading, spacing: 1) {
@@ -926,7 +926,7 @@ struct AboutView: View {
                             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                                 aboutItem(
                                     icon: "person.3.fill",
-                                    color: DS.Color.primary,
+                                    color: DS.Color.palm,
                                     title: t("شجرة العائلة", "Family Tree"),
                                     desc: t("استعرض أفراد عائلتك وأنسابهم بشكل تفاعلي", "Browse your family members and lineage interactively")
                                 )
@@ -935,7 +935,7 @@ struct AboutView: View {
 
                                 aboutItem(
                                     icon: "newspaper.fill",
-                                    color: DS.Color.info,
+                                    color: DS.Color.accent,
                                     title: t("أخبار العائلة", "Family News"),
                                     desc: t("شارك الأخبار وتفاعل بالتعليقات والإعجابات", "Share news and interact with comments & likes")
                                 )
@@ -944,7 +944,7 @@ struct AboutView: View {
 
                                 aboutItem(
                                     icon: "bell.badge.fill",
-                                    color: DS.Color.warning,
+                                    color: DS.Color.sea,
                                     title: t("الإشعارات", "Notifications"),
                                     desc: t("إشعارات فورية داخل التطبيق وعلى جهازك", "Instant alerts inside the app and on your device")
                                 )
@@ -953,7 +953,7 @@ struct AboutView: View {
 
                                 aboutItem(
                                     icon: "lock.shield.fill",
-                                    color: DS.Color.gridContact,
+                                    color: DS.Color.primary,
                                     title: t("الخصوصية والأمان", "Privacy & Security"),
                                     desc: t("بياناتك محمية بالكامل وتتحكّم بمن يراها", "Your data is fully protected — you control visibility")
                                 )
@@ -1047,7 +1047,7 @@ struct PrivacyPolicyView: View {
 
                         policyCard(
                             icon: "hand.raised.fill",
-                            color: DS.Color.accent,
+                            color: DS.Color.primary,
                             title: t("استخدام البيانات", "Data Usage"),
                             points: [
                                 t("بياناتك تُستخدم فقط لعرض الشجرة والتواصل بين الأعضاء.", "Your data is only used for the family tree and communication."),
@@ -1080,7 +1080,7 @@ struct PrivacyPolicyView: View {
 
                         policyCard(
                             icon: "bell.badge.fill",
-                            color: DS.Color.warning,
+                            color: DS.Color.sea,
                             title: t("الإشعارات", "Notifications"),
                             points: [
                                 t("نرسل إشعارات عن التعليقات والإعجابات والتحديثات.", "We send alerts for comments, likes, and updates."),
@@ -1102,7 +1102,7 @@ struct PrivacyPolicyView: View {
 
                         policyCard(
                             icon: "envelope.fill",
-                            color: DS.Color.primary,
+                            color: DS.Color.sea,
                             title: t("تواصل معنا", "Contact Us"),
                             points: [
                                 t("لأي استفسار، تواصل عبر مركز التواصل داخل التطبيق.", "For any questions, reach us via the Contact Center in the app.")

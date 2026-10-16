@@ -144,19 +144,19 @@ struct AdminAnalyticsView: View {
                         value: "\(aliveW)",
                         label: L10n.t("على قيد الحياة", "Alive"),
                         icon: "heart.circle.fill",
-                        color: DS.Color.success
+                        color: DS.Color.palm
                     )
                     overviewCell(
                         value: "\(deceasedW)",
                         label: L10n.t("متوفيات", "Deceased"),
                         icon: "heart.slash.fill",
-                        color: DS.Color.error
+                        color: DS.Color.slate
                     )
                     overviewCell(
                         value: "\(linked)",
                         label: L10n.t("مرتبطة بحساب", "Linked accounts"),
                         icon: "link.circle.fill",
-                        color: DS.Color.warning
+                        color: DS.Color.primary
                     )
                 }
                 .padding(DS.Spacing.md)
@@ -186,13 +186,13 @@ struct AdminAnalyticsView: View {
                     value: "\(activeMembers.count)",
                     label: L10n.t("أحياء", "Alive"),
                     icon: "heart.fill",
-                    color: DS.Color.success
+                    color: DS.Color.palm
                 )
                 overviewCell(
                     value: "\(deceasedMembers.count)",
                     label: L10n.t("متوفين", "Deceased"),
                     icon: "heart.slash.fill",
-                    color: DS.Color.error
+                    color: DS.Color.slate
                 )
             }
             .padding(DS.Spacing.md)
@@ -240,7 +240,7 @@ struct AdminAnalyticsView: View {
             DSSectionHeader(
                 title: L10n.t("توزيع الأدوار (الأحياء)", "Roles (alive)"),
                 icon: "shield.fill",
-                iconColor: DS.Color.warning
+                iconColor: DS.Color.primary
             )
 
             VStack(spacing: DS.Spacing.md) {
@@ -331,7 +331,7 @@ struct AdminAnalyticsView: View {
                 iconColor: DS.Color.neonPink
             )
             VStack(spacing: DS.Spacing.md) {
-                barRow(label: L10n.t("متزوج", "Married"), count: married, total: total, color: DS.Color.success)
+                barRow(label: L10n.t("متزوج", "Married"), count: married, total: total, color: DS.Color.accent)
                 // is_married افتراضياً false — فأغلبهم لم يحدّدوا حالتهم
                 barRow(label: L10n.t("أعزب / غير محدد", "Single / not set"), count: single, total: total, color: DS.Color.info)
                 if unknown > 0 {
@@ -369,15 +369,15 @@ struct AdminAnalyticsView: View {
             DSSectionHeader(
                 title: L10n.t("نظرة على الشجرة", "Tree Insights"),
                 icon: "tree.fill",
-                iconColor: DS.Color.success
+                iconColor: DS.Color.palm
             )
             let columns = [GridItem(.flexible()), GridItem(.flexible())]
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
                 overviewCell(value: "\(generations)", label: L10n.t("عدد الأجيال", "Generations"), icon: "square.stack.3d.up.fill", color: DS.Color.accent)
                 overviewCell(value: "\(parentsCount)", label: L10n.t("لديهم أبناء", "Parents"), icon: "person.2.fill", color: DS.Color.info)
-                overviewCell(value: String(format: "%.1f", avgChildren), label: L10n.t("متوسط الأبناء", "Avg. children"), icon: "chart.bar.fill", color: DS.Color.warning)
+                overviewCell(value: String(format: "%.1f", avgChildren), label: L10n.t("متوسط الأبناء", "Avg. children"), icon: "chart.bar.fill", color: DS.Color.palm)
                 overviewCell(value: "\(maxChildren)", label: L10n.t("أكبر عائلة", "Largest family"), icon: "crown.fill", color: DS.Color.secondary)
-                overviewCell(value: "\(leaves)", label: L10n.t("بدون أبناء", "No children"), icon: "leaf.fill", color: DS.Color.success)
+                overviewCell(value: "\(leaves)", label: L10n.t("بدون أبناء", "No children"), icon: "leaf.fill", color: DS.Color.palm)
                 overviewCell(value: "\(totalChildren)", label: L10n.t("روابط نسب", "Parent links"), icon: "arrow.triangle.branch", color: DS.Color.primary)
             }
             .padding(DS.Spacing.md)
@@ -441,13 +441,13 @@ struct AdminAnalyticsView: View {
             DSSectionHeader(
                 title: L10n.t("إحصائيات الوفيات", "Deceased Insights"),
                 icon: "hourglass",
-                iconColor: DS.Color.error
+                iconColor: DS.Color.slate
             )
             let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                miniStat(value: avgLifespan > 0 ? "\(avgLifespan)" : "—", label: L10n.t("متوسط العمر", "Avg. lifespan"), color: DS.Color.warning)
-                miniStat(value: oldest > 0 ? "\(oldest)" : "—", label: L10n.t("أطول عمر", "Longest life"), color: DS.Color.success)
-                miniStat(value: "\(ratio)%", label: L10n.t("نسبة المتوفين", "Deceased %"), color: DS.Color.error)
+                miniStat(value: avgLifespan > 0 ? "\(avgLifespan)" : "—", label: L10n.t("متوسط العمر", "Avg. lifespan"), color: DS.Color.primary)
+                miniStat(value: oldest > 0 ? "\(oldest)" : "—", label: L10n.t("أطول عمر", "Longest life"), color: DS.Color.accent)
+                miniStat(value: "\(ratio)%", label: L10n.t("نسبة المتوفين", "Deceased %"), color: DS.Color.slate)
             }
             .padding(DS.Spacing.lg)
 
@@ -490,15 +490,15 @@ struct AdminAnalyticsView: View {
             DSSectionHeader(
                 title: L10n.t("الفئات العمرية", "Age Groups"),
                 icon: "calendar.circle.fill",
-                iconColor: DS.Color.success
+                iconColor: DS.Color.palm
             )
 
             VStack(spacing: DS.Spacing.md) {
                 barRow(label: L10n.t("أقل من ١٨", "Under 18"), count: under18, total: total, color: DS.Color.neonCyan)
                 barRow(label: "18–29", count: age18to30, total: total, color: DS.Color.info)
-                barRow(label: "30–49", count: age30to50, total: total, color: DS.Color.success)
-                barRow(label: "50–69", count: age50to70, total: total, color: DS.Color.warning)
-                barRow(label: L10n.t("٧٠+", "70+"), count: over70, total: total, color: DS.Color.error)
+                barRow(label: "30–49", count: age30to50, total: total, color: DS.Color.sea)
+                barRow(label: "50–69", count: age50to70, total: total, color: DS.Color.accent)
+                barRow(label: L10n.t("٧٠+", "70+"), count: over70, total: total, color: DS.Color.sadu)
                 if noAge > 0 {
                     barRow(label: L10n.t("بدون تاريخ", "No date"), count: noAge, total: total, color: DS.Color.textTertiary)
                 }

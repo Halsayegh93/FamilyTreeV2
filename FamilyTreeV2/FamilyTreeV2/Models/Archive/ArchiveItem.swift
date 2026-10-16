@@ -74,7 +74,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
             if let custom = CategoryStore.lookup(.archive, rawValue) { return custom.color }
             switch self {
             case .documents:  return DS.Color.info        // أزرق رسمي
-            case .books:      return DS.Color.warning     // ذهبي دافئ
+            case .books:      return DS.Color.accent      // ذهبي دافئ
             case .oldPhotos:  return DS.Color.neonPink    // وردي عتيق (sepia feel)
             case .other:      return DS.Color.textSecondary
             }

@@ -63,7 +63,7 @@ private struct DSAlertPressStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .frame(minHeight: 46)
             .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(destructive ? DS.Color.error : DS.Color.mutedBackground.opacity(0.8)))
+                .fill(destructive ? DS.Color.errorFill : DS.Color.mutedBackground.opacity(0.8)))
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)

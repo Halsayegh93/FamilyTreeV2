@@ -320,7 +320,7 @@ struct FamilyArchiveView: View {
             if anyVisible {
                 actionPill(icon: "eye.slash.fill",
                            label: L10n.t("إخفاء", "Hide"),
-                           color: DS.Color.warning) {
+                           color: DS.Color.slateFill) {
                     let ids = selectedIDs
                     Task {
                         await archiveVM.setHidden(ids: ids, hidden: true)
@@ -334,7 +334,7 @@ struct FamilyArchiveView: View {
             if anyHidden {
                 actionPill(icon: "eye.fill",
                            label: L10n.t("إظهار", "Show"),
-                           color: DS.Color.success) {
+                           color: DS.Color.navyFill) {
                     let ids = selectedIDs
                     Task {
                         await archiveVM.setHidden(ids: ids, hidden: false)
@@ -686,7 +686,7 @@ struct FamilyArchiveView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
-                .background(Capsule().fill(DS.Color.error.opacity(0.92)))
+                .background(Capsule().fill(DS.Color.saduFill.opacity(0.92)))
                 .padding(.horizontal, DS.Spacing.sm + 4)
                 .padding(.bottom, 6)
         }
@@ -854,7 +854,7 @@ struct ArchiveUploadSheet: View {
 
                             DSDivider()
 
-                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.success,
+                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.primary,
                                               label: L10n.t("السنة", "Year")) {
                                 TextField("1965", text: $yearText)
                                     .keyboardType(.numberPad)
@@ -874,7 +874,7 @@ struct ArchiveUploadSheet: View {
 
                             DSDivider()
 
-                            DSLabeledFieldRow(icon: "folder.fill", iconColor: DS.Color.warning,
+                            DSLabeledFieldRow(icon: "folder.fill", iconColor: DS.Color.sadu,
                                               label: L10n.t("القسم", "Category")) {
                                 categoryMenu
                             }

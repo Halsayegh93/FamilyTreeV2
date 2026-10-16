@@ -114,7 +114,7 @@ struct AdminIncompleteMembersView: View {
                 // حالة التحميل — البيانات لم تصل بعد
                 VStack(spacing: DS.Spacing.lg) {
                     ProgressView()
-                        .tint(DS.Color.warning)
+                        .tint(DS.Color.primary)
                         .scaleEffect(1.3)
                     Text(L10n.t("جاري فحص البيانات...", "Checking data..."))
                         .font(DS.Font.callout)
