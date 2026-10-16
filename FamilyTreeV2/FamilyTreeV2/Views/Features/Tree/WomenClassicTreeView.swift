@@ -684,7 +684,7 @@ struct WomenClassicTreeView: View {
                                 .overlay(
                                     Image(systemName: "eye.slash.fill")
                                         .font(.system(size: 8.5, weight: .bold))
-                                        .foregroundColor(DS.Color.warning)
+                                        .foregroundColor(DS.Color.slate)
                                 )
                                 .offset(x: 4, y: -4)
                         }
@@ -802,7 +802,7 @@ struct WomenClassicTreeView: View {
                             .overlay(
                                 Image(systemName: "eye.slash.fill")
                                     .font(.system(size: 6, weight: .bold))
-                                    .foregroundColor(DS.Color.warning)
+                                    .foregroundColor(DS.Color.slate)
                             )
                             .offset(x: 3, y: -3)
                     }

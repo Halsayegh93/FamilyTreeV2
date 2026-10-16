@@ -604,7 +604,7 @@ struct AdminReportsView: View {
                             selectedMemberIds = Set(filteredMembers.map(\.id))
                         }
 
-                        miniActionButton(title: "إلغاء التحديد", icon: "xmark.circle.fill", tint: .red) {
+                        miniActionButton(title: "إلغاء التحديد", icon: "xmark.circle.fill", tint: DS.Color.error) {
                             selectedMemberIds.removeAll()
                         }
 
@@ -761,7 +761,7 @@ struct AdminReportsView: View {
                 .font(DS.Font.scaled(12, weight: .bold))
                 .frame(maxWidth: .infinity)
             }
-            .foregroundColor(selected ? DS.Color.textOnPrimary : report.tint)
+            .foregroundColor(selected ? DS.Color.onTint : report.tint)
             .frame(maxWidth: .infinity, minHeight: 52)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 4)

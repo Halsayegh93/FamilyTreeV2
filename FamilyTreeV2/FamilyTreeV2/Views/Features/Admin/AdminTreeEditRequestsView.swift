@@ -132,7 +132,7 @@ struct AdminTreeEditRequestsView: View {
                                     .clipShape(Capsule())
                             }
                         }
-                        .foregroundColor(isSelected ? DS.Color.textOnPrimary : tint)
+                        .foregroundColor(isSelected ? DS.Color.onTint : tint)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.sm)
                         .background(isSelected ? tint : tint.opacity(0.10))

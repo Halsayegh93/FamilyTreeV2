@@ -186,13 +186,13 @@ struct AdminAllRequestsView: View {
             case .news: return DS.Color.accent
             case .reports: return DS.Color.error
             case .phone: return DS.Color.primary
-            case .nameChange: return DS.Color.neonPurple
+            case .nameChange: return DS.Color.palm
             case .diwaniya: return DS.Color.gridDiwaniya
             case .archive: return DS.Color.sadu
             case .deceased: return DS.Color.slate
             case .children: return DS.Color.info
             case .treeAdd: return DS.Color.palm
-            case .treeEditName: return DS.Color.neonPurple
+            case .treeEditName: return DS.Color.palm
             case .treeEditPhone: return DS.Color.primary
             case .treeEditBirth: return DS.Color.palm
             case .treeDeceased: return DS.Color.slate
@@ -200,8 +200,8 @@ struct AdminAllRequestsView: View {
             case .treeAddPhoto: return DS.Color.primary
             case .treeDelete: return DS.Color.error
             case .treeOther: return DS.Color.accent
-            case .photos: return DS.Color.neonBlue
-            case .projects: return DS.Color.neonPurple
+            case .photos: return DS.Color.sadu
+            case .projects: return DS.Color.accent
             case .healthOrphan: return DS.Color.error
             case .healthNoName: return DS.Color.warning
             case .healthBrokenParent: return DS.Color.info
@@ -1164,15 +1164,15 @@ struct AdminAllRequestsView: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.onTint)
                 Text(title)
                     .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.onTint)
                     .lineLimit(1)
                 if count > 0 {
                     Text("\(count)")
                         .font(DS.Font.scaled(11, weight: .black))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.onTint)
                         .frame(minWidth: 18, minHeight: 18)
                         .padding(.horizontal, 4)
                         .background(Capsule().fill(Color.white.opacity(0.28)))
@@ -3190,7 +3190,7 @@ struct AdminAllRequestsView: View {
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // الصف الأول: الأيقونة + الاسم + البادج
             HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple, size: 36)
+                iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.palm, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isFamily ? L10n.t("تغيير العائلة", "Family Change") : L10n.t("تغيير اسم", "Name Change"))
@@ -3392,12 +3392,12 @@ struct AdminAllRequestsView: View {
                     CachedAsyncImage(url: url) { img in
                         img.resizable().scaledToFill()
                     } placeholder: {
-                        iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 36)
+                        iconCircle(icon: "briefcase.fill", color: DS.Color.accent, size: 36)
                     }
                     .frame(width: 36, height: 36)
                     .clipShape(Circle())
                 } else {
-                    iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 36)
+                    iconCircle(icon: "briefcase.fill", color: DS.Color.accent, size: 36)
                 }
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -3604,7 +3604,7 @@ struct AdminAllRequestsView: View {
                          title: L10n.t("تغيير رقم هاتف", "Phone Change"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
         case .nameChange(let r):
-            return .init(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple,
+            return .init(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.palm,
                          title: r.requestType == RequestType.familyChange.rawValue
                             ? L10n.t("تغيير العائلة", "Family Change") : L10n.t("تغيير اسم", "Name Change"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
@@ -3626,7 +3626,7 @@ struct AdminAllRequestsView: View {
                          timestamp: r.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: r.newValue)
         case .project(let p):
-            return .init(icon: "briefcase.fill", color: DS.Color.neonPurple,
+            return .init(icon: "briefcase.fill", color: DS.Color.accent,
                          title: L10n.t("طلب مشروع", "Project Request"),
                          timestamp: p.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: p.logoUrl)
@@ -3678,7 +3678,7 @@ struct AdminAllRequestsView: View {
                         .shadow(color: color.opacity(0.35), radius: 10, x: 0, y: 5)
                     Image(systemName: icon)
                         .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.onTint)
                 }
             }
 
@@ -3713,7 +3713,7 @@ struct AdminAllRequestsView: View {
             }
             if let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines), !birth.isEmpty {
                 infoCard(icon: "calendar", label: L10n.t("تاريخ الميلاد", "Birth Date"),
-                         value: birth, color: DS.Color.neonPurple)
+                         value: birth, color: DS.Color.palm)
             }
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
@@ -3841,7 +3841,7 @@ struct AdminAllRequestsView: View {
 
         case .project(let project):
             infoCard(icon: "briefcase.fill", label: L10n.t("اسم المشروع", "Project"),
-                     value: project.title, color: DS.Color.neonPurple)
+                     value: project.title, color: DS.Color.accent)
             infoCard(icon: "person.fill", label: L10n.t("صاحب المشروع", "Owner"),
                      value: project.ownerName, color: DS.Color.primary)
             if let desc = project.description, !desc.isEmpty {

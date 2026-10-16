@@ -22,7 +22,7 @@ private struct NotificationKindStyle {
         "admin":             .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إعلان من الإدارة", labelEn: "Admin Announcement"),
         "admin_broadcast":   .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إعلان من الإدارة", labelEn: "Admin Announcement"),
         "admin_request":     .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.warning,     labelAr: "إدارة",           labelEn: "Admin"),
-        "deceased_report":   .init(icon: "heart.fill",                               gradient: DS.Color.gradientAccent,  color: DS.Color.warning,     labelAr: "وفاة",            labelEn: "Deceased"),
+        "deceased_report":   .init(icon: "heart.fill",                               gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "وفاة",            labelEn: "Deceased"),
         "child_add":         .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة ابن",       labelEn: "Child Add"),
         "admin_edit_child_add":   .init(icon: "person.badge.plus",                   gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة ابن",       labelEn: "Child Add"),
         "admin_edit_child_remove":.init(icon: "person.badge.minus",                  gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "حذف ابن",         labelEn: "Child Removed"),

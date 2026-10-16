@@ -50,7 +50,7 @@ struct AdminModeratorsView: View {
                                 moderatorRow(member: member, index: index)
                             }
                         } header: {
-                            sectionHeader(title: L10n.t("المدراء", "Admins"), icon: "shield.fill", color: DS.Color.neonPurple, count: admins.count)
+                            sectionHeader(title: L10n.t("المدراء", "Admins"), icon: "shield.fill", color: DS.Color.adminRole, count: admins.count)
                         }
                     }
 
@@ -194,7 +194,7 @@ struct AdminModeratorsView: View {
     private func moderatorRow(member: FamilyMember, index: Int) -> some View {
         HStack(spacing: DS.Spacing.md) {
             ZStack {
-                let roleColor = (member.role == .owner || member.role == .admin) ? DS.Color.neonPurple : (member.role == .monitor ? DS.Color.monitorRole : DS.Color.sea)
+                let roleColor = (member.role == .owner || member.role == .admin) ? DS.Color.adminRole : (member.role == .monitor ? DS.Color.monitorRole : DS.Color.sea)
                 let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.fill" : (member.role == .monitor ? "eye.fill" : "star.fill")
 
                 Circle()
@@ -614,7 +614,7 @@ struct AddModeratorSheet: View {
 
                                         Image(systemName: "plus.circle.fill")
                                             .font(DS.Font.scaled(22))
-                                            .foregroundColor(selectedRole == .admin ? DS.Color.neonPurple : (selectedRole == .monitor ? DS.Color.monitorRole : DS.Color.sea))
+                                            .foregroundColor(selectedRole == .admin ? DS.Color.adminRole : (selectedRole == .monitor ? DS.Color.monitorRole : DS.Color.sea))
                                     }
                                 }
                                 .listRowBackground(DS.Color.surface)

@@ -582,7 +582,7 @@ struct GalleryAlbumFormSheet: View {
                                     .foregroundColor(DS.Color.textPrimary)
                             }
                             DSDivider()
-                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.success,
+                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.primary,
                                               label: L10n.t("السنة (اختياري)", "Year (optional)")) {
                                 TextField("2024", text: $yearText)
                                     .keyboardType(.numberPad)

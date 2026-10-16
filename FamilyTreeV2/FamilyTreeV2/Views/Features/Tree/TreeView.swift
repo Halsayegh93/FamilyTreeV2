@@ -280,7 +280,7 @@ struct TreeView: View {
                                                        control1: CGPoint(x: link.from.x, y: link.from.y + dy * 0.8),
                                                        control2: CGPoint(x: link.to.x, y: link.to.y - dy * 0.8))
                                             ctx.stroke(p,
-                                                       with: .color(link.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.45)),
+                                                       with: .color(link.kinship ? DS.Color.accent : DS.Color.primary.opacity(0.45)),
                                                        style: StrokeStyle(lineWidth: link.kinship ? 3.5 : 2, lineCap: .round))
                                         }
                                         // قوس الآباء الملتفّة صفوفهم (>٣ أبناء مهما كثروا) — من أول ابن
@@ -296,7 +296,7 @@ struct TreeView: View {
                                                            control: CGPoint(x: apex.x + (arc.to.x - apex.x) * 0.5,
                                                                             y: arc.to.y))
                                             ctx.stroke(p,
-                                                       with: .color(arc.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.45)),
+                                                       with: .color(arc.kinship ? DS.Color.accent : DS.Color.primary.opacity(0.45)),
                                                        style: StrokeStyle(lineWidth: arc.kinship ? 3.5 : 2, lineCap: .round, lineJoin: .round))
                                         }
                                     }
@@ -305,7 +305,7 @@ struct TreeView: View {
                                     // وصلة قصيرة تحت الأب المفتوح (للآباء بأكثر من 3 أبناء — الشجرة الكبيرة ما تنرسم بخطوط)
                                     ForEach(connectorStubs) { stub in
                                         RoundedRectangle(cornerRadius: 2)
-                                            .fill(stub.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.6))
+                                            .fill(stub.kinship ? DS.Color.accent : DS.Color.primary.opacity(0.6))
                                             .frame(width: stub.kinship ? 5 : 2.5, height: 16)
                                             .position(x: stub.x, y: stub.y)
                                     }
@@ -1347,7 +1347,7 @@ struct TreeMemberNode: View {
     // لون دائرة الصورة — ذهبي إذا جزء من مسار القرابة
     private var nodeAccentColor: Color {
         if isKinshipHighlighted {
-            return DS.Color.warning
+            return DS.Color.accent
         }
         if member.isDeceased == true {
             return DS.Color.deceased
@@ -1496,7 +1496,7 @@ struct TreeMemberNode: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
                         .frame(minWidth: 34, minHeight: 32)
-                        .background(Capsule().fill(isKinshipHighlighted ? DS.Color.warning : DS.Color.primaryDark))   // أغمق من لون العضو بلا صورة
+                        .background(Capsule().fill(isKinshipHighlighted ? DS.Color.goldFill : DS.Color.primaryDark))   // أغمق من لون العضو بلا صورة
                         .overlay(Capsule().stroke(DS.Color.textOnPrimary.opacity(0.45), lineWidth: 1.2))
                         .shadow(color: DS.Color.primary.opacity(0.4), radius: 4, y: 2)
                         .offset(x: -2, y: 0)

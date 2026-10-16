@@ -291,7 +291,7 @@ struct AdminActivityLogView: View {
                 Image(systemName: "xmark")
                     .font(DS.Font.scaled(9, weight: .heavy))
             }
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.onTint)
             .padding(.horizontal, DS.Spacing.md)
             .frame(height: 28)
             .background(Capsule().fill(filter.color))
@@ -548,19 +548,19 @@ private struct ActivityDetailSheet: View {
                         Circle().fill(SwiftUI.Color.white.opacity(0.20))
                         Image(systemName: style.icon)
                             .font(DS.Font.scaled(17, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.onTint)
                     }
                     .frame(width: 44, height: 44)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.title)
                             .font(DS.Font.plex(16, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.onTint)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(categoryTitle)
                             .font(DS.Font.caption2)
-                            .foregroundColor(SwiftUI.Color.white.opacity(0.85))
+                            .foregroundColor(DS.Color.onTint.opacity(0.85))
                     }
 
                     Spacer(minLength: 0)
@@ -568,7 +568,7 @@ private struct ActivityDetailSheet: View {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
                             .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.onTint)
                             .frame(width: 32, height: 32)
                             .background(SwiftUI.Color.white.opacity(0.18), in: Circle())
                     }

@@ -76,10 +76,10 @@ struct HomeNewsPreviewCard: View {
     private var todayBadge: some View {
         Text(L10n.t("جديد اليوم", "New today"))
             .font(DS.Font.scaled(10, weight: .bold))
-            .foregroundColor(DS.Color.error)
+            .foregroundColor(DS.Color.accent)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 4)
-            .background(Capsule().fill(DS.Color.error.opacity(0.10)))
+            .background(Capsule().fill(DS.Color.accent.opacity(0.10)))
     }
 
     // MARK: - المحتوى

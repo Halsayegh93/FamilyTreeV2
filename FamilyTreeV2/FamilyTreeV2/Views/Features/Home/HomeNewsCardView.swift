@@ -422,12 +422,12 @@ struct HomeNewsCardView: View {
                         }
                     }
                     .font(DS.Font.scaled(16, weight: .medium))
-                    .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
+                    .foregroundColor(isLiked ? DS.Color.sadu : DS.Color.textSecondary)
 
                     if likeCount > 0 {
                         Text("\(likeCount)")
                             .font(DS.Font.scaled(12, weight: .semibold))
-                            .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
+                            .foregroundColor(isLiked ? DS.Color.sadu : DS.Color.textSecondary)
                             .monospacedDigit()
                     }
                 }
