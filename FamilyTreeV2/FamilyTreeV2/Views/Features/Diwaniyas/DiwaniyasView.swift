@@ -305,7 +305,7 @@ struct DiwaniyasView: View {
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.sm)
                                 .padding(.vertical, DS.Spacing.xs)
-                                .background(DS.Color.error.opacity(0.8))
+                                .background(DS.Color.errorFill)
                                 .clipShape(Capsule())
                             }
                         }

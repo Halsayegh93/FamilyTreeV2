@@ -101,7 +101,7 @@ struct MemberContactFormView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .foregroundColor(selected ? .white : cat.color)
+            .foregroundColor(selected ? DS.Color.onTint : cat.color)
             .frame(maxWidth: .infinity)
             .frame(height: 66)
             .background(
@@ -249,7 +249,7 @@ struct MemberContactFormView: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 if isSending {
-                    ProgressView().tint(.white).scaleEffect(0.9)
+                    ProgressView().tint(DS.Color.onTint).scaleEffect(0.9)
                 } else {
                     Image(systemName: "paperplane.fill")
                         .font(DS.Font.scaled(14, weight: .bold))
@@ -257,7 +257,7 @@ struct MemberContactFormView: View {
                 Text(isSending ? L10n.t("جارٍ الإرسال…", "Sending…") : L10n.t("إرسال", "Send"))
                     .font(DS.Font.plex(15, weight: .bold))
             }
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.onTint)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
             .background(

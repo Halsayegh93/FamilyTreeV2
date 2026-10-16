@@ -1149,7 +1149,7 @@ struct MemberDetailsView: View {
             case .add: return DS.Color.palm
             case .editName: return DS.Color.info
             case .editPhone: return DS.Color.primary
-            case .editBirth: return DS.Color.accent
+            case .editBirth: return DS.Color.palm
             case .deceased: return DS.Color.textTertiary
             case .addDeathDate: return DS.Color.textTertiary
             case .addPhoto: return DS.Color.primary
@@ -1267,7 +1267,7 @@ struct MemberDetailsView: View {
         case .add: return DS.Color.palm
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
-        case .editBirth: return DS.Color.accent
+        case .editBirth: return DS.Color.palm
         case .deceased: return DS.Color.textTertiary
         case .addDeathDate: return DS.Color.textTertiary
         case .addPhoto: return DS.Color.primary

@@ -19,12 +19,12 @@ enum SocialPlatform {
     /// لون البراند الأساسي — يُستخدم خلفية للأيقونة.
     var brandColor: Color {
         switch self {
-        case .website:   return DS.Color.primary           // أزرق هادئ
+        case .website:   return DS.Color.navyFill          // كحلي — تعبئة تحت أيقونة بيضاء
         case .instagram: return Color(hex: "#E1306C")     // وردي إنستجرام
         case .twitter:   return Color(hex: "#000000")     // أسود X
         case .snapchat:  return Color(hex: "#FFFC00")     // أصفر Snap
         case .whatsapp:  return Color(hex: "#25D366")     // أخضر WhatsApp
-        case .phone:     return DS.Color.seaFill           // أخضر هاتف
+        case .phone:     return DS.Color.seaFill           // بحري — الهاتف
         case .location:  return Color(hex: "#EA4335")     // أحمر Maps
         }
     }

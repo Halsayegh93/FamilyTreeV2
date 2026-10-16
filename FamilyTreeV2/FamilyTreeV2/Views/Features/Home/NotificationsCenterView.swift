@@ -34,7 +34,7 @@ private struct NotificationKindStyle {
         "admin_edit":        .init(icon: "pencil.circle.fill",                       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل بيانات",    labelEn: "Edit"),
         "admin_edit_name":   .init(icon: "pencil",                                   gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل اسم",       labelEn: "Name Edit"),
         "admin_edit_dates":  .init(icon: "calendar",                                 gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل تواريخ",    labelEn: "Dates Edit"),
-        "admin_edit_phone":  .init(icon: "phone.arrow.right",                        gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل رقم",       labelEn: "Phone Edit"),
+        "admin_edit_phone":  .init(icon: "phone.arrow.right",                        gradient: DS.Color.gradientAccent,  color: DS.Color.sea,      labelAr: "تعديل رقم",       labelEn: "Phone Edit"),
         "admin_edit_phone_remove": .init(icon: "phone.down.fill",                    gradient: DS.Color.gradientAccent,  color: DS.Color.error,       labelAr: "حذف رقم",         labelEn: "Phone Removed"),
         "admin_edit_role":   .init(icon: "shield.lefthalf.filled",                   gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل صلاحية",    labelEn: "Role Edit"),
         "admin_edit_father": .init(icon: "person.2.fill",                            gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل أب",        labelEn: "Father Edit"),
