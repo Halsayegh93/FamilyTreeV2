@@ -3933,7 +3933,7 @@ struct AdminAllRequestsView: View {
                          value: memberName, color: DS.Color.primary)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Death Date"),
-                             value: death, color: DS.Color.error)
+                             value: death, color: DS.Color.slate)
                 }
             case .addPhoto:
                 infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
@@ -3943,7 +3943,7 @@ struct AdminAllRequestsView: View {
                 }
             case .add:
                 infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
-                         value: payload?.newMemberName ?? memberName, color: DS.Color.success)
+                         value: payload?.newMemberName ?? memberName, color: DS.Color.palm)
                 if let parent = payload?.parentMemberName, !parent.isEmpty {
                     infoCard(icon: "person.2.fill", label: L10n.t("الأب", "Father"),
                              value: parent, color: DS.Color.primary)
@@ -3956,7 +3956,7 @@ struct AdminAllRequestsView: View {
                          value: memberName, color: DS.Color.primary)
                 if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
                     infoCard(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New Birth Date"),
-                             value: newDate, color: DS.Color.warning)
+                             value: newDate, color: DS.Color.palm)
                 }
             case .other:
                 infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
@@ -3993,12 +3993,12 @@ struct AdminAllRequestsView: View {
                 infoCard(icon: "phone.fill",
                          label: L10n.t("رقم الهاتف", "Phone"),
                          value: KuwaitPhone.display(phone),
-                         color: DS.Color.success)
+                         color: DS.Color.sea)
                 if let wa = KuwaitPhone.whatsappURL(phone) {
                     contactLinkCard(icon: "message.fill",
                                     label: L10n.t("تواصل واتساب", "WhatsApp"),
                                     value: KuwaitPhone.display(phone),
-                                    color: DS.Color.success, url: wa)
+                                    color: DS.Color.sea, url: wa)
                 }
             } else {
                 infoCard(icon: "phone.slash", label: L10n.t("رقم الهاتف", "Phone"),
