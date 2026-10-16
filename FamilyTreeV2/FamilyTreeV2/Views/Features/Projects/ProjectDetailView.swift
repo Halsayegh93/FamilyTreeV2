@@ -24,7 +24,7 @@ enum SocialPlatform {
         case .twitter:   return Color(hex: "#000000")     // أسود X
         case .snapchat:  return Color(hex: "#FFFC00")     // أصفر Snap
         case .whatsapp:  return Color(hex: "#25D366")     // أخضر WhatsApp
-        case .phone:     return DS.Color.success           // أخضر هاتف
+        case .phone:     return DS.Color.seaFill           // أخضر هاتف
         case .location:  return Color(hex: "#EA4335")     // أحمر Maps
         }
     }

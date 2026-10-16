@@ -30,10 +30,10 @@ struct TreeEditRequestView: View {
 
     private var actionColor: Color {
         switch action {
-        case .add: return DS.Color.success
+        case .add: return DS.Color.palm
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
-        case .editBirth: return DS.Color.warning
+        case .editBirth: return DS.Color.accent
         case .deceased: return DS.Color.textTertiary
         case .addDeathDate: return DS.Color.textTertiary
         case .addPhoto: return DS.Color.primary
@@ -194,7 +194,7 @@ struct TreeEditRequestView: View {
                 title: L10n.t("تاريخ الميلاد الصحيح", "Correct Birth Date"),
                 label: L10n.t("تاريخ الميلاد", "Birth Date"),
                 date: $birthDate,
-                iconColor: DS.Color.warning
+                iconColor: DS.Color.accent
             )
         case .editPhone:
             phoneInputSection

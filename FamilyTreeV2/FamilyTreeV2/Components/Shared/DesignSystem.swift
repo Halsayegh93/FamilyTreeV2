@@ -130,6 +130,9 @@ enum DS {
         static let error   = SwiftUI.Color.adaptive(light: "#C0282A", dark: "#F47370") // danger — يعدّي AA كنص
         /// تعبئة الشارات والأزرار الحمراء ذات النص الأبيض — ثابتة في الوضعين (الأبيض فوقها ٥٫٩:١)
         static let errorFill = SwiftUI.Color.adaptive(light: "#C0282A", dark: "#C0282A")
+        /// تعبئة الأزرار والشارات الخضراء/الكهرمانية ذات النص الأبيض — ثابتة في الوضعين (٦٫٤:١ و٥٫٩:١)
+        static let successFill = SwiftUI.Color.adaptive(light: "#216C4F", dark: "#216C4F")
+        static let warningFill = SwiftUI.Color.adaptive(light: "#875C0A", dark: "#875C0A")
         static let info    = primary // كحلي
 
         // Role Colors — كل دور بلون من ألوان السدو (الشارة: النص باللون فوق نفس اللون ١٢٪)

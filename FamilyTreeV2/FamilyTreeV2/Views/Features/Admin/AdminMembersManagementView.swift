@@ -133,7 +133,7 @@ struct AdminMembersManagementView: View {
                         value: stats.pending,
                         title: L10n.t("بانتظار التفعيل", "Pending activation"),
                         icon: "clock.badge.questionmark",
-                        color: DS.Color.primary
+                        color: DS.Color.warning
                     ) {
                         issueFocus = .all
                         selectedTab = .accounts

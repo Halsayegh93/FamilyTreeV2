@@ -277,7 +277,7 @@ struct AdminDashboardView: View {
                                 title: L10n.t("بانتظار", "Pending"),
                                 value: pendingCount,
                                 icon: "clock.fill",
-                                color: DS.Color.error
+                                color: DS.Color.warning
                             )
                         }
                     } else {

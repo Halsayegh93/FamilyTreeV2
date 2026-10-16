@@ -314,7 +314,7 @@ struct AdminPushHealthView: View {
                     .foregroundColor(DS.Color.textOnPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.md)
-                    .background(DS.Color.warning)
+                    .background(DS.Color.warningFill)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                 }
                 .disabled(isCleaningUp)

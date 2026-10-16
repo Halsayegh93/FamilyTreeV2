@@ -563,7 +563,7 @@ private struct WomanDetailSheet: View {
                     quickPillLabel(
                         icon: "point.3.connected.trianglepath.dotted",
                         label: L10n.t("صلة القرابة", "Kinship"),
-                        color: DS.Color.warning
+                        color: DS.Color.palm
                     )
                 }
                 .buttonStyle(DSScaleButtonStyle())
@@ -617,14 +617,14 @@ private struct WomanDetailSheet: View {
     private func kinshipBanner(_ text: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "point.3.connected.trianglepath.dotted")
-                .foregroundColor(DS.Color.warning)
+                .foregroundColor(DS.Color.palm)
             Text(text)
                 .font(DS.Font.calloutBold)
                 .foregroundColor(DS.Color.textPrimary)
             Spacer()
         }
         .padding(DS.Spacing.md)
-        .background(DS.Color.warning.opacity(0.12))
+        .background(DS.Color.palm.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
     }
 

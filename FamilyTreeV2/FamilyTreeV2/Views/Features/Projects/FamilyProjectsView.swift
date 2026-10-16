@@ -562,7 +562,7 @@ struct FamilyProjectsView: View {
     /// أيقونات المنصات اللي عنده روابط فيها — مؤشّر بصري سريع.
     private func socialIndicators(project: Project) -> some View {
         HStack(spacing: 4) {
-            if project.phoneNumber?.isEmpty == false    { socialDot(icon: "phone.fill", color: DS.Color.success) }
+            if project.phoneNumber?.isEmpty == false    { socialDot(icon: "phone.fill", color: DS.Color.sea) }
             if project.whatsappNumber?.isEmpty == false { socialDot(icon: "message.fill", color: Color(hex: "#25D366")) }
             if project.instagramUrl?.isEmpty == false   { socialDot(icon: "camera.fill", color: Color(hex: "#E1306C")) }
             if project.twitterUrl?.isEmpty == false     { socialDot(icon: "xmark", color: Color(hex: "#000000")) }
@@ -855,14 +855,14 @@ struct AddProjectView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "link")
                         .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.sea)
                     Text(L10n.t("روابط التواصل", "Contact Links"))
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                     Spacer()
                     Text(filled > 0 ? "\(filled)" : L10n.t("اختياري", "Optional"))
                         .font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(filled > 0 ? DS.Color.success : DS.Color.textTertiary)
+                        .foregroundColor(filled > 0 ? DS.Color.sea : DS.Color.textTertiary)
                     Image(systemName: contactsOpen ? "chevron.up" : "chevron.down")
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textTertiary)
@@ -881,12 +881,12 @@ struct AddProjectView: View {
                     ],
                     spacing: DS.Spacing.sm
                 ) {
-                    compactLink(icon: "phone.fill", color: DS.Color.success, placeholder: "+965...", text: $phoneNumber)
-                    compactLink(icon: "message.fill", color: DS.Color.success, placeholder: L10n.t("واتساب", "WhatsApp"), text: $whatsappNumber)
+                    compactLink(icon: "phone.fill", color: DS.Color.sea, placeholder: "+965...", text: $phoneNumber)
+                    compactLink(icon: "message.fill", color: DS.Color.sea, placeholder: L10n.t("واتساب", "WhatsApp"), text: $whatsappNumber)
                     compactLink(icon: "camera.fill", color: DS.Color.accent, placeholder: L10n.t("إنستغرام", "Instagram"), text: $instagramUrl)
                     compactLink(icon: "at", color: DS.Color.info, placeholder: L10n.t("إكس", "X"), text: $twitterUrl)
                     compactLink(icon: "globe", color: DS.Color.primary, placeholder: L10n.t("موقع", "Website"), text: $websiteUrl)
-                    compactLink(icon: "mappin.and.ellipse", color: DS.Color.error, placeholder: L10n.t("الموقع", "Maps"), text: $locationUrl)
+                    compactLink(icon: "mappin.and.ellipse", color: DS.Color.palm, placeholder: L10n.t("الموقع", "Maps"), text: $locationUrl)
                 }
                 .padding([.horizontal, .bottom], DS.Spacing.md)
             }

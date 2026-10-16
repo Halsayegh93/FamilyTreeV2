@@ -895,7 +895,7 @@ struct AdminActivateAccountsView: View {
                     Text("\(chipCount)")
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
-                        .foregroundColor(isSelected ? filter.color : DS.Color.textOnPrimary)
+                        .foregroundColor(isSelected ? filter.color : DS.Color.onTint)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(
@@ -904,7 +904,7 @@ struct AdminActivateAccountsView: View {
                         )
                 }
             }
-            .foregroundColor(isSelected ? DS.Color.textOnPrimary : filter.color)
+            .foregroundColor(isSelected ? DS.Color.onTint : filter.color)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .background(

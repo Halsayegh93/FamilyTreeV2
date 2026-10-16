@@ -191,7 +191,7 @@ struct AdminAppUpdateView: View {
                         HStack(spacing: 5) {
                             Image(systemName: k.icon)
                                 .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(selected ? .white : k.color)
+                                .foregroundColor(selected ? DS.Color.onTint : k.color)
                                 .frame(width: 22, height: 22)
                                 .background(selected ? k.color : k.color.opacity(0.12))
                                 .clipShape(Circle())

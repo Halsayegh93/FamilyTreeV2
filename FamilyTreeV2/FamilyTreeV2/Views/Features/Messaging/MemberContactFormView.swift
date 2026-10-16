@@ -403,8 +403,8 @@ enum ContactCategory: CaseIterable {
 
     var color: Color {
         switch self {
-        case .complaint: return DS.Color.error
-        case .suggestion: return DS.Color.success
+        case .complaint: return DS.Color.sadu
+        case .suggestion: return DS.Color.palm
         case .inquiry: return DS.Color.primary
         case .other: return DS.Color.accent
         }

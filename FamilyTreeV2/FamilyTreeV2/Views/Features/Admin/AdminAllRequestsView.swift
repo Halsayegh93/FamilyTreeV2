@@ -97,8 +97,8 @@ struct AdminAllRequestsView: View {
         var color: Color {
             switch self {
             case .members:    return DS.Color.info
-            case .tree:       return DS.Color.success
-            case .content:    return DS.Color.warning
+            case .tree:       return DS.Color.palm
+            case .content:    return DS.Color.accent
             case .treeHealth: return DS.Color.error
             }
         }
@@ -183,20 +183,20 @@ struct AdminAllRequestsView: View {
             switch self {
             case .all: return DS.Color.primary
             case .joinRequests: return DS.Color.info
-            case .news: return DS.Color.warning
+            case .news: return DS.Color.accent
             case .reports: return DS.Color.error
             case .phone: return DS.Color.primary
             case .nameChange: return DS.Color.neonPurple
             case .diwaniya: return DS.Color.gridDiwaniya
-            case .archive: return DS.Color.warning
-            case .deceased: return DS.Color.error
+            case .archive: return DS.Color.sadu
+            case .deceased: return DS.Color.slate
             case .children: return DS.Color.info
-            case .treeAdd: return DS.Color.success
+            case .treeAdd: return DS.Color.palm
             case .treeEditName: return DS.Color.neonPurple
             case .treeEditPhone: return DS.Color.primary
-            case .treeEditBirth: return DS.Color.warning
-            case .treeDeceased: return DS.Color.error
-            case .treeAddDeathDate: return DS.Color.error
+            case .treeEditBirth: return DS.Color.palm
+            case .treeDeceased: return DS.Color.slate
+            case .treeAddDeathDate: return DS.Color.slate
             case .treeAddPhoto: return DS.Color.primary
             case .treeDelete: return DS.Color.error
             case .treeOther: return DS.Color.accent
@@ -453,7 +453,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Image(systemName: "checkmark.circle")
                             .font(DS.Font.scaled(16, weight: .semibold))
-                            .foregroundColor(DS.Color.success)
+                            .foregroundColor(DS.Color.primary)
                     }
                     .accessibilityLabel(L10n.t("تحديد", "Select"))
                 }
@@ -1018,10 +1018,10 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Image(systemName: "checkmark.circle")
                             .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(DS.Color.success)
+                            .foregroundColor(DS.Color.primary)
                             .frame(width: 36, height: 36)
-                            .background(Circle().fill(DS.Color.success.opacity(0.12)))
-                            .overlay(Circle().strokeBorder(DS.Color.success.opacity(0.25), lineWidth: 1))
+                            .background(Circle().fill(DS.Color.primary.opacity(0.12)))
+                            .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
                     }
                     .buttonStyle(DSScaleButtonStyle())
                     .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
@@ -1935,7 +1935,7 @@ struct AdminAllRequestsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.right.circle.fill")
                         .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.primary)
                     Text(L10n.t("القيمة الجديدة:", "New:")).font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
                     Text(newDisplay).font(DS.Font.caption1).fontWeight(.semibold).foregroundColor(DS.Color.textPrimary)
                     Spacer()
@@ -2065,7 +2065,7 @@ struct AdminAllRequestsView: View {
         case .add: return RequestTab.treeAdd.color
         case .editName: return RequestTab.treeEditName.color
         case .editPhone: return RequestTab.treeEditPhone.color
-        case .editBirth: return DS.Color.warning
+        case .editBirth: return DS.Color.palm
         case .deceased: return RequestTab.treeDeceased.color
         case .addDeathDate: return DS.Color.textTertiary
         case .addPhoto: return DS.Color.primary
@@ -2398,8 +2398,8 @@ struct AdminAllRequestsView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 6)
-                            .background(Capsule().fill(DS.Color.success))
-                            .shadow(color: DS.Color.success.opacity(0.30), radius: 4, x: 0, y: 2)
+                            .background(Capsule().fill(DS.Color.seaFill))
+                            .shadow(color: DS.Color.seaFill.opacity(0.30), radius: 4, x: 0, y: 2)
                         }
                         .buttonStyle(DSScaleButtonStyle())
                     }
@@ -2991,7 +2991,7 @@ struct AdminAllRequestsView: View {
     private func archiveRow(for item: ArchiveItem) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: item.categoryIcon, color: DS.Color.warning, size: 36)
+                iconCircle(icon: item.categoryIcon, color: DS.Color.sadu, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("عنصر أرشيف", "Archive Item"))
@@ -3024,7 +3024,7 @@ struct AdminAllRequestsView: View {
     private func deceasedRow(for request: AdminRequest) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "bolt.heart.fill", color: DS.Color.error, size: 36)
+                iconCircle(icon: "bolt.heart.fill", color: DS.Color.slate, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("تسجيل وفاة", "Deceased"))
@@ -3325,7 +3325,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
                     Text(KuwaitPhone.display(request.newValue))
                         .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.primary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, DS.Spacing.lg)
@@ -3592,7 +3592,7 @@ struct AdminAllRequestsView: View {
                          timestamp: m.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: m.avatarUrl)
         case .news(let p):
-            return .init(icon: "newspaper.fill", color: DS.Color.warning,
+            return .init(icon: "newspaper.fill", color: DS.Color.accent,
                          title: L10n.t("خبر بانتظار الاعتماد", "Pending News"),
                          timestamp: formatRegistrationDate(String(p.created_at)))
         case .report(let r):
@@ -3613,7 +3613,7 @@ struct AdminAllRequestsView: View {
                          title: L10n.t("طلب ديوانية", "Diwaniya Request"),
                          timestamp: nil)
         case .deceased(let r):
-            return .init(icon: "bolt.heart.fill", color: DS.Color.error,
+            return .init(icon: "bolt.heart.fill", color: DS.Color.slate,
                          title: L10n.t("تسجيل وفاة", "Deceased"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
         case .child(let r):
@@ -3631,7 +3631,7 @@ struct AdminAllRequestsView: View {
                          timestamp: p.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: p.logoUrl)
         case .archive(let a):
-            return .init(icon: a.categoryIcon, color: DS.Color.warning,
+            return .init(icon: a.categoryIcon, color: DS.Color.sadu,
                          title: L10n.t("عنصر أرشيف", "Archive Item"),
                          timestamp: nil,
                          imageUrl: a.thumbnailUrl)
@@ -3717,7 +3717,7 @@ struct AdminAllRequestsView: View {
             }
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
-                         value: KuwaitPhone.display(phone), color: DS.Color.success)
+                         value: KuwaitPhone.display(phone), color: DS.Color.sea)
             }
             // تعديل / إضافة رقم فعلي قبل الربط
             if authVM.canModerate {
@@ -3810,7 +3810,7 @@ struct AdminAllRequestsView: View {
             }
             if let address = diwaniya.address, !address.isEmpty {
                 infoCard(icon: "mappin.and.ellipse", label: L10n.t("العنوان", "Address"),
-                         value: address, color: DS.Color.error)
+                         value: address, color: DS.Color.palm)
             }
 
         case .deceased(let request):
@@ -3852,7 +3852,7 @@ struct AdminAllRequestsView: View {
             // روابط التواصل
             if let wa = project.whatsappNumber, !wa.isEmpty, let url = KuwaitPhone.whatsappURL(wa) {
                 contactLinkCard(icon: "message.fill", label: L10n.t("واتساب", "WhatsApp"),
-                                value: KuwaitPhone.display(wa), color: DS.Color.success, url: url)
+                                value: KuwaitPhone.display(wa), color: DS.Color.sea, url: url)
             }
             if let phone = project.phoneNumber, !phone.isEmpty, let url = KuwaitPhone.telURL(phone) {
                 contactLinkCard(icon: "phone.fill", label: L10n.t("هاتف", "Phone"),
@@ -3873,17 +3873,17 @@ struct AdminAllRequestsView: View {
             }
             if let sc = project.snapchatUrl, !sc.isEmpty, let url = socialURL(sc, base: "https://snapchat.com/add/") {
                 contactLinkCard(icon: "camera.viewfinder", label: L10n.t("سناب شات", "Snapchat"),
-                                value: sc, color: DS.Color.warning, url: url)
+                                value: sc, color: DS.Color.accent, url: url)
             }
             if let loc = project.locationUrl, !loc.isEmpty,
                let url = URL(string: loc.lowercased().hasPrefix("http") ? loc : "https://\(loc)") {
                 contactLinkCard(icon: "mappin.and.ellipse", label: L10n.t("الموقع الجغرافي", "Location"),
-                                value: L10n.t("فتح الخريطة", "Open map"), color: DS.Color.error, url: url)
+                                value: L10n.t("فتح الخريطة", "Open map"), color: DS.Color.palm, url: url)
             }
 
         case .archive(let item):
             infoCard(icon: "textformat", label: L10n.t("العنوان", "Title"),
-                     value: item.title, color: DS.Color.warning)
+                     value: item.title, color: DS.Color.sadu)
             infoCard(icon: item.categoryIcon, label: L10n.t("القسم", "Category"),
                      value: item.categoryDisplayName,
                      color: DS.Color.info)
@@ -3926,7 +3926,7 @@ struct AdminAllRequestsView: View {
                          value: memberName, color: DS.Color.primary)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Death Date"),
-                             value: death, color: DS.Color.error)
+                             value: death, color: DS.Color.slate)
                 }
             case .addDeathDate:
                 infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
