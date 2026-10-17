@@ -802,11 +802,9 @@ extension OccasionPostView {
         var items: [AnyView] = [
             AnyView(m3SabrBlock(v, gap: 10)),
             AnyView(OccasionM3Sadu(color: OccasionM3.gold, width: 420, big: 14, small: 10, opLine: 0.8, opSmall: 0.6)),
-            // «تتقدم عائلة المحمدعلي» أساس الفكرة: كبير (60) وملاصق للعنوان في مجموعة واحدة، مثل الموقع
-            AnyView(VStack(spacing: 0) {
-                m3Fixed("مشاركة عزاء", .extrabold, 68, color: ink, lineHeight: 1.25)
-                if has("from") { m3OneLine(value("from"), .extrabold, 60, width: 880, color: OccasionM3.navy, lineHeight: 1.4) }
-            }),
+            // «تتقدم عائلة المحمدعلي» أساس الفكرة: ملاصق للعنوان، و«مشاركة عزاء» ممدودة بالكشيدة لعرضه — مثل الموقع
+            AnyView(OccasionSolaceHeadingView(from: has("from") ? value("from") : "", fromSize: 54, titleSize: 68, fromLineHeight: 1.4,
+                                              titleColor: ink, fromColor: OccasionM3.navy)),
             AnyView(VStack(spacing: 0) {
                 m3Fixed("بأحر التعازي وأصدق المواساة إلى", .regular, 27, color: muted, lineHeight: 1.45)
                 if has("to") { m3NameLine("to", color: ink, scale: 1) }
