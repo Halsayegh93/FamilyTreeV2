@@ -1035,7 +1035,7 @@ struct AdminActivateAccountsView: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Color.neonPink)
+                        .background(DS.Color.saduFill)
                         .clipShape(Capsule())
                     }
                     .buttonStyle(DSBoldButtonStyle())
@@ -1589,11 +1589,11 @@ private struct StationSheetShell<Content: View>: View {
 
                     Button(action: onSave) {
                         HStack(spacing: DS.Spacing.sm) {
-                            if isSaving { ProgressView().tint(DS.Color.textOnPrimary) }
+                            if isSaving { ProgressView().tint(DS.Color.onTint) }
                             Text(L10n.t("حفظ", "Save"))
                                 .font(DS.Font.scaled(13, weight: .bold))
                         }
-                        .foregroundColor(DS.Color.textOnPrimary)
+                        .foregroundColor(DS.Color.onTint)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(canSave ? tint : DS.Color.textTertiary, in: Capsule())

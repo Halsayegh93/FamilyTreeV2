@@ -521,7 +521,7 @@ struct AdminMembersDirectoryView: View {
                         .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(.white)
                         .padding(4)
-                        .background(DS.Color.textTertiary)
+                        .background(DS.Color.deceasedFill)
                         .clipShape(Circle())
                         .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
                 } else if member.status == .frozen {

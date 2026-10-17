@@ -724,11 +724,11 @@ struct FamilyArchiveView: View {
     @ViewBuilder
     private func statusStack(for item: ArchiveItem) -> some View {
         if item.approvalStatus == .pending {
-            statusBadge(icon: "clock.fill", label: L10n.t("بانتظار", "Pending"), color: DS.Color.warning)
+            statusBadge(icon: "clock.fill", label: L10n.t("بانتظار", "Pending"), color: DS.Color.warningFill)
         } else if item.approvalStatus == .rejected {
-            statusBadge(icon: "xmark.circle.fill", label: L10n.t("مرفوض", "Rejected"), color: DS.Color.error)
+            statusBadge(icon: "xmark.circle.fill", label: L10n.t("مرفوض", "Rejected"), color: DS.Color.errorFill)
         } else if item.isHidden {
-            statusBadge(icon: "eye.slash.fill", label: L10n.t("مخفي", "Hidden"), color: DS.Color.textTertiary)
+            statusBadge(icon: "eye.slash.fill", label: L10n.t("مخفي", "Hidden"), color: DS.Color.slateFill)
         }
     }
 
@@ -756,7 +756,7 @@ struct FamilyArchiveView: View {
             Image(systemName: icon).font(DS.Font.icon(11, weight: .bold))
             Text(label).font(DS.Font.scaled(11, weight: .bold))
         }
-        .foregroundColor(.white)
+        .foregroundColor(DS.Color.textOnPrimary)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(Capsule().fill(color))

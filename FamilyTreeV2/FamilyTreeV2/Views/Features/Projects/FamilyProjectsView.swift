@@ -379,10 +379,10 @@ struct FamilyProjectsView: View {
                         Text("\(pendingCount)")
                             .font(DS.Font.scaled(11, weight: .heavy))
                     }
-                    .foregroundColor(on ? .white : DS.Color.warning)
+                    .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.warning)
                     .padding(.horizontal, DS.Spacing.md)
                     .frame(height: 34)
-                    .background(Capsule().fill(on ? DS.Color.warning : DS.Color.warning.opacity(0.12)))
+                    .background(Capsule().fill(on ? DS.Color.warningFill : DS.Color.warning.opacity(0.12)))
                 }
                 .buttonStyle(DSScaleButtonStyle())
             }
@@ -511,9 +511,9 @@ struct FamilyProjectsView: View {
         )
         .overlay(alignment: .topLeading) {
             if project.approvalStatus == "pending" {
-                statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warning)
+                statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warningFill)
             } else if project.isHidden {
-                statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.textTertiary)
+                statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.slateFill)
             }
         }
         .opacity(project.approvalStatus == "pending" || project.isHidden ? 0.85 : 1.0)
@@ -553,7 +553,7 @@ struct FamilyProjectsView: View {
             Image(systemName: icon).font(DS.Font.icon(10, weight: .bold))
             Text(text).font(DS.Font.scaled(10, weight: .bold))
         }
-        .foregroundColor(.white)
+        .foregroundColor(DS.Color.textOnPrimary)
         .padding(.horizontal, 6).padding(.vertical, 3)
         .background(Capsule().fill(color))
         .padding(DS.Spacing.xs)

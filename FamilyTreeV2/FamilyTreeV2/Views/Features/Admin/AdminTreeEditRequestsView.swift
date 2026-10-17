@@ -267,7 +267,7 @@ struct AdminTreeEditRequestsView: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Color.success)
+                        .background(DS.Color.successFill)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
                     }
                     .buttonStyle(DSScaleButtonStyle())

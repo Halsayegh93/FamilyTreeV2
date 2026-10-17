@@ -158,10 +158,10 @@ struct CategoriesManagerView: View {
             if !category.isActive {
                 Text(L10n.t("مخفي", "Hidden"))
                     .font(DS.Font.plex(10, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
-                    .background(Capsule().fill(DS.Color.textTertiary))
+                    .background(Capsule().fill(DS.Color.slateFill))
             }
             // حذف من برّا — للتصنيف الفارغ غير الأساسي فقط
             if canEdit && count == 0 && !store.isProtected(category) {
