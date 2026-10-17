@@ -405,7 +405,7 @@ struct HomeNewsView: View {
     private func primaryTilesRow(tileHeight: CGFloat) -> some View {
         HStack(spacing: tileSpacing) {
             unifiedTile(
-                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
+                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nfamily tree"),
                 icon: "tree.fill",
                 color: DS.Color.tileTree,
                 deep: DS.Color.tileTreeDeep,

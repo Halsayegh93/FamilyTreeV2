@@ -176,7 +176,7 @@ struct SettingsView: View {
                     .strokeBorder(Color.white.opacity(0.7), lineWidth: 2))
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali Family"))
+                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                         .font(DS.Font.plex(10, weight: .semibold))
                         .foregroundColor(.white.opacity(0.7))
                     Text(user?.displayName ?? "")
@@ -905,7 +905,7 @@ struct AboutView: View {
 
                         // App Name & Version
                         VStack(spacing: DS.Spacing.sm) {
-                            Text(t("عائلة المحمدعلي", "Al-Mohammadali Family"))
+                            Text(t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                                 .font(DS.Font.title1)
                                 .fontWeight(.black)
                                 .foregroundColor(DS.Color.textPrimary)
@@ -963,7 +963,7 @@ struct AboutView: View {
 
                         // Footer
                         VStack(spacing: DS.Spacing.sm) {
-                            Text(t("صُنع بحب لعائلة آل محمد علي 🤍", "Made with love for Al-Mohammad Ali family 🤍"))
+                            Text(t("صُنع بحب لعائلة المحمدعلي", "Made with love for the Al-Mohammad Ali family"))
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textTertiary)
 
@@ -1094,7 +1094,7 @@ struct PrivacyPolicyView: View {
                             color: DS.Color.neonPurple,
                             title: t("شروط الاستخدام", "Terms of Use"),
                             points: [
-                                t("التطبيق مخصص حصرياً لأفراد عائلة آل محمد علي.", "The app is exclusively for Al-Mohammad Ali family members."),
+                                t("التطبيق مخصص حصرياً لأفراد عائلة المحمدعلي.", "The app is exclusively for Al-Mohammad Ali family members."),
                                 t("يجب استخدام التطبيق بمسؤولية واحترام خصوصية الآخرين.", "Use the app responsibly and respect others' privacy."),
                                 t("يحق للإدارة تجميد أو حذف الحسابات المخالفة.", "Admins may freeze or delete accounts that violate policies.")
                             ]

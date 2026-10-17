@@ -41,7 +41,7 @@ struct AdminRegisterMemberView: View {
                                     .opacity(headerOpacity)
 
                                 VStack(spacing: DS.Spacing.sm) {
-                                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
+                                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                                         .font(DS.Font.title2)
                                         .fontWeight(.black)
                                         .foregroundColor(DS.Color.textPrimary)
@@ -78,7 +78,7 @@ struct AdminRegisterMemberView: View {
 
                         // العنوان — نفس فورم التسجيل
                         VStack(spacing: DS.Spacing.sm) {
-                            Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
+                            Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                                 .font(DS.Font.title1)
                                 .fontWeight(.black)
                                 .foregroundColor(DS.Color.textPrimary)
@@ -198,8 +198,8 @@ struct AdminRegisterMemberView: View {
     private var familyNameSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             DSTextField(
-                label: L10n.t("اسم العائلة", "Family Name"),
-                placeholder: L10n.t("مثال: آل محمد علي", "e.g. Al-Mohammad Ali"),
+                label: L10n.t("اسم العائلة", "Family name"),
+                placeholder: L10n.t("[اسم العائلة]", "[Family name]"),
                 text: $familyName,
                 icon: "person.2.fill",
                 iconColor: DS.Color.accent,

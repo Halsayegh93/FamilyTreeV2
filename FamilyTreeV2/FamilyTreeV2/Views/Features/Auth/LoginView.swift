@@ -267,7 +267,7 @@ struct LoginView: View {
 #endif
 
             VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
+                Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                     .font(DS.Font.title1)
                     .fontWeight(.black)
                     .foregroundColor(DS.Color.textPrimary)
