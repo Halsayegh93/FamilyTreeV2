@@ -71,11 +71,11 @@ struct AppInfoCard: View {
             Button(action: onClose) {
                 Text(L10n.t("إغلاق", "Close"))
                     .font(DS.Font.calloutBold)
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.primary))
+                        .fill(DS.Color.primaryFill))
             }
             .buttonStyle(DSScaleButtonStyle())
             .padding(.top, DS.Spacing.xs)

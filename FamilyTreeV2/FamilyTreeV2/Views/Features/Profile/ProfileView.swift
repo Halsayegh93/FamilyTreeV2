@@ -1158,6 +1158,7 @@ struct ProfileView: View {
                                 .font(DS.Font.calloutBold)
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(DS.Color.primaryFill)
                         .padding(.top, DS.Spacing.xs)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

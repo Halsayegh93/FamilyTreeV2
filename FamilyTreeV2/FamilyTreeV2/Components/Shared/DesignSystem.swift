@@ -760,6 +760,9 @@ struct DSPrimaryButton: View {
         self.action = action
     }
 
+    /// تعبئة الزر بدون التدرّج — الكحلي المتكيّف يأخذ primaryFill حتى يبقى النص الأبيض مقروءاً في الداكن
+    private var flatFill: Color { color == DS.Color.primary ? DS.Color.primaryFill : color }
+
     private var debouncedAction: () -> Void {
         let key = "DSPrimary_\(title)"
         let original = action
@@ -772,7 +775,7 @@ struct DSPrimaryButton: View {
         Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
                 if isLoading {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(DS.Color.textOnPrimary)
                 } else {
                     if let icon {
                         Image(systemName: icon)
@@ -787,7 +790,7 @@ struct DSPrimaryButton: View {
                 }
             }
             .font(DS.Font.headline)
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.textOnPrimary)
             .padding(.horizontal, DS.Spacing.lg)
             .frame(maxWidth: .infinity)
             // minHeight بدل الارتفاع الثابت — يسمح للنص بالنمو بدل القص في أحجام Dynamic Type الكبيرة
@@ -798,7 +801,7 @@ struct DSPrimaryButton: View {
                     .fill(
                         useGradient
                             ? AnyShapeStyle(DS.Color.gradientPrimary)
-                            : AnyShapeStyle(isLoading ? color.opacity(0.7) : color)
+                            : AnyShapeStyle(isLoading ? flatFill.opacity(0.7) : flatFill)
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
@@ -1378,13 +1381,13 @@ struct DSApproveRejectButtons: View {
             Button(action: approveTapped) {
                 ZStack {
                     if isLoading {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(DS.Color.textOnPrimary)
                     } else {
                         Text(approveTitle)
                             .font(DS.Font.calloutBold)
                     }
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DS.Spacing.md)
                 .background(approveGradient)
@@ -1589,11 +1592,12 @@ struct UnifiedTextField: ViewModifier {
 }
 
 struct UnifiedButtonStyle: ButtonStyle {
-    var color: Color = DS.Color.primary
+    /// تعبئة تحت نص أبيض — primaryFill (كحلي، #2B5F90 في الداكن) لا primary
+    var color: Color = DS.Color.primaryFill
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(DS.Font.headline)
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.textOnPrimary)
             .frame(maxWidth: .infinity)
             .frame(height: 58)
             .background(configuration.isPressed ? color.opacity(0.85) : color)
@@ -1684,7 +1688,7 @@ struct DSEmptyState: View {
                         Text(buttonTitle)
                     }
                     .font(DS.Font.calloutBold)
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.xl)
                     .padding(.vertical, DS.Spacing.sm)
                     .background(buttonBackground)
@@ -1697,18 +1701,17 @@ struct DSEmptyState: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// خلفية زر الإجراء: التدرّج الافتراضي للحالات العادية، لون صلب لحالات الخطأ/المخصصة
-    @ViewBuilder
-    private var buttonBackground: some View {
-        if tint == DS.Color.primary {
-            DS.Color.gradientPrimary
-        } else if tint == DS.Color.error {
-            // نص الزر أبيض — التعبئة الحمراء الثابتة تبقى مقروءة في الداكن
-            DS.Color.errorFill
-        } else {
-            tint
-        }
+    /// خلفية زر الإجراء والدائرة الصلبة في نمط halo — النص والأيقونة فوقها بيضاء، فاللون المتكيّف
+    /// يأخذ تعبئته الثابتة (primaryFill، errorFill، successFill، warningFill) حتى يبقى الأبيض مقروءاً في الداكن
+    private var solidFill: SwiftUI.Color {
+        if tint == DS.Color.primary { return DS.Color.primaryFill }
+        if tint == DS.Color.error   { return DS.Color.errorFill }
+        if tint == DS.Color.success { return DS.Color.successFill }
+        if tint == DS.Color.warning { return DS.Color.warningFill }
+        return tint
     }
+
+    private var buttonBackground: SwiftUI.Color { solidFill }
 
     @ViewBuilder
     private var iconArea: some View {
@@ -1731,11 +1734,11 @@ struct DSEmptyState: View {
                     .fill(tint.opacity(0.10))
                     .frame(width: 95, height: 95)
                 Circle()
-                    .fill(tint)
+                    .fill(solidFill)
                     .frame(width: 64, height: 64)
                 Image(systemName: icon)
                     .font(DS.Font.icon(28, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
             }
         }
     }

@@ -752,7 +752,7 @@ struct TreeView: View {
                 .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 5)
                 .frame(minWidth: 40, minHeight: 20)
-                .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
+                .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primaryFill : DS.Color.surface.opacity(0.8)))
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -869,7 +869,7 @@ struct TreeView: View {
                         .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.textPrimary)
                         .padding(.horizontal, isLandscapeMode ? 10 : 6)
                         .padding(.vertical, isLandscapeMode ? 5 : 1)
-                        .background(isLast ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.surface), in: Capsule())
+                        .background(isLast ? AnyShapeStyle(DS.Color.primaryFill) : AnyShapeStyle(DS.Color.surface), in: Capsule())
                         .overlay(Capsule().stroke(DS.Color.primary.opacity(isLast ? 0 : 0.2), lineWidth: 1))
                     }
                     .buttonStyle(DSScaleButtonStyle())

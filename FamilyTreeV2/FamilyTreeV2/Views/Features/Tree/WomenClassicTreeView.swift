@@ -512,7 +512,7 @@ struct WomenClassicTreeView: View {
                 .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 5)
                 .frame(minWidth: 40, minHeight: 20)
-                .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
+                .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primaryFill : DS.Color.surface.opacity(0.8)))
         }
         .buttonStyle(DSScaleButtonStyle())
     }

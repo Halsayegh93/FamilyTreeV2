@@ -604,7 +604,7 @@ struct AdminPendingRequestsView: View {
                 // بادج قوة التطابق
                 Text(matchStrengthLabel(ratio: matchRatio))
                     .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(DS.Color.textOnPrimary)
+                    .foregroundColor(DS.Color.onTint)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, 3)
                     .background(strengthColor)

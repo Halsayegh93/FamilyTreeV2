@@ -517,7 +517,7 @@ struct AdminReportsView: View {
                 .foregroundColor(active ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(active ? DS.Color.primary : Color.clear)
+                .background(active ? DS.Color.primaryFill : Color.clear)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule().stroke(

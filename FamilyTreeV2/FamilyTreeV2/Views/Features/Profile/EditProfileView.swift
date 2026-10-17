@@ -43,11 +43,11 @@ private struct EditLimitPopup: View {
                 Button(action: close) {
                     Text(L10n.t("حسناً", "OK"))
                         .font(DS.Font.calloutBold)
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.primary))
+                            .fill(DS.Color.primaryFill))
                 }
                 .buttonStyle(DSScaleButtonStyle())
                 .padding(.top, DS.Spacing.xs)
@@ -810,7 +810,7 @@ struct EditProfileView: View {
                     .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, 3)
-                    .background(DS.Color.primary)
+                    .background(DS.Color.primaryFill)
                     .clipShape(Capsule())
                     .fixedSize()
             } else {

@@ -129,7 +129,7 @@ struct DSProfilePhotoPicker: View {
                         .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 32, height: 32)
-                        .background(DS.Color.primary)
+                        .background(DS.Color.primaryFill)
                         .clipShape(Circle())
                         .overlay(Circle().stroke(DS.Color.background, lineWidth: 2.5))
                 }
@@ -273,7 +273,7 @@ struct DSProfilePhotoPicker: View {
                         .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 32, height: 32)
-                        .background(DS.Color.primary)
+                        .background(DS.Color.primaryFill)
                         .clipShape(Circle())
                         .overlay(Circle().stroke(DS.Color.background, lineWidth: 2.5))
                 }
@@ -429,7 +429,7 @@ struct DSProfilePhotoPicker: View {
                             .font(DS.Font.icon(12, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .frame(width: 32, height: 32)
-                            .background(DS.Color.primary)
+                            .background(DS.Color.primaryFill)
                             .clipShape(Circle())
                             .overlay(Circle().stroke(DS.Color.background, lineWidth: 2.5))
                     }

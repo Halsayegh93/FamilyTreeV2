@@ -302,7 +302,7 @@ struct FamilyArchiveView: View {
             .foregroundColor(isSelected ? .white : DS.Color.textPrimary.opacity(0.7))
             .background(
                 Circle()
-                    .fill(isSelected ? DS.Color.primary : Color.white.opacity(0.85))
+                    .fill(isSelected ? DS.Color.primaryFill : Color.white.opacity(0.85))
                     .frame(width: 22, height: 22)
             )
             .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)

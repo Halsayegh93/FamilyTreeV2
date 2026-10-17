@@ -173,7 +173,7 @@ struct AdminIncompleteMembersView: View {
                                         } label: {
                                             Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
                                         }
-                                        .tint(DS.Color.primary)
+                                        .tint(DS.Color.primaryFill)
                                     }
                                 }
                             }
@@ -468,7 +468,7 @@ struct AdminIncompleteMembersView: View {
 
             if isSelected {
                 Circle()
-                    .fill(DS.Color.primary)
+                    .fill(DS.Color.primaryFill)
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
                     .font(DS.Font.icon(12, weight: .bold))

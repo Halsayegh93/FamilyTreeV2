@@ -563,7 +563,7 @@ struct LoginView: View {
     private func stepDot(filled: Bool) -> some View {
         ZStack {
             Circle()
-                .fill(filled ? DS.Color.primary : DS.Color.textTertiary.opacity(0.25))
+                .fill(filled ? DS.Color.primaryFill : DS.Color.textTertiary.opacity(0.25))
                 .frame(width: 10, height: 10)
             if filled {
                 Circle()

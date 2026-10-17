@@ -164,7 +164,7 @@ struct AddNewsView: View {
                     if selected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(DS.Font.icon(13, weight: .bold))
-                            .foregroundStyle(.white, DS.Color.primary)
+                            .foregroundStyle(DS.Color.textOnPrimary, DS.Color.primaryFill)
                             .background(Circle().fill(DS.Color.cardBackground).frame(width: 15, height: 15))
                             .offset(x: 11, y: 11)
                             .transition(.scale.combined(with: .opacity))

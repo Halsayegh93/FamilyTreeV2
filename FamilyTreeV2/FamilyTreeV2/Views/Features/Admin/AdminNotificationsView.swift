@@ -133,7 +133,7 @@ struct AdminNotificationsView: View {
             .foregroundColor(active ? DS.Color.textOnPrimary : DS.Color.textSecondary)
             .padding(.horizontal, DS.Spacing.sm + 2)
             .frame(height: 26)
-            .background(Capsule().fill(active ? DS.Color.primary : DS.Color.surface))
+            .background(Capsule().fill(active ? DS.Color.primaryFill : DS.Color.surface))
             .overlay(Capsule().stroke(DS.Color.mutedBackground, lineWidth: active ? 0 : 1))
         }
         .buttonStyle(DSScaleButtonStyle())

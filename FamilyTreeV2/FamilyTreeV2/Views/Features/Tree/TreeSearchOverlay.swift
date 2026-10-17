@@ -552,10 +552,10 @@ struct TreeSearchOverlay: View {
                     .buttonStyle(.plain)
                     .padding(.leading, 2)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(DS.Color.primary))
+                .background(Capsule().fill(DS.Color.primaryFill))
             }
             .buttonStyle(DSScaleButtonStyle())
         } else {

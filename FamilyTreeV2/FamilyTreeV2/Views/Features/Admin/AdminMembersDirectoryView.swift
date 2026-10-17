@@ -345,7 +345,7 @@ struct AdminMembersDirectoryView: View {
                                     } label: {
                                         Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
                                     }
-                                    .tint(DS.Color.primary)
+                                    .tint(DS.Color.primaryFill)
                                 }
                             }
                         }

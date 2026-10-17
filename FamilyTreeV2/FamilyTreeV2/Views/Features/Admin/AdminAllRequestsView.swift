@@ -1830,7 +1830,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
                     }
-                    .tint(DS.Color.primary)
+                    .tint(DS.Color.primaryFill)
 
                     Button {
                         Task { await adminRequestVM.activateAccount(memberId: member.id) }
@@ -2213,7 +2213,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
                     }
-                    .tint(DS.Color.primary)
+                    .tint(DS.Color.primaryFill)
 
                     Button {
                         Task { await adminRequestVM.activateAccount(memberId: member.id) }
@@ -2536,10 +2536,10 @@ struct AdminAllRequestsView: View {
                     if match.isRegistrationMatch {
                         Text(L10n.t("تسجيل", "Reg"))
                             .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(DS.Color.primary)
+                            .background(DS.Color.primaryFill)
                             .clipShape(Capsule())
                     }
                 }

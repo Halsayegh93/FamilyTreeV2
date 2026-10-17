@@ -415,7 +415,7 @@ struct NotificationsCenterView: View {
                             .font(DS.Font.scaled(11, weight: .black))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .frame(minWidth: NotifLayout.badgeSize, minHeight: NotifLayout.badgeSize)
-                            .background(DS.Color.primary)
+                            .background(DS.Color.primaryFill)
                             .clipShape(Circle())
                     }
 
@@ -456,7 +456,7 @@ struct NotificationsCenterView: View {
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .frame(minWidth: 18, minHeight: 18)
                                 .padding(.horizontal, 4)
-                                .background(Capsule().fill(DS.Color.primary))
+                                .background(Capsule().fill(DS.Color.primaryFill))
                             Text(L10n.t("غير مقروء", "unread"))
                                 .font(DS.Font.scaled(11, weight: .semibold))
                                 .foregroundColor(DS.Color.textSecondary)
@@ -762,7 +762,7 @@ struct NotificationsCenterView: View {
                                     } label: {
                                         Label(L10n.t("مقروء", "Read"), systemImage: "envelope.open")
                                     }
-                                    .tint(DS.Color.primary)
+                                    .tint(DS.Color.primaryFill)
                                 }
                             }
                     }

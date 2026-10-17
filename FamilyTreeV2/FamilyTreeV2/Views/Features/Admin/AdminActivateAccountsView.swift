@@ -311,7 +311,7 @@ struct AdminActivateAccountsView: View {
                                                 } label: {
                                                     Label(L10n.t("هاتف", "Phone"), systemImage: "phone.badge.plus")
                                                 }
-                                                .tint(DS.Color.primary)
+                                                .tint(DS.Color.primaryFill)
                                             }
                                             if isMissingBirthDate(member) {
                                                 Button {
@@ -511,7 +511,7 @@ struct AdminActivateAccountsView: View {
                     .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(Capsule().fill(isOn ? DS.Color.primary : DS.Color.surface))
+                    .background(Capsule().fill(isOn ? DS.Color.primaryFill : DS.Color.surface))
                     .overlay(
                         Capsule().strokeBorder(
                             isOn ? Color.clear : DS.Color.textTertiary.opacity(0.15),
@@ -961,7 +961,7 @@ struct AdminActivateAccountsView: View {
 
             if isSelected {
                 Circle()
-                    .fill(DS.Color.primary)
+                    .fill(DS.Color.primaryFill)
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
                     .font(DS.Font.icon(12, weight: .bold))
@@ -1023,7 +1023,7 @@ struct AdminActivateAccountsView: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Color.primary)
+                        .background(DS.Color.primaryFill)
                         .clipShape(Capsule())
                     }
                     .buttonStyle(DSBoldButtonStyle())
@@ -1213,7 +1213,7 @@ struct EditPhoneSheet: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.xs)
-                        .background(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? DS.Color.textTertiary : DS.Color.primary)
+                        .background(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? DS.Color.textTertiary : DS.Color.primaryFill)
                         .cornerRadius(DS.Radius.lg)
                     }
                     .disabled(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
@@ -1518,7 +1518,7 @@ struct EditBirthDateSheet: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.primary)
+                        .background(DS.Color.primaryFill)
                         .cornerRadius(DS.Radius.lg)
                     }
                     .disabled(isSaving)
