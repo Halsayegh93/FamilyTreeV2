@@ -56,12 +56,21 @@ struct OccasionFlowLayout: Layout {
 /// شريحة اختيار واحدة
 struct OccasionChip: View {
     let title: String
+    /// رمز SF Symbols قبل النص (مثل القلم في «نص آخر») — بدل الإيموجي
+    var systemImage: String? = nil
     let isOn: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(title)
+            HStack(spacing: 6) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 13, weight: .semibold))
+                        .accessibilityHidden(true)
+                }
+                Text(title)
+            }
                 .font(DS.Font.plex(14, weight: .semibold))
                 .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textPrimary)
                 .multilineTextAlignment(.leading)
@@ -70,7 +79,7 @@ struct OccasionChip: View {
                 .padding(.vertical, 9)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(isOn ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.cardBackgroundSoft))
+                        .fill(isOn ? AnyShapeStyle(DS.Color.primaryFill) : AnyShapeStyle(DS.Color.cardBackgroundSoft))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -108,7 +117,7 @@ struct OccasionChips: View {
                     OccasionChip(title: noneLabel, isOn: selected == options.count) { onSelect(options.count) }
                 }
                 if let custom {
-                    OccasionChip(title: "✏️ " + (custom.label ?? L10n.t("نص آخر", "Other")), isOn: selected == -1) { onSelect(-1) }
+                    OccasionChip(title: custom.label ?? L10n.t("نص آخر", "Other"), systemImage: "pencil", isOn: selected == -1) { onSelect(-1) }
                 }
             }
             if let custom, selected == -1 {
@@ -156,7 +165,7 @@ struct OccasionTextCards: View {
                     OccasionChip(title: noneLabel, isOn: selected == options.count) { onSelect(options.count) }
                 }
                 if custom != nil {
-                    OccasionChip(title: "✏️ " + L10n.t("نص آخر", "Other"), isOn: selected == -1) { onSelect(-1) }
+                    OccasionChip(title: L10n.t("نص آخر", "Other"), systemImage: "pencil", isOn: selected == -1) { onSelect(-1) }
                 }
             }
             if let custom, selected == -1 {

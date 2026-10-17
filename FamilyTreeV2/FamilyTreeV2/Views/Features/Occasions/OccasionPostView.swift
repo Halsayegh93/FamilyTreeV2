@@ -102,11 +102,13 @@ struct OccasionPostView: View {
         HStack(spacing: 28) {
             LinearGradient(colors: [color.opacity(0), color], startPoint: .leading, endPoint: .trailing)
                 .frame(width: lineW, height: 2)
-            if let ui = image("logo/\(logo).png") {
-                Image(uiImage: ui).resizable().frame(width: lh * ui.size.width / max(ui.size.height, 1), height: lh)
+            let h = lh * OccasionFlatLogo.scale
+            if let ui = image(OccasionFlatLogo.path(logo)) {
+                Image(uiImage: ui).resizable().frame(width: h * ui.size.width / max(ui.size.height, 1), height: h)
+                    .padding(.vertical, (lh - h) / 2)
                     .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
             } else {
-                Color.clear.frame(width: lh * 900 / 831, height: lh)
+                Color.clear.frame(width: h * OccasionFlatLogo.aspect, height: lh)
             }
             LinearGradient(colors: [color, color.opacity(0)], startPoint: .leading, endPoint: .trailing)
                 .frame(width: lineW, height: 2)

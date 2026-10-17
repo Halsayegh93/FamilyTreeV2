@@ -205,7 +205,8 @@ extension OccasionPostView {
                 text(value("title"), .extrabold, 36 * k, color: OccasionDeathPalette.soft, lineHeight: 1.35)
             }
             if has("name") {
-                nameLine("name", color: .white)
+                // الاسم بذهبي الوفاة (occ-obituary-gold) مثل النموذجين ٢ و٣
+                nameLine("name", color: OccasionDeathPalette.gold)
                     .shadow(color: .black.opacity(0.65), radius: 13 * k, x: 0, y: 10 * k)
             }
         }
@@ -285,13 +286,15 @@ extension OccasionPostView {
     /// الشعار وحده (نموذج ١ — بدون الخطين)
     private func m1Logo(_ name: String, height lh: CGFloat) -> some View {
         Group {
-            if let ui = image("logo/\(name).png") {
+            let h = lh * OccasionFlatLogo.scale
+            if let ui = image(OccasionFlatLogo.path(name)) {
                 Image(uiImage: ui)
                     .resizable()
-                    .frame(width: lh * ui.size.width / max(ui.size.height, 1), height: lh)
+                    .frame(width: h * ui.size.width / max(ui.size.height, 1), height: h)
+                    .padding(.vertical, (lh - h) / 2)
                     .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
             } else {
-                Color.clear.frame(width: lh * 900 / 831, height: lh)
+                Color.clear.frame(width: h * OccasionFlatLogo.aspect, height: lh)
             }
         }
     }
