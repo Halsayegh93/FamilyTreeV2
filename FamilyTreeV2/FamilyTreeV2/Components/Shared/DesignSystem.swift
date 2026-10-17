@@ -157,7 +157,10 @@ enum DS {
         static let newsInvitation   = SwiftUI.Color.adaptive(light: "#7C3E4C", dark: "#ECA8B2") // عنّابي
 
         // Status Colors
-        static let deceased         = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#808080") // رمادي هادي
+        /// المتوفّى — رصاصي العائلة (slate) للنص والأيقونات والحلقات؛ كان #A0A0A0 والأبيض فوقه ٢٫٦:١
+        static let deceased         = slate
+        /// تعبئة المتوفّى تحت نص/أيقونة بيضاء — slateFill الثابت (الأبيض فوقه ٧:١)
+        static let deceasedFill     = slateFill
         static let currentLocation  = SwiftUI.Color.adaptive(light: "#2C623B", dark: "#9ACDA1") // أخضر
         static let likeAction       = newsWedding // وردي
         /// لون الإناث في شجرة النساء — وردي تراثي موحّد (بدل القيم المرمّزة يدوياً في WomenTreeView/WomenClassicTreeView)
