@@ -1060,21 +1060,57 @@ private enum MembersPDFBuilder {
     private static let rowHeight: CGFloat = 24
     private static let pageBodyTop: CGFloat = 150     // الصفحة الأولى: تحت الهيدر مباشرة (مقرّب)
     private static let pageBodyTopOther: CGFloat = 50 // الصفحات الباقية: قريب من الأعلى
-    private static let border = UIColor(red: 0.89, green: 0.91, blue: 0.93, alpha: 1.0)
-    private static let softGray = UIColor(red: 0.97, green: 0.98, blue: 0.99, alpha: 1.0)
-    private static let headerGray = UIColor(red: 0.94, green: 0.96, blue: 0.97, alpha: 1.0)
-    private static let textPrimary = UIColor(red: 0.06, green: 0.09, blue: 0.16, alpha: 1.0)
-    private static let textMuted = UIColor(red: 0.39, green: 0.45, blue: 0.52, alpha: 1.0)
-    private static let textTertiary = UIColor(red: 0.58, green: 0.64, blue: 0.72, alpha: 1.0)
 
-    private static let titleFont = UIFont.systemFont(ofSize: 26, weight: .black)
-    private static let brandFont = UIFont.systemFont(ofSize: 9, weight: .semibold)
-    private static let bodyFont = UIFont.systemFont(ofSize: 10, weight: .regular)
-    private static let bodyBoldFont = UIFont.systemFont(ofSize: 10, weight: .semibold)
-    private static let metaFont = UIFont.systemFont(ofSize: 9, weight: .regular)
-    private static let metaBoldFont = UIFont.systemFont(ofSize: 9, weight: .bold)
-    private static let smallFont = UIFont.systemFont(ofSize: 8.5, weight: .medium)
-    private static let branchFont = UIFont.systemFont(ofSize: 11, weight: .bold)
+    // MARK: ألوان الهوية — ثابتة: الورقة فاتحة دائماً فلا تتبع الوضع الداكن للجهاز
+    private static func rgb(_ hex: UInt32) -> UIColor {
+        UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255,
+                green: CGFloat((hex >> 8) & 0xFF) / 255,
+                blue: CGFloat(hex & 0xFF) / 255,
+                alpha: 1)
+    }
+    /// navy — العناوين ونص الجدول (ink)
+    private static let navy = rgb(0x172536)
+    /// gold — الخطوط الفاصلة
+    private static let gold = rgb(0xB89A5A)
+    /// cream — لوحة رأس الجدول
+    private static let cream = rgb(0xF2EBDD)
+    /// sand — الصفوف المتبادلة
+    private static let sand = rgb(0xFCF7EC)
+    /// line — حدود الصفوف
+    private static let line = rgb(0xDCCFB4)
+    private static let textPrimary = navy            // ink
+    private static let textMuted = rgb(0x4A5560)     // ink-muted
+
+    // MARK: خط الهوية — IBM Plex Sans Arabic (نفس أسماء DS.Font.Plex)، وخط النظام احتياطاً
+    private static func plex(_ name: String, _ size: CGFloat, fallback weight: UIFont.Weight) -> UIFont {
+        UIFont(name: name, size: size) ?? UIFont.systemFont(ofSize: size, weight: weight)
+    }
+    private static let titleFont = plex(DS.Font.Plex.bold, 26, fallback: .bold)
+    private static let brandFont = plex(DS.Font.Plex.semibold, 9, fallback: .semibold)
+    private static let bodyFont = plex(DS.Font.Plex.regular, 10, fallback: .regular)
+    private static let bodyBoldFont = plex(DS.Font.Plex.semibold, 10, fallback: .semibold)
+    private static let metaFont = plex(DS.Font.Plex.regular, 9, fallback: .regular)
+    private static let metaBoldFont = plex(DS.Font.Plex.bold, 9, fallback: .bold)
+    private static let smallFont = plex(DS.Font.Plex.medium, 8.5, fallback: .medium)
+    private static let branchFont = plex(DS.Font.Plex.bold, 11, fallback: .bold)
+
+    /// ارتفاع سطر واحد للخط — Plex أطول سطراً من خط النظام، فالمستطيلات تُحسب منه حتى لا يُقصّ النص
+    private static func lineBox(_ font: UIFont) -> CGFloat { ceil(font.lineHeight) + 2 }
+
+    /// يصغّر الخط حتى يتسع النص في سطر واحد (بحد أدنى) — للعنوان المخصّص الطويل
+    private static func fitted(_ text: String, font: UIFont, maxWidth: CGFloat, minSize: CGFloat) -> UIFont {
+        var result = font
+        while result.pointSize > minSize,
+              (text as NSString).size(withAttributes: [.font: result]).width > maxWidth {
+            result = result.withSize(result.pointSize - 1)
+        }
+        return result
+    }
+
+    /// الشعار المسطّح الكحلي — نسخة الوضع الفاتح دائماً (الورقة بيضاء)
+    private static var logoImage: UIImage? {
+        UIImage(named: "FamilyLogoNavy", in: nil, compatibleWith: UITraitCollection(userInterfaceStyle: .light))
+    }
 
     private struct ReportColumn {
         let title: String
@@ -1098,7 +1134,8 @@ private enum MembersPDFBuilder {
         branchName: String? = nil,
         filterLabel: String? = nil
     ) throws -> Data {
-        let uiAccent = UIColor(accent)
+        // ألوان الوثيقة من الهوية (كحلي وذهبي وكريمي) — لون نوع التقرير يبقى في الواجهة فقط
+        let uiAccent = navy
 
         var columns: [ReportColumn] = [
             ReportColumn(title: "م", ratio: 0.06) { _, index in "\(index)" }
@@ -1113,7 +1150,7 @@ private enum MembersPDFBuilder {
             })
         }
 
-        let fieldLabels = fields.map { $0.label }.joined(separator: " • ")
+        let fieldLabels = fields.map { $0.label }.joined(separator: " · ")
 
         return try makeMembersTableReport(
             members: members,
@@ -1130,10 +1167,7 @@ private enum MembersPDFBuilder {
         try makeMembersTableReport(
             members: members,
             filters: filters,
-            theme: PDFTheme(
-                accent: UIColor(red: 0.21, green: 0.46, blue: 0.78, alpha: 1),
-                title: "تقرير الهواتف"
-            ),
+            theme: PDFTheme(accent: navy, title: "تقرير الهواتف"),
             columns: [
                 ReportColumn(title: "م", ratio: 0.10) { _, index in "\(index)" },
                 ReportColumn(title: "الاسم الكامل", ratio: 0.42) { member, _ in member.fullName },
@@ -1147,10 +1181,7 @@ private enum MembersPDFBuilder {
         try makeMembersTableReport(
             members: members,
             filters: filters,
-            theme: PDFTheme(
-                accent: UIColor(red: 0.18, green: 0.55, blue: 0.51, alpha: 1),
-                title: "تقرير الأعمار"
-            ),
+            theme: PDFTheme(accent: navy, title: "تقرير الأعمار"),
             columns: [
                 ReportColumn(title: "م", ratio: 0.08) { _, index in "\(index)" },
                 ReportColumn(title: "الاسم الكامل", ratio: 0.56) { member, _ in member.fullName },
@@ -1164,10 +1195,7 @@ private enum MembersPDFBuilder {
         try makeMembersTableReport(
             members: members,
             filters: filters,
-            theme: PDFTheme(
-                accent: UIColor(red: 0.33, green: 0.41, blue: 0.57, alpha: 1),
-                title: "تقرير الأسماء"
-            ),
+            theme: PDFTheme(accent: navy, title: "تقرير الأسماء"),
             columns: [
                 ReportColumn(title: "م", ratio: 0.10) { _, index in "\(index)" },
                 ReportColumn(title: "الاسم الكامل", ratio: 0.90) { member, _ in member.fullName }
@@ -1179,10 +1207,7 @@ private enum MembersPDFBuilder {
         try makeMembersTableReport(
             members: members,
             filters: filters,
-            theme: PDFTheme(
-                accent: UIColor(red: 0.63, green: 0.49, blue: 0.23, alpha: 1),
-                title: "تقرير الأعضاء بدون هاتف"
-            ),
+            theme: PDFTheme(accent: navy, title: "تقرير الأعضاء بدون هاتف"),
             columns: [
                 ReportColumn(title: "م", ratio: 0.10) { _, index in "\(index)" },
                 ReportColumn(title: "الاسم الكامل", ratio: 0.90) { member, _ in member.fullName }
@@ -1196,7 +1221,7 @@ private enum MembersPDFBuilder {
         let filters: [String]
         let accent: UIColor
         let branchName: String?      // اسم الفرع لو محدد
-        let fieldLabels: String?     // أسماء الحقول مفصولة بـ •
+        let fieldLabels: String?     // أسماء الحقول مفصولة بـ ·
         let filterLabel: String?     // فلتر الأعضاء (أحياء/متوفون...)
         let reportNumber: String     // رقم تقرير قصير
     }
@@ -1252,7 +1277,7 @@ private enum MembersPDFBuilder {
         let format = UIGraphicsPDFRendererFormat()
         format.documentInfo = [
             kCGPDFContextTitle as String: title,
-            kCGPDFContextAuthor as String: "AlmohamadAli"
+            kCGPDFContextAuthor as String: "Al-Mohammad Ali family"
         ]
         return UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight), format: format)
     }
@@ -1263,115 +1288,136 @@ private enum MembersPDFBuilder {
         UIBezierPath(rect: CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)).fill()
         // الهيدر فقط في الصفحة الأولى
         if pageNumber == 1 {
-            drawHeaderCard(context: context)
-            return pageBodyTop
+            let headerBottom = drawHeaderCard(context: context)
+            return max(pageBodyTop, headerBottom + 14)
         } else {
             return pageBodyTopOther
         }
     }
 
-    private static func drawHeaderCard(context: ReportContext) {
+    /// رأس الصفحة الأولى — يرجع أسفل آخر سطر رُسم
+    private static func drawHeaderCard(context: ReportContext) -> CGFloat {
         let leftEdge = margin
         let rightEdge = pageWidth - margin
-        let topY: CGFloat = 36
-        let contentWidth = rightEdge - leftEdge
+        let topY: CGFloat = 32
 
-        // (1) شعار العائلة "ALMOHAMMADALI FAMILY" — يمين أعلى الصفحة (RTL = visual right)
-        let brand = "ALMOHAMMADALI FAMILY"
+        // (1) الشعار المسطّح الكحلي — يمين أعلى الصفحة (بداية القراءة)، بلا إطار ولا ظل،
+        // ومسافة آمنة ربع ارتفاعه بينه وبين النص
+        let logoHeight: CGFloat = 46
+        let logoWidth = logoHeight * 710.061 / 529.415
+        let clearSpace = logoHeight / 4
+        var textRight = rightEdge
+        if let logo = logoImage {
+            logo.draw(in: CGRect(x: rightEdge - logoWidth, y: topY, width: logoWidth, height: logoHeight))
+            textRight = rightEdge - logoWidth - clearSpace
+        }
+        let dateColumnWidth: CGFloat = 170
+        let textLeft = leftEdge + dateColumnWidth
+        let textWidth = max(textRight - textLeft, 120)
+
+        // (2) اسم العائلة بالحروف اللاتينية — فوق العنوان
+        let brandH = lineBox(brandFont)
         drawRTLText(
-            brand,
-            in: CGRect(x: leftEdge, y: topY, width: contentWidth, height: 12),
+            "Al-Mohammad Ali family",
+            in: CGRect(x: textLeft, y: topY, width: textWidth, height: brandH),
             font: brandFont,
-            color: textTertiary,
-            alignment: .right,
-            kern: 2.5
+            color: textMuted,
+            alignment: .right
         )
 
-        // (2) التاريخ + رقم التقرير — يسار أعلى الصفحة
-        let dateStr = formattedFullDate()
+        // (3) التاريخ + رقم التقرير — يسار أعلى الصفحة
+        let dateH = lineBox(metaBoldFont)
         drawRTLText(
-            dateStr,
-            in: CGRect(x: leftEdge, y: topY, width: 220, height: 12),
+            formattedFullDate(),
+            in: CGRect(x: leftEdge, y: topY, width: dateColumnWidth, height: dateH),
             font: metaBoldFont,
             color: textPrimary,
             alignment: .left
         )
         drawRTLText(
             "تقرير #\(context.reportNumber)",
-            in: CGRect(x: leftEdge, y: topY + 14, width: 220, height: 12),
+            in: CGRect(x: leftEdge, y: topY + dateH, width: dateColumnWidth, height: lineBox(metaFont)),
             font: metaFont,
             color: textMuted,
             alignment: .left
         )
 
-        // (3) عنوان التقرير الرئيسي — كبير وعريض
+        // (4) عنوان التقرير الرئيسي — كحلي عريض، يصغر قليلاً إذا طال العنوان المخصّص
+        let titleY = topY + brandH - 2
+        let fittedTitleFont = fitted(context.title, font: titleFont, maxWidth: textWidth, minSize: 16)
+        let titleH = lineBox(fittedTitleFont)
         drawRTLText(
             context.title,
-            in: CGRect(x: leftEdge, y: topY + 16, width: contentWidth, height: 36),
-            font: titleFont,
-            color: textPrimary,
+            in: CGRect(x: textLeft, y: titleY, width: textWidth, height: titleH),
+            font: fittedTitleFont,
+            color: navy,
             alignment: .right
         )
 
-        // (4) اسم الفرع (لو موجود) — بلون الـ accent + أيقونة شجرة
-        var branchY: CGFloat = topY + 16 + 36
+        // (5) اسم الفرع (لو موجود) — كحلي، تحت العنوان
+        var textBottom = titleY + titleH
         if let branch = context.branchName, !branch.isEmpty {
+            let branchH = lineBox(branchFont)
             drawRTLText(
-                "🌳 فرع \(branch)",
-                in: CGRect(x: leftEdge, y: branchY, width: contentWidth, height: 16),
+                "فرع \(branch)",
+                in: CGRect(x: textLeft, y: textBottom - 2, width: textWidth, height: branchH),
                 font: branchFont,
-                color: context.accent,
+                color: navy,
                 alignment: .right
             )
-            branchY += 18
+            textBottom += branchH
         }
 
-        // (5) خط فاصل خفيف
-        let separatorY = branchY + 6
+        // (6) خط فاصل ذهبي — تحت الشعار والعنوان
+        let separatorY = max(textBottom, topY + logoHeight + clearSpace) + 2
         let separator = UIBezierPath()
         separator.move(to: CGPoint(x: leftEdge, y: separatorY))
         separator.addLine(to: CGPoint(x: rightEdge, y: separatorY))
-        separator.lineWidth = 0.6
-        border.setStroke()
+        separator.lineWidth = 0.8
+        gold.setStroke()
         separator.stroke()
 
-        // (6) سطر التفاصيل: العدد + الفلتر + الحقول
+        // (7) سطر التفاصيل: العدد + الفلتر + الحقول
         let metaY = separatorY + 6
         var metaParts: [String] = []
-        metaParts.append("👥 العدد: \(context.count) عضو")
+        metaParts.append("العدد: \(context.count) عضو")
         if let f = context.filterLabel, !f.isEmpty {
-            metaParts.append("🏷️ الفلتر: \(f)")
+            metaParts.append("الفلتر: \(f)")
         }
         if let fields = context.fieldLabels, !fields.isEmpty {
-            metaParts.append("📋 الحقول: \(fields)")
+            metaParts.append("الحقول: \(fields)")
         }
+        let metaH = lineBox(metaFont)
         drawRTLText(
             metaParts.joined(separator: "    "),
-            in: CGRect(x: leftEdge, y: metaY, width: contentWidth, height: 14),
+            in: CGRect(x: leftEdge, y: metaY, width: rightEdge - leftEdge, height: metaH),
             font: metaFont,
             color: textMuted,
             alignment: .right
         )
+        return metaY + metaH
     }
 
     private static func formattedFullDate() -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ar")
+        // أسماء الأيام والأشهر بالعربي، والأرقام لاتينية (الهوية)
+        f.locale = Locale(identifier: "ar@numbers=latn")
         f.dateFormat = "EEEE، d MMMM، yyyy"
         return f.string(from: Date())
     }
 
     private static func drawTableHeader(y: CGFloat, columns: [ReportColumn], accent: UIColor) {
         let rect = CGRect(x: margin, y: y, width: pageWidth - margin * 2, height: rowHeight)
-        fillRoundedRect(rect, color: accent.withAlphaComponent(0.12))
-        strokeRoundedRect(rect, color: border, lineWidth: 0.8)
-        drawColumns(columns.map(\.title), columns: columns, y: y, textColor: textPrimary, font: bodyBoldFont)
+        // لوحة كريمية بحد line ونص كحلي
+        fillRoundedRect(rect, color: cream)
+        strokeRoundedRect(rect, color: line, lineWidth: 0.8)
+        drawColumns(columns.map(\.title), columns: columns, y: y, textColor: navy, font: bodyBoldFont)
     }
 
     private static func drawTableRow(y: CGFloat, index: Int, member: FamilyMember, columns: [ReportColumn], isEven: Bool) {
         let rect = CGRect(x: margin, y: y, width: pageWidth - margin * 2, height: rowHeight)
-        fillRoundedRect(rect, color: isEven ? softGray : UIColor.white)
-        strokeRoundedRect(rect, color: border.withAlphaComponent(0.7), lineWidth: 0.8)
+        fillRoundedRect(rect, color: isEven ? sand : UIColor.white)
+        strokeRoundedRect(rect, color: line.withAlphaComponent(0.7), lineWidth: 0.8)
         let texts = columns.map { $0.value(member, index) }
         drawColumns(texts, columns: columns, y: y, textColor: textPrimary, font: bodyFont)
     }
@@ -1379,10 +1425,13 @@ private enum MembersPDFBuilder {
     private static func drawColumns(_ texts: [String], columns: [ReportColumn], y: CGFloat, textColor: UIColor, font: UIFont) {
         let totalWidth = pageWidth - margin * 2 - 16
         var cursor = pageWidth - margin - 8
+        // سطر واحد في وسط الصف بارتفاع سطر الخط كاملاً
+        let textH = lineBox(font)
+        let textY = y + (rowHeight - textH) / 2
 
         for (index, column) in columns.enumerated() {
             let width = totalWidth * column.ratio
-            let rect = CGRect(x: cursor - width, y: y + 5, width: width - 8, height: rowHeight - 10)
+            let rect = CGRect(x: cursor - width, y: textY, width: width - 8, height: textH)
             drawRTFText(texts[index], in: rect, font: font, color: textColor)
             cursor -= width
         }
@@ -1391,15 +1440,16 @@ private enum MembersPDFBuilder {
     private static func drawFooter(pageNumber: Int, drawNow: Bool = true) {
         guard drawNow || UIGraphicsGetCurrentContext() != nil else { return }
         let lineY = pageHeight - 38
-        UIColor.systemGray5.setStroke()
+        gold.setStroke()
         let path = UIBezierPath()
         path.move(to: CGPoint(x: margin, y: lineY))
         path.addLine(to: CGPoint(x: pageWidth - margin, y: lineY))
-        path.lineWidth = 1
+        path.lineWidth = 0.6
         path.stroke()
 
-        drawRTFText("AlmohamadAli", in: CGRect(x: margin, y: lineY + 6, width: 160, height: 14), font: smallFont, color: textMuted)
-        drawRTFText("صفحة \(pageNumber)", in: CGRect(x: pageWidth - margin - 100, y: lineY + 6, width: 100, height: 14), font: smallFont, color: textMuted)
+        let footerH = lineBox(smallFont)
+        drawRTLText("Al-Mohammad Ali family", in: CGRect(x: margin, y: lineY + 6, width: 200, height: footerH), font: smallFont, color: textMuted, alignment: .left)
+        drawRTFText("صفحة \(pageNumber)", in: CGRect(x: pageWidth - margin - 100, y: lineY + 6, width: 100, height: footerH), font: smallFont, color: textMuted)
     }
 
     private static func formattedNow() -> String {
@@ -1425,6 +1475,7 @@ private enum MembersPDFBuilder {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .right
         paragraph.baseWritingDirection = .rightToLeft
+        paragraph.lineBreakMode = .byTruncatingTail
         (text as NSString).draw(
             in: rect,
             withAttributes: [
@@ -1435,24 +1486,23 @@ private enum MembersPDFBuilder {
         )
     }
 
-    /// رسم نص بمحاذاة يسار/يمين/وسط مع دعم RTL والتباعد الحرفي
+    /// رسم نص سطر واحد بمحاذاة يسار/يمين/وسط مع دعم RTL (بلا تباعد حرفي — الهوية لا تباعد العربي)
     private static func drawRTLText(
         _ text: String,
         in rect: CGRect,
         font: UIFont,
         color: UIColor,
-        alignment: NSTextAlignment = .right,
-        kern: CGFloat = 0
+        alignment: NSTextAlignment = .right
     ) {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = alignment
         paragraph.baseWritingDirection = .rightToLeft
-        var attrs: [NSAttributedString.Key: Any] = [
+        paragraph.lineBreakMode = .byTruncatingTail
+        let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: color,
             .paragraphStyle: paragraph
         ]
-        if kern > 0 { attrs[.kern] = kern }
         (text as NSString).draw(in: rect, withAttributes: attrs)
     }
 
