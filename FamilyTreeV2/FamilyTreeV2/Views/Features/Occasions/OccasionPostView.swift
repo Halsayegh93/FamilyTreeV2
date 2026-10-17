@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
 
-// MARK: - رسم بوست المناسبة بمقاسه الحقيقي (نقطة = بكسل) — نموذج ٢، ونموذج ١ في OccasionModel1View.swift
+// MARK: - رسم بوست المناسبة بمقاسه الحقيقي (نقطة = بكسل) — نموذج ٢، ونموذج ١ في OccasionModel1View.swift،
+// ونموذج ٣ (المعتمد) في OccasionModel3View.swift
 //
 // نفس تخطيط الموقع (familytree-web/src/components/occasions/OccasionPost.tsx)، وكل قالب مع صورة وبدون صورة.
 // الرسم بإحداثيات ثابتة من اليسار لليمين (LTR) حتى يطلع نفس الشكل مهما كانت لغة التطبيق؛
@@ -24,7 +25,7 @@ struct OccasionPostView: View {
     let kit: OccasionKit
     /// يتغيّر لما تتوفّر ملفات جديدة — يضمن تحديث الرسم
     let revision: Int
-    /// نموذج ١ أو نموذج ٢ (القالب اللي ما له نموذج ١ يرجع لنموذج ٢)
+    /// نموذج ١ أو ٢ أو ٣ (القالب اللي ما له نموذج ١ يرجع لنموذج ٢)
     var model: OccasionModel = .m2
     /// التهاني: «مع صورة» أو «بدون صورة» (الوفاة قالبين، ومشاركة العزاء بدون صورة)
     var withPhoto: Bool = true
@@ -40,7 +41,9 @@ struct OccasionPostView: View {
 
     @ViewBuilder
     private var content: some View {
-        if template.effectiveModel(model) == .m1 {
+        if template.effectiveModel(model) == .m3 {
+            m3Post
+        } else if template.effectiveModel(model) == .m1 {
             switch template.kind {
             case .happy:
                 if template.showsPhoto(withPhoto) { m1HappyPost } else { m1HappyNoPhotoPost }

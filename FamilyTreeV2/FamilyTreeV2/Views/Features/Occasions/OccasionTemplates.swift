@@ -1,7 +1,8 @@
 import SwiftUI
 import CoreGraphics
 
-// MARK: - بوستات المناسبات — نموذج ١ (صورة دائرية فوق) ونموذج ٢ (صورة جانبية داخل إطار سداسي)
+// MARK: - بوستات المناسبات — نموذج ١ (صورة دائرية فوق)، نموذج ٢ (صورة جانبية داخل إطار سداسي)،
+// ونموذج ٣ (المعتمد: الآية بالمخطوطة فوق والصورة بقوس يطلع من بطاقة — بياناته في OccasionModel3View.swift)
 //
 // نسخة مطابقة لتعريفات الموقع: familytree-web/src/lib/occasions/templates.ts
 // أي تعديل على النصوص أو الألوان أو المقاسات لازم ينعكس في الثنين.
@@ -66,16 +67,21 @@ struct OccasionPlacement: Identifiable, Hashable {
 
 // MARK: النموذج
 
-/// نموذج ١ (صورة دائرية فوق، اسم كبير، كبسولة متدرجة) أو نموذج ٢ (صورة جانبية داخل إطار سداسي)
+/// نموذج ١ (صورة دائرية فوق، اسم كبير، كبسولة متدرجة)، نموذج ٢ (صورة جانبية داخل إطار سداسي)،
+/// أو نموذج ٣ (المعتمد منذ 17/10/2026: صورة بقوس فوق بطاقة رملية)
 enum OccasionModel: String, CaseIterable, Identifiable {
-    case m1, m2
+    case m1, m2, m3
 
     var id: String { rawValue }
+
+    /// النموذج المعتمد حالياً (تفتح عليه الشاشة) — نفس DEFAULT_MODEL في الموقع
+    static let standard: OccasionModel = .m3
 
     var title: String {
         switch self {
         case .m1: return L10n.t("نموذج ١", "Design 1")
         case .m2: return L10n.t("نموذج ٢", "Design 2")
+        case .m3: return L10n.t("نموذج ٣", "Design 3")
         }
     }
 
@@ -84,6 +90,16 @@ enum OccasionModel: String, CaseIterable, Identifiable {
         switch self {
         case .m1: return L10n.t("صورة دائرية فوق", "Round photo on top")
         case .m2: return L10n.t("صورة سداسية جانبية", "Hexagon photo at the side")
+        case .m3: return L10n.t("صورة بقوس فوق بطاقة", "Arched photo over a card")
+        }
+    }
+
+    /// رسمة النموذج في الاختيار: دائرة (١)، سداسي (٢)، رأس مقوّس (٣) — مثل رسمات الموقع
+    var symbol: String {
+        switch self {
+        case .m1: return "circle.circle"
+        case .m2: return "hexagon"
+        case .m3: return "rectangle.roundedtop"
         }
     }
 }
@@ -259,8 +275,14 @@ struct OccasionTemplate: Identifiable {
     /// له تصميم «نموذج ١»؟
     var hasModel1: Bool { kind == .happy ? m1 != nil : true }
 
-    /// النموذج اللي ينرسم فعلاً (القالب اللي ما له نموذج ١ يرجع لنموذج ٢)
-    func effectiveModel(_ model: OccasionModel) -> OccasionModel { model == .m1 && hasModel1 ? .m1 : .m2 }
+    /// النموذج اللي ينرسم فعلاً (نموذج ٣ لكل القوالب؛ القالب اللي ما له نموذج ١ يرجع لنموذج ٢)
+    func effectiveModel(_ model: OccasionModel) -> OccasionModel {
+        if model == .m3 { return .m3 }
+        return model == .m1 && hasModel1 ? .m1 : .m2
+    }
+
+    /// النماذج المتاحة لهذا القالب (لاختيار النموذج في الشاشة)
+    var models: [OccasionModel] { OccasionModel.allCases.filter { $0 != .m1 || hasModel1 } }
 
     /// المستخدم يختار «مع صورة / بدون صورة»؟ (التهاني فقط — الوفاة قالبين، ومشاركة العزاء بدون صورة)
     var photoOptional: Bool { kind == .happy && noPhoto != nil }
@@ -272,6 +294,23 @@ struct OccasionTemplate: Identifiable {
     func assetPaths(for size: OccasionSize, model: OccasionModel = .m2, withPhoto: Bool = true) -> [String] {
         let photo = showsPhoto(withPhoto)
         var paths: [String] = []
+        if effectiveModel(model) == .m3 {
+            // نموذج ٣: المخطوطات (PNG — نسخة من SVG الموقع)، الختم النافر، والشعار الكريمي
+            switch kind {
+            case .happy:
+                let v = OccasionM3.happyVerse(id)
+                paths += ["m3/verse/\((photo ? v.photo : v.noPhoto).file).png", "m3/verse/\((photo ? v.echo : v.echoNP).file).png",
+                          "m3/wm/emboss-sand.png"]
+            case .death, .deathText:
+                let v = kind == .death ? OccasionM3.deathPhotoVerse : OccasionM3.deathNoPhotoVerse
+                paths += ["m3/verse/\(v.lead.file).png", "m3/verse/\(v.inna.file).png", "m3/verse/\(v.echo.file).png", "m3/wm/emboss-dark.png"]
+            case .solace:
+                let v = OccasionM3.solaceVerse
+                paths += ["m3/verse/\(v.lead.file).png", "m3/verse/\(v.inna.file).png", "m3/verse/\(v.echo.file).png", "m3/wm/emboss-white.png"]
+            }
+            paths.append("logo/flat-cream.png")
+            return paths
+        }
         if effectiveModel(model) == .m1 {
             // نموذج ١: خلفية وحدة لكل قالب تغطي أي مقاس (occasion-kit/m1)
             switch kind {
@@ -350,6 +389,24 @@ extension OccasionTemplate {
         let photo = showsPhoto(withPhoto)
         func slot(_ weight: OccasionKit.FontWeight, _ s: CGFloat, _ width: CGFloat, _ lineHeight: CGFloat) -> OccasionNameSlot {
             OccasionNameSlot(weight: weight, size: s, width: width, lineHeight: lineHeight)
+        }
+        if effectiveModel(model) == .m3 {
+            // نموذج ٣ يُرسم بمقاس التصميم في كل المقاسات (المربع مصغّر كله) — فالأسطر نفسها. نفس nameSlots في الموقع
+            let N = OccasionM3.Names.self
+            switch kind {
+            case .happy:
+                let n = photo ? N.happy : N.happyNoPhoto
+                return ["name": slot(.extrabold, n.size, n.width, n.lineHeight)]
+            case .death, .deathText:
+                let k: CGFloat = kind == .death ? 1 : OccasionM3.deathTextK
+                let name = slot(.extrabold, (N.death.size * k).rounded(), N.death.width, N.death.lineHeight)
+                let rel = slot(.semibold, (N.deathRelation.size * k).rounded(), N.deathRelation.width, N.deathRelation.lineHeight)
+                if kind == .death { return ["name": name, "relation": rel] }
+                return ["name": name, "rel1": rel, "rel2": rel, "rel3": rel]
+            case .solace:
+                return ["to": slot(.extrabold, N.solaceTo.size, N.solaceTo.width, N.solaceTo.lineHeight),
+                        "name": slot(.extrabold, N.solaceName.size, N.solaceName.width, N.solaceName.lineHeight)]
+            }
         }
         if effectiveModel(model) == .m1 {
             switch kind {
