@@ -16,8 +16,9 @@ final class OccasionComposerViewModel: ObservableObject {
     @Published private(set) var member: FamilyMember?
     /// الصيغة المطلوبة لكل عنصر اسم (عدد الأسماء) — الافتراضي الأطول؛ اللي ما يدخل بسطر يختصر تلقائياً
     @Published var nameCounts: [String: Int] = [:]
-    /// نموذج ١ (صورة دائرية فوق) أو نموذج ٢ (صورة سداسية جانبية) — الافتراضي نموذج ٢ مثل الموقع
-    @Published var model: OccasionModel = .m2
+    /// نموذج ١ (صورة دائرية فوق)، نموذج ٢ (صورة سداسية جانبية)، أو نموذج ٣ (صورة بقوس فوق بطاقة) —
+    /// الافتراضي المعتمد (نموذج ٣) مثل الموقع
+    @Published var model: OccasionModel = .standard
     /// التهاني: «مع صورة» أو «بدون صورة» (يبقى لما يتغيّر القالب مثل النموذج)
     @Published var withPhoto = true
     @Published var photo = OccasionPhoto()

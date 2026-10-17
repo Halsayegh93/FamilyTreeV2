@@ -71,7 +71,7 @@ struct OccasionComposerView: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.xxl) {
                     preview.id("preview")
                     templateSection
-                    if vm.template.hasModel1 { modelSection }
+                    if vm.template.models.count > 1 { modelSection }
                     placementSection
                     detailsSection
                     // التهاني: القسم دايماً (فيه «بدون صورة»)؛ الوفاة مع صورة: الصورة؛ الباقي بدون صورة
@@ -250,7 +250,7 @@ struct OccasionComposerView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             DSSectionHeader(title: L10n.t("النموذج", "Design"), icon: "rectangle.on.rectangle")
             HStack(spacing: DS.Spacing.sm) {
-                ForEach(OccasionModel.allCases) { m in
+                ForEach(vm.template.models) { m in
                     modelCard(m)
                 }
             }
@@ -262,25 +262,24 @@ struct OccasionComposerView: View {
         return Button {
             withAnimation(DS.Anim.quick) { vm.model = m }
         } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                // دائرة فوق (١) أو سداسي (٢) — نفس رسمة الموقع
-                Image(systemName: m == .m1 ? "circle.circle" : "hexagon")
+            // ثلاث خانات بعرض الشاشة: الرسمة فوق، ثم الاسم وشكل الصورة
+            VStack(spacing: DS.Spacing.xs) {
+                Image(systemName: m.symbol)
                     .font(DS.Font.scaled(20, weight: .semibold))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(m.title)
-                        .font(DS.Font.plex(15, weight: .bold))
-                    // القالب أو النسخة اللي ما فيها صورة (مشاركة العزاء، الوفاة بدون صورة، «بدون صورة») يقول «بدون صورة»
-                    Text(vm.showsPhoto ? m.subtitle : L10n.t("بدون صورة", "No photo"))
-                        .font(DS.Font.plex(12))
-                        .opacity(0.8)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                Spacer(minLength: 0)
+                Text(m.title)
+                    .font(DS.Font.plex(15, weight: .bold))
+                // القالب أو النسخة اللي ما فيها صورة (مشاركة العزاء، الوفاة بدون صورة، «بدون صورة») يقول «بدون صورة»
+                Text(vm.showsPhoto ? m.subtitle : L10n.t("بدون صورة", "No photo"))
+                    .font(DS.Font.plex(12))
+                    .opacity(0.8)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
             }
             .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.textPrimary)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(maxWidth: .infinity, minHeight: 60)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.md)
+            .frame(maxWidth: .infinity, minHeight: 96)
             .background(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .fill(on ? AnyShapeStyle(DS.Color.gradientPrimary) : AnyShapeStyle(DS.Color.cardBackground))
