@@ -27,12 +27,8 @@ struct AdminRegisterMemberView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [DS.Color.primary.opacity(0.06), DS.Color.background],
-                startPoint: .top,
-                endPoint: .center
-            )
-            .ignoresSafeArea()
+            DS.Color.background
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 ScrollView(showsIndicators: false) {

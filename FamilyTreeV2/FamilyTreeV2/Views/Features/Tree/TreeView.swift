@@ -1364,22 +1364,19 @@ struct TreeMemberNode: View {
     // لون الإطار = نفس لون الدائرة
     private var borderColor: Color { nodeAccentColor }
 
-    // تدرج العقدة
-    private var nodeGradient: LinearGradient {
-        LinearGradient(
-            colors: [nodeAccentColor, nodeAccentColor.opacity(0.6)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    // تعبئة العقدة — لون صلب بلا تدرّج (الهوية). تحت أيقونة الشخص البيضاء يأخذ الكحلي والمتوفّى
+    // تعبئتهما الثابتة (primaryFill / deceasedFill) حتى يبقى الأبيض مقروءاً في الداكن
+    private var nodeFill: Color {
+        if isKinshipHighlighted { return nodeAccentColor }
+        if member.isDeceased == true { return DS.Color.deceasedFill }
+        switch member.role {
+        case .owner, .admin, .monitor, .supervisor: return nodeAccentColor
+        default: return DS.Color.primaryFill
+        }
     }
 
-    private var borderGradient: LinearGradient {
-        LinearGradient(
-            colors: [nodeAccentColor.opacity(0.9), nodeAccentColor.opacity(0.4)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
+    // حلقة العقدة وإطار الاسم — لون الرتبة صلباً
+    private var borderStroke: Color { nodeAccentColor.opacity(0.9) }
 
     var body: some View {
             // الوضع التفاعلي — دائري
@@ -1396,7 +1393,7 @@ struct TreeMemberNode: View {
                     ZStack {
                         // الدائرة الرئيسية — ظل ملوّن ناعم بلون الرتبة (عمق أنظف)
                         Circle()
-                            .fill(nodeGradient)
+                            .fill(nodeFill)
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .shadow(color: nodeAccentColor.opacity(member.isDeceased == true ? 0.12 : 0.26),
                                     radius: 10, x: 0, y: 5)
@@ -1426,9 +1423,9 @@ struct TreeMemberNode: View {
                             .stroke(DS.Color.surface, lineWidth: 2.5)
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
 
-                        // حلقة خارجية بتدرج لون الرتبة (رمادية للمتوفّى — تمييز أوضح)
+                        // حلقة خارجية بلون الرتبة (رصاصية للمتوفّى — تمييز أوضح)
                         Circle()
-                            .stroke(borderGradient, lineWidth: 3)
+                            .stroke(borderStroke, lineWidth: 3)
                             .frame(width: interactiveNodeSize + 6, height: interactiveNodeSize + 6)
                     }
                 }
@@ -1444,13 +1441,7 @@ struct TreeMemberNode: View {
                     // حلقة البحث المتوهجة
                     if searchedMemberID == member.id {
                         Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [DS.Color.primaryDark, DS.Color.primaryDark],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 5
-                            )
+                            .stroke(DS.Color.primaryDark, lineWidth: 5)
                             .frame(width: interactiveNodeSize + 14, height: interactiveNodeSize + 14)
                             .dsGlowShadow()
                     }
@@ -1563,7 +1554,7 @@ struct TreeMemberNode: View {
                             }
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                .stroke(borderGradient, lineWidth: 2.5))
+                                .stroke(borderStroke, lineWidth: 2.5))
                         } else if showName {
                             Text(displayName)
                                 .font(DS.Font.scaled(15, weight: .bold))
@@ -1575,7 +1566,7 @@ struct TreeMemberNode: View {
                                 .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2)
                                 .background(DS.Color.surface)
                                 .clipShape(Capsule())
-                                .overlay(Capsule().stroke(borderGradient, lineWidth: 2.5))
+                                .overlay(Capsule().stroke(borderStroke, lineWidth: 2.5))
                         }
                     }
                     .contentShape(Rectangle())

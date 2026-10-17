@@ -198,13 +198,7 @@ struct AdminModeratorsView: View {
                 let roleIcon = (member.role == .owner || member.role == .admin) ? "shield.fill" : (member.role == .monitor ? "eye.fill" : "star.fill")
 
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [roleColor.opacity(0.3), roleColor.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(roleColor.opacity(DS.Icon.opacity))
                     .frame(width: 50, height: 50)
 
                 Image(systemName: roleIcon)

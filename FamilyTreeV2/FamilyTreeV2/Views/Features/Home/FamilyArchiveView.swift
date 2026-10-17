@@ -598,14 +598,8 @@ struct FamilyArchiveView: View {
             uploaderStrip(for: item, accent: accent)
         }
         .frame(width: cardSide, height: cardSide, alignment: .top)
-        .background(
-            // ورقة: تدرّج خفيف بلون التصنيف من الأعلى
-            LinearGradient(
-                colors: [accent.opacity(0.07), DS.Color.surface],
-                startPoint: .top, endPoint: .center
-            )
-            .background(DS.Color.surface)
-        )
+        // ورقة بيضاء — سطح صلب (الهوية: البطاقات بلا تدرّج)؛ التصنيف في شريط الرافع والإطار
+        .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
@@ -1303,11 +1297,8 @@ struct ArchiveItemViewer: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LinearGradient(
-                    colors: [accent.opacity(0.10), DS.Color.background],
-                    startPoint: .top, endPoint: .center
-                )
-                .ignoresSafeArea()
+                DS.Color.background
+                    .ignoresSafeArea()
 
                 VStack(spacing: DS.Spacing.md) {
                     documentSheet
@@ -1478,8 +1469,7 @@ struct ArchiveItemViewer: View {
         .background(DS.Color.surface)
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(LinearGradient(colors: [accent, accent.opacity(0.6)],
-                                     startPoint: .top, endPoint: .bottom))
+                .fill(accent)
                 .frame(width: 5)
         }
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))

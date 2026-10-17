@@ -948,13 +948,8 @@ struct DSIcon: View {
             .font(DS.Font.icon(iconSize, weight: .bold))
             .foregroundColor(color)
             .frame(width: size, height: size)
-            .background(
-                LinearGradient(
-                    colors: [color.opacity(DS.Icon.opacity), color.opacity(DS.Icon.opacity * 0.4)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            // الهوية: مربّع الأيقونة بلون قسمه ١٥٪ — تعبئة صلبة بلا تدرّج
+            .background(color.opacity(DS.Icon.opacity))
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
     }
 }
@@ -1283,19 +1278,14 @@ struct DSSettingIcon: View {
 
     var body: some View {
         ZStack {
+            // تعبئة صلبة — والكحلي المتكيّف يأخذ primaryFill حتى يبقى الرمز الأبيض مقروءاً في الداكن
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(color == DS.Color.primary ? DS.Color.primaryFill : color)
                 .frame(width: size, height: size)
 
             Image(systemName: name)
                 .font(DS.Font.icon(size * 0.42, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
         }
     }
 }
@@ -1623,12 +1613,7 @@ struct DSMemberAvatar: View {
         ZStack {
             if let urlStr = avatarUrl, let url = URL(string: urlStr) {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [roleColor, roleColor.opacity(0.7)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(roleColor)
                     .frame(width: size, height: size)
 
                 CachedAsyncImage(url: url) { image in

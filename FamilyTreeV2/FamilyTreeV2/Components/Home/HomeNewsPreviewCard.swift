@@ -163,16 +163,9 @@ struct HomeNewsPreviewCard: View {
         .padding(.top, DS.Spacing.xs)
     }
 
-    /// سطح هادئ مع لمسة لونية خفيفة جداً في الزاوية — بلا بقع ملوّنة متعدّدة
+    /// سطح البطاقة — أبيض صلب (الهوية: البطاقات بلا تدرّج)
     private var cardBackground: some View {
-        ZStack(alignment: .topTrailing) {
-            DS.Color.surface
-            LinearGradient(
-                colors: [DS.Color.primary.opacity(0.06), .clear],
-                startPoint: .top,
-                endPoint: .center
-            )
-        }
+        DS.Color.surface
     }
 }
 

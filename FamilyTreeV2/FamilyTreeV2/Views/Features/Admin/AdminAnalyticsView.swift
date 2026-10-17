@@ -557,13 +557,7 @@ struct AdminAnalyticsView: View {
                             .foregroundColor(DS.Color.textSecondary)
 
                         RoundedRectangle(cornerRadius: DS.Radius.sm)
-                            .fill(
-                                LinearGradient(
-                                    colors: [DS.Color.accent, DS.Color.accentLight],
-                                    startPoint: .bottom,
-                                    endPoint: .top
-                                )
-                            )
+                            .fill(DS.Color.accent)
                             .frame(
                                 height: max(CGFloat(month.count) / CGFloat(maxCount) * 100, 4)
                             )
@@ -628,8 +622,7 @@ struct AdminAnalyticsView: View {
                         .fill(color.opacity(0.12))
                         .frame(height: 12)
                     Capsule()
-                        .fill(LinearGradient(colors: [color, color.opacity(0.75)],
-                                             startPoint: .leading, endPoint: .trailing))
+                        .fill(color)
                         .frame(width: max(geo.size.width * percentage, count > 0 ? 6 : 0), height: 12)
                 }
                 .frame(maxHeight: .infinity)

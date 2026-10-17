@@ -396,13 +396,7 @@ struct AdminIncompleteMembersView: View {
             // Avatar
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [DS.Color.warning.opacity(0.3), DS.Color.warning.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(DS.Color.warning.opacity(DS.Icon.opacity))
                     .frame(width: 50, height: 50)
 
                 Text(String(member.fullName.prefix(1)))

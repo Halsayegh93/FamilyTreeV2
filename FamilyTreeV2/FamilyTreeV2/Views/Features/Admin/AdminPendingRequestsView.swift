@@ -251,24 +251,14 @@ struct AdminPendingRequestsView: View {
             VStack(spacing: DS.Spacing.lg) {
 
                 // Accent bar — لون مختلف إذا فيه تطابق
-                LinearGradient(
-                    colors: hasMatches
-                        ? [DS.Color.info, DS.Color.success]
-                        : [DS.Color.warning, DS.Color.warning.opacity(0.6)],
-                    startPoint: .leading, endPoint: .trailing
-                )
-                .frame(height: 4)
-                .cornerRadius(DS.Radius.full)
+                (hasMatches ? DS.Color.info : DS.Color.warning)
+                    .frame(height: 4)
+                    .cornerRadius(DS.Radius.full)
 
                 HStack(spacing: DS.Spacing.lg) {
                     ZStack {
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [DS.Color.warning.opacity(0.3), DS.Color.warning.opacity(0.1)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(DS.Color.warning.opacity(DS.Icon.opacity))
                             .frame(width: 50, height: 50)
 
                         Text(member.fullName.prefix(1))

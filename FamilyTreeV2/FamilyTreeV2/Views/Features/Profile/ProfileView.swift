@@ -298,15 +298,9 @@ struct ProfileView: View {
                     .frame(width: 110, height: 110)
                     .dsGlowShadow()
                 
-                // حلقة gradient
+                // حلقة بلون واحد (الهوية: بلا تدرّج)
                 Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [DS.Color.primary, DS.Color.secondary, DS.Color.primary],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 3
-                    )
+                    .stroke(DS.Color.primary, lineWidth: 3)
                     .frame(width: 106, height: 106)
 
                 if let urlStr = user.avatarUrl, let url = URL(string: urlStr) {

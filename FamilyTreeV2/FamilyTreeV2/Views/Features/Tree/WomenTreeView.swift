@@ -1168,10 +1168,7 @@ private struct WomanDetailSheet: View {
                 if m.isFemale {
                     tint
                 } else {
-                    LinearGradient(
-                        colors: [DS.Color.primary.opacity(0.22), DS.Color.accent.opacity(0.14)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
+                    DS.Color.primary.opacity(DS.Icon.opacity)
                 }
                 Text(String((m.firstName.isEmpty ? m.fullName : m.firstName).prefix(1)))
                     .font(DS.Font.plexFixed(g.size.width * 0.42, weight: .bold))

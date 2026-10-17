@@ -583,12 +583,7 @@ struct TreeSearchOverlay: View {
         HStack(spacing: DS.Spacing.sm) {
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [result.member.roleColor, result.member.roleColor.opacity(0.7)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(result.member.roleColor)
                     .frame(width: 36, height: 36)
 
                 if let urlStr = result.member.avatarUrl, let url = URL(string: urlStr) {

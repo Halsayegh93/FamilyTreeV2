@@ -197,13 +197,9 @@ struct LoginView: View {
     // MARK: - Background
     private var backgroundView: some View {
         ZStack {
-            // تدرج خفيف من أعلى
-            LinearGradient(
-                colors: [DS.Color.primary.opacity(0.06), DS.Color.background],
-                startPoint: .top,
-                endPoint: .center
-            )
-            .ignoresSafeArea()
+            // خلفية صلبة (الهوية: بلا تدرّج)
+            DS.Color.background
+                .ignoresSafeArea()
         }
     }
 

@@ -1419,11 +1419,7 @@ struct MemberDetailsView: View {
                     ProgressView().tint(DS.Color.primary)
                 }
             } else {
-                LinearGradient(
-                    colors: [DS.Color.primary.opacity(0.20), DS.Color.accent.opacity(0.12)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                DS.Color.primary.opacity(DS.Icon.opacity)
                 .overlay(
                     Image(systemName: "person.fill")
                         .font(DS.Font.icon(50))

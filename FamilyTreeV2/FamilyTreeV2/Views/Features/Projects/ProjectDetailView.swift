@@ -359,11 +359,7 @@ struct ProjectDetailView: View {
                 }
             } else {
                 ZStack {
-                    LinearGradient(
-                        colors: [DS.Color.primary.opacity(0.25), DS.Color.accent.opacity(0.20)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+                    DS.Color.primary.opacity(DS.Icon.opacity)
                     Image(systemName: "briefcase.fill")
                         .font(DS.Font.icon(32, weight: .bold))
                         .foregroundColor(DS.Color.primary)

@@ -581,13 +581,10 @@ struct FamilyProjectsView: View {
 
     private var projectPlaceholderCover: some View {
         ZStack {
-            LinearGradient(
-                colors: [DS.Color.primary.opacity(0.30), DS.Color.accent.opacity(0.30)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
+            DS.Color.primaryFill
             Image(systemName: "briefcase.fill")
                 .font(.system(size: 38, weight: .light))
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(DS.Color.textOnPrimary.opacity(0.85))
         }
     }
 

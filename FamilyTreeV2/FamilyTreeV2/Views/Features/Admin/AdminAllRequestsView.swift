@@ -1180,15 +1180,7 @@ struct AdminAllRequestsView: View {
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, 8)
-            .background(
-                Capsule(style: .continuous).fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.82)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            )
+            .background(Capsule(style: .continuous).fill(color))
             .overlay(
                 Capsule(style: .continuous)
                     .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
@@ -1262,12 +1254,7 @@ struct AdminAllRequestsView: View {
                     .foregroundColor(DS.Color.textOnPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(
-                        LinearGradient(
-                            colors: [DS.Color.success, DS.Color.success.opacity(0.8)],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
+                    .background(DS.Color.successFill)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
                 .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
@@ -1532,12 +1519,7 @@ struct AdminAllRequestsView: View {
         return HStack(spacing: 0) {
             // شريط لوني جانبي يشير لنوع الطلب — لمسة احترافية
             Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [accentColor, accentColor.opacity(0.6)],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                )
+                .fill(accentColor)
                 .frame(width: 4)
 
             // المحتوى — قابل للنقر، يفتح تفاصيل الطلب
@@ -3440,23 +3422,15 @@ struct AdminAllRequestsView: View {
     // MARK: - Shared Components
 
     private func accentBar(color: Color) -> some View {
-        LinearGradient(
-            colors: [color, color.opacity(0.7)],
-            startPoint: .leading, endPoint: .trailing
-        )
-        .frame(height: 4)
-        .cornerRadius(DS.Radius.full)
+        color
+            .frame(height: 4)
+            .cornerRadius(DS.Radius.full)
     }
 
     private func iconCircle(icon: String, color: Color, size: CGFloat = 44) -> some View {
         ZStack {
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [color.opacity(0.2), color.opacity(0.08)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
+                .fill(color.opacity(DS.Icon.opacity))
                 .frame(width: size, height: size)
             Image(systemName: icon)
                 .foregroundColor(color)
@@ -3668,12 +3642,7 @@ struct AdminAllRequestsView: View {
                     .shadow(color: color.opacity(0.25), radius: 10, x: 0, y: 5)
                 } else {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [color, color.opacity(0.75)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(color)
                         .frame(width: 72, height: 72)
                         .shadow(color: color.opacity(0.35), radius: 10, x: 0, y: 5)
                     Image(systemName: icon)
@@ -4220,17 +4189,10 @@ struct AdminAllRequestsView: View {
                             Text(approveLabelFor(detail))
                                 .font(DS.Font.scaled(14, weight: .bold))
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    colors: [DS.Color.success, DS.Color.success.opacity(0.85)],
-                                    startPoint: .leading, endPoint: .trailing
-                                )
-                            )
-                        )
+                        .background(Capsule().fill(DS.Color.successFill))
                         .shadow(color: DS.Color.success.opacity(0.35), radius: 6, x: 0, y: 3)
                     }
                     .buttonStyle(.plain)

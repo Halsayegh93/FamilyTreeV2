@@ -592,13 +592,7 @@ struct AdminDashboardView: View {
         HStack(spacing: 0) {
             // Prominent yellow/orange left accent bar
             RoundedRectangle(cornerRadius: DS.Radius.sm)
-                .fill(
-                    LinearGradient(
-                        colors: [DS.Color.warning, DS.Color.error],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .fill(DS.Color.warning)
                 .frame(width: DS.Spacing.xs)
 
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {

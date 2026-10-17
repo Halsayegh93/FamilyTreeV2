@@ -789,13 +789,7 @@ struct AdminActivateAccountsView: View {
             // Avatar
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [selectedFilter.color.opacity(0.3), selectedFilter.color.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(selectedFilter.color.opacity(DS.Icon.opacity))
                     .frame(width: 50, height: 50)
 
                 Text(String(member.fullName.prefix(1)))

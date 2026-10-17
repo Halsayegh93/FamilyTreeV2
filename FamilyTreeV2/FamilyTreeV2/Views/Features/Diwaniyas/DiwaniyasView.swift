@@ -212,16 +212,7 @@ struct DiwaniyasView: View {
                     .frame(width: 120, height: 120)
 
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                DS.Color.gridDiwaniya.opacity(0.20),
-                                DS.Color.primary.opacity(0.10)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(DS.Color.gridDiwaniya.opacity(DS.Icon.opacity))
                     .frame(width: 96, height: 96)
 
                 Image(systemName: "mappin.slash")
@@ -274,14 +265,9 @@ struct DiwaniyasView: View {
                     ZStack {
                         Circle()
                             .fill(
-                                LinearGradient(
-                                    colors: isPending
-                                        ? [DS.Color.warning.opacity(0.2), DS.Color.warning.opacity(0.1)]
-                                        : (isClosed
-                                            ? [DS.Color.textTertiary.opacity(0.3), DS.Color.textTertiary.opacity(0.1)]
-                                            : [DS.Color.gridDiwaniya.opacity(0.2), DS.Color.primary.opacity(0.1)]),
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                )
+                                (isPending ? DS.Color.warning
+                                    : (isClosed ? DS.Color.textTertiary : DS.Color.gridDiwaniya))
+                                    .opacity(DS.Icon.opacity)
                             )
                             .frame(width: DS.Icon.size, height: DS.Icon.size)
                         Image(systemName: item.imageUrl ?? "map.fill")
