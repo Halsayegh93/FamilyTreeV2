@@ -728,8 +728,8 @@ struct AdminMemberDetailSheet: View {
             if result.isDuplicate, let existing = result.existingMember {
                 let existingPhone = KuwaitPhone.display(existing.phoneNumber)
                 phoneDuplicateWarning = L10n.t(
-                    "⚠️ الرقم مستخدم من: \(existing.firstName) — \(existingPhone) (\(existing.fullName))",
-                    "⚠️ Used by: \(existing.firstName) — \(existingPhone) (\(existing.fullName))"
+                    "الرقم مستخدم من: \(existing.firstName) — \(existingPhone) (\(existing.fullName))",
+                    "Used by: \(existing.firstName) — \(existingPhone) (\(existing.fullName))"
                 )
             } else {
                 phoneDuplicateWarning = nil

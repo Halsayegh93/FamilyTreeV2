@@ -6,7 +6,7 @@ struct AdminNotificationsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
 
-    @State private var title = "عائلة المحمدعلي 🌿"
+    @State private var title = "عائلة المحمدعلي"
     @State private var bodyText = ""
     @State private var selectedMemberIds: Set<UUID> = []
     @State private var searchText = ""
@@ -25,7 +25,7 @@ struct AdminNotificationsView: View {
     /// العنوان: قائمة جاهزة افتراضياً، ويمكن كتابة عنوان مخصّص
     @State private var useCustomTitle = false
     static let presetTitles = [
-        "عائلة المحمدعلي 🌿",
+        "عائلة المحمدعلي",
         "إعلان من الإدارة",
         "تذكير",
         "دعوة",

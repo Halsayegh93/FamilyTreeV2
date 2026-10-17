@@ -333,7 +333,7 @@ class NewsViewModel: ObservableObject {
                     // حفظ داخلي
                     let payload: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
-                        "title": AnyEncodable(L10n.t("إعجاب جديد ❤️", "New Like ❤️")),
+                        "title": AnyEncodable(L10n.t("إعجاب جديد", "New Like")),
                         "body": AnyEncodable(fromAdmin
                             ? L10n.t("الإدارة أعجبت بخبرك", "The admins liked your post")
                             : L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
@@ -410,7 +410,7 @@ class NewsViewModel: ObservableObject {
                 if let creator = currentUser?.id {
                     let payload: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
-                        "title": AnyEncodable(L10n.t("تعليق جديد 💬", "New Comment 💬")),
+                        "title": AnyEncodable(L10n.t("تعليق جديد", "New Comment")),
                         "body": AnyEncodable(fromAdmin
                             ? L10n.t("الإدارة علّقت على خبرك", "The admins commented on your post")
                             : L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
