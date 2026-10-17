@@ -210,7 +210,7 @@ struct AdminTreeHealthView: View {
                                             } label: {
                                                 Label(L10n.t("ربط أب", "Link Father"), systemImage: "person.line.dotted.person")
                                             }
-                                            .tint(DS.Color.info)
+                                            .tint(DS.Color.primaryFill)
                                         }
                                         if memberIssues.contains(.noName) {
                                             Button {

@@ -236,7 +236,7 @@ struct AdminModeratorsView: View {
                             .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 2)
-                            .background(DS.Color.info)
+                            .background(DS.Color.primaryFill)
                             .clipShape(Capsule())
                     }
                 }

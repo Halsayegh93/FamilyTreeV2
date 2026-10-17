@@ -117,7 +117,8 @@ enum DS {
         // Text
         static let textPrimary   = SwiftUI.Color.adaptive(light: "#172536", dark: "#FFFFFF") // ink
         static let textSecondary = SwiftUI.Color.adaptive(light: "#4A5560", dark: "#C9CED5") // ink-muted
-        static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // Slate — مقروء (AA)
+        /// ink-subtle في الهوية — نص ثالث (تلميحات، أسهم الصفوف، الحالات المعطّلة)؛ مقروء (AA) على الأبيض والأسود
+        static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // ink-subtle
         static let textOnPrimary = SwiftUI.Color.white
         static let textGold      = accent // ذهبي
         /// أيقونة/نص فوق مربّع معبّأ بلون متكيّف (مثل palm أو primary): أبيض في الفاتح، وحبر غامق في الداكن
@@ -133,7 +134,8 @@ enum DS {
         /// تعبئة الأزرار والشارات الخضراء/الكهرمانية ذات النص الأبيض — ثابتة في الوضعين (٦٫٤:١ و٥٫٩:١)
         static let successFill = SwiftUI.Color.adaptive(light: "#216C4F", dark: "#216C4F")
         static let warningFill = SwiftUI.Color.adaptive(light: "#875C0A", dark: "#875C0A")
-        static let info    = primary // كحلي
+        /// info — أزرق الإشعارات المحايدة وروابط المساعدة فيها (حالة، كنص وأيقونة). تحت نص أبيض استخدم primaryFill.
+        static let info    = SwiftUI.Color.adaptive(light: "#1F6FA3", dark: "#5FA8DA")
 
         // Role Colors — كل دور بلونه السابق بعمق العائلة (الشارة: النص باللون فوق نفس اللون ١٢٪)
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }

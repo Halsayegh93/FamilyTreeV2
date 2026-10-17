@@ -1823,7 +1823,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
                     }
-                    .tint(DS.Color.info)
+                    .tint(DS.Color.primaryFill)
 
                     Button {
                         healthPhoneMember = member
@@ -2206,7 +2206,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
                     }
-                    .tint(DS.Color.info)
+                    .tint(DS.Color.primaryFill)
 
                     Button {
                         healthPhoneMember = member

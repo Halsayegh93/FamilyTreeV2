@@ -329,7 +329,7 @@ struct AdminActivateAccountsView: View {
                                                 } label: {
                                                     Label(L10n.t("ربط أب", "Link Father"), systemImage: "person.line.dotted.person")
                                                 }
-                                                .tint(DS.Color.info)
+                                                .tint(DS.Color.primaryFill)
                                             }
                                             if isNotActivated(member) {
                                                 Button {
@@ -1401,7 +1401,7 @@ struct LinkFatherSheet: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.md)
-                        .background(selectedFather != nil ? DS.Color.info : DS.Color.textTertiary)
+                        .background(selectedFather != nil ? DS.Color.primaryFill : DS.Color.textTertiary)
                         .cornerRadius(DS.Radius.lg)
                     }
                     .disabled(selectedFather == nil || isSaving)
