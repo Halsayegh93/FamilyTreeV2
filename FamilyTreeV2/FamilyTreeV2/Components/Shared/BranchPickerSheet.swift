@@ -125,7 +125,7 @@ struct BranchPickerSheet: View {
                         }
                     } label: {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.left")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                             .foregroundColor(DS.Color.textSecondary)
                             .frame(width: 22, height: 22)
                             .background(Circle().fill(DS.Color.surface))
@@ -143,7 +143,7 @@ struct BranchPickerSheet: View {
                         HStack(spacing: 4) {
                             if node.member.isDeceased == true {
                                 Image(systemName: "leaf.fill")
-                                    .font(DS.Font.scaled(11))
+                                    .font(DS.Font.icon(11))
                                     .foregroundColor(DS.Color.textTertiary)
                             }
                             Text(node.displayName)

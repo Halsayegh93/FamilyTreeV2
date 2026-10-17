@@ -285,7 +285,7 @@ struct AdminPendingRequestsView: View {
                         if let uname {
                             HStack(spacing: 4) {
                                 Image(systemName: "at")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                     .foregroundColor(DS.Color.primary)
                                 Text(uname)
                                     .font(DS.Font.scaled(11, weight: .bold))
@@ -297,7 +297,7 @@ struct AdminPendingRequestsView: View {
                         if member.fullName.split(whereSeparator: \.isWhitespace).count >= 5 {
                             HStack(spacing: 4) {
                                 Image(systemName: "checkmark.seal.fill")
-                                    .font(DS.Font.scaled(11))
+                                    .font(DS.Font.icon(11))
                                     .foregroundColor(DS.Color.success)
                                 Text(L10n.t("اسم خماسي مكتمل", "Full 5-part name"))
                                     .font(DS.Font.scaled(11))
@@ -308,7 +308,7 @@ struct AdminPendingRequestsView: View {
                         // الوقت والتاريخ
                         HStack(spacing: 3) {
                             Image(systemName: "clock.fill")
-                                .font(DS.Font.scaled(11))
+                                .font(DS.Font.icon(11))
                             Text(registrationTime)
                                 .font(DS.Font.scaled(11, weight: .semibold))
                         }
@@ -317,7 +317,7 @@ struct AdminPendingRequestsView: View {
                         // المصدر
                         HStack(spacing: 3) {
                             Image(systemName: platform == "web" ? "globe" : "iphone")
-                                .font(DS.Font.scaled(11))
+                                .font(DS.Font.icon(11))
                             Text(platform == "web" ? L10n.t("الموقع", "Web") : L10n.t("التطبيق", "App"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
@@ -375,7 +375,7 @@ struct AdminPendingRequestsView: View {
                                     .tint(DS.Color.info)
                             } else {
                                 Image(systemName: "person.2.fill")
-                                    .font(DS.Font.scaled(14, weight: .semibold))
+                                    .font(DS.Font.icon(14, weight: .semibold))
                             }
                             Text(L10n.t("البحث عن تطابق بالشجرة", "Search for tree matches"))
                                 .font(DS.Font.scaled(13, weight: .bold))
@@ -401,7 +401,7 @@ struct AdminPendingRequestsView: View {
                             // عنوان التطابق
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "person.2.fill")
-                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                    .font(DS.Font.icon(13, weight: .semibold))
                                     .foregroundColor(DS.Color.info)
                                 Text(L10n.t(
                                     "تطابق محتمل مع \(nameMatches.count) عضو بالشجرة",
@@ -418,7 +418,7 @@ struct AdminPendingRequestsView: View {
                                     }
                                 } label: {
                                     Image(systemName: "arrow.counterclockwise")
-                                        .font(DS.Font.scaled(12, weight: .semibold))
+                                        .font(DS.Font.icon(12, weight: .semibold))
                                         .foregroundColor(DS.Color.textTertiary)
                                 }
                                 .accessibilityLabel(L10n.t("إعادة البحث", "Search again"))
@@ -460,7 +460,7 @@ struct AdminPendingRequestsView: View {
                         // لا يوجد تطابق
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(DS.Font.scaled(14, weight: .semibold))
+                                .font(DS.Font.icon(14, weight: .semibold))
                                 .foregroundColor(DS.Color.success)
                             Text(L10n.t("لا يوجد تطابق بالشجرة — اسم جديد", "No tree matches — new name"))
                                 .font(DS.Font.scaled(12, weight: .bold))
@@ -474,7 +474,7 @@ struct AdminPendingRequestsView: View {
                                 }
                             } label: {
                                 Image(systemName: "arrow.counterclockwise")
-                                    .font(DS.Font.scaled(12, weight: .semibold))
+                                    .font(DS.Font.icon(12, weight: .semibold))
                                     .foregroundColor(DS.Color.textTertiary)
                             }
                             .accessibilityLabel(L10n.t("إعادة البحث", "Search again"))
@@ -492,7 +492,7 @@ struct AdminPendingRequestsView: View {
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "phone.badge.plus")
-                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .font(DS.Font.icon(14, weight: .semibold))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"))
                                 .font(DS.Font.scaled(13, weight: .bold))
@@ -502,7 +502,7 @@ struct AdminPendingRequestsView: View {
                         }
                         Spacer()
                         Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                     .foregroundColor(DS.Color.primary)
@@ -555,7 +555,7 @@ struct AdminPendingRequestsView: View {
                         .fill(strengthColor.opacity(0.15))
                         .frame(width: 40, height: 40)
                     Image(systemName: matchRatio >= 0.8 ? "checkmark.circle.fill" : "person.fill.questionmark")
-                        .font(DS.Font.scaled(17, weight: .semibold))
+                        .font(DS.Font.icon(17, weight: .semibold))
                         .foregroundColor(strengthColor)
                 }
 
@@ -576,7 +576,7 @@ struct AdminPendingRequestsView: View {
                     if let fatherName {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.up.right")
-                                .font(DS.Font.scaled(11, weight: .semibold))
+                                .font(DS.Font.icon(11, weight: .semibold))
                             Text(L10n.t("ابن: \(fatherName)", "Son of: \(fatherName)"))
                                 .font(DS.Font.scaled(11, weight: .medium))
                         }
@@ -619,7 +619,7 @@ struct AdminPendingRequestsView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.merge")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                         Text(L10n.t("دمج", "Merge"))
                             .font(DS.Font.scaled(12, weight: .bold))
                     }
@@ -748,7 +748,7 @@ struct LinkToExistingMemberSheet: View {
                         if let selected = selectedMember {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "arrow.down")
-                                    .font(DS.Font.scaled(12, weight: .bold))
+                                    .font(DS.Font.icon(12, weight: .bold))
                                     .foregroundColor(DS.Color.primary)
                                 Text(L10n.t("سيُربط بـ", "Will link to"))
                                     .font(DS.Font.caption1)
@@ -811,7 +811,7 @@ struct LinkToExistingMemberSheet: View {
                                             .frame(width: 38, height: 38)
                                         if isSelected {
                                             Image(systemName: "checkmark")
-                                                .font(DS.Font.scaled(14, weight: .bold))
+                                                .font(DS.Font.icon(14, weight: .bold))
                                                 .foregroundColor(DS.Color.primary)
                                         } else {
                                             Text(member.fullName.prefix(1))
@@ -862,7 +862,7 @@ struct LinkToExistingMemberSheet: View {
                 ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(20))
+                            .font(DS.Font.icon(20))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }

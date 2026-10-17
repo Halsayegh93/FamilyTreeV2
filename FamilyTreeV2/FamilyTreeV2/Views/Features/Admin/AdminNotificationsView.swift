@@ -103,7 +103,7 @@ struct AdminNotificationsView: View {
                 if loading {
                     ProgressView().tint(filled ? DS.Color.textOnPrimary : DS.Color.primary)
                 } else {
-                    Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold))
+                    Image(systemName: icon).font(DS.Font.icon(14, weight: .bold))
                 }
                 Text(title).font(DS.Font.plex(14, weight: .bold))
             }
@@ -152,7 +152,7 @@ struct AdminNotificationsView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "clock.badge.fill")
-                                    .font(DS.Font.scaled(16, weight: .semibold))
+                                    .font(DS.Font.icon(16, weight: .semibold))
                                     .foregroundColor(DS.Color.warning)
                                 Text(L10n.t(
                                     "\(notificationVM.scheduledNotifications.count) إشعار مجدول بانتظار الإرسال",
@@ -163,7 +163,7 @@ struct AdminNotificationsView: View {
                                 .lineLimit(1)
                                 Spacer()
                                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                                    .font(DS.Font.scaled(12, weight: .bold))
+                                    .font(DS.Font.icon(12, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
                             }
                             .padding(DS.Spacing.md)
@@ -181,7 +181,7 @@ struct AdminNotificationsView: View {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "bell.badge")
                             .foregroundColor(DS.Color.textTertiary)
-                            .font(DS.Font.scaled(13, weight: .medium))
+                            .font(DS.Font.icon(13, weight: .medium))
 
                         if useCustomTitle {
                             TextField(L10n.t("عنوان الإشعار", "Notification title"), text: $title)
@@ -196,7 +196,7 @@ struct AdminNotificationsView: View {
                                 }
                             } label: {
                                 Image(systemName: "list.bullet")
-                                    .font(DS.Font.scaled(13, weight: .bold))
+                                    .font(DS.Font.icon(13, weight: .bold))
                                     .foregroundColor(DS.Color.primary)
                             }
                             .accessibilityLabel(L10n.t("عناوين جاهزة", "Preset titles"))
@@ -217,7 +217,7 @@ struct AdminNotificationsView: View {
                                         .lineLimit(1)
                                     Spacer(minLength: 0)
                                     Image(systemName: "chevron.up.chevron.down")
-                                        .font(DS.Font.scaled(11, weight: .bold))
+                                        .font(DS.Font.icon(11, weight: .bold))
                                         .foregroundColor(DS.Color.textTertiary)
                                 }
                             }
@@ -232,7 +232,7 @@ struct AdminNotificationsView: View {
                         HStack(alignment: .top, spacing: DS.Spacing.sm) {
                             Image(systemName: "text.alignright")
                                 .foregroundColor(DS.Color.textTertiary)
-                                .font(DS.Font.scaled(14, weight: .medium))
+                                .font(DS.Font.icon(14, weight: .medium))
                                 .padding(.top, DS.Spacing.sm)
                             ZStack(alignment: L10n.isArabic ? .topTrailing : .topLeading) {
                                 if bodyText.isEmpty {
@@ -271,7 +271,7 @@ struct AdminNotificationsView: View {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "magnifyingglass")
                                 .foregroundColor(DS.Color.textTertiary)
-                                .font(DS.Font.scaled(14, weight: .medium))
+                                .font(DS.Font.icon(14, weight: .medium))
                             TextField(L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."), text: $searchText)
                                 .font(DS.Font.callout)
                                 .focused($searchFocused)
@@ -301,7 +301,7 @@ struct AdminNotificationsView: View {
                             if showSearchField { searchFocused = true }
                         } label: {
                             Image(systemName: showSearchField ? "magnifyingglass.circle.fill" : "magnifyingglass")
-                                .font(DS.Font.scaled(13, weight: .bold))
+                                .font(DS.Font.icon(13, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                                 .padding(.horizontal, DS.Spacing.md)
                                 .padding(.vertical, DS.Spacing.xs)
@@ -315,7 +315,7 @@ struct AdminNotificationsView: View {
                         } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(DS.Font.scaled(11))
+                                    .font(DS.Font.icon(11))
                                 Text(L10n.t("الكل", "All"))
                                     .font(DS.Font.scaled(12, weight: .bold))
                             }
@@ -331,7 +331,7 @@ struct AdminNotificationsView: View {
                         } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(DS.Font.scaled(11))
+                                    .font(DS.Font.icon(11))
                                 Text(L10n.t("إلغاء", "Clear"))
                                     .font(DS.Font.scaled(12, weight: .bold))
                             }
@@ -359,7 +359,7 @@ struct AdminNotificationsView: View {
                     Spacer()
                     VStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.slash")
-                            .font(DS.Font.scaled(36, weight: .regular))
+                            .font(DS.Font.icon(36, weight: .regular))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا يوجد أعضاء", "No members found"))
                             .font(DS.Font.callout)
@@ -516,7 +516,7 @@ struct AdminNotificationsView: View {
     private func memberRow(member: FamilyMember) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: selectedMemberIds.contains(member.id) ? "checkmark.circle.fill" : "circle")
-                .font(DS.Font.scaled(17))
+                .font(DS.Font.icon(17))
                 .foregroundStyle(
                     selectedMemberIds.contains(member.id)
                         ? AnyShapeStyle(DS.Color.primary)
@@ -532,7 +532,7 @@ struct AdminNotificationsView: View {
                 if let phone = member.phoneNumber, !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     HStack(spacing: 2) {
                         Image(systemName: "phone.fill")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                         Text(KuwaitPhone.display(phone))
                     }
                     .font(DS.Font.caption1)
@@ -651,7 +651,7 @@ private struct ScheduleComposerSheet: View {
                         DSDivider()
                         HStack(spacing: 6) {
                             Image(systemName: "clock.badge")
-                                .font(DS.Font.scaled(11, weight: .semibold))
+                                .font(DS.Font.icon(11, weight: .semibold))
                             Text(L10n.t("مجدولة بانتظار الإرسال (\(notificationVM.scheduledNotifications.count))",
                                         "Pending (\(notificationVM.scheduledNotifications.count))"))
                                 .font(DS.Font.caption1)
@@ -727,7 +727,7 @@ private struct ScheduledNotificationsSheet: View {
                 if notificationVM.scheduledNotifications.isEmpty {
                     VStack(spacing: DS.Spacing.md) {
                         Image(systemName: "clock.badge.checkmark")
-                            .font(DS.Font.scaled(40, weight: .regular))
+                            .font(DS.Font.icon(40, weight: .regular))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا توجد إشعارات مجدولة", "No scheduled notifications"))
                             .font(DS.Font.callout)
@@ -765,7 +765,7 @@ private struct ScheduledNotificationsSheet: View {
                 // العنوان
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "bell.badge.fill")
-                        .font(DS.Font.scaled(14, weight: .semibold))
+                        .font(DS.Font.icon(14, weight: .semibold))
                         .foregroundColor(DS.Color.warning)
                     Text(item.title)
                         .font(DS.Font.bodyBold)
@@ -810,7 +810,7 @@ private struct ScheduledNotificationsSheet: View {
                             ProgressView().tint(DS.Color.error)
                         } else {
                             Image(systemName: "trash")
-                                .font(DS.Font.scaled(13, weight: .semibold))
+                                .font(DS.Font.icon(13, weight: .semibold))
                         }
                         Text(L10n.t("إلغاء الجدولة", "Cancel schedule"))
                             .font(DS.Font.calloutBold)
@@ -829,7 +829,7 @@ private struct ScheduledNotificationsSheet: View {
 
     private func metaChip(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: DS.Spacing.xs) {
-            Image(systemName: icon).font(DS.Font.scaled(11, weight: .semibold))
+            Image(systemName: icon).font(DS.Font.icon(11, weight: .semibold))
             Text(text).font(DS.Font.caption1).fontWeight(.semibold)
         }
         .foregroundColor(color)

@@ -29,7 +29,7 @@ struct QRCodeSheet: View {
             HStack {
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(DS.Font.scaled(28))
+                        .font(DS.Font.icon(28))
                         .foregroundStyle(DS.Color.textTertiary)
                 }
                 Spacer()
@@ -38,7 +38,7 @@ struct QRCodeSheet: View {
                     .foregroundColor(DS.Color.textPrimary)
                 Spacer()
                 Image(systemName: "xmark.circle.fill")
-                    .font(DS.Font.scaled(28))
+                    .font(DS.Font.icon(28))
                     .foregroundStyle(.clear)
             }
             .padding(.horizontal, DS.Spacing.lg)
@@ -66,7 +66,7 @@ struct QRCodeSheet: View {
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "camera.viewfinder")
-                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .font(DS.Font.icon(14, weight: .semibold))
                         Text(L10n.t("امسح رمز QR لمعرفة صلة القرابة", "Scan QR to discover kinship"))
                             .font(DS.Font.caption1)
                             .fontWeight(.medium)
@@ -85,7 +85,7 @@ struct QRCodeSheet: View {
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "square.and.arrow.up")
-                            .font(DS.Font.scaled(15, weight: .bold))
+                            .font(DS.Font.icon(15, weight: .bold))
                         Text(L10n.t("مشاركة الرمز", "Share Code"))
                             .font(DS.Font.calloutBold)
                     }

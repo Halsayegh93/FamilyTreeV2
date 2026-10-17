@@ -134,7 +134,7 @@ struct CategoriesManagerView: View {
                 Circle().fill(category.color.opacity(category.isActive ? 0.18 : 0.08))
                     .frame(width: 34, height: 34)
                 Image(systemName: category.iconKey)
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                     .foregroundColor(category.isActive ? category.color : DS.Color.textTertiary)
             }
             VStack(alignment: .leading, spacing: 1) {
@@ -169,7 +169,7 @@ struct CategoriesManagerView: View {
                     pendingDelete = category
                 } label: {
                     Image(systemName: "trash")
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(DS.Font.icon(13, weight: .bold))
                         .foregroundColor(DS.Color.error)
                         .frame(width: 30, height: 30)
                         .background(Circle().fill(DS.Color.error.opacity(0.10)))
@@ -214,7 +214,7 @@ struct CategoryEditSheet: View {
                 VStack(spacing: DS.Spacing.lg) {
                     // معاينة
                     HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: iconKey).font(DS.Font.scaled(12, weight: .bold))
+                        Image(systemName: iconKey).font(DS.Font.icon(12, weight: .bold))
                         Text(nameAr.isEmpty ? L10n.t("اسم التصنيف", "Category name") : nameAr)
                             .font(DS.Font.plex(13, weight: .bold))
                     }
@@ -240,7 +240,7 @@ struct CategoryEditSheet: View {
                             ForEach(CategoryPalette.icons, id: \.self) { icon in
                                 Button { iconKey = icon } label: {
                                     Image(systemName: icon)
-                                        .font(DS.Font.scaled(16, weight: .bold))
+                                        .font(DS.Font.icon(16, weight: .bold))
                                         .foregroundColor(iconKey == icon ? .white : accent)
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 42)

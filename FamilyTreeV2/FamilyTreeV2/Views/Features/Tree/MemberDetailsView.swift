@@ -230,7 +230,7 @@ struct MemberDetailsView: View {
                     .fill(DS.Color.textTertiary.opacity(0.15))
                     .frame(width: 100, height: 100)
                 Image(systemName: "person.slash.fill")
-                    .font(DS.Font.scaled(36))
+                    .font(DS.Font.icon(36))
                     .foregroundColor(DS.Color.textTertiary)
             }
             Text(L10n.t("هذا العضو حذف حسابه", "This member deleted their account"))
@@ -269,7 +269,7 @@ struct MemberDetailsView: View {
                             .frame(width: 36, height: 36)
                             .overlay(
                                 Image(systemName: "heart.slash.fill")
-                                    .font(DS.Font.scaled(18, weight: .bold))
+                                    .font(DS.Font.icon(18, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
                             )
                             .offset(x: 48, y: 48)
@@ -331,7 +331,7 @@ struct MemberDetailsView: View {
                 let color = isDeceased ? DS.Color.textSecondary : DS.Color.info
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: isDeceased ? "heart.slash.fill" : "timelapse")
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(DS.Font.icon(11, weight: .semibold))
                     Text("\(age) " + L10n.t("سنة", "yrs"))
                         .font(DS.Font.scaled(12, weight: .bold))
                     if isDeceased {
@@ -358,7 +358,7 @@ struct MemberDetailsView: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                 Text(label)
                     .font(DS.Font.scaled(12, weight: .bold))
             }
@@ -387,7 +387,7 @@ struct MemberDetailsView: View {
                             .fill(DS.Color.primary.opacity(0.12))
                             .frame(width: 34, height: 34)
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .font(DS.Font.icon(14, weight: .semibold))
                             .foregroundColor(DS.Color.primary)
                     }
                     VStack(alignment: .leading, spacing: 1) {
@@ -402,7 +402,7 @@ struct MemberDetailsView: View {
                     }
                     Spacer(minLength: 0)
                     Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
                 .frame(maxWidth: .infinity)
@@ -480,13 +480,13 @@ struct MemberDetailsView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "person.3.fill")
-                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                    .font(DS.Font.icon(13, weight: .semibold))
                                     .foregroundColor(DS.Color.primary)
                                 Text(L10n.t("الأبناء", "Children") + " (\(cachedChildren.count))")
                                     .font(DS.Font.calloutBold)
                                     .foregroundColor(DS.Color.textPrimary)
                                 Image(systemName: "chevron.down")
-                                    .font(DS.Font.scaled(11, weight: .semibold))
+                                    .font(DS.Font.icon(11, weight: .semibold))
                                     .foregroundColor(DS.Color.textTertiary)
                                     .rotationEffect(.degrees(childrenExpanded ? 180 : 0))
                             }
@@ -549,7 +549,7 @@ struct MemberDetailsView: View {
                     .fill(c.color.opacity(0.12))
                     .frame(width: 42, height: 42)
                 Image(systemName: c.icon)
-                    .font(DS.Font.scaled(18, weight: .semibold))
+                    .font(DS.Font.icon(18, weight: .semibold))
                     .foregroundColor(c.color)
             }
             Text(c.text)
@@ -594,7 +594,7 @@ struct MemberDetailsView: View {
                     .fill(color.opacity(0.12))
                     .frame(width: 34, height: 34)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .font(DS.Font.icon(15, weight: .semibold))
                     .foregroundColor(color)
             }
             Text(label)
@@ -619,7 +619,7 @@ struct MemberDetailsView: View {
                     .fill(row.color.opacity(0.12))
                     .frame(width: 38, height: 38)
                 Image(systemName: row.icon)
-                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .font(DS.Font.icon(15, weight: .semibold))
                     .foregroundColor(row.color)
             }
             Text(row.label)
@@ -710,7 +710,7 @@ struct MemberDetailsView: View {
                     .fill(color.opacity(0.12))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .font(DS.Font.icon(13, weight: .semibold))
                     .foregroundColor(color)
             }
             Text(label)
@@ -935,7 +935,7 @@ struct MemberDetailsView: View {
                         .frame(width: 14, height: 14)
                         .overlay(
                             Image(systemName: "heart.slash.fill")
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .font(DS.Font.icon(11, weight: .bold))
                                 .foregroundColor(DS.Color.textTertiary)
                         )
                         .offset(x: 15, y: 15)
@@ -960,7 +960,7 @@ struct MemberDetailsView: View {
                     .fill(color.opacity(0.12))
                     .frame(width: 32, height: 32)
                 Image(systemName: "person.3.fill")
-                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .font(DS.Font.icon(13, weight: .semibold))
                     .foregroundColor(color)
             }
             Text(label)
@@ -972,7 +972,7 @@ struct MemberDetailsView: View {
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
-                .font(DS.Font.scaled(11, weight: .semibold))
+                .font(DS.Font.icon(11, weight: .semibold))
                 .foregroundColor(DS.Color.textTertiary)
                 .rotationEffect(.degrees(expanded ? 180 : 0))
         }
@@ -997,7 +997,7 @@ struct MemberDetailsView: View {
                     .fill(color.opacity(0.12))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .font(DS.Font.icon(13, weight: .semibold))
                     .foregroundColor(color)
             }
             Text(label)
@@ -1009,7 +1009,7 @@ struct MemberDetailsView: View {
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(1)
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .semibold))
+                .font(DS.Font.icon(11, weight: .semibold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.vertical, DS.Spacing.sm + 2)
@@ -1042,7 +1042,7 @@ struct MemberDetailsView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "trash")
-                                    .font(DS.Font.scaled(13, weight: .semibold))
+                                    .font(DS.Font.icon(13, weight: .semibold))
                                 Text(L10n.t("حذف السيرة", "Delete Biography"))
                                     .font(DS.Font.calloutBold)
                             }
@@ -1165,7 +1165,7 @@ struct MemberDetailsView: View {
                     .fill(color.opacity(0.12))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .font(DS.Font.icon(13, weight: .semibold))
                     .foregroundColor(color)
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -1303,7 +1303,7 @@ struct MemberDetailsView: View {
                         .overlay(Circle().stroke(tint.opacity(0.28), lineWidth: 1))
                         .frame(width: 64, height: 64)
                     Image(systemName: action.iconName)
-                        .font(DS.Font.scaled(24, weight: .semibold))
+                        .font(DS.Font.icon(24, weight: .semibold))
                         .foregroundColor(tint)
                 }
                 Text(editActionLabel(for: action))
@@ -1336,7 +1336,7 @@ struct MemberDetailsView: View {
                             .frame(width: 62, height: 62)
                             .dsSubtleShadow()
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(22, weight: .semibold))
+                            .font(DS.Font.icon(22, weight: .semibold))
                             .foregroundColor(DS.Color.textOnPrimary)
                     } else {
                         Circle()
@@ -1344,7 +1344,7 @@ struct MemberDetailsView: View {
                             .frame(width: 62, height: 62)
                             .overlay(Circle().stroke(tint.opacity(0.30), lineWidth: 1.5))
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(22, weight: .semibold))
+                            .font(DS.Font.icon(22, weight: .semibold))
                             .foregroundColor(tint)
                     }
                 }
@@ -1365,7 +1365,7 @@ struct MemberDetailsView: View {
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(DS.Font.icon(13, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                         .frame(width: 38, height: 38)
                         .dsGlass(Circle())
@@ -1426,7 +1426,7 @@ struct MemberDetailsView: View {
                 )
                 .overlay(
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(50))
+                        .font(DS.Font.icon(50))
                         .foregroundColor(DS.Color.primary.opacity(0.5))
                 )
             }
@@ -1477,7 +1477,7 @@ struct MemberDetailsView: View {
                 showAvatarPreview = false
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(DS.Font.scaled(30))
+                    .font(DS.Font.icon(30))
                     .foregroundColor(DS.Color.overlayTextFull)
                     .padding()
             }

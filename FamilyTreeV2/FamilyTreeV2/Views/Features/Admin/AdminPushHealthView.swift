@@ -244,7 +244,7 @@ struct AdminPushHealthView: View {
                                 ProgressView().tint(DS.Color.textOnPrimary)
                             } else {
                                 Image(systemName: "paperplane.fill")
-                                    .font(DS.Font.scaled(14, weight: .bold))
+                                    .font(DS.Font.icon(14, weight: .bold))
                             }
                             Text(L10n.t("أرسل إشعار تجريبي", "Send Test Push"))
                                 .font(DS.Font.calloutBold)
@@ -263,7 +263,7 @@ struct AdminPushHealthView: View {
                     if let msg = testResultMessage {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: testResultIsSuccess ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                                .font(DS.Font.scaled(14, weight: .bold))
+                                .font(DS.Font.icon(14, weight: .bold))
                             Text(msg)
                                 .font(DS.Font.caption1)
                                 .fontWeight(.medium)
@@ -306,7 +306,7 @@ struct AdminPushHealthView: View {
                             ProgressView().tint(DS.Color.textOnPrimary)
                         } else {
                             Image(systemName: "trash.fill")
-                                .font(DS.Font.scaled(14, weight: .bold))
+                                .font(DS.Font.icon(14, weight: .bold))
                         }
                         Text(L10n.t("تنظيف الآن", "Clean Now"))
                             .font(DS.Font.calloutBold)
@@ -325,7 +325,7 @@ struct AdminPushHealthView: View {
                 if let msg = cleanupResultMessage {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: cleanupResultIsSuccess ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                            .font(DS.Font.scaled(14, weight: .bold))
+                            .font(DS.Font.icon(14, weight: .bold))
                         Text(msg)
                             .font(DS.Font.caption1)
                             .fontWeight(.medium)
@@ -369,7 +369,7 @@ struct AdminPushHealthView: View {
                         .clipShape(Capsule())
 
                     Image(systemName: "chevron.down")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                         .rotationEffect(.degrees(tokenOwnersExpanded ? 180 : 0))
                 }
@@ -385,7 +385,7 @@ struct AdminPushHealthView: View {
                 if tokenOwners.isEmpty {
                     VStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.crop.circle.badge.xmark")
-                            .font(DS.Font.scaled(24))
+                            .font(DS.Font.icon(24))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا يوجد أجهزة مسجلة", "No registered devices"))
                             .font(DS.Font.caption1)
@@ -433,7 +433,7 @@ struct AdminPushHealthView: View {
                         .clipShape(Capsule())
 
                     Image(systemName: "chevron.down")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                         .rotationEffect(.degrees(missingMembersExpanded ? 180 : 0))
                 }
@@ -449,7 +449,7 @@ struct AdminPushHealthView: View {
                 if missingMembers.isEmpty {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(DS.Font.scaled(14, weight: .bold))
+                            .font(DS.Font.icon(14, weight: .bold))
                             .foregroundColor(DS.Color.success)
                         Text(L10n.t("جميع الأعضاء النشطين مسجلون ✓", "All active members registered ✓"))
                             .font(DS.Font.caption1)
@@ -520,7 +520,7 @@ struct AdminPushHealthView: View {
             // Environment pill
             HStack(spacing: 3) {
                 Image(systemName: owner.environment == "sandbox" ? "hammer.fill" : "checkmark.shield.fill")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                 Text(owner.environment == "sandbox" ? L10n.t("تطوير", "Sandbox") : L10n.t("إنتاج", "Prod"))
                     .font(DS.Font.caption2)
                     .fontWeight(.bold)
@@ -584,7 +584,7 @@ struct AdminPushHealthView: View {
             Spacer()
 
             Image(systemName: "bell.slash")
-                .font(DS.Font.scaled(12, weight: .bold))
+                .font(DS.Font.icon(12, weight: .bold))
                 .foregroundColor(DS.Color.warning)
                 .frame(width: 24, height: 24)
                 .background(DS.Color.warning.opacity(0.12))
@@ -599,7 +599,7 @@ struct AdminPushHealthView: View {
     private func miniStat(value: String, label: String, icon: String, color: Color) -> some View {
         VStack(spacing: DS.Spacing.xs) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(18, weight: .bold))
+                .font(DS.Font.icon(18, weight: .bold))
                 .foregroundColor(color)
                 .frame(width: 40, height: 40)
                 .background(color.opacity(0.12))

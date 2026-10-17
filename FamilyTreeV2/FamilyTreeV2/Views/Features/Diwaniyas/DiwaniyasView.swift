@@ -225,7 +225,7 @@ struct DiwaniyasView: View {
                     .frame(width: 96, height: 96)
 
                 Image(systemName: "mappin.slash")
-                    .font(DS.Font.scaled(40, weight: .bold))
+                    .font(DS.Font.icon(40, weight: .bold))
                     .foregroundColor(DS.Color.gridDiwaniya)
             }
 
@@ -258,7 +258,7 @@ struct DiwaniyasView: View {
                 if isPending {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "clock.badge.questionmark")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                         Text(L10n.t("تحت المراجعة", "Under Review"))
                             .font(DS.Font.scaled(12, weight: .bold))
                     }
@@ -285,7 +285,7 @@ struct DiwaniyasView: View {
                             )
                             .frame(width: DS.Icon.size, height: DS.Icon.size)
                         Image(systemName: item.imageUrl ?? "map.fill")
-                            .font(DS.Font.scaled(22, weight: .bold))
+                            .font(DS.Font.icon(22, weight: .bold))
                             .foregroundColor(cardColor)
                     }
 
@@ -342,7 +342,7 @@ struct DiwaniyasView: View {
                             }
                         } label: {
                             Image(systemName: "ellipsis")
-                                .font(DS.Font.scaled(16, weight: .bold))
+                                .font(DS.Font.icon(16, weight: .bold))
                                 .foregroundColor(DS.Color.textSecondary)
                                 .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
                                 .background(DS.Color.textTertiary.opacity(0.08))
@@ -361,7 +361,7 @@ struct DiwaniyasView: View {
                             ForEach(Array(infoItems.enumerated()), id: \.offset) { _, info in
                                 HStack(spacing: 5) {
                                     Image(systemName: info.icon)
-                                        .font(DS.Font.scaled(11, weight: .semibold))
+                                        .font(DS.Font.icon(11, weight: .semibold))
                                         .foregroundColor(info.color)
                                     Text(info.text)
                                         .font(DS.Font.scaled(12, weight: .medium))
@@ -388,7 +388,7 @@ struct DiwaniyasView: View {
                             Button(action: { UIApplication.shared.open(url) }) {
                                 HStack(spacing: 6) {
                                     Image(systemName: "location.fill")
-                                        .font(DS.Font.scaled(12, weight: .bold))
+                                        .font(DS.Font.icon(12, weight: .bold))
                                     Text(L10n.t("الموقع", "Location"))
                                         .font(DS.Font.scaled(12, weight: .bold))
                                 }
@@ -404,7 +404,7 @@ struct DiwaniyasView: View {
                             Button(action: { UIApplication.shared.open(callURL) }) {
                                 HStack(spacing: 6) {
                                     Image(systemName: "phone.fill")
-                                        .font(DS.Font.scaled(12, weight: .bold))
+                                        .font(DS.Font.icon(12, weight: .bold))
                                     Text(L10n.t("اتصال", "Call"))
                                         .font(DS.Font.scaled(12, weight: .bold))
                                 }
@@ -710,7 +710,7 @@ private struct AddDiwaniyaRequestView: View {
                         // Review note
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "info.circle.fill")
-                                .font(DS.Font.scaled(11))
+                                .font(DS.Font.icon(11))
                                 .foregroundColor(DS.Color.gridDiwaniya)
                             Text(L10n.t(
                                 "سيتم إضافة الديوانية بعد الموافقة.",
@@ -760,7 +760,7 @@ private struct AddDiwaniyaRequestView: View {
     private func compactHeader(_ title: String, icon: String, color: Color) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(color)
             Text(title)
                 .font(DS.Font.scaled(11, weight: .bold))

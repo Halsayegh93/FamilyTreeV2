@@ -176,7 +176,7 @@ struct AdminSecuritySettingsView: View {
     private func sectionHeader(icon: String, color: Color, title: String, note: String?) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(12, weight: .bold))
+                .font(DS.Font.icon(12, weight: .bold))
                 .foregroundColor(color)
             Text(title)
                 .font(DS.Font.plex(14, weight: .bold))
@@ -253,14 +253,14 @@ struct AdminSecuritySettingsView: View {
                 ZStack {
                     Circle().fill(category.color.opacity(0.16)).frame(width: 34, height: 34)
                     Image(systemName: category.icon)
-                        .font(DS.Font.scaled(14, weight: .bold))
+                        .font(DS.Font.icon(14, weight: .bold))
                         .foregroundColor(category.color)
                 }
             }
             VStack(alignment: large ? .leading : .center, spacing: 2) {
                 if !large {
                     Image(systemName: category.icon)
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(category.color)
                 }
                 Text(usageValue(category).map { "\($0)" } ?? "—")

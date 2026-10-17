@@ -165,7 +165,7 @@ struct AppUsageMembersView: View {
             ZStack {
                 Circle().fill(category.color.opacity(0.16)).frame(width: 40, height: 40)
                 Image(systemName: category.icon)
-                    .font(DS.Font.scaled(16, weight: .bold))
+                    .font(DS.Font.icon(16, weight: .bold))
                     .foregroundColor(category.color)
             }
             VStack(alignment: .leading, spacing: 4) {
@@ -228,7 +228,7 @@ struct AppUsageMembersView: View {
     private func contactButton(icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(13, weight: .bold))
+                .font(DS.Font.icon(13, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: 32, height: 32)
                 .background(Circle().fill(color))

@@ -534,7 +534,7 @@ private struct WomanDetailSheet: View {
                             .frame(width: 36, height: 36)
                             .overlay(
                                 Image(systemName: "heart.slash.fill")
-                                    .font(DS.Font.scaled(18, weight: .bold))
+                                    .font(DS.Font.icon(18, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
                             )
                             .offset(x: 48, y: 48)
@@ -583,7 +583,7 @@ private struct WomanDetailSheet: View {
                 let color = isDeceased ? DS.Color.textSecondary : DS.Color.info
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: isDeceased ? "heart.slash.fill" : "timelapse")
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(DS.Font.icon(11, weight: .semibold))
                     Text("\(age) " + L10n.t("سنة", "yrs"))
                         .font(DS.Font.scaled(12, weight: .bold))
                     if isDeceased {
@@ -603,7 +603,7 @@ private struct WomanDetailSheet: View {
     private func quickPillLabel(icon: String, label: String, color: Color) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .semibold))
+                .font(DS.Font.icon(11, weight: .semibold))
             Text(label)
                 .font(DS.Font.scaled(12, weight: .bold))
         }
@@ -687,7 +687,7 @@ private struct WomanDetailSheet: View {
         let inner = HStack(spacing: DS.Spacing.sm) {
             ZStack {
                 Circle().fill(color.opacity(0.12)).frame(width: 34, height: 34)
-                Image(systemName: icon).font(DS.Font.scaled(14, weight: .semibold)).foregroundColor(color)
+                Image(systemName: icon).font(DS.Font.icon(14, weight: .semibold)).foregroundColor(color)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(label).font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
@@ -697,7 +697,7 @@ private struct WomanDetailSheet: View {
             Spacer(minLength: 0)
             if onTap != nil {
                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(DS.Font.scaled(11, weight: .bold)).foregroundColor(DS.Color.textTertiary)
+                    .font(DS.Font.icon(11, weight: .bold)).foregroundColor(DS.Color.textTertiary)
             }
         }
         .frame(maxWidth: .infinity)
@@ -721,13 +721,13 @@ private struct WomanDetailSheet: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "person.3.fill")
-                        .font(DS.Font.scaled(13, weight: .semibold))
+                        .font(DS.Font.icon(13, weight: .semibold))
                         .foregroundColor(DS.Color.primary)
                     Text(L10n.t("الأبناء", "Children") + " (\(children.count))")
                         .font(DS.Font.calloutBold)
                         .foregroundColor(DS.Color.textPrimary)
                     Image(systemName: "chevron.down")
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(DS.Font.icon(11, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                         .rotationEffect(.degrees(childrenExpanded ? 180 : 0))
                 }
@@ -747,7 +747,7 @@ private struct WomanDetailSheet: View {
         HStack(spacing: DS.Spacing.md) {
             ZStack {
                 Circle().fill(color.opacity(0.12)).frame(width: 34, height: 34)
-                Image(systemName: icon).font(DS.Font.scaled(14, weight: .semibold)).foregroundColor(color)
+                Image(systemName: icon).font(DS.Font.icon(14, weight: .semibold)).foregroundColor(color)
             }
             Text(label).font(DS.Font.callout).foregroundColor(DS.Color.textSecondary)
             Spacer()
@@ -801,7 +801,7 @@ private struct WomanDetailSheet: View {
                 ZStack {
                     Circle().fill(color.opacity(0.12)).frame(width: 50, height: 50)
                     Circle().strokeBorder(color.opacity(0.25), lineWidth: 1).frame(width: 50, height: 50)
-                    Image(systemName: icon).font(DS.Font.scaled(18, weight: .semibold)).foregroundColor(color)
+                    Image(systemName: icon).font(DS.Font.icon(18, weight: .semibold)).foregroundColor(color)
                 }
                 Text(L10n.t(ar, en))
                     .font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
@@ -1088,7 +1088,7 @@ private struct WomanDetailSheet: View {
             Spacer()
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
-                    .font(DS.Font.scaled(15, weight: .bold))
+                    .font(DS.Font.icon(15, weight: .bold))
                     .foregroundColor(DS.Color.textSecondary)
                     .frame(width: 34, height: 34)
                     .background(DS.Color.surface)

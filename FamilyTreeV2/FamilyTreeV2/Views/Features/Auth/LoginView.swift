@@ -365,7 +365,7 @@ struct LoginView: View {
                         }
                     }) {
                         Image(systemName: "pencil.circle.fill")
-                            .font(DS.Font.scaled(16))
+                            .font(DS.Font.icon(16))
                             .foregroundColor(DS.Color.textSecondary)
                     }
                     .padding(.leading, DS.Spacing.xs)
@@ -470,7 +470,7 @@ struct LoginView: View {
                 }) {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "message.fill")
-                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .font(DS.Font.icon(13, weight: .semibold))
                         Text(timeRemaining > 0
                              ? L10n.t("بعد \(timeRemaining)ث", "in \(timeRemaining)s")
                              : L10n.t("إعادة عبر SMS", "Resend via SMS"))
@@ -499,7 +499,7 @@ struct LoginView: View {
                     }) {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .font(DS.Font.scaled(13, weight: .semibold))
+                                .font(DS.Font.icon(13, weight: .semibold))
                             Text(L10n.t("إرسال عبر واتساب", "Send via WhatsApp"))
                                 .font(DS.Font.footnote)
                                 .fontWeight(.semibold)
@@ -530,7 +530,7 @@ struct LoginView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(DS.Color.error)
-                    .font(DS.Font.scaled(16, weight: .bold))
+                    .font(DS.Font.icon(16, weight: .bold))
                 Text(error)
                     .font(DS.Font.footnote)
                     .fontWeight(.semibold)
@@ -545,7 +545,7 @@ struct LoginView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(DS.Color.success)
-                    .font(DS.Font.scaled(16, weight: .bold))
+                    .font(DS.Font.icon(16, weight: .bold))
                 Text(authVM.otpStatusMessage)
                     .font(DS.Font.footnote)
                     .fontWeight(.semibold)

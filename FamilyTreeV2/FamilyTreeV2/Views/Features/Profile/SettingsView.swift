@@ -77,7 +77,7 @@ struct SettingsView: View {
                     Button { showDeleteConfirmation = true } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "trash")
-                                .font(DS.Font.scaled(13, weight: .bold))
+                                .font(DS.Font.icon(13, weight: .bold))
                             Text(t("حذف الحساب", "Delete Account"))
                                 .font(DS.Font.plex(14, weight: .bold))
                         }
@@ -165,7 +165,7 @@ struct SettingsView: View {
                         ZStack {
                             Color.white.opacity(0.18)
                             Image(systemName: "person.fill")
-                                .font(DS.Font.scaled(26, weight: .bold))
+                                .font(DS.Font.icon(26, weight: .bold))
                                 .foregroundColor(.white)
                         }
                     }
@@ -206,7 +206,7 @@ struct SettingsView: View {
 
                 Button { showEditProfile = true } label: {
                     Image(systemName: "pencil")
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(DS.Font.icon(13, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(Color.white))
@@ -242,7 +242,7 @@ struct SettingsView: View {
     private func cardFact(icon: String, title: String, value: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(.white.opacity(0.75))
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
@@ -259,7 +259,7 @@ struct SettingsView: View {
     private func valueTile(icon: String, color: Color, title: String, value: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(16, weight: .semibold))
+                .font(DS.Font.icon(16, weight: .semibold))
                 .foregroundColor(DS.Color.onTint)
                 .frame(width: 38, height: 38)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(color))
@@ -310,7 +310,7 @@ struct SettingsView: View {
     private func groupRow(icon: String, color: Color, title: String, value: String?) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
+                .font(DS.Font.icon(14, weight: .semibold))
                 .foregroundColor(DS.Color.onTint)
                 .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm + 1, style: .continuous).fill(color))
@@ -326,7 +326,7 @@ struct SettingsView: View {
                     .lineLimit(1)
             }
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary.opacity(0.7))
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -534,7 +534,7 @@ struct NotificationsAndPrivacyView: View {
                 ZStack {
                     Circle().fill(tint.opacity(0.16)).frame(width: 46, height: 46)
                     Image(systemName: on ? "bell.badge.fill" : "bell.slash.fill")
-                        .font(DS.Font.scaled(19, weight: .semibold))
+                        .font(DS.Font.icon(19, weight: .semibold))
                         .foregroundColor(tint)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -653,7 +653,7 @@ struct NotificationsAndPrivacyView: View {
     private func switchRow(icon: String, color: Color, title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
+                .font(DS.Font.icon(14, weight: .semibold))
                 .foregroundColor(DS.Color.onTint)
                 .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm + 1, style: .continuous).fill(color))
@@ -832,7 +832,7 @@ private func settingsActionRow(icon: String, color: Color, title: String, subtit
         Spacer()
 
         Image(systemName: "chevron.forward")
-            .font(DS.Font.scaled(13, weight: .bold))
+            .font(DS.Font.icon(13, weight: .bold))
             .foregroundColor(DS.Color.textTertiary)
     }
     .padding(.horizontal, DS.Spacing.lg)
@@ -897,7 +897,7 @@ struct AboutView: View {
                                 .dsGlowShadow()
 
                             Image(systemName: "tree.fill")
-                                .font(DS.Font.scaled(42, weight: .bold))
+                                .font(DS.Font.icon(42, weight: .bold))
                                 .foregroundColor(DS.Color.textOnPrimary)
                         }
                         .frame(maxWidth: .infinity)
@@ -992,7 +992,7 @@ struct AboutView: View {
     private func aboutItem(icon: String, color: Color, title: String, desc: String) -> some View {
         HStack(alignment: .top, spacing: DS.Spacing.md) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(18, weight: .bold))
+                .font(DS.Font.icon(18, weight: .bold))
                 .foregroundColor(color)
                 .frame(width: 40, height: 40)
                 .background(color.opacity(0.12))
@@ -1130,7 +1130,7 @@ struct PrivacyPolicyView: View {
         DSCard(padding: 0) {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(18, weight: .bold))
+                    .font(DS.Font.icon(18, weight: .bold))
                     .foregroundColor(color)
                     .frame(width: 40, height: 40)
                     .background(color.opacity(0.12))
@@ -1199,7 +1199,7 @@ struct LinkedDevicesSettingsSheet: View {
 
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "info.circle.fill")
-                                    .font(DS.Font.scaled(16, weight: .bold))
+                                    .font(DS.Font.icon(16, weight: .bold))
                                     .foregroundColor(DS.Color.info)
                                     .frame(width: 36, height: 36)
                                     .background(DS.Color.info.opacity(0.12))
@@ -1227,7 +1227,7 @@ struct LinkedDevicesSettingsSheet: View {
                             if notificationVM.linkedDevices.isEmpty {
                                 HStack(spacing: DS.Spacing.sm) {
                                     Image(systemName: "iphone.slash")
-                                        .font(DS.Font.scaled(16, weight: .bold))
+                                        .font(DS.Font.icon(16, weight: .bold))
                                         .foregroundColor(DS.Color.textTertiary)
                                         .frame(width: 36, height: 36)
                                         .background(DS.Color.textTertiary.opacity(0.12))

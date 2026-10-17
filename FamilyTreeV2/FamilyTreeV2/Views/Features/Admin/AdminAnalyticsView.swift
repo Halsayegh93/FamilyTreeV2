@@ -28,7 +28,7 @@ struct AdminAnalyticsView: View {
             if totalMembers == 0 {
                 VStack(spacing: DS.Spacing.lg) {
                     Image(systemName: "chart.bar.xaxis")
-                        .font(DS.Font.scaled(48, weight: .light))
+                        .font(DS.Font.icon(48, weight: .light))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(L10n.t("لا توجد بيانات كافية", "No data available"))
                         .font(DS.Font.title3)
@@ -205,7 +205,7 @@ struct AdminAnalyticsView: View {
             ZStack {
                 Circle().fill(color.opacity(0.12)).frame(width: 36, height: 36)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(15, weight: .bold))
+                    .font(DS.Font.icon(15, weight: .bold))
                     .foregroundColor(color)
             }
             // رقم أوضح: خط التطبيق، أرقام متساوية العرض، وفواصل الآلاف (طلب المالك)

@@ -16,7 +16,7 @@ struct RoleScopeCard: View {
                 ZStack {
                     Circle().fill(guide.color.opacity(0.18)).frame(width: 32, height: 32)
                     Image(systemName: guide.icon)
-                        .font(DS.Font.scaled(14, weight: .bold))
+                        .font(DS.Font.icon(14, weight: .bold))
                         .foregroundColor(guide.color)
                 }
                 VStack(alignment: .leading, spacing: 1) {
@@ -53,7 +53,7 @@ struct RoleScopeCard: View {
     private func scopeLine(_ text: String, icon: String, color: Color) -> some View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(color)
                 .padding(.top, 1)
             Text(text)

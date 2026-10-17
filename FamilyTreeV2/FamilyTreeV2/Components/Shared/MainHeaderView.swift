@@ -277,14 +277,14 @@ struct MainHeaderView<TrailingContent: View>: View {
                     Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
                 )
             Image(systemName: symbol)
-                .font(DS.Font.scaled(isLandscape ? 16 : 20, weight: .bold))
+                .font(DS.Font.icon(isLandscape ? 16 : 20, weight: .bold))
                 .foregroundColor(DS.Color.textOnPrimary)
         }
     }
 
     private func headerIconView(icon: String) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(isLandscape ? 15 : 18, weight: .bold))
+            .font(DS.Font.icon(isLandscape ? 15 : 18, weight: .bold))
             .foregroundColor(DS.Color.textOnPrimary)
             .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
             .dsHeaderGlassCircle()

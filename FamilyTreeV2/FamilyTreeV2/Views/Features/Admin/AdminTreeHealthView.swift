@@ -174,7 +174,7 @@ struct AdminTreeHealthView: View {
                     // Swipe hint
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "hand.draw")
-                            .font(DS.Font.scaled(11, weight: .medium))
+                            .font(DS.Font.icon(11, weight: .medium))
                         Text(L10n.t(
                             "← سحب لإجراءات سريعة →",
                             "← Swipe for quick actions →"
@@ -375,7 +375,7 @@ struct AdminTreeHealthView: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: filter.icon)
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .font(DS.Font.icon(11, weight: .bold))
                             Text(filter.label)
                                 .font(DS.Font.scaled(13, weight: .bold))
                             if filterCount > 0 {
@@ -412,7 +412,7 @@ struct AdminTreeHealthView: View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(DS.Color.textTertiary)
-                .font(DS.Font.scaled(14, weight: .medium))
+                .font(DS.Font.icon(14, weight: .medium))
             TextField(L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."), text: $searchText)
                 .font(DS.Font.callout)
                 .foregroundColor(DS.Color.textPrimary)
@@ -474,7 +474,7 @@ struct AdminTreeHealthView: View {
                         ForEach(issues, id: \.self) { tag in
                             HStack(spacing: 2) {
                                 Image(systemName: tag.icon)
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(tag.label)
                                     .font(DS.Font.scaled(11, weight: .bold))
                             }

@@ -14,7 +14,7 @@ struct HomeInfoButton: View {
         } label: {
             // نفس حجم الجرس (22) وعرض أضيق ليقترب منه
             Image(systemName: "info.circle")
-                .font(DS.Font.scaled(22, weight: .semibold))
+                .font(DS.Font.icon(22, weight: .semibold))
                 .foregroundStyle(DS.Color.textOnPrimary)
                 .frame(width: 32, height: 44)
         }

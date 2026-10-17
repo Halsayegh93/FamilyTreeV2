@@ -117,7 +117,7 @@ struct AdminAppSettingsView: View {
                     }
                     Spacer(minLength: 0)
                     Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -405,7 +405,7 @@ struct AdminAppSettingsView: View {
     private var readOnlyBanner: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "eye.fill")
-                .font(DS.Font.scaled(14, weight: .bold))
+                .font(DS.Font.icon(14, weight: .bold))
                 .foregroundColor(DS.Color.info)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("وضع القراءة فقط", "Read-only mode"))
@@ -481,7 +481,7 @@ struct AdminAppSettingsView: View {
         } label: {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: "arrow.counterclockwise")
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                 Text(L10n.t("إعادة تعيين الإعدادات", "Reset Settings"))
                     .font(DS.Font.calloutBold)
             }

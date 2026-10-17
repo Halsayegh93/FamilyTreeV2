@@ -322,7 +322,7 @@ struct AdminReportsView: View {
             // رأس
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "slider.horizontal.3")
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                     .foregroundColor(DS.Color.primary)
                 Text("إعدادات التقرير")
                     .font(DS.Font.calloutBold)
@@ -374,7 +374,7 @@ struct AdminReportsView: View {
                     if needsAgeFilter {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "calendar")
-                                .font(DS.Font.scaled(11, weight: .semibold))
+                                .font(DS.Font.icon(11, weight: .semibold))
                                 .foregroundColor(DS.Color.palm)
                             Text("العمر:")
                                 .font(DS.Font.caption1)
@@ -480,7 +480,7 @@ struct AdminReportsView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                     .foregroundColor(DS.Color.textSecondary)
                 Text(title)
                     .font(DS.Font.caption1)
@@ -547,7 +547,7 @@ struct AdminReportsView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.icon(13, weight: .bold))
                     .foregroundColor(color)
                 Text(title)
                     .font(DS.Font.calloutBold)
@@ -590,7 +590,7 @@ struct AdminReportsView: View {
             if filteredMembers.isEmpty {
                 VStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "person.2.slash")
-                        .font(DS.Font.scaled(34))
+                        .font(DS.Font.icon(34))
                         .foregroundColor(DS.Color.textTertiary)
                     Text("لا يوجد أعضاء")
                         .font(DS.Font.callout)
@@ -668,7 +668,7 @@ struct AdminReportsView: View {
             if let m = branchRootMember {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "tree.fill")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(selectedReport.tint)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("فرع: \(m.displayFullName)")
@@ -712,13 +712,13 @@ struct AdminReportsView: View {
                 Button { branchPickerOpen = true } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "tree")
-                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .font(DS.Font.icon(12, weight: .semibold))
                         Text("حصر على فرع معيّن")
                             .font(DS.Font.caption1)
                             .fontWeight(.semibold)
                         Spacer()
                         Image(systemName: "chevron.forward")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                             .opacity(0.5)
                     }
                     .foregroundColor(DS.Color.textSecondary)
@@ -755,7 +755,7 @@ struct AdminReportsView: View {
                     if selected {
                         Spacer(minLength: 0)
                         Image(systemName: "checkmark.circle.fill")
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.icon(13, weight: .bold))
                     }
                 }
                 .font(DS.Font.scaled(12, weight: .bold))
@@ -782,7 +782,7 @@ struct AdminReportsView: View {
 
         return HStack(spacing: DS.Spacing.md) {
             Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                .font(DS.Font.scaled(20))
+                .font(DS.Font.icon(20))
                 .foregroundStyle(
                     selected ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.textTertiary)
                 )
@@ -796,7 +796,7 @@ struct AdminReportsView: View {
 
                     if member.isDeceased == true {
                         Image(systemName: "leaf.fill")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }
@@ -819,7 +819,7 @@ struct AdminReportsView: View {
             Spacer()
 
             Image(systemName: "chevron.forward")
-                .font(DS.Font.scaled(12, weight: .bold))
+                .font(DS.Font.icon(12, weight: .bold))
                 .foregroundColor(selected ? selectedReport.tint : DS.Color.textTertiary)
         }
         .padding(DS.Spacing.md)
@@ -836,7 +836,7 @@ struct AdminReportsView: View {
     private func detailBadge(icon: String, text: String, tint: Color = DS.Color.textSecondary) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11))
+                .font(DS.Font.icon(11))
             Text(text)
                 .font(DS.Font.caption2)
         }
@@ -851,7 +851,7 @@ struct AdminReportsView: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11))
+                    .font(DS.Font.icon(11))
                 Text(title)
                     .font(DS.Font.scaled(11, weight: .bold))
             }

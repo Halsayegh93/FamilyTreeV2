@@ -129,7 +129,7 @@ struct AddSonByAdminSheet: View {
         Section {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: isEditMode ? "pencil.circle.fill" : "person.badge.plus.fill")
-                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .font(DS.Font.icon(15, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
                     .frame(width: 28, height: 28)
                     .background(DS.Color.primary.opacity(0.12))
@@ -256,7 +256,7 @@ struct AddSonByAdminSheet: View {
     private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(color)
             Text(title)
                 .font(DS.Font.caption1)

@@ -285,11 +285,11 @@ struct AdminActivityLogView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: filter.icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                 Text(filter.title)
                     .font(DS.Font.scaled(12, weight: .bold))
                 Image(systemName: "xmark")
-                    .font(DS.Font.scaled(9, weight: .heavy))
+                    .font(DS.Font.icon(9, weight: .heavy))
             }
             .foregroundColor(DS.Color.onTint)
             .padding(.horizontal, DS.Spacing.md)
@@ -303,7 +303,7 @@ struct AdminActivityLogView: View {
     private var searchField: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "magnifyingglass")
-                .font(DS.Font.scaled(13, weight: .medium))
+                .font(DS.Font.icon(13, weight: .medium))
                 .foregroundColor(DS.Color.textTertiary)
             TextField(L10n.t("ابحث في السجل…", "Search the log…"), text: $searchText)
                 .font(DS.Font.callout)
@@ -325,7 +325,7 @@ struct AdminActivityLogView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(L10n.t("تحديد الكل", "Select all"))
                         .font(DS.Font.scaled(12, weight: .bold))
                 }
@@ -350,7 +350,7 @@ struct AdminActivityLogView: View {
                         ProgressView().tint(DS.Color.error).scaleEffect(0.7)
                     } else {
                         Image(systemName: "trash.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                     }
                     Text(L10n.t("حذف", "Delete"))
                         .font(DS.Font.scaled(12, weight: .bold))
@@ -388,12 +388,12 @@ struct AdminActivityLogView: View {
         return HStack(spacing: DS.Spacing.md) {
             if isSelecting {
                 Image(systemName: picked ? "checkmark.circle.fill" : "circle")
-                    .font(DS.Font.scaled(20))
+                    .font(DS.Font.icon(20))
                     .foregroundColor(picked ? DS.Color.primary : DS.Color.textTertiary)
             }
 
             Image(systemName: style.icon)
-                .font(DS.Font.scaled(15, weight: .semibold))
+                .font(DS.Font.icon(15, weight: .semibold))
                 .foregroundColor(style.color)
                 .frame(width: 36, height: 36)
                 .background(style.color.opacity(0.12), in: RoundedRectangle(cornerRadius: DS.Radius.md))
@@ -488,7 +488,7 @@ struct AdminActivityLogView: View {
     private var emptyState: some View {
         VStack(spacing: DS.Spacing.md) {
             Image(systemName: "clock.arrow.circlepath")
-                .font(DS.Font.scaled(38, weight: .regular))
+                .font(DS.Font.icon(38, weight: .regular))
                 .foregroundColor(DS.Color.textTertiary)
             Text(L10n.t("لا توجد حركة بعد", "No activity yet"))
                 .font(DS.Font.callout)
@@ -547,7 +547,7 @@ private struct ActivityDetailSheet: View {
                     ZStack {
                         Circle().fill(SwiftUI.Color.white.opacity(0.20))
                         Image(systemName: style.icon)
-                            .font(DS.Font.scaled(17, weight: .bold))
+                            .font(DS.Font.icon(17, weight: .bold))
                             .foregroundColor(DS.Color.onTint)
                     }
                     .frame(width: 44, height: 44)
@@ -567,7 +567,7 @@ private struct ActivityDetailSheet: View {
 
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.icon(13, weight: .bold))
                             .foregroundColor(DS.Color.onTint)
                             .frame(width: 32, height: 32)
                             .background(SwiftUI.Color.white.opacity(0.18), in: Circle())
@@ -699,7 +699,7 @@ private struct ActivityDetailSheet: View {
                     ZStack {
                         Rectangle().fill(DS.Color.surface)
                         Image(systemName: "person.crop.circle.badge.xmark")
-                            .font(DS.Font.scaled(14))
+                            .font(DS.Font.icon(14))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }
@@ -735,7 +735,7 @@ private struct ActivityDetailSheet: View {
                 HStack(spacing: DS.Spacing.md) {
                     photoThumb(ch.before, label: L10n.t("قبل", "Before"), faded: true)
                     Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                     photoThumb(ch.after, label: L10n.t("بعد", "After"), faded: false)
                     Spacer(minLength: 0)
@@ -749,7 +749,7 @@ private struct ActivityDetailSheet: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                     Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(display(ch.after))
                         .font(DS.Font.scaled(12, weight: .bold))

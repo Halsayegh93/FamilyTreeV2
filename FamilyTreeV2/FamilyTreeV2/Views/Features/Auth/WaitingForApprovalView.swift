@@ -68,7 +68,7 @@ struct WaitingForApprovalView: View {
                         ToolbarItem(placement: DSToolbar.cancelPlacement) {
                             Button { showContactSheet = false } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(DS.Font.scaled(22, weight: .medium))
+                                    .font(DS.Font.icon(22, weight: .medium))
                                     .foregroundStyle(DS.Color.textTertiary)
                                     .symbolRenderingMode(.hierarchical)
                             }
@@ -110,7 +110,7 @@ struct WaitingForApprovalView: View {
 
             // أيقونة الانتظار
             Image(systemName: "hourglass")
-                .font(DS.Font.scaled(40, weight: .semibold))
+                .font(DS.Font.icon(40, weight: .semibold))
                 .foregroundColor(.white)
                 .offset(y: iconBounce)
         }

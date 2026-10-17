@@ -98,7 +98,7 @@ struct AdminModeratorsView: View {
                         showAddSheet = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(DS.Font.scaled(22, weight: .medium))
+                            .font(DS.Font.icon(22, weight: .medium))
                             .foregroundStyle(DS.Color.primary)
                     }
                     .accessibilityLabel(L10n.t("إضافة", "Add"))
@@ -175,7 +175,7 @@ struct AdminModeratorsView: View {
     private func sectionHeader(title: String, icon: String, color: Color, count: Int? = nil) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .bold))
+                .font(DS.Font.icon(14, weight: .bold))
                 .foregroundColor(color)
             Text(title)
                 .font(DS.Font.calloutBold)
@@ -208,7 +208,7 @@ struct AdminModeratorsView: View {
                     .frame(width: 50, height: 50)
 
                 Image(systemName: roleIcon)
-                    .font(DS.Font.scaled(20, weight: .bold))
+                    .font(DS.Font.icon(20, weight: .bold))
                     .foregroundColor(roleColor)
             }
 
@@ -244,7 +244,7 @@ struct AdminModeratorsView: View {
                 if let phone = member.phoneNumber, !phone.isEmpty {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "phone.fill")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                         Text(KuwaitPhone.display(phone))
                             .font(DS.Font.caption1)
                             .monospacedDigit()
@@ -336,7 +336,7 @@ struct AdminModeratorsView: View {
     private func domainTile(_ domain: RoleDomain) -> some View {
         VStack(spacing: 5) {
             Image(systemName: domain.icon)
-                .font(DS.Font.scaled(16, weight: .bold))
+                .font(DS.Font.icon(16, weight: .bold))
                 .foregroundColor(domain.color)
             Text(domain.title)
                 .font(DS.Font.plex(11, weight: .bold))
@@ -367,7 +367,7 @@ struct AdminModeratorsView: View {
             ZStack {
                 Circle().fill(guide.color.opacity(0.18)).frame(width: 34, height: 34)
                 Image(systemName: guide.icon)
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                     .foregroundColor(guide.color)
             }
             VStack(alignment: .leading, spacing: 1) {
@@ -397,7 +397,7 @@ struct AdminModeratorsView: View {
                     .background(Capsule().fill(guide.color.opacity(0.14)))
             }
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -429,7 +429,7 @@ struct AdminModeratorsView: View {
                         ZStack {
                             Circle().fill(guide.color.opacity(0.18)).frame(width: 52, height: 52)
                             Image(systemName: guide.icon)
-                                .font(DS.Font.scaled(22, weight: .bold))
+                                .font(DS.Font.icon(22, weight: .bold))
                                 .foregroundColor(guide.color)
                         }
                         VStack(alignment: .leading, spacing: 2) {
@@ -490,7 +490,7 @@ struct AdminModeratorsView: View {
     private func guideLine(_ text: String, icon: String, color: Color) -> some View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(12, weight: .bold))
+                .font(DS.Font.icon(12, weight: .bold))
                 .foregroundColor(color)
                 .padding(.top, 1)
             Text(text)
@@ -570,7 +570,7 @@ struct AddModeratorSheet: View {
                         Spacer()
                         VStack(spacing: DS.Spacing.md) {
                             Image(systemName: "person.slash")
-                                .font(DS.Font.scaled(36, weight: .bold))
+                                .font(DS.Font.icon(36, weight: .bold))
                                 .foregroundColor(DS.Color.textTertiary)
                             Text(L10n.t("لا يوجد أعضاء", "No members found"))
                                 .font(DS.Font.subheadline)
@@ -592,7 +592,7 @@ struct AddModeratorSheet: View {
                                                 .fill(DS.Color.primary.opacity(0.1))
                                                 .frame(width: 40, height: 40)
                                             Image(systemName: "person.fill")
-                                                .font(DS.Font.scaled(16, weight: .semibold))
+                                                .font(DS.Font.icon(16, weight: .semibold))
                                                 .foregroundColor(DS.Color.primary)
                                         }
 
@@ -613,7 +613,7 @@ struct AddModeratorSheet: View {
                                         Spacer()
 
                                         Image(systemName: "plus.circle.fill")
-                                            .font(DS.Font.scaled(22))
+                                            .font(DS.Font.icon(22))
                                             .foregroundColor(selectedRole == .admin ? DS.Color.adminRole : (selectedRole == .monitor ? DS.Color.monitorRole : DS.Color.supervisorRole))
                                     }
                                 }
@@ -633,7 +633,7 @@ struct AddModeratorSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(22, weight: .medium))
+                            .font(DS.Font.icon(22, weight: .medium))
                             .foregroundStyle(DS.Color.textTertiary)
                             .symbolRenderingMode(.hierarchical)
                     }
@@ -726,7 +726,7 @@ struct ChangeRoleSheet: View {
                     ZStack {
                         DS.Color.primary.opacity(0.14)
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(18, weight: .bold))
+                            .font(DS.Font.icon(18, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                     }
                 }
@@ -759,7 +759,7 @@ struct ChangeRoleSheet: View {
                 ZStack {
                     Circle().fill(guide.color.opacity(0.18)).frame(width: 34, height: 34)
                     Image(systemName: guide.icon)
-                        .font(DS.Font.scaled(14, weight: .bold))
+                        .font(DS.Font.icon(14, weight: .bold))
                         .foregroundColor(guide.color)
                 }
                 VStack(alignment: .leading, spacing: 1) {
@@ -773,7 +773,7 @@ struct ChangeRoleSheet: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(DS.Font.scaled(18, weight: .bold))
+                    .font(DS.Font.icon(18, weight: .bold))
                     .foregroundColor(isSelected ? guide.color : DS.Color.textTertiary.opacity(0.5))
             }
 
@@ -813,7 +813,7 @@ struct ChangeRoleSheet: View {
     private func optionLine(_ text: String, icon: String, color: Color) -> some View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(color)
                 .padding(.top, 1)
             Text(text)

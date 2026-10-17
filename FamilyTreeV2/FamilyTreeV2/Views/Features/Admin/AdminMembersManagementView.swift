@@ -79,7 +79,7 @@ struct AdminMembersManagementView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showRegisterMember = true } label: {
                         Image(systemName: "person.badge.plus")
-                            .font(DS.Font.scaled(15, weight: .semibold))
+                            .font(DS.Font.icon(15, weight: .semibold))
                     }
                     .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register new member"))
                 }
@@ -261,7 +261,7 @@ struct AdminMembersManagementView: View {
                 ZStack {
                     Circle().fill(color.opacity(0.14))
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(14, weight: .semibold))
+                        .font(DS.Font.icon(14, weight: .semibold))
                         .foregroundColor(color)
                 }
                 .frame(width: 36, height: 36)
@@ -326,7 +326,7 @@ struct AdminMembersManagementView: View {
             withAnimation(DS.Anim.snappy) { selectedTab = tab }
         } label: {
             Image(systemName: tab.icon)
-                .font(DS.Font.scaled(15, weight: .semibold))
+                .font(DS.Font.icon(15, weight: .semibold))
                 .accessibilityLabel(tab.title)
             .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
             .frame(maxWidth: .infinity)

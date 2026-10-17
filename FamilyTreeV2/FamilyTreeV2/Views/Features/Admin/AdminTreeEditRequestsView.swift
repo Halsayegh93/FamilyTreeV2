@@ -118,7 +118,7 @@ struct AdminTreeEditRequestsView: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: action.iconName)
-                                .font(DS.Font.scaled(13, weight: .semibold))
+                                .font(DS.Font.icon(13, weight: .semibold))
                             Text(L10n.t(action.arabicLabel, action.englishLabel))
                                 .font(DS.Font.caption1)
                                 .fontWeight(.semibold)
@@ -154,7 +154,7 @@ struct AdminTreeEditRequestsView: View {
         VStack(spacing: DS.Spacing.md) {
             Spacer()
             Image(systemName: "tray")
-                .font(DS.Font.scaled(48))
+                .font(DS.Font.icon(48))
                 .foregroundColor(DS.Color.textTertiary.opacity(0.5))
             Text(L10n.t("لا توجد طلبات", "No requests"))
                 .font(DS.Font.calloutBold)
@@ -197,7 +197,7 @@ struct AdminTreeEditRequestsView: View {
                         .fill(tint.opacity(0.12))
                         .frame(width: 44, height: 44)
                     Image(systemName: action.iconName)
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                         .foregroundColor(tint)
                 }
 
@@ -222,7 +222,7 @@ struct AdminTreeEditRequestsView: View {
 
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(11))
+                        .font(DS.Font.icon(11))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(L10n.t("مقدم الطلب: ", "Requester: ") + requesterName)
                         .font(DS.Font.caption1)
@@ -232,7 +232,7 @@ struct AdminTreeEditRequestsView: View {
                 if let createdAt = request.createdAt, !createdAt.isEmpty {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "clock")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(formatDate(createdAt))
                             .font(DS.Font.caption1)
@@ -243,7 +243,7 @@ struct AdminTreeEditRequestsView: View {
                 if let notes = payload?.notes, !notes.isEmpty {
                     HStack(alignment: .top, spacing: DS.Spacing.xs) {
                         Image(systemName: "text.bubble")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(notes)
                             .font(DS.Font.caption1)
@@ -260,7 +260,7 @@ struct AdminTreeEditRequestsView: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(DS.Font.scaled(14, weight: .semibold))
+                                .font(DS.Font.icon(14, weight: .semibold))
                             Text(L10n.t("موافقة", "Approve"))
                                 .font(DS.Font.calloutBold)
                         }
@@ -281,7 +281,7 @@ struct AdminTreeEditRequestsView: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(DS.Font.scaled(14, weight: .semibold))
+                                .font(DS.Font.icon(14, weight: .semibold))
                             Text(L10n.t("رفض", "Reject"))
                                 .font(DS.Font.calloutBold)
                         }
@@ -378,7 +378,7 @@ struct AdminTreeEditRequestsView: View {
     private func detailRow(icon: String, label: String, value: String, valueColor: Color = DS.Color.textPrimary) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11))
+                .font(DS.Font.icon(11))
                 .foregroundColor(DS.Color.textTertiary)
                 .frame(width: 16)
             Text(label)

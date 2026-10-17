@@ -64,7 +64,7 @@ struct QRScannerView: View {
                 ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(24))
+                            .font(DS.Font.icon(24))
                             .foregroundStyle(.white.opacity(0.8))
                     }
                 }
@@ -170,7 +170,7 @@ struct QRScannerView: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "qrcode.viewfinder")
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                     Text(L10n.t("مسح باركود آخر", "Scan another"))
                         .font(DS.Font.calloutBold)
                 }

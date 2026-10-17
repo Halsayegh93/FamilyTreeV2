@@ -350,7 +350,7 @@ struct AdminIncompleteMembersView: View {
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: filter.icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                 Text(filter.label)
                     .font(DS.Font.caption1)
                     .fontWeight(.semibold)
@@ -426,7 +426,7 @@ struct AdminIncompleteMembersView: View {
                         ForEach(missing, id: \.self) { field in
                             HStack(spacing: 2) {
                                 Image(systemName: field.icon)
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(field.label)
                                     .font(DS.Font.caption2)
                                     .fontWeight(.medium)
@@ -471,7 +471,7 @@ struct AdminIncompleteMembersView: View {
                     .fill(DS.Color.primary)
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                     .foregroundColor(DS.Color.textOnPrimary)
             }
         }
@@ -528,7 +528,7 @@ struct AdminIncompleteMembersView: View {
                         }
                     } label: {
                         Image(systemName: "pencil.circle.fill")
-                            .font(DS.Font.scaled(16, weight: .bold))
+                            .font(DS.Font.icon(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
                             .background(DS.Color.primary.opacity(0.1))

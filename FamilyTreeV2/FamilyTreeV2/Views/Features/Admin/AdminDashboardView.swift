@@ -283,7 +283,7 @@ struct AdminDashboardView: View {
                     } else {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "checkmark.seal.fill")
-                                .font(DS.Font.scaled(14, weight: .semibold))
+                                .font(DS.Font.icon(14, weight: .semibold))
                                 .foregroundColor(DS.Color.success)
                             Text(L10n.t("ما فيه شي ينتظر مراجعتك", "Nothing awaiting your review"))
                                 .font(DS.Font.scaled(12, weight: .medium))
@@ -382,7 +382,7 @@ struct AdminDashboardView: View {
         VStack(spacing: 2) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(10, weight: .bold))
+                    .font(DS.Font.icon(10, weight: .bold))
                 Text("\(value)")
                     .font(DS.Font.plex(15, weight: .bold))
             }
@@ -511,7 +511,7 @@ struct AdminDashboardView: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                     .foregroundColor(color)
                 Text(title)
                     .font(DS.Font.scaled(11, weight: .medium))
@@ -604,7 +604,7 @@ struct AdminDashboardView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(DS.Font.scaled(15, weight: .bold))
+                        .font(DS.Font.icon(15, weight: .bold))
                         .foregroundColor(DS.Color.error)
                     Text(L10n.t("تنبيه توافق قاعدة البيانات", "Database Compatibility Warning"))
                         .font(DS.Font.calloutBold)
@@ -656,7 +656,7 @@ struct AdminTile<Destination: View>: View {
                     ZStack {
                         Circle().fill(color.opacity(0.14))
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(compact ? 15 : 17, weight: .semibold))
+                            .font(DS.Font.icon(compact ? 15 : 17, weight: .semibold))
                             .foregroundColor(color)
                     }
                     .frame(width: compact ? 36 : 44, height: compact ? 36 : 44)

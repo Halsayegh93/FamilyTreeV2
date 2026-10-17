@@ -48,7 +48,7 @@ struct ProjectPhotosEditor: View {
                                  matching: .images) {
                         VStack(spacing: 4) {
                             Image(systemName: "plus")
-                                .font(DS.Font.scaled(18, weight: .bold))
+                                .font(DS.Font.icon(18, weight: .bold))
                             Text(L10n.t("إضافة", "Add"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
@@ -91,7 +91,7 @@ struct ProjectPhotosEditor: View {
             .overlay(alignment: .topLeading) {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.icon(10, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 22, height: 22)
                         .background(Circle().fill(Color.black.opacity(0.55)))
@@ -154,7 +154,7 @@ struct ProjectPhotosMosaic: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "photo.on.rectangle.angled")
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                 Text(L10n.t("صور المشروع", "Project Photos"))
                     .font(DS.Font.plex(13, weight: .bold))
                 Spacer()

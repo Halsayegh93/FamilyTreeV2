@@ -145,7 +145,7 @@ struct TreeEditRequestView: View {
                     .fill(actionColor.opacity(0.12))
                     .frame(width: 56, height: 56)
                 Image(systemName: action.iconName)
-                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .font(DS.Font.icon(20, weight: .semibold))
                     .foregroundColor(actionColor)
             }
 
@@ -264,7 +264,7 @@ struct TreeEditRequestView: View {
 
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .medium))
+                    .font(DS.Font.icon(14, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                     .frame(width: 24)
 
@@ -276,7 +276,7 @@ struct TreeEditRequestView: View {
                 if !text.wrappedValue.isEmpty {
                     Button { text.wrappedValue = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(14, weight: .medium))
+                            .font(DS.Font.icon(14, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }

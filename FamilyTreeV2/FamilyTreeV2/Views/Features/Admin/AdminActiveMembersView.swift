@@ -147,7 +147,7 @@ struct AdminActiveMembersView: View {
                 ProgressView().scaleEffect(0.8)
             } else {
                 Image(systemName: "arrow.clockwise")
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
             }
         }
         .disabled(isRefreshing)
@@ -167,7 +167,7 @@ struct AdminActiveMembersView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: actionIcon(row.actionKind, source: row.source))
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(DS.Font.icon(11, weight: .semibold))
                         .foregroundColor(actionColor(row.actionKind, source: row.source))
                     Text(actionLabel(row))
                         .font(DS.Font.scaled(11, weight: .semibold))
@@ -262,7 +262,7 @@ struct AdminActiveMembersView: View {
     private func statBox(icon: String, title: String, value: String, color: Color) -> some View {
         VStack(spacing: 3) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(color)
             Text(value)
                 .font(DS.Font.plex(18, weight: .bold)).monospacedDigit()
@@ -292,7 +292,7 @@ struct AdminActiveMembersView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: sourceIcon(row.source))
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(DS.Font.icon(11, weight: .semibold))
                     Text(screenLabel(row.currentScreen, source: row.source))
                         .font(DS.Font.scaled(11, weight: .semibold))
                 }
@@ -322,7 +322,7 @@ struct AdminActiveMembersView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: sourceIcon(row.source))
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(DS.Font.icon(11, weight: .semibold))
                     Text(screenLabel(row.currentScreen, source: row.source))
                         .font(DS.Font.scaled(11, weight: .regular))
                 }
@@ -363,7 +363,7 @@ struct AdminActiveMembersView: View {
                     .frame(width: 40, height: 40)
                     .overlay(
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(16))
+                            .font(DS.Font.icon(16))
                             .foregroundColor(DS.Color.primary)
                     )
             }
@@ -387,7 +387,7 @@ struct AdminActiveMembersView: View {
     private func inlineEmpty(text: String) -> some View {
         VStack(spacing: 4) {
             Image(systemName: "moon.zzz.fill")
-                .font(DS.Font.scaled(20))
+                .font(DS.Font.icon(20))
                 .foregroundColor(DS.Color.textTertiary)
             Text(text)
                 .font(DS.Font.caption1)

@@ -369,7 +369,7 @@ struct FamilyArchiveView: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                 Text(label)
                     .font(DS.Font.scaled(13, weight: .bold))
             }
@@ -524,7 +524,7 @@ struct FamilyArchiveView: View {
     /// شارة زر القائمة الظاهر (•••) — دائرة زجاجية صغيرة.
     private var cardMenuBadge: some View {
         Image(systemName: "ellipsis")
-            .font(DS.Font.scaled(13, weight: .black))
+            .font(DS.Font.icon(13, weight: .black))
             .foregroundColor(DS.Color.textSecondary)
             .frame(width: 26, height: 26)
             .background(Circle().fill(DS.Color.surface))
@@ -544,7 +544,7 @@ struct FamilyArchiveView: View {
             // لسان الملف
             HStack(spacing: 4) {
                 Image(systemName: item.categoryIcon)
-                    .font(DS.Font.scaled(9, weight: .bold))
+                    .font(DS.Font.icon(9, weight: .bold))
                 Text(item.categoryDisplayName)
                     .font(DS.Font.plex(10, weight: .bold))
                     .lineLimit(1)
@@ -631,7 +631,7 @@ struct FamilyArchiveView: View {
                     ZStack {
                         accent.opacity(0.22)
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(8, weight: .bold))
+                            .font(DS.Font.icon(8, weight: .bold))
                             .foregroundColor(accent)
                     }
                 }
@@ -759,7 +759,7 @@ struct FamilyArchiveView: View {
     /// شارة حالة موحّدة (capsule صغيرة بأيقونة + نص).
     private func statusBadge(icon: String, label: String, color: Color) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+            Image(systemName: icon).font(DS.Font.icon(11, weight: .bold))
             Text(label).font(DS.Font.scaled(11, weight: .bold))
         }
         .foregroundColor(.white)
@@ -946,7 +946,7 @@ struct ArchiveUploadSheet: View {
                 // عرض الملف المختار
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: pickedMimeType == "application/pdf" ? "doc.text.fill" : "photo.fill")
-                        .font(DS.Font.scaled(20, weight: .bold))
+                        .font(DS.Font.icon(20, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(pickedFileName.isEmpty ? L10n.t("ملف مختار", "Selected file") : pickedFileName)
@@ -998,7 +998,7 @@ struct ArchiveUploadSheet: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(22, weight: .bold))
+                    .font(DS.Font.icon(22, weight: .bold))
                     .foregroundColor(DS.Color.primary)
                 Text(title)
                     .font(DS.Font.callout)
@@ -1051,7 +1051,7 @@ struct ArchiveUploadSheet: View {
             boxedField {
                 HStack(spacing: 6) {
                     Image(systemName: ArchiveItem.categoryIcon(categoryKey))
-                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .font(DS.Font.icon(12, weight: .semibold))
                         .foregroundColor(DS.Color.primary)
                     Text(ArchiveItem.categoryName(categoryKey))
                         .font(DS.Font.scaled(14))
@@ -1059,7 +1059,7 @@ struct ArchiveUploadSheet: View {
                         .lineLimit(1)
                     Spacer(minLength: 2)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -1249,7 +1249,7 @@ struct ArchiveEditSheet: View {
             editBoxedField {
                 HStack(spacing: 6) {
                     Image(systemName: ArchiveItem.categoryIcon(categoryKey))
-                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .font(DS.Font.icon(12, weight: .semibold))
                         .foregroundColor(DS.Color.primary)
                     Text(ArchiveItem.categoryName(categoryKey))
                         .font(DS.Font.scaled(14))
@@ -1257,7 +1257,7 @@ struct ArchiveEditSheet: View {
                         .lineLimit(1)
                     Spacer(minLength: 2)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -1406,7 +1406,7 @@ struct ArchiveItemViewer: View {
             HStack(spacing: DS.Spacing.sm) {
                 HStack(spacing: 4) {
                     Image(systemName: item.categoryIcon)
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.icon(10, weight: .bold))
                     Text(item.categoryDisplayName)
                         .font(DS.Font.plex(11, weight: .bold))
                 }
@@ -1461,7 +1461,7 @@ struct ArchiveItemViewer: View {
                 if let uploaderName, !uploaderName.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.icon(10, weight: .bold))
                         Text(uploaderName)
                             .font(DS.Font.plex(11, weight: .semibold))
                             .lineLimit(1)

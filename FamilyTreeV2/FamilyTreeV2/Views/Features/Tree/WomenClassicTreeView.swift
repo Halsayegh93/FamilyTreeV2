@@ -519,7 +519,7 @@ struct WomenClassicTreeView: View {
 
     private func toolbarIcon(_ icon: String, compact: Bool = false) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(compact ? 12 : 14, weight: .bold))
+            .font(DS.Font.icon(compact ? 12 : 14, weight: .bold))
             .foregroundColor(DS.Color.primary)
             .frame(width: compact ? 27 : 34, height: compact ? 27 : 34)
             .background(DS.Color.surface.opacity(0.8), in: Circle())   // أغمق (طلب المالك)

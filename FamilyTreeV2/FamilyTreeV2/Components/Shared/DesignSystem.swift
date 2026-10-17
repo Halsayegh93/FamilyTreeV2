@@ -774,13 +774,13 @@ struct DSPrimaryButton: View {
                 } else {
                     if let icon {
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(16, weight: .bold))
+                            .font(DS.Font.icon(16, weight: .bold))
                     }
                     Text(title)
                         .fontWeight(.bold)
                     Spacer(minLength: 0)
                     Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(DS.Font.scaled(14, weight: .black))
+                        .font(DS.Font.icon(14, weight: .black))
                         .opacity(0.9)
                 }
             }
@@ -836,7 +836,7 @@ struct DSSecondaryButton: View {
     var body: some View {
         Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
-                if let icon { Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold)) }
+                if let icon { Image(systemName: icon).font(DS.Font.icon(14, weight: .bold)) }
                 Text(title).fontWeight(.bold)
             }
             .font(DS.Font.calloutBold)
@@ -937,7 +937,7 @@ struct DSIcon: View {
 
     var body: some View {
         Image(systemName: name)
-            .font(DS.Font.scaled(iconSize, weight: .bold))
+            .font(DS.Font.icon(iconSize, weight: .bold))
             .foregroundColor(color)
             .frame(width: size, height: size)
             .background(
@@ -1006,7 +1006,7 @@ struct DSActionRow: View {
             }
 
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(13, weight: .bold))
+                .font(DS.Font.icon(13, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -1027,7 +1027,7 @@ struct DSSectionHeader: View {
                 HStack(spacing: DS.Spacing.xs) {
                     if let icon {
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                             .foregroundColor(iconColor)
                     }
                     Text(title)
@@ -1146,7 +1146,7 @@ struct DSStatCard: View {
     var body: some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(26, weight: .bold))
+                .font(DS.Font.icon(26, weight: .bold))
                 .foregroundColor(color)
                 .frame(width: DS.Icon.sizeLg, height: DS.Icon.sizeLg)
                 .background(color.opacity(0.12))
@@ -1232,7 +1232,7 @@ struct DSFloatingButton: View {
             HStack(spacing: DS.Spacing.sm) {
                 if let icon, !icon.isEmpty {
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(20, weight: .black))
+                        .font(DS.Font.icon(20, weight: .black))
                 }
                 if let label {
                     Text(label).font(DS.Font.calloutBold)
@@ -1286,7 +1286,7 @@ struct DSSettingIcon: View {
                 .frame(width: size, height: size)
 
             Image(systemName: name)
-                .font(DS.Font.scaled(size * 0.42, weight: .bold))
+                .font(DS.Font.icon(size * 0.42, weight: .bold))
                 .foregroundColor(.white)
         }
     }
@@ -1451,7 +1451,7 @@ struct DSIconButton: View {
                     .frame(width: size, height: size)
                     .overlay(Circle().stroke(borderColor, lineWidth: borderWidth))
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(iconSize, weight: .bold))
+                    .font(DS.Font.icon(iconSize, weight: .bold))
                     .foregroundColor(iconColor)
             }
             .contentShape(Circle())
@@ -1489,7 +1489,7 @@ struct DSDestructiveButton: View {
                 } else {
                     if let icon {
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(15, weight: .bold))
+                            .font(DS.Font.icon(15, weight: .bold))
                     }
                     Text(title).fontWeight(.bold)
                 }
@@ -1536,7 +1536,7 @@ struct DSTextButton: View {
             HStack(spacing: DS.Spacing.xs) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(13, weight: .semibold))
+                        .font(DS.Font.icon(13, weight: .semibold))
                 }
                 Text(title).fontWeight(.semibold)
             }
@@ -1717,7 +1717,7 @@ struct DSEmptyState: View {
                     .fill(tint.opacity(0.08))
                     .frame(width: 100, height: 100)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(36, weight: .medium))
+                    .font(DS.Font.icon(36, weight: .medium))
                     .foregroundColor(tint.opacity(0.5))
             }
         case .halo:
@@ -1732,7 +1732,7 @@ struct DSEmptyState: View {
                     .fill(tint)
                     .frame(width: 64, height: 64)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(28, weight: .bold))
+                    .font(DS.Font.icon(28, weight: .bold))
                     .foregroundColor(.white)
             }
         }

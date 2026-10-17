@@ -327,7 +327,7 @@ struct FamilyProjectsView: View {
     /// شارة زر القائمة الظاهر (•••) — دائرة زجاجية صغيرة.
     private var cardMenuBadge: some View {
         Image(systemName: "ellipsis")
-            .font(DS.Font.scaled(13, weight: .black))
+            .font(DS.Font.icon(13, weight: .black))
             .foregroundColor(DS.Color.textSecondary)
             .frame(width: 26, height: 26)
             .background(Circle().fill(DS.Color.surface))
@@ -373,7 +373,7 @@ struct FamilyProjectsView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "clock.fill")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                         Text(authVM.isAdmin ? L10n.t("بانتظار", "Pending") : L10n.t("طلباتي", "Mine"))
                             .font(DS.Font.scaled(12, weight: .bold))
                         Text("\(pendingCount)")
@@ -442,7 +442,7 @@ struct FamilyProjectsView: View {
                 showBatchDeleteAlert = true
             } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: "trash.fill").font(DS.Font.scaled(12, weight: .bold))
+                    Image(systemName: "trash.fill").font(DS.Font.icon(12, weight: .bold))
                     Text(L10n.t("حذف", "Delete")).font(DS.Font.scaled(13, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -482,7 +482,7 @@ struct FamilyProjectsView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.icon(10, weight: .bold))
                     Text(project.ownerName)
                         .font(DS.Font.plex(11, weight: .semibold))
                         .lineLimit(1)
@@ -534,7 +534,7 @@ struct FamilyProjectsView: View {
                 ZStack {
                     DS.Color.primary.opacity(0.12)
                     Image(systemName: "briefcase.fill")
-                        .font(DS.Font.scaled(18, weight: .bold))
+                        .font(DS.Font.icon(18, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                 }
             }
@@ -550,7 +550,7 @@ struct FamilyProjectsView: View {
 
     private func statusBadge(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(DS.Font.scaled(10, weight: .bold))
+            Image(systemName: icon).font(DS.Font.icon(10, weight: .bold))
             Text(text).font(DS.Font.scaled(10, weight: .bold))
         }
         .foregroundColor(.white)
@@ -573,7 +573,7 @@ struct FamilyProjectsView: View {
 
     private func socialDot(icon: String, color: Color) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(11, weight: .bold))
+            .font(DS.Font.icon(11, weight: .bold))
             .foregroundColor(color)
             .frame(width: 16, height: 16)
             .background(Circle().fill(color.opacity(0.15)))
@@ -733,7 +733,7 @@ struct AddProjectView: View {
     private var approvalHintCard: some View {
         HStack(alignment: .top, spacing: DS.Spacing.sm) {
             Image(systemName: "info.circle.fill")
-                .font(DS.Font.scaled(14, weight: .bold))
+                .font(DS.Font.icon(14, weight: .bold))
                 .foregroundColor(DS.Color.info)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("بانتظار موافقة الإدارة",
@@ -854,7 +854,7 @@ struct AddProjectView: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "link")
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(DS.Font.icon(13, weight: .bold))
                         .foregroundColor(DS.Color.sea)
                     Text(L10n.t("روابط التواصل", "Contact Links"))
                         .font(DS.Font.scaled(13, weight: .bold))
@@ -897,7 +897,7 @@ struct AddProjectView: View {
     private func compactLink(icon: String, color: Color, placeholder: String, text: Binding<String>) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(13, weight: .semibold))
+                .font(DS.Font.icon(13, weight: .semibold))
                 .foregroundColor(color)
             TextField(placeholder, text: text)
                 .font(DS.Font.scaled(13))

@@ -24,7 +24,7 @@ private struct EditLimitPopup: View {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                         .foregroundColor(DS.Color.warning)
                     Text(L10n.t("تم تجاوز حد التعديلات", "Edit limit reached"))
                         .font(DS.Font.plex(17, weight: .bold))
@@ -506,7 +506,7 @@ struct EditProfileView: View {
             Text(L10n.t("تعديل", "Edit"))
                 .font(DS.Font.scaled(13, weight: .bold))
             Image(systemName: "pencil")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
         }
         .foregroundColor(DS.Color.primary)
         .padding(.horizontal, DS.Spacing.md)
@@ -538,7 +538,7 @@ struct EditProfileView: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.icon(13, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                         Text(L10n.t("الاسم", "Name"))
                             .font(DS.Font.caption1)
@@ -617,7 +617,7 @@ struct EditProfileView: View {
             Spacer()
 
             Image(systemName: "lock.fill")
-                .font(DS.Font.scaled(12, weight: .semibold))
+                .font(DS.Font.icon(12, weight: .semibold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -723,7 +723,7 @@ struct EditProfileView: View {
                     Button { showBioEditor = true } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "plus.circle.fill")
-                                .font(DS.Font.scaled(18))
+                                .font(DS.Font.icon(18))
                                 .foregroundColor(DS.Color.primary)
                             Text(L10n.t("أضف حدثاً لسيرتك", "Add to your biography"))
                                 .font(DS.Font.callout)

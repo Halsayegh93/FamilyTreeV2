@@ -95,7 +95,7 @@ struct PhotoGalleryView: View {
     private func yearHeader(for year: Int?) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: year == nil ? "calendar.badge.exclamationmark" : "calendar")
-                .font(DS.Font.scaled(13, weight: .bold))
+                .font(DS.Font.icon(13, weight: .bold))
                 .foregroundColor(DS.Color.primary)
             Text(year.map(String.init) ?? L10n.t("غير مؤرّخ", "Undated"))
                 .font(DS.Font.scaled(16, weight: .black))
@@ -161,7 +161,7 @@ private struct GalleryAlbumCard: View {
 
                 // عدّاد الصور
                 HStack(spacing: 3) {
-                    Image(systemName: "photo.fill").font(DS.Font.scaled(11, weight: .bold))
+                    Image(systemName: "photo.fill").font(DS.Font.icon(11, weight: .bold))
                     Text("\(photoCount)").font(DS.Font.scaled(11, weight: .black))
                 }
                 .foregroundColor(.white)
@@ -174,7 +174,7 @@ private struct GalleryAlbumCard: View {
             .overlay(alignment: .topTrailing) {
                 if album.isHidden {
                     HStack(spacing: 3) {
-                        Image(systemName: "eye.slash.fill").font(DS.Font.scaled(11, weight: .bold))
+                        Image(systemName: "eye.slash.fill").font(DS.Font.icon(11, weight: .bold))
                         Text(L10n.t("مخفي", "Hidden")).font(DS.Font.scaled(11, weight: .bold))
                     }
                     .foregroundColor(.white)
@@ -193,7 +193,7 @@ private struct GalleryAlbumCard: View {
                     .multilineTextAlignment(.leading)
                 if let year = album.year {
                     HStack(spacing: 3) {
-                        Image(systemName: "calendar").font(DS.Font.scaled(11, weight: .bold))
+                        Image(systemName: "calendar").font(DS.Font.icon(11, weight: .bold))
                         Text(String(year)).font(DS.Font.scaled(11, weight: .bold))
                     }
                     .foregroundColor(DS.Color.primary)
@@ -409,7 +409,7 @@ struct GalleryAlbumDetailView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(DS.Font.scaled(16, weight: .bold))
+                        .font(DS.Font.icon(16, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                         .frame(width: 38, height: 38)
                         .background(DS.Color.surface)
@@ -669,7 +669,7 @@ struct GalleryAddPhotosSheet: View {
                     ) {
                         VStack(spacing: 8) {
                             Image(systemName: "photo.badge.plus")
-                                .font(DS.Font.scaled(26, weight: .bold))
+                                .font(DS.Font.icon(26, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                             Text(images.isEmpty
                                  ? L10n.t("اختر صوراً", "Select photos")

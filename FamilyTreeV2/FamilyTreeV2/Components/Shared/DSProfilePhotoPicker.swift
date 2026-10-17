@@ -126,7 +126,7 @@ struct DSProfilePhotoPicker: View {
                     showChangeOptions = true
                 } label: {
                     Image(systemName: "camera.fill")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 32, height: 32)
                         .background(DS.Color.primary)
@@ -146,7 +146,7 @@ struct DSProfilePhotoPicker: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "crop")
-                                .font(DS.Font.scaled(12, weight: .bold))
+                                .font(DS.Font.icon(12, weight: .bold))
                             Text(L10n.t("تعديل", "Edit"))
                                 .font(DS.Font.scaled(13, weight: .bold))
                         }
@@ -164,7 +164,7 @@ struct DSProfilePhotoPicker: View {
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "arrow.triangle.2.circlepath.camera")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                         Text(L10n.t("تغيير", "Change"))
                             .font(DS.Font.scaled(13, weight: .bold))
                     }
@@ -187,7 +187,7 @@ struct DSProfilePhotoPicker: View {
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "trash.fill")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                         Text(L10n.t("حذف", "Delete"))
                             .font(DS.Font.scaled(13, weight: .bold))
                     }
@@ -270,7 +270,7 @@ struct DSProfilePhotoPicker: View {
                     showChangeOptions = true
                 } label: {
                     Image(systemName: "camera.fill")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 32, height: 32)
                         .background(DS.Color.primary)
@@ -294,7 +294,7 @@ struct DSProfilePhotoPicker: View {
                                     .tint(DS.Color.info)
                             } else {
                                 Image(systemName: "crop")
-                                    .font(DS.Font.scaled(12, weight: .bold))
+                                    .font(DS.Font.icon(12, weight: .bold))
                             }
                             Text(L10n.t("تعديل", "Edit"))
                                 .font(DS.Font.scaled(13, weight: .bold))
@@ -314,7 +314,7 @@ struct DSProfilePhotoPicker: View {
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "arrow.triangle.2.circlepath.camera")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                         Text(L10n.t("تغيير", "Change"))
                             .font(DS.Font.scaled(13, weight: .bold))
                     }
@@ -333,7 +333,7 @@ struct DSProfilePhotoPicker: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "trash.fill")
-                                .font(DS.Font.scaled(12, weight: .bold))
+                                .font(DS.Font.icon(12, weight: .bold))
                             Text(L10n.t("حذف", "Delete"))
                                 .font(DS.Font.scaled(13, weight: .bold))
                         }
@@ -426,7 +426,7 @@ struct DSProfilePhotoPicker: View {
 
                         // أيقونة الكاميرا
                         Image(systemName: "camera.fill")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .frame(width: 32, height: 32)
                             .background(DS.Color.primary)
@@ -450,7 +450,7 @@ struct DSProfilePhotoPicker: View {
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "arrow.triangle.2.circlepath.camera")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                         Text(L10n.t("اختر صورة", "Choose Photo"))
                             .font(DS.Font.scaled(13, weight: .bold))
                     }
@@ -492,7 +492,7 @@ struct DSProfilePhotoPicker: View {
             }
 
             Image(systemName: cropShape == .circle ? "person.fill" : "photo.fill")
-                .font(DS.Font.scaled(40, weight: .light))
+                .font(DS.Font.icon(40, weight: .light))
                 .foregroundColor(DS.Color.primary.opacity(0.25))
         }
     }
@@ -604,7 +604,7 @@ struct DSMultiPhotoPicker: View {
         } label: {
             VStack(spacing: DS.Spacing.md) {
                 Image(systemName: "photo.on.rectangle.angled")
-                    .font(DS.Font.scaled(36, weight: .light))
+                    .font(DS.Font.icon(36, weight: .light))
                     .foregroundColor(DS.Color.primary.opacity(0.5))
                 Text(L10n.t("اختر صور (اختياري)", "Choose Photos (optional)"))
                     .font(DS.Font.callout)
@@ -678,7 +678,7 @@ struct DSMultiPhotoPicker: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "trash.fill")
-                                .font(DS.Font.scaled(12, weight: .bold))
+                                .font(DS.Font.icon(12, weight: .bold))
                             Text(L10n.t("حذف", "Delete"))
                                 .font(DS.Font.scaled(12, weight: .bold))
                         }
@@ -740,7 +740,7 @@ struct DSMultiPhotoPicker: View {
                     } label: {
                         VStack(spacing: 2) {
                             Image(systemName: "plus")
-                                .font(DS.Font.scaled(16, weight: .bold))
+                                .font(DS.Font.icon(16, weight: .bold))
                             Text(L10n.t("إضافة", "Add"))
                                 .font(DS.Font.scaled(11, weight: .medium))
                         }

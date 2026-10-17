@@ -396,7 +396,7 @@ struct AdminAllRequestsView: View {
                             } label: {
                                 HStack(spacing: DS.Spacing.xs) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(DS.Font.scaled(14, weight: .semibold))
+                                        .font(DS.Font.icon(14, weight: .semibold))
                                     Text(L10n.t("رفض", "Reject"))
                                         .font(DS.Font.calloutBold)
                                 }
@@ -417,7 +417,7 @@ struct AdminAllRequestsView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.xs) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(DS.Font.scaled(14, weight: .semibold))
+                                    .font(DS.Font.icon(14, weight: .semibold))
                                 Text(L10n.t("قبول", "Approve"))
                                     .font(DS.Font.calloutBold)
                             }
@@ -452,7 +452,7 @@ struct AdminAllRequestsView: View {
                         }
                     } label: {
                         Image(systemName: "checkmark.circle")
-                            .font(DS.Font.scaled(16, weight: .semibold))
+                            .font(DS.Font.icon(16, weight: .semibold))
                             .foregroundColor(DS.Color.primary)
                     }
                     .accessibilityLabel(L10n.t("تحديد", "Select"))
@@ -1017,7 +1017,7 @@ struct AdminAllRequestsView: View {
                         }
                     } label: {
                         Image(systemName: "checkmark.circle")
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.icon(13, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 36, height: 36)
                             .background(Circle().fill(DS.Color.primary.opacity(0.12)))
@@ -1163,7 +1163,7 @@ struct AdminAllRequestsView: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.icon(13, weight: .bold))
                     .foregroundColor(DS.Color.onTint)
                 Text(title)
                     .font(DS.Font.scaled(13, weight: .bold))
@@ -1216,7 +1216,7 @@ struct AdminAllRequestsView: View {
         return Button(action: action) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                     .foregroundColor(color)
                     .frame(width: 38, height: 38)
                     .background(Circle().fill(color.opacity(0.10)))
@@ -1252,7 +1252,7 @@ struct AdminAllRequestsView: View {
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .font(DS.Font.icon(14, weight: .semibold))
                         Text(L10n.t(
                             "الموافقة على الكل (\(adminRequestVM.childAddRequests.count))",
                             "Approve All (\(adminRequestVM.childAddRequests.count))"
@@ -1492,7 +1492,7 @@ struct AdminAllRequestsView: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: allSelected ? "checkmark.circle.fill" : "circle.dotted")
-                        .font(DS.Font.scaled(15, weight: .semibold))
+                        .font(DS.Font.icon(15, weight: .semibold))
                     Text(allSelected
                         ? L10n.t("إلغاء تحديد الكل", "Deselect All")
                         : L10n.t("تحديد الكل (\(ids.count))", "Select All (\(ids.count))")
@@ -1554,7 +1554,7 @@ struct AdminAllRequestsView: View {
                 HStack(alignment: .center, spacing: DS.Spacing.sm) {
                     if isSelectMode {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .font(DS.Font.scaled(22, weight: .regular))
+                            .font(DS.Font.icon(22, weight: .regular))
                             .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
                             .transition(.scale.combined(with: .opacity))
                     }
@@ -1563,7 +1563,7 @@ struct AdminAllRequestsView: View {
                     // chevron — إشارة إن الكرت يفتح التفاصيل (تظهر خارج وضع التحديد)
                     if !isSelectMode {
                         Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.icon(13, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary.opacity(0.55))
                     }
                 }
@@ -1867,7 +1867,7 @@ struct AdminAllRequestsView: View {
                 if let createdAt = member.createdAt {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "clock")
-                            .font(DS.Font.scaled(11, weight: .medium))
+                            .font(DS.Font.icon(11, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(formatRegistrationDate(createdAt))
                             .font(DS.Font.caption2)
@@ -1934,7 +1934,7 @@ struct AdminAllRequestsView: View {
             if let newDisplay = treeEditNewValue(payload: payload, action: action) {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.right.circle.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                     Text(L10n.t("القيمة الجديدة:", "New:")).font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
                     Text(newDisplay).font(DS.Font.caption1).fontWeight(.semibold).foregroundColor(DS.Color.textPrimary)
@@ -1945,7 +1945,7 @@ struct AdminAllRequestsView: View {
             if let date = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(date))
                         .font(DS.Font.caption2)
@@ -2351,7 +2351,7 @@ struct AdminAllRequestsView: View {
                     if let uname {
                         HStack(spacing: 3) {
                             Image(systemName: "at")
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .font(DS.Font.icon(11, weight: .bold))
                             Text(uname)
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
@@ -2362,7 +2362,7 @@ struct AdminAllRequestsView: View {
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "phone.fill")
-                                .font(DS.Font.scaled(11))
+                                .font(DS.Font.icon(11))
                             Text(KuwaitPhone.display(phone))
                                 .font(DS.Font.scaled(11, weight: .medium))
                                 .monospacedDigit()
@@ -2373,7 +2373,7 @@ struct AdminAllRequestsView: View {
                     // الوقت والتاريخ
                     HStack(spacing: 3) {
                         Image(systemName: "clock.fill")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                         Text(registrationTime)
                             .font(DS.Font.scaled(11, weight: .semibold))
                     }
@@ -2391,7 +2391,7 @@ struct AdminAllRequestsView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "message.fill")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(L10n.t("واتساب", "WhatsApp"))
                                     .font(DS.Font.scaled(11, weight: .bold))
                             }
@@ -2427,7 +2427,7 @@ struct AdminAllRequestsView: View {
                 VStack(spacing: DS.Spacing.xs) {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.fill")
-                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .font(DS.Font.icon(13, weight: .semibold))
                             .foregroundColor(DS.Color.primary)
                         Text(L10n.t(
                             "تطابق محتمل (\(orderedResults.count))",
@@ -2450,7 +2450,7 @@ struct AdminAllRequestsView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.xs) {
                                 Image(systemName: "chevron.down")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(L10n.t(
                                     "عرض الكل (\(orderedResults.count))",
                                     "Show all (\(orderedResults.count))"
@@ -2470,7 +2470,7 @@ struct AdminAllRequestsView: View {
             } else {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "person.badge.plus")
-                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .font(DS.Font.icon(12, weight: .semibold))
                         .foregroundColor(DS.Color.textSecondary)
                     Text(L10n.t("لا يوجد تطابق — اسم جديد", "No tree matches — new name"))
                         .font(DS.Font.scaled(11, weight: .bold))
@@ -2548,7 +2548,7 @@ struct AdminAllRequestsView: View {
                 if let phone = match.member.phoneNumber, !phone.isEmpty {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "phone.fill")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                         Text(KuwaitPhone.display(phone))
                             .font(DS.Font.scaled(11, weight: .medium))
                             .monospacedDigit()
@@ -2842,14 +2842,14 @@ struct AdminAllRequestsView: View {
             // التاريخ تحت + إشارة صور إن وُجدت
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "clock")
-                    .font(DS.Font.scaled(11, weight: .medium))
+                    .font(DS.Font.icon(11, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(formatRegistrationDate(String(post.created_at)))
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textTertiary)
                 if !post.mediaURLs.isEmpty {
                     Image(systemName: "photo.fill")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text("\(post.mediaURLs.count)")
                         .font(DS.Font.caption2)
@@ -2890,7 +2890,7 @@ struct AdminAllRequestsView: View {
             // التاريخ تحت
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "clock")
-                    .font(DS.Font.scaled(11, weight: .medium))
+                    .font(DS.Font.icon(11, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(request.createdAt.map { formatRegistrationDate($0) } ?? "—")
                     .font(DS.Font.caption2)
@@ -2931,7 +2931,7 @@ struct AdminAllRequestsView: View {
                     .strikethrough()
                     .monospacedDigit()
                 Image(systemName: "arrow.forward")
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(newPhone)
                     .font(DS.Font.caption1)
@@ -2944,7 +2944,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3054,7 +3054,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3099,7 +3099,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3160,7 +3160,7 @@ struct AdminAllRequestsView: View {
                 if let createdAt = request.createdAt {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "clock")
-                            .font(DS.Font.scaled(11, weight: .medium))
+                            .font(DS.Font.icon(11, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(formatRegistrationDate(String(createdAt)))
                             .font(DS.Font.caption2)
@@ -3214,7 +3214,7 @@ struct AdminAllRequestsView: View {
             // الاسم: الحالي ← الجديد (سطر مدمج)
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "arrow.forward")
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(newName)
                     .font(DS.Font.caption1)
@@ -3227,7 +3227,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3424,7 +3424,7 @@ struct AdminAllRequestsView: View {
             if let date = project.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(L10n.t("أُضيف: \(formatRegistrationDate(date))", "Added: \(formatRegistrationDate(date))"))
                         .font(DS.Font.caption2)
@@ -3460,7 +3460,7 @@ struct AdminAllRequestsView: View {
                 .frame(width: size, height: size)
             Image(systemName: icon)
                 .foregroundColor(color)
-                .font(DS.Font.scaled(size * 0.4, weight: .semibold))
+                .font(DS.Font.icon(size * 0.4, weight: .semibold))
         }
     }
 
@@ -3482,7 +3482,7 @@ struct AdminAllRequestsView: View {
     private func detailRow(icon: String, text: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(12, weight: .medium))
+                .font(DS.Font.icon(12, weight: .medium))
                 .foregroundColor(DS.Color.textTertiary)
                 .frame(width: 18)
             Text(text)
@@ -3689,7 +3689,7 @@ struct AdminAllRequestsView: View {
             if let timestamp {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(timestamp)
                         .font(DS.Font.scaled(11, weight: .semibold))
                 }
@@ -3726,12 +3726,12 @@ struct AdminAllRequestsView: View {
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "phone.badge.plus")
-                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .font(DS.Font.icon(13, weight: .semibold))
                         Text(L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"))
                             .font(DS.Font.scaled(13, weight: .bold))
                         Spacer()
                         Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                     .foregroundColor(DS.Color.primary)
@@ -4015,7 +4015,7 @@ struct AdminAllRequestsView: View {
                     .fill(color.opacity(0.15))
                     .frame(width: 36, height: 36)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.icon(13, weight: .bold))
                     .foregroundColor(color)
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -4049,7 +4049,7 @@ struct AdminAllRequestsView: View {
                 ZStack {
                     Circle().fill(color.opacity(0.15)).frame(width: 36, height: 36)
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(DS.Font.icon(13, weight: .bold))
                         .foregroundColor(color)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -4063,7 +4063,7 @@ struct AdminAllRequestsView: View {
                 }
                 Spacer()
                 Image(systemName: "arrow.up.forward")
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                     .foregroundColor(color.opacity(0.7))
             }
             .padding(DS.Spacing.md)
@@ -4093,7 +4093,7 @@ struct AdminAllRequestsView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                     .foregroundColor(DS.Color.textSecondary)
                 Text(label)
                     .font(DS.Font.scaled(11, weight: .semibold))
@@ -4123,7 +4123,7 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 ZStack {
                     Circle().fill(DS.Color.error.opacity(0.12)).frame(width: 32, height: 32)
-                    Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+                    Image(systemName: icon).font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.error)
                 }
                 VStack(alignment: .leading, spacing: 1) {
@@ -4139,7 +4139,7 @@ struct AdminAllRequestsView: View {
             HStack(spacing: 4) {
                 Spacer()
                 Image(systemName: "arrow.down")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
                 Spacer()
             }
@@ -4147,7 +4147,7 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 ZStack {
                     Circle().fill(DS.Color.success.opacity(0.15)).frame(width: 32, height: 32)
-                    Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+                    Image(systemName: icon).font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.success)
                 }
                 VStack(alignment: .leading, spacing: 1) {
@@ -4199,7 +4199,7 @@ struct AdminAllRequestsView: View {
                             showRejectReason = true
                         } label: {
                             HStack(spacing: 5) {
-                                Image(systemName: "xmark").font(DS.Font.scaled(12, weight: .bold))
+                                Image(systemName: "xmark").font(DS.Font.icon(12, weight: .bold))
                                 Text(L10n.t("رفض", "Reject")).font(DS.Font.scaled(14, weight: .bold))
                             }
                             .foregroundColor(DS.Color.error)
@@ -4216,7 +4216,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: approveIconFor(detail))
-                                .font(DS.Font.scaled(12, weight: .bold))
+                                .font(DS.Font.icon(12, weight: .bold))
                             Text(approveLabelFor(detail))
                                 .font(DS.Font.scaled(14, weight: .bold))
                         }
@@ -4243,7 +4243,7 @@ struct AdminAllRequestsView: View {
                         deleteConfirmDetail = detail
                     } label: {
                         HStack(spacing: 5) {
-                            Image(systemName: "trash").font(DS.Font.scaled(11, weight: .bold))
+                            Image(systemName: "trash").font(DS.Font.icon(11, weight: .bold))
                             Text(L10n.t("حذف نهائي", "Delete Permanently"))
                                 .font(DS.Font.scaled(13, weight: .bold))
                         }

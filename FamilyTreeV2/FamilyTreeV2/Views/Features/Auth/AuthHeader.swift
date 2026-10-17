@@ -19,7 +19,7 @@ extension View {
                         .fill(DS.Color.overlayIcon)
                         .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(20, weight: .bold))
+                        .font(DS.Font.icon(20, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                 }
                 .frame(width: 52, height: 52)
@@ -40,7 +40,7 @@ extension View {
                 if let actionIcon, let action {
                     Button(action: action) {
                         Image(systemName: actionIcon)
-                            .font(DS.Font.scaled(17, weight: .bold))
+                            .font(DS.Font.icon(17, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .frame(width: 44, height: 44)
                             .background(Circle().fill(DS.Color.overlayIcon))

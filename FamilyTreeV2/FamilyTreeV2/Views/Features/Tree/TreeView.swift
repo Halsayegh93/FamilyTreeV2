@@ -435,7 +435,7 @@ struct TreeView: View {
                             VStack {
                                 HStack(spacing: DS.Spacing.sm) {
                                     Image(systemName: "person.2.fill")
-                                        .font(DS.Font.scaled(16, weight: .bold))
+                                        .font(DS.Font.icon(16, weight: .bold))
                                     Text(banner)
                                         .font(DS.Font.calloutBold)
                                     Spacer()
@@ -451,7 +451,7 @@ struct TreeView: View {
                                         }
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
-                                            .font(DS.Font.scaled(18))
+                                            .font(DS.Font.icon(18))
                                             .foregroundColor(DS.Color.textOnPrimary.opacity(0.7))
                                     }
                                 }
@@ -807,7 +807,7 @@ struct TreeView: View {
     /// زر دائري بأيقونة — تضليل خفيف (مو شفاف 100%).
     private func toolbarIconButton(icon: String, color: Color = DS.Color.primary, compact: Bool = false) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(compact ? 12 : 14, weight: .bold))
+            .font(DS.Font.icon(compact ? 12 : 14, weight: .bold))
             .foregroundColor(color)
             .frame(width: compact ? 27 : 34, height: compact ? 27 : 34)                         // بار مدمّج أصغر
             .background(DS.Color.surface.opacity(0.8), in: Circle())   // أغمق (طلب المالك)
@@ -860,7 +860,7 @@ struct TreeView: View {
                         HStack(spacing: 3) {
                             if idx == 0 {
                                 Image(systemName: "house.fill")
-                                    .font(DS.Font.scaled(isLandscapeMode ? 11 : 8, weight: .bold))
+                                    .font(DS.Font.icon(isLandscapeMode ? 11 : 8, weight: .bold))
                             }
                             Text(m.firstName.isEmpty ? "—" : m.firstName)
                                 .font(DS.Font.scaled(isLandscapeMode ? 13 : 10, weight: isLast ? .heavy : .semibold))
@@ -877,7 +877,7 @@ struct TreeView: View {
 
                     if !isLast {
                         Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(isLandscapeMode ? 9 : 7, weight: .bold))
+                            .font(DS.Font.icon(isLandscapeMode ? 9 : 7, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }
@@ -913,7 +913,7 @@ struct TreeView: View {
                                 .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
                         } else {
                             Image(systemName: "arrow.counterclockwise")
-                                .font(DS.Font.scaled(15, weight: .bold))
+                                .font(DS.Font.icon(15, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                                 .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
                         }
@@ -1301,7 +1301,7 @@ struct TreeView: View {
                         .fill(DS.Color.gridTree.opacity(0.1))
                         .frame(width: 80, height: 80)
                     Image(systemName: "leaf.arrow.triangle.circlepath")
-                        .font(DS.Font.scaled(36, weight: .medium))
+                        .font(DS.Font.icon(36, weight: .medium))
                         .foregroundStyle(DS.Color.primary)
                 }
 
@@ -1407,7 +1407,7 @@ struct TreeMemberNode: View {
                                 image.resizable().scaledToFill()
                             } placeholder: {
                                 Image(systemName: "person.fill")
-                                    .font(DS.Font.scaled(30))
+                                    .font(DS.Font.icon(30))
                                     .foregroundColor(DS.Color.overlayTextMuted)
                             }
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
@@ -1476,7 +1476,7 @@ struct TreeMemberNode: View {
                             .frame(width: 30, height: 30)
                             .overlay(
                                 Image(systemName: "heart.slash.fill")
-                                    .font(DS.Font.scaled(15, weight: .bold))
+                                    .font(DS.Font.icon(15, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
                             )
                             .overlay(Circle().stroke(DS.Color.deceased.opacity(0.35), lineWidth: 1))
@@ -1490,7 +1490,7 @@ struct TreeMemberNode: View {
                             Text("\(childrenCount)")
                                 .font(DS.Font.scaled(16, weight: .heavy))
                             Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(11, weight: .heavy))
+                                .font(DS.Font.icon(11, weight: .heavy))
                                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         }
                         .foregroundColor(.white)

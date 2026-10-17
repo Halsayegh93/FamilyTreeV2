@@ -184,7 +184,7 @@ struct NotificationsCenterView: View {
                 // الرجوع مكان أيقونة الصفحة (طلب المالك) — بلا علامة ×
                 Button { dismiss() } label: {
                     Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                        .font(DS.Font.scaled(19, weight: .bold))
+                        .font(DS.Font.icon(19, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 48, height: 48)
                         .dsHeaderGlassCircle()
@@ -491,7 +491,7 @@ struct NotificationsCenterView: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .font(DS.Font.icon(12, weight: .semibold))
                 Text(label)
                     .font(DS.Font.scaled(12, weight: .bold))
             }
@@ -812,7 +812,7 @@ struct NotificationsCenterView: View {
                 if isSelecting {
                     let isSelected = selectedIds.contains(item.id)
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(DS.Font.scaled(22, weight: .medium))
+                        .font(DS.Font.icon(22, weight: .medium))
                         .foregroundStyle(isSelected ? DS.Color.primary : DS.Color.textTertiary)
                         .animation(DS.Anim.snappy, value: isSelected)
                 }
@@ -824,7 +824,7 @@ struct NotificationsCenterView: View {
                         .frame(width: NotifLayout.rowIconSize, height: NotifLayout.rowIconSize)
 
                     Image(systemName: iconInfo.icon)
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                         .foregroundColor(isUnread ? iconInfo.color : DS.Color.textTertiary)
                 }
 
@@ -877,7 +877,7 @@ struct NotificationsCenterView: View {
                             // «من فلان» — يوضّح للإدارة أن الإشعار يخصّ عضواً بعينه
                             HStack(spacing: 3) {
                                 Image(systemName: isAdminNotif ? "shield.fill" : "person.fill")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(isAdminNotif ? creatorName : L10n.t("من \(creatorName)", "from \(creatorName)"))
                                     .font(DS.Font.scaled(11, weight: .bold))
                                     .lineLimit(1)
@@ -1226,7 +1226,7 @@ struct NotificationsCenterView: View {
                     .clipShape(Circle())
                 } else {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -1252,12 +1252,12 @@ struct NotificationsCenterView: View {
 
             // سهم — إشارة أن الكرت يفتح تفاصيل العضو
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(12, weight: .bold))
+                .font(DS.Font.icon(12, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary.opacity(0.6))
 
             // أيقونة صغيرة تشير لنوع الإشعار
             Image(systemName: iconInfo.icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
+                .font(DS.Font.icon(14, weight: .semibold))
                 .foregroundColor(iconInfo.color)
                 .padding(8)
                 .background(iconInfo.color.opacity(0.10))
@@ -1325,7 +1325,7 @@ struct NotificationsCenterView: View {
                 // chip التصنيف
                 HStack(spacing: 4) {
                     Image(systemName: iconInfo.icon)
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(iconInfo.label)
                         .font(DS.Font.scaled(11, weight: .bold))
                 }
@@ -1340,7 +1340,7 @@ struct NotificationsCenterView: View {
                 if isAdminSender {
                     HStack(spacing: 3) {
                         Image(systemName: "shield.lefthalf.filled")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                         Text(L10n.t("الإدارة", "Admin"))
                             .font(DS.Font.scaled(11, weight: .bold))
                     }
@@ -1356,7 +1356,7 @@ struct NotificationsCenterView: View {
                 if let creator = actualCreator {
                     HStack(spacing: 3) {
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                         Text(creator.shortFullName)
                             .font(DS.Font.scaled(11, weight: .bold))
                             .lineLimit(1)
@@ -1407,7 +1407,7 @@ struct NotificationsCenterView: View {
             // التاريخ والوقت الكامل (تذييل خفيف)
             HStack(spacing: 4) {
                 Image(systemName: "calendar")
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                 Text(fullDateTime(date))
                     .font(DS.Font.scaled(11, weight: .medium))
             }
@@ -1487,7 +1487,7 @@ struct NotificationsCenterView: View {
 
                 // سهم
                 Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
 
                 // قيمة بعد
@@ -1513,7 +1513,7 @@ struct NotificationsCenterView: View {
         HStack(spacing: 4) {
             if let icon {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
             }
             Text(text)
                 .font(DS.Font.scaled(11, weight: .bold))
@@ -1645,7 +1645,7 @@ struct NotificationsCenterView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "envelope.open")
-                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .font(DS.Font.icon(11, weight: .semibold))
                         Text(L10n.t("تعليم كمقروء", "Mark as Read"))
                             .font(DS.Font.scaled(12, weight: .semibold))
                     }
@@ -1900,7 +1900,7 @@ struct NotificationsCenterView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     HStack(spacing: 4) {
                         Image(systemName: "person.2.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                         Text(L10n.t("تطابقات محتملة", "Possible Matches"))
                             .font(DS.Font.scaled(11, weight: .bold))
                     }
@@ -1925,7 +1925,7 @@ struct NotificationsCenterView: View {
 
                             if !candidates.isEmpty {
                                 Image(systemName: joinMatchesExpanded ? "chevron.up" : "chevron.down")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
                             }
                         }
@@ -1953,7 +1953,7 @@ struct NotificationsCenterView: View {
                 // Empty state — يظهر دائماً (بدون توسيع) لأن المعلومة مهمة
                 HStack(spacing: 6) {
                     Image(systemName: "person.fill.questionmark")
-                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .font(DS.Font.icon(12, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(L10n.t(
                         "لا توجد مطابقات في الشجرة — قد يكون عضو جديد",
@@ -1996,7 +1996,7 @@ struct NotificationsCenterView: View {
                     .clipShape(Circle())
                 } else {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(DS.Font.icon(11, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -2021,7 +2021,7 @@ struct NotificationsCenterView: View {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "link")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(L10n.t("ربط", "Link"))
                         .font(DS.Font.scaled(11, weight: .bold))
                 }
@@ -2066,7 +2066,7 @@ struct NotificationsCenterView: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .semibold))
+                    .font(DS.Font.icon(14, weight: .semibold))
                 Text(label)
                     .font(DS.Font.calloutBold)
             }
@@ -2088,7 +2088,7 @@ struct NotificationsCenterView: View {
     private func detailInfoRow(icon: String, label: String, value: some StringProtocol, color: Color) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
+                .font(DS.Font.icon(14, weight: .semibold))
                 .foregroundColor(color)
                 .frame(width: NotifLayout.infoIconWidth, alignment: .center)
 

@@ -365,7 +365,7 @@ struct ProjectDetailView: View {
                         endPoint: .bottomTrailing
                     )
                     Image(systemName: "briefcase.fill")
-                        .font(DS.Font.scaled(32, weight: .bold))
+                        .font(DS.Font.icon(32, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                 }
             }
@@ -383,7 +383,7 @@ struct ProjectDetailView: View {
     private var ownerChip: some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: "person.fill")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
             Text(project.ownerName)
                 .font(DS.Font.plex(12, weight: .bold))
                 .lineLimit(1)
@@ -428,7 +428,7 @@ struct ProjectDetailView: View {
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: action.platform.sfSymbol)
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                 Text(action.title)
                     .font(DS.Font.plex(12, weight: .bold))
                     .lineLimit(1)
@@ -477,7 +477,7 @@ struct ProjectDetailView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "link")
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                 Text(L10n.t("حسابات المشروع", "Project Accounts"))
                     .font(DS.Font.plex(13, weight: .bold))
                 Spacer()
@@ -579,7 +579,7 @@ struct ProjectDetailView: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "trash.fill")
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                 Text(L10n.t("حذف المشروع", "Delete Project"))
                     .font(DS.Font.callout)
                     .fontWeight(.bold)
@@ -718,7 +718,7 @@ struct EditProjectView: View {
                             Button { showOwnerPicker = true } label: {
                                 HStack(spacing: DS.Spacing.sm) {
                                     Image(systemName: "person.crop.circle.badge.checkmark")
-                                        .font(DS.Font.scaled(14, weight: .bold))
+                                        .font(DS.Font.icon(14, weight: .bold))
                                         .foregroundColor(DS.Color.primary)
                                     Text(L10n.t("صاحب المشروع:", "Owner:"))
                                         .font(DS.Font.scaled(13))
@@ -764,7 +764,7 @@ struct EditProjectView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "briefcase.fill")
-                                        .font(DS.Font.scaled(11, weight: .bold))
+                                        .font(DS.Font.icon(11, weight: .bold))
                                         .foregroundColor(DS.Color.textSecondary)
                                     Text(L10n.t("اسم المشروع", "Project Name"))
                                         .font(DS.Font.scaled(12, weight: .semibold))
@@ -792,7 +792,7 @@ struct EditProjectView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(spacing: 4) {
                                 Image(systemName: "text.alignleft")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                     .foregroundColor(DS.Color.textSecondary)
                                 Text(L10n.t("وصف المشروع", "Description"))
                                     .font(DS.Font.scaled(12, weight: .semibold))

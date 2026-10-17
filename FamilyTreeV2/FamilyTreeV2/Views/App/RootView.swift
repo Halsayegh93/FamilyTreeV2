@@ -79,7 +79,7 @@ struct MaintenanceModeView: View {
             Spacer()
 
             Image(systemName: "wrench.and.screwdriver")
-                .font(DS.Font.scaled(80, weight: .regular))
+                .font(DS.Font.icon(80, weight: .regular))
                 .foregroundStyle(DS.Color.primary)
 
             Text(L10n.t("التطبيق تحت الصيانة", "App Under Maintenance"))
@@ -143,7 +143,7 @@ struct DeviceRevokedView: View {
                         .fill(DS.Color.warning.opacity(0.12))
                         .frame(width: 100, height: 100)
                     Image(systemName: "iphone.slash")
-                        .font(DS.Font.scaled(42, weight: .bold))
+                        .font(DS.Font.icon(42, weight: .bold))
                         .foregroundColor(DS.Color.warning)
                 }
 
