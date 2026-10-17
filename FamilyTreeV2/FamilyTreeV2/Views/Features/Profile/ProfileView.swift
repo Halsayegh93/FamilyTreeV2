@@ -944,7 +944,7 @@ struct ProfileView: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.xs)
                         .padding(.vertical, 1)
-                        .background(DS.Color.error.opacity(0.8))
+                        .background(DS.Color.errorFill)
                         .clipShape(Capsule())
                 }
             }
@@ -1253,7 +1253,7 @@ struct ProfileView: View {
                             .font(DS.Font.scaled(11, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, DS.Spacing.xs).padding(.vertical, 1)
-                            .background(DS.Color.error.opacity(0.8)).clipShape(Capsule())
+                            .background(DS.Color.errorFill).clipShape(Capsule())
                     }
                 }
             }

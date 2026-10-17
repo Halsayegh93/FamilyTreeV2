@@ -89,10 +89,11 @@ struct QRScannerView: View {
 
             Text(L10n.t("وجّه الكاميرا نحو رمز QR", "Point camera at QR code"))
                 .font(DS.Font.calloutBold)
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.textPrimary.opacity(0.55))
+                // ستارة كحلية ثابتة فوق الكاميرا — textPrimary يصير أبيض في الداكن
+                .background(DS.Color.bandFill.opacity(0.75))
                 .clipShape(Capsule())
                 .padding(.bottom, DS.Spacing.xxxxl)
         }
