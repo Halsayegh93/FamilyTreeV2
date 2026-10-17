@@ -63,6 +63,9 @@ enum DS {
         )
         // الأشرطة الكحلية الغامقة (band): الهيدرات ولوحات الترحيب — كحلي المصمم، وفي الداكن #1B2638 (نفس band في الموقع)
         static let bandFill = SwiftUI.Color.adaptive(light: "#172536", dark: "#1B2638")
+        /// خلفية شاشة البداية: كحلي المصمم في الفاتح، وأسود صافٍ في الداكن (قرار المالك 17/10/2026).
+        /// من لون الأصول LaunchBackground نفسه الذي تستعمله شاشة الإقلاع في Info.plist، فلا يومض لون بينهما.
+        static let splashBackground = SwiftUI.Color("LaunchBackground")
         static let gradientBand = LinearGradient(
             colors: [bandFill, bandFill],
             startPoint: .bottomTrailing, endPoint: .topLeading

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// شاشة البداية — شريط الهوية الكحلي (band) والشعار المسطّح الكريمي في الوسط.
+/// شاشة البداية — الشعار المسطّح الكريمي في الوسط، على الكحلي في الفاتح وعلى الأسود الصافي في الداكن.
 /// الهوية: الشعار بلا دائرة ولا ظل ولا توهّج، ويظهر بتلاشٍ وتكبير خفيف قصير — بلا نبض ولا دوران ولا لمعان.
 struct SplashScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -14,13 +14,13 @@ struct SplashScreenView: View {
 
     var body: some View {
         ZStack {
-            // شريط الهوية: كحلي المصمم #172536، وفي الداكن #1B2638
-            DS.Color.bandFill.ignoresSafeArea()
+            // كحلي المصمم #172536 في الفاتح، وأسود صافٍ في الداكن — بلون شاشة الإقلاع نفسه
+            DS.Color.splashBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer()
 
-                // الشعار المسطّح — logo-cream على band
+                // الشعار المسطّح — logo-cream على الكحلي والأسود
                 Image("FamilyLogoCream")
                     .renderingMode(.original)
                     .resizable()
@@ -60,7 +60,7 @@ struct SplashScreenView: View {
                             .frame(width: 40, height: 1)
                     }
 
-                    // النص الثانوي على band ذهبي (الهوية)
+                    // النص الثانوي ذهبي على الخلفية الداكنة (الهوية)
                     Text(L10n.t("شجرة العائلة", "Family tree"))
                         .font(DS.Font.title3)
                         .foregroundColor(DS.Color.accentLight)
