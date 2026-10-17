@@ -12,7 +12,7 @@ struct LoginView: View {
 #endif
     @State private var timeRemaining = 0
     @State private var otpTimeRemaining = 0
-    @State private var logoScale: CGFloat = 0.6
+    @State private var logoScale: CGFloat = 0.94
     @State private var logoOpacity: CGFloat = 0
 
 
@@ -78,7 +78,8 @@ struct LoginView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
         .onAppear {
-            withAnimation(DS.Anim.elastic.delay(0.15)) {
+            // ظهور هادئ قصير للشعار: تلاشٍ وتكبير خفيف
+            withAnimation(.easeOut(duration: 0.45).delay(0.1)) {
                 logoScale = 1.0
                 logoOpacity = 1.0
             }
@@ -203,16 +204,19 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - Logo — App Icon
+    // MARK: - Logo — شعار العائلة المسطّح
+    /// ارتفاع الشعار؛ المسافة بينه وبين الاسم (DS.Spacing.xl) ربع ارتفاعه — مسافة الهوية الآمنة
+    private var logoHeight: CGFloat { isLandscape ? 64 : 80 }
+
     private var logoSection: some View {
         VStack(spacing: DS.Spacing.xl) {
-            // أيقونة التطبيق — دائرية
-            Image("AppIconImage")
+            // الشعار المسطّح «المحمدعلي»: كحلي على الفاتح، كريمي في الداكن — بلا دائرة ولا ظل (الهوية)
+            Image("FamilyLogoNavy")
+                .renderingMode(.original)
                 .resizable()
-                .scaledToFill()
-                .frame(width: 100, height: 100)
-                .clipShape(Circle())
-                .shadow(color: DS.Color.primary.opacity(0.2), radius: 12, y: 6)
+                .scaledToFit()
+                .frame(height: logoHeight)
+                .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
 #if DEBUG
                 // ضغطة مطوّلة على الشعار تفتح شاشة تسجيل البيانات للمعاينة
                 // بلا رقم جديد. لا تُبنى إطلاقاً في نسخة الإصدار.
