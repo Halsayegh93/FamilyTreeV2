@@ -716,13 +716,14 @@ struct DSGradientText: View {
     }
 }
 
-/// باج متحرك مع نبض
+/// باج العدد — ينبض ثلاث نبضات قصيرة عند ظهوره وكلما تغيّر العدد ثم يسكن
+/// (الهوية: حركة سريعة هادئة، ولا شيء يتكرر فوق المحتوى)
 struct DSPulseBadge: View {
     let count: Int
     var color: SwiftUI.Color = DS.Color.error
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
+    @State private var pulseScale: CGFloat = 1.0
 
     private var displayText: String { count > 99 ? "99+" : "\(count)" }
 
@@ -735,13 +736,19 @@ struct DSPulseBadge: View {
             .padding(.vertical, 3)
             .background(DS.Color.errorFill)
             .clipShape(Capsule())
-            .scaleEffect(isPulsing ? 1.15 : 1.0)
-            .animation(
-                DS.Anim.respectingMotion(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), reduceMotion: reduceMotion),
-                value: isPulsing
-            )
-            // يحترم "تقليل الحركة": يبقى الباج ثابتاً بلا نبض متكرر
-            .onAppear { isPulsing = !reduceMotion }
+            .scaleEffect(pulseScale)
+            // تبدأ عند الظهور وتعيد البدء عند تغيّر العدد؛ "تقليل الحركة" → بلا نبض
+            .task(id: count) {
+                guard !reduceMotion else { pulseScale = 1.0; return }
+                for _ in 0..<3 {
+                    withAnimation(.easeOut(duration: 0.18)) { pulseScale = 1.15 }
+                    try? await Task.sleep(nanoseconds: 180_000_000)
+                    withAnimation(.easeIn(duration: 0.22)) { pulseScale = 1.0 }
+                    try? await Task.sleep(nanoseconds: 280_000_000)
+                    if Task.isCancelled { break }
+                }
+                pulseScale = 1.0
+            }
     }
 }
 
