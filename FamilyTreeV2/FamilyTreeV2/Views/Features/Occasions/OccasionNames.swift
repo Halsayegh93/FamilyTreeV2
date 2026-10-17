@@ -175,3 +175,64 @@ enum OccasionNames {
                                       autoShortened: option.count < min(requested, longest), shrunk: option.scale < 1)
     }
 }
+
+// MARK: - عنوان مشاركة العزاء
+
+/// «مشاركة عزاء» ممدودة بالكشيدة لين يصير عرضها بعرض سطر «تتقدم…» تحتها — نفس solaceHeading في الموقع وملف التصميم:
+/// كشيدة بعد الشين ثم بعد العين بالتناوب (أقصى ١٢ لكل كلمة)، واللي يبقى (أقل من كشيدة) مسافة بين الكلمتين.
+/// السطر اللي أعرض من 8.5 × حجم العنوان يصغر لين يدخل، والكشيدة تطول معه.
+enum OccasionSolaceHeading {
+    static let capEm: CGFloat = 8.5
+    static let maxKashida = 24
+
+    struct Fit {
+        /// الكلمتان بعد المد: [«مشـ…اركة»، «عـ…زاء»]
+        let words: [String]
+        /// المسافة بين الكلمتين (عرض المسافة العادية + الباقي)؛ nil = الخط ما تحمّل بعد — نص عادي
+        let gap: CGFloat?
+        /// أقصى عرض لسطر «تتقدم…»
+        let cap: CGFloat
+        var title: String { words.joined(separator: " ") }
+    }
+
+    static func words(_ a: Int, _ b: Int) -> [String] {
+        ["مش" + String(repeating: "ـ", count: a) + "اركة", "ع" + String(repeating: "ـ", count: b) + "زاء"]
+    }
+
+    /// حجم سطر واحد مثل OneLine في الموقع: يصغر بأعشار البكسل لين يدخل، ولا ينزل عن minScale
+    static func oneLineSize(_ text: String, _ size: CGFloat, _ width: CGFloat) -> CGFloat {
+        guard let full = OccasionNames.measure(text, weight: .extrabold, size: size), full > width + 0.01 else { return size }
+        let minSize = size * OccasionNames.minScale
+        func fits(_ s: CGFloat) -> Bool { (OccasionNames.measure(text, weight: .extrabold, size: s) ?? 0) <= width + 0.01 }
+        var s = max(minSize, (size * (width / full) * 10).rounded(.down) / 10)
+        while s > minSize && !fits(s) { s = max(minSize, s - 0.5) }
+        return s
+    }
+
+    static func fit(from: String, fromSize: CGFloat, titleSize: CGFloat) -> Fit {
+        let cap = capEm * titleSize
+        let t = from.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        func width(_ w: [String]) -> CGFloat? { OccasionNames.measure(w.joined(separator: " "), weight: .extrabold, size: titleSize) }
+        guard let base = width(words(0, 0)) else { return Fit(words: words(0, 0), gap: nil, cap: cap) }
+        var target: CGFloat = 0
+        if !t.isEmpty, let fw = OccasionNames.measure(t, weight: .extrabold, size: oneLineSize(t, fromSize, cap)) {
+            target = min(cap, fw)
+        }
+        var a = 0
+        var b = 0
+        if base < target {
+            for i in 0..<maxKashida {
+                let (na, nb) = i % 2 == 0 ? (a + 1, b) : (a, b + 1)
+                guard let w = width(words(na, nb)), w <= target + 0.01 else { break }
+                a = na
+                b = nb
+            }
+        }
+        let w = words(a, b)
+        guard let full = width(w),
+              let w0 = OccasionNames.measure(w[0], weight: .extrabold, size: titleSize),
+              let w1 = OccasionNames.measure(w[1], weight: .extrabold, size: titleSize) else { return Fit(words: w, gap: nil, cap: cap) }
+        let extra = max(0, ((target - full) * 100).rounded() / 100)
+        return Fit(words: w, gap: (full - w0 - w1) + extra, cap: cap)
+    }
+}

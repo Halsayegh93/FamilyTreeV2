@@ -215,24 +215,33 @@ struct OccasionComposerView: View {
                         Button {
                             withAnimation(DS.Anim.quick) { vm.select(t) }
                         } label: {
+                            // مربع المناسبة بلونها (occ-*) ورمز أبيض — الوفاة كحلي ليلي بحلقة ورمز ذهبي — مثل الموقع (OccasionTile)
+                            let tile = t.tileStyle
                             VStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: t.icon)
-                                    .font(DS.Font.scaled(18, weight: .semibold))
+                                ZStack {
+                                    Circle().fill(tile.fill)
+                                    Circle().strokeBorder(tile.ring, lineWidth: 1.5)
+                                    Image(systemName: t.icon)
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(tile.symbol)
+                                }
+                                .frame(width: 36, height: 36)
                                 Text(t.title)
                                     .font(DS.Font.plex(13, weight: .semibold))
+                                    .foregroundColor(DS.Color.textPrimary)
                                     .multilineTextAlignment(.center)
                                     .lineLimit(2)
                                     .minimumScaleFactor(0.85)
                             }
-                            .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.textPrimary)
-                            .frame(width: 104, height: 84)
+                            .frame(width: 104, height: 88)
+                            // المختار: حدّ ذهبي وأرضية ذهبية خفيفة (OccasionTile في الهوية)
                             .background(
                                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .fill(on ? AnyShapeStyle(DS.Color.gradientPrimary) : AnyShapeStyle(DS.Color.cardBackground))
+                                    .fill(on ? DS.Color.accentLight.opacity(0.12) : DS.Color.cardBackground)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .stroke(on ? Color.clear : DS.Color.cardBorder, lineWidth: 1)
+                                    .stroke(on ? DS.Color.accentLight : DS.Color.cardBorder, lineWidth: on ? 2 : 1)
                             )
                         }
                         .buttonStyle(DSScaleButtonStyle())
@@ -552,7 +561,7 @@ struct OccasionComposerView: View {
             if vm.template.kind == .death {
                 OccasionFormCard(title: L10n.t("صلة القرابة", "Relation"), hint: L10n.t("اتركها فاضية لتختفي", "Leave empty to hide")) {
                     OccasionQuickText(text: vm.text("relation"), suggestions: vm.relationSuggestions,
-                                      placeholder: L10n.t("مثال: والد كل من: علي، حسين", "e.g. والد كل من: علي، حسين"))
+                                      placeholder: L10n.t("مثال: والد كل من: [الاسم]، [الاسم]", "e.g. والد كل من: [الاسم]، [الاسم]"))
                     formatPicker("relation")
                 }
             } else {
@@ -685,7 +694,7 @@ struct OccasionComposerView: View {
             }
             OccasionFormCard(title: L10n.t("إلى", "To"), hint: L10n.t("اسم العائلة المعزّى فيها", "The bereaved family")) {
                 OccasionQuickText(text: vm.text("toFamily"), suggestions: Array(vm.familyNames.prefix(16)),
-                                  placeholder: L10n.t("مثال: العبدالمحسن", "e.g. العبدالمحسن"))
+                                  placeholder: L10n.t("مثال: [اسم العائلة]", "e.g. [اسم العائلة]"))
                 if OccasionChoices.solaceFamily(vm.form.txt("toFamily")).isEmpty {
                     OccasionRequiredHint(L10n.t("مطلوب — اكتب اسم العائلة", "Required — type the family name"))
                 } else {

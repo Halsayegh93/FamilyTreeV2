@@ -205,7 +205,8 @@ extension OccasionPostView {
                 text(value("title"), .extrabold, 36 * k, color: OccasionDeathPalette.soft, lineHeight: 1.35)
             }
             if has("name") {
-                nameLine("name", color: .white)
+                // الاسم بذهبي الوفاة (occ-obituary-gold) مثل النموذجين ٢ و٣
+                nameLine("name", color: OccasionDeathPalette.gold)
                     .shadow(color: .black.opacity(0.65), radius: 13 * k, x: 0, y: 10 * k)
             }
         }
@@ -222,19 +223,16 @@ extension OccasionPostView {
         let shadow = OccasionLightShadow(k: k)
         var items: [AnyView] = [
             AnyView(verse(template.verse ?? .sabr, scale: k, pull: 30 * k)),
-            AnyView(text("مشـاركة عـزاء", .extrabold, 96 * k, color: ink, lineHeight: 1.25).modifier(shadow)),
+            // «تتقدم عائلة المحمدعلي» ملاصق للعنوان وبعرضه — «مشاركة عزاء» ممدودة بالكشيدة (مثل الموقع)
+            AnyView(OccasionSolaceHeadingView(from: has("from") ? value("from") : "", fromSize: 61 * k, titleSize: 96 * k,
+                                              fromLineHeight: 1.35, titleColor: ink, fromColor: ink).modifier(shadow)),
             AnyView(
                 VStack(spacing: 8 * k) {
-                    if has("from") {
-                        text(value("from"), .semibold, 48 * k, color: ink, lineHeight: 1.35).modifier(shadow)
-                    }
                     text("بأحر التعازي وأصدق المواساة إلى", .regular, 34 * k, color: muted, lineHeight: 1.4)
+                    if has("to") { nameLine("to", color: ink).modifier(shadow) }
                 }
             ),
         ]
-        if has("to") {
-            items.append(AnyView(nameLine("to", color: ink).modifier(shadow)))
-        }
         items.append(AnyView(
             VStack(spacing: 6 * k) {
                 if has("lead") {
@@ -288,13 +286,15 @@ extension OccasionPostView {
     /// الشعار وحده (نموذج ١ — بدون الخطين)
     private func m1Logo(_ name: String, height lh: CGFloat) -> some View {
         Group {
-            if let ui = image("logo/\(name).png") {
+            let h = lh * OccasionFlatLogo.scale
+            if let ui = image(OccasionFlatLogo.path(name)) {
                 Image(uiImage: ui)
                     .resizable()
-                    .frame(width: lh * ui.size.width / max(ui.size.height, 1), height: lh)
+                    .frame(width: h * ui.size.width / max(ui.size.height, 1), height: h)
+                    .padding(.vertical, (lh - h) / 2)
                     .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
             } else {
-                Color.clear.frame(width: lh * 900 / 831, height: lh)
+                Color.clear.frame(width: h * OccasionFlatLogo.aspect, height: lh)
             }
         }
     }

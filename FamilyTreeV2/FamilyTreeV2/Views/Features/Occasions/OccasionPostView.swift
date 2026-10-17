@@ -102,11 +102,13 @@ struct OccasionPostView: View {
         HStack(spacing: 28) {
             LinearGradient(colors: [color.opacity(0), color], startPoint: .leading, endPoint: .trailing)
                 .frame(width: lineW, height: 2)
-            if let ui = image("logo/\(logo).png") {
-                Image(uiImage: ui).resizable().frame(width: lh * ui.size.width / max(ui.size.height, 1), height: lh)
+            let h = lh * OccasionFlatLogo.scale
+            if let ui = image(OccasionFlatLogo.path(logo)) {
+                Image(uiImage: ui).resizable().frame(width: h * ui.size.width / max(ui.size.height, 1), height: h)
+                    .padding(.vertical, (lh - h) / 2)
                     .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
             } else {
-                Color.clear.frame(width: lh * 900 / 831, height: lh)
+                Color.clear.frame(width: h * OccasionFlatLogo.aspect, height: lh)
             }
             LinearGradient(colors: [color, color.opacity(0)], startPoint: .leading, endPoint: .trailing)
                 .frame(width: lineW, height: 2)
@@ -416,13 +418,15 @@ struct OccasionPostView: View {
             AnyView(verse(template.verse ?? .sabr, scale: L.verseMul)),
             AnyView(
                 VStack(spacing: 10) {
-                    text("مشـاركة عـزاء", .extrabold, L.title, color: ink, lineHeight: 1.25).modifier(OccasionLightShadow())
+                    // «تتقدم عائلة المحمدعلي» ملاصق للعنوان وبعرضه — «مشاركة عزاء» ممدودة بالكشيدة (مثل الموقع)
+                    OccasionSolaceHeadingView(from: has("from") ? value("from") : "", fromSize: L.from, titleSize: L.title,
+                                              fromLineHeight: 1.35, titleColor: ink, fromColor: ink)
+                        .modifier(OccasionLightShadow())
                     OccasionDivider(color: line).padding(.top, 4)
                 }
             ),
             AnyView(
                 VStack(spacing: 8) {
-                    if has("from") { text(value("from"), .semibold, L.from, color: ink, lineHeight: 1.35).modifier(OccasionLightShadow()) }
                     text("بأحر التعازي وأصدق المواساة إلى", .regular, L.sub, color: muted, lineHeight: 1.4)
                     if has("to") {
                         nameLine("to", color: ink)
@@ -704,6 +708,57 @@ struct OccasionPin: View {
             }
             .frame(width: 64 * s, height: 64 * s)
         }
+    }
+}
+
+/// «مشاركة عزاء» وتحتها «تتقدم…» ملاصقاً لها وبعرضها — نفس SolaceHeading في الموقع (كل النماذج).
+/// الكلمتان في HStack (التخطيط LTR: «عزاء» يسار و«مشاركة» يمين) والمسافة بينهما = المسافة العادية + الباقي.
+struct OccasionSolaceHeadingView: View {
+    let from: String
+    let fromSize: CGFloat
+    let titleSize: CGFloat
+    let fromLineHeight: CGFloat
+    let titleColor: Color
+    let fromColor: Color
+
+    var body: some View {
+        let fit = OccasionSolaceHeading.fit(from: from, fromSize: fromSize, titleSize: titleSize)
+        let t = from.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let fs = t.isEmpty ? fromSize : OccasionSolaceHeading.oneLineSize(t, fromSize, fit.cap)
+        return VStack(spacing: 0) {
+            Group {
+                if let gap = fit.gap {
+                    HStack(spacing: gap) {
+                        word(fit.words[1])
+                        word(fit.words[0])
+                    }
+                    .environment(\.layoutDirection, .leftToRight)
+                } else {
+                    word(fit.title)
+                }
+            }
+            if !t.isEmpty {
+                Text(t)
+                    .font(.custom(OccasionKit.FontWeight.extrabold.postScriptName, fixedSize: fs))
+                    .foregroundColor(fromColor)
+                    .lineLimit(1)
+                    // احتياط لو اختلف القياس شوي عن الرسم
+                    .minimumScaleFactor(0.6)
+                    .environment(\.layoutDirection, .rightToLeft)
+                    .occasionLineBox(.extrabold, size: fs, lineHeight: fromLineHeight * fromSize / max(fs, 1))
+                    .frame(maxWidth: fit.cap)
+            }
+        }
+    }
+
+    private func word(_ w: String) -> some View {
+        Text(w)
+            .font(.custom(OccasionKit.FontWeight.extrabold.postScriptName, fixedSize: titleSize))
+            .foregroundColor(titleColor)
+            .lineLimit(1)
+            .fixedSize()
+            .environment(\.layoutDirection, .rightToLeft)
+            .occasionLineBox(.extrabold, size: titleSize, lineHeight: 1.25)
     }
 }
 
