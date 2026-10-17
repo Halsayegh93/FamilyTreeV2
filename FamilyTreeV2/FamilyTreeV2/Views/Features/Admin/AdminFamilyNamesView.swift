@@ -73,7 +73,7 @@ struct AdminFamilyNamesView: View {
                 Text(L10n.t("يختار العضو عائلته منها، وتظهر بآخر اسمه في التطبيق.",
                             "Members pick from this list; it appears at the end of their name."))
                     .font(DS.Font.scaled(11))
-                    .foregroundColor(SwiftUI.Color.white.opacity(0.85))
+                    .foregroundColor(DS.Color.accentLight)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

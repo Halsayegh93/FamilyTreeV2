@@ -217,7 +217,7 @@ enum DS {
         static let overlayIcon = SwiftUI.Color.white.opacity(0.15)
         /// حدود أيقونة شفافة فوق تدرج
         static let overlayIconBorder = SwiftUI.Color.white.opacity(0.3)
-        /// نص فوق تدرج (أقل سطوعاً من textOnPrimary)
+        /// نص أبيض خافت فوق الصور. على band (الهيدرات) النص الثانوي ذهبي: accentLight — لا هذا (الهوية)
         static let overlayText = SwiftUI.Color.white.opacity(0.85)
         /// نص/أيقونة فاتحة فوق خلفية داكنة (opacity 0.7)
         static let overlayTextMuted = SwiftUI.Color.white.opacity(0.7)

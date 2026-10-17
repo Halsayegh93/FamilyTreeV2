@@ -178,7 +178,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                         .font(DS.Font.plex(10, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(DS.Color.accentLight)
                     Text(user?.displayName ?? "")
                         .font(DS.Font.plex(18, weight: .bold))
                         .foregroundColor(.white)
@@ -243,11 +243,11 @@ struct SettingsView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(DS.Font.icon(11, weight: .bold))
-                .foregroundColor(.white.opacity(0.75))
+                .foregroundColor(DS.Color.accentLight)
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
                     .font(DS.Font.plex(9.5, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(DS.Color.accentLight)
                 Text(value)
                     .font(DS.Font.plex(12, weight: .bold))
                     .foregroundColor(.white)

@@ -126,7 +126,7 @@ struct RegistrationView: View {
                     Text(L10n.t("خطوة واحدة وتنضم لشجرة العائلة",
                                 "One step to join the family tree"))
                         .font(DS.Font.plex(12, weight: .medium))
-                        .foregroundColor(DS.Color.overlayText)
+                        .foregroundColor(DS.Color.accentLight)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
