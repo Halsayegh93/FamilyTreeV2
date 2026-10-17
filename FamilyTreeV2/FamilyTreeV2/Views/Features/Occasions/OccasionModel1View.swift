@@ -64,8 +64,8 @@ extension OccasionPostView {
     /// «تهنئة وتبريك للأخ العزيز» ← الاسم ← الكبسولة (المناسبة + اسم المولود أو الجهة).
     /// big = النسخة بدون صورة (المقدمة ٣٤، الاسم ٩٢، الكبسولة ٤٠)
     private func m1HappyText(_ th: OccasionM1Theme, k: CGFloat, contentW: CGFloat, big: Bool) -> some View {
+        // الاسم: ٩٢ بدون صورة و٧٨ مع صورة (nameSlots)
         let introSize: CGFloat = big ? 34 : 30
-        let nameSize: CGFloat = big ? 92 : 78
         let pillSize: CGFloat = big ? 40 : 35
         let padH: CGFloat = (big ? 56 : 46) * k
         let padTop: CGFloat = (big ? 11 : 9) * k
@@ -78,9 +78,11 @@ extension OccasionPostView {
             if has("intro") {
                 text(value("intro"), .semibold, introSize * k, color: th.intro, lineHeight: 1.4, balanceWidth: contentW)
             }
-            fitLine(value("name"), .extrabold, maxSize: nameSize * k, minSize: 14, width: contentW, color: Self.ink, lineHeight: 1.24)
-                .shadow(color: .white.opacity(0.9), radius: 0, x: 0, y: 2 * k)
-                .shadow(color: Color(red: 23 / 255, green: 37 / 255, blue: 54 / 255).opacity(0.22), radius: 12 * k, x: 0, y: 12 * k)
+            if has("name") {
+                nameLine("name", color: Self.ink)
+                    .shadow(color: .white.opacity(0.9), radius: 0, x: 0, y: 2 * k)
+                    .shadow(color: Color(red: 23 / 255, green: 37 / 255, blue: 54 / 255).opacity(0.22), radius: 12 * k, x: 0, y: 12 * k)
+            }
             if !pillText.isEmpty {
                 text(pillText, .extrabold, pillSize * k, color: th.pillText, lineHeight: 1.4, balanceWidth: contentW - 2 * padH)
                     .padding(.horizontal, padH)
@@ -108,18 +110,25 @@ extension OccasionPostView {
             AnyView(deathVerses(lead: 391 * k / OccasionVerse.sabrLead.width, main: 541 * k / OccasionVerse.inna.width,
                                 leadPull: 30 * k, mainPull: 28 * k)),
             AnyView(OccasionCirclePhoto(box: 286 * k, frame: image("m1/frame/white.png"), avatar: .dark, photo: photo)),
-            AnyView(m1DeathName(k: k, contentW: contentW, nameSize: 74)),
+            AnyView(m1DeathName(k: k)),
         ]
         if has("relation") {
             items.append(AnyView(
-                text(value("relation"), .semibold, 26 * k, color: .white, lineHeight: 1.4, balanceWidth: contentW - 82 * k)
-                    .padding(.horizontal, 40 * k)
-                    .padding(.top, 10 * k)
-                    .padding(.bottom, 12 * k)
-                    .background(Capsule().fill(Color.white.opacity(0.10)))
-                    .overlay(Capsule().stroke(Color.white.opacity(0.28), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.45), radius: 15 * k, x: 0, y: 16 * k)
-                    .frame(maxWidth: contentW)
+                Group {
+                    if isNameLine("relation") {
+                        // اسم شخص واحد: سطر واحد بصيغة تدخل (والكبسولة على قده)
+                        nameLine("relation", color: .white).fixedSize()
+                    } else {
+                        text(value("relation"), .semibold, 26 * k, color: .white, lineHeight: 1.4, balanceWidth: contentW - 82 * k)
+                    }
+                }
+                .padding(.horizontal, 40 * k)
+                .padding(.top, 10 * k)
+                .padding(.bottom, 12 * k)
+                .background(Capsule().fill(Color.white.opacity(0.10)))
+                .overlay(Capsule().stroke(Color.white.opacity(0.28), lineWidth: 1))
+                .shadow(color: .black.opacity(0.45), radius: 15 * k, x: 0, y: 16 * k)
+                .frame(maxWidth: contentW)
             ))
         }
         if has("menPlace") || has("womenPlace") {
@@ -136,20 +145,25 @@ extension OccasionPostView {
         let L = OccasionM1Layout.deathText(size)
         let k = L.k
         let contentW = canvas.width - 2 * L.pad.side
-        let rels = ["rel1", "rel2", "rel3"].filter { has($0) }.map { value($0) }
+        let rels = ["rel1", "rel2", "rel3"].filter { has($0) }
         let relColor = Color(hex: "#E6E9EC")
         var items: [AnyView] = [
             AnyView(deathVerses(lead: 430 * k / OccasionVerse.sabrLead.width, main: 580 * k / OccasionVerse.inna.width,
                                 leadPull: 30 * k, mainPull: 28 * k)),
-            AnyView(m1DeathName(k: k, contentW: contentW, nameSize: 80)),
+            AnyView(m1DeathName(k: k)),
         ]
         if !rels.isEmpty {
             // سطر واحد = كبسولة؛ أكثر = بطاقة بزوايا دائرية (نفس الكبسولة)
             let card = RoundedRectangle(cornerRadius: 36 * k)
             items.append(AnyView(
                 VStack(spacing: 0) {
-                    ForEach(Array(rels.enumerated()), id: \.offset) { _, line in
-                        text(line, .regular, 26 * k, color: relColor, lineHeight: 1.55, balanceWidth: contentW - 92 * k)
+                    ForEach(rels, id: \.self) { key in
+                        // اسم شخص واحد: سطر واحد بصيغة تدخل؛ القوائم تلتف
+                        if isNameLine(key) {
+                            nameLine(key, color: relColor).fixedSize()
+                        } else {
+                            text(value(key), .regular, 26 * k, color: relColor, lineHeight: 1.55, balanceWidth: contentW - 92 * k)
+                        }
                     }
                 }
                 .padding(.horizontal, 44 * k)
@@ -181,8 +195,8 @@ extension OccasionPostView {
         return m1Canvas(root: OccasionDeathPalette.root, bg: "death", pad: L.pad, items: items)
     }
 
-    /// «انتقل إلى رحمة الله تعالى» ← «المرحوم الحاج» ← الاسم (أبيض على أسود)
-    private func m1DeathName(k: CGFloat, contentW: CGFloat, nameSize: CGFloat) -> some View {
+    /// «انتقل إلى رحمة الله تعالى» ← «المرحوم الحاج» ← الاسم (أبيض على أسود؛ حجم الاسم من nameSlots)
+    private func m1DeathName(k: CGFloat) -> some View {
         VStack(spacing: 2 * k) {
             if has("lead") {
                 text(value("lead"), .semibold, 30 * k, color: .white, lineHeight: 1.4)
@@ -190,8 +204,10 @@ extension OccasionPostView {
             if has("title") {
                 text(value("title"), .extrabold, 36 * k, color: OccasionDeathPalette.soft, lineHeight: 1.35)
             }
-            fitLine(value("name"), .extrabold, maxSize: nameSize * k, minSize: 18, width: contentW, color: .white, lineHeight: 1.22)
-                .shadow(color: .black.opacity(0.65), radius: 13 * k, x: 0, y: 10 * k)
+            if has("name") {
+                nameLine("name", color: .white)
+                    .shadow(color: .black.opacity(0.65), radius: 13 * k, x: 0, y: 10 * k)
+            }
         }
     }
 
@@ -215,20 +231,20 @@ extension OccasionPostView {
                     text("بأحر التعازي وأصدق المواساة إلى", .regular, 34 * k, color: muted, lineHeight: 1.4)
                 }
             ),
-            AnyView(
-                fitLine(value("to"), .extrabold, maxSize: 82 * k, minSize: 18, width: contentW, color: ink, lineHeight: 1.25)
-                    .modifier(shadow)
-            ),
-            AnyView(
-                VStack(spacing: 6 * k) {
-                    if has("lead") {
-                        text(value("lead"), .regular, 34 * k, color: muted, lineHeight: 1.4)
-                    }
-                    fitLine(value("name"), .extrabold, maxSize: 72 * k, minSize: 18, width: contentW, color: ink, lineHeight: 1.25)
-                        .modifier(shadow)
-                }
-            ),
         ]
+        if has("to") {
+            items.append(AnyView(nameLine("to", color: ink).modifier(shadow)))
+        }
+        items.append(AnyView(
+            VStack(spacing: 6 * k) {
+                if has("lead") {
+                    text(value("lead"), .regular, 34 * k, color: muted, lineHeight: 1.4)
+                }
+                if has("name") {
+                    nameLine("name", color: ink).modifier(shadow)
+                }
+            }
+        ))
         if has("dua") {
             let duaW = min(860 * k, contentW)
             items.append(AnyView(
@@ -276,7 +292,7 @@ extension OccasionPostView {
                 Image(uiImage: ui)
                     .resizable()
                     .frame(width: lh * ui.size.width / max(ui.size.height, 1), height: lh)
-                    .accessibilityLabel(L10n.t("شعار عائلة المحمد علي", "Al-Mohammad Ali family logo"))
+                    .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
             } else {
                 Color.clear.frame(width: lh * 900 / 831, height: lh)
             }

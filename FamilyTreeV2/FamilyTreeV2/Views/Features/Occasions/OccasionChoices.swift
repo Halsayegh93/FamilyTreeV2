@@ -23,11 +23,11 @@ enum OccasionChoices {
 
     /// {d} = الصفة مع لام الجر، {n} = الصفة كما هي
     private static let openingsById: [String: [String]] = [
-        "wedding": ["تهنئة وتبريك {d}", "نتقدم بأحر التهاني {d}", "ألف مبروك {d}", "تتقدم عائلة المحمد علي بالتهنئة {d}"],
-        "newborn": ["نتقدم بالتهنئة {d}", "تهنئة وتبريك {d}", "ألف مبروك {d}", "تتقدم عائلة المحمد علي بالتهنئة {d}"],
-        "newbornGirl": ["نتقدم بالتهنئة {d}", "تهنئة وتبريك {d}", "ألف مبروك {d}", "تتقدم عائلة المحمد علي بالتهنئة {d}"],
+        "wedding": ["تهنئة وتبريك {d}", "نتقدم بأحر التهاني {d}", "ألف مبروك {d}", "تتقدم عائلة المحمدعلي بالتهنئة {d}"],
+        "newborn": ["نتقدم بالتهنئة {d}", "تهنئة وتبريك {d}", "ألف مبروك {d}", "تتقدم عائلة المحمدعلي بالتهنئة {d}"],
+        "newbornGirl": ["نتقدم بالتهنئة {d}", "تهنئة وتبريك {d}", "ألف مبروك {d}", "تتقدم عائلة المحمدعلي بالتهنئة {d}"],
         "recovery": ["نسألكم الدعاء {d}", "دعواتكم بالشفاء العاجل {d}", "الحمد لله على سلامة {n}", "نتمنى الشفاء العاجل {d}"],
-        "graduation": ["نتقدم بالتهنئة {d}", "ألف مبروك {d}", "تهنئة وتبريك {d}", "تتقدم عائلة المحمد علي بالتهنئة {d}"],
+        "graduation": ["نتقدم بالتهنئة {d}", "ألف مبروك {d}", "تهنئة وتبريك {d}", "تتقدم عائلة المحمدعلي بالتهنئة {d}"],
     ]
 
     static func openings(_ templateId: String) -> [String] {
@@ -238,20 +238,80 @@ enum OccasionChoices {
         return kuwaitAreas.filter { address.contains($0) }.max { $0.count < $1.count }
     }
 
+    // MARK: الحسينيات — قائمة ثابتة لمكان العزاء (مو مربوطة بقسم الديوانيات) — نفس HUSSEINIYA_GROUPS في الموقع
+
+    private static func h(_ name: String, _ area: String) -> OccasionHusseiniya { OccasionHusseiniya(name: name, area: area) }
+
+    /// حسب المحافظة؛ اختيار وحدة يعبّي المكان والمنطقة (والمنطقة تنعدّل). المناطق بنفس كتابة areaGroups.
+    static let husseiniyaGroups: [OccasionHusseiniyaGroup] = [
+        OccasionHusseiniyaGroup(governorate: "العاصمة", items: [
+            h("الحسينية الجعفرية", "الشرق"),
+            h("حسينية سيد الشهداء", "القادسية"),
+            h("حسينية دار الزهراء", "الدسمة"),
+            h("حسينية الأربش", "الدسمة"),
+            h("حسينية آل ياسين", "المنصورية"),
+            h("الحسينية العباسية", "المنصورية"),
+            h("حسينية أهل البيت (العطية)", "الدعية"),
+            h("الحسينية الهاشمية", "الصليبيخات"),
+            h("حسينية دار التوجيه", "الصليبيخات"),
+        ]),
+        OccasionHusseiniyaGroup(governorate: "حولي", items: [
+            h("حسينية الإمام الحسين", "سلوى"),
+            h("حسينية شهيد المحراب", "سلوى"),
+            h("حسينية خاتم الأنبياء", "الزهراء"),
+            h("حسينية أم البنين", "الرميثية"),
+            h("حسينية عقيلة الطالبين", "الرميثية"),
+            h("حسينية أبا الأحرار", "الرميثية"),
+            h("حسينية النور", "الرميثية"),
+            h("حسينية آل الرسول", "الرميثية"),
+            h("حسينية السبط الأكبر", "السالمية"),
+            h("حسينية البلوش", "الجابرية"),
+            h("حسينية باب الحوائج", "مشرف"),
+            h("الحسينية الكاظمية (البكاي)", "الشعب"),
+        ]),
+        OccasionHusseiniyaGroup(governorate: "الفروانية", items: [h("حسينية الإمام علي", "عبدالله المبارك")]),
+        OccasionHusseiniyaGroup(governorate: "الجهراء", items: [h("حسينية الإمام المهدي", "سعد العبدالله")]),
+        OccasionHusseiniyaGroup(governorate: "الأحمدي", items: [h("حسينية أهل البيت", "الأحمدي")]),
+    ]
+
+    static let husseiniyas: [OccasionHusseiniya] = husseiniyaGroups.flatMap(\.items)
+
+    /// «حسينية أخرى»: يعبّي بداية الاسم والباقي كتابة
+    static let husseiniyaOtherPrefix = "حسينية "
+
+    /// الحسينية من القائمة إذا كان المكان المكتوب اسمها بالضبط
+    static func husseiniya(named place: String) -> OccasionHusseiniya? {
+        let p = place.trimmingCharacters(in: .whitespacesAndNewlines)
+        return p.isEmpty ? nil : husseiniyas.first { $0.name == p }
+    }
+
     // MARK: مشاركة العزاء
 
-    static let solaceFrom = ["تتقدم عائلة المحمد علي", "يتقدم أبناء عائلة المحمد علي", "تتقدم أسرة المحمد علي"]
+    static let solaceFrom = ["تتقدم عائلة المحمدعلي", "يتقدم أبناء عائلة المحمدعلي", "تتقدم أسرة المحمدعلي"]
     static let solaceToFormats = ["عائلة {x} الكرام", "آل {x} الكرام", "أسرة {x} الكريمة"]
 
-    static func composeSolaceTo(format: String, family: String) -> String {
+    /// اسم العائلة بدون «عائلة/آل/أسرة» و«الكرام/الكريمة» (لو انكتبت مع الاسم)
+    static func solaceFamily(_ family: String) -> String {
         var x = family.trimmingCharacters(in: .whitespacesAndNewlines)
-        for prefix in ["عائلة ", "آل ", "أسرة "] where x.hasPrefix(prefix) {
+        if let prefix = ["عائلة ", "آل ", "أسرة "].first(where: { x.hasPrefix($0) }) {
             x = String(x.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
         }
-        for suffix in [" الكرام", " الكريمة"] where x.hasSuffix(suffix) {
+        if let suffix = [" الكرام", " الكريمة"].first(where: { x.hasSuffix($0) }) {
             x = String(x.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
         }
-        return format.replacingOccurrences(of: "{x}", with: x.isEmpty ? "..." : x)
+        return x
+    }
+
+    /// «عائلة {x} الكرام» → («عائلة »، « الكرام»)
+    static func solaceToParts(_ format: String) -> (prefix: String, suffix: String) {
+        let parts = format.components(separatedBy: "{x}")
+        return (parts.first ?? "", parts.count > 1 ? parts[1] : "")
+    }
+
+    /// السطر كامل؛ فاضي إذا ما انكتبت العائلة (مطلوبة — الحفظ يوقف لين تنكتب)
+    static func composeSolaceTo(format: String, family: String) -> String {
+        let x = solaceFamily(family)
+        return x.isEmpty ? "" : format.replacingOccurrences(of: "{x}", with: x)
     }
 
     static func solaceLeads(_ g: OccasionGender) -> [String] {
@@ -272,60 +332,15 @@ struct OccasionAreaGroup: Identifiable {
     var id: String { name }
 }
 
-// MARK: - صيغة الاسم (من شجرة العائلة) — نفس دوال الأسماء في FamilyMember
+struct OccasionHusseiniya: Hashable {
+    let name: String
+    let area: String
+}
 
-/// أقصى عدد أسماء في البوست (بعدها يصغر الخط كثير) — الافتراضي «سداسي»
-enum OccasionNameFormat: String, CaseIterable, Identifiable {
-    case three, four, five, six
-
-    static let maxWords = 6
-    static let defaultFormat: OccasionNameFormat = .six
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .three: return L10n.t("ثلاثي", "3 names")
-        case .four: return L10n.t("رباعي", "4 names")
-        case .five: return L10n.t("خماسي", "5 names")
-        case .six: return L10n.t("سداسي", "6 names")
-        }
-    }
-
-    func apply(_ m: FamilyMember) -> String {
-        switch self {
-        case .three: return m.shortFullName
-        case .four: return m.fourPartName
-        case .five: return m.fivePartName
-        case .six: return Self.sixPartName(m)
-        }
-    }
-
-    /// الخمسة الأولى + العائلة (نفس قاعدة fivePartName بكلمة زيادة)
-    static func sixPartName(_ m: FamilyMember) -> String {
-        let parts = m.nameWordsWithFamily
-        guard parts.count > maxWords, let family = parts.last else {
-            return parts.isEmpty ? m.fullName : parts.joined(separator: " ")
-        }
-        return (parts.prefix(maxWords - 1) + [family]).joined(separator: " ")
-    }
-
-    /// الصيغ المختلفة فقط (الاسم القصير يطلع نفسه بأكثر من صيغة)
-    static func distinct(for m: FamilyMember) -> [(format: OccasionNameFormat, text: String)] {
-        var out: [(format: OccasionNameFormat, text: String)] = []
-        for f in allCases {
-            let text = f.apply(m)
-            if out.last?.text != text { out.append((format: f, text: text)) }
-        }
-        return out
-    }
-
-    /// الاسم المكتوب: أقصى شي ٦ أسماء (الخمسة الأولى + الأخير، وهو العائلة عادة)
-    static func capped(_ name: String) -> String {
-        let words = name.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard words.count > maxWords, let last = words.last else { return words.joined(separator: " ") }
-        return (words.prefix(maxWords - 1) + [last]).joined(separator: " ")
-    }
+struct OccasionHusseiniyaGroup: Identifiable {
+    let governorate: String
+    let items: [OccasionHusseiniya]
+    var id: String { governorate }
 }
 
 // MARK: - حالة النموذج (اختيارات + نصوص)
@@ -345,6 +360,9 @@ struct OccasionForm: Equatable {
 }
 
 // MARK: - تحويل الاختيارات إلى نصوص البوست (نفس compose.ts)
+//
+// ما فيه نصوص بديلة «[…]»: الحقل الاختياري الفاضي يختفي من البوست، والمطلوب (missingRequired)
+// يوقف الحفظ والمشاركة لين ينكتب.
 
 enum OccasionCompose {
     private static func clean(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -370,8 +388,8 @@ enum OccasionCompose {
                 let opening = openings.indices.contains(f.sel("opening")) ? openings[f.sel("opening")] : (openings.first ?? "")
                 out["intro"] = OccasionChoices.composeIntro(opening, honor: honor)
             }
-            let typed = OccasionNameFormat.capped(name)
-            out["name"] = typed.isEmpty ? "[الاسم الكامل]" : typed
+            // الاسم والمولود مطلوبين: فاضيين ما ينرسمون، والحفظ يوقف لين ينكتبون (missingRequired)
+            out["name"] = OccasionNames.capped(name)
             if t.id == "graduation" {
                 let inst = f.sel("inst") == -1
                     ? f.txt("instCustom")
@@ -384,8 +402,7 @@ enum OccasionCompose {
                 let list = OccasionChoices.occasions(t.id, g)
                 out["occasion"] = pick(list, min(f.sel("occasion"), list.count - 1), custom: f.txt("occasionCustom"))
                 if t.id == "newborn" || t.id == "newbornGirl" {
-                    let baby = clean(f.txt("sub"))
-                    out["sub"] = baby.isEmpty ? (t.id == "newborn" ? "[اسم المولود]" : "[اسم المولودة]") : baby
+                    out["sub"] = clean(f.txt("sub"))
                 }
             }
             out["dua"] = pick(OccasionChoices.duas(t.id, g), f.sel("dua"), custom: f.txt("duaCustom"))
@@ -396,15 +413,13 @@ enum OccasionCompose {
             let format = formats.indices.contains(f.sel("toFmt")) ? formats[f.sel("toFmt")] : formats[0]
             out["to"] = OccasionChoices.composeSolaceTo(format: format, family: f.txt("toFamily"))
             out["lead"] = pick(OccasionChoices.solaceLeads(g), f.sel("slead"), custom: f.txt("sleadCustom"))
-            let typed = OccasionNameFormat.capped(name)
-            out["name"] = typed.isEmpty ? (g == .male ? "[اسم الفقيد]" : "[اسم الفقيدة]") : typed
+            out["name"] = OccasionNames.capped(name)
             out["dua"] = pick(OccasionChoices.duas("solace", g), f.sel("dua"), custom: f.txt("duaCustom"))
 
         case .death, .deathText:
             out["lead"] = pick(OccasionChoices.deathLeads(g), f.sel("lead"), custom: f.txt("leadCustom"))
             out["title"] = pick(OccasionChoices.deathTitles(g), f.sel("title"), custom: f.txt("titleCustom"))
-            let typed = OccasionNameFormat.capped(name)
-            out["name"] = typed.isEmpty ? (g == .male ? "[اسم الفقيد]" : "[اسم الفقيدة]") : typed
+            out["name"] = OccasionNames.capped(name)
 
             if t.kind == .death {
                 out["relation"] = clean(f.txt("relation"))
@@ -460,6 +475,76 @@ enum OccasionCompose {
                 out["dua1"] = d.0
                 out["dua2"] = d.1
             }
+        }
+        return out
+    }
+}
+
+// MARK: - الأسماء (كل اسم سطر واحد) والحقول المطلوبة — نفس composePost و missingRequired في الموقع
+
+extension OccasionCompose {
+    /// عنوان الاسم في الشاشة
+    static func nameTitle(_ t: OccasionTemplate, _ g: OccasionGender) -> String {
+        if t.kind == .happy { return L10n.t("الاسم", "Name") }
+        return g == .male ? L10n.t("اسم الفقيد", "Name of the deceased") : L10n.t("اسم الفقيدة", "Name of the deceased")
+    }
+
+    private static func relationTitle(_ key: String) -> String {
+        switch key {
+        case "rel1": return L10n.t("الزوج / الزوجة", "Spouse")
+        case "rel2": return L10n.t("الأبناء", "Children")
+        case "rel3": return L10n.t("الإخوان", "Brothers")
+        default: return L10n.t("صلة القرابة", "Relation")
+        }
+    }
+
+    /// عناصر الأسماء في القالب: الاسم، العائلة (مشاركة العزاء)، وسطور القرابة اللي فيها اسم شخص واحد
+    static func nameElements(_ t: OccasionTemplate, _ f: OccasionForm, values: [String: String]) -> [OccasionNameElement] {
+        var list: [OccasionNameElement] = []
+        let words = OccasionNames.words(values["name"] ?? "")
+        if !words.isEmpty {
+            list.append(OccasionNameElement(key: "name", title: nameTitle(t, f.gender), prefix: "", words: words, suffix: ""))
+        }
+        if t.kind == .solace {
+            let family = OccasionNames.words(OccasionChoices.solaceFamily(f.txt("toFamily")))
+            if !family.isEmpty {
+                let formats = OccasionChoices.solaceToFormats
+                let format = formats.indices.contains(f.sel("toFmt")) ? formats[f.sel("toFmt")] : formats[0]
+                let parts = OccasionChoices.solaceToParts(format)
+                list.append(OccasionNameElement(key: "to", title: L10n.t("اسم العائلة", "Family name"),
+                                                prefix: parts.prefix, words: family, suffix: parts.suffix))
+            }
+        }
+        for key in ["relation", "rel1", "rel2", "rel3"] {
+            if let line = values[key], let r = OccasionNames.relationName(line), !r.words.isEmpty {
+                list.append(OccasionNameElement(key: key, title: relationTitle(key), prefix: r.prefix, words: r.words, suffix: ""))
+            }
+        }
+        return list
+    }
+
+    /// نصوص البوست النهائية: كل اسم بالصيغة اللي تدخل بسطر واحد (بالنموذج والمقاس والنسخة الحالية).
+    /// counts = الصيغة المطلوبة لكل عنصر (الافتراضي الأطول)؛ قبل ما يتحمّل الخط كل شي يعتبر داخل.
+    static func post(_ t: OccasionTemplate, _ f: OccasionForm, name: String, model: OccasionModel, size: OccasionSize,
+                     withPhoto: Bool, counts: [String: Int]) -> (values: [String: String], names: [OccasionNameResolution]) {
+        var out = values(t, f, name: name)
+        let slots = t.nameSlots(model: model, size: size, withPhoto: withPhoto)
+        let names = nameElements(t, f, values: out).compactMap { e in
+            OccasionNames.resolve(e, slot: slots[e.key], requested: counts[e.key] ?? OccasionNames.maxWords)
+        }
+        for r in names { out[r.element.key] = r.option.line }
+        return (out, names)
+    }
+
+    /// الحقول اللي التصميم ما يمشي بدونها — فاضية ما تنرسم، والحفظ والمشاركة يوقفون لين تنكتب
+    static func missingRequired(_ t: OccasionTemplate, _ f: OccasionForm, name: String) -> [String] {
+        var out: [String] = []
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out.append(nameTitle(t, f.gender)) }
+        if t.id == "newborn" || t.id == "newbornGirl", f.txt("sub").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            out.append(t.id == "newborn" ? L10n.t("اسم المولود", "Baby's name") : L10n.t("اسم المولودة", "Baby's name"))
+        }
+        if t.kind == .solace, OccasionChoices.solaceFamily(f.txt("toFamily")).isEmpty {
+            out.append(L10n.t("اسم العائلة", "Family name"))
         }
         return out
     }

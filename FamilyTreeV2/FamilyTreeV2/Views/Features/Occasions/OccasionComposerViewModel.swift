@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UIKit
 import Photos
 import PhotosUI
@@ -13,9 +14,11 @@ final class OccasionComposerViewModel: ObservableObject {
     @Published var form = OccasionForm()
     /// العضو المختار من شجرة العائلة (رجال)
     @Published private(set) var member: FamilyMember?
-    @Published var nameFormat: OccasionNameFormat = OccasionNameFormat.defaultFormat
-    /// نموذج ١ (صورة دائرية فوق) أو نموذج ٢ (صورة سداسية جانبية) — الافتراضي نموذج ٢ مثل الموقع
-    @Published var model: OccasionModel = .m2
+    /// الصيغة المطلوبة لكل عنصر اسم (عدد الأسماء) — الافتراضي الأطول؛ اللي ما يدخل بسطر يختصر تلقائياً
+    @Published var nameCounts: [String: Int] = [:]
+    /// نموذج ١ (صورة دائرية فوق)، نموذج ٢ (صورة سداسية جانبية)، أو نموذج ٣ (صورة بقوس فوق بطاقة) —
+    /// الافتراضي المعتمد (نموذج ٣) مثل الموقع
+    @Published var model: OccasionModel = .standard
     /// التهاني: «مع صورة» أو «بدون صورة» (يبقى لما يتغيّر القالب مثل النموذج)
     @Published var withPhoto = true
     @Published var photo = OccasionPhoto()
@@ -61,14 +64,49 @@ final class OccasionComposerViewModel: ObservableObject {
 
     private var assetPaths: [String] { template.assetPaths(for: size, model: model, withPhoto: withPhoto) }
 
-    /// الاسم في البوست: من الشجرة بالصيغة المختارة، أو المكتوب
+    /// الاسم كامل: من الشجرة (مع العائلة) أو المكتوب — الصيغة تنختار بعدين حسب السطر (OccasionNames)
     var name: String {
-        if let member { return nameFormat.apply(member) }
+        if let member { return member.nameWordsWithFamily.joined(separator: " ") }
         return form.txt("nameTyped")
     }
 
+    private struct ComposeKey: Equatable {
+        let template: String
+        let form: OccasionForm
+        let name: String
+        let model: OccasionModel
+        let size: OccasionSize
+        let withPhoto: Bool
+        let counts: [String: Int]
+        /// القياس يتغيّر لما يتسجّل الخط
+        let fontsReady: Bool
+    }
+
+    private var composeCache: (key: ComposeKey, value: (values: [String: String], names: [OccasionNameResolution]))?
+
+    /// نصوص البوست النهائية + صيغة كل اسم (بالنموذج والمقاس والنسخة الحالية) — نفس composePost في الموقع.
+    /// تنحسب مرة وحدة لكل تغيير (القياس بالخط مكلف شوي، والشاشة تقراها أكثر من مرة بكل رسم)
+    var composed: (values: [String: String], names: [OccasionNameResolution]) {
+        let key = ComposeKey(template: template.id, form: form, name: name, model: model, size: size,
+                             withPhoto: withPhoto, counts: nameCounts, fontsReady: kit.fontsReady)
+        if let cached = composeCache, cached.key == key { return cached.value }
+        let value = OccasionCompose.post(template, form, name: name, model: model, size: size, withPhoto: withPhoto, counts: nameCounts)
+        composeCache = (key, value)
+        return value
+    }
+
     /// نصوص البوست النهائية
-    var values: [String: String] { OccasionCompose.values(template, form, name: name) }
+    var values: [String: String] { composed.values }
+
+    /// صيغة عنصر اسم (name / to / relation / rel1…) — للشاشة
+    func nameResolution(_ key: String) -> OccasionNameResolution? {
+        composed.names.first { $0.element.key == key }
+    }
+
+    func setNameCount(_ key: String, _ count: Int) { nameCounts[key] = count }
+
+    /// الحقول المطلوبة الفاضية — الحفظ والمشاركة يوقفون لين تنكتب
+    var missing: [String] { OccasionCompose.missingRequired(template, form, name: name) }
 
     // MARK: البيانات
 
@@ -97,17 +135,27 @@ final class OccasionComposerViewModel: ObservableObject {
                 set: { [weak self] in self?.form.texts[key] = $0 })
     }
 
-    /// مكان العزاء: لو كان ديوانية معتمدة، تتعبّى المنطقة من عنوانها
+    /// مكان العزاء: حسينية من القائمة تعبّي منطقتها؛ ديوانية معتمدة تعبّي المنطقة من عنوانها
     func venuePlace(_ side: String) -> Binding<String> {
         Binding(get: { [weak self] in self?.form.txt("\(side)Place") ?? "" },
-                set: { [weak self] value in
-                    guard let self else { return }
-                    self.form.texts["\(side)Place"] = value
-                    if let d = self.diwaniyas.first(where: { $0.title == value }),
-                       let area = OccasionChoices.area(inAddress: d.address) {
-                        self.form.texts["\(side)Area"] = area
-                    }
-                })
+                set: { [weak self] value in self?.setVenuePlace(side, value) })
+    }
+
+    func setVenuePlace(_ side: String, _ value: String) {
+        form.texts["\(side)Place"] = value
+        let husseiniya = OccasionChoices.husseiniya(named: value)
+        let diwaniya = husseiniya == nil ? diwaniyas.first(where: { $0.title == value }) : nil
+        if let area = husseiniya?.area ?? OccasionChoices.area(inAddress: diwaniya?.address) {
+            form.texts["\(side)Area"] = area
+        }
+    }
+
+    /// «حسينية أخرى»: «حسينية » للكتابة؛ المنطقة اللي تعبّت من حسينية القائمة تنمسح
+    func pickOtherHusseiniya(_ side: String) {
+        if let prev = OccasionChoices.husseiniya(named: form.txt("\(side)Place")), form.txt("\(side)Area") == prev.area {
+            form.texts["\(side)Area"] = ""
+        }
+        form.texts["\(side)Place"] = OccasionChoices.husseiniyaOtherPrefix
     }
 
     func setGender(_ next: OccasionGender) {
@@ -120,6 +168,8 @@ final class OccasionComposerViewModel: ObservableObject {
     func select(_ next: OccasionTemplate) {
         guard next.id != template.id else { return }
         template = next
+        // أسطر الأسماء تختلف بين القوالب — كل اسم يرجع لأطول صيغة تدخل
+        nameCounts = [:]
         // اختيارات خاصة بكل قالب (قوائمها تختلف) ترجع للأول
         for key in ["opening", "occasion", "dua"] { form.selections[key] = nil }
         photo.gray = next.kind == .death
@@ -133,7 +183,7 @@ final class OccasionComposerViewModel: ObservableObject {
         form = OccasionForm()
         member = nil
         autoRelations = [:]
-        nameFormat = OccasionNameFormat.defaultFormat
+        nameCounts = [:]
         if photoFromMember {
             photo = OccasionPhoto(gray: keepGray)
             photoFromMember = false
@@ -144,6 +194,8 @@ final class OccasionComposerViewModel: ObservableObject {
 
     func pickMember(_ m: FamilyMember) {
         member = m
+        // عضو جديد: الاسم يرجع لأطول صيغة تدخل
+        nameCounts["name"] = nil
         let sons = family.sonsLine(m)
         let next: [String: String] = [
             "relation": sons.isEmpty ? family.fatherLine(m) : sons,
@@ -304,8 +356,16 @@ final class OccasionComposerViewModel: ObservableObject {
         return renderer.uiImage
     }
 
+    /// يوقف الحفظ والمشاركة برسالة واضحة إذا فيه حقل مطلوب فاضي
+    private func checkRequired() -> Bool {
+        let list = missing
+        guard !list.isEmpty else { return true }
+        message = L10n.t("أكمل الحقول المطلوبة أولاً: ", "Fill in the required fields first: ") + list.joined(separator: "، ")
+        return false
+    }
+
     func saveToPhotos() async {
-        guard !isWorking else { return }
+        guard !isWorking, checkRequired() else { return }
         isWorking = true
         defer { isWorking = false }
         guard let image = await render(), let data = image.pngData() else {
@@ -331,7 +391,7 @@ final class OccasionComposerViewModel: ObservableObject {
     }
 
     func share() async {
-        guard !isWorking else { return }
+        guard !isWorking, checkRequired() else { return }
         isWorking = true
         defer { isWorking = false }
         guard let image = await render(), let data = image.pngData() else {

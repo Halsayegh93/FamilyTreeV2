@@ -242,6 +242,169 @@ struct OccasionAreaField: View {
     }
 }
 
+/// الحسينيات (قائمة ثابتة حسب المحافظة): اختيار وحدة يعبّي المكان والمنطقة، و«حسينية أخرى» يبدأ الكتابة — نفس الموقع
+struct OccasionHusseiniyaMenu: View {
+    let place: String
+    let onPick: (OccasionHusseiniya) -> Void
+    let onOther: () -> Void
+
+    var body: some View {
+        let picked = OccasionChoices.husseiniya(named: place)
+        Menu {
+            ForEach(OccasionChoices.husseiniyaGroups) { group in
+                Menu(group.governorate) {
+                    ForEach(group.items, id: \.name) { h in
+                        Button {
+                            onPick(h)
+                        } label: {
+                            if picked == h {
+                                Label("\(h.name) — \(h.area)", systemImage: "checkmark")
+                            } else {
+                                Text("\(h.name) — \(h.area)")
+                            }
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button {
+                onOther()
+            } label: {
+                Label(L10n.t("حسينية أخرى", "Another husseiniya"), systemImage: "pencil")
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "building.columns")
+                    .font(DS.Font.scaled(15, weight: .semibold))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(picked?.name ?? L10n.t("اختر حسينية من القائمة", "Choose a husseiniya from the list"))
+                        .font(DS.Font.plex(14, weight: .semibold))
+                        .lineLimit(1)
+                    if let picked {
+                        Text(picked.area)
+                            .font(DS.Font.caption2)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .foregroundColor(DS.Color.textPrimary)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm + 2)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(picked == nil ? DS.Color.cardBackgroundSoft : DS.Color.primary.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .stroke(picked == nil ? DS.Color.cardBorderStrong : DS.Color.primary, lineWidth: 1)
+            )
+        }
+        .accessibilityLabel(L10n.t("الحسينيات", "Husseiniyas"))
+    }
+}
+
+/// تنبيه أحمر تحت الحقل المطلوب الفاضي
+struct OccasionRequiredHint: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Label {
+            Text(text)
+        } icon: {
+            Image(systemName: "exclamationmark.circle.fill")
+        }
+        .font(DS.Font.caption1.weight(.semibold))
+        .foregroundColor(DS.Color.error)
+        .accessibilityAddTraits(.isStaticText)
+    }
+}
+
+/// «اسم الفقيد: رباعي» + شرائح الصيغ. اللي ما تدخل بسطر واحد عليها «أطول من السطر» وما تنختار؛
+/// أقصر صيغة تنختار بأي وقت («الخط يصغر ليدخل»). الأطول اللي يدخل ينختار تلقائياً — نفس الموقع.
+struct OccasionNameFormatPicker: View {
+    let resolution: OccasionNameResolution
+    let onSelect: (Int) -> Void
+
+    private var note: String {
+        let r = resolution
+        if r.autoShortened && r.shrunk { return L10n.t("اختُصر وصغُر الخط ليدخل بسطر واحد", "Shortened and slightly smaller to fit one line") }
+        if r.autoShortened { return L10n.t("اختُصر تلقائياً ليدخل بسطر واحد", "Shortened to fit one line") }
+        if r.shrunk { return L10n.t("الخط أصغر شوي ليدخل بسطر واحد", "Slightly smaller to fit one line") }
+        return ""
+    }
+
+    var body: some View {
+        let r = resolution
+        let shortest = r.options.last?.count
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            (Text("\(r.element.title): \(r.option.label)").fontWeight(.semibold).foregroundColor(DS.Color.textSecondary)
+                + Text(note.isEmpty ? "" : "  · " + note).foregroundColor(DS.Color.textTertiary))
+                .font(DS.Font.caption1)
+            if r.options.count > 1 {
+                OccasionFlowLayout(spacing: 8) {
+                    ForEach(r.options, id: \.count) { o in
+                        OccasionFormatChip(
+                            title: "\(o.label) — \(o.name)",
+                            warning: o.fits ? "" : (o.count == shortest
+                                ? L10n.t("الخط يصغر ليدخل", "Smaller type to fit")
+                                : L10n.t("أطول من السطر", "Too long for one line")),
+                            isOn: o.count == r.option.count,
+                            enabled: o.fits || o.count == shortest
+                        ) {
+                            onSelect(o.count)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// شريحة صيغة الاسم: الصيغة + الاسم، وتحتها تنبيه («أطول من السطر») — اللي ما تدخل ما تنختار
+struct OccasionFormatChip: View {
+    let title: String
+    let warning: String
+    let isOn: Bool
+    let enabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(DS.Font.plex(14, weight: .semibold))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !warning.isEmpty {
+                    Text(warning)
+                        .font(DS.Font.plex(11, weight: .semibold))
+                        .foregroundColor(isOn ? DS.Color.textOnPrimary.opacity(0.85) : DS.Color.warning)
+                }
+            }
+            .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textPrimary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(isOn ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.cardBackgroundSoft))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(isOn ? Color.clear : DS.Color.cardBorderStrong, lineWidth: 1)
+            )
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.5)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+}
+
 /// بطاقة قسم في النموذج: عنوان + تلميح + مفتاح «إظهار» (اختياري)
 struct OccasionFormCard<Content: View>: View {
     let title: String

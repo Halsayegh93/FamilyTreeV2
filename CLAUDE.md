@@ -194,7 +194,7 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 
 ### Colors — `DS.Color`
 
-Visual identity (October 2026) follows the designer's guide: navy #172536, gold #B89A5A, cream #F2EBDD. The token names and values match the website (`familytree-web/src/app/globals.css`) and the «المحمد علي» design system. Values are light / dark.
+Visual identity (October 2026) follows the designer's guide: navy #172536, gold #B89A5A, cream #F2EBDD. The token names and values match the website (`familytree-web/src/app/globals.css`) and the «المحمدعلي» design system. Values are light / dark.
 
 - **Brand:** `primary` navy (#172536 / #7FA8D6), `primaryDark` (#0F1824 / #2B5F90), `primaryLight` (#5D6672 / #A9C4E4), `accent` = gold-text for text on light surfaces (#725D31 / #B89A5A), `accentDark` (#5A4927 / #9C8045), `accentLight` = gold for lines and frames (#B89A5A in both modes). `secondary` (forest green) stays a supporting color.
 - **Gold rule:** gold text on light backgrounds uses `accent` (#725D31); the brighter #B89A5A is text only on navy.
@@ -315,6 +315,7 @@ Fields: `id`, `targetMemberId`, `title`, `body`, `kind`, `createdBy`, `createdAt
 ## Localization & RTL
 
 - Use `L10n.t("عربي", "English")` for bilingual strings (from `Components/Shared/AppL10n.swift`)
+- Write the family name «المحمدعلي» as one word everywhere — UI, posts and docs — the way the tree stores it. Post text joins «المحمد علي» typed with a space (`OccasionText.postText`, same as `postText` on the website). In Latin script: Al-Mohammad Ali.
 - Check `L10n.isArabic` for directional logic (delegates to `LanguageManager.shared.selectedLanguage == "ar"`)
 - Chevrons: `L10n.isArabic ? "chevron.left" : "chevron.right"`
 - Use `DirectionalOffset.signedX()` or `.languageHorizontalOffset()` for RTL-aware positioning
