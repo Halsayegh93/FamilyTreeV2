@@ -10,7 +10,11 @@ struct RootView: View {
         Group {
             switch authVM.status {
             case .unauthenticated:
-                LoginView()
+                if ProcessInfo.processInfo.arguments.contains("-HoldSplash") {
+                    SplashScreenView()
+                } else {
+                    LoginView()
+                }
 
             case .checking:
                 SplashScreenView()

@@ -1,0 +1,78 @@
+name: Screens (temporary)
+
+# مؤقت — لقطات من محاكي الآيفون لشاشة البداية وتسجيل الدخول (فاتح وداكن) لمراجعة الهوية.
+# الفرع للمعاينة فقط ولا يُدمج؛ ينحذف بعد أخذ اللقطات.
+on:
+  push:
+    branches: ['claude/screens-2026-10-17']
+
+jobs:
+  screens:
+    runs-on: self-hosted
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pick a simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json | /usr/bin/python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          pick = ""; fallback = ""
+          for rt in sorted(d):
+              if ".iOS-" not in rt: continue
+              for x in d[rt]:
+                  if not x["name"].startswith("iPhone"): continue
+                  fallback = x["udid"]
+                  if "Pro" in x["name"] and "Max" not in x["name"]: pick = x["udid"]
+          print(pick or fallback)')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl list devices | grep "$UDID" || true
+
+      - name: Build for the simulator
+        run: |
+          LOG="$RUNNER_TEMP/sim-build.log"
+          xcodebuild build -project FamilyTreeV2.xcodeproj -scheme FamilyTreeV2 -configuration Debug \
+            -destination "id=$UDID" -derivedDataPath "$RUNNER_TEMP/dd-sim" CODE_SIGNING_ALLOWED=NO > "$LOG" 2>&1 || { tail -60 "$LOG"; exit 1; }
+          grep -q 'BUILD SUCCEEDED' "$LOG" && echo "::notice title=Build::BUILD SUCCEEDED"
+
+      - name: Screenshots
+        run: |
+          set -x
+          APP=$(find "$RUNNER_TEMP/dd-sim/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name "*.app" | head -1)
+          BID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP/Info.plist")
+          OUT="$RUNNER_TEMP/shots"; mkdir -p "$OUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time "9:41" --wifiBars 3 --cellularBars 4 --batteryState charged --batteryLevel 100 || true
+          xcrun simctl install "$UDID" "$APP"
+          for MODE in light dark; do
+            xcrun simctl ui "$UDID" appearance "$MODE"
+            xcrun simctl terminate "$UDID" "$BID" || true
+            xcrun simctl launch "$UDID" "$BID" -NoPushPrompt -HoldSplash
+            sleep 5; xcrun simctl io "$UDID" screenshot "$OUT/$MODE-splash.png"
+            xcrun simctl terminate "$UDID" "$BID" || true
+            xcrun simctl launch "$UDID" "$BID" -NoPushPrompt
+            sleep 9; xcrun simctl io "$UDID" screenshot "$OUT/$MODE-login.png"
+          done
+          xcrun simctl terminate "$UDID" "$BID" || true
+          xcrun simctl ui "$UDID" appearance light
+          sleep 2; xcrun simctl io "$UDID" screenshot "$OUT/home-screen.png"
+          ls -la "$OUT"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: ${{ runner.temp }}/shots
+          retention-days: 3
+
+      - name: Clean up the simulator
+        if: always()
+        run: |
+          xcrun simctl uninstall "$UDID" Hasan.FamilyTreeV2 || true
+          xcrun simctl status_bar "$UDID" clear || true
+          xcrun simctl shutdown "$UDID" || true

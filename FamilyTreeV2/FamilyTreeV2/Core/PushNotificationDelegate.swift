@@ -76,6 +76,7 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
 
         Task { try? await center.setBadgeCount(0) }
 
+        if ProcessInfo.processInfo.arguments.contains("-NoPushPrompt") { return true }
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else { return }
             Task { @MainActor in
