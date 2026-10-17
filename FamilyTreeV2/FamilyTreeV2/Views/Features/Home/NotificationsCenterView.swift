@@ -562,13 +562,13 @@ struct NotificationsCenterView: View {
                         .symbolRenderingMode(.hierarchical)
 
                     Text(title)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(DS.Font.plexFixed(14, weight: .bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
 
                     if count > 0 {
                         Text("\(count)")
-                            .font(.system(size: 10, weight: .black, design: .rounded))
+                            .font(DS.Font.plexFixed(10, weight: .bold))
                             .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textOnPrimary)
                             .frame(minWidth: 16, minHeight: 16)
                             .padding(.horizontal, 3)

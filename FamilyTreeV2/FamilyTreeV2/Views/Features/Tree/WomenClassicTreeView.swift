@@ -641,7 +641,7 @@ struct WomenClassicTreeView: View {
                             } else if female {
                                 // الإناث: كلمة «ابنة» بدل الحرف الأول
                                 Text(L10n.t("ابنة", "Daughter"))
-                                    .font(.system(size: CIRCLE * 0.26, weight: .bold))
+                                    .font(DS.Font.plexFixed(CIRCLE * 0.26, weight: .bold))
                                     .minimumScaleFactor(0.7)
                                     .lineLimit(1)
                                     .foregroundColor(.white)
@@ -696,7 +696,7 @@ struct WomenClassicTreeView: View {
                         if !kids.isEmpty {
                             HStack(spacing: 1.5) {
                                 Text("\(kids.count)")
-                                    .font(.system(size: 8.5, weight: .heavy))
+                                    .font(DS.Font.plexFixed(8.5, weight: .bold))
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 6, weight: .heavy))
                                     .rotationEffect(.degrees(isCollapsed ? 0 : 180))
@@ -729,7 +729,7 @@ struct WomenClassicTreeView: View {
                 // (نفس تصميم شجرة العائلة، بمقاس عقد النساء الصغيرة)
                 VStack(spacing: 0) {
                     Text(m.firstName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(DS.Font.plexFixed(11, weight: .semibold))
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
@@ -738,7 +738,7 @@ struct WomenClassicTreeView: View {
                         .frame(height: PILL_H)
                         .background(DS.Color.surface)
                     Text(lifeSpanNeat(m) ?? L10n.t(m.isFemale ? "متوفية" : "متوفى", "Deceased"))
-                        .font(.system(size: 8.5, weight: .heavy))
+                        .font(DS.Font.plexFixed(8.5, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -754,7 +754,7 @@ struct WomenClassicTreeView: View {
                 .onTapGesture { onSelect?(m) }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             } else {
                 Text(m.firstName)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(DS.Font.plexFixed(11, weight: .semibold))
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)   // تصغير أكبر → الاسم الطويل يظهر كاملاً بلا اقتطاع
@@ -789,7 +789,7 @@ struct WomenClassicTreeView: View {
                                   lineWidth: w.isDeceased == true ? 1.5 : 1))
                 .overlay(
                     Text(L10n.t("زوجة", "Wife"))
-                        .font(.system(size: 7.5, weight: .bold))
+                        .font(DS.Font.plexFixed(7.5, weight: .bold))
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
                         .foregroundColor(.white)
@@ -809,7 +809,7 @@ struct WomenClassicTreeView: View {
                 }
                 .opacity(w.isHiddenFromTree ? 0.55 : 1)
             Text(wifeShortName(w))
-                .font(.system(size: 8, weight: .medium))
+                .font(DS.Font.plexFixed(8, weight: .medium))
                 .foregroundColor(DS.Color.textSecondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)

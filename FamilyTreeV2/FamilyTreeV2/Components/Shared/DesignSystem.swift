@@ -252,14 +252,10 @@ enum DS {
         static let mutedBackground = SwiftUI.Color.gray.opacity(0.2)
     }
 
-    // MARK: Typography — خطوط حديثة ونظيفة مع دعم Dynamic Type
+    // MARK: Typography — IBM Plex Sans Arabic لكل الواجهة، مع دعم Dynamic Type
+    // الهوية: خط واحد للواجهة كلها (التطبيق والموقع والـ PDF) بأوزان 400/500/600/700.
+    // رموز SF Symbols وحدها على خط النظام — عبر icon().
     enum Font {
-        /// الصوت الطباعي المميّز لهوية العائلة التراثية — أدفأ وأكثر تميّزاً من SF Pro.
-        /// SF Rounded يدعم العربية (SF Arabic Rounded) فيظهر الدفء على اسم العائلة والعناوين
-        /// العربية والإنجليزية معاً، بعكس الخط السيريفي (New York) الذي لا يملك محارف عربية.
-        /// يُطبَّق على الخطوط المرنة (scaled) فقط؛ نصوص الواجهة — العناوين والمحتوى — على IBM Plex Sans Arabic (الهوية).
-        static let displayDesign: SwiftUI.Font.Design = .rounded
-
         // MARK: IBM Plex Sans Arabic — خط الهوية
         /// أسماء PostScript للأوزان المضافة في Resources/Fonts
         enum Plex {
@@ -267,18 +263,28 @@ enum DS {
             static let medium   = "IBMPlexSansArabic-Medium"
             static let semibold = "IBMPlexSansArabic-SemiBold"
             static let bold     = "IBMPlexSansArabic-Bold"
+
+            /// وزن الواجهة المطلوب ← ملف الخط: الخفيف والعادي → Regular (400)، medium → Medium (500)،
+            /// semibold → SemiBold (600)، bold وheavy وblack → Bold (700)
+            static func name(for weight: SwiftUI.Font.Weight) -> String {
+                switch weight {
+                case .black, .heavy, .bold: return bold
+                case .semibold:             return semibold
+                case .medium:               return medium
+                default:                    return regular
+                }
+            }
         }
 
         /// خط IBM Plex Sans Arabic مع دعم Dynamic Type — يُستخدم للعناوين وهوية الاسم
         static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
-            let name: String
-            switch weight {
-            case .black, .heavy, .bold: name = Plex.bold
-            case .semibold:             name = Plex.semibold
-            case .medium:               name = Plex.medium
-            default:                    name = Plex.regular
-            }
-            return .custom(name, size: size, relativeTo: textStyle(for: size))
+            .custom(Plex.name(for: weight), size: size, relativeTo: textStyle(for: size))
+        }
+
+        /// IBM Plex Sans Arabic بحجم ثابت لا يتبع Dynamic Type — لنصوص لوحة الشجرة داخل عُقد بمقاس ثابت
+        /// (بدل .system(size:) في تلك الأماكن)
+        static func plexFixed(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
+            .custom(Plex.name(for: weight), fixedSize: size)
         }
 
         /// اختيار TextStyle المناسب للحجم — يضمن تكيّف الخط المخصّص مع Dynamic Type
@@ -310,32 +316,47 @@ enum DS {
         static let calloutBold = SwiftUI.Font.custom(Plex.bold, size: 16, relativeTo: .callout)
         static let subheadline = SwiftUI.Font.custom(Plex.regular, size: 15, relativeTo: .subheadline)
         static let footnote    = SwiftUI.Font.custom(Plex.regular, size: 13, relativeTo: .footnote)
-        static let caption1    = SwiftUI.Font.custom(Plex.regular, size: 12, relativeTo: .caption)
-        static let caption2    = SwiftUI.Font.custom(Plex.regular, size: 11, relativeTo: .caption2)
+        // الهوية: caption بوزن 500 وcaption-2 بوزن 600 (حقول وعدّادات وشارات أدوار)
+        static let caption1    = SwiftUI.Font.custom(Plex.medium, size: 12, relativeTo: .caption)
+        static let caption2    = SwiftUI.Font.custom(Plex.semibold, size: 11, relativeTo: .caption2)
 
-        /// خط مرن يدعم Dynamic Type - يُستخدم بدل .system(size:weight:)
-        static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
-            let style: SwiftUI.Font.TextStyle
+        /// نمط النص المقابل للحجم — يحدّد منحنى Dynamic Type لـ scaled() وicon().
+        /// نفس الجدول السابق لكل الأحجام الصحيحة (١١ وأقل caption2 … ٣٦ وأكثر largeTitle)،
+        /// والحدود بـ ..< حتى تأخذ الأحجام الكسرية (13.5 مثلاً) النمط الأقرب بدل largeTitle.
+        static func scaledTextStyle(for size: CGFloat) -> SwiftUI.Font.TextStyle {
             switch size {
-            case ...10: style = .caption2
-            case 11: style = .caption2
-            case 12: style = .caption
-            case 13: style = .footnote
-            case 14...15: style = .subheadline
-            case 16: style = .callout
-            case 17: style = .body
-            case 18...19: style = .headline
-            case 20...21: style = .title3
-            case 22...27: style = .title2
-            case 28...35: style = .title
-            default: style = .largeTitle
+            case ..<11.5: return .caption2
+            case ..<12.5: return .caption
+            case ..<13.5: return .footnote
+            case ..<15.5: return .subheadline
+            case ..<16.5: return .callout
+            case ..<17.5: return .body
+            case ..<19.5: return .headline
+            case ..<21.5: return .title3
+            case ..<27.5: return .title2
+            case ..<35.5: return .title
+            default:      return .largeTitle
             }
-            return SwiftUI.Font.system(style, design: design).weight(weight)
         }
 
-        /// الخط المميّز (display) بحجم مخصّص — لاسم العائلة والعناوين الكبيرة، مع دعم Dynamic Type.
+        /// خط الواجهة المرن — IBM Plex Sans Arabic بالحجم المطلوب ويكبر ويصغر مع Dynamic Type
+        /// (relativeTo: نمط النص المقابل للحجم). يُستخدم بدل .system(size:weight:) لكل نص.
+        /// الأوزان حسب Plex.name(for:). `design` باقٍ في التوقيع للتوافق فقط ويُتجاهل — خط واحد للواجهة.
+        /// لرموز SF Symbols استخدم icon().
+        static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
+            .custom(Plex.name(for: weight), size: size, relativeTo: scaledTextStyle(for: size))
+        }
+
+        /// خط رموز SF Symbols — خط النظام بنمط النص المقابل للحجم مع الوزن (نفس ما كان scaled() يرجعه،
+        /// فلا يتغيّر مقاس الأيقونات)، ويكبر ويصغر مع Dynamic Type.
+        /// لـ Image(systemName:) فقط؛ النص يبقى على scaled()/plex().
+        static func icon(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
+            SwiftUI.Font.system(scaledTextStyle(for: size), design: .default).weight(weight)
+        }
+
+        /// الخط الكبير (display) بحجم مخصّص — لاسم العائلة والعناوين الكبيرة: نفس scaled() على Plex.
         static func display(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> SwiftUI.Font {
-            scaled(size, weight: weight, design: displayDesign)
+            scaled(size, weight: weight)
         }
     }
 
