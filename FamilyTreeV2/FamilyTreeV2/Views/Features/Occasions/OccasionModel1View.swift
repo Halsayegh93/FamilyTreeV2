@@ -222,19 +222,16 @@ extension OccasionPostView {
         let shadow = OccasionLightShadow(k: k)
         var items: [AnyView] = [
             AnyView(verse(template.verse ?? .sabr, scale: k, pull: 30 * k)),
-            AnyView(text("مشـاركة عـزاء", .extrabold, 96 * k, color: ink, lineHeight: 1.25).modifier(shadow)),
+            // «تتقدم عائلة المحمدعلي» ملاصق للعنوان وبعرضه — «مشاركة عزاء» ممدودة بالكشيدة (مثل الموقع)
+            AnyView(OccasionSolaceHeadingView(from: has("from") ? value("from") : "", fromSize: 61 * k, titleSize: 96 * k,
+                                              fromLineHeight: 1.35, titleColor: ink, fromColor: ink).modifier(shadow)),
             AnyView(
                 VStack(spacing: 8 * k) {
-                    if has("from") {
-                        text(value("from"), .semibold, 48 * k, color: ink, lineHeight: 1.35).modifier(shadow)
-                    }
                     text("بأحر التعازي وأصدق المواساة إلى", .regular, 34 * k, color: muted, lineHeight: 1.4)
+                    if has("to") { nameLine("to", color: ink).modifier(shadow) }
                 }
             ),
         ]
-        if has("to") {
-            items.append(AnyView(nameLine("to", color: ink).modifier(shadow)))
-        }
         items.append(AnyView(
             VStack(spacing: 6 * k) {
                 if has("lead") {
