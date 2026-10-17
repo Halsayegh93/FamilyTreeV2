@@ -315,7 +315,7 @@ enum OccasionM3 {
     static func lines(_ text: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, _ width: CGFloat) -> Int {
         guard let font = UIFont(name: weight.postScriptName, size: size) else { return 1 }
         let attrs: [NSAttributedString.Key: Any] = [.font: font]
-        func fits(_ s: String) -> Bool { (s as NSString).size(withAttributes: attrs).width <= width + 0.01 }
+        func fitsLine(_ s: String) -> Bool { (s as NSString).size(withAttributes: attrs).width <= width + 0.01 }
         var count = 0
         for para in text.components(separatedBy: "\n") {
             var cur = ""
@@ -325,7 +325,7 @@ enum OccasionM3 {
                     continue
                 }
                 let candidate = cur + " " + word
-                if fits(candidate) {
+                if fitsLine(candidate) {
                     cur = candidate
                 } else {
                     count += 1
@@ -337,10 +337,74 @@ enum OccasionM3 {
         return max(count, 1)
     }
 
-    /// سطر الاسم ياخذ سطرين؟ (لو ما دخل حتى بأصغر حجم — مثل nameLine) — يرجع ١ أو ٢
+    /// يدخل بسطر واحد بهالحجم؟ (قبل ما يتحمّل الخط: نعم)
+    static func fits(_ text: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, _ width: CGFloat) -> Bool {
+        guard let w = OccasionNames.measure(text, weight: weight, size: size) else { return true }
+        return w <= width + 0.01
+    }
+
+    /// سطر الاسم ياخذ سطرين؟ (لو ما دخل حتى بأصغر حجم) — يرجع ١ أو ٢، نفس oneLineRows في الموقع
     static func nameRows(_ text: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, _ width: CGFloat) -> CGFloat {
-        guard let w = OccasionNames.measure(text, weight: weight, size: size * OccasionNames.minScale) else { return 1 }
-        return w > width + 0.5 ? 2 : 1
+        let t = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return fits(t, weight, size * OccasionNames.minScale, width) ? 1 : 2
+    }
+
+    /// سطر واحد مثل OneLine في الموقع: أكبر حجم (بأعشار البكسل) يدخل فيه، ولا ينزل عن minScale؛ nil = ما دخل حتى عنده
+    static func oneLineSize(_ text: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, _ width: CGFloat) -> CGFloat? {
+        guard let full = OccasionNames.measure(text, weight: weight, size: size), full > width + 0.01 else { return size }
+        let minSize = size * OccasionNames.minScale
+        var s = max(minSize, (size * (width / full) * 10).rounded(.down) / 10)
+        while s > minSize && !fits(text, weight, s, width) { s = max(minSize, s - 0.5) }
+        return fits(text, weight, s, width) ? s : nil
+    }
+
+    /// يلف النص على العرض بالكلمات: عادي (أكثر كلمات في كل سطر)، أو متوازن مثل text-wrap: balance في المتصفح
+    /// (أضيق عرض يعطي نفس عدد السطور). كل فقرة (\n) تبدأ سطراً جديداً.
+    static func wrap(_ text: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, _ width: CGFloat, balance: Bool) -> [String] {
+        let paragraphs = text.components(separatedBy: "\n")
+        guard let font = UIFont(name: weight.postScriptName, size: size) else { return paragraphs }
+        let attrs: [NSAttributedString.Key: Any] = [.font: font]
+        func greedy(_ words: [String], _ limit: CGFloat) -> [String] {
+            var out: [String] = []
+            var cur = ""
+            for word in words {
+                if cur.isEmpty {
+                    cur = word
+                    continue
+                }
+                let candidate = cur + " " + word
+                if (candidate as NSString).size(withAttributes: attrs).width <= limit + 0.01 {
+                    cur = candidate
+                } else {
+                    out.append(cur)
+                    cur = word
+                }
+            }
+            if !cur.isEmpty { out.append(cur) }
+            return out
+        }
+        var lines: [String] = []
+        for paragraph in paragraphs {
+            let words = paragraph.split(separator: " ").map(String.init)
+            var best = greedy(words, width)
+            if balance && best.count > 1 {
+                let count = best.count
+                var lo: CGFloat = 0
+                var hi = width
+                for _ in 0..<12 {
+                    let mid = (lo + hi) / 2
+                    let attempt = greedy(words, mid)
+                    if attempt.count <= count {
+                        hi = mid
+                        best = attempt
+                    } else {
+                        lo = mid
+                    }
+                }
+            }
+            lines += best
+        }
+        return lines
     }
 
     /// أكبر نسبة (من ١ نزولاً لـ minScale) يدخل فيها النص مكانه — نفس fitScale في الموقع
@@ -754,7 +818,7 @@ extension OccasionPostView {
             items.append(AnyView(Color.clear.frame(height: 0)))
         }
         return m3Canvas(fill: S.fill, deep: S.deep) {
-            m3Card(top: top, padTop: 40, background: .white, layers: {
+            m3Card(top: top, padTop: 40, background: .white, spaceBetween: true, layers: {
                 OccasionM3StarsView(stars: OccasionM3.StarSets.solace, color: OccasionM3.gold)
                     .frame(width: OccasionM3.cardWidth, height: cardHeight, alignment: .topLeading)
                 m3Echo(v.echo, frameWidth: OccasionM3.cardWidth)
@@ -886,7 +950,7 @@ extension OccasionPostView {
 
     /// البطاقة: layers طبقات خلف النص مقصوصة بحوافها (الختم، النجوم…)، والنص في المساحة بين الحشوتين
     private func m3Card<Layers: View, Content: View>(top: CGFloat, padTop: CGFloat, padBottom: CGFloat = 40,
-                                                     background: Color = OccasionM3.sand,
+                                                     background: Color = OccasionM3.sand, spaceBetween: Bool = false,
                                                      @ViewBuilder layers: () -> Layers,
                                                      @ViewBuilder content: () -> Content) -> some View {
         let w = OccasionM3.cardWidth
@@ -901,9 +965,17 @@ extension OccasionPostView {
             .frame(width: w, height: h, alignment: .topLeading)
             .clipShape(RoundedRectangle(cornerRadius: 40, style: .circular))
             .accessibilityHidden(true)
-            content()
-                .frame(width: w - 112, height: h - padTop - padBottom)
-                .offset(x: 56, y: padTop)
+            Group {
+                if spaceBetween {
+                    // مشاركة العزاء: العناصر موزّعة على الارتفاع كله (justify-content: space-between)
+                    content().frame(width: w - 112, height: h - padTop - padBottom)
+                } else {
+                    // في الوسط إذا عنده مساحة؛ وإذا طال يبدأ من فوق ويكمل في الحشوة السفلية (ما يطلع على الصورة) — مثل الموقع
+                    OccasionM3CenterBox(height: h - padTop - padBottom) { content() }
+                        .frame(width: w - 112)
+                }
+            }
+            .offset(x: 56, y: padTop)
         }
         .frame(width: w, height: h, alignment: .topLeading)
         .offset(x: OccasionM3.margin, y: top)
@@ -942,17 +1014,52 @@ extension OccasionPostView {
     // MARK: النص
 
     /// نص ثابت بسطر واحد (عناوين التصميم)
+    /// سطور جاهزة: كل سطر Text وحده بارتفاع سطر التصميم بالضبط (box)، والعمود على قد أعرض سطر
+    /// (مثل max-width في CSS — فأرضية الكبسولة على قد النص). احتياط: لو اختلف القياس شوي، السطر يصغر ١٠٪ بدل ما ينقص.
+    private func m3Stack(_ lines: [String], _ weight: OccasionKit.FontWeight, _ fs: CGFloat, box: CGFloat, color: Color,
+                         width: CGFloat) -> some View {
+        OccasionM3MaxWidth(width: width) {
+            VStack(spacing: 0) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { item in
+                    Text(item.element)
+                        .font(.custom(weight.postScriptName, fixedSize: fs))
+                        .foregroundColor(color)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                        // التخطيط LTR، لكن النص نفسه عربي — اتجاهه RTL حتى تطلع النقاط والأقواس بمكانها
+                        .environment(\.layoutDirection, .rightToLeft)
+                        .occasionLineBox(weight, size: fs, lineHeight: box / max(fs, 1))
+                }
+            }
+        }
+    }
+
+    /// نص ثابت بسطر واحد (عناوين التصميم)
     private func m3Fixed(_ string: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, color: Color, lineHeight: CGFloat) -> some View {
-        text(string, weight, size, color: color, lineHeight: lineHeight)
+        m3Stack([string], weight, size, box: lineHeight * size, color: color, width: OccasionM3.width)
     }
 
-    /// سطر واحد يصغر بس إذا ما دخل (أقل شي ٦٠٪) — مثل OneLine في الموقع
+    /// سطر واحد مثل OneLine في الموقع: يصغر بقدر ما يدخل (أقل شي ٦٠٪)؛ إذا ما دخل حتى عنده: الأسماء (balance) سطرين
+    /// متوازنين بأصغر حجم، والباقي يلتف بحجم التصميم. ارتفاع السطر يبقى بحجم التصميم (lineHeight × size).
     private func m3OneLine(_ string: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, width: CGFloat, color: Color,
-                           lineHeight: CGFloat) -> some View {
-        fitLine(string, weight, maxSize: size, minSize: size * OccasionNames.minScale, width: width, color: color, lineHeight: lineHeight)
+                           lineHeight: CGFloat, balance: Bool = false) -> some View {
+        let t = string.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let lines: [String]
+        let fs: CGFloat
+        if let fitted = OccasionM3.oneLineSize(t, weight, size, width) {
+            lines = [t]
+            fs = fitted
+        } else if balance {
+            fs = size * OccasionNames.minScale
+            lines = OccasionM3.wrap(t, weight, fs, width, balance: true)
+        } else {
+            fs = size
+            lines = OccasionM3.wrap(t, weight, fs, width, balance: false)
+        }
+        return m3Stack(lines, weight, fs, box: lineHeight * size, color: color, width: width)
     }
 
-    /// نص بسطور متوازنة؛ إذا زاد عن maxLines يصغر الخط شوي شوي (أقل شي ٧٠٪) — مثل Lines في الموقع
+    /// نص بسطور (متوازنة مثل text-wrap: balance)؛ إذا زاد عن maxLines يصغر الخط شوي شوي (أقل شي ٧٠٪) — مثل Lines في الموقع
     private func m3Lines(_ string: String, _ weight: OccasionKit.FontWeight, _ size: CGFloat, lineHeight: CGFloat, width: CGFloat,
                          color: Color, maxLines: Int) -> some View {
         var fs = size
@@ -961,27 +1068,16 @@ extension OccasionPostView {
         while fs > minSize && OccasionM3.lines(string, weight, fs, width) > maxLines {
             fs = max(minSize, fs - step)
         }
-        return text(string, weight, fs, color: color, lineHeight: lineHeight, balanceWidth: width)
-            .frame(maxWidth: width)
+        let lines = OccasionM3.wrap(string, weight, fs, width, balance: true)
+        return m3Stack(lines, weight, fs, box: lineHeight * fs, color: color, width: width)
     }
 
     /// سطر اسم (من nameSlots) مضروب في scale — لما يصغر نص البطاقة كله
     private func m3NameLine(_ key: String, color: Color, scale: CGFloat) -> some View {
         let slot = template.nameSlots(model: model, size: size, withPhoto: withPhoto)[key]
             ?? OccasionNameSlot(weight: .extrabold, size: 56, width: 540, lineHeight: 1.25)
-        let px = slot.size * scale
-        let string = value(key)
-        let minSize = px * OccasionNames.minScale
-        // نادر: حتى أقصر صيغة ما دخلت بأصغر حجم — سطرين متوازنين بأصغر حجم (ارتفاع السطر بحجم التصميم مثل الموقع)
-        let tooLong = (OccasionNames.measure(string, weight: slot.weight, size: minSize) ?? 0) > slot.width + 0.5
-        return Group {
-            if tooLong {
-                text(string, slot.weight, minSize, color: color, lineHeight: slot.lineHeight * px / max(minSize, 1), balanceWidth: slot.width)
-                    .frame(maxWidth: slot.width)
-            } else {
-                fitLine(string, slot.weight, maxSize: px, minSize: minSize, width: slot.width, color: color, lineHeight: slot.lineHeight)
-            }
-        }
+        return m3OneLine(value(key), slot.weight, slot.size * scale, width: slot.width, color: color,
+                         lineHeight: slot.lineHeight, balance: true)
     }
 }
 
@@ -1189,7 +1285,7 @@ struct OccasionM3PhotoFill: View {
                     .offset(x: (width - dw) * photo.x / 100, y: (height - dh) * photo.y / 100)
             }
         } else {
-            let s = max(width / 400, height / 480)
+            let s = max(width / 400, height / 480) * max(photo.zoom, 1)
             let dx = (width - 400 * s) * photo.x / 100
             let dy = (height - 480 * s) * photo.y / 100
             ZStack(alignment: .topLeading) {
@@ -1222,5 +1318,45 @@ struct OccasionM3Pin: Shape {
         p.closeSubpath()
         p.addEllipse(in: CGRect(x: r.minX + 9.5 * s, y: r.minY + 6.5 * s, width: 5 * s, height: 5 * s))
         return p
+    }
+}
+
+/// يحد العرض المقترح (النص يلتف أو يصغر عنده) بدون ما يتمدد له — مثل max-width في CSS.
+/// (frame(maxWidth:) يتمدد لكل العرض المقترح، فتطلع أرضية الكبسولة بعرض العمود)
+struct OccasionM3MaxWidth: Layout {
+    let width: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        return child.sizeThatFits(childProposal(proposal))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let child = subviews.first else { return }
+        child.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: childProposal(proposal))
+    }
+
+    private func childProposal(_ proposal: ProposedViewSize) -> ProposedViewSize {
+        ProposedViewSize(width: min(proposal.width ?? width, width), height: proposal.height)
+    }
+}
+
+/// نص البطاقة مثل عمود CSS بـ flex: 1 و justify-content: center: في الوسط إذا عنده مساحة،
+/// وإذا طال عن المساحة يبدأ من فوقها ويكمل تحت (ما يطلع فوق على الصورة)
+struct OccasionM3CenterBox: Layout {
+    let height: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 0
+        let content = subviews.first?.sizeThatFits(ProposedViewSize(width: width, height: nil)).height ?? 0
+        return CGSize(width: width, height: max(height, content))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let child = subviews.first else { return }
+        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+        let top = bounds.minY + max(0, (height - size.height) / 2)
+        child.place(at: CGPoint(x: bounds.midX, y: top), anchor: .top,
+                    proposal: ProposedViewSize(width: bounds.width, height: size.height))
     }
 }
