@@ -125,6 +125,28 @@ enum DS {
         /// لأن الألوان المتكيّفة تفتح في الداكن فيضيع الأبيض فوقها
         static let onTint        = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#14171C")
 
+        /// نص/أيقونة فوق تعبئة بلون غير معروف مسبقاً (ألوان التصنيفات، ومنها ما يختاره المستخدم من
+        /// CategoryPalette): أبيض أو حبر داكن #14171C — أيّهما أعلى تبايناً مع اللون كما يُعرض في الوضع
+        /// الحالي (فاتح/داكن). للتعبئات الثابتة استخدم textOnPrimary، وللألوان المتكيّفة المعروفة onTint.
+        static func readableText(on fill: SwiftUI.Color) -> SwiftUI.Color {
+            let base = UIColor(fill)
+            let ink = UIColor(red: 20.0 / 255.0, green: 23.0 / 255.0, blue: 28.0 / 255.0, alpha: 1)
+            return SwiftUI.Color(uiColor: UIColor { traits in
+                let resolved = base.resolvedColor(with: traits)
+                var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                guard resolved.getRed(&r, green: &g, blue: &b, alpha: &a) else { return .white }
+                func linear(_ value: CGFloat) -> Double {
+                    let c = Double(min(max(value, 0), 1))
+                    return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+                }
+                // اللمعان النسبي (WCAG)، ثم تباين الأبيض (لمعانه ١) والحبر (لمعانه ≈ ٠٫٠٠٨)
+                let luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+                let whiteContrast = 1.05 / (luminance + 0.05)
+                let inkContrast = (luminance + 0.05) / 0.0585
+                return whiteContrast >= inkContrast ? .white : ink
+            })
+        }
+
         // Semantic
         static let success = SwiftUI.Color.adaptive(light: "#216C4F", dark: "#4A9E7C") // success — يعدّي AA كنص
         static let warning = SwiftUI.Color.adaptive(light: "#875C0A", dark: "#F0B040") // warning — يعدّي AA كنص

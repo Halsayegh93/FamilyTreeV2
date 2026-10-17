@@ -1172,7 +1172,7 @@ private struct WomanDetailSheet: View {
                 }
                 Text(String((m.firstName.isEmpty ? m.fullName : m.firstName).prefix(1)))
                     .font(DS.Font.plexFixed(g.size.width * 0.42, weight: .bold))
-                    .foregroundColor(m.isFemale ? .white : tint.opacity(0.85))
+                    .foregroundColor(m.isFemale ? DS.Color.onTint : tint.opacity(0.85))
             }
         }
     }

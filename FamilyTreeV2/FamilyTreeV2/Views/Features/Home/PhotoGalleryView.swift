@@ -179,7 +179,7 @@ private struct GalleryAlbumCard: View {
                     }
                     .foregroundColor(.white)
                     .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(Capsule().fill(DS.Color.textTertiary))
+                    .background(Capsule().fill(DS.Color.slateFill))
                     .padding(6)
                 }
             }

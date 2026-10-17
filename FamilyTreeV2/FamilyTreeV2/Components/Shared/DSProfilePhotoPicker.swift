@@ -685,7 +685,7 @@ struct DSMultiPhotoPicker: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xs + 2)
-                        .background(DS.Color.error.opacity(0.85))
+                        .background(DS.Color.errorFill)
                         .clipShape(Capsule())
                     }
 

@@ -1508,7 +1508,7 @@ struct AdminAllRequestsView: View {
         accentColor: Color = DS.Color.primary,
         approveLabel: String? = nil,
         approveIcon: String = "checkmark",
-        approveColor: Color = DS.Color.success,
+        approveColor: Color = DS.Color.successFill,
         onApprove: (() -> Void)? = nil,
         onReject: (() -> Void)? = nil,
         onDelete: (() -> Void)? = nil,
@@ -1581,7 +1581,7 @@ struct AdminAllRequestsView: View {
                 Button(action: onReject) {
                     Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
                 }
-                .tint(DS.Color.warning)
+                .tint(DS.Color.warningFill)
             }
             // حذف نهائي — جنب الرفض (للمالك/المدير)
             if !isSelectMode, let onDelete, authVM.canDeleteMembers {
@@ -1819,7 +1819,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
                     }
-                    .tint(DS.Color.success)
+                    .tint(DS.Color.successFill)
                 }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -2202,7 +2202,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
                     }
-                    .tint(DS.Color.success)
+                    .tint(DS.Color.successFill)
                 }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: false) {

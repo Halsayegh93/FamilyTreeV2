@@ -216,7 +216,7 @@ struct AdminModeratorsView: View {
                     Text(member.roleName)
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
-                        .foregroundColor(DS.Color.textOnPrimary)
+                        .foregroundColor(DS.Color.onTint)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, 2)
                         // المالك يظهر بنفس لون المدير — لا يتميّز عنه بصرياً

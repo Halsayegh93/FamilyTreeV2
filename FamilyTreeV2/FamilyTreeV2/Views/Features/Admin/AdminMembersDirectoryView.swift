@@ -195,7 +195,7 @@ struct AdminMembersDirectoryView: View {
                     .foregroundColor(drillPath.isEmpty ? DS.Color.textOnPrimary : DS.Color.primary)
                     .padding(.horizontal, DS.Spacing.sm + 2)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(drillPath.isEmpty ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                    .background(Capsule().fill(drillPath.isEmpty ? DS.Color.primaryFill : DS.Color.primary.opacity(0.10)))
                 }
 
                 ForEach(Array(drillPath.enumerated()), id: \.element.id) { idx, node in
@@ -214,7 +214,7 @@ struct AdminMembersDirectoryView: View {
                             .lineLimit(1)
                             .padding(.horizontal, DS.Spacing.sm + 2)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(isLast ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                            .background(Capsule().fill(isLast ? DS.Color.primaryFill : DS.Color.primary.opacity(0.10)))
                     }
                 }
             }
@@ -327,14 +327,14 @@ struct AdminMembersDirectoryView: View {
                                         } label: {
                                             Label(L10n.t("تفعيل", "Activate"), systemImage: "lock.open.fill")
                                         }
-                                        .tint(DS.Color.success)
+                                        .tint(DS.Color.successFill)
                                     } else {
                                         Button {
                                             memberToFreeze = member
                                         } label: {
                                             Label(L10n.t("تجميد", "Freeze"), systemImage: "lock.fill")
                                         }
-                                        .tint(DS.Color.error)
+                                        .tint(DS.Color.errorFill)
                                     }
                                 }
                             }
@@ -521,7 +521,7 @@ struct AdminMembersDirectoryView: View {
                         .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(.white)
                         .padding(4)
-                        .background(DS.Color.textTertiary)
+                        .background(DS.Color.deceasedFill)
                         .clipShape(Circle())
                         .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
                 } else if member.status == .frozen {

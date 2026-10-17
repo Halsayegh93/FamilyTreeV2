@@ -1292,7 +1292,7 @@ struct LinkedDevicesSettingsSheet: View {
                             .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 2)
-                            .background(DS.Color.success)
+                            .background(DS.Color.successFill)
                             .clipShape(Capsule())
                     }
                 }

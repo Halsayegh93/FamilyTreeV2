@@ -138,7 +138,7 @@ struct AdminPendingRequestsView: View {
                                 } label: {
                                     Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
                                 }
-                                .tint(DS.Color.success)
+                                .tint(DS.Color.successFill)
                             }
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 if authVM.canRejectRequests {

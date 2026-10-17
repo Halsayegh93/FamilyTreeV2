@@ -19,7 +19,7 @@ struct OfflineBanner: View {
                 icon: "wifi.slash",
                 title: L10n.t("لا يوجد اتصال", "No Connection"),
                 subtitle: L10n.t("تقدر تتصفح البيانات المحفوظة مؤقتاً", "You can browse cached data offline"),
-                color: DS.Color.error
+                color: DS.Color.errorFill
             )
             .offset(y: dragOffset)
             .gesture(
@@ -45,7 +45,7 @@ struct OfflineBanner: View {
                 icon: "wifi",
                 title: L10n.t("رجع الاتصال", "Back Online"),
                 subtitle: L10n.t("جاري تحديث البيانات", "Updating data..."),
-                color: DS.Color.success
+                color: DS.Color.successFill
             )
         }
 
@@ -104,7 +104,7 @@ struct OfflineBanner: View {
             if let subtitle {
                 Text("— \(subtitle)")
                     .font(DS.Font.caption2)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(DS.Color.textOnPrimary)
                     .lineLimit(1)
             }
 

@@ -626,7 +626,7 @@ struct WomenClassicTreeView: View {
                     // مربع الابنة بنفس غمقة مربع الزوجة (طلب المالك) — رمادي أنعم قليلاً
                     .overlay(shape.fill(deceased && !female
                         ? DS.Color.textTertiary.opacity(0.5)
-                        : accent))
+                        : (female ? accent : DS.Color.primaryFill)))
                     .frame(width: CIRCLE, height: CIRCLE)
                     .overlay(
                         Group {
@@ -644,7 +644,7 @@ struct WomenClassicTreeView: View {
                                     .font(DS.Font.plexFixed(CIRCLE * 0.26, weight: .bold))
                                     .minimumScaleFactor(0.7)
                                     .lineLimit(1)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(DS.Color.onTint)
                             } else {
                                 // الذكور بلا صورة: أيقونة شخص بدل الحرف (طلب المالك)
                                 Image(systemName: "person.fill")
@@ -792,7 +792,7 @@ struct WomenClassicTreeView: View {
                         .font(DS.Font.plexFixed(7.5, weight: .bold))
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.onTint)
                 )
                 // نفس شارة الإخفاء على مربّع الزوجة — بمقاس الخلية الصغيرة
                 .overlay(alignment: .topTrailing) {

@@ -5,6 +5,7 @@ struct DSSwipeAction: Identifiable {
     var id: String { title }
     let icon: String
     let title: String
+    /// تعبئة الزر تحت نص أبيض — تعبئة ثابتة (errorFill، warningFill، successFill…) لا اللون المتكيّف الذي يفتح في الداكن
     let color: Color
     let action: () -> Void
 }
@@ -68,7 +69,7 @@ struct DSSwipeActionsModifier: ViewModifier {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.textOnPrimary)
             .frame(width: buttonWidth - 6)
             .frame(maxHeight: .infinity)
             .background(
@@ -144,7 +145,7 @@ extension View {
         }
         if canReport {
             actions.append(DSSwipeAction(icon: "flag.fill", title: L10n.t("إبلاغ", "Report"),
-                                         color: DS.Color.warning, action: onReport))
+                                         color: DS.Color.warningFill, action: onReport))
         }
         return dsSwipeActions(id: id, actions: actions)
     }

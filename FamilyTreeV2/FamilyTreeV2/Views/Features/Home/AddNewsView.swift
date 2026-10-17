@@ -248,7 +248,7 @@ struct AddNewsView: View {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: NewsTypeHelper.icon(for: type))
                                     .font(DS.Font.icon(11, weight: .bold))
-                                    .foregroundColor(isSelected ? DS.Color.textOnPrimary : typeColor)
+                                    .foregroundColor(isSelected ? DS.Color.readableText(on: typeColor) : typeColor)
                                     .frame(width: 22, height: 22)
                                     .background(isSelected ? typeColor : typeColor.opacity(0.12))
                                     .clipShape(Circle())
@@ -372,7 +372,7 @@ struct AddNewsView: View {
                                 .fontWeight(.bold)
                         }
                     }
-                    .foregroundColor(isPoll ? .white : DS.Color.newsVote)
+                    .foregroundColor(isPoll ? DS.Color.onTint : DS.Color.newsVote)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
                     .background(isPoll ? DS.Color.newsVote : DS.Color.newsVote.opacity(0.10))

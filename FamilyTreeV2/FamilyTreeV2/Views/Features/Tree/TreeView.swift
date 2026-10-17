@@ -1498,7 +1498,7 @@ struct TreeMemberNode: View {
                     if isCurrentLocationMember {
                         Text(L10n.t("أنت هنا", "You"))
                             .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
+                            .foregroundColor(DS.Color.onTint)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 3)
                             .background(DS.Color.currentLocation)
