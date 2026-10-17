@@ -60,6 +60,10 @@ jobs:
             xcrun simctl terminate "$UDID" "$BID" || true
             xcrun simctl launch "$UDID" "$BID" -NoPushPrompt
             sleep 9; xcrun simctl io "$UDID" screenshot "$OUT/$MODE-login.png"
+            xcrun simctl terminate "$UDID" "$BID" || true
+            xcrun simctl launch "$UDID" "$BID" -NoPushPrompt -ShowHome
+            sleep 6; xcrun simctl io "$UDID" screenshot "$OUT/$MODE-home-a.png"
+            sleep 8; xcrun simctl io "$UDID" screenshot "$OUT/$MODE-home-b.png"
           done
           xcrun simctl terminate "$UDID" "$BID" || true
           xcrun simctl ui "$UDID" appearance light

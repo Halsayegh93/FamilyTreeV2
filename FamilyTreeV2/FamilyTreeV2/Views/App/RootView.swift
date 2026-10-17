@@ -12,6 +12,8 @@ struct RootView: View {
             case .unauthenticated:
                 if ProcessInfo.processInfo.arguments.contains("-HoldSplash") {
                     SplashScreenView()
+                } else if ProcessInfo.processInfo.arguments.contains("-ShowHome") {
+                    MainTabView()
                 } else {
                     LoginView()
                 }
