@@ -6,6 +6,9 @@ on:
   push:
     branches: ['claude/screens-2026-10-17']
 
+permissions:
+  contents: write
+
 jobs:
   screens:
     runs-on: self-hosted
@@ -63,12 +66,12 @@ jobs:
           sleep 2; xcrun simctl io "$UDID" screenshot "$OUT/home-screen.png"
           ls -la "$OUT"
 
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: screens
-          path: ${{ runner.temp }}/shots
-          retention-days: 3
+      - name: Push the screenshots to a side branch
+        run: |
+          mkdir -p screens-out && cp "$RUNNER_TEMP"/shots/*.png screens-out/
+          git config user.name "Claude" && git config user.email "noreply@anthropic.com"
+          git add screens-out && git commit -q -m "Screens: simulator screenshots (temporary)"
+          git push -f origin HEAD:refs/heads/claude/screens-out-2026-10-17
 
       - name: Clean up the simulator
         if: always()
