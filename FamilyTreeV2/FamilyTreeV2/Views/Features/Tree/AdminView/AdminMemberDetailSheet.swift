@@ -502,7 +502,7 @@ struct AdminMemberDetailSheet: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "person.line.dotted.person.fill")
-                        .font(DS.Font.scaled(15, weight: .semibold))
+                        .font(DS.Font.icon(15, weight: .semibold))
                         .foregroundColor(DS.Color.primary)
                         .frame(width: 28, height: 28)
                         .background(DS.Color.primary.opacity(0.12))
@@ -529,7 +529,7 @@ struct AdminMemberDetailSheet: View {
                     Spacer()
 
                     Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -628,7 +628,7 @@ struct AdminMemberDetailSheet: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: iconName)
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                     .foregroundColor(iconColor)
                     .frame(width: 30, height: 30)
                     .background(iconColor.opacity(0.12))
@@ -652,7 +652,7 @@ struct AdminMemberDetailSheet: View {
 
                 if editMode != .active {
                     Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -681,7 +681,7 @@ struct AdminMemberDetailSheet: View {
     private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(color)
             Text(title)
                 .font(DS.Font.caption1)
@@ -728,8 +728,8 @@ struct AdminMemberDetailSheet: View {
             if result.isDuplicate, let existing = result.existingMember {
                 let existingPhone = KuwaitPhone.display(existing.phoneNumber)
                 phoneDuplicateWarning = L10n.t(
-                    "⚠️ الرقم مستخدم من: \(existing.firstName) — \(existingPhone) (\(existing.fullName))",
-                    "⚠️ Used by: \(existing.firstName) — \(existingPhone) (\(existing.fullName))"
+                    "الرقم مستخدم من: \(existing.firstName) — \(existingPhone) (\(existing.fullName))",
+                    "Used by: \(existing.firstName) — \(existingPhone) (\(existing.fullName))"
                 )
             } else {
                 phoneDuplicateWarning = nil
@@ -1157,7 +1157,7 @@ struct FatherPickerSheet: View {
     private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(color)
             Text(title)
                 .font(DS.Font.caption1)
@@ -1216,7 +1216,7 @@ struct FatherPickerSheet: View {
                         } label: {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "person.crop.circle.badge.minus")
-                                    .font(DS.Font.scaled(15, weight: .semibold))
+                                    .font(DS.Font.icon(15, weight: .semibold))
                                     .foregroundColor(DS.Color.warning)
                                     .frame(width: 28, height: 28)
                                     .background(DS.Color.warning.opacity(0.12))
@@ -1236,7 +1236,7 @@ struct FatherPickerSheet: View {
 
                                 if selectedId == nil {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .font(DS.Font.scaled(18))
+                                        .font(DS.Font.icon(18))
                                         .foregroundStyle(DS.Color.primary)
                                 }
                             }
@@ -1259,7 +1259,7 @@ struct FatherPickerSheet: View {
                     } header: {
                         HStack(spacing: 6) {
                             Image(systemName: "person.2.fill")
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .font(DS.Font.icon(11, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                             Text(L10n.t("اختر الأب", "Choose Father"))
                                 .font(DS.Font.caption1)
@@ -1388,7 +1388,7 @@ private struct FatherPickerRow: View, Equatable {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(DS.Font.scaled(18))
+                        .font(DS.Font.icon(18))
                         .foregroundStyle(DS.Color.primary)
                 }
             }

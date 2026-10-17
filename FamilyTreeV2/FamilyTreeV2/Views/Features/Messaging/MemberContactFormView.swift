@@ -95,13 +95,13 @@ struct MemberContactFormView: View {
         } label: {
             VStack(spacing: 5) {
                 Image(systemName: cat.icon)
-                    .font(DS.Font.scaled(17, weight: .semibold))
+                    .font(DS.Font.icon(17, weight: .semibold))
                 Text(cat.title)
                     .font(DS.Font.plex(13, weight: selected ? .bold : .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .foregroundColor(selected ? .white : cat.color)
+            .foregroundColor(selected ? DS.Color.onTint : cat.color)
             .frame(maxWidth: .infinity)
             .frame(height: 66)
             .background(
@@ -125,7 +125,7 @@ struct MemberContactFormView: View {
             VStack(spacing: 0) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "text.cursor")
-                        .font(DS.Font.scaled(13, weight: .semibold))
+                        .font(DS.Font.icon(13, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                     // العنوان بمحاذاة ثابتة: يمين في العربية، يسار في الإنجليزية (طلب المالك)
                     TextField(L10n.t("عنوان الرسالة (اختياري)", "Subject (optional)"), text: $subject)
@@ -186,7 +186,7 @@ struct MemberContactFormView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "at")
-                    .font(DS.Font.scaled(14, weight: .semibold))
+                    .font(DS.Font.icon(14, weight: .semibold))
                     .foregroundColor(emailIsValid ? DS.Color.success : DS.Color.textTertiary)
                     .frame(width: 20)
                 TextField(L10n.t("بريدك للرد (اختياري)", "Your email for a reply (optional)"), text: $preferredContact)
@@ -199,7 +199,7 @@ struct MemberContactFormView: View {
                     .multilineTextAlignment(L10n.isArabic ? .trailing : .leading)
                 if emailIsValid {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(DS.Font.scaled(14, weight: .bold))
+                        .font(DS.Font.icon(14, weight: .bold))
                         .foregroundColor(DS.Color.success)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -249,15 +249,15 @@ struct MemberContactFormView: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 if isSending {
-                    ProgressView().tint(.white).scaleEffect(0.9)
+                    ProgressView().tint(DS.Color.onTint).scaleEffect(0.9)
                 } else {
                     Image(systemName: "paperplane.fill")
-                        .font(DS.Font.scaled(14, weight: .bold))
+                        .font(DS.Font.icon(14, weight: .bold))
                 }
                 Text(isSending ? L10n.t("جارٍ الإرسال…", "Sending…") : L10n.t("إرسال", "Send"))
                     .font(DS.Font.plex(15, weight: .bold))
             }
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.onTint)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
             .background(
@@ -301,7 +301,7 @@ struct MemberContactFormView: View {
                     .foregroundColor(DS.Color.textPrimary)
                 HStack(spacing: 5) {
                     Image(systemName: sentCategory.icon)
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(sentCategory.title)
                         .font(DS.Font.plex(12, weight: .bold))
                 }
@@ -403,8 +403,8 @@ enum ContactCategory: CaseIterable {
 
     var color: Color {
         switch self {
-        case .complaint: return DS.Color.error
-        case .suggestion: return DS.Color.success
+        case .complaint: return DS.Color.sadu
+        case .suggestion: return DS.Color.palm
         case .inquiry: return DS.Color.primary
         case .other: return DS.Color.accent
         }

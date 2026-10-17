@@ -42,7 +42,7 @@ struct HomeNewsPreviewCard: View {
     private var header: some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
             Image(systemName: "newspaper.fill")
-                .font(DS.Font.scaled(16, weight: .semibold))
+                .font(DS.Font.icon(16, weight: .semibold))
                 .foregroundColor(DS.Color.primary)
                 .frame(width: 38, height: 38)
                 .background(
@@ -76,10 +76,10 @@ struct HomeNewsPreviewCard: View {
     private var todayBadge: some View {
         Text(L10n.t("جديد اليوم", "New today"))
             .font(DS.Font.scaled(10, weight: .bold))
-            .foregroundColor(DS.Color.error)
+            .foregroundColor(DS.Color.accent)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, 4)
-            .background(Capsule().fill(DS.Color.error.opacity(0.10)))
+            .background(Capsule().fill(DS.Color.accent.opacity(0.10)))
     }
 
     // MARK: - المحتوى
@@ -96,7 +96,7 @@ struct HomeNewsPreviewCard: View {
         } else if newsVM.allNews.isEmpty {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "newspaper")
-                    .font(DS.Font.scaled(18))
+                    .font(DS.Font.icon(18))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(L10n.t("لا توجد أخبار بعد", "No news yet"))
                     .font(DS.Font.scaled(13, weight: .medium))
@@ -151,7 +151,7 @@ struct HomeNewsPreviewCard: View {
             Text(L10n.t("عرض كل الأخبار", "Show all news"))
                 .font(DS.Font.plex(13, weight: .semibold))
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
         }
         .foregroundColor(DS.Color.primary)
         .padding(.vertical, 10)
@@ -163,16 +163,9 @@ struct HomeNewsPreviewCard: View {
         .padding(.top, DS.Spacing.xs)
     }
 
-    /// سطح هادئ مع لمسة لونية خفيفة جداً في الزاوية — بلا بقع ملوّنة متعدّدة
+    /// سطح البطاقة — أبيض صلب (الهوية: البطاقات بلا تدرّج)
     private var cardBackground: some View {
-        ZStack(alignment: .topTrailing) {
-            DS.Color.surface
-            LinearGradient(
-                colors: [DS.Color.primary.opacity(0.06), .clear],
-                startPoint: .top,
-                endPoint: .center
-            )
-        }
+        DS.Color.surface
     }
 }
 
@@ -196,7 +189,7 @@ struct HomeNewsPreviewRow: View {
         switch news.role_color {
         case "purple": return DS.Color.adminRole
         case "orange": return DS.Color.supervisorRole
-        case "green":  return DS.Color.success
+        case "green":  return DS.Color.monitorRole
         default:       return DS.Color.primary
         }
     }
@@ -240,7 +233,7 @@ struct HomeNewsPreviewRow: View {
             ZStack {
                 Circle().fill(DS.Color.gradientPrimary)
                 Image(systemName: "megaphone.fill")
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.icon(13, weight: .bold))
                     .foregroundColor(.white)
             }
             .frame(width: 32, height: 32)
@@ -278,7 +271,7 @@ struct HomeNewsPreviewRow: View {
     private func metaChip(icon: String, value: Int?) -> some View {
         HStack(spacing: 2) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
             if let value {
                 Text("\(value)")
                     .font(DS.Font.scaled(11, weight: .bold))
@@ -310,7 +303,7 @@ struct HomeOccasionRow: View {
             ZStack {
                 Circle().fill(color.opacity(0.16))
                 Image(systemName: NewsTypeHelper.icon(for: news.type))
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                     .foregroundColor(color)
             }
             .frame(width: 36, height: 36)

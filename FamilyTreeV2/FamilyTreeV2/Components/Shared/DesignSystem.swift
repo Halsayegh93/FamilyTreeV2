@@ -12,18 +12,45 @@ enum DS {
         static let primary       = SwiftUI.Color.adaptive(light: "#172536", dark: "#7FA8D6") // navy
         static let primaryDark   = SwiftUI.Color.adaptive(light: "#0F1824", dark: "#2B5F90") // كحلي أغمق
         static let primaryLight  = SwiftUI.Color.adaptive(light: "#5D6672", dark: "#A9C4E4") // كحلي فاتح
-        static let secondary     = SwiftUI.Color.adaptive(light: "#2E6B4F", dark: "#6FB394") // Forest Green
-        static let secondaryDark = SwiftUI.Color.adaptive(light: "#1F4F39", dark: "#3E8566") // Deep Forest
-        static let secondaryLight = SwiftUI.Color.adaptive(light: "#6FA88C", dark: "#9ACDB5") // Sage
+        // الثانوي = أخضر العائلة (نفس الأخضر بعمق الكحلي)
+        static let secondary     = palm
+        static let secondaryDark = SwiftUI.Color.adaptive(light: "#244B44", dark: "#65927D") // أخضر العائلة غامق
+        static let secondaryLight = SwiftUI.Color.adaptive(light: "#759C8A", dark: "#BCD9CB") // أخضر العائلة فاتح
         static let accent        = SwiftUI.Color.adaptive(light: "#725D31", dark: "#B89A5A") // gold-text — ذهبي المصمم أغمق للنص (٦:١ على الأبيض)
         static let accentDark    = SwiftUI.Color.adaptive(light: "#5A4927", dark: "#9C8045") // ذهبي غامق
         static let accentLight   = SwiftUI.Color.adaptive(light: "#B89A5A", dark: "#B89A5A") // gold — ذهبي المصمم للخطوط والإطارات (نفس الموقع في الوضعين)
 
-        // Supporting Accents
+        // Supporting Accents — أسماء قديمة تشير لعائلة الكحلي والذهبي
         static let neonBlue     = SwiftUI.Color.adaptive(light: "#172536", dark: "#A9C4E4") // band
-        static let neonPurple   = SwiftUI.Color.adaptive(light: "#4A5D78", dark: "#9FB0C8") // Slate
-        static let neonCyan     = SwiftUI.Color.adaptive(light: "#2E6B4F", dark: "#6FB394") // Forest
-        static let neonPink     = SwiftUI.Color.adaptive(light: "#8C2F45", dark: "#C9667D") // Burgundy Rose
+        static let neonPurple   = slate   // رصاصي العائلة
+        static let neonCyan     = palm    // أخضر العائلة
+        static let neonPink     = sadu    // عنّابي العائلة
+
+        // MARK: عائلة الكحلي والذهبي — ألوان الأقسام
+        // نفس ألوان التطبيق السابقة (أخضر، بترولي، عنّابي، رصاصي، ذهبي، كحلي) بعمق واحد ولمسة كحلي (#172536)
+        // وذهبه (#B89A5A). لكل لون ثلاث درجات:
+        //   • اللون نفسه (palm…) — للنص والأيقونات: يعدّي AA على الرملي والأبيض، وأفتح في الداكن.
+        //   • Fill — تعبئة المربّعات والشارات بنص أبيض (٧:١ وأكثر، والذهبي ٤٫٨:١). ثابت بالوضعين.
+        //   • Deep — الطرف الغامق لتدرّج المربّع.
+        // الألوان للأقسام والتصنيفات بس — الحالات (مقبول/ينتظر/خطأ) تبقى success/warning/error.
+        static let palm      = SwiftUI.Color.adaptive(light: "#2C614B", dark: "#9ACBB1") // أخضر العائلة — الشجرة والأعضاء
+        static let palmFill  = SwiftUI.Color(hex: "#2C5846")
+        static let palmDeep  = SwiftUI.Color(hex: "#10302B")
+        static let sea       = SwiftUI.Color.adaptive(light: "#2C5D69", dark: "#9AC6D2") // بترولي — التواصل والرسائل
+        static let seaFill   = SwiftUI.Color(hex: "#2C5460")
+        static let seaDeep   = SwiftUI.Color(hex: "#112E3A")
+        static let sadu      = SwiftUI.Color.adaptive(light: "#7B414A", dark: "#EAAAAF") // عنّابي العائلة — المكتبة والصور
+        static let saduFill  = SwiftUI.Color(hex: "#693940")
+        static let saduDeep  = SwiftUI.Color(hex: "#382028")
+        static let slate     = SwiftUI.Color.adaptive(light: "#56606B", dark: "#B4BCC5") // رصاصي العائلة — المحايد والمعلّق
+        static let slateFill = SwiftUI.Color(hex: "#4D5B67")
+        static let slateDeep = SwiftUI.Color(hex: "#333F49")
+        /// كحلي المربّعات: يتدرّج إلى كحلي المصمم
+        static let navyFill  = SwiftUI.Color(hex: "#324561")
+        static let navyDeep  = SwiftUI.Color(hex: "#17263C")
+        /// ذهبي المربّعات: أغمق من ذهبي المصمم حتى يُقرأ الأبيض فوقه
+        static let goldFill  = SwiftUI.Color(hex: "#806631")
+        static let goldDeep  = SwiftUI.Color(hex: "#40351E")
 
         // Gradients
         // الهوية: الأزرار والهيدرات والبطاقات بلون واحد بدون تدرّج — يبقى الاسم للتوافق.
@@ -44,46 +71,17 @@ enum DS {
             colors: [accent, accent],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
-        static let gradientSecondary = LinearGradient(
-            colors: [secondaryLight, secondary, secondaryDark],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
-        static let gradientWarm = LinearGradient(
-            colors: [primary, secondary],
-            startPoint: .leading, endPoint: .trailing
-        )
-        static let gradientCool = LinearGradient(
-            colors: [SwiftUI.Color.adaptive(light: "#F0F4FF", dark: "#0A0E18"), primaryLight],
-            startPoint: .leading, endPoint: .trailing
-        )
-        static let gradientDark = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#0A0E18"), SwiftUI.Color(hex: "#06080E"), SwiftUI.Color(hex: "#030406")],
-            startPoint: .top, endPoint: .bottom
-        )
-        static let gradientAuth = LinearGradient(
-            colors: [SwiftUI.Color(hex: "#0A0E18"), primaryDark, SwiftUI.Color(hex: "#0E0A20"), SwiftUI.Color(hex: "#060810")],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
-        static let gradientFire = LinearGradient(
-            colors: [SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80"), SwiftUI.Color.adaptive(light: "#D4960A", dark: "#F0B040")],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
-        static let gradientOcean = LinearGradient(
-            colors: [primary, secondary],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
-        static let gradientNeon = LinearGradient(
-            colors: [secondary, accent],
-            startPoint: .leading, endPoint: .trailing
-        )
-        static let gradientRoyal = LinearGradient(
-            colors: [primary, secondaryLight],
-            startPoint: .bottomTrailing, endPoint: .topLeading
-        )
-        static let gradientGold = LinearGradient(
-            colors: [secondaryLight, secondary, secondaryDark],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
+        // تدرّجات العائلة — من نفس اللون إلى درجته الغامقة فقط (بدون خلط ألوان)
+        static let gradientSecondary = LinearGradient(colors: [palmFill, palmDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+        static let gradientWarm  = LinearGradient(colors: [navyFill, navyDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+        static let gradientCool  = LinearGradient(colors: [cardBackgroundSoft, cardBackgroundSoft], startPoint: .leading, endPoint: .trailing)
+        static let gradientDark  = LinearGradient(colors: [bandFill, bandFill], startPoint: .top, endPoint: .bottom)
+        static let gradientAuth  = LinearGradient(colors: [bandFill, bandFill], startPoint: .topLeading, endPoint: .bottomTrailing)
+        static let gradientFire  = LinearGradient(colors: [saduFill, saduDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+        static let gradientOcean = LinearGradient(colors: [seaFill, seaDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+        static let gradientNeon  = LinearGradient(colors: [goldFill, goldDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+        static let gradientRoyal = LinearGradient(colors: [navyFill, navyDeep], startPoint: .bottomTrailing, endPoint: .topLeading)
+        static let gradientGold  = LinearGradient(colors: [goldFill, goldDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
 
         // MARK: Feature Gradients — موحد: هيدرات الأقسام على band
         static let gradientHome     = gradientBand
@@ -101,7 +99,7 @@ enum DS {
 
         // Surfaces — الكروت لازم تبان فوق الخلفية
         // الهوية: خلفية رملية والكروت بيضاء فوقها
-        static let background       = SwiftUI.Color.adaptive(light: "#FCF7EC", dark: "#14171C") // sand
+        static let background       = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#000000") // أبيض صافي / أسود صافي
         static let surface          = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25") // surface
         static let surfaceElevated  = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#23272E")
         static let cardBackground   = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25") // surface
@@ -119,9 +117,13 @@ enum DS {
         // Text
         static let textPrimary   = SwiftUI.Color.adaptive(light: "#172536", dark: "#FFFFFF") // ink
         static let textSecondary = SwiftUI.Color.adaptive(light: "#4A5560", dark: "#C9CED5") // ink-muted
-        static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // Slate — مقروء (AA)
+        /// ink-subtle في الهوية — نص ثالث (تلميحات، أسهم الصفوف، الحالات المعطّلة)؛ مقروء (AA) على الأبيض والأسود
+        static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // ink-subtle
         static let textOnPrimary = SwiftUI.Color.white
         static let textGold      = accent // ذهبي
+        /// أيقونة/نص فوق مربّع معبّأ بلون متكيّف (مثل palm أو primary): أبيض في الفاتح، وحبر غامق في الداكن
+        /// لأن الألوان المتكيّفة تفتح في الداكن فيضيع الأبيض فوقها
+        static let onTint        = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#14171C")
 
         // Semantic
         static let success = SwiftUI.Color.adaptive(light: "#216C4F", dark: "#4A9E7C") // success — يعدّي AA كنص
@@ -129,33 +131,40 @@ enum DS {
         static let error   = SwiftUI.Color.adaptive(light: "#C0282A", dark: "#F47370") // danger — يعدّي AA كنص
         /// تعبئة الشارات والأزرار الحمراء ذات النص الأبيض — ثابتة في الوضعين (الأبيض فوقها ٥٫٩:١)
         static let errorFill = SwiftUI.Color.adaptive(light: "#C0282A", dark: "#C0282A")
-        static let info    = primary // كحلي
+        /// تعبئة الأزرار والشارات الخضراء/الكهرمانية ذات النص الأبيض — ثابتة في الوضعين (٦٫٤:١ و٥٫٩:١)
+        static let successFill = SwiftUI.Color.adaptive(light: "#216C4F", dark: "#216C4F")
+        static let warningFill = SwiftUI.Color.adaptive(light: "#875C0A", dark: "#875C0A")
+        /// info — أزرق الإشعارات المحايدة وروابط المساعدة فيها (حالة، كنص وأيقونة). تحت نص أبيض استخدم primaryFill.
+        static let info    = SwiftUI.Color.adaptive(light: "#1F6FA3", dark: "#5FA8DA")
 
-        // Role Colors — باستيل ناعم
+        // Role Colors — كل دور بلونه السابق بعمق العائلة (الشارة: النص باللون فوق نفس اللون ١٢٪)
         static func role(_ roleColor: SwiftUI.Color) -> SwiftUI.Color { roleColor }
-        static let ownerRole      = SwiftUI.Color.adaptive(light: "#9B7FD4", dark: "#B89FE8") // بنفسجي باستيل
-        static let adminRole      = SwiftUI.Color.adaptive(light: "#D47B7B", dark: "#E8A0A0") // وردي باستيل
-        static let monitorRole    = SwiftUI.Color.adaptive(light: "#7BB8A4", dark: "#9FD4C0") // أخضر نعناعي باستيل
-        static let supervisorRole = SwiftUI.Color.adaptive(light: "#D4A96B", dark: "#E8C48F") // ذهبي باستيل
-        static let memberRole     = SwiftUI.Color.adaptive(light: "#7BA8D4", dark: "#9FC4E8") // أزرق باستيل
-        static let pendingRole    = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#B8B8B8") // رمادي باستيل
+        static let ownerRole      = SwiftUI.Color.adaptive(light: "#594C7A", dark: "#C2B5E4") // بنفسجي العائلة
+        static let adminRole      = SwiftUI.Color.adaptive(light: "#7E3F42", dark: "#EDA9A8") // وردي عنّابي
+        static let monitorRole    = SwiftUI.Color.adaptive(light: "#286153", dark: "#97CBB9") // أخضر نعناعي
+        static let supervisorRole = SwiftUI.Color.adaptive(light: "#6C4F20", dark: "#D9B88A") // ذهبي
+        static let memberRole     = SwiftUI.Color.adaptive(light: "#32587C", dark: "#9DC2E7") // أزرق
+        static let pendingRole    = slate   // رصاصي
 
-        // News Type Colors
-        static let newsWedding      = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
-        static let newsBirth        = SwiftUI.Color.adaptive(light: "#2E8B57", dark: "#5FBF8A") // Sea Green
-        static let newsDeath        = SwiftUI.Color.adaptive(light: "#8A8A8E", dark: "#A8A8AC") // Muted Gray
-        static let newsVote         = SwiftUI.Color.adaptive(light: "#4A5D78", dark: "#9FB0C8") // Slate
-        static let newsAnnouncement = primary                                                    // Navy
-        static let newsCongrats     = accent                                                     // Gold
-        static let newsReminder     = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry
-        static let newsInvitation   = SwiftUI.Color.adaptive(light: "#8C2F45", dark: "#C9667D") // Burgundy
+        // News Type Colors — نفس ألوان البوستات: الزواج ذهبي مثل بوست الزواج، والمولود أزرق مثل بوست المولود
+        static let newsWedding      = SwiftUI.Color.adaptive(light: "#944E62", dark: "#F7ACBD") // وردي
+        static let newsBirth        = SwiftUI.Color.adaptive(light: "#316145", dark: "#9DCBAC") // أخضر
+        static let newsDeath        = SwiftUI.Color.adaptive(light: "#53545D", dark: "#BDBDC5") // رمادي
+        static let newsVote         = SwiftUI.Color.adaptive(light: "#415673", dark: "#ABBFDD") // رصاصي مزرق
+        static let newsAnnouncement = primary
+        static let newsCongrats     = accent
+        static let newsReminder     = newsWedding
+        static let newsInvitation   = SwiftUI.Color.adaptive(light: "#7C3E4C", dark: "#ECA8B2") // عنّابي
 
         // Status Colors
-        static let deceased         = SwiftUI.Color.adaptive(light: "#A0A0A0", dark: "#808080") // رمادي هادي
-        static let currentLocation  = SwiftUI.Color.adaptive(light: "#00C853", dark: "#69F0AE") // أخضر
-        static let likeAction       = SwiftUI.Color.adaptive(light: "#B24C63", dark: "#CC6A80") // Berry Rose
+        /// المتوفّى — رصاصي العائلة (slate) للنص والأيقونات والحلقات؛ كان #A0A0A0 والأبيض فوقه ٢٫٦:١
+        static let deceased         = slate
+        /// تعبئة المتوفّى تحت نص/أيقونة بيضاء — slateFill الثابت (الأبيض فوقه ٧:١)
+        static let deceasedFill     = slateFill
+        static let currentLocation  = SwiftUI.Color.adaptive(light: "#2C623B", dark: "#9ACDA1") // أخضر
+        static let likeAction       = newsWedding // وردي
         /// لون الإناث في شجرة النساء — وردي تراثي موحّد (بدل القيم المرمّزة يدوياً في WomenTreeView/WomenClassicTreeView)
-        static let female           = SwiftUI.Color.adaptive(light: "#D66F92", dark: "#E48AA8") // وردي
+        static let female           = SwiftUI.Color.adaptive(light: "#92526F", dark: "#F4B1CB") // وردي
         /// الأنثى المتوفّاة في شجرة النساء — وردي أغمق يميّزها عن الحيّة دون أن يفقد هويتها
         /// الأنثى المتوفّاة — بنفسجي خوخي مطفأ: لون مختلف عن وردي الحيّة لكنه من عائلته (طلب المالك)
         static let femaleDeceased   = SwiftUI.Color.adaptive(light: "#7A5578", dark: "#9D7A9B")
@@ -166,22 +175,22 @@ enum DS {
         static let gridTree      = primary
         static let gridAlerts    = error
         static let gridDiwaniya  = secondary
-        static let gridContact   = accent
-        static let gridMessaging = SwiftUI.Color.adaptive(light: "#3D6670", dark: "#86AEB8") // Slate Teal — التواصل
+        static let gridContact   = sea // بترولي — التواصل
+        static let gridMessaging = sea
 
-        // مربّعات الرئيسية — هوية رسمية: كل قسم بلون عميق هادئ من نفس العائلة اللونية
-        static let tileTree     = secondary                                                 // أخضر غابي
-        static let tileDiwaniya = primary                                                   // كحلي
-        static let tileLibrary  = SwiftUI.Color.adaptive(light: "#7A2E3A", dark: "#A8505E") // عنّابي
-        static let tileProjects = accent                                                    // ذهبي
-        static let tileContact  = SwiftUI.Color.adaptive(light: "#3D6670", dark: "#5E8A95") // رمادي مزرق
+        // مربّعات الرئيسية — عائلة الكحلي والذهبي: كل قسم بلونه، ومن نفس العمق
+        static let tileTree     = palmFill  // أخضر
+        static let tileDiwaniya = navyFill  // كحلي
+        static let tileLibrary  = saduFill  // عنّابي
+        static let tileProjects = goldFill  // ذهبي
+        static let tileContact  = seaFill   // بترولي
 
         // الطرف الغامق من تدرّج كل مربّع
-        static let tileTreeDeep     = secondaryDark
-        static let tileDiwaniyaDeep = primaryDark
-        static let tileLibraryDeep  = SwiftUI.Color.adaptive(light: "#561F29", dark: "#7A2E3A")
-        static let tileProjectsDeep = accentDark
-        static let tileContactDeep  = SwiftUI.Color.adaptive(light: "#284850", dark: "#3D6670")
+        static let tileTreeDeep     = palmDeep
+        static let tileDiwaniyaDeep = navyDeep
+        static let tileLibraryDeep  = saduDeep
+        static let tileProjectsDeep = goldDeep
+        static let tileContactDeep  = seaDeep
 
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {
@@ -208,7 +217,7 @@ enum DS {
         static let overlayIcon = SwiftUI.Color.white.opacity(0.15)
         /// حدود أيقونة شفافة فوق تدرج
         static let overlayIconBorder = SwiftUI.Color.white.opacity(0.3)
-        /// نص فوق تدرج (أقل سطوعاً من textOnPrimary)
+        /// نص أبيض خافت فوق الصور. على band (الهيدرات) النص الثانوي ذهبي: accentLight — لا هذا (الهوية)
         static let overlayText = SwiftUI.Color.white.opacity(0.85)
         /// نص/أيقونة فاتحة فوق خلفية داكنة (opacity 0.7)
         static let overlayTextMuted = SwiftUI.Color.white.opacity(0.7)
@@ -248,14 +257,10 @@ enum DS {
         static let mutedBackground = SwiftUI.Color.gray.opacity(0.2)
     }
 
-    // MARK: Typography — خطوط حديثة ونظيفة مع دعم Dynamic Type
+    // MARK: Typography — IBM Plex Sans Arabic لكل الواجهة، مع دعم Dynamic Type
+    // الهوية: خط واحد للواجهة كلها (التطبيق والموقع والـ PDF) بأوزان 400/500/600/700.
+    // رموز SF Symbols وحدها على خط النظام — عبر icon().
     enum Font {
-        /// الصوت الطباعي المميّز لهوية العائلة التراثية — أدفأ وأكثر تميّزاً من SF Pro.
-        /// SF Rounded يدعم العربية (SF Arabic Rounded) فيظهر الدفء على اسم العائلة والعناوين
-        /// العربية والإنجليزية معاً، بعكس الخط السيريفي (New York) الذي لا يملك محارف عربية.
-        /// يُطبَّق على الخطوط المرنة (scaled) فقط؛ نصوص الواجهة — العناوين والمحتوى — على IBM Plex Sans Arabic (الهوية).
-        static let displayDesign: SwiftUI.Font.Design = .rounded
-
         // MARK: IBM Plex Sans Arabic — خط الهوية
         /// أسماء PostScript للأوزان المضافة في Resources/Fonts
         enum Plex {
@@ -263,18 +268,28 @@ enum DS {
             static let medium   = "IBMPlexSansArabic-Medium"
             static let semibold = "IBMPlexSansArabic-SemiBold"
             static let bold     = "IBMPlexSansArabic-Bold"
+
+            /// وزن الواجهة المطلوب ← ملف الخط: الخفيف والعادي → Regular (400)، medium → Medium (500)،
+            /// semibold → SemiBold (600)، bold وheavy وblack → Bold (700)
+            static func name(for weight: SwiftUI.Font.Weight) -> String {
+                switch weight {
+                case .black, .heavy, .bold: return bold
+                case .semibold:             return semibold
+                case .medium:               return medium
+                default:                    return regular
+                }
+            }
         }
 
         /// خط IBM Plex Sans Arabic مع دعم Dynamic Type — يُستخدم للعناوين وهوية الاسم
         static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
-            let name: String
-            switch weight {
-            case .black, .heavy, .bold: name = Plex.bold
-            case .semibold:             name = Plex.semibold
-            case .medium:               name = Plex.medium
-            default:                    name = Plex.regular
-            }
-            return .custom(name, size: size, relativeTo: textStyle(for: size))
+            .custom(Plex.name(for: weight), size: size, relativeTo: textStyle(for: size))
+        }
+
+        /// IBM Plex Sans Arabic بحجم ثابت لا يتبع Dynamic Type — لنصوص لوحة الشجرة داخل عُقد بمقاس ثابت
+        /// (بدل .system(size:) في تلك الأماكن)
+        static func plexFixed(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
+            .custom(Plex.name(for: weight), fixedSize: size)
         }
 
         /// اختيار TextStyle المناسب للحجم — يضمن تكيّف الخط المخصّص مع Dynamic Type
@@ -306,32 +321,47 @@ enum DS {
         static let calloutBold = SwiftUI.Font.custom(Plex.bold, size: 16, relativeTo: .callout)
         static let subheadline = SwiftUI.Font.custom(Plex.regular, size: 15, relativeTo: .subheadline)
         static let footnote    = SwiftUI.Font.custom(Plex.regular, size: 13, relativeTo: .footnote)
-        static let caption1    = SwiftUI.Font.custom(Plex.regular, size: 12, relativeTo: .caption)
-        static let caption2    = SwiftUI.Font.custom(Plex.regular, size: 11, relativeTo: .caption2)
+        // الهوية: caption بوزن 500 وcaption-2 بوزن 600 (حقول وعدّادات وشارات أدوار)
+        static let caption1    = SwiftUI.Font.custom(Plex.medium, size: 12, relativeTo: .caption)
+        static let caption2    = SwiftUI.Font.custom(Plex.semibold, size: 11, relativeTo: .caption2)
 
-        /// خط مرن يدعم Dynamic Type - يُستخدم بدل .system(size:weight:)
-        static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
-            let style: SwiftUI.Font.TextStyle
+        /// نمط النص المقابل للحجم — يحدّد منحنى Dynamic Type لـ scaled() وicon().
+        /// نفس الجدول السابق لكل الأحجام الصحيحة (١١ وأقل caption2 … ٣٦ وأكثر largeTitle)،
+        /// والحدود بـ ..< حتى تأخذ الأحجام الكسرية (13.5 مثلاً) النمط الأقرب بدل largeTitle.
+        static func scaledTextStyle(for size: CGFloat) -> SwiftUI.Font.TextStyle {
             switch size {
-            case ...10: style = .caption2
-            case 11: style = .caption2
-            case 12: style = .caption
-            case 13: style = .footnote
-            case 14...15: style = .subheadline
-            case 16: style = .callout
-            case 17: style = .body
-            case 18...19: style = .headline
-            case 20...21: style = .title3
-            case 22...27: style = .title2
-            case 28...35: style = .title
-            default: style = .largeTitle
+            case ..<11.5: return .caption2
+            case ..<12.5: return .caption
+            case ..<13.5: return .footnote
+            case ..<15.5: return .subheadline
+            case ..<16.5: return .callout
+            case ..<17.5: return .body
+            case ..<19.5: return .headline
+            case ..<21.5: return .title3
+            case ..<27.5: return .title2
+            case ..<35.5: return .title
+            default:      return .largeTitle
             }
-            return SwiftUI.Font.system(style, design: design).weight(weight)
         }
 
-        /// الخط المميّز (display) بحجم مخصّص — لاسم العائلة والعناوين الكبيرة، مع دعم Dynamic Type.
+        /// خط الواجهة المرن — IBM Plex Sans Arabic بالحجم المطلوب ويكبر ويصغر مع Dynamic Type
+        /// (relativeTo: نمط النص المقابل للحجم). يُستخدم بدل .system(size:weight:) لكل نص.
+        /// الأوزان حسب Plex.name(for:). `design` باقٍ في التوقيع للتوافق فقط ويُتجاهل — خط واحد للواجهة.
+        /// لرموز SF Symbols استخدم icon().
+        static func scaled(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
+            .custom(Plex.name(for: weight), size: size, relativeTo: scaledTextStyle(for: size))
+        }
+
+        /// خط رموز SF Symbols — خط النظام بنمط النص المقابل للحجم مع الوزن (نفس ما كان scaled() يرجعه،
+        /// فلا يتغيّر مقاس الأيقونات)، ويكبر ويصغر مع Dynamic Type.
+        /// لـ Image(systemName:) فقط؛ النص يبقى على scaled()/plex().
+        static func icon(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
+            SwiftUI.Font.system(scaledTextStyle(for: size), design: .default).weight(weight)
+        }
+
+        /// الخط الكبير (display) بحجم مخصّص — لاسم العائلة والعناوين الكبيرة: نفس scaled() على Plex.
         static func display(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> SwiftUI.Font {
-            scaled(size, weight: weight, design: displayDesign)
+            scaled(size, weight: weight)
         }
     }
 
@@ -686,13 +716,14 @@ struct DSGradientText: View {
     }
 }
 
-/// باج متحرك مع نبض
+/// باج العدد — ينبض ثلاث نبضات قصيرة عند ظهوره وكلما تغيّر العدد ثم يسكن
+/// (الهوية: حركة سريعة هادئة، ولا شيء يتكرر فوق المحتوى)
 struct DSPulseBadge: View {
     let count: Int
     var color: SwiftUI.Color = DS.Color.error
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
+    @State private var pulseScale: CGFloat = 1.0
 
     private var displayText: String { count > 99 ? "99+" : "\(count)" }
 
@@ -705,13 +736,19 @@ struct DSPulseBadge: View {
             .padding(.vertical, 3)
             .background(DS.Color.errorFill)
             .clipShape(Capsule())
-            .scaleEffect(isPulsing ? 1.15 : 1.0)
-            .animation(
-                DS.Anim.respectingMotion(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), reduceMotion: reduceMotion),
-                value: isPulsing
-            )
-            // يحترم "تقليل الحركة": يبقى الباج ثابتاً بلا نبض متكرر
-            .onAppear { isPulsing = !reduceMotion }
+            .scaleEffect(pulseScale)
+            // تبدأ عند الظهور وتعيد البدء عند تغيّر العدد؛ "تقليل الحركة" → بلا نبض
+            .task(id: count) {
+                guard !reduceMotion else { pulseScale = 1.0; return }
+                for _ in 0..<3 {
+                    withAnimation(.easeOut(duration: 0.18)) { pulseScale = 1.15 }
+                    try? await Task.sleep(nanoseconds: 180_000_000)
+                    withAnimation(.easeIn(duration: 0.22)) { pulseScale = 1.0 }
+                    try? await Task.sleep(nanoseconds: 280_000_000)
+                    if Task.isCancelled { break }
+                }
+                pulseScale = 1.0
+            }
     }
 }
 
@@ -733,6 +770,9 @@ struct DSPrimaryButton: View {
         self.action = action
     }
 
+    /// تعبئة الزر بدون التدرّج — الكحلي المتكيّف يأخذ primaryFill حتى يبقى النص الأبيض مقروءاً في الداكن
+    private var flatFill: Color { color == DS.Color.primary ? DS.Color.primaryFill : color }
+
     private var debouncedAction: () -> Void {
         let key = "DSPrimary_\(title)"
         let original = action
@@ -745,22 +785,22 @@ struct DSPrimaryButton: View {
         Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
                 if isLoading {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(DS.Color.textOnPrimary)
                 } else {
                     if let icon {
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(16, weight: .bold))
+                            .font(DS.Font.icon(16, weight: .bold))
                     }
                     Text(title)
                         .fontWeight(.bold)
                     Spacer(minLength: 0)
                     Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                        .font(DS.Font.scaled(14, weight: .black))
+                        .font(DS.Font.icon(14, weight: .black))
                         .opacity(0.9)
                 }
             }
             .font(DS.Font.headline)
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.textOnPrimary)
             .padding(.horizontal, DS.Spacing.lg)
             .frame(maxWidth: .infinity)
             // minHeight بدل الارتفاع الثابت — يسمح للنص بالنمو بدل القص في أحجام Dynamic Type الكبيرة
@@ -771,7 +811,7 @@ struct DSPrimaryButton: View {
                     .fill(
                         useGradient
                             ? AnyShapeStyle(DS.Color.gradientPrimary)
-                            : AnyShapeStyle(isLoading ? color.opacity(0.7) : color)
+                            : AnyShapeStyle(isLoading ? flatFill.opacity(0.7) : flatFill)
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
@@ -811,7 +851,7 @@ struct DSSecondaryButton: View {
     var body: some View {
         Button(action: debouncedAction) {
             HStack(spacing: DS.Spacing.sm) {
-                if let icon { Image(systemName: icon).font(DS.Font.scaled(14, weight: .bold)) }
+                if let icon { Image(systemName: icon).font(DS.Font.icon(14, weight: .bold)) }
                 Text(title).fontWeight(.bold)
             }
             .font(DS.Font.calloutBold)
@@ -912,16 +952,11 @@ struct DSIcon: View {
 
     var body: some View {
         Image(systemName: name)
-            .font(DS.Font.scaled(iconSize, weight: .bold))
+            .font(DS.Font.icon(iconSize, weight: .bold))
             .foregroundColor(color)
             .frame(width: size, height: size)
-            .background(
-                LinearGradient(
-                    colors: [color.opacity(DS.Icon.opacity), color.opacity(DS.Icon.opacity * 0.4)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            // الهوية: مربّع الأيقونة بلون قسمه ١٥٪ — تعبئة صلبة بلا تدرّج
+            .background(color.opacity(DS.Icon.opacity))
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
     }
 }
@@ -981,7 +1016,7 @@ struct DSActionRow: View {
             }
 
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(13, weight: .bold))
+                .font(DS.Font.icon(13, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -1002,7 +1037,7 @@ struct DSSectionHeader: View {
                 HStack(spacing: DS.Spacing.xs) {
                     if let icon {
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                             .foregroundColor(iconColor)
                     }
                     Text(title)
@@ -1121,7 +1156,7 @@ struct DSStatCard: View {
     var body: some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(26, weight: .bold))
+                .font(DS.Font.icon(26, weight: .bold))
                 .foregroundColor(color)
                 .frame(width: DS.Icon.sizeLg, height: DS.Icon.sizeLg)
                 .background(color.opacity(0.12))
@@ -1207,7 +1242,7 @@ struct DSFloatingButton: View {
             HStack(spacing: DS.Spacing.sm) {
                 if let icon, !icon.isEmpty {
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(20, weight: .black))
+                        .font(DS.Font.icon(20, weight: .black))
                 }
                 if let label {
                     Text(label).font(DS.Font.calloutBold)
@@ -1250,19 +1285,14 @@ struct DSSettingIcon: View {
 
     var body: some View {
         ZStack {
+            // تعبئة صلبة — والكحلي المتكيّف يأخذ primaryFill حتى يبقى الرمز الأبيض مقروءاً في الداكن
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(color == DS.Color.primary ? DS.Color.primaryFill : color)
                 .frame(width: size, height: size)
 
             Image(systemName: name)
-                .font(DS.Font.scaled(size * 0.42, weight: .bold))
-                .foregroundColor(.white)
+                .font(DS.Font.icon(size * 0.42, weight: .bold))
+                .foregroundColor(DS.Color.textOnPrimary)
         }
     }
 }
@@ -1351,13 +1381,13 @@ struct DSApproveRejectButtons: View {
             Button(action: approveTapped) {
                 ZStack {
                     if isLoading {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(DS.Color.textOnPrimary)
                     } else {
                         Text(approveTitle)
                             .font(DS.Font.calloutBold)
                     }
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DS.Spacing.md)
                 .background(approveGradient)
@@ -1426,7 +1456,7 @@ struct DSIconButton: View {
                     .frame(width: size, height: size)
                     .overlay(Circle().stroke(borderColor, lineWidth: borderWidth))
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(iconSize, weight: .bold))
+                    .font(DS.Font.icon(iconSize, weight: .bold))
                     .foregroundColor(iconColor)
             }
             .contentShape(Circle())
@@ -1464,7 +1494,7 @@ struct DSDestructiveButton: View {
                 } else {
                     if let icon {
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(15, weight: .bold))
+                            .font(DS.Font.icon(15, weight: .bold))
                     }
                     Text(title).fontWeight(.bold)
                 }
@@ -1511,7 +1541,7 @@ struct DSTextButton: View {
             HStack(spacing: DS.Spacing.xs) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(13, weight: .semibold))
+                        .font(DS.Font.icon(13, weight: .semibold))
                 }
                 Text(title).fontWeight(.semibold)
             }
@@ -1562,11 +1592,12 @@ struct UnifiedTextField: ViewModifier {
 }
 
 struct UnifiedButtonStyle: ButtonStyle {
-    var color: Color = DS.Color.primary
+    /// تعبئة تحت نص أبيض — primaryFill (كحلي، #2B5F90 في الداكن) لا primary
+    var color: Color = DS.Color.primaryFill
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(DS.Font.headline)
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.textOnPrimary)
             .frame(maxWidth: .infinity)
             .frame(height: 58)
             .background(configuration.isPressed ? color.opacity(0.85) : color)
@@ -1589,12 +1620,7 @@ struct DSMemberAvatar: View {
         ZStack {
             if let urlStr = avatarUrl, let url = URL(string: urlStr) {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [roleColor, roleColor.opacity(0.7)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(roleColor)
                     .frame(width: size, height: size)
 
                 CachedAsyncImage(url: url) { image in
@@ -1657,7 +1683,7 @@ struct DSEmptyState: View {
                         Text(buttonTitle)
                     }
                     .font(DS.Font.calloutBold)
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.xl)
                     .padding(.vertical, DS.Spacing.sm)
                     .background(buttonBackground)
@@ -1670,18 +1696,17 @@ struct DSEmptyState: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// خلفية زر الإجراء: التدرّج الافتراضي للحالات العادية، لون صلب لحالات الخطأ/المخصصة
-    @ViewBuilder
-    private var buttonBackground: some View {
-        if tint == DS.Color.primary {
-            DS.Color.gradientPrimary
-        } else if tint == DS.Color.error {
-            // نص الزر أبيض — التعبئة الحمراء الثابتة تبقى مقروءة في الداكن
-            DS.Color.errorFill
-        } else {
-            tint
-        }
+    /// خلفية زر الإجراء والدائرة الصلبة في نمط halo — النص والأيقونة فوقها بيضاء، فاللون المتكيّف
+    /// يأخذ تعبئته الثابتة (primaryFill، errorFill، successFill، warningFill) حتى يبقى الأبيض مقروءاً في الداكن
+    private var solidFill: SwiftUI.Color {
+        if tint == DS.Color.primary { return DS.Color.primaryFill }
+        if tint == DS.Color.error   { return DS.Color.errorFill }
+        if tint == DS.Color.success { return DS.Color.successFill }
+        if tint == DS.Color.warning { return DS.Color.warningFill }
+        return tint
     }
+
+    private var buttonBackground: SwiftUI.Color { solidFill }
 
     @ViewBuilder
     private var iconArea: some View {
@@ -1692,7 +1717,7 @@ struct DSEmptyState: View {
                     .fill(tint.opacity(0.08))
                     .frame(width: 100, height: 100)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(36, weight: .medium))
+                    .font(DS.Font.icon(36, weight: .medium))
                     .foregroundColor(tint.opacity(0.5))
             }
         case .halo:
@@ -1704,11 +1729,11 @@ struct DSEmptyState: View {
                     .fill(tint.opacity(0.10))
                     .frame(width: 95, height: 95)
                 Circle()
-                    .fill(tint)
+                    .fill(solidFill)
                     .frame(width: 64, height: 64)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(28, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(DS.Font.icon(28, weight: .bold))
+                    .foregroundColor(DS.Color.textOnPrimary)
             }
         }
     }

@@ -86,7 +86,7 @@ struct ImageCropperView: View {
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .padding(.vertical, DS.Spacing.sm)
-                                .background(DS.Color.primary)
+                                .background(DS.Color.primaryFill)
                                 .clipShape(Capsule())
                         }
                     }

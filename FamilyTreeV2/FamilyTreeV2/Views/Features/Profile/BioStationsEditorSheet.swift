@@ -43,7 +43,7 @@ struct BioStationsEditorSheet: View {
                     } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "plus.circle.fill")
-                                .font(DS.Font.scaled(18))
+                                .font(DS.Font.icon(18))
                                 .foregroundColor(DS.Color.primary)
                             Text(t("إضافة حدث", "Add Entry"))
                                 .font(DS.Font.calloutBold)
@@ -96,7 +96,7 @@ struct StationEditorRow: View {
             // السنة
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "calendar")
-                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .font(DS.Font.icon(13, weight: .semibold))
                     .foregroundColor(DS.Color.accent)
                     .frame(width: 20)
                 TextField(t("السنة (اختياري)", "Year (optional)"), text: Binding(
@@ -113,7 +113,7 @@ struct StationEditorRow: View {
             // العنوان
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "text.quote")
-                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .font(DS.Font.icon(13, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
                     .frame(width: 20)
                 TextField(t("العنوان", "Title"), text: $station.title)
@@ -126,7 +126,7 @@ struct StationEditorRow: View {
             // التفاصيل
             HStack(alignment: .top, spacing: DS.Spacing.sm) {
                 Image(systemName: "text.alignleft")
-                    .font(DS.Font.scaled(13, weight: .semibold))
+                    .font(DS.Font.icon(13, weight: .semibold))
                     .foregroundColor(DS.Color.secondary)
                     .frame(width: 20)
                     .padding(.top, 2)

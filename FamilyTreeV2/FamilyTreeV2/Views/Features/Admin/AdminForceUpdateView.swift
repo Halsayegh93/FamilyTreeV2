@@ -85,7 +85,7 @@ struct AdminForceUpdateView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 HStack(spacing: DS.Spacing.md) {
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                         .foregroundColor(DS.Color.primary)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {

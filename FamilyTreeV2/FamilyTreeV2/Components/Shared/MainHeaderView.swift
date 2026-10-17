@@ -91,7 +91,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                                     } else {
                                         Text(customSubtitle)
                                             .font(DS.Font.scaled(11, weight: .medium))
-                                            .foregroundColor(DS.Color.overlayText)
+                                            .foregroundColor(DS.Color.accentLight)
                                             .lineLimit(1)
                                             .minimumScaleFactor(0.7)
                                     }
@@ -104,7 +104,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                             if subtitleAbove, let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
                                 Text(customSubtitle)
                                     .font(DS.Font.scaled(14, weight: .semibold))
-                                    .foregroundColor(DS.Color.overlayText)
+                                    .foregroundColor(DS.Color.accentLight)
                             }
                             Text(customTitle)
                                 .font(DS.Font.scaled(subtitleAbove ? 24 : 21, weight: .black))
@@ -125,7 +125,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                                 } else {
                                     Text(customSubtitle)
                                         .font(DS.Font.scaled(13, weight: .medium))
-                                        .foregroundColor(DS.Color.overlayText)
+                                        .foregroundColor(DS.Color.accentLight)
                                 }
                             }
                         }
@@ -143,7 +143,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                             VStack(alignment: .leading, spacing: isLandscape ? 0 : 3) {
                                 Text(L10n.t("مرحباً بك", "Welcome Back"))
                                     .font(DS.Font.scaled(isLandscape ? 10 : 12, weight: .semibold))
-                                    .foregroundColor(DS.Color.overlayText)
+                                    .foregroundColor(DS.Color.accentLight)
                                 Text(authVM.currentUser?.displayName ?? "Member")
                                     .font(DS.Font.scaled(isLandscape ? 17 : 21, weight: .bold))
                                     .foregroundColor(DS.Color.textOnPrimary)
@@ -277,14 +277,14 @@ struct MainHeaderView<TrailingContent: View>: View {
                     Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
                 )
             Image(systemName: symbol)
-                .font(DS.Font.scaled(isLandscape ? 16 : 20, weight: .bold))
+                .font(DS.Font.icon(isLandscape ? 16 : 20, weight: .bold))
                 .foregroundColor(DS.Color.textOnPrimary)
         }
     }
 
     private func headerIconView(icon: String) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(isLandscape ? 15 : 18, weight: .bold))
+            .font(DS.Font.icon(isLandscape ? 15 : 18, weight: .bold))
             .foregroundColor(DS.Color.textOnPrimary)
             .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
             .dsHeaderGlassCircle()

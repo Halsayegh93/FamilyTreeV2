@@ -61,7 +61,7 @@ struct NewsCommentsSheet: View {
                                             }
                                         } label: {
                                             Image(systemName: "ellipsis")
-                                                .font(DS.Font.scaled(13, weight: .bold))
+                                                .font(DS.Font.icon(13, weight: .bold))
                                                 .foregroundColor(DS.Color.textSecondary)
                                                 .frame(width: 28, height: 24)
                                                 .contentShape(Rectangle())
@@ -99,7 +99,7 @@ struct NewsCommentsSheet: View {
                 } else {
                     VStack {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(DS.Font.scaled(40))
+                            .font(DS.Font.icon(40))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا توجد تعليقات بعد", "No comments yet"))
                             .font(DS.Font.title3)
@@ -136,7 +136,7 @@ struct NewsCommentsSheet: View {
                                 .clipShape(Circle())
                         } else {
                             Image(systemName: "paperplane.fill")
-                                .font(DS.Font.scaled(15, weight: .bold))
+                                .font(DS.Font.icon(15, weight: .bold))
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .frame(width: 42, height: 42)
                                 .background(DS.Color.gradientPrimary)

@@ -269,7 +269,7 @@ struct AdminActivateAccountsView: View {
                     // Swipe hint
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "hand.draw")
-                            .font(DS.Font.scaled(11, weight: .medium))
+                            .font(DS.Font.icon(11, weight: .medium))
                         Text(L10n.t(
                             "← سحب يمين: هاتف / ميلاد  •  سحب يسار: ربط أب / تفعيل →",
                             "← Swipe right: Phone / Birth  •  Swipe left: Father / Activate →"
@@ -311,7 +311,7 @@ struct AdminActivateAccountsView: View {
                                                 } label: {
                                                     Label(L10n.t("هاتف", "Phone"), systemImage: "phone.badge.plus")
                                                 }
-                                                .tint(DS.Color.primary)
+                                                .tint(DS.Color.primaryFill)
                                             }
                                             if isMissingBirthDate(member) {
                                                 Button {
@@ -319,7 +319,7 @@ struct AdminActivateAccountsView: View {
                                                 } label: {
                                                     Label(L10n.t("ميلاد", "Birth"), systemImage: "calendar.badge.plus")
                                                 }
-                                                .tint(DS.Color.warning)
+                                                .tint(DS.Color.accent)
                                             }
                                         }
                                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -329,7 +329,7 @@ struct AdminActivateAccountsView: View {
                                                 } label: {
                                                     Label(L10n.t("ربط أب", "Link Father"), systemImage: "person.line.dotted.person")
                                                 }
-                                                .tint(DS.Color.info)
+                                                .tint(DS.Color.primaryFill)
                                             }
                                             if isNotActivated(member) {
                                                 Button {
@@ -504,14 +504,14 @@ struct AdminActivateAccountsView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: mode == .station ? "bolt.badge.checkmark" : "list.bullet")
-                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .font(DS.Font.icon(11, weight: .semibold))
                         Text(mode == .station ? L10n.t("محطة", "Station") : L10n.t("قائمة", "List"))
                             .font(DS.Font.scaled(12, weight: .semibold))
                     }
                     .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(Capsule().fill(isOn ? DS.Color.primary : DS.Color.surface))
+                    .background(Capsule().fill(isOn ? DS.Color.primaryFill : DS.Color.surface))
                     .overlay(
                         Capsule().strokeBorder(
                             isOn ? Color.clear : DS.Color.textTertiary.opacity(0.15),
@@ -562,7 +562,7 @@ struct AdminActivateAccountsView: View {
                             focus = .all
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .font(DS.Font.icon(11, weight: .bold))
                         }
                     }
                     .foregroundColor(DS.Color.primary)
@@ -586,7 +586,7 @@ struct AdminActivateAccountsView: View {
                         if resolvedCount > 0 {
                             HStack(spacing: 4) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(L10n.t("أنجزت \(resolvedCount)", "\(resolvedCount) done"))
                                     .font(DS.Font.scaled(11, weight: .semibold))
                             }
@@ -722,7 +722,7 @@ struct AdminActivateAccountsView: View {
                 ZStack {
                     Circle().fill(color.opacity(disabled ? 0.06 : 0.14))
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(17, weight: .semibold))
+                        .font(DS.Font.icon(17, weight: .semibold))
                         .foregroundColor(disabled ? DS.Color.textTertiary : color)
                 }
                 .frame(width: 52, height: 52)
@@ -749,7 +749,7 @@ struct AdminActivateAccountsView: View {
                 ZStack {
                     Circle().fill(color.opacity(0.14))
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(13, weight: .semibold))
+                        .font(DS.Font.icon(13, weight: .semibold))
                         .foregroundColor(color)
                 }
                 .frame(width: 34, height: 34)
@@ -761,7 +761,7 @@ struct AdminActivateAccountsView: View {
                 Spacer(minLength: 0)
 
                 Image(systemName: "chevron.forward")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                     .foregroundColor(color.opacity(0.6))
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -789,13 +789,7 @@ struct AdminActivateAccountsView: View {
             // Avatar
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [selectedFilter.color.opacity(0.3), selectedFilter.color.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(selectedFilter.color.opacity(DS.Icon.opacity))
                     .frame(width: 50, height: 50)
 
                 Text(String(member.fullName.prefix(1)))
@@ -819,7 +813,7 @@ struct AdminActivateAccountsView: View {
                         ForEach(issues, id: \.self) { issue in
                             HStack(spacing: 2) {
                                 Image(systemName: issue.icon)
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(issue.label)
                                     .font(DS.Font.caption2)
                                     .fontWeight(.medium)
@@ -837,7 +831,7 @@ struct AdminActivateAccountsView: View {
                 if let phone = member.phoneNumber, !phone.isEmpty {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "phone.fill")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                         Text(KuwaitPhone.display(phone))
                             .font(DS.Font.caption1)
                             .monospacedDigit()
@@ -887,7 +881,7 @@ struct AdminActivateAccountsView: View {
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: filter.icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                 Text(filter.label)
                     .font(DS.Font.caption1)
                     .fontWeight(.semibold)
@@ -895,7 +889,7 @@ struct AdminActivateAccountsView: View {
                     Text("\(chipCount)")
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
-                        .foregroundColor(isSelected ? filter.color : DS.Color.textOnPrimary)
+                        .foregroundColor(isSelected ? filter.color : DS.Color.onTint)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(
@@ -904,7 +898,7 @@ struct AdminActivateAccountsView: View {
                         )
                 }
             }
-            .foregroundColor(isSelected ? DS.Color.textOnPrimary : filter.color)
+            .foregroundColor(isSelected ? DS.Color.onTint : filter.color)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .background(
@@ -961,10 +955,10 @@ struct AdminActivateAccountsView: View {
 
             if isSelected {
                 Circle()
-                    .fill(DS.Color.primary)
+                    .fill(DS.Color.primaryFill)
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                     .foregroundColor(DS.Color.textOnPrimary)
             }
         }
@@ -1016,14 +1010,14 @@ struct AdminActivateAccountsView: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "person.fill")
-                                .font(DS.Font.scaled(13, weight: .bold))
+                                .font(DS.Font.icon(13, weight: .bold))
                             Text(L10n.t("ذكر", "Male"))
                                 .font(DS.Font.calloutBold)
                         }
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.sm)
-                        .background(DS.Color.primary)
+                        .background(DS.Color.primaryFill)
                         .clipShape(Capsule())
                     }
                     .buttonStyle(DSBoldButtonStyle())
@@ -1034,7 +1028,7 @@ struct AdminActivateAccountsView: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "figure.stand.dress")
-                                .font(DS.Font.scaled(13, weight: .bold))
+                                .font(DS.Font.icon(13, weight: .bold))
                             Text(L10n.t("أنثى", "Female"))
                                 .font(DS.Font.calloutBold)
                         }
@@ -1166,7 +1160,7 @@ struct EditPhoneSheet: View {
                             .fill(DS.Color.info.opacity(0.1))
                             .frame(width: 80, height: 80)
                         Image(systemName: "phone.badge.plus")
-                            .font(DS.Font.scaled(30, weight: .bold))
+                            .font(DS.Font.icon(30, weight: .bold))
                             .foregroundColor(DS.Color.info)
                     }
                     .padding(.top, DS.Spacing.xl)
@@ -1213,7 +1207,7 @@ struct EditPhoneSheet: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.xs)
-                        .background(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? DS.Color.textTertiary : DS.Color.primary)
+                        .background(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? DS.Color.textTertiary : DS.Color.primaryFill)
                         .cornerRadius(DS.Radius.lg)
                     }
                     .disabled(phoneInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
@@ -1230,7 +1224,7 @@ struct EditPhoneSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(22, weight: .medium))
+                            .font(DS.Font.icon(22, weight: .medium))
                             .foregroundStyle(DS.Color.textTertiary)
                             .symbolRenderingMode(.hierarchical)
                     }
@@ -1285,7 +1279,7 @@ struct LinkFatherSheet: View {
                                 .fill(DS.Color.info.opacity(0.1))
                                 .frame(width: 70, height: 70)
                             Image(systemName: "person.line.dotted.person")
-                                .font(DS.Font.scaled(28, weight: .bold))
+                                .font(DS.Font.icon(28, weight: .bold))
                                 .foregroundColor(DS.Color.info)
                         }
 
@@ -1338,7 +1332,7 @@ struct LinkFatherSheet: View {
                                     // Selection indicator
                                     Image(systemName: selectedFather?.id == father.id ? "checkmark.circle.fill" : "circle")
                                         .foregroundColor(selectedFather?.id == father.id ? DS.Color.info : DS.Color.textTertiary)
-                                        .font(DS.Font.scaled(20))
+                                        .font(DS.Font.icon(20))
 
                                     // Avatar
                                     ZStack {
@@ -1401,7 +1395,7 @@ struct LinkFatherSheet: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.md)
-                        .background(selectedFather != nil ? DS.Color.info : DS.Color.textTertiary)
+                        .background(selectedFather != nil ? DS.Color.primaryFill : DS.Color.textTertiary)
                         .cornerRadius(DS.Radius.lg)
                     }
                     .disabled(selectedFather == nil || isSaving)
@@ -1417,7 +1411,7 @@ struct LinkFatherSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(22, weight: .medium))
+                            .font(DS.Font.icon(22, weight: .medium))
                             .foregroundStyle(DS.Color.textTertiary)
                             .symbolRenderingMode(.hierarchical)
                     }
@@ -1469,7 +1463,7 @@ struct EditBirthDateSheet: View {
                         ZStack {
                             Circle().fill(DS.Color.accent.opacity(0.12)).frame(width: 34, height: 34)
                             Image(systemName: "calendar.badge.plus")
-                                .font(DS.Font.scaled(15, weight: .semibold))
+                                .font(DS.Font.icon(15, weight: .semibold))
                                 .foregroundColor(DS.Color.accent)
                         }
                         Text(member.displayFullName)
@@ -1518,7 +1512,7 @@ struct EditBirthDateSheet: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.primary)
+                        .background(DS.Color.primaryFill)
                         .cornerRadius(DS.Radius.lg)
                     }
                     .disabled(isSaving)
@@ -1535,7 +1529,7 @@ struct EditBirthDateSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(22, weight: .medium))
+                            .font(DS.Font.icon(22, weight: .medium))
                             .foregroundStyle(DS.Color.textTertiary)
                             .symbolRenderingMode(.hierarchical)
                     }
@@ -1574,7 +1568,7 @@ private struct StationSheetShell<Content: View>: View {
                         ZStack {
                             Circle().fill(tint.opacity(0.12)).frame(width: 34, height: 34)
                             Image(systemName: icon)
-                                .font(DS.Font.scaled(15, weight: .semibold))
+                                .font(DS.Font.icon(15, weight: .semibold))
                                 .foregroundColor(tint)
                         }
                         Text(memberName)
@@ -1678,7 +1672,7 @@ struct EditGenderSheet: View {
                 Spacer(minLength: 0)
 
                 Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .font(DS.Font.icon(15, weight: .semibold))
                     .foregroundColor(isOn ? DS.Color.neonPurple : DS.Color.textTertiary.opacity(0.5))
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -1811,7 +1805,7 @@ struct EditMemberPhotoSheet: View {
                     ZStack {
                         Circle().fill(DS.Color.surface).frame(width: 96, height: 96)
                         Image(systemName: "person.crop.circle.badge.plus")
-                            .font(DS.Font.scaled(26, weight: .light))
+                            .font(DS.Font.icon(26, weight: .light))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }

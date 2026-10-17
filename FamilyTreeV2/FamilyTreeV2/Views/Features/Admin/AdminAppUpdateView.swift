@@ -44,7 +44,7 @@ struct AdminAppUpdateView: View {
         }
         var color: Color {
             switch self {
-            case .feature:     return DS.Color.success
+            case .feature:     return DS.Color.accent
             case .fix:         return DS.Color.info
             case .maintenance: return DS.Color.warning
             case .notice:      return DS.Color.primary
@@ -132,13 +132,13 @@ struct AdminAppUpdateView: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "doc.text.fill")
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.icon(13, weight: .bold))
                 Text(L10n.t("تعبئة ملاحظات هذا الإصدار \(AppReleaseNotes.currentVersionLabel)",
                             "Fill this release's notes \(AppReleaseNotes.currentVersionLabel)"))
                     .font(DS.Font.calloutBold)
                 Spacer(minLength: 0)
                 Image(systemName: "wand.and.stars")
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.icon(13, weight: .bold))
             }
             .foregroundColor(DS.Color.primary)
             .padding(DS.Spacing.md)
@@ -155,7 +155,7 @@ struct AdminAppUpdateView: View {
                     .fill(DS.Color.primary.opacity(0.12))
                     .frame(width: 42, height: 42)
                 Image(systemName: "megaphone.fill")
-                    .font(DS.Font.scaled(17, weight: .semibold))
+                    .font(DS.Font.icon(17, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
             }
             VStack(alignment: .leading, spacing: 3) {
@@ -190,8 +190,8 @@ struct AdminAppUpdateView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: k.icon)
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(selected ? .white : k.color)
+                                .font(DS.Font.icon(11, weight: .bold))
+                                .foregroundColor(selected ? DS.Color.onTint : k.color)
                                 .frame(width: 22, height: 22)
                                 .background(selected ? k.color : k.color.opacity(0.12))
                                 .clipShape(Circle())
@@ -222,7 +222,7 @@ struct AdminAppUpdateView: View {
             sectionLabel(L10n.t("رقم الإصدار (اختياري)", "Version (optional)"), icon: "number")
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "app.badge.fill")
-                    .font(DS.Font.scaled(13, weight: .medium))
+                    .font(DS.Font.icon(13, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                 TextField(L10n.t("مثال: 2.1", "e.g. 2.1"), text: $version)
                     .font(DS.Font.callout)
@@ -274,7 +274,7 @@ struct AdminAppUpdateView: View {
             sectionLabel(L10n.t("المعاينة", "Preview"), icon: "eye.fill")
             HStack(alignment: .top, spacing: DS.Spacing.md) {
                 Image(systemName: kind.icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.icon(13, weight: .bold))
                     .foregroundColor(kind.color)
                     .frame(width: 32, height: 32)
                     .background(kind.color.opacity(0.12))
@@ -303,7 +303,7 @@ struct AdminAppUpdateView: View {
     private func sectionLabel(_ title: String, icon: String) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(DS.Color.primary.opacity(0.75))
             Text(title)
                 .font(DS.Font.caption1)

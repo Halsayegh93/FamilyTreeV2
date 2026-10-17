@@ -62,7 +62,7 @@ struct DSSwipeActionsModifier: ViewModifier {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: a.icon)
-                    .font(DS.Font.scaled(18, weight: .bold))
+                    .font(DS.Font.icon(18, weight: .bold))
                 Text(a.title)
                     .font(DS.Font.scaled(12, weight: .bold))
                     .lineLimit(1)

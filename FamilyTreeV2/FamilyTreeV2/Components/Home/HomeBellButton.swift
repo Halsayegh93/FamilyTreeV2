@@ -25,7 +25,7 @@ struct HomeBellButton: View {
                         .foregroundStyle(DS.Color.textOnPrimary)
                 }
             }
-            .font(DS.Font.scaled(22, weight: .semibold))
+            .font(DS.Font.icon(22, weight: .semibold))
             .frame(width: 44, height: 44)
             .animation(DS.Anim.smooth, value: hasUnread)
         }

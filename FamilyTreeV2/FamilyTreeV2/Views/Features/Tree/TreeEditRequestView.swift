@@ -30,10 +30,10 @@ struct TreeEditRequestView: View {
 
     private var actionColor: Color {
         switch action {
-        case .add: return DS.Color.success
+        case .add: return DS.Color.palm
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
-        case .editBirth: return DS.Color.warning
+        case .editBirth: return DS.Color.palm
         case .deceased: return DS.Color.textTertiary
         case .addDeathDate: return DS.Color.textTertiary
         case .addPhoto: return DS.Color.primary
@@ -145,7 +145,7 @@ struct TreeEditRequestView: View {
                     .fill(actionColor.opacity(0.12))
                     .frame(width: 56, height: 56)
                 Image(systemName: action.iconName)
-                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .font(DS.Font.icon(20, weight: .semibold))
                     .foregroundColor(actionColor)
             }
 
@@ -194,7 +194,7 @@ struct TreeEditRequestView: View {
                 title: L10n.t("تاريخ الميلاد الصحيح", "Correct Birth Date"),
                 label: L10n.t("تاريخ الميلاد", "Birth Date"),
                 date: $birthDate,
-                iconColor: DS.Color.warning
+                iconColor: DS.Color.palm
             )
         case .editPhone:
             phoneInputSection
@@ -264,7 +264,7 @@ struct TreeEditRequestView: View {
 
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .medium))
+                    .font(DS.Font.icon(14, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                     .frame(width: 24)
 
@@ -276,7 +276,7 @@ struct TreeEditRequestView: View {
                 if !text.wrappedValue.isEmpty {
                     Button { text.wrappedValue = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(14, weight: .medium))
+                            .font(DS.Font.icon(14, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }

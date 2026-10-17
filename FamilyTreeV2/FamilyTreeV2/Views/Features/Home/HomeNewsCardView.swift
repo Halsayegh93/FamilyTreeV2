@@ -158,7 +158,7 @@ struct HomeNewsCardView: View {
                     // سطر خفيف: النوع · الوقت — بدل الكبسولة والوقت أسفل البطاقة
                     HStack(spacing: 4) {
                         Image(systemName: NewsTypeHelper.icon(for: type))
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.icon(10, weight: .bold))
                         Text(NewsTypeHelper.displayName(for: type))
                             .font(DS.Font.plex(11, weight: .semibold))
                         if !isOlderThanTwoMonths {
@@ -204,7 +204,7 @@ struct HomeNewsCardView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(DS.Font.scaled(14, weight: .semibold))
+                        .font(DS.Font.icon(14, weight: .semibold))
                         .foregroundColor(isAdminIdentityPost ? DS.Color.accentDark
                                                              : DS.Color.textTertiary)
                         .frame(width: 36, height: 36)
@@ -234,7 +234,7 @@ struct HomeNewsCardView: View {
                 Circle()
                     .fill(DS.Color.accent)
                 Image(systemName: "megaphone.fill")
-                    .font(DS.Font.scaled(15, weight: .bold))
+                    .font(DS.Font.icon(15, weight: .bold))
                     .foregroundColor(.white)
             }
             .frame(width: 32, height: 32)
@@ -293,7 +293,7 @@ struct HomeNewsCardView: View {
             // قلب الإعجاب
             if showDoubleTapHeart {
                 Image(systemName: "heart.fill")
-                    .font(DS.Font.scaled(60, weight: .bold))
+                    .font(DS.Font.icon(60, weight: .bold))
                     .foregroundStyle(DS.Color.textOnPrimary)
                     .dsCardShadow()
                     .transition(.scale.combined(with: .opacity))
@@ -373,7 +373,7 @@ struct HomeNewsCardView: View {
 
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(DS.Font.scaled(16, weight: .semibold))
+                        .font(DS.Font.icon(16, weight: .semibold))
                         .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
 
                     Text(option)
@@ -421,13 +421,13 @@ struct HomeNewsCardView: View {
                                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
                         }
                     }
-                    .font(DS.Font.scaled(16, weight: .medium))
-                    .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
+                    .font(DS.Font.icon(16, weight: .medium))
+                    .foregroundColor(isLiked ? DS.Color.sadu : DS.Color.textSecondary)
 
                     if likeCount > 0 {
                         Text("\(likeCount)")
                             .font(DS.Font.scaled(12, weight: .semibold))
-                            .foregroundColor(isLiked ? DS.Color.error : DS.Color.textSecondary)
+                            .foregroundColor(isLiked ? DS.Color.sadu : DS.Color.textSecondary)
                             .monospacedDigit()
                     }
                 }
@@ -443,7 +443,7 @@ struct HomeNewsCardView: View {
             Button(action: onCommentTap) {
                 HStack(spacing: 5) {
                     Image(systemName: "bubble.right")
-                        .font(DS.Font.scaled(15, weight: .medium))
+                        .font(DS.Font.icon(15, weight: .medium))
                         .foregroundColor(DS.Color.textSecondary)
 
                     if commentCount > 0 {

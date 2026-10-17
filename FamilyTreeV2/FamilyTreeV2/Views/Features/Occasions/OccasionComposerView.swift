@@ -194,7 +194,7 @@ struct OccasionComposerView: View {
     private func barButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(17, weight: .semibold))
+                .font(DS.Font.icon(17, weight: .semibold))
                 .foregroundColor(DS.Color.textOnPrimary)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(DS.Color.primary))
@@ -274,7 +274,7 @@ struct OccasionComposerView: View {
             // ثلاث خانات بعرض الشاشة: الرسمة فوق، ثم الاسم وشكل الصورة
             VStack(spacing: DS.Spacing.xs) {
                 Image(systemName: m.symbol)
-                    .font(DS.Font.scaled(20, weight: .semibold))
+                    .font(DS.Font.icon(20, weight: .semibold))
                 Text(m.title)
                     .font(DS.Font.plex(15, weight: .bold))
                 // القالب أو النسخة اللي ما فيها صورة (مشاركة العزاء، الوفاة بدون صورة، «بدون صورة») يقول «بدون صورة»
@@ -444,7 +444,7 @@ struct OccasionComposerView: View {
                 withAnimation(DS.Anim.quick) { vm.clearMember() }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(DS.Font.scaled(18))
+                    .font(DS.Font.icon(18))
                     .foregroundColor(DS.Color.textTertiary)
             }
             .accessibilityLabel(L10n.t("إلغاء الاختيار", "Clear selection"))

@@ -14,7 +14,7 @@ struct HomeInfoButton: View {
         } label: {
             // نفس حجم الجرس (22) وعرض أضيق ليقترب منه
             Image(systemName: "info.circle")
-                .font(DS.Font.scaled(22, weight: .semibold))
+                .font(DS.Font.icon(22, weight: .semibold))
                 .foregroundStyle(DS.Color.textOnPrimary)
                 .frame(width: 32, height: 44)
         }
@@ -36,15 +36,18 @@ struct AppInfoCard: View {
     var body: some View {
         DSCenterCard(onBackgroundTap: onClose) {
             VStack(spacing: DS.Spacing.md) {
-                Image("AppIconImage")
+                // الشعار المسطّح «المحمدعلي»: كحلي على الفاتح، كريمي في الداكن — بلا إطار ولا ظل (الهوية)؛
+                // المسافة الآمنة ربع ارتفاعه
+                Image("FamilyLogoNavy")
+                    .renderingMode(.original)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 72, height: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
-                    .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+                    .frame(height: 56)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
 
                 VStack(spacing: 4) {
-                    Text(L10n.t("تطبيق عائلة المحمدعلي", "Al-Mohammad Ali Family App"))
+                    Text(L10n.t("تطبيق عائلة المحمدعلي", "Al-Mohammad Ali family app"))
                         .font(DS.Font.plex(17, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                     Text(L10n.t("الإصدار \(appVersion)", "Version \(appVersion)"))
@@ -71,11 +74,11 @@ struct AppInfoCard: View {
             Button(action: onClose) {
                 Text(L10n.t("إغلاق", "Close"))
                     .font(DS.Font.calloutBold)
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .fill(DS.Color.primary))
+                        .fill(DS.Color.primaryFill))
             }
             .buttonStyle(DSScaleButtonStyle())
             .padding(.top, DS.Spacing.xs)

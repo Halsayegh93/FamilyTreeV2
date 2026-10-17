@@ -38,7 +38,7 @@ struct ForceUpdateView: View {
                     .fill(DS.Color.primary.opacity(0.12))
                     .frame(width: 110, height: 110)
                 Image(systemName: "arrow.down.app.fill")
-                    .font(DS.Font.scaled(52, weight: .semibold))
+                    .font(DS.Font.icon(52, weight: .semibold))
                     .foregroundStyle(DS.Color.primary)
             }
 

@@ -280,7 +280,7 @@ struct TreeView: View {
                                                        control1: CGPoint(x: link.from.x, y: link.from.y + dy * 0.8),
                                                        control2: CGPoint(x: link.to.x, y: link.to.y - dy * 0.8))
                                             ctx.stroke(p,
-                                                       with: .color(link.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.45)),
+                                                       with: .color(link.kinship ? DS.Color.accent : DS.Color.primary.opacity(0.45)),
                                                        style: StrokeStyle(lineWidth: link.kinship ? 3.5 : 2, lineCap: .round))
                                         }
                                         // قوس الآباء الملتفّة صفوفهم (>٣ أبناء مهما كثروا) — من أول ابن
@@ -296,7 +296,7 @@ struct TreeView: View {
                                                            control: CGPoint(x: apex.x + (arc.to.x - apex.x) * 0.5,
                                                                             y: arc.to.y))
                                             ctx.stroke(p,
-                                                       with: .color(arc.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.45)),
+                                                       with: .color(arc.kinship ? DS.Color.accent : DS.Color.primary.opacity(0.45)),
                                                        style: StrokeStyle(lineWidth: arc.kinship ? 3.5 : 2, lineCap: .round, lineJoin: .round))
                                         }
                                     }
@@ -305,7 +305,7 @@ struct TreeView: View {
                                     // وصلة قصيرة تحت الأب المفتوح (للآباء بأكثر من 3 أبناء — الشجرة الكبيرة ما تنرسم بخطوط)
                                     ForEach(connectorStubs) { stub in
                                         RoundedRectangle(cornerRadius: 2)
-                                            .fill(stub.kinship ? DS.Color.warning : DS.Color.primary.opacity(0.6))
+                                            .fill(stub.kinship ? DS.Color.accent : DS.Color.primary.opacity(0.6))
                                             .frame(width: stub.kinship ? 5 : 2.5, height: 16)
                                             .position(x: stub.x, y: stub.y)
                                     }
@@ -435,7 +435,7 @@ struct TreeView: View {
                             VStack {
                                 HStack(spacing: DS.Spacing.sm) {
                                     Image(systemName: "person.2.fill")
-                                        .font(DS.Font.scaled(16, weight: .bold))
+                                        .font(DS.Font.icon(16, weight: .bold))
                                     Text(banner)
                                         .font(DS.Font.calloutBold)
                                     Spacer()
@@ -451,7 +451,7 @@ struct TreeView: View {
                                         }
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
-                                            .font(DS.Font.scaled(18))
+                                            .font(DS.Font.icon(18))
                                             .foregroundColor(DS.Color.textOnPrimary.opacity(0.7))
                                     }
                                 }
@@ -752,7 +752,7 @@ struct TreeView: View {
                 .foregroundColor(treeTab.wrappedValue == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .padding(.horizontal, 5)
                 .frame(minWidth: 40, minHeight: 20)
-                .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primary : DS.Color.surface.opacity(0.8)))
+                .background(Capsule().fill(treeTab.wrappedValue == idx ? DS.Color.primaryFill : DS.Color.surface.opacity(0.8)))
         }
         .buttonStyle(DSScaleButtonStyle())
     }
@@ -807,7 +807,7 @@ struct TreeView: View {
     /// زر دائري بأيقونة — تضليل خفيف (مو شفاف 100%).
     private func toolbarIconButton(icon: String, color: Color = DS.Color.primary, compact: Bool = false) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(compact ? 12 : 14, weight: .bold))
+            .font(DS.Font.icon(compact ? 12 : 14, weight: .bold))
             .foregroundColor(color)
             .frame(width: compact ? 27 : 34, height: compact ? 27 : 34)                         // بار مدمّج أصغر
             .background(DS.Color.surface.opacity(0.8), in: Circle())   // أغمق (طلب المالك)
@@ -860,7 +860,7 @@ struct TreeView: View {
                         HStack(spacing: 3) {
                             if idx == 0 {
                                 Image(systemName: "house.fill")
-                                    .font(DS.Font.scaled(isLandscapeMode ? 11 : 8, weight: .bold))
+                                    .font(DS.Font.icon(isLandscapeMode ? 11 : 8, weight: .bold))
                             }
                             Text(m.firstName.isEmpty ? "—" : m.firstName)
                                 .font(DS.Font.scaled(isLandscapeMode ? 13 : 10, weight: isLast ? .heavy : .semibold))
@@ -869,7 +869,7 @@ struct TreeView: View {
                         .foregroundColor(isLast ? DS.Color.textOnPrimary : DS.Color.textPrimary)
                         .padding(.horizontal, isLandscapeMode ? 10 : 6)
                         .padding(.vertical, isLandscapeMode ? 5 : 1)
-                        .background(isLast ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.surface), in: Capsule())
+                        .background(isLast ? AnyShapeStyle(DS.Color.primaryFill) : AnyShapeStyle(DS.Color.surface), in: Capsule())
                         .overlay(Capsule().stroke(DS.Color.primary.opacity(isLast ? 0 : 0.2), lineWidth: 1))
                     }
                     .buttonStyle(DSScaleButtonStyle())
@@ -877,7 +877,7 @@ struct TreeView: View {
 
                     if !isLast {
                         Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(isLandscapeMode ? 9 : 7, weight: .bold))
+                            .font(DS.Font.icon(isLandscapeMode ? 9 : 7, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }
@@ -913,7 +913,7 @@ struct TreeView: View {
                                 .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
                         } else {
                             Image(systemName: "arrow.counterclockwise")
-                                .font(DS.Font.scaled(15, weight: .bold))
+                                .font(DS.Font.icon(15, weight: .bold))
                                 .foregroundColor(DS.Color.primary)
                                 .frame(width: TreeConst.toolButtonSize, height: TreeConst.toolButtonSize)
                         }
@@ -1301,7 +1301,7 @@ struct TreeView: View {
                         .fill(DS.Color.gridTree.opacity(0.1))
                         .frame(width: 80, height: 80)
                     Image(systemName: "leaf.arrow.triangle.circlepath")
-                        .font(DS.Font.scaled(36, weight: .medium))
+                        .font(DS.Font.icon(36, weight: .medium))
                         .foregroundStyle(DS.Color.primary)
                 }
 
@@ -1347,7 +1347,7 @@ struct TreeMemberNode: View {
     // لون دائرة الصورة — ذهبي إذا جزء من مسار القرابة
     private var nodeAccentColor: Color {
         if isKinshipHighlighted {
-            return DS.Color.warning
+            return DS.Color.accent
         }
         if member.isDeceased == true {
             return DS.Color.deceased
@@ -1364,22 +1364,19 @@ struct TreeMemberNode: View {
     // لون الإطار = نفس لون الدائرة
     private var borderColor: Color { nodeAccentColor }
 
-    // تدرج العقدة
-    private var nodeGradient: LinearGradient {
-        LinearGradient(
-            colors: [nodeAccentColor, nodeAccentColor.opacity(0.6)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    // تعبئة العقدة — لون صلب بلا تدرّج (الهوية). تحت أيقونة الشخص البيضاء يأخذ الكحلي والمتوفّى
+    // تعبئتهما الثابتة (primaryFill / deceasedFill) حتى يبقى الأبيض مقروءاً في الداكن
+    private var nodeFill: Color {
+        if isKinshipHighlighted { return nodeAccentColor }
+        if member.isDeceased == true { return DS.Color.deceasedFill }
+        switch member.role {
+        case .owner, .admin, .monitor, .supervisor: return nodeAccentColor
+        default: return DS.Color.primaryFill
+        }
     }
 
-    private var borderGradient: LinearGradient {
-        LinearGradient(
-            colors: [nodeAccentColor.opacity(0.9), nodeAccentColor.opacity(0.4)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
+    // حلقة العقدة وإطار الاسم — لون الرتبة صلباً
+    private var borderStroke: Color { nodeAccentColor.opacity(0.9) }
 
     var body: some View {
             // الوضع التفاعلي — دائري
@@ -1396,7 +1393,7 @@ struct TreeMemberNode: View {
                     ZStack {
                         // الدائرة الرئيسية — ظل ملوّن ناعم بلون الرتبة (عمق أنظف)
                         Circle()
-                            .fill(nodeGradient)
+                            .fill(nodeFill)
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
                             .shadow(color: nodeAccentColor.opacity(member.isDeceased == true ? 0.12 : 0.26),
                                     radius: 10, x: 0, y: 5)
@@ -1407,7 +1404,7 @@ struct TreeMemberNode: View {
                                 image.resizable().scaledToFill()
                             } placeholder: {
                                 Image(systemName: "person.fill")
-                                    .font(DS.Font.scaled(30))
+                                    .font(DS.Font.icon(30))
                                     .foregroundColor(DS.Color.overlayTextMuted)
                             }
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
@@ -1426,9 +1423,9 @@ struct TreeMemberNode: View {
                             .stroke(DS.Color.surface, lineWidth: 2.5)
                             .frame(width: interactiveNodeSize, height: interactiveNodeSize)
 
-                        // حلقة خارجية بتدرج لون الرتبة (رمادية للمتوفّى — تمييز أوضح)
+                        // حلقة خارجية بلون الرتبة (رصاصية للمتوفّى — تمييز أوضح)
                         Circle()
-                            .stroke(borderGradient, lineWidth: 3)
+                            .stroke(borderStroke, lineWidth: 3)
                             .frame(width: interactiveNodeSize + 6, height: interactiveNodeSize + 6)
                     }
                 }
@@ -1444,13 +1441,7 @@ struct TreeMemberNode: View {
                     // حلقة البحث المتوهجة
                     if searchedMemberID == member.id {
                         Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [DS.Color.primaryDark, DS.Color.primaryDark],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 5
-                            )
+                            .stroke(DS.Color.primaryDark, lineWidth: 5)
                             .frame(width: interactiveNodeSize + 14, height: interactiveNodeSize + 14)
                             .dsGlowShadow()
                     }
@@ -1476,7 +1467,7 @@ struct TreeMemberNode: View {
                             .frame(width: 30, height: 30)
                             .overlay(
                                 Image(systemName: "heart.slash.fill")
-                                    .font(DS.Font.scaled(15, weight: .bold))
+                                    .font(DS.Font.icon(15, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
                             )
                             .overlay(Circle().stroke(DS.Color.deceased.opacity(0.35), lineWidth: 1))
@@ -1490,13 +1481,13 @@ struct TreeMemberNode: View {
                             Text("\(childrenCount)")
                                 .font(DS.Font.scaled(16, weight: .heavy))
                             Image(systemName: "chevron.down")
-                                .font(DS.Font.scaled(11, weight: .heavy))
+                                .font(DS.Font.icon(11, weight: .heavy))
                                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
                         .frame(minWidth: 34, minHeight: 32)
-                        .background(Capsule().fill(isKinshipHighlighted ? DS.Color.warning : DS.Color.primaryDark))   // أغمق من لون العضو بلا صورة
+                        .background(Capsule().fill(isKinshipHighlighted ? DS.Color.goldFill : DS.Color.primaryDark))   // أغمق من لون العضو بلا صورة
                         .overlay(Capsule().stroke(DS.Color.textOnPrimary.opacity(0.45), lineWidth: 1.2))
                         .shadow(color: DS.Color.primary.opacity(0.4), radius: 4, y: 2)
                         .offset(x: -2, y: 0)
@@ -1563,7 +1554,7 @@ struct TreeMemberNode: View {
                             }
                             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                                .stroke(borderGradient, lineWidth: 2.5))
+                                .stroke(borderStroke, lineWidth: 2.5))
                         } else if showName {
                             Text(displayName)
                                 .font(DS.Font.scaled(15, weight: .bold))
@@ -1575,7 +1566,7 @@ struct TreeMemberNode: View {
                                 .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2)
                                 .background(DS.Color.surface)
                                 .clipShape(Capsule())
-                                .overlay(Capsule().stroke(borderGradient, lineWidth: 2.5))
+                                .overlay(Capsule().stroke(borderStroke, lineWidth: 2.5))
                         }
                     }
                     .contentShape(Rectangle())

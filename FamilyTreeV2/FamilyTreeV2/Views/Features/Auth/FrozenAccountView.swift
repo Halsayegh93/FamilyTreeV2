@@ -59,7 +59,7 @@ struct FrozenAccountView: View {
                         ToolbarItem(placement: DSToolbar.cancelPlacement) {
                             Button { showContactSheet = false } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(DS.Font.scaled(22, weight: .medium))
+                                    .font(DS.Font.icon(22, weight: .medium))
                                     .foregroundStyle(DS.Color.textTertiary)
                                     .symbolRenderingMode(.hierarchical)
                             }
@@ -86,7 +86,7 @@ struct FrozenAccountView: View {
                         .frame(width: 110, height: 110)
 
                     Image(systemName: "lock.shield.fill")
-                        .font(DS.Font.scaled(48, weight: .bold))
+                        .font(DS.Font.icon(48, weight: .bold))
                         .foregroundStyle(DS.Color.warning)
                 }
                 .scaleEffect(iconScale)

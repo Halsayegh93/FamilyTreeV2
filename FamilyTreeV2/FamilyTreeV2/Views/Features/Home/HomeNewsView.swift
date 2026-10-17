@@ -292,7 +292,7 @@ struct HomeNewsView: View {
                     activeSubPage = nil
                 } label: {
                     Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                        .font(DS.Font.scaled(isLandscape ? 16 : 19, weight: .bold))
+                        .font(DS.Font.icon(isLandscape ? 16 : 19, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: isLandscape ? 38 : 48, height: isLandscape ? 38 : 48)
                         .dsHeaderGlassCircle()
@@ -309,7 +309,7 @@ struct HomeNewsView: View {
                     if let subtitle {
                         Text(subtitle)
                             .font(DS.Font.plex(12, weight: .medium))
-                            .foregroundColor(DS.Color.overlayText)
+                            .foregroundColor(DS.Color.accentLight)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
@@ -325,7 +325,7 @@ struct HomeNewsView: View {
                                                         userInfo: ["page": page == .archive ? "archive" : "projects"])
                     } label: {
                         Image(systemName: "checkmark.circle")
-                            .font(DS.Font.scaled(isLandscape ? 15 : 18, weight: .bold))
+                            .font(DS.Font.icon(isLandscape ? 15 : 18, weight: .bold))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .frame(width: isLandscape ? 36 : 44, height: isLandscape ? 36 : 44)
                             .dsHeaderGlassCircle()
@@ -405,7 +405,7 @@ struct HomeNewsView: View {
     private func primaryTilesRow(tileHeight: CGFloat) -> some View {
         HStack(spacing: tileSpacing) {
             unifiedTile(
-                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nFamily Tree"),
+                title: L10n.t("شجرة\nالمحمدعلي", "Al-Mohammad Ali\nfamily tree"),
                 icon: "tree.fill",
                 color: DS.Color.tileTree,
                 deep: DS.Color.tileTreeDeep,
@@ -499,7 +499,7 @@ struct HomeNewsView: View {
                     stops: [
                         .init(color: .white.opacity(0.10), location: 0),
                         .init(color: .clear, location: 0.32),
-                        .init(color: .black.opacity(0.36), location: 1)
+                        .init(color: DS.Color.navyDeep.opacity(0.46), location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -509,11 +509,11 @@ struct HomeNewsView: View {
                 VStack {
                     HStack {
                         Image(systemName: icon)
-                            .font(DS.Font.scaled(15, weight: .bold))
+                            .font(DS.Font.icon(15, weight: .bold))
                             .foregroundColor(.white)
                             .frame(width: 36 * layout.scale, height: 36 * layout.scale)
                             .dsGlass(Circle())
-                            .overlay(Circle().strokeBorder(Color.white.opacity(0.30), lineWidth: 1))
+                            .overlay(Circle().strokeBorder(DS.Color.accentLight.opacity(0.75), lineWidth: 1))
                             .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
 
                         Spacer()
@@ -586,7 +586,7 @@ struct HomeNewsView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 78, height: 78)
-                .foregroundColor(.white.opacity(0.17))
+                .foregroundColor(DS.Color.accentLight.opacity(0.30))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 .offset(x: 16, y: 12)
         }
@@ -834,7 +834,7 @@ struct HomeNewsView: View {
         case "purple": return DS.Color.adminRole
         case "orange": return DS.Color.supervisorRole
         case "blue":   return DS.Color.primary
-        case "green":  return DS.Color.success
+        case "green":  return DS.Color.monitorRole
         default:       return DS.Color.primary
         }
     }
@@ -886,7 +886,7 @@ struct HomeNewsView: View {
         DSCard(padding: 0) {
             VStack(spacing: DS.Spacing.md) {
                 Image(systemName: "newspaper")
-                    .font(DS.Font.scaled(40))
+                    .font(DS.Font.icon(40))
                     .foregroundColor(DS.Color.textTertiary)
 
                 Text(L10n.t("لا توجد أخبار حديثة", "No recent news"))
@@ -897,7 +897,7 @@ struct HomeNewsView: View {
                     Button(action: { showingAddNews = true }) {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "plus.circle.fill")
-                                .font(DS.Font.scaled(14, weight: .bold))
+                                .font(DS.Font.icon(14, weight: .bold))
                             Text(L10n.t("أضف أول خبر", "Add First Post"))
                                 .font(DS.Font.caption1)
                                 .fontWeight(.bold)

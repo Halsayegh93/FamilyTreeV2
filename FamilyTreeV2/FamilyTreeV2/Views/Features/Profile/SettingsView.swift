@@ -36,7 +36,7 @@ struct SettingsView: View {
                     // مربّعات بدل القائمة (طلب المالك) — كل مربّع يعرض قيمته الحالية
                     HStack(spacing: DS.Spacing.md) {
                         NavigationLink(destination: NotificationsAndPrivacyView()) {
-                            valueTile(icon: "bell.badge.fill", color: DS.Color.warning,
+                            valueTile(icon: "bell.badge.fill", color: DS.Color.sea,
                                       title: t("الإشعارات والخصوصية", "Notifications & Privacy"),
                                       value: notificationsEnabled ? t("مفعّلة", "On") : t("موقوفة", "Off"))
                         }
@@ -55,7 +55,7 @@ struct SettingsView: View {
 
                     HStack(spacing: DS.Spacing.md) {
                         Button { showAbout = true } label: {
-                            valueTile(icon: "app.badge.fill", color: DS.Color.secondary,
+                            valueTile(icon: "app.badge.fill", color: DS.Color.primary,
                                       title: t("عن التطبيق", "About"),
                                       value: AppVersion.string)
                         }
@@ -77,7 +77,7 @@ struct SettingsView: View {
                     Button { showDeleteConfirmation = true } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "trash")
-                                .font(DS.Font.scaled(13, weight: .bold))
+                                .font(DS.Font.icon(13, weight: .bold))
                             Text(t("حذف الحساب", "Delete Account"))
                                 .font(DS.Font.plex(14, weight: .bold))
                         }
@@ -165,7 +165,7 @@ struct SettingsView: View {
                         ZStack {
                             Color.white.opacity(0.18)
                             Image(systemName: "person.fill")
-                                .font(DS.Font.scaled(26, weight: .bold))
+                                .font(DS.Font.icon(26, weight: .bold))
                                 .foregroundColor(.white)
                         }
                     }
@@ -176,9 +176,9 @@ struct SettingsView: View {
                     .strokeBorder(Color.white.opacity(0.7), lineWidth: 2))
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali Family"))
+                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                         .font(DS.Font.plex(10, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(DS.Color.accentLight)
                     Text(user?.displayName ?? "")
                         .font(DS.Font.plex(18, weight: .bold))
                         .foregroundColor(.white)
@@ -206,7 +206,7 @@ struct SettingsView: View {
 
                 Button { showEditProfile = true } label: {
                     Image(systemName: "pencil")
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(DS.Font.icon(13, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(Color.white))
@@ -242,12 +242,12 @@ struct SettingsView: View {
     private func cardFact(icon: String, title: String, value: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(.white.opacity(0.75))
+                .font(DS.Font.icon(11, weight: .bold))
+                .foregroundColor(DS.Color.accentLight)
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
                     .font(DS.Font.plex(9.5, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(DS.Color.accentLight)
                 Text(value)
                     .font(DS.Font.plex(12, weight: .bold))
                     .foregroundColor(.white)
@@ -259,8 +259,8 @@ struct SettingsView: View {
     private func valueTile(icon: String, color: Color, title: String, value: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(16, weight: .semibold))
-                .foregroundColor(.white)
+                .font(DS.Font.icon(16, weight: .semibold))
+                .foregroundColor(DS.Color.onTint)
                 .frame(width: 38, height: 38)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(color))
             Text(title)
@@ -310,8 +310,8 @@ struct SettingsView: View {
     private func groupRow(icon: String, color: Color, title: String, value: String?) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
-                .foregroundColor(.white)
+                .font(DS.Font.icon(14, weight: .semibold))
+                .foregroundColor(DS.Color.onTint)
                 .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm + 1, style: .continuous).fill(color))
             Text(title)
@@ -326,7 +326,7 @@ struct SettingsView: View {
                     .lineLimit(1)
             }
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary.opacity(0.7))
         }
         .padding(.horizontal, DS.Spacing.md)
@@ -402,19 +402,19 @@ struct NotificationsAndPrivacyView: View {
 
     private var kinds: [Kind] {
         var list: [Kind] = [
-            Kind(key: "news", icon: "newspaper.fill", color: DS.Color.primary,
+            Kind(key: "news", icon: "newspaper.fill", color: DS.Color.accent,
                  title: t("الأخبار الجديدة", "New posts"), subtitle: t("عند نشر خبر في العائلة", "When a family post is published")),
-            Kind(key: "comments", icon: "bubble.left.fill", color: DS.Color.info,
+            Kind(key: "comments", icon: "bubble.left.fill", color: DS.Color.sea,
                  title: t("التعليقات", "Comments"), subtitle: t("عند تعليق أحد على خبرك", "When someone comments on your post")),
-            Kind(key: "likes", icon: "heart.fill", color: DS.Color.error,
+            Kind(key: "likes", icon: "heart.fill", color: DS.Color.sadu,
                  title: t("الإعجابات", "Likes"), subtitle: t("عند إعجاب أحد بخبرك", "When someone likes your post")),
             Kind(key: "requests", icon: "checkmark.seal.fill", color: DS.Color.success,
                  title: t("الرد على طلباتي", "Replies to my requests"), subtitle: t("قبول أو رفض طلباتك، تفعيل حسابك", "Approvals, rejections, activation")),
-            Kind(key: "profile", icon: "person.crop.circle.badge.checkmark", color: DS.Color.accent,
+            Kind(key: "profile", icon: "person.crop.circle.badge.checkmark", color: DS.Color.palm,
                  title: t("تحديثات ملفي", "My profile updates"), subtitle: t("عند تعديل الإدارة لبياناتك", "When admins edit your profile"))
         ]
         if authVM.canModerate {
-            list.append(Kind(key: "admin_activity", icon: "sparkles", color: DS.Color.warning,
+            list.append(Kind(key: "admin_activity", icon: "sparkles", color: DS.Color.primary,
                              title: t("مستجدات الإدارة", "Admin activity"),
                              subtitle: t("طلبات الشجرة والانضمام والتعديلات", "Tree, join and edit requests")))
         }
@@ -459,12 +459,12 @@ struct NotificationsAndPrivacyView: View {
                     group(t("الخصوصية", "Privacy"),
                           footer: t("بياناتك تبقى محفوظة في الشجرة، بس ما تظهر للأعضاء. الإدارة تشوفها.",
                                     "Your data stays in the tree but is hidden from members. Admins can still see it.")) {
-                        switchRow(icon: "phone.down.fill", color: DS.Color.gridContact,
+                        switchRow(icon: "phone.down.fill", color: DS.Color.primary,
                                   title: t("إخفاء رقم الهاتف", "Hide phone number"),
                                   subtitle: t("ما يظهر رقمك للأعضاء", "Members won't see your number"),
                                   isOn: $isPhoneHidden)
                         rowDivider
-                        switchRow(icon: "calendar.badge.minus", color: DS.Color.gridContact,
+                        switchRow(icon: "calendar.badge.minus", color: DS.Color.primary,
                                   title: t("إخفاء تاريخ الميلاد", "Hide birth date"),
                                   subtitle: t("ما يظهر تاريخ ميلادك للأعضاء", "Members won't see your birth date"),
                                   isOn: $isBirthDateHidden)
@@ -534,7 +534,7 @@ struct NotificationsAndPrivacyView: View {
                 ZStack {
                     Circle().fill(tint.opacity(0.16)).frame(width: 46, height: 46)
                     Image(systemName: on ? "bell.badge.fill" : "bell.slash.fill")
-                        .font(DS.Font.scaled(19, weight: .semibold))
+                        .font(DS.Font.icon(19, weight: .semibold))
                         .foregroundColor(tint)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -551,7 +551,7 @@ struct NotificationsAndPrivacyView: View {
                 Spacer(minLength: 0)
                 Toggle("", isOn: $notificationsEnabled)
                     .labelsHidden()
-                    .tint(DS.Color.success)
+                    .tint(DS.Color.primary)
             }
 
             if systemBlocked {
@@ -653,8 +653,8 @@ struct NotificationsAndPrivacyView: View {
     private func switchRow(icon: String, color: Color, title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
-                .foregroundColor(.white)
+                .font(DS.Font.icon(14, weight: .semibold))
+                .foregroundColor(DS.Color.onTint)
                 .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm + 1, style: .continuous).fill(color))
             VStack(alignment: .leading, spacing: 1) {
@@ -832,7 +832,7 @@ private func settingsActionRow(icon: String, color: Color, title: String, subtit
         Spacer()
 
         Image(systemName: "chevron.forward")
-            .font(DS.Font.scaled(13, weight: .bold))
+            .font(DS.Font.icon(13, weight: .bold))
             .foregroundColor(DS.Color.textTertiary)
     }
     .padding(.horizontal, DS.Spacing.lg)
@@ -897,7 +897,7 @@ struct AboutView: View {
                                 .dsGlowShadow()
 
                             Image(systemName: "tree.fill")
-                                .font(DS.Font.scaled(42, weight: .bold))
+                                .font(DS.Font.icon(42, weight: .bold))
                                 .foregroundColor(DS.Color.textOnPrimary)
                         }
                         .frame(maxWidth: .infinity)
@@ -905,7 +905,7 @@ struct AboutView: View {
 
                         // App Name & Version
                         VStack(spacing: DS.Spacing.sm) {
-                            Text(t("عائلة المحمدعلي", "Al-Mohammadali Family"))
+                            Text(t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                                 .font(DS.Font.title1)
                                 .fontWeight(.black)
                                 .foregroundColor(DS.Color.textPrimary)
@@ -926,7 +926,7 @@ struct AboutView: View {
                             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                                 aboutItem(
                                     icon: "person.3.fill",
-                                    color: DS.Color.primary,
+                                    color: DS.Color.palm,
                                     title: t("شجرة العائلة", "Family Tree"),
                                     desc: t("استعرض أفراد عائلتك وأنسابهم بشكل تفاعلي", "Browse your family members and lineage interactively")
                                 )
@@ -935,7 +935,7 @@ struct AboutView: View {
 
                                 aboutItem(
                                     icon: "newspaper.fill",
-                                    color: DS.Color.info,
+                                    color: DS.Color.accent,
                                     title: t("أخبار العائلة", "Family News"),
                                     desc: t("شارك الأخبار وتفاعل بالتعليقات والإعجابات", "Share news and interact with comments & likes")
                                 )
@@ -944,7 +944,7 @@ struct AboutView: View {
 
                                 aboutItem(
                                     icon: "bell.badge.fill",
-                                    color: DS.Color.warning,
+                                    color: DS.Color.sea,
                                     title: t("الإشعارات", "Notifications"),
                                     desc: t("إشعارات فورية داخل التطبيق وعلى جهازك", "Instant alerts inside the app and on your device")
                                 )
@@ -953,7 +953,7 @@ struct AboutView: View {
 
                                 aboutItem(
                                     icon: "lock.shield.fill",
-                                    color: DS.Color.gridContact,
+                                    color: DS.Color.primary,
                                     title: t("الخصوصية والأمان", "Privacy & Security"),
                                     desc: t("بياناتك محمية بالكامل وتتحكّم بمن يراها", "Your data is fully protected — you control visibility")
                                 )
@@ -963,7 +963,7 @@ struct AboutView: View {
 
                         // Footer
                         VStack(spacing: DS.Spacing.sm) {
-                            Text(t("صُنع بحب لعائلة آل محمد علي 🤍", "Made with love for Al-Mohammad Ali family 🤍"))
+                            Text(t("صُنع بحب لعائلة المحمدعلي", "Made with love for the Al-Mohammad Ali family"))
                                 .font(DS.Font.caption1)
                                 .foregroundColor(DS.Color.textTertiary)
 
@@ -992,7 +992,7 @@ struct AboutView: View {
     private func aboutItem(icon: String, color: Color, title: String, desc: String) -> some View {
         HStack(alignment: .top, spacing: DS.Spacing.md) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(18, weight: .bold))
+                .font(DS.Font.icon(18, weight: .bold))
                 .foregroundColor(color)
                 .frame(width: 40, height: 40)
                 .background(color.opacity(0.12))
@@ -1047,7 +1047,7 @@ struct PrivacyPolicyView: View {
 
                         policyCard(
                             icon: "hand.raised.fill",
-                            color: DS.Color.accent,
+                            color: DS.Color.primary,
                             title: t("استخدام البيانات", "Data Usage"),
                             points: [
                                 t("بياناتك تُستخدم فقط لعرض الشجرة والتواصل بين الأعضاء.", "Your data is only used for the family tree and communication."),
@@ -1080,7 +1080,7 @@ struct PrivacyPolicyView: View {
 
                         policyCard(
                             icon: "bell.badge.fill",
-                            color: DS.Color.warning,
+                            color: DS.Color.sea,
                             title: t("الإشعارات", "Notifications"),
                             points: [
                                 t("نرسل إشعارات عن التعليقات والإعجابات والتحديثات.", "We send alerts for comments, likes, and updates."),
@@ -1094,7 +1094,7 @@ struct PrivacyPolicyView: View {
                             color: DS.Color.neonPurple,
                             title: t("شروط الاستخدام", "Terms of Use"),
                             points: [
-                                t("التطبيق مخصص حصرياً لأفراد عائلة آل محمد علي.", "The app is exclusively for Al-Mohammad Ali family members."),
+                                t("التطبيق مخصص حصرياً لأفراد عائلة المحمدعلي.", "The app is exclusively for Al-Mohammad Ali family members."),
                                 t("يجب استخدام التطبيق بمسؤولية واحترام خصوصية الآخرين.", "Use the app responsibly and respect others' privacy."),
                                 t("يحق للإدارة تجميد أو حذف الحسابات المخالفة.", "Admins may freeze or delete accounts that violate policies.")
                             ]
@@ -1102,7 +1102,7 @@ struct PrivacyPolicyView: View {
 
                         policyCard(
                             icon: "envelope.fill",
-                            color: DS.Color.primary,
+                            color: DS.Color.sea,
                             title: t("تواصل معنا", "Contact Us"),
                             points: [
                                 t("لأي استفسار، تواصل عبر مركز التواصل داخل التطبيق.", "For any questions, reach us via the Contact Center in the app.")
@@ -1130,7 +1130,7 @@ struct PrivacyPolicyView: View {
         DSCard(padding: 0) {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(18, weight: .bold))
+                    .font(DS.Font.icon(18, weight: .bold))
                     .foregroundColor(color)
                     .frame(width: 40, height: 40)
                     .background(color.opacity(0.12))
@@ -1199,7 +1199,7 @@ struct LinkedDevicesSettingsSheet: View {
 
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "info.circle.fill")
-                                    .font(DS.Font.scaled(16, weight: .bold))
+                                    .font(DS.Font.icon(16, weight: .bold))
                                     .foregroundColor(DS.Color.info)
                                     .frame(width: 36, height: 36)
                                     .background(DS.Color.info.opacity(0.12))
@@ -1227,7 +1227,7 @@ struct LinkedDevicesSettingsSheet: View {
                             if notificationVM.linkedDevices.isEmpty {
                                 HStack(spacing: DS.Spacing.sm) {
                                     Image(systemName: "iphone.slash")
-                                        .font(DS.Font.scaled(16, weight: .bold))
+                                        .font(DS.Font.icon(16, weight: .bold))
                                         .foregroundColor(DS.Color.textTertiary)
                                         .frame(width: 36, height: 36)
                                         .background(DS.Color.textTertiary.opacity(0.12))

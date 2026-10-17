@@ -241,7 +241,7 @@ struct OccasionAreaField: View {
                 }
             } label: {
                 Image(systemName: "mappin.and.ellipse")
-                    .font(DS.Font.scaled(17, weight: .semibold))
+                    .font(DS.Font.icon(17, weight: .semibold))
                     .foregroundColor(DS.Color.textOnPrimary)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(DS.Color.primary))
@@ -284,7 +284,7 @@ struct OccasionHusseiniyaMenu: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "building.columns")
-                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .font(DS.Font.icon(15, weight: .semibold))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(picked?.name ?? L10n.t("اختر حسينية من القائمة", "Choose a husseiniya from the list"))
                         .font(DS.Font.plex(14, weight: .semibold))
@@ -297,7 +297,7 @@ struct OccasionHusseiniyaMenu: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .font(DS.Font.icon(12, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
             }
             .foregroundColor(DS.Color.textPrimary)

@@ -111,13 +111,13 @@ struct AdminDevicesView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Button { self.removalMessage = nil } label: {
-                        Image(systemName: "xmark").font(DS.Font.scaled(11, weight: .bold))
+                        Image(systemName: "xmark").font(DS.Font.icon(11, weight: .bold))
                     }
                 }
                 .foregroundColor(.white)
                 .padding(DS.Spacing.md)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(removalFailed ? DS.Color.errorFill : DS.Color.success))
+                    .fill(removalFailed ? DS.Color.errorFill : DS.Color.successFill))
                 .padding(DS.Spacing.lg)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -191,7 +191,7 @@ struct AdminDevicesView: View {
     private func statPill(icon: String, value: String, label: String, color: Color) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(13, weight: .bold))
+                .font(DS.Font.icon(13, weight: .bold))
                 .foregroundColor(color)
             Text(value)
                 .font(DS.Font.calloutBold)
@@ -264,7 +264,7 @@ struct AdminDevicesView: View {
     private func adminDeviceRow(_ device: NotificationViewModel.LinkedDevice) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: "iphone.gen3")
-                .font(DS.Font.scaled(16, weight: .bold))
+                .font(DS.Font.icon(16, weight: .bold))
                 .foregroundColor(DS.Color.neonBlue)
                 .frame(width: 32, height: 32)
                 .background(DS.Color.neonBlue.opacity(0.12))
@@ -289,7 +289,7 @@ struct AdminDevicesView: View {
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "trash.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                         Text(t("إزالة", "Remove"))
                             .font(DS.Font.scaled(11, weight: .bold))
                     }

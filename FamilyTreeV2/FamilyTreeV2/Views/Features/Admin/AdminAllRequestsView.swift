@@ -97,8 +97,8 @@ struct AdminAllRequestsView: View {
         var color: Color {
             switch self {
             case .members:    return DS.Color.info
-            case .tree:       return DS.Color.success
-            case .content:    return DS.Color.warning
+            case .tree:       return DS.Color.palm
+            case .content:    return DS.Color.accent
             case .treeHealth: return DS.Color.error
             }
         }
@@ -183,25 +183,25 @@ struct AdminAllRequestsView: View {
             switch self {
             case .all: return DS.Color.primary
             case .joinRequests: return DS.Color.info
-            case .news: return DS.Color.warning
+            case .news: return DS.Color.accent
             case .reports: return DS.Color.error
             case .phone: return DS.Color.primary
-            case .nameChange: return DS.Color.neonPurple
+            case .nameChange: return DS.Color.palm
             case .diwaniya: return DS.Color.gridDiwaniya
-            case .archive: return DS.Color.warning
-            case .deceased: return DS.Color.error
+            case .archive: return DS.Color.sadu
+            case .deceased: return DS.Color.slate
             case .children: return DS.Color.info
-            case .treeAdd: return DS.Color.success
-            case .treeEditName: return DS.Color.neonPurple
+            case .treeAdd: return DS.Color.palm
+            case .treeEditName: return DS.Color.palm
             case .treeEditPhone: return DS.Color.primary
-            case .treeEditBirth: return DS.Color.warning
-            case .treeDeceased: return DS.Color.error
-            case .treeAddDeathDate: return DS.Color.error
+            case .treeEditBirth: return DS.Color.palm
+            case .treeDeceased: return DS.Color.slate
+            case .treeAddDeathDate: return DS.Color.slate
             case .treeAddPhoto: return DS.Color.primary
             case .treeDelete: return DS.Color.error
             case .treeOther: return DS.Color.accent
-            case .photos: return DS.Color.neonBlue
-            case .projects: return DS.Color.neonPurple
+            case .photos: return DS.Color.sadu
+            case .projects: return DS.Color.accent
             case .healthOrphan: return DS.Color.error
             case .healthNoName: return DS.Color.warning
             case .healthBrokenParent: return DS.Color.info
@@ -396,7 +396,7 @@ struct AdminAllRequestsView: View {
                             } label: {
                                 HStack(spacing: DS.Spacing.xs) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(DS.Font.scaled(14, weight: .semibold))
+                                        .font(DS.Font.icon(14, weight: .semibold))
                                     Text(L10n.t("رفض", "Reject"))
                                         .font(DS.Font.calloutBold)
                                 }
@@ -417,7 +417,7 @@ struct AdminAllRequestsView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.xs) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(DS.Font.scaled(14, weight: .semibold))
+                                    .font(DS.Font.icon(14, weight: .semibold))
                                 Text(L10n.t("قبول", "Approve"))
                                     .font(DS.Font.calloutBold)
                             }
@@ -452,8 +452,8 @@ struct AdminAllRequestsView: View {
                         }
                     } label: {
                         Image(systemName: "checkmark.circle")
-                            .font(DS.Font.scaled(16, weight: .semibold))
-                            .foregroundColor(DS.Color.success)
+                            .font(DS.Font.icon(16, weight: .semibold))
+                            .foregroundColor(DS.Color.primary)
                     }
                     .accessibilityLabel(L10n.t("تحديد", "Select"))
                 }
@@ -1017,11 +1017,11 @@ struct AdminAllRequestsView: View {
                         }
                     } label: {
                         Image(systemName: "checkmark.circle")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundColor(DS.Color.success)
+                            .font(DS.Font.icon(13, weight: .bold))
+                            .foregroundColor(DS.Color.primary)
                             .frame(width: 36, height: 36)
-                            .background(Circle().fill(DS.Color.success.opacity(0.12)))
-                            .overlay(Circle().strokeBorder(DS.Color.success.opacity(0.25), lineWidth: 1))
+                            .background(Circle().fill(DS.Color.primary.opacity(0.12)))
+                            .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
                     }
                     .buttonStyle(DSScaleButtonStyle())
                     .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
@@ -1163,16 +1163,16 @@ struct AdminAllRequestsView: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(DS.Font.icon(13, weight: .bold))
+                    .foregroundColor(DS.Color.onTint)
                 Text(title)
                     .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.onTint)
                     .lineLimit(1)
                 if count > 0 {
                     Text("\(count)")
                         .font(DS.Font.scaled(11, weight: .black))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.onTint)
                         .frame(minWidth: 18, minHeight: 18)
                         .padding(.horizontal, 4)
                         .background(Capsule().fill(Color.white.opacity(0.28)))
@@ -1180,15 +1180,7 @@ struct AdminAllRequestsView: View {
             }
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, 8)
-            .background(
-                Capsule(style: .continuous).fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.82)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            )
+            .background(Capsule(style: .continuous).fill(color))
             .overlay(
                 Capsule(style: .continuous)
                     .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
@@ -1216,7 +1208,7 @@ struct AdminAllRequestsView: View {
         return Button(action: action) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                     .foregroundColor(color)
                     .frame(width: 38, height: 38)
                     .background(Circle().fill(color.opacity(0.10)))
@@ -1252,7 +1244,7 @@ struct AdminAllRequestsView: View {
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(DS.Font.scaled(14, weight: .semibold))
+                            .font(DS.Font.icon(14, weight: .semibold))
                         Text(L10n.t(
                             "الموافقة على الكل (\(adminRequestVM.childAddRequests.count))",
                             "Approve All (\(adminRequestVM.childAddRequests.count))"
@@ -1262,12 +1254,7 @@ struct AdminAllRequestsView: View {
                     .foregroundColor(DS.Color.textOnPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.sm)
-                    .background(
-                        LinearGradient(
-                            colors: [DS.Color.success, DS.Color.success.opacity(0.8)],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
+                    .background(DS.Color.successFill)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
                 .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
@@ -1492,7 +1479,7 @@ struct AdminAllRequestsView: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: allSelected ? "checkmark.circle.fill" : "circle.dotted")
-                        .font(DS.Font.scaled(15, weight: .semibold))
+                        .font(DS.Font.icon(15, weight: .semibold))
                     Text(allSelected
                         ? L10n.t("إلغاء تحديد الكل", "Deselect All")
                         : L10n.t("تحديد الكل (\(ids.count))", "Select All (\(ids.count))")
@@ -1532,12 +1519,7 @@ struct AdminAllRequestsView: View {
         return HStack(spacing: 0) {
             // شريط لوني جانبي يشير لنوع الطلب — لمسة احترافية
             Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [accentColor, accentColor.opacity(0.6)],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                )
+                .fill(accentColor)
                 .frame(width: 4)
 
             // المحتوى — قابل للنقر، يفتح تفاصيل الطلب
@@ -1554,7 +1536,7 @@ struct AdminAllRequestsView: View {
                 HStack(alignment: .center, spacing: DS.Spacing.sm) {
                     if isSelectMode {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .font(DS.Font.scaled(22, weight: .regular))
+                            .font(DS.Font.icon(22, weight: .regular))
                             .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
                             .transition(.scale.combined(with: .opacity))
                     }
@@ -1563,7 +1545,7 @@ struct AdminAllRequestsView: View {
                     // chevron — إشارة إن الكرت يفتح التفاصيل (تظهر خارج وضع التحديد)
                     if !isSelectMode {
                         Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.icon(13, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary.opacity(0.55))
                     }
                 }
@@ -1823,14 +1805,14 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
                     }
-                    .tint(DS.Color.info)
+                    .tint(DS.Color.primaryFill)
 
                     Button {
                         healthPhoneMember = member
                     } label: {
                         Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
                     }
-                    .tint(DS.Color.primary)
+                    .tint(DS.Color.primaryFill)
 
                     Button {
                         Task { await adminRequestVM.activateAccount(memberId: member.id) }
@@ -1867,7 +1849,7 @@ struct AdminAllRequestsView: View {
                 if let createdAt = member.createdAt {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "clock")
-                            .font(DS.Font.scaled(11, weight: .medium))
+                            .font(DS.Font.icon(11, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(formatRegistrationDate(createdAt))
                             .font(DS.Font.caption2)
@@ -1934,8 +1916,8 @@ struct AdminAllRequestsView: View {
             if let newDisplay = treeEditNewValue(payload: payload, action: action) {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.right.circle.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.success)
+                        .font(DS.Font.icon(11, weight: .bold))
+                        .foregroundColor(DS.Color.primary)
                     Text(L10n.t("القيمة الجديدة:", "New:")).font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
                     Text(newDisplay).font(DS.Font.caption1).fontWeight(.semibold).foregroundColor(DS.Color.textPrimary)
                     Spacer()
@@ -1945,7 +1927,7 @@ struct AdminAllRequestsView: View {
             if let date = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(date))
                         .font(DS.Font.caption2)
@@ -2065,7 +2047,7 @@ struct AdminAllRequestsView: View {
         case .add: return RequestTab.treeAdd.color
         case .editName: return RequestTab.treeEditName.color
         case .editPhone: return RequestTab.treeEditPhone.color
-        case .editBirth: return DS.Color.warning
+        case .editBirth: return DS.Color.palm
         case .deceased: return RequestTab.treeDeceased.color
         case .addDeathDate: return DS.Color.textTertiary
         case .addPhoto: return DS.Color.primary
@@ -2206,14 +2188,14 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("ربط", "Link"), systemImage: "link.badge.plus")
                     }
-                    .tint(DS.Color.info)
+                    .tint(DS.Color.primaryFill)
 
                     Button {
                         healthPhoneMember = member
                     } label: {
                         Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
                     }
-                    .tint(DS.Color.primary)
+                    .tint(DS.Color.primaryFill)
 
                     Button {
                         Task { await adminRequestVM.activateAccount(memberId: member.id) }
@@ -2351,7 +2333,7 @@ struct AdminAllRequestsView: View {
                     if let uname {
                         HStack(spacing: 3) {
                             Image(systemName: "at")
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .font(DS.Font.icon(11, weight: .bold))
                             Text(uname)
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
@@ -2362,7 +2344,7 @@ struct AdminAllRequestsView: View {
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "phone.fill")
-                                .font(DS.Font.scaled(11))
+                                .font(DS.Font.icon(11))
                             Text(KuwaitPhone.display(phone))
                                 .font(DS.Font.scaled(11, weight: .medium))
                                 .monospacedDigit()
@@ -2373,7 +2355,7 @@ struct AdminAllRequestsView: View {
                     // الوقت والتاريخ
                     HStack(spacing: 3) {
                         Image(systemName: "clock.fill")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                         Text(registrationTime)
                             .font(DS.Font.scaled(11, weight: .semibold))
                     }
@@ -2391,15 +2373,15 @@ struct AdminAllRequestsView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "message.fill")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(L10n.t("واتساب", "WhatsApp"))
                                     .font(DS.Font.scaled(11, weight: .bold))
                             }
                             .foregroundColor(.white)
                             .padding(.horizontal, DS.Spacing.sm)
                             .padding(.vertical, 6)
-                            .background(Capsule().fill(DS.Color.success))
-                            .shadow(color: DS.Color.success.opacity(0.30), radius: 4, x: 0, y: 2)
+                            .background(Capsule().fill(DS.Color.seaFill))
+                            .shadow(color: DS.Color.seaFill.opacity(0.30), radius: 4, x: 0, y: 2)
                         }
                         .buttonStyle(DSScaleButtonStyle())
                     }
@@ -2427,7 +2409,7 @@ struct AdminAllRequestsView: View {
                 VStack(spacing: DS.Spacing.xs) {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "person.2.fill")
-                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .font(DS.Font.icon(13, weight: .semibold))
                             .foregroundColor(DS.Color.primary)
                         Text(L10n.t(
                             "تطابق محتمل (\(orderedResults.count))",
@@ -2450,7 +2432,7 @@ struct AdminAllRequestsView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.xs) {
                                 Image(systemName: "chevron.down")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(L10n.t(
                                     "عرض الكل (\(orderedResults.count))",
                                     "Show all (\(orderedResults.count))"
@@ -2470,7 +2452,7 @@ struct AdminAllRequestsView: View {
             } else {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "person.badge.plus")
-                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .font(DS.Font.icon(12, weight: .semibold))
                         .foregroundColor(DS.Color.textSecondary)
                     Text(L10n.t("لا يوجد تطابق — اسم جديد", "No tree matches — new name"))
                         .font(DS.Font.scaled(11, weight: .bold))
@@ -2536,10 +2518,10 @@ struct AdminAllRequestsView: View {
                     if match.isRegistrationMatch {
                         Text(L10n.t("تسجيل", "Reg"))
                             .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(DS.Color.textOnPrimary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(DS.Color.primary)
+                            .background(DS.Color.primaryFill)
                             .clipShape(Capsule())
                     }
                 }
@@ -2548,7 +2530,7 @@ struct AdminAllRequestsView: View {
                 if let phone = match.member.phoneNumber, !phone.isEmpty {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "phone.fill")
-                            .font(DS.Font.scaled(11))
+                            .font(DS.Font.icon(11))
                         Text(KuwaitPhone.display(phone))
                             .font(DS.Font.scaled(11, weight: .medium))
                             .monospacedDigit()
@@ -2842,14 +2824,14 @@ struct AdminAllRequestsView: View {
             // التاريخ تحت + إشارة صور إن وُجدت
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "clock")
-                    .font(DS.Font.scaled(11, weight: .medium))
+                    .font(DS.Font.icon(11, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(formatRegistrationDate(String(post.created_at)))
                     .font(DS.Font.caption2)
                     .foregroundColor(DS.Color.textTertiary)
                 if !post.mediaURLs.isEmpty {
                     Image(systemName: "photo.fill")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text("\(post.mediaURLs.count)")
                         .font(DS.Font.caption2)
@@ -2890,7 +2872,7 @@ struct AdminAllRequestsView: View {
             // التاريخ تحت
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "clock")
-                    .font(DS.Font.scaled(11, weight: .medium))
+                    .font(DS.Font.icon(11, weight: .medium))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(request.createdAt.map { formatRegistrationDate($0) } ?? "—")
                     .font(DS.Font.caption2)
@@ -2931,7 +2913,7 @@ struct AdminAllRequestsView: View {
                     .strikethrough()
                     .monospacedDigit()
                 Image(systemName: "arrow.forward")
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(newPhone)
                     .font(DS.Font.caption1)
@@ -2944,7 +2926,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -2991,7 +2973,7 @@ struct AdminAllRequestsView: View {
     private func archiveRow(for item: ArchiveItem) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: item.categoryIcon, color: DS.Color.warning, size: 36)
+                iconCircle(icon: item.categoryIcon, color: DS.Color.sadu, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("عنصر أرشيف", "Archive Item"))
@@ -3024,7 +3006,7 @@ struct AdminAllRequestsView: View {
     private func deceasedRow(for request: AdminRequest) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "bolt.heart.fill", color: DS.Color.error, size: 36)
+                iconCircle(icon: "bolt.heart.fill", color: DS.Color.slate, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("تسجيل وفاة", "Deceased"))
@@ -3054,7 +3036,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3099,7 +3081,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3160,7 +3142,7 @@ struct AdminAllRequestsView: View {
                 if let createdAt = request.createdAt {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "clock")
-                            .font(DS.Font.scaled(11, weight: .medium))
+                            .font(DS.Font.icon(11, weight: .medium))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(formatRegistrationDate(String(createdAt)))
                             .font(DS.Font.caption2)
@@ -3190,7 +3172,7 @@ struct AdminAllRequestsView: View {
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // الصف الأول: الأيقونة + الاسم + البادج
             HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple, size: 36)
+                iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.palm, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isFamily ? L10n.t("تغيير العائلة", "Family Change") : L10n.t("تغيير اسم", "Name Change"))
@@ -3214,7 +3196,7 @@ struct AdminAllRequestsView: View {
             // الاسم: الحالي ← الجديد (سطر مدمج)
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "arrow.forward")
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(newName)
                     .font(DS.Font.caption1)
@@ -3227,7 +3209,7 @@ struct AdminAllRequestsView: View {
             if let createdAt = request.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(formatRegistrationDate(String(createdAt)))
                         .font(DS.Font.caption2)
@@ -3325,7 +3307,7 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.textSecondary)
                     Text(KuwaitPhone.display(request.newValue))
                         .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.success)
+                        .foregroundColor(DS.Color.primary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, DS.Spacing.lg)
@@ -3392,12 +3374,12 @@ struct AdminAllRequestsView: View {
                     CachedAsyncImage(url: url) { img in
                         img.resizable().scaledToFill()
                     } placeholder: {
-                        iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 36)
+                        iconCircle(icon: "briefcase.fill", color: DS.Color.accent, size: 36)
                     }
                     .frame(width: 36, height: 36)
                     .clipShape(Circle())
                 } else {
-                    iconCircle(icon: "briefcase.fill", color: DS.Color.neonPurple, size: 36)
+                    iconCircle(icon: "briefcase.fill", color: DS.Color.accent, size: 36)
                 }
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
@@ -3424,7 +3406,7 @@ struct AdminAllRequestsView: View {
             if let date = project.createdAt {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock")
-                        .font(DS.Font.scaled(11, weight: .medium))
+                        .font(DS.Font.icon(11, weight: .medium))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(L10n.t("أُضيف: \(formatRegistrationDate(date))", "Added: \(formatRegistrationDate(date))"))
                         .font(DS.Font.caption2)
@@ -3440,27 +3422,19 @@ struct AdminAllRequestsView: View {
     // MARK: - Shared Components
 
     private func accentBar(color: Color) -> some View {
-        LinearGradient(
-            colors: [color, color.opacity(0.7)],
-            startPoint: .leading, endPoint: .trailing
-        )
-        .frame(height: 4)
-        .cornerRadius(DS.Radius.full)
+        color
+            .frame(height: 4)
+            .cornerRadius(DS.Radius.full)
     }
 
     private func iconCircle(icon: String, color: Color, size: CGFloat = 44) -> some View {
         ZStack {
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [color.opacity(0.2), color.opacity(0.08)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
+                .fill(color.opacity(DS.Icon.opacity))
                 .frame(width: size, height: size)
             Image(systemName: icon)
                 .foregroundColor(color)
-                .font(DS.Font.scaled(size * 0.4, weight: .semibold))
+                .font(DS.Font.icon(size * 0.4, weight: .semibold))
         }
     }
 
@@ -3482,7 +3456,7 @@ struct AdminAllRequestsView: View {
     private func detailRow(icon: String, text: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(12, weight: .medium))
+                .font(DS.Font.icon(12, weight: .medium))
                 .foregroundColor(DS.Color.textTertiary)
                 .frame(width: 18)
             Text(text)
@@ -3592,7 +3566,7 @@ struct AdminAllRequestsView: View {
                          timestamp: m.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: m.avatarUrl)
         case .news(let p):
-            return .init(icon: "newspaper.fill", color: DS.Color.warning,
+            return .init(icon: "newspaper.fill", color: DS.Color.accent,
                          title: L10n.t("خبر بانتظار الاعتماد", "Pending News"),
                          timestamp: formatRegistrationDate(String(p.created_at)))
         case .report(let r):
@@ -3604,7 +3578,7 @@ struct AdminAllRequestsView: View {
                          title: L10n.t("تغيير رقم هاتف", "Phone Change"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
         case .nameChange(let r):
-            return .init(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.neonPurple,
+            return .init(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.palm,
                          title: r.requestType == RequestType.familyChange.rawValue
                             ? L10n.t("تغيير العائلة", "Family Change") : L10n.t("تغيير اسم", "Name Change"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
@@ -3613,7 +3587,7 @@ struct AdminAllRequestsView: View {
                          title: L10n.t("طلب ديوانية", "Diwaniya Request"),
                          timestamp: nil)
         case .deceased(let r):
-            return .init(icon: "bolt.heart.fill", color: DS.Color.error,
+            return .init(icon: "bolt.heart.fill", color: DS.Color.slate,
                          title: L10n.t("تسجيل وفاة", "Deceased"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
         case .child(let r):
@@ -3626,12 +3600,12 @@ struct AdminAllRequestsView: View {
                          timestamp: r.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: r.newValue)
         case .project(let p):
-            return .init(icon: "briefcase.fill", color: DS.Color.neonPurple,
+            return .init(icon: "briefcase.fill", color: DS.Color.accent,
                          title: L10n.t("طلب مشروع", "Project Request"),
                          timestamp: p.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: p.logoUrl)
         case .archive(let a):
-            return .init(icon: a.categoryIcon, color: DS.Color.warning,
+            return .init(icon: a.categoryIcon, color: DS.Color.sadu,
                          title: L10n.t("عنصر أرشيف", "Archive Item"),
                          timestamp: nil,
                          imageUrl: a.thumbnailUrl)
@@ -3668,17 +3642,12 @@ struct AdminAllRequestsView: View {
                     .shadow(color: color.opacity(0.25), radius: 10, x: 0, y: 5)
                 } else {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [color, color.opacity(0.75)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(color)
                         .frame(width: 72, height: 72)
                         .shadow(color: color.opacity(0.35), radius: 10, x: 0, y: 5)
                     Image(systemName: icon)
                         .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.onTint)
                 }
             }
 
@@ -3689,7 +3658,7 @@ struct AdminAllRequestsView: View {
             if let timestamp {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(timestamp)
                         .font(DS.Font.scaled(11, weight: .semibold))
                 }
@@ -3713,11 +3682,11 @@ struct AdminAllRequestsView: View {
             }
             if let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines), !birth.isEmpty {
                 infoCard(icon: "calendar", label: L10n.t("تاريخ الميلاد", "Birth Date"),
-                         value: birth, color: DS.Color.neonPurple)
+                         value: birth, color: DS.Color.palm)
             }
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
-                         value: KuwaitPhone.display(phone), color: DS.Color.success)
+                         value: KuwaitPhone.display(phone), color: DS.Color.sea)
             }
             // تعديل / إضافة رقم فعلي قبل الربط
             if authVM.canModerate {
@@ -3726,12 +3695,12 @@ struct AdminAllRequestsView: View {
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "phone.badge.plus")
-                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .font(DS.Font.icon(13, weight: .semibold))
                         Text(L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"))
                             .font(DS.Font.scaled(13, weight: .bold))
                         Spacer()
                         Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                     .foregroundColor(DS.Color.primary)
@@ -3810,7 +3779,7 @@ struct AdminAllRequestsView: View {
             }
             if let address = diwaniya.address, !address.isEmpty {
                 infoCard(icon: "mappin.and.ellipse", label: L10n.t("العنوان", "Address"),
-                         value: address, color: DS.Color.error)
+                         value: address, color: DS.Color.palm)
             }
 
         case .deceased(let request):
@@ -3841,7 +3810,7 @@ struct AdminAllRequestsView: View {
 
         case .project(let project):
             infoCard(icon: "briefcase.fill", label: L10n.t("اسم المشروع", "Project"),
-                     value: project.title, color: DS.Color.neonPurple)
+                     value: project.title, color: DS.Color.accent)
             infoCard(icon: "person.fill", label: L10n.t("صاحب المشروع", "Owner"),
                      value: project.ownerName, color: DS.Color.primary)
             if let desc = project.description, !desc.isEmpty {
@@ -3852,7 +3821,7 @@ struct AdminAllRequestsView: View {
             // روابط التواصل
             if let wa = project.whatsappNumber, !wa.isEmpty, let url = KuwaitPhone.whatsappURL(wa) {
                 contactLinkCard(icon: "message.fill", label: L10n.t("واتساب", "WhatsApp"),
-                                value: KuwaitPhone.display(wa), color: DS.Color.success, url: url)
+                                value: KuwaitPhone.display(wa), color: DS.Color.sea, url: url)
             }
             if let phone = project.phoneNumber, !phone.isEmpty, let url = KuwaitPhone.telURL(phone) {
                 contactLinkCard(icon: "phone.fill", label: L10n.t("هاتف", "Phone"),
@@ -3873,17 +3842,17 @@ struct AdminAllRequestsView: View {
             }
             if let sc = project.snapchatUrl, !sc.isEmpty, let url = socialURL(sc, base: "https://snapchat.com/add/") {
                 contactLinkCard(icon: "camera.viewfinder", label: L10n.t("سناب شات", "Snapchat"),
-                                value: sc, color: DS.Color.warning, url: url)
+                                value: sc, color: DS.Color.accent, url: url)
             }
             if let loc = project.locationUrl, !loc.isEmpty,
                let url = URL(string: loc.lowercased().hasPrefix("http") ? loc : "https://\(loc)") {
                 contactLinkCard(icon: "mappin.and.ellipse", label: L10n.t("الموقع الجغرافي", "Location"),
-                                value: L10n.t("فتح الخريطة", "Open map"), color: DS.Color.error, url: url)
+                                value: L10n.t("فتح الخريطة", "Open map"), color: DS.Color.palm, url: url)
             }
 
         case .archive(let item):
             infoCard(icon: "textformat", label: L10n.t("العنوان", "Title"),
-                     value: item.title, color: DS.Color.warning)
+                     value: item.title, color: DS.Color.sadu)
             infoCard(icon: item.categoryIcon, label: L10n.t("القسم", "Category"),
                      value: item.categoryDisplayName,
                      color: DS.Color.info)
@@ -3926,14 +3895,14 @@ struct AdminAllRequestsView: View {
                          value: memberName, color: DS.Color.primary)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Death Date"),
-                             value: death, color: DS.Color.error)
+                             value: death, color: DS.Color.slate)
                 }
             case .addDeathDate:
                 infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
                          value: memberName, color: DS.Color.primary)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Death Date"),
-                             value: death, color: DS.Color.error)
+                             value: death, color: DS.Color.slate)
                 }
             case .addPhoto:
                 infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
@@ -3943,7 +3912,7 @@ struct AdminAllRequestsView: View {
                 }
             case .add:
                 infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
-                         value: payload?.newMemberName ?? memberName, color: DS.Color.success)
+                         value: payload?.newMemberName ?? memberName, color: DS.Color.palm)
                 if let parent = payload?.parentMemberName, !parent.isEmpty {
                     infoCard(icon: "person.2.fill", label: L10n.t("الأب", "Father"),
                              value: parent, color: DS.Color.primary)
@@ -3956,7 +3925,7 @@ struct AdminAllRequestsView: View {
                          value: memberName, color: DS.Color.primary)
                 if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
                     infoCard(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New Birth Date"),
-                             value: newDate, color: DS.Color.warning)
+                             value: newDate, color: DS.Color.palm)
                 }
             case .other:
                 infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
@@ -3993,12 +3962,12 @@ struct AdminAllRequestsView: View {
                 infoCard(icon: "phone.fill",
                          label: L10n.t("رقم الهاتف", "Phone"),
                          value: KuwaitPhone.display(phone),
-                         color: DS.Color.success)
+                         color: DS.Color.sea)
                 if let wa = KuwaitPhone.whatsappURL(phone) {
                     contactLinkCard(icon: "message.fill",
                                     label: L10n.t("تواصل واتساب", "WhatsApp"),
                                     value: KuwaitPhone.display(phone),
-                                    color: DS.Color.success, url: wa)
+                                    color: DS.Color.sea, url: wa)
                 }
             } else {
                 infoCard(icon: "phone.slash", label: L10n.t("رقم الهاتف", "Phone"),
@@ -4015,7 +3984,7 @@ struct AdminAllRequestsView: View {
                     .fill(color.opacity(0.15))
                     .frame(width: 36, height: 36)
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.icon(13, weight: .bold))
                     .foregroundColor(color)
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -4049,7 +4018,7 @@ struct AdminAllRequestsView: View {
                 ZStack {
                     Circle().fill(color.opacity(0.15)).frame(width: 36, height: 36)
                     Image(systemName: icon)
-                        .font(DS.Font.scaled(13, weight: .bold))
+                        .font(DS.Font.icon(13, weight: .bold))
                         .foregroundColor(color)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -4063,7 +4032,7 @@ struct AdminAllRequestsView: View {
                 }
                 Spacer()
                 Image(systemName: "arrow.up.forward")
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                     .foregroundColor(color.opacity(0.7))
             }
             .padding(DS.Spacing.md)
@@ -4093,7 +4062,7 @@ struct AdminAllRequestsView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                     .foregroundColor(DS.Color.textSecondary)
                 Text(label)
                     .font(DS.Font.scaled(11, weight: .semibold))
@@ -4123,7 +4092,7 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 ZStack {
                     Circle().fill(DS.Color.error.opacity(0.12)).frame(width: 32, height: 32)
-                    Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+                    Image(systemName: icon).font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.error)
                 }
                 VStack(alignment: .leading, spacing: 1) {
@@ -4139,7 +4108,7 @@ struct AdminAllRequestsView: View {
             HStack(spacing: 4) {
                 Spacer()
                 Image(systemName: "arrow.down")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
                 Spacer()
             }
@@ -4147,7 +4116,7 @@ struct AdminAllRequestsView: View {
             HStack(spacing: DS.Spacing.sm) {
                 ZStack {
                     Circle().fill(DS.Color.success.opacity(0.15)).frame(width: 32, height: 32)
-                    Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+                    Image(systemName: icon).font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.success)
                 }
                 VStack(alignment: .leading, spacing: 1) {
@@ -4199,7 +4168,7 @@ struct AdminAllRequestsView: View {
                             showRejectReason = true
                         } label: {
                             HStack(spacing: 5) {
-                                Image(systemName: "xmark").font(DS.Font.scaled(12, weight: .bold))
+                                Image(systemName: "xmark").font(DS.Font.icon(12, weight: .bold))
                                 Text(L10n.t("رفض", "Reject")).font(DS.Font.scaled(14, weight: .bold))
                             }
                             .foregroundColor(DS.Color.error)
@@ -4216,21 +4185,14 @@ struct AdminAllRequestsView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: approveIconFor(detail))
-                                .font(DS.Font.scaled(12, weight: .bold))
+                                .font(DS.Font.icon(12, weight: .bold))
                             Text(approveLabelFor(detail))
                                 .font(DS.Font.scaled(14, weight: .bold))
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    colors: [DS.Color.success, DS.Color.success.opacity(0.85)],
-                                    startPoint: .leading, endPoint: .trailing
-                                )
-                            )
-                        )
+                        .background(Capsule().fill(DS.Color.successFill))
                         .shadow(color: DS.Color.success.opacity(0.35), radius: 6, x: 0, y: 3)
                     }
                     .buttonStyle(.plain)
@@ -4243,7 +4205,7 @@ struct AdminAllRequestsView: View {
                         deleteConfirmDetail = detail
                     } label: {
                         HStack(spacing: 5) {
-                            Image(systemName: "trash").font(DS.Font.scaled(11, weight: .bold))
+                            Image(systemName: "trash").font(DS.Font.icon(11, weight: .bold))
                             Text(L10n.t("حذف نهائي", "Delete Permanently"))
                                 .font(DS.Font.scaled(13, weight: .bold))
                         }

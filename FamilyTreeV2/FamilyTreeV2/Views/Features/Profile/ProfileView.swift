@@ -298,15 +298,9 @@ struct ProfileView: View {
                     .frame(width: 110, height: 110)
                     .dsGlowShadow()
                 
-                // حلقة gradient
+                // حلقة بلون واحد (الهوية: بلا تدرّج)
                 Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [DS.Color.primary, DS.Color.secondary, DS.Color.primary],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 3
-                    )
+                    .stroke(DS.Color.primary, lineWidth: 3)
                     .frame(width: 106, height: 106)
 
                 if let urlStr = user.avatarUrl, let url = URL(string: urlStr) {
@@ -335,7 +329,7 @@ struct ProfileView: View {
                             .foregroundColor(DS.Color.textPrimary)
                         + Text("  ")
                         + Text(Image(systemName: "pencil.circle.fill"))
-                            .font(DS.Font.scaled(20, weight: .bold))
+                            .font(DS.Font.icon(20, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                     )
                     .multilineTextAlignment(.center)
@@ -368,7 +362,7 @@ struct ProfileView: View {
                     if totalChildren > 0 {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "person.2.fill")
-                                .font(DS.Font.scaled(11, weight: .semibold))
+                                .font(DS.Font.icon(11, weight: .semibold))
                             Text("\(totalChildren) " + L10n.t("من العائلة", "family"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
@@ -398,7 +392,7 @@ struct ProfileView: View {
                     // عنوان القسم
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "info.circle.fill")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                             .foregroundColor(DS.Color.textSecondary)
                         Text(L10n.t("المعلومات الشخصية", "Personal Info"))
                             .font(DS.Font.scaled(13, weight: .semibold))
@@ -415,7 +409,7 @@ struct ProfileView: View {
                     Button(action: { showQRScanner = true }) {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "camera.viewfinder")
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .font(DS.Font.icon(11, weight: .bold))
                             Text(L10n.t("مسح", "Scan"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
@@ -432,7 +426,7 @@ struct ProfileView: View {
                     Button(action: { showQRCode = true }) {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "qrcode")
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .font(DS.Font.icon(11, weight: .bold))
                             Text(L10n.t("رمز QR", "QR Code"))
                                 .font(DS.Font.scaled(11, weight: .bold))
                         }
@@ -512,7 +506,7 @@ struct ProfileView: View {
     private func infoGridCell(icon: String, color: Color, title: String, value: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(16, weight: .bold))
+                .font(DS.Font.icon(16, weight: .bold))
                 .foregroundColor(color)
                 .frame(width: 36, height: 36)
                 .background(color.opacity(0.12))
@@ -575,7 +569,7 @@ struct ProfileView: View {
                 DSSectionHeader(
                     title: L10n.t("المفضلة", "Favorites"),
                     icon: "heart.fill",
-                    iconColor: DS.Color.error
+                    iconColor: DS.Color.sadu
                 )
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -639,7 +633,7 @@ struct ProfileView: View {
                     .fill(info.color.opacity(0.12))
                     .frame(width: 36, height: 36)
                 Image(systemName: info.icon)
-                    .font(DS.Font.scaled(14, weight: .semibold))
+                    .font(DS.Font.icon(14, weight: .semibold))
                     .foregroundColor(info.color)
             }
 
@@ -659,7 +653,7 @@ struct ProfileView: View {
                 // badge «تحت المراجعة» — نفس نمط الديوانيات
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "clock.badge.questionmark")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(L10n.t("تحت المراجعة", "Under Review"))
                         .font(DS.Font.scaled(11, weight: .bold))
                 }
@@ -724,7 +718,7 @@ struct ProfileView: View {
             return .init(icon: "heart.slash", color: DS.Color.textTertiary,
                          title: L10n.t("تسجيل وفاة", "Deceased report"), target: targetName)
         case RequestType.childAdd.rawValue:
-            return .init(icon: "person.badge.plus", color: DS.Color.success,
+            return .init(icon: "person.badge.plus", color: DS.Color.palm,
                          title: L10n.t("إضافة ابن", "Add child"), target: targetName)
         default:
             return .init(icon: "clock", color: DS.Color.warning,
@@ -734,10 +728,10 @@ struct ProfileView: View {
 
     private func treeEditColor(for action: TreeEditAction?) -> Color {
         switch action {
-        case .add: return DS.Color.success
+        case .add: return DS.Color.palm
         case .editName: return DS.Color.info
         case .editPhone: return DS.Color.primary
-        case .editBirth: return DS.Color.warning
+        case .editBirth: return DS.Color.palm
         case .deceased, .addDeathDate: return DS.Color.textTertiary
         case .addPhoto: return DS.Color.primary
         case .delete: return DS.Color.error
@@ -774,7 +768,7 @@ struct ProfileView: View {
                         } label: {
                             HStack(spacing: DS.Spacing.xs) {
                                 Image(systemName: isReorderingChildren ? "checkmark" : "arrow.up.arrow.down")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(isReorderingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"))
                                     .font(DS.Font.scaled(11, weight: .bold))
                             }
@@ -819,7 +813,7 @@ struct ProfileView: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(16, weight: .bold))
+                    .font(DS.Font.icon(16, weight: .bold))
                     .foregroundColor(color)
                     .frame(width: 36, height: 36)
                     .background(color.opacity(0.12))
@@ -905,7 +899,7 @@ struct ProfileView: View {
                 Button { showAddChild = true } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "plus")
-                            .font(DS.Font.scaled(16, weight: .bold))
+                            .font(DS.Font.icon(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 36, height: 36)
                             .background(DS.Color.primary.opacity(0.12))
@@ -1118,7 +1112,7 @@ struct ProfileView: View {
                     // الحالة الافتراضية: إرشاد بلا أي أسماء
                     VStack(spacing: DS.Spacing.md) {
                         Image(systemName: "magnifyingglass")
-                            .font(DS.Font.scaled(36, weight: .regular))
+                            .font(DS.Font.icon(36, weight: .regular))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("اكتب الاسم الرباعي الصحيح لزوجتك",
                                     "Type your wife's full name"))
@@ -1135,7 +1129,7 @@ struct ProfileView: View {
                 } else if list.isEmpty {
                     VStack(spacing: DS.Spacing.md) {
                         Image(systemName: "person.fill.questionmark")
-                            .font(DS.Font.scaled(36, weight: .regular))
+                            .font(DS.Font.icon(36, weight: .regular))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("ما لقينا اسماً مطابقاً", "No matching name"))
                             .font(DS.Font.callout)
@@ -1158,6 +1152,7 @@ struct ProfileView: View {
                                 .font(DS.Font.calloutBold)
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(DS.Color.primaryFill)
                         .padding(.top, DS.Spacing.xs)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1278,7 +1273,7 @@ struct ProfileView: View {
         ZStack {
             DS.Color.primary.opacity(0.08)
             Image(systemName: "person.fill")
-                .font(DS.Font.scaled(16, weight: .bold))
+                .font(DS.Font.icon(16, weight: .bold))
                 .foregroundColor(DS.Color.primary.opacity(0.6))
         }
     }
@@ -1363,7 +1358,8 @@ struct ProfileView: View {
     private func reorderIndexBadge(_ number: Int, color: Color) -> some View {
         Text("\(number)")
             .font(DS.Font.scaled(13, weight: .bold))
-            .foregroundColor(DS.Color.textOnPrimary)
+            // اللون متكيّف (primary / neonPink / error) يفتح في الداكن — النص onTint لا الأبيض
+            .foregroundColor(DS.Color.onTint)
             .frame(width: 28, height: 28)
             .background(color.opacity(0.8))
             .clipShape(Circle())
@@ -1390,7 +1386,7 @@ struct ProfileView: View {
         VStack(spacing: 4) {
             Button(action: up) {
                 Image(systemName: "chevron.up")
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                     .foregroundColor(canUp ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
@@ -1400,7 +1396,7 @@ struct ProfileView: View {
 
             Button(action: down) {
                 Image(systemName: "chevron.down")
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                     .foregroundColor(canDown ? DS.Color.primary : DS.Color.textTertiary.opacity(0.3))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
@@ -1433,14 +1429,14 @@ struct ProfileView: View {
                     image.resizable().scaledToFill()
                 } placeholder: {
                     Image(systemName: info.name)
-                        .font(DS.Font.scaled(iconFont, weight: .bold))
+                        .font(DS.Font.icon(iconFont, weight: .bold))
                         .foregroundColor(info.color)
                 }
                 .frame(width: size, height: size)
                 .clipShape(Circle())
             } else {
                 Image(systemName: info.name)
-                    .font(DS.Font.scaled(iconFont, weight: .bold))
+                    .font(DS.Font.icon(iconFont, weight: .bold))
                     .foregroundColor(info.color)
                     .frame(width: size, height: size)
                     .background(info.color.opacity(0.12))
@@ -1457,7 +1453,7 @@ struct ProfileView: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .font(DS.Font.icon(15, weight: .semibold))
                 Text(L10n.t("تسجيل الخروج", "Sign Out"))
                     .font(DS.Font.calloutBold)
             }

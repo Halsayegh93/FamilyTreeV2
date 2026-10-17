@@ -196,21 +196,34 @@ IMPORTANT: All UI must use the centralized `DS` enum from `Components/Shared/Des
 
 Visual identity (October 2026) follows the designer's guide: navy #172536, gold #B89A5A, cream #F2EBDD. The token names and values match the website (`familytree-web/src/app/globals.css`) and the «المحمدعلي» design system. Values are light / dark.
 
-- **Brand:** `primary` navy (#172536 / #7FA8D6), `primaryDark` (#0F1824 / #2B5F90), `primaryLight` (#5D6672 / #A9C4E4), `accent` = gold-text for text on light surfaces (#725D31 / #B89A5A), `accentDark` (#5A4927 / #9C8045), `accentLight` = gold for lines and frames (#B89A5A in both modes). `secondary` (forest green) stays a supporting color.
+- **Brand:** `primary` navy (#172536 / #7FA8D6), `primaryDark` (#0F1824 / #2B5F90), `primaryLight` (#5D6672 / #A9C4E4), `accent` = gold-text for text on light surfaces (#725D31 / #B89A5A), `accentDark` (#5A4927 / #9C8045), `accentLight` = gold for lines and frames (#B89A5A in both modes). `secondary` = `palm` (family green).
 - **Gold rule:** gold text on light backgrounds uses `accent` (#725D31); the brighter #B89A5A is text only on navy.
-- **Supporting accents:** `neonBlue` (#172536, band), `neonPurple` (slate), `neonCyan` (forest), `neonPink` (burgundy rose)
-- **Semantic:** `success` (#216C4F), `warning` (#875C0A), `error` (#C0282A), `info` (= `primary`). Red badges and pills with white text use `errorFill` (#C0282A in both modes); `error` is for text and icons.
-- **Surfaces:** `background` sand (#FCF7EC / #14171C), `surface` and `cardBackground` white (#FFFFFF / #1C1F25), `cardBackgroundSoft` cream (#F2EBDD / #23272E), `cardBorder` line (#DCCFB4 / #343A44), `cardBorderStrong` line-strong (#8A7B60 / #6B7380) for edges that must be visible (buttons, fields)
-- **Text:** `textPrimary` ink (#172536 / #FFFFFF), `textSecondary` ink-muted (#4A5560 / #C9CED5), `textTertiary`, `textOnPrimary`
-- **Grid:** `gridTree` (= `primary`), `gridAlerts` (= `error`), `gridDiwaniya` (= `secondary`), `gridContact` (= `accent`)
-- **Gradients:** `gradientPrimary`, `gradientAccent`, `gradientWarm`, `gradientCool`, `gradientDark`, `gradientAuth`, `gradientFire`, `gradientOcean`, `gradientNeon`. The identity uses flat color: `gradientPrimary` (navy #172536; #2B5F90 in dark so buttons and selected states stand out from dark cards) and `gradientAccent` are solid fills that keep their names for compatibility. Headers and hero panels use `gradientBand` (band: #172536; #1B2638 in dark, as on the website). Use these as fills only; navy text and icons use `primary`. Cards, buttons and fields have no glass; Liquid Glass stays on the tab bar, `dsGlass` and `glassPill()`.
+- **Navy-and-gold family (عائلة الكحلي والذهبي) — the section and category colours.** The same colours the app always had (green, petrol, burgundy, slate, gold, navy), each kept in its hue but brought to one depth with a navy undertone, so they read as one family with the designer's navy and gold. Each has a text/icon colour (readable on white, black and dark cards), a `…Fill` for solid backgrounds under white text (fixed in both modes) and a `…Deep` for the tile gradient. The token names `palm`, `sea`, `sadu` and `slate` are kept for compatibility:
+  - `palm` family green (#2C614B / #9ACBB1, fill #2C5846 → #10302B): family tree, members, kinship, Diwaniya cards. `secondary`, `neonCyan` point here.
+  - `sea` petrol (#2C5D69 / #9AC6D2, fill #2C5460 → #112E3A): communication — messages, contact, phone. `gridContact`, `gridMessaging`.
+  - `sadu` burgundy (#7B414A / #EAAAAF, fill #693940 → #382028): library, archive, photos. `neonPink`.
+  - `slate` (#56606B / #B4BCC5, fill #4D5B67 → #333F49): neutral and pending. `neonPurple`, `pendingRole`.
+  - Tiles also use `navyFill` (#324561 → #17263C) and `goldFill` (#806631 → #40351E).
+  - Home tiles (`tileTree`…`tileContact`): green, navy, burgundy, gold, petrol — a tonal gradient from fill to deep, a navy veil at the bottom, a gold ring around the icon and the large watermark icon in gold. No Sadu diamonds on the tiles; the header keeps its white Sadu strip.
+  - Roles keep their earlier hues at the family depth: owner plum (#594C7A / #C2B5E4), admin rose (#7E3F42 / #EDA9A8), monitor green (#286153 / #97CBB9), supervisor gold (#6C4F20 / #D9B88A), member blue (#32587C / #9DC2E7), pending slate. Publicly the owner shows the admin colour.
+  - News types keep their earlier hues too: wedding rose (#944E62 / #F7ACBD; also `newsReminder` and `likeAction`), birth green (#316145 / #9DCBAC), death grey (#53545D / #BDBDC5), vote slate-blue (#415673 / #ABBFDD), invitation burgundy (#7C3E4C / #ECA8B2), announcement navy, congrats gold. `currentLocation` green (#2C623B / #9ACDA1), `female` rose (#92526F / #F4B1CB).
+  - Rule: family colours are for sections and categories (pick by meaning). `success` / `warning` / `error` are only for real statuses (approved, pending, rejected, errors, destructive actions).
+- **Semantic:** `success` (#216C4F), `warning` (#875C0A), `error` (#C0282A), `info` (#1F6FA3 / #5FA8DA — neutral notices and help links). Red badges and pills with white text use `errorFill` (#C0282A in both modes); `error` is for text and icons. Green and amber fills under white text use `successFill` / `warningFill`.
+- **Fills under white text:** white (`textOnPrimary`) sits on `primaryFill` (#172536 / #2B5F90), never on `primary`, which lightens to #7FA8D6 in dark. On an adaptive colour that lightens in dark (palm, role colours, `info`…) use `onTint` for the text instead. `deceased` is `slate`; shapes under white use `deceasedFill` (= `slateFill`).
+- **Surfaces:** `background` pure white / pure black (#FFFFFF / #000000), `surface` and `cardBackground` white (#FFFFFF / #1C1F25) — cards keep their border and shadow so they still lift off the white ground, `cardBackgroundSoft` cream (#F2EBDD / #23272E), `cardBorder` line (#DCCFB4 / #343A44), `cardBorderStrong` line-strong (#8A7B60 / #6B7380) for edges that must be visible (buttons, fields)
+- **Text:** `textPrimary` ink (#172536 / #FFFFFF), `textSecondary` ink-muted (#4A5560 / #C9CED5), `textTertiary` ink-subtle (#6B7280 / #8A93A0), `textOnPrimary`. On band (headers, hero panels) secondary text is gold `accentLight`, not white at 70–85%.
+- **Grid:** `gridTree` (= `primary`), `gridAlerts` (= `error`), `gridDiwaniya` (= `secondary`, palm), `gridContact` (= `sea`)
+- **Gradients:** `gradientPrimary`, `gradientAccent`, `gradientWarm`, `gradientCool`, `gradientDark`, `gradientAuth`, `gradientFire`, `gradientOcean`, `gradientNeon`. The older names are now tonal gradients inside one family colour (fill → deep), never a mix of two colours. The identity uses flat color: `gradientPrimary` (navy #172536; #2B5F90 in dark so buttons and selected states stand out from dark cards) and `gradientAccent` are solid fills that keep their names for compatibility. Headers and hero panels use `gradientBand` (band: #172536; #1B2638 in dark, as on the website). Use these as fills only; navy text and icons use `primary`. Controls and cards are filled with one solid colour — no gradients; the only gradients are the home section tiles (same hue, fill → deep), the projects backdrop that carries the projects tile, and fading gold hairlines. Tinted icon circles use the colour at 15% (`DS.Icon.opacity`). Cards, buttons and fields have no glass; Liquid Glass stays on the tab bar, `dsGlass` and `glassPill()`.
 - Hex colors via `Color(hex: "#XXXXXX")` extension
 
 ### Typography — `DS.Font`
 
-- IBM Plex Sans Arabic for all UI text, titles and body (`DS.Font.Plex.*`, `Font.custom(_:size:relativeTo:)` so Dynamic Type still works). `DS.Font.scaled()` stays on the system font.
-- Scale: `hero`, `largeTitle`, `title1`-`title3`, `headline`, `body`, `bodyBold`, `callout`, `calloutBold`, `subheadline`, `footnote`, `caption1`, `caption2`
-- Dynamic Type: use `DS.Font.scaled(size, weight:)` instead of `.system(size:)` — maps sizes to appropriate text styles
+- IBM Plex Sans Arabic everywhere — the app, the website and PDFs — for all text, titles and body (`DS.Font.Plex.*`, `Font.custom(_:size:relativeTo:)` so Dynamic Type still works). Weights 400/500/600/700 only: light/regular → Regular, medium → Medium, semibold → SemiBold, bold/heavy/black → Bold.
+- Scale: `hero`, `largeTitle`, `title1`-`title3`, `headline`, `body`, `bodyBold`, `callout`, `calloutBold`, `subheadline`, `footnote`, `caption1` (500), `caption2` (600)
+- Dynamic Type: use `DS.Font.scaled(size, weight:)` (or `DS.Font.plex`) instead of `.system(size:)` — it returns Plex at that size, scaling with the text style mapped from the size. Its `design:` argument is ignored.
+- SF Symbols: style `Image(systemName:)` with `DS.Font.icon(size, weight:)` — the system font by text style, so symbols keep their size. Never put text on `icon()`.
+- Fixed-size text inside tree nodes: `DS.Font.plexFixed(size, weight:)` (no Dynamic Type), never `.system(size:)`.
+- PDFs and other UIKit drawing: `UIFont(name: DS.Font.Plex.bold, size:)` etc.
 
 ### Spacing — `DS.Spacing`
 
@@ -223,6 +236,10 @@ Visual identity (October 2026) follows the designer's guide: navy #172536, gold 
 ### Icons — `DS.Icon`
 
 - SF Symbols only. Sizes: `size: 46`, `sizeSm: 38`, `sizeLg: 58`, `opacity: 0.15`
+
+### Logo
+
+- The family's flat «المحمدعلي» mark: `Image("FamilyLogoNavy")` (navy; cream in dark mode) on light grounds, `Image("FamilyLogoCream")` on band (the splash). Never in a circle or badge, never shadowed or glowing; at least 32pt tall, with a quarter of its height clear on every side. The app icon (`AppIcon`, `AppIconImage`) is separate.
 
 ### Shadows — `DS.Shadow`
 
@@ -250,7 +267,7 @@ IMPORTANT: Always use existing DS components before creating custom views.
 | `DSDataRow` | Read-only data display row |
 | `DSSectionHeader` | Uppercase section title with optional icon and trailing text |
 | `DSSheetHeader` | Sheet header with cancel/confirm actions and loading state |
-| `DSPulseBadge` | Animated notification count badge with pulse |
+| `DSPulseBadge` | Notification count badge: three short pulses on appear and when the count changes, then still |
 | `DSStatCard` | Statistics card with circle icon background |
 | `DSFloatingButton` | FAB with gradient capsule and optional label |
 | `DSGradientText` | Text with gradient foreground |
@@ -423,7 +440,7 @@ When implementing designs from Figma using the Figma MCP server:
 - IMPORTANT: Map Figma colors to `DS.Color` tokens, never hardcode hex values
 - IMPORTANT: Map Figma spacing/padding to `DS.Spacing` tokens
 - IMPORTANT: Map Figma corner radius to `DS.Radius` tokens
-- IMPORTANT: Map Figma typography to `DS.Font` tokens (SF Rounded)
+- IMPORTANT: Map Figma typography to `DS.Font` tokens (IBM Plex Sans Arabic)
 - Reuse existing DS components (`DSCard`, `DSPrimaryButton`, etc.) instead of creating new ones
 - Use SF Symbols for icons — match Figma icons to the closest SF Symbol
 - Respect the app's RTL/Arabic layout support
