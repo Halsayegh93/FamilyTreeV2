@@ -327,14 +327,14 @@ struct AdminMembersDirectoryView: View {
                                         } label: {
                                             Label(L10n.t("تفعيل", "Activate"), systemImage: "lock.open.fill")
                                         }
-                                        .tint(DS.Color.success)
+                                        .tint(DS.Color.successFill)
                                     } else {
                                         Button {
                                             memberToFreeze = member
                                         } label: {
                                             Label(L10n.t("تجميد", "Freeze"), systemImage: "lock.fill")
                                         }
-                                        .tint(DS.Color.error)
+                                        .tint(DS.Color.errorFill)
                                     }
                                 }
                             }

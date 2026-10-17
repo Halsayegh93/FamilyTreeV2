@@ -229,7 +229,7 @@ struct AdminInboxView: View {
         ]
         if msg.status == ApprovalStatus.pending.rawValue {
             actions.append(DSSwipeAction(icon: "checkmark.circle.fill", title: L10n.t("تم التعامل", "Handled"),
-                                         color: DS.Color.success) {
+                                         color: DS.Color.successFill) {
                 adminRequestVM.markContactMessageRead(msg.id)
                 Task { await adminRequestVM.markContactMessageHandled(msg) }
             })

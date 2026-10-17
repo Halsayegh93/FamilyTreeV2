@@ -319,7 +319,7 @@ struct AdminActivateAccountsView: View {
                                                 } label: {
                                                     Label(L10n.t("ميلاد", "Birth"), systemImage: "calendar.badge.plus")
                                                 }
-                                                .tint(DS.Color.accent)
+                                                .tint(DS.Color.goldFill)
                                             }
                                         }
                                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -338,7 +338,7 @@ struct AdminActivateAccountsView: View {
                                                 } label: {
                                                     Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
                                                 }
-                                                .tint(DS.Color.success)
+                                                .tint(DS.Color.successFill)
                                             }
                                         }
                                 }

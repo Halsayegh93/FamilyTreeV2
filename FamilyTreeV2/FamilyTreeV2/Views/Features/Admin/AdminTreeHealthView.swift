@@ -218,7 +218,7 @@ struct AdminTreeHealthView: View {
                                             } label: {
                                                 Label(L10n.t("تعديل اسم", "Edit Name"), systemImage: "pencil")
                                             }
-                                            .tint(DS.Color.warning)
+                                            .tint(DS.Color.warningFill)
                                         }
                                         if memberIssues.contains(.duplicatePhone) {
                                             Button {
@@ -227,7 +227,7 @@ struct AdminTreeHealthView: View {
                                             } label: {
                                                 Label(L10n.t("مسح الرقم", "Clear Phone"), systemImage: "phone.badge.minus")
                                             }
-                                            .tint(DS.Color.neonPink)
+                                            .tint(DS.Color.saduFill)
                                         }
                                     }
                                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -242,7 +242,7 @@ struct AdminTreeHealthView: View {
                                                 systemImage: member.isHiddenFromTree ? "eye" : "eye.slash"
                                             )
                                         }
-                                        .tint(member.isHiddenFromTree ? DS.Color.success : DS.Color.textTertiary)
+                                        .tint(member.isHiddenFromTree ? DS.Color.successFill : DS.Color.slateFill)
                                     }
                             }
 

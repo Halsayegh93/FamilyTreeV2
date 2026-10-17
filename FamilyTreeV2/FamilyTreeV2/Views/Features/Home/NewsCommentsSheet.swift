@@ -89,7 +89,7 @@ struct NewsCommentsSheet: View {
                                     } label: {
                                         Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
                                     }
-                                    .tint(DS.Color.warning)
+                                    .tint(DS.Color.warningFill)
                                 }
                             }
                         }
