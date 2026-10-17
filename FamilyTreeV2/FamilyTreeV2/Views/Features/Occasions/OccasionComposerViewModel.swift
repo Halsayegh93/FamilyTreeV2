@@ -399,8 +399,15 @@ final class OccasionComposerViewModel: ObservableObject {
             return
         }
         let variant = template.photoOptional && !withPhoto ? "-nophoto" : ""
+        let day: String = {
+            let f = DateFormatter()
+            f.calendar = Calendar(identifier: .gregorian)
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.dateFormat = "yyyy-MM-dd"
+            return f.string(from: Date())
+        }()
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("almohali-\(template.id)\(variant)-\(effectiveModel.rawValue)-\(size.rawValue).png")
+            .appendingPathComponent("almohali-\(template.id)\(variant)-\(effectiveModel.rawValue)-\(size.rawValue)-\(day).png")
         do {
             try data.write(to: url, options: .atomic)
             shareItem = OccasionShareItem(url: url)
