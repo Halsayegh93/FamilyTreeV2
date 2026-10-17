@@ -218,7 +218,7 @@ struct CategoryEditSheet: View {
                         Text(nameAr.isEmpty ? L10n.t("اسم التصنيف", "Category name") : nameAr)
                             .font(DS.Font.plex(13, weight: .bold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Color.readableText(on: accent))
                     .padding(.horizontal, DS.Spacing.md)
                     .frame(height: 32)
                     .background(Capsule().fill(accent))

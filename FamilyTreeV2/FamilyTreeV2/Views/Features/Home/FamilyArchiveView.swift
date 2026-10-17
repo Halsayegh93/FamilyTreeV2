@@ -549,7 +549,7 @@ struct FamilyArchiveView: View {
                     .font(DS.Font.plex(10, weight: .bold))
                     .lineLimit(1)
             }
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.readableText(on: accent))
             .padding(.horizontal, DS.Spacing.sm)
             .frame(height: 22)
             .background(
@@ -1378,7 +1378,7 @@ struct ArchiveItemViewer: View {
                         } label: {
                             Text(L10n.t("حفظ الملف", "Save file"))
                                 .font(DS.Font.calloutBold)
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.readableText(on: accent))
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .frame(height: 40)
                                 .background(Capsule().fill(accent))
@@ -1401,7 +1401,7 @@ struct ArchiveItemViewer: View {
                     Text(item.categoryDisplayName)
                         .font(DS.Font.plex(11, weight: .bold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.readableText(on: accent))
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(accent))
