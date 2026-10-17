@@ -239,7 +239,7 @@ Visual identity (October 2026) follows the designer's guide: navy #172536, gold 
 
 ### Logo
 
-- The family's flat «المحمدعلي» mark: `Image("FamilyLogoNavy")` (navy; cream in dark mode) on light grounds, `Image("FamilyLogoCream")` on band (the splash). Never in a circle or badge, never shadowed or glowing; at least 32pt tall, with a quarter of its height clear on every side. The app icon (`AppIcon`, `AppIconImage`) is separate.
+- The family's flat «المحمدعلي» mark: `Image("FamilyLogoNavy")` (navy; cream in dark mode) on light grounds, `Image("FamilyLogoCream")` on band and on the splash. The splash and the launch screen share `DS.Color.splashBackground` (the `LaunchBackground` colour asset): navy #172536 in light, pure black in dark. Never in a circle or badge, never shadowed or glowing; at least 32pt tall, with a quarter of its height clear on every side. The app icon (`AppIcon`, `AppIconImage`) is separate.
 
 ### Shadows — `DS.Shadow`
 
