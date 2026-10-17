@@ -1,31 +1,31 @@
-// قالب إيميل فاخر ومرتّب لتطبيق شجرة عائلة آل محمد علي
+// قالب إيميل لتطبيق شجرة عائلة المحمدعلي — بهوية العائلة الموحدة
 // RTL عربي، متوافق مع عملاء البريد (جداول + ستايل inline)، بهوية التطبيق
 
 export const BRAND = {
-  // لوحة فحمي + شمبانيا الفاخرة
-  charcoal: "#1A1D21", // ترويسة فحمية غامقة
-  charcoalEnd: "#2C3037", // نهاية تدرّج الترويسة (عمق خفيف)
-  champagne: "#D8C3A5", // شمبانيا فاتحة — للمسات على الترويسة الفحمية فقط
-  champagneSoft: "#E7DAC4", // شمبانيا أنعم للتسمية الفرعية
-  gold: "#9C7C3A", // ذهبي/برونزي غامق — لمسات داخل الجسم الأبيض (مقروء)
-  warn: "#9B3B3B", // أحمر فاخر هادئ — للتنبيه (تجميد)
+  // ألوان الهوية الموحدة (كحلي المصمم + ذهبي + رملي) — نفس التطبيق والموقع
+  charcoal: "#172536", // الترويسة: band (كحلي المصمم)، لون واحد بلا تدرّج
+  charcoalEnd: "#172536",
+  champagne: "#B89A5A", // gold — خطوط الترويسة
+  champagneSoft: "#B89A5A", // النص الثانوي على band ذهبي
+  gold: "#725D31", // gold-text — لمسات داخل الجسم الأبيض (مقروء على الأبيض)
+  warn: "#C0282A", // danger — للتنبيه (تجميد)
   // أسماء قديمة (تشير الآن للذهبي للتوافق)
-  blue: "#9C7C3A",
-  emerald: "#9C7C3A",
-  indigo: "#9C7C3A",
-  ink: "#23262B",
-  body: "#52565C",
-  muted: "#9A9286",
-  hair: "#ECE7DD",
-  panel: "#FBFAF6",
-  panelLine: "#ECE7DD",
-  pageBg: "#ECE8E1",
-  appName: "شجرة عائلة آل محمد علي",
+  blue: "#725D31",
+  emerald: "#725D31",
+  indigo: "#725D31",
+  ink: "#172536", // ink
+  body: "#4A5560", // ink-muted
+  muted: "#6B7280", // ink-subtle
+  hair: "#DCCFB4", // line
+  panel: "#FCF7EC", // sand
+  panelLine: "#DCCFB4", // line
+  pageBg: "#F2EBDD", // sand-deep (كريمي المصمم)
+  appName: "شجرة عائلة المحمدعلي",
   tagline: "تطبيق العائلة",
 };
 
 const FONT_STACK =
-  "-apple-system,BlinkMacSystemFont,'SF Pro Rounded','Segoe UI','Geeza Pro','Dubai',Tahoma,Arial,sans-serif";
+  "'IBM Plex Sans Arabic',-apple-system,BlinkMacSystemFont,'Segoe UI','Geeza Pro','Dubai',Tahoma,Arial,sans-serif";
 
 // حواف المحتوى الموحّدة — كل الأقسام تشترك بنفس الهوامش لتناسق تام
 const PAD = "0 44px";
@@ -51,7 +51,7 @@ export function dataRow(label: string, value: string, opts?: { accent?: string; 
   const weight = opts?.bold || opts?.accent ? "700" : "600";
   return `
     <tr>
-      <td width="38%" class="dr" style="padding:15px 22px;color:${BRAND.muted};font-size:12.5px;font-weight:600;letter-spacing:.2px;vertical-align:middle;border-top:1px solid ${BRAND.panelLine}">${escapeHtml(label)}</td>
+      <td width="38%" class="dr" style="padding:15px 22px;color:${BRAND.muted};font-size:12.5px;font-weight:600;vertical-align:middle;border-top:1px solid ${BRAND.panelLine}">${escapeHtml(label)}</td>
       <td class="dr" style="padding:15px 22px;color:${valColor};font-size:15px;font-weight:${weight};vertical-align:middle;border-top:1px solid ${BRAND.panelLine};text-align:left">${value}</td>
     </tr>`;
 }
@@ -81,7 +81,7 @@ export function quoteBox(text: string, opts?: { label?: string; accent?: string;
   const accent = opts?.accent ?? BRAND.blue;
   const bg = opts?.subtle ? "#F7F9FC" : tint(accent, "0D");
   const labelHtml = opts?.label
-    ? `<p style="margin:0 0 10px;color:${opts?.subtle ? BRAND.muted : accent};font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase">${escapeHtml(opts.label)}</p>`
+    ? `<p style="margin:0 0 10px;color:${opts?.subtle ? BRAND.muted : accent};font-size:11px;font-weight:700">${escapeHtml(opts.label)}</p>`
     : "";
   return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0">
@@ -114,7 +114,7 @@ export function ctaButton(label: string, url: string, accent: string = BRAND.blu
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0 6px">
       <tr><td style="border-radius:12px;background:${accent}">
-        <a href="${escapeHtml(url)}" style="display:inline-block;padding:15px 38px;color:#fff;font-size:15px;font-weight:700;letter-spacing:.3px;text-decoration:none;border-radius:12px">${escapeHtml(label)}</a>
+        <a href="${escapeHtml(url)}" style="display:inline-block;padding:15px 38px;color:#fff;font-size:15px;font-weight:700;text-decoration:none;border-radius:12px">${escapeHtml(label)}</a>
       </td></tr>
     </table>`;
 }
@@ -141,7 +141,7 @@ export function renderEmail(args: RenderArgs): string {
   const accent = args.accentColor ?? BRAND.gold;
   const preheader = args.preheader ?? args.title;
   const eyebrow = args.badge
-    ? `<div style="color:${accent};font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;margin:0 0 12px">${escapeHtml(args.badge)}</div>`
+    ? `<div style="color:${accent};font-size:11px;font-weight:800;margin:0 0 12px">${escapeHtml(args.badge)}</div>`
     : "";
 
   return `<!doctype html>
@@ -170,15 +170,15 @@ export function renderEmail(args: RenderArgs): string {
 
         <!-- الترويسة: فحمية فاخرة، كتابة متناظرة بلا أيقونة، لمسات شمبانيا -->
         <tr><td class="hero" style="padding:46px 44px 42px;background:${BRAND.charcoal};background:linear-gradient(160deg,${BRAND.charcoal} 0%,${BRAND.charcoalEnd} 100%);text-align:center;border-bottom:2px solid ${BRAND.champagne}">
-          <div style="color:${BRAND.champagneSoft};font-size:11px;font-weight:700;letter-spacing:5px;text-transform:uppercase;margin:0 0 14px">${escapeHtml(BRAND.tagline)}</div>
-          <div style="color:#ffffff;font-size:23px;font-weight:800;letter-spacing:.4px;line-height:1.35">${escapeHtml(BRAND.appName)}</div>
+          <div style="color:${BRAND.champagneSoft};font-size:11px;font-weight:700;margin:0 0 14px">${escapeHtml(BRAND.tagline)}</div>
+          <div style="color:#ffffff;font-size:23px;font-weight:700;line-height:1.35">${escapeHtml(BRAND.appName)}</div>
           <div style="width:46px;height:2px;background:${BRAND.champagne};margin:18px auto 0"></div>
         </td></tr>
 
         <!-- العنوان -->
         <tr><td class="pad" style="padding:40px 44px 0;text-align:right">
           ${eyebrow}
-          <h1 class="h1" style="margin:0;color:${BRAND.ink};font-size:23px;font-weight:800;line-height:1.5;letter-spacing:.2px">${escapeHtml(args.title)}</h1>
+          <h1 class="h1" style="margin:0;color:${BRAND.ink};font-size:23px;font-weight:800;line-height:1.5;">${escapeHtml(args.title)}</h1>
           <div style="height:2px;width:40px;background:${accent};margin:18px 0 0"></div>
         </td></tr>
 
@@ -188,12 +188,12 @@ export function renderEmail(args: RenderArgs): string {
         <!-- التذييل -->
         <tr><td style="padding:${PAD}"><div style="border-top:1px solid ${BRAND.hair}"></div></td></tr>
         <tr><td class="pad" style="padding:28px 44px 34px;text-align:center">
-          <p style="margin:0 0 7px;color:${BRAND.ink};font-size:13px;font-weight:800;letter-spacing:1px">${escapeHtml(BRAND.appName)}</p>
-          <p style="margin:0;color:${BRAND.muted};font-size:11.5px;line-height:1.75;letter-spacing:.2px">رسالة تلقائية من التطبيق — لا حاجة للرد عليها مباشرةً</p>
+          <p style="margin:0 0 7px;color:${BRAND.ink};font-size:13px;font-weight:800;">${escapeHtml(BRAND.appName)}</p>
+          <p style="margin:0;color:${BRAND.muted};font-size:11.5px;line-height:1.75;">رسالة تلقائية من التطبيق — لا حاجة للرد عليها مباشرةً</p>
         </td></tr>
 
       </table>
-      <p style="margin:20px 0 0;color:${BRAND.muted};font-size:11px;letter-spacing:.3px">© ${escapeHtml(BRAND.appName)}</p>
+      <p style="margin:20px 0 0;color:${BRAND.muted};font-size:11px;">© ${escapeHtml(BRAND.appName)}</p>
     </td></tr>
   </table>
 </body></html>`;
