@@ -6,7 +6,7 @@ import UIKit
 // نفس OccasionPostM3.tsx في الموقع، وبنفس أرقام ملف التصميم «منشورات مناسبات المحمدعلي» (صفحة نموذج ٣):
 // التهاني: الآية بالمخطوطة كبيرة فوق ونسخة عملاقة منها خافتة خلفها ونجوم حولها، والصورة بقوس دائري الرأس
 // بحاشية رملية وخطين ذهبيين تطلع من بطاقة رملية، والشعار ختماً نافراً عند زاوية البطاقة، والشعار الكريمي تحت.
-// إعلان الوفاة («اللوح المفتوح»): النص على الأرضية الداكنة مباشرة، والعزاءان بين فاصلين من السدو.
+// إعلان الوفاة («اللوح المفتوح»): النص على الأرضية الداكنة مباشرة، والعزاءان بخط رفيع بينهما بلا زخارف فوقهما ولا تحتهما.
 // مشاركة العزاء: بطاقة بيضاء تحمل الآية والنص على أرضية رصاصية.
 //
 // التصميم بإحداثيات ثابتة 1080×1350 (من فوق يسار مثل position: absolute)؛ الستوري والمربع نفس التصميم داخل
@@ -596,7 +596,8 @@ extension OccasionPostView {
     }
 
     /// نص الإعلان على الأرضية مباشرة: المقدمة، اللقب، الاسم، القرابة (كبسولة؛ بطاقة لو أكثر من سطر)،
-    /// ثم بين فاصلين من السدو: التشييع والعزاء والعزاءان، ثم الدعاء. k0 = حجم التصميم، gap0 = نسبة المسافات.
+    /// ثم التشييع والعزاء والعزاءان، ثم الدعاء. فوق العزاءين وتحتهما مسافة فقط (كان فيها فاصلا سدو، أُزيلا بطلب المستخدم
+    /// 17/10/2026 مع بقاء المسافة نفسها). k0 = حجم التصميم، gap0 = نسبة المسافات.
     /// يصغر الكل بنسبة وحدة لين يدخل فوق الشعار — نفس DeathInfo في الموقع
     private func m3DeathInfo(top: CGFloat, k0: CGFloat, gap0: CGFloat, rels: [String]) -> some View {
         let D = OccasionM3.Death.self
@@ -687,7 +688,7 @@ extension OccasionPostView {
                 }
                 .padding(.top, 6)
             }
-            m3MidSadu(D.champ)
+            m3RuleSpace()
                 .padding(.top, d.ruleTop)
                 .padding(.bottom, section ? d.ruleMid : d.ruleEnd)
             if section {
@@ -713,7 +714,7 @@ extension OccasionPostView {
                     }
                     .frame(maxWidth: d.rowW)
                 }
-                m3MidSadu(D.champ)
+                m3RuleSpace()
                     .padding(.top, d.ruleMid)
                     .padding(.bottom, d.ruleEnd)
             }
@@ -803,7 +804,8 @@ extension OccasionPostView {
             AnyView(OccasionM3Sadu(color: OccasionM3.gold, width: 420, big: 14, small: 10, opLine: 0.8, opSmall: 0.6)),
             AnyView(m3Fixed("مشاركة عزاء", .extrabold, 68, color: ink, lineHeight: 1.25)),
             AnyView(VStack(spacing: 0) {
-                if has("from") { m3OneLine(value("from"), .semibold, 34, width: 880, color: OccasionM3.navy, lineHeight: 1.45) }
+                // «تتقدم عائلة المحمدعلي» أساس الفكرة — أكبر وأثقل من باقي السطور الصغيرة
+                if has("from") { m3OneLine(value("from"), .extrabold, 44, width: 880, color: OccasionM3.navy, lineHeight: 1.4) }
                 m3Fixed("بأحر التعازي وأصدق المواساة إلى", .regular, 27, color: muted, lineHeight: 1.45)
                 if has("to") { m3NameLine("to", color: ink, scale: 1) }
             }),
@@ -899,9 +901,9 @@ extension OccasionPostView {
         .offset(y: padTop)
     }
 
-    /// فاصل السدو في وسط البطاقة (وحوالي العزاءين): 300، معيّنات 13/9
-    private func m3MidSadu(_ color: Color) -> some View {
-        OccasionM3Sadu(color: color, width: 300, big: 13, small: 9, opLine: 0.8, opSmall: 0.55)
+    /// مكان فاصل السدو اللي كان فوق العزاءين وتحتهما (ارتفاعه 13) — بقي مسافة فارغة مثل الموقع
+    private func m3RuleSpace() -> some View {
+        Color.clear.frame(height: 13)
     }
 
     /// خطّا القوس حول الصورة (باب داخل باب). fading = إعلان الوفاة: يتلاشيان نحو أسفل الصورة (ما فيه بطاقة تحتها)
