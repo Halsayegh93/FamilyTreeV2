@@ -1,0 +1,41 @@
++ echo '== Info.plist UILaunchScreen'
+== Info.plist UILaunchScreen
++ /usr/libexec/PlistBuddy -c 'Print :UILaunchScreen' /Users/macmini/actions-runner/_work/_temp/dd-sim/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/Info.plist
+Dict {
+    UIColorName = LaunchBackground
+}
++ echo '== Assets.car LaunchBackground'
+== Assets.car LaunchBackground
++ xcrun assetutil --info /Users/macmini/actions-runner/_work/_temp/dd-sim/Build/Products/Debug-iphonesimulator/FamilyTreeV2.app/Assets.car
++ grep -B2 -A12 '"Name" : "LaunchBackground"'
+    "Colorspace" : "srgb",
+    "Idiom" : "universal",
+    "Name" : "LaunchBackground",
+    "NameIdentifier" : 995,
+    "Scale" : 1,
+    "SHA1Digest" : "AFEA0C4F4A7C82636E8508AA04A53DFBC9BB80A26F4CAD1CECB9CB5C85175832",
+    "SizeOnDisk" : 260
+  },
+  {
+    "Appearance" : "UIAppearanceDark",
+    "AssetType" : "Color",
+    "Color components" : [
+      0,
+      0,
+      0,
+--
+    "Colorspace" : "srgb",
+    "Idiom" : "universal",
+    "Name" : "LaunchBackground",
+    "NameIdentifier" : 995,
+    "Scale" : 1,
+    "SHA1Digest" : "638EE881A3351148C615BC9DD188D8EA08780202C1430A2E3D893F62F881EAB9",
+    "SizeOnDisk" : 260
+  },
+  {
+    "AssetType" : "Icon Image",
+    "BitsPerComponent" : 8,
+    "ColorModel" : "RGB",
+    "Colorspace" : "srgb",
+    "Compression" : "lzfse",
+    "Encoding" : "ARGB",
