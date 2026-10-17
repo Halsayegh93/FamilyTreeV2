@@ -41,11 +41,11 @@ struct FamilyTreeTabBar: View {
         } label: {
             Text(label)
                 .font(DS.Font.scaled(11, weight: .bold))
-                .foregroundColor(selection == idx ? .white : DS.Color.textSecondary)
+                .foregroundColor(selection == idx ? DS.Color.textOnPrimary : DS.Color.textSecondary)
                 .lineLimit(1)
                 .padding(.horizontal, DS.Spacing.sm)
                 .frame(minHeight: 30)                       // مقاس مدمّج أصغر للبار العلوي
-                .background(Capsule().fill(selection == idx ? DS.Color.primary : Color.clear))
+                .background(Capsule().fill(selection == idx ? DS.Color.primaryFill : Color.clear))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)

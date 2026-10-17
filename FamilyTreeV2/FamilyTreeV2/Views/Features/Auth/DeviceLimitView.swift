@@ -25,7 +25,7 @@ struct DeviceLimitView: View {
                         .frame(width: 100, height: 100)
 
                     Image(systemName: "iphone.gen3.badge.exclamationmark")
-                        .font(DS.Font.scaled(42, weight: .bold))
+                        .font(DS.Font.icon(42, weight: .bold))
                         .foregroundColor(DS.Color.error)
                 }
 
@@ -103,7 +103,7 @@ struct DeviceOverLimitView: View {
                         .fill(DS.Color.warning.opacity(0.12))
                         .frame(width: 100, height: 100)
                     Image(systemName: "iphone.gen3.badge.exclamationmark")
-                        .font(DS.Font.scaled(42, weight: .bold))
+                        .font(DS.Font.icon(42, weight: .bold))
                         .foregroundColor(DS.Color.warning)
                 }
 
@@ -188,7 +188,7 @@ struct OverLimitDevicesSheet: View {
                             // شريط تقدم الحذف
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: excessCount > 0 ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                                    .font(DS.Font.scaled(16, weight: .bold))
+                                    .font(DS.Font.icon(16, weight: .bold))
                                     .foregroundColor(excessCount > 0 ? DS.Color.warning : DS.Color.success)
                                     .frame(width: 36, height: 36)
                                     .background((excessCount > 0 ? DS.Color.warning : DS.Color.success).opacity(0.12))
@@ -320,7 +320,7 @@ struct OverLimitDevicesSheet: View {
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "trash.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                         Text(t("إزالة", "Remove"))
                             .font(DS.Font.scaled(11, weight: .bold))
                     }
@@ -392,7 +392,7 @@ struct LinkedDevicesSheet: View {
                             // Device count info cell
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(DS.Font.scaled(16, weight: .bold))
+                                    .font(DS.Font.icon(16, weight: .bold))
                                     .foregroundColor(DS.Color.warning)
                                     .frame(width: 36, height: 36)
                                     .background(DS.Color.warning.opacity(0.12))
@@ -426,7 +426,7 @@ struct LinkedDevicesSheet: View {
                                     Image(systemName: notificationVM.linkedDevicesLoadFailed
                                           ? "wifi.exclamationmark"
                                           : "iphone.slash")
-                                        .font(DS.Font.scaled(28, weight: .semibold))
+                                        .font(DS.Font.icon(28, weight: .semibold))
                                         .foregroundColor(DS.Color.textTertiary)
 
                                     Text(notificationVM.linkedDevicesLoadFailed
@@ -530,7 +530,7 @@ struct LinkedDevicesSheet: View {
             } label: {
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "trash.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(t("إزالة", "Remove"))
                         .font(DS.Font.scaled(11, weight: .bold))
                 }

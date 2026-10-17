@@ -174,7 +174,7 @@ struct AdminTreeHealthView: View {
                     // Swipe hint
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "hand.draw")
-                            .font(DS.Font.scaled(11, weight: .medium))
+                            .font(DS.Font.icon(11, weight: .medium))
                         Text(L10n.t(
                             "← سحب لإجراءات سريعة →",
                             "← Swipe for quick actions →"
@@ -210,7 +210,7 @@ struct AdminTreeHealthView: View {
                                             } label: {
                                                 Label(L10n.t("ربط أب", "Link Father"), systemImage: "person.line.dotted.person")
                                             }
-                                            .tint(DS.Color.info)
+                                            .tint(DS.Color.primaryFill)
                                         }
                                         if memberIssues.contains(.noName) {
                                             Button {
@@ -218,7 +218,7 @@ struct AdminTreeHealthView: View {
                                             } label: {
                                                 Label(L10n.t("تعديل اسم", "Edit Name"), systemImage: "pencil")
                                             }
-                                            .tint(DS.Color.warning)
+                                            .tint(DS.Color.warningFill)
                                         }
                                         if memberIssues.contains(.duplicatePhone) {
                                             Button {
@@ -227,7 +227,7 @@ struct AdminTreeHealthView: View {
                                             } label: {
                                                 Label(L10n.t("مسح الرقم", "Clear Phone"), systemImage: "phone.badge.minus")
                                             }
-                                            .tint(DS.Color.neonPink)
+                                            .tint(DS.Color.saduFill)
                                         }
                                     }
                                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -242,7 +242,7 @@ struct AdminTreeHealthView: View {
                                                 systemImage: member.isHiddenFromTree ? "eye" : "eye.slash"
                                             )
                                         }
-                                        .tint(member.isHiddenFromTree ? DS.Color.success : DS.Color.textTertiary)
+                                        .tint(member.isHiddenFromTree ? DS.Color.successFill : DS.Color.slateFill)
                                     }
                             }
 
@@ -375,7 +375,7 @@ struct AdminTreeHealthView: View {
                     } label: {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: filter.icon)
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .font(DS.Font.icon(11, weight: .bold))
                             Text(filter.label)
                                 .font(DS.Font.scaled(13, weight: .bold))
                             if filterCount > 0 {
@@ -412,7 +412,7 @@ struct AdminTreeHealthView: View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(DS.Color.textTertiary)
-                .font(DS.Font.scaled(14, weight: .medium))
+                .font(DS.Font.icon(14, weight: .medium))
             TextField(L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."), text: $searchText)
                 .font(DS.Font.callout)
                 .foregroundColor(DS.Color.textPrimary)
@@ -437,13 +437,7 @@ struct AdminTreeHealthView: View {
             // Avatar
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [selectedFilter.color.opacity(0.3), selectedFilter.color.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(selectedFilter.color.opacity(DS.Icon.opacity))
                     .frame(width: 50, height: 50)
 
                 let initial = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -474,7 +468,7 @@ struct AdminTreeHealthView: View {
                         ForEach(issues, id: \.self) { tag in
                             HStack(spacing: 2) {
                                 Image(systemName: tag.icon)
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(tag.label)
                                     .font(DS.Font.scaled(11, weight: .bold))
                             }

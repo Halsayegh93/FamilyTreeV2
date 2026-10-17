@@ -39,7 +39,7 @@ struct DSChangeDetailsCard: View {
     private var header: some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: "pencil.line")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
             Text(L10n.t("ما الذي تغيّر", "What Changed"))
                 .font(DS.Font.scaled(11, weight: .bold))
                 .textCase(.uppercase)

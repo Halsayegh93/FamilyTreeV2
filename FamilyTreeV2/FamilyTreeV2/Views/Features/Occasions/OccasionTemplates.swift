@@ -201,6 +201,27 @@ struct OccasionM1Theme {
 }
 
 /// إعلان الوفاة: ذهبي فاتح (شامبين) على الأسود
+extension OccasionTemplate {
+    /// مربع المناسبة في منتقي القالب — نفس tileStyle في الموقع: التهاني بلونها (occ-*) ورمز أبيض،
+    /// الوفاة كحلي ليلي بحلقة ورمز ذهبي، ومشاركة العزاء رصاصي ورمز أبيض.
+    var tileStyle: (fill: Color, ring: Color, symbol: Color) {
+        switch kind {
+        case .happy: return (theme?.acc ?? DS.Color.accent, .clear, .white)
+        case .death, .deathText: return (OccasionDeathPalette.root, OccasionDeathPalette.gold.opacity(0.7), OccasionDeathPalette.gold)
+        case .solace: return (Color(hex: "#4A5560"), .clear, .white)
+        }
+    }
+}
+
+/// الشعار المسطّح من الهوية بدل المظلّل القديم: logo-navy على الفاتح وlogo-cream على الداكن (الوفاة).
+/// صندوقه بارتفاع الشعار القديم فما يتحرك شي؛ العلامة 77٪ منه ومتمركزة (المسطّح أعرض) — نفس Logo في الموقع.
+enum OccasionFlatLogo {
+    static let scale: CGFloat = 0.773
+    /// نسبة عرض الشعار المسطّح لارتفاعه (1200×895) — قبل ما ينزل الملف
+    static let aspect: CGFloat = 1200 / 895
+    static func path(_ name: String) -> String { name == "white" ? "logo/flat-cream.png" : "logo/flat-navy.png" }
+}
+
 enum OccasionDeathPalette {
     static let root = Color(hex: "#14171C")
     static let gold = Color(hex: "#E9D5A6")
@@ -320,13 +341,13 @@ struct OccasionTemplate: Identifiable {
                     if photo { paths.append("m1/frame/\(m1.frame).png") }
                 }
                 if let v = photo ? verse : (noPhoto?.verse ?? verse) { paths.append("verse/\(v.file).png") }
-                paths.append("logo/navy.png")
+                paths.append("logo/flat-navy.png")
             case .death:
-                paths += ["m1/bg/death.jpg", "m1/frame/white.png", "verse/sabr-lead.png", "verse/inna.png", "logo/white.png"]
+                paths += ["m1/bg/death.jpg", "m1/frame/white.png", "verse/sabr-lead.png", "verse/inna.png", "logo/flat-cream.png"]
             case .deathText:
-                paths += ["m1/bg/death.jpg", "verse/sabr-lead.png", "verse/inna.png", "logo/white.png"]
+                paths += ["m1/bg/death.jpg", "verse/sabr-lead.png", "verse/inna.png", "logo/flat-cream.png"]
             case .solace:
-                paths += ["m1/bg/solace.jpg", "verse/sabr.png", "logo/navy.png"]
+                paths += ["m1/bg/solace.jpg", "verse/sabr.png", "logo/flat-navy.png"]
             }
             return paths
         }
@@ -337,13 +358,13 @@ struct OccasionTemplate: Identifiable {
                 if photo { paths.append("frame/\(theme.frame).png") }
             }
             if let v = photo ? verse : (noPhoto?.verse ?? verse) { paths.append("verse/\(v.file).png") }
-            paths.append("logo/navy.png")
+            paths.append("logo/flat-navy.png")
         case .death:
-            paths += ["bg/death-\(size.rawValue).jpg", "frame/goldnight.png", "verse/sabr-lead.png", "verse/inna.png", "logo/white.png"]
+            paths += ["bg/death-\(size.rawValue).jpg", "frame/goldnight.png", "verse/sabr-lead.png", "verse/inna.png", "logo/flat-cream.png"]
         case .deathText:
-            paths += ["bg/death-\(size.rawValue).jpg", "verse/sabr-lead.png", "verse/inna.png", "logo/white.png"]
+            paths += ["bg/death-\(size.rawValue).jpg", "verse/sabr-lead.png", "verse/inna.png", "logo/flat-cream.png"]
         case .solace:
-            paths += ["bg/solace-\(size.rawValue).jpg", "verse/sabr.png", "logo/navy.png"]
+            paths += ["bg/solace-\(size.rawValue).jpg", "verse/sabr.png", "logo/flat-navy.png"]
         }
         return paths
     }
@@ -534,13 +555,13 @@ struct SolaceLayout {
     static func of(_ s: OccasionSize) -> SolaceLayout {
         switch s {
         case .post:
-            return SolaceLayout(pad: OccasionInsets(top: 50, side: 48, bottom: 28), verseMul: 0.9, title: 84, from: 42, sub: 30, to: 72,
+            return SolaceLayout(pad: OccasionInsets(top: 50, side: 48, bottom: 28), verseMul: 0.9, title: 84, from: 54, sub: 30, to: 72,
                                 lead: 30, name: 66, dua: 28, lh: 170, lineW: 250)
         case .square:
-            return SolaceLayout(pad: OccasionInsets(top: 34, side: 48, bottom: 18), verseMul: 0.8, title: 72, from: 38, sub: 28, to: 62,
+            return SolaceLayout(pad: OccasionInsets(top: 34, side: 48, bottom: 18), verseMul: 0.8, title: 72, from: 46, sub: 28, to: 62,
                                 lead: 28, name: 57, dua: 25, lh: 128, lineW: 230)
         case .story:
-            return SolaceLayout(pad: OccasionInsets(top: 224, side: 48, bottom: 196), verseMul: 1, title: 96, from: 48, sub: 34, to: 82,
+            return SolaceLayout(pad: OccasionInsets(top: 224, side: 48, bottom: 196), verseMul: 1, title: 96, from: 61, sub: 34, to: 82,
                                 lead: 34, name: 76, dua: 31, lh: 230, lineW: 250)
         }
     }

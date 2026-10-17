@@ -117,7 +117,7 @@ struct AdminAppSettingsView: View {
                     }
                     Spacer(minLength: 0)
                     Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -184,7 +184,7 @@ struct AdminAppSettingsView: View {
             // السماح بالتسجيل الجديد
             settingToggle(
                 icon: "person.badge.plus",
-                color: DS.Color.success,
+                color: DS.Color.palm,
                 title: L10n.t("السماح بالتسجيل", "Allow Registrations"),
                 subtitle: L10n.t("السماح لأعضاء جدد بالتسجيل في التطبيق", "Allow new registrations"),
                 isOn: appSettingsVM.settings.allowNewRegistrations,
@@ -252,7 +252,7 @@ struct AdminAppSettingsView: View {
             // موافقة الأخبار
             settingToggle(
                 icon: "checkmark.shield.fill",
-                color: DS.Color.warning,
+                color: DS.Color.accent,
                 title: L10n.t("موافقة الأخبار", "News Approval"),
                 subtitle: L10n.t("يتطلب موافقة المدير قبل نشر الأخبار", "Require admin approval"),
                 isOn: appSettingsVM.settings.newsRequiresApproval,
@@ -280,7 +280,7 @@ struct AdminAppSettingsView: View {
             DSSectionHeader(
                 title: L10n.t("الميزات", "Features"),
                 icon: "star.fill",
-                iconColor: DS.Color.warning
+                iconColor: DS.Color.accent
             )
 
             settingToggle(
@@ -323,7 +323,7 @@ struct AdminAppSettingsView: View {
             DSSectionHeader(
                 title: L10n.t("الأمان والصيانة", "Security & Maintenance"),
                 icon: "lock.shield.fill",
-                iconColor: DS.Color.error
+                iconColor: DS.Color.primary
             )
 
             // وضع الصيانة
@@ -345,7 +345,7 @@ struct AdminAppSettingsView: View {
             DSSectionHeader(
                 title: L10n.t("عداد التعديل", "Edit Cooldown"),
                 icon: "timer",
-                iconColor: DS.Color.warning
+                iconColor: DS.Color.palm
             )
 
             // إيقاف / تشغيل العداد
@@ -405,7 +405,7 @@ struct AdminAppSettingsView: View {
     private var readOnlyBanner: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "eye.fill")
-                .font(DS.Font.scaled(14, weight: .bold))
+                .font(DS.Font.icon(14, weight: .bold))
                 .foregroundColor(DS.Color.info)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("وضع القراءة فقط", "Read-only mode"))
@@ -481,7 +481,7 @@ struct AdminAppSettingsView: View {
         } label: {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: "arrow.counterclockwise")
-                    .font(DS.Font.scaled(14, weight: .bold))
+                    .font(DS.Font.icon(14, weight: .bold))
                 Text(L10n.t("إعادة تعيين الإعدادات", "Reset Settings"))
                     .font(DS.Font.calloutBold)
             }

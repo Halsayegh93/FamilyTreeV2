@@ -46,7 +46,7 @@ struct AdminMembersDirectoryView: View {
         var color: Color {
             switch self {
             case .all:      return DS.Color.primary
-            case .living:   return DS.Color.success
+            case .living:   return DS.Color.palm
             case .deceased: return DS.Color.textTertiary
             }
         }
@@ -188,19 +188,19 @@ struct AdminMembersDirectoryView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "house.fill")
-                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .font(DS.Font.icon(11, weight: .semibold))
                         Text(L10n.t("الفروع", "Branches"))
                             .font(DS.Font.scaled(11, weight: .semibold))
                     }
                     .foregroundColor(drillPath.isEmpty ? DS.Color.textOnPrimary : DS.Color.primary)
                     .padding(.horizontal, DS.Spacing.sm + 2)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(drillPath.isEmpty ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                    .background(Capsule().fill(drillPath.isEmpty ? DS.Color.primaryFill : DS.Color.primary.opacity(0.10)))
                 }
 
                 ForEach(Array(drillPath.enumerated()), id: \.element.id) { idx, node in
                     Image(systemName: "chevron.forward")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                     Button {
                         withAnimation(DS.Anim.snappy) {
@@ -214,7 +214,7 @@ struct AdminMembersDirectoryView: View {
                             .lineLimit(1)
                             .padding(.horizontal, DS.Spacing.sm + 2)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(isLast ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                            .background(Capsule().fill(isLast ? DS.Color.primaryFill : DS.Color.primary.opacity(0.10)))
                     }
                 }
             }
@@ -240,7 +240,7 @@ struct AdminMembersDirectoryView: View {
                         Text("\(kids)")
                             .font(DS.Font.plex(13, weight: .bold))
                         Image(systemName: "chevron.forward")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                     }
                     .foregroundColor(DS.Color.primary)
                     .frame(width: 42, height: 42)
@@ -327,14 +327,14 @@ struct AdminMembersDirectoryView: View {
                                         } label: {
                                             Label(L10n.t("تفعيل", "Activate"), systemImage: "lock.open.fill")
                                         }
-                                        .tint(DS.Color.success)
+                                        .tint(DS.Color.successFill)
                                     } else {
                                         Button {
                                             memberToFreeze = member
                                         } label: {
                                             Label(L10n.t("تجميد", "Freeze"), systemImage: "lock.fill")
                                         }
-                                        .tint(DS.Color.error)
+                                        .tint(DS.Color.errorFill)
                                     }
                                 }
                             }
@@ -345,7 +345,7 @@ struct AdminMembersDirectoryView: View {
                                     } label: {
                                         Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
                                     }
-                                    .tint(DS.Color.primary)
+                                    .tint(DS.Color.primaryFill)
                                 }
                             }
                         }
@@ -466,7 +466,7 @@ struct AdminMembersDirectoryView: View {
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: filter.icon)
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                 Text(filter.label)
                     .font(DS.Font.caption1)
                     .fontWeight(.semibold)
@@ -474,7 +474,7 @@ struct AdminMembersDirectoryView: View {
                     Text("\(chipCount)")
                         .font(DS.Font.caption2)
                         .fontWeight(.bold)
-                        .foregroundColor(isSelected ? filter.color : DS.Color.textOnPrimary)
+                        .foregroundColor(isSelected ? filter.color : DS.Color.onTint)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(
@@ -483,7 +483,7 @@ struct AdminMembersDirectoryView: View {
                         )
                 }
             }
-            .foregroundColor(isSelected ? DS.Color.textOnPrimary : filter.color)
+            .foregroundColor(isSelected ? DS.Color.onTint : filter.color)
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .background(Capsule().fill(isSelected ? filter.color : filter.color.opacity(0.1)))
@@ -518,15 +518,15 @@ struct AdminMembersDirectoryView: View {
                 // حالة العضو على الصورة نفسها — بدل شارات نصّية تزحم السطر
                 if member.isDeceased == true {
                     Image(systemName: "leaf.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(.white)
                         .padding(4)
-                        .background(DS.Color.textTertiary)
+                        .background(DS.Color.deceasedFill)
                         .clipShape(Circle())
                         .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 1.5))
                 } else if member.status == .frozen {
                     Image(systemName: "lock.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(.white)
                         .padding(4)
                         .background(DS.Color.errorFill)
@@ -552,7 +552,7 @@ struct AdminMembersDirectoryView: View {
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         HStack(spacing: 3) {
                             Image(systemName: "phone.fill")
-                                .font(DS.Font.scaled(11))
+                                .font(DS.Font.icon(11))
                             Text(KuwaitPhone.display(phone))
                                 .font(DS.Font.caption2)
                                 .monospacedDigit()
@@ -581,7 +581,7 @@ struct AdminMembersDirectoryView: View {
             if let m = branchRootMember {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "tree.fill")
-                        .font(DS.Font.scaled(12, weight: .bold))
+                        .font(DS.Font.icon(12, weight: .bold))
                         .foregroundColor(DS.Color.accent)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("فرع: \(m.displayFullName)", "Branch: \(m.displayFullName)"))
@@ -632,13 +632,13 @@ struct AdminMembersDirectoryView: View {
                 } label: {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "tree")
-                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .font(DS.Font.icon(12, weight: .semibold))
                         Text(L10n.t("حصر على فرع معيّن", "Filter by branch"))
                             .font(DS.Font.caption1)
                             .fontWeight(.semibold)
                         Spacer()
                         Image(systemName: "chevron.forward")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                             .opacity(0.5)
                     }
                     .foregroundColor(DS.Color.textSecondary)
@@ -684,7 +684,7 @@ struct AdminMembersDirectoryView: View {
     private var noResultsState: some View {
         VStack(spacing: DS.Spacing.sm) {
             Image(systemName: "person.fill.questionmark")
-                .font(DS.Font.scaled(32))
+                .font(DS.Font.icon(32))
                 .foregroundColor(DS.Color.textTertiary)
             Text(L10n.t("لا يوجد نتائج", "No results found"))
                 .font(DS.Font.callout)

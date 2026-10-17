@@ -127,7 +127,7 @@ struct EditChildSheet: View {
                     // الهاتف — للذكر فقط
                     if selectedGender == "male" {
                         DSDivider()
-                        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
+                        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.sea,
                                           label: L10n.t("رقم الهاتف", "Phone Number")) {
                             DSPhoneField(
                                 country: $selectedPhoneCountry,

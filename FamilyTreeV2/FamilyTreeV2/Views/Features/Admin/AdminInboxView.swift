@@ -81,7 +81,7 @@ struct AdminInboxView: View {
                                 HStack(spacing: DS.Spacing.sm) {
                                     if isSelectMode {
                                         Image(systemName: selectedIDs.contains(msg.id) ? "checkmark.circle.fill" : "circle")
-                                            .font(DS.Font.scaled(20, weight: .semibold))
+                                            .font(DS.Font.icon(20, weight: .semibold))
                                             .foregroundColor(selectedIDs.contains(msg.id) ? DS.Color.primary : DS.Color.textTertiary)
                                     }
                                     messageRow(msg)
@@ -229,7 +229,7 @@ struct AdminInboxView: View {
         ]
         if msg.status == ApprovalStatus.pending.rawValue {
             actions.append(DSSwipeAction(icon: "checkmark.circle.fill", title: L10n.t("تم التعامل", "Handled"),
-                                         color: DS.Color.success) {
+                                         color: DS.Color.successFill) {
                 adminRequestVM.markContactMessageRead(msg.id)
                 Task { await adminRequestVM.markContactMessageHandled(msg) }
             })
@@ -264,7 +264,7 @@ struct AdminInboxView: View {
                     if isDeleting {
                         ProgressView().tint(.white)
                     } else {
-                        Image(systemName: "trash.fill").font(DS.Font.scaled(13, weight: .bold))
+                        Image(systemName: "trash.fill").font(DS.Font.icon(13, weight: .bold))
                     }
                     Text(L10n.t("حذف", "Delete")).font(DS.Font.scaled(14, weight: .bold))
                 }
@@ -375,7 +375,7 @@ struct AdminInboxView: View {
                     categoryChip(category)
                     if isPending {
                         Image(systemName: "clock.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                             .foregroundColor(DS.Color.warning)
                     }
                     Spacer(minLength: 0)
@@ -442,7 +442,7 @@ struct AdminInboxView: View {
         let info = ContactCategoryInfo.from(raw: raw)
         return HStack(spacing: 4) {
             Image(systemName: info.icon)
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
             Text(info.title)
                 .font(DS.Font.scaled(11, weight: .bold))
         }
@@ -511,7 +511,7 @@ private struct MessageDetailSheet: View {
 
                     VStack(spacing: 2) {
                         Image(systemName: info.icon)
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.icon(13, weight: .bold))
                             .foregroundColor(info.color)
                             .frame(width: 34, height: 34)
                             .background(info.color.opacity(0.14))
@@ -563,13 +563,13 @@ private struct MessageDetailSheet: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: isEmail ? "envelope.fill" : "phone.fill")
-                                        .font(DS.Font.scaled(11, weight: .semibold))
+                                        .font(DS.Font.icon(11, weight: .semibold))
                                     Text(preferred)
                                         .font(DS.Font.caption1)
                                         .lineLimit(1)
                                         .environment(\.layoutDirection, .leftToRight)
                                     Image(systemName: "doc.on.doc")
-                                        .font(DS.Font.scaled(11, weight: .semibold))
+                                        .font(DS.Font.icon(11, weight: .semibold))
                                         .opacity(0.6)
                                 }
                                 .foregroundColor(DS.Color.textSecondary)
@@ -587,7 +587,7 @@ private struct MessageDetailSheet: View {
                                 replyButton(
                                     title: L10n.t("اتصال", "Call"),
                                     icon: "phone.fill",
-                                    color: DS.Color.success
+                                    color: DS.Color.sea
                                 ) { openURL("tel:\(sanitize(replyPhone))") }
                             }
                             if isEmail {
@@ -611,7 +611,7 @@ private struct MessageDetailSheet: View {
                                 ProgressView().tint(.white).scaleEffect(0.9)
                             } else {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(DS.Font.scaled(15, weight: .bold))
+                                    .font(DS.Font.icon(15, weight: .bold))
                             }
                             Text(isMarking ? L10n.t("جارٍ…", "Working…") : L10n.t("تم التعامل", "Mark as Handled"))
                                 .font(DS.Font.calloutBold)
@@ -663,7 +663,7 @@ private struct MessageDetailSheet: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(13, weight: .bold))
+                    .font(DS.Font.icon(13, weight: .bold))
                 Text(title)
                     .font(DS.Font.calloutBold)
             }
@@ -804,9 +804,9 @@ struct ContactCategoryInfo {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
         switch trimmed {
         case "شكوى", "complaint", "Complaint":
-            return .init(title: L10n.t("شكوى", "Complaint"), icon: "exclamationmark.bubble.fill", color: DS.Color.error)
+            return .init(title: L10n.t("شكوى", "Complaint"), icon: "exclamationmark.bubble.fill", color: DS.Color.sadu)
         case "اقتراح", "suggestion", "Suggestion":
-            return .init(title: L10n.t("اقتراح", "Suggestion"), icon: "lightbulb.fill", color: DS.Color.success)
+            return .init(title: L10n.t("اقتراح", "Suggestion"), icon: "lightbulb.fill", color: DS.Color.palm)
         case "استفسار", "inquiry", "Inquiry":
             return .init(title: L10n.t("استفسار", "Inquiry"), icon: "questionmark.bubble.fill", color: DS.Color.primary)
         case "أخرى", "other", "Other":

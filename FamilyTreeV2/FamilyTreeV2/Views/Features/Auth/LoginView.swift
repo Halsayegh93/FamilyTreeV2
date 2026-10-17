@@ -12,7 +12,7 @@ struct LoginView: View {
 #endif
     @State private var timeRemaining = 0
     @State private var otpTimeRemaining = 0
-    @State private var logoScale: CGFloat = 0.6
+    @State private var logoScale: CGFloat = 0.94
     @State private var logoOpacity: CGFloat = 0
 
 
@@ -78,7 +78,8 @@ struct LoginView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
         .onAppear {
-            withAnimation(DS.Anim.elastic.delay(0.15)) {
+            // ظهور هادئ قصير للشعار: تلاشٍ وتكبير خفيف
+            withAnimation(.easeOut(duration: 0.45).delay(0.1)) {
                 logoScale = 1.0
                 logoOpacity = 1.0
             }
@@ -197,26 +198,25 @@ struct LoginView: View {
     // MARK: - Background
     private var backgroundView: some View {
         ZStack {
-            // تدرج خفيف من أعلى
-            LinearGradient(
-                colors: [DS.Color.primary.opacity(0.06), DS.Color.background],
-                startPoint: .top,
-                endPoint: .center
-            )
-            .ignoresSafeArea()
+            // خلفية صلبة (الهوية: بلا تدرّج)
+            DS.Color.background
+                .ignoresSafeArea()
         }
     }
 
-    // MARK: - Logo — App Icon
+    // MARK: - Logo — شعار العائلة المسطّح
+    /// ارتفاع الشعار؛ المسافة بينه وبين الاسم (DS.Spacing.xl) ربع ارتفاعه — مسافة الهوية الآمنة
+    private var logoHeight: CGFloat { isLandscape ? 64 : 80 }
+
     private var logoSection: some View {
         VStack(spacing: DS.Spacing.xl) {
-            // أيقونة التطبيق — دائرية
-            Image("AppIconImage")
+            // الشعار المسطّح «المحمدعلي»: كحلي على الفاتح، كريمي في الداكن — بلا دائرة ولا ظل (الهوية)
+            Image("FamilyLogoNavy")
+                .renderingMode(.original)
                 .resizable()
-                .scaledToFill()
-                .frame(width: 100, height: 100)
-                .clipShape(Circle())
-                .shadow(color: DS.Color.primary.opacity(0.2), radius: 12, y: 6)
+                .scaledToFit()
+                .frame(height: logoHeight)
+                .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
 #if DEBUG
                 // ضغطة مطوّلة على الشعار تفتح شاشة تسجيل البيانات للمعاينة
                 // بلا رقم جديد. لا تُبنى إطلاقاً في نسخة الإصدار.
@@ -267,7 +267,7 @@ struct LoginView: View {
 #endif
 
             VStack(spacing: DS.Spacing.sm) {
-                Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
+                Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                     .font(DS.Font.title1)
                     .fontWeight(.black)
                     .foregroundColor(DS.Color.textPrimary)
@@ -365,7 +365,7 @@ struct LoginView: View {
                         }
                     }) {
                         Image(systemName: "pencil.circle.fill")
-                            .font(DS.Font.scaled(16))
+                            .font(DS.Font.icon(16))
                             .foregroundColor(DS.Color.textSecondary)
                     }
                     .padding(.leading, DS.Spacing.xs)
@@ -470,7 +470,7 @@ struct LoginView: View {
                 }) {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "message.fill")
-                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .font(DS.Font.icon(13, weight: .semibold))
                         Text(timeRemaining > 0
                              ? L10n.t("بعد \(timeRemaining)ث", "in \(timeRemaining)s")
                              : L10n.t("إعادة عبر SMS", "Resend via SMS"))
@@ -499,15 +499,15 @@ struct LoginView: View {
                     }) {
                         HStack(spacing: DS.Spacing.xs) {
                             Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .font(DS.Font.scaled(13, weight: .semibold))
+                                .font(DS.Font.icon(13, weight: .semibold))
                             Text(L10n.t("إرسال عبر واتساب", "Send via WhatsApp"))
                                 .font(DS.Font.footnote)
                                 .fontWeight(.semibold)
                         }
-                        .foregroundStyle(authVM.isLoading ? DS.Color.textTertiary : DS.Color.success)
+                        .foregroundStyle(authVM.isLoading ? DS.Color.textTertiary : DS.Color.sea)
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.xs + 2)
-                        .background((authVM.isLoading ? DS.Color.textTertiary : DS.Color.success).opacity(0.10))
+                        .background((authVM.isLoading ? DS.Color.textTertiary : DS.Color.sea).opacity(0.10))
                         .clipShape(Capsule())
                     }
                     .disabled(authVM.isLoading)
@@ -530,7 +530,7 @@ struct LoginView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(DS.Color.error)
-                    .font(DS.Font.scaled(16, weight: .bold))
+                    .font(DS.Font.icon(16, weight: .bold))
                 Text(error)
                     .font(DS.Font.footnote)
                     .fontWeight(.semibold)
@@ -545,7 +545,7 @@ struct LoginView: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(DS.Color.success)
-                    .font(DS.Font.scaled(16, weight: .bold))
+                    .font(DS.Font.icon(16, weight: .bold))
                 Text(authVM.otpStatusMessage)
                     .font(DS.Font.footnote)
                     .fontWeight(.semibold)
@@ -563,7 +563,7 @@ struct LoginView: View {
     private func stepDot(filled: Bool) -> some View {
         ZStack {
             Circle()
-                .fill(filled ? DS.Color.primary : DS.Color.textTertiary.opacity(0.25))
+                .fill(filled ? DS.Color.primaryFill : DS.Color.textTertiary.opacity(0.25))
                 .frame(width: 10, height: 10)
             if filled {
                 Circle()

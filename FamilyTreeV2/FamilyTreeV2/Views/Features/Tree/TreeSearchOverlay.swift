@@ -161,7 +161,7 @@ struct TreeSearchOverlay: View {
                     .fill(DS.Color.primary.opacity(0.12))
                     .frame(width: 32, height: 32)
                 Image(systemName: "magnifyingglass")
-                    .font(DS.Font.scaled(14, weight: .semibold))
+                    .font(DS.Font.icon(14, weight: .semibold))
                     .foregroundColor(DS.Color.primary)
             }
 
@@ -202,7 +202,7 @@ struct TreeSearchOverlay: View {
                 .fill(DS.Color.error.opacity(0.12))
                 .frame(width: 28, height: 28)
             Image(systemName: "xmark")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
                 .foregroundColor(DS.Color.error)
         }
     }
@@ -257,7 +257,7 @@ struct TreeSearchOverlay: View {
                             Button(action: { searchText = query }) {
                                 HStack(spacing: DS.Spacing.xs) {
                                     Image(systemName: "clock.arrow.circlepath")
-                                        .font(DS.Font.scaled(11, weight: .regular))
+                                        .font(DS.Font.icon(11, weight: .regular))
                                     Text(query)
                                         .font(DS.Font.caption1)
                                 }
@@ -286,7 +286,7 @@ struct TreeSearchOverlay: View {
                 if filteredResults.isEmpty {
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(DS.Font.scaled(16))
+                            .font(DS.Font.icon(16))
                             .foregroundColor(DS.Color.textTertiary)
                         Text(L10n.t("لا توجد نتائج ضمن هذه التصفية", "No results for this filter"))
                             .font(DS.Font.callout)
@@ -344,7 +344,7 @@ struct TreeSearchOverlay: View {
         } else if !debouncedSearchText.isEmpty && searchText == debouncedSearchText {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "person.slash.fill")
-                    .font(DS.Font.scaled(16))
+                    .font(DS.Font.icon(16))
                     .foregroundColor(DS.Color.textTertiary)
                 Text(L10n.t("لا توجد نتائج", "No results found"))
                     .font(DS.Font.callout)
@@ -537,7 +537,7 @@ struct TreeSearchOverlay: View {
             Button { branchPickerOpen = true } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "tree.fill")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(m.firstName)
                         .font(DS.Font.scaled(12, weight: .bold))
                         .lineLimit(1)
@@ -547,15 +547,15 @@ struct TreeSearchOverlay: View {
                         branchRootId = nil
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(13, weight: .semibold))
+                            .font(DS.Font.icon(13, weight: .semibold))
                     }
                     .buttonStyle(.plain)
                     .padding(.leading, 2)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(DS.Color.primary))
+                .background(Capsule().fill(DS.Color.primaryFill))
             }
             .buttonStyle(DSScaleButtonStyle())
         } else {
@@ -563,7 +563,7 @@ struct TreeSearchOverlay: View {
             Button { branchPickerOpen = true } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "tree")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(L10n.t("الفرع", "Branch"))
                         .font(DS.Font.scaled(12, weight: .semibold))
                 }
@@ -583,12 +583,7 @@ struct TreeSearchOverlay: View {
         HStack(spacing: DS.Spacing.sm) {
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [result.member.roleColor, result.member.roleColor.opacity(0.7)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(result.member.roleColor)
                     .frame(width: 36, height: 36)
 
                 if let urlStr = result.member.avatarUrl, let url = URL(string: urlStr) {
@@ -597,14 +592,14 @@ struct TreeSearchOverlay: View {
                     } placeholder: {
                         Text(String(result.member.firstName.prefix(1)))
                             .font(DS.Font.scaled(14, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
+                            .foregroundColor(DS.Color.onTint) // نص فوق لون الدور: داكن في الوضع الداكن
                     }
                     .frame(width: 36, height: 36)
                     .clipShape(Circle())
                 } else {
                     Text(String(result.member.firstName.prefix(1)))
                         .font(DS.Font.scaled(14, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
+                        .foregroundColor(DS.Color.onTint) // نص فوق لون الدور: داكن في الوضع الداكن
                 }
 
                 if result.member.isDeceased ?? false {
@@ -613,11 +608,11 @@ struct TreeSearchOverlay: View {
                         HStack {
                             Spacer()
                             Circle()
-                                .fill(DS.Color.deceased)
+                                .fill(DS.Color.deceasedFill)
                                 .frame(width: 16, height: 16)
                                 .overlay(
                                     Image(systemName: "heart.slash.fill")
-                                        .font(DS.Font.scaled(11, weight: .bold))
+                                        .font(DS.Font.icon(11, weight: .bold))
                                         .foregroundColor(DS.Color.textOnPrimary)
                                 )
                         }
@@ -656,7 +651,7 @@ struct TreeSearchOverlay: View {
             }
             Spacer()
             Image(systemName: "arrow.up.left.circle.fill")
-                .font(DS.Font.scaled(18))
+                .font(DS.Font.icon(18))
                 .foregroundColor(result.member.roleColor.opacity(0.6))
         }
         .padding(.horizontal, DS.Spacing.md)

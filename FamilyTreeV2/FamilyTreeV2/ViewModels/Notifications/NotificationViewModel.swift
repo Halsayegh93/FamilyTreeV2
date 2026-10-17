@@ -1420,8 +1420,8 @@ class NotificationViewModel: ObservableObject {
                     "target_member_id": AnyEncodable(requestId.uuidString),
                     "title": AnyEncodable(L10n.t("تم قبول طلبك", "Your Request Was Approved")),
                     "body": AnyEncodable(L10n.t(
-                        "وافقت الإدارة على انضمامك — مرحباً في عائلة المحمدعلي 🌿",
-                        "The administration approved your membership — Welcome to the Al-Mohammad Ali family 🌿"
+                        "وافقت الإدارة على انضمامك — مرحباً في عائلة المحمدعلي",
+                        "The administration approved your membership — Welcome to the Al-Mohammad Ali family"
                     )),
                     "kind": AnyEncodable("join_approved"),
                     "created_by": AnyEncodable(currentUser?.id.uuidString ?? "")
@@ -1429,7 +1429,7 @@ class NotificationViewModel: ObservableObject {
                 _ = try? await supabase.from("notifications").insert(approvedPayload).execute()
                 await sendPushToMembers(
                     title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
-                    body: L10n.t("مرحباً في عائلة المحمدعلي 🌿", "Welcome to the Al-Mohammad Ali family 🌿"),
+                    body: L10n.t("مرحباً في عائلة المحمدعلي", "Welcome to the Al-Mohammad Ali family"),
                     kind: "join_approved",
                     targetMemberIds: [requestId]
                 )

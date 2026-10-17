@@ -92,24 +92,24 @@ serve(async (req) => {
   const lines: string[] = [];
 
   if (newMembers.length > 0) {
-    lines.push(`👤 ${newMembers.length} عضو جديد انضم هالأسبوع`);
+    lines.push(`${newMembers.length} عضو جديد انضم هالأسبوع`);
   }
   if (newNews.length > 0) {
-    lines.push(`📰 ${newNews.length} خبر جديد`);
+    lines.push(`${newNews.length} خبر جديد`);
   }
   if (newDiwaniyas.length > 0) {
-    lines.push(`🏠 ${newDiwaniyas.length} ديوانية جديدة`);
+    lines.push(`${newDiwaniyas.length} ديوانية جديدة`);
   }
   if (birthdays.length > 0) {
     const birthdayNames = birthdays.slice(0, 3).map((b) => b.name).join(" و ");
-    lines.push(`🎂 أعياد ميلاد قادمة: ${birthdayNames}${birthdays.length > 3 ? ` و ${birthdays.length - 3} آخرين` : ""}`);
+    lines.push(`أعياد ميلاد قادمة: ${birthdayNames}${birthdays.length > 3 ? ` و ${birthdays.length - 3} آخرين` : ""}`);
   }
 
   if (lines.length === 0) {
     lines.push("لا توجد أحداث جديدة هالأسبوع");
   }
 
-  const titleAr = `📋 ملخص الأسبوع — عائلة آل محمد علي`;
+  const titleAr = `ملخص الأسبوع — عائلة المحمدعلي`;
   const bodyAr = lines.join("\n");
 
   // The notification INSERT trigger sends push. A second invoke would duplicate it.

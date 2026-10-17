@@ -110,7 +110,7 @@ struct DSPhoneField: View {
                         .font(DS.Font.scaled(codeFontSize, weight: .bold))
                         .foregroundStyle(DS.Color.textPrimary)
                     Image(systemName: "chevron.down")
-                        .font(DS.Font.scaled(compact ? 9 : 10, weight: .bold))
+                        .font(DS.Font.icon(compact ? 9 : 10, weight: .bold))
                         .foregroundStyle(DS.Color.textTertiary)
                 }
             }

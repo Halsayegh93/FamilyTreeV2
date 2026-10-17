@@ -102,7 +102,7 @@ struct AddNewsView: View {
                     ProgressView().scaleEffect(0.8).tint(DS.Color.primary)
                 } else {
                     Image(systemName: "paperplane.fill")
-                        .font(DS.Font.scaled(16, weight: .semibold))
+                        .font(DS.Font.icon(16, weight: .semibold))
                 }
             }
             .foregroundColor(canSubmit ? DS.Color.primary : DS.Color.textTertiary)
@@ -149,7 +149,7 @@ struct AddNewsView: View {
                             .frame(width: 30, height: 30)
                             .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
                         Image(systemName: "megaphone.fill")
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.icon(13, weight: .bold))
                             .foregroundColor(.white)
                     } else {
                         DSMemberAvatar(
@@ -163,8 +163,8 @@ struct AddNewsView: View {
                     // علامة الاختيار — تحلّ محلّ المفتاح
                     if selected {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(DS.Font.scaled(13, weight: .bold))
-                            .foregroundStyle(.white, DS.Color.primary)
+                            .font(DS.Font.icon(13, weight: .bold))
+                            .foregroundStyle(DS.Color.textOnPrimary, DS.Color.primaryFill)
                             .background(Circle().fill(DS.Color.cardBackground).frame(width: 15, height: 15))
                             .offset(x: 11, y: 11)
                             .transition(.scale.combined(with: .opacity))
@@ -218,7 +218,7 @@ struct AddNewsView: View {
                                size: CGFloat = 11) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(size - 1, weight: .bold))
+                .font(DS.Font.icon(size - 1, weight: .bold))
                 .foregroundColor(color)
             Text(title)
                 .font(DS.Font.scaled(size, weight: .bold))
@@ -247,8 +247,8 @@ struct AddNewsView: View {
                         }) {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: NewsTypeHelper.icon(for: type))
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                    .foregroundColor(isSelected ? DS.Color.textOnPrimary : typeColor)
+                                    .font(DS.Font.icon(11, weight: .bold))
+                                    .foregroundColor(isSelected ? DS.Color.readableText(on: typeColor) : typeColor)
                                     .frame(width: 22, height: 22)
                                     .background(isSelected ? typeColor : typeColor.opacity(0.12))
                                     .clipShape(Circle())
@@ -338,7 +338,7 @@ struct AddNewsView: View {
                             .tint(DS.Color.primary)
                     } else {
                         Image(systemName: "photo.on.rectangle.angled")
-                            .font(DS.Font.scaled(16, weight: .medium))
+                            .font(DS.Font.icon(16, weight: .medium))
                     }
 
                     if !selectedImages.isEmpty {
@@ -365,14 +365,14 @@ struct AddNewsView: View {
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "chart.bar.fill")
-                            .font(DS.Font.scaled(15, weight: .medium))
+                            .font(DS.Font.icon(15, weight: .medium))
                         if isPoll {
                             Text(L10n.t("تصويت", "Poll"))
                                 .font(DS.Font.caption2)
                                 .fontWeight(.bold)
                         }
                     }
-                    .foregroundColor(isPoll ? .white : DS.Color.newsVote)
+                    .foregroundColor(isPoll ? DS.Color.onTint : DS.Color.newsVote)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.vertical, DS.Spacing.sm)
                     .background(isPoll ? DS.Color.newsVote : DS.Color.newsVote.opacity(0.10))
@@ -408,7 +408,7 @@ struct AddNewsView: View {
                             }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(DS.Font.scaled(18, weight: .bold))
+                                .font(DS.Font.icon(18, weight: .bold))
                                 .foregroundStyle(DS.Color.textOnPrimary, DS.Color.error)
                                 .dsCardShadow()
                         }
@@ -442,7 +442,7 @@ struct AddNewsView: View {
         if !newsVM.canAutoPublishNews {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: "info.circle.fill")
-                    .font(DS.Font.scaled(11))
+                    .font(DS.Font.icon(11))
                 Text(L10n.t("يحتاج موافقة الإدارة", "Pending admin review"))
                     .font(DS.Font.caption2)
             }
@@ -454,7 +454,7 @@ struct AddNewsView: View {
     private func pollField(placeholder: String, text: Binding<String>, icon: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(12, weight: .semibold))
+                .font(DS.Font.icon(12, weight: .semibold))
                 .foregroundColor(DS.Color.newsVote)
                 .frame(width: 20)
 

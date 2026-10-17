@@ -1,109 +1,43 @@
 import SwiftUI
 
+/// شاشة البداية — الشعار المسطّح الكريمي في الوسط، على الكحلي في الفاتح وعلى الأسود الصافي في الداكن.
+/// الهوية: الشعار بلا دائرة ولا ظل ولا توهّج، ويظهر بتلاشٍ وتكبير خفيف قصير — بلا نبض ولا دوران ولا لمعان.
 struct SplashScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var logoScale: CGFloat = 0.5
+    @State private var logoScale: CGFloat = 0.94
     @State private var logoOpacity: Double = 0
     @State private var textOpacity: Double = 0
     @State private var dotCount = 0
-    @State private var pulseScale: CGFloat = 1.0
-    @State private var ringRotation: Double = 0
-    @State private var ring2Rotation: Double = 0
-    @State private var shimmerOffset: CGFloat = -200
-    @State private var glowOpacity: Double = 0
+
+    /// ارتفاع الشعار — والمسافة الآمنة حوله ربع ارتفاعه (الهوية)
+    private let logoHeight: CGFloat = 120
 
     var body: some View {
         ZStack {
-            // خلفية بسيطة صافية
-            DS.Color.background.ignoresSafeArea()
+            // كحلي المصمم #172536 في الفاتح، وأسود صافٍ في الداكن — بلون شاشة الإقلاع نفسه
+            DS.Color.splashBackground.ignoresSafeArea()
 
-            VStack(spacing: DS.Spacing.xxl) {
+            VStack(spacing: 0) {
                 Spacer()
 
-                // اللوقو مع حلقات متحركة
-                ZStack {
-                    // حلقة دائرية تدور
-                    Circle()
-                        .trim(from: 0.0, to: 0.65)
-                        .stroke(
-                            AngularGradient(
-                                colors: [DS.Color.primary.opacity(0.0), DS.Color.primary.opacity(0.3), DS.Color.primary.opacity(0.0)],
-                                center: .center
-                            ),
-                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
-                        )
-                        .frame(width: 155, height: 155)
-                        .rotationEffect(.degrees(ringRotation))
+                // الشعار المسطّح — logo-cream على الكحلي والأسود
+                Image("FamilyLogoCream")
+                    .renderingMode(.original)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: logoHeight)
+                    .padding(logoHeight / 4)
+                    .scaleEffect(logoScale)
+                    .opacity(logoOpacity)
+                    .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
 
-                    // حلقة ثانية عكسية
-                    Circle()
-                        .trim(from: 0.0, to: 0.4)
-                        .stroke(
-                            AngularGradient(
-                                colors: [DS.Color.accent.opacity(0.0), DS.Color.accent.opacity(0.2), DS.Color.accent.opacity(0.0)],
-                                center: .center
-                            ),
-                            style: StrokeStyle(lineWidth: 2, lineCap: .round)
-                        )
-                        .frame(width: 145, height: 145)
-                        .rotationEffect(.degrees(ring2Rotation))
-
-                    // حلقة نبض خارجية
-                    Circle()
-                        .stroke(DS.Color.primary.opacity(0.12), lineWidth: 2.5)
-                        .frame(width: 140, height: 140)
-                        .scaleEffect(pulseScale)
-
-                    // Glow ring
-                    Circle()
-                        .fill(DS.Color.primary.opacity(glowOpacity * 0.08))
-                        .frame(width: 130, height: 130)
-                        .blur(radius: 15)
-
-                    // دائرة خارجية
-                    Circle()
-                        .fill(DS.Color.primary.opacity(0.08))
-                        .frame(width: 120, height: 120)
-
-                    // الدائرة الرئيسية
-                    Circle()
-                        .fill(DS.Color.gradientRoyal)
-                        .frame(width: 100, height: 100)
-                        .dsGlowShadow()
-
-                    // Shimmer overlay
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.clear, .white.opacity(0.15), .clear],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: 100, height: 100)
-                        .offset(x: shimmerOffset)
-                        .mask(
-                            Circle().frame(width: 100, height: 100)
-                        )
-
-                    Image("AppIconImage")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 100, height: 100)
-                        .clipShape(Circle())
-                }
-                .dsGlowShadow()
-                .scaleEffect(logoScale)
-                .opacity(logoOpacity)
-
-                // النصوص — مع فاصل تراثي ذهبي
+                // الاسم — مع فاصل ذهبي
                 VStack(spacing: DS.Spacing.sm) {
-                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammadali Family"))
+                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
                         .font(DS.Font.title1)
-                        .fontWeight(.black)
-                        .foregroundColor(DS.Color.textPrimary)
+                        .foregroundColor(DS.Color.textOnPrimary)
 
-                    // فاصل ذهبي تراثي
+                    // فاصل ذهبي: خطّان رفيعان يتلاشيان للخارج حول معيّن صغير
                     HStack(spacing: 6) {
                         Rectangle()
                             .fill(
@@ -126,33 +60,31 @@ struct SplashScreenView: View {
                             .frame(width: 40, height: 1)
                     }
 
-                    Text(L10n.t("شجرة العائلة", "Family Tree"))
+                    // النص الثانوي ذهبي على الخلفية الداكنة (الهوية)
+                    Text(L10n.t("شجرة العائلة", "Family tree"))
                         .font(DS.Font.title3)
-                        .foregroundColor(DS.Color.textSecondary)
+                        .foregroundColor(DS.Color.accentLight)
                 }
                 .opacity(textOpacity)
 
                 Spacer()
 
-                // مؤشر التحميل
+                // مؤشر التحميل — نقاط هادئة تتبدّل بالشفافية فقط
                 VStack(spacing: DS.Spacing.md) {
-                    // Custom dot loader instead of ProgressView
                     HStack(spacing: 6) {
                         ForEach(0..<3) { i in
                             Circle()
-                                .fill(DS.Color.primary)
+                                .fill(DS.Color.accentLight)
                                 .frame(width: 8, height: 8)
-                                // Reduce Motion: بلا نبض حجمي — يبقى التبديل على الشفافية فقط
-                                .scaleEffect(reduceMotion ? 1.0 : (dotCount == i + 1 ? 1.3 : 0.7))
                                 .opacity(dotCount == i + 1 ? 1.0 : 0.3)
-                                .animation(reduceMotion ? .easeInOut(duration: 0.25) : DS.Anim.bouncy, value: dotCount)
+                                .animation(.easeInOut(duration: 0.25), value: dotCount)
                         }
                     }
 
                     Text(L10n.t("جاري التحقق", "Verifying") + String(repeating: ".", count: dotCount))
                         .font(DS.Font.callout)
                         .fontWeight(.medium)
-                        .foregroundColor(DS.Color.textSecondary)
+                        .foregroundColor(DS.Color.accentLight)
                         .frame(width: 140)
                         .animation(.none, value: dotCount)
                 }
@@ -163,49 +95,23 @@ struct SplashScreenView: View {
             }
         }
         .onAppear {
-            // احترام "تقليل الحركة": ظهور ناعم بالشفافية فقط — بلا سبرنق/نبض/دوران/لمعان
+            // احترام "تقليل الحركة": ظهور بالشفافية فقط
             guard !reduceMotion else {
                 logoScale = 1.0
                 withAnimation(.easeIn(duration: 0.3)) {
                     logoOpacity = 1.0
                     textOpacity = 1.0
-                    glowOpacity = 1.0
                 }
                 return
             }
 
-            // أنيميشن اللوقو — elastic spring
-            withAnimation(DS.Anim.elastic) {
+            // ظهور هادئ قصير: تلاشٍ مع تكبير خفيف
+            withAnimation(.easeOut(duration: 0.45)) {
                 logoScale = 1.0
                 logoOpacity = 1.0
             }
-
-            // أنيميشن النص — smooth delay
-            withAnimation(DS.Anim.smooth.delay(0.2)) {
+            withAnimation(.easeOut(duration: 0.4).delay(0.15)) {
                 textOpacity = 1.0
-            }
-
-            // Glow fade in
-            withAnimation(DS.Anim.smooth.delay(0.3)) {
-                glowOpacity = 1.0
-            }
-
-            // أنيميشن النبض المتكرر
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                pulseScale = 1.18
-            }
-
-            // حلقات تدور
-            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-                ringRotation = 360
-            }
-            withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) {
-                ring2Rotation = -360
-            }
-
-            // Shimmer sweep
-            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: false).delay(0.5)) {
-                shimmerOffset = 200
             }
         }
         // أنيميشن النقاط المتحركة

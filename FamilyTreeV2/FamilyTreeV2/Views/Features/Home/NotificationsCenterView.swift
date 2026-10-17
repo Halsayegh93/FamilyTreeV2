@@ -14,14 +14,14 @@ private struct NotificationKindStyle {
 
     private static let styles: [String: NotificationKindStyle] = [
         // — كل الأيقونات تستخدم ألوان Vivid Spectrum (الأزرق/الأخضر/البنفسجي) —
-        "approval":          .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "عضوية",           labelEn: "Membership"),
-        "join_approved":     .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "عضوية",           labelEn: "Membership"),
-        "join_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "طلب انضمام",      labelEn: "Join Request"),
-        "news":              .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
-        "news_add":          .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "أخبار",           labelEn: "News"),
+        "approval":          .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientPrimary, color: DS.Color.success,     labelAr: "عضوية",           labelEn: "Membership"),
+        "join_approved":     .init(icon: "checkmark.circle.fill",                    gradient: DS.Color.gradientPrimary, color: DS.Color.success,     labelAr: "عضوية",           labelEn: "Membership"),
+        "join_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.warning,     labelAr: "طلب انضمام",      labelEn: "Join Request"),
+        "news":              .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.accent,      labelAr: "أخبار",           labelEn: "News"),
+        "news_add":          .init(icon: "newspaper.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.accent,      labelAr: "أخبار",           labelEn: "News"),
         "admin":             .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إعلان من الإدارة", labelEn: "Admin Announcement"),
         "admin_broadcast":   .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إعلان من الإدارة", labelEn: "Admin Announcement"),
-        "admin_request":     .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "إدارة",           labelEn: "Admin"),
+        "admin_request":     .init(icon: "shield.fill",                              gradient: DS.Color.gradientAccent,  color: DS.Color.warning,     labelAr: "إدارة",           labelEn: "Admin"),
         "deceased_report":   .init(icon: "heart.fill",                               gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "وفاة",            labelEn: "Deceased"),
         "child_add":         .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة ابن",       labelEn: "Child Add"),
         "admin_edit_child_add":   .init(icon: "person.badge.plus",                   gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة ابن",       labelEn: "Child Add"),
@@ -34,37 +34,37 @@ private struct NotificationKindStyle {
         "admin_edit":        .init(icon: "pencil.circle.fill",                       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل بيانات",    labelEn: "Edit"),
         "admin_edit_name":   .init(icon: "pencil",                                   gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل اسم",       labelEn: "Name Edit"),
         "admin_edit_dates":  .init(icon: "calendar",                                 gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل تواريخ",    labelEn: "Dates Edit"),
-        "admin_edit_phone":  .init(icon: "phone.arrow.right",                        gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل رقم",       labelEn: "Phone Edit"),
+        "admin_edit_phone":  .init(icon: "phone.arrow.right",                        gradient: DS.Color.gradientAccent,  color: DS.Color.sea,      labelAr: "تعديل رقم",       labelEn: "Phone Edit"),
         "admin_edit_phone_remove": .init(icon: "phone.down.fill",                    gradient: DS.Color.gradientAccent,  color: DS.Color.error,       labelAr: "حذف رقم",         labelEn: "Phone Removed"),
         "admin_edit_role":   .init(icon: "shield.lefthalf.filled",                   gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل صلاحية",    labelEn: "Role Edit"),
         "admin_edit_father": .init(icon: "person.2.fill",                            gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل أب",        labelEn: "Father Edit"),
-        "admin_edit_avatar": .init(icon: "camera.circle.fill",                       gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "تعديل صورة",      labelEn: "Photo Edit"),
+        "admin_edit_avatar": .init(icon: "camera.circle.fill",                       gradient: DS.Color.gradientPrimary, color: DS.Color.sadu,        labelAr: "تعديل صورة",      labelEn: "Photo Edit"),
         "admin_edit_avatar_remove": .init(icon: "camera.metering.unknown",           gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "حذف صورة",        labelEn: "Photo Removed"),
         "admin_child_add":   .init(icon: "person.badge.plus",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة ابن",       labelEn: "Child Add"),
-        "phone_change":      .init(icon: "phone.arrow.right",                        gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "تغيير رقم",       labelEn: "Phone Change"),
+        "phone_change":      .init(icon: "phone.arrow.right",                        gradient: DS.Color.gradientPrimary, color: DS.Color.sea,         labelAr: "تغيير رقم",       labelEn: "Phone Change"),
         "news_report":       .init(icon: "exclamationmark.triangle.fill",            gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "بلاغ خبر",        labelEn: "News Report"),
         "news_deleted":      .init(icon: "trash.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "حذف منشور",       labelEn: "Post Deleted"),
-        "contact_message":   .init(icon: "envelope.fill",                            gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "تواصل",           labelEn: "Contact"),
-        "contact_reply":     .init(icon: "envelope.open.fill",                       gradient: DS.Color.gradientPrimary, color: DS.Color.success,     labelAr: "رد من الإدارة",   labelEn: "Admin Reply"),
-        "link_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "طلب ربط",         labelEn: "Link Request"),
-        "gallery_add":       .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "معرض صور",        labelEn: "Gallery"),
-        "news_comment":      .init(icon: "bubble.left.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "تعليق",           labelEn: "Comment"),
-        "news_like":         .init(icon: "heart.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إعجاب",           labelEn: "Like"),
-        "news_published":    .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "خبر جديد",        labelEn: "New Post"),
+        "contact_message":   .init(icon: "envelope.fill",                            gradient: DS.Color.gradientPrimary, color: DS.Color.sea,         labelAr: "تواصل",           labelEn: "Contact"),
+        "contact_reply":     .init(icon: "envelope.open.fill",                       gradient: DS.Color.gradientPrimary, color: DS.Color.sea,         labelAr: "رد من الإدارة",   labelEn: "Admin Reply"),
+        "link_request":      .init(icon: "link.circle.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.warning,     labelAr: "طلب ربط",         labelEn: "Link Request"),
+        "gallery_add":       .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.sadu,        labelAr: "معرض صور",        labelEn: "Gallery"),
+        "news_comment":      .init(icon: "bubble.left.fill",                         gradient: DS.Color.gradientPrimary, color: DS.Color.sea,         labelAr: "تعليق",           labelEn: "Comment"),
+        "news_like":         .init(icon: "heart.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.sadu,        labelAr: "إعجاب",           labelEn: "Like"),
+        "news_published":    .init(icon: "megaphone.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.accent,      labelAr: "خبر جديد",        labelEn: "New Post"),
         "profile_update":    .init(icon: "person.crop.circle.badge.checkmark",       gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "تحديث بيانات",    labelEn: "Profile Update"),
-        "account_activated": .init(icon: "checkmark.seal.fill",                      gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "تفعيل حساب",      labelEn: "Activated"),
+        "account_activated": .init(icon: "checkmark.seal.fill",                      gradient: DS.Color.gradientPrimary, color: DS.Color.success,     labelAr: "تفعيل حساب",      labelEn: "Activated"),
         "role_change":       .init(icon: "shield.lefthalf.filled",                   gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تغيير الصلاحية",  labelEn: "Role Change"),
         "weekly_digest":     .init(icon: "list.clipboard.fill",                      gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "ملخص أسبوعي",     labelEn: "Weekly Digest"),
         "tree_edit":         .init(icon: "pencil.circle.fill",                       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل شجرة",      labelEn: "Tree Edit"),
-        "photo_suggestion":  .init(icon: "camera.badge.ellipsis",                    gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "اقتراح صورة",     labelEn: "Photo Suggestion"),
-        "gallery_pending":   .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "صورة معرض",        labelEn: "Gallery Photo"),
-        "gallery_approved":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "صورة معتمدة",      labelEn: "Photo Approved"),
+        "photo_suggestion":  .init(icon: "camera.badge.ellipsis",                    gradient: DS.Color.gradientPrimary, color: DS.Color.sadu,        labelAr: "اقتراح صورة",     labelEn: "Photo Suggestion"),
+        "gallery_pending":   .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.warning,     labelAr: "صورة معرض",        labelEn: "Gallery Photo"),
+        "gallery_approved":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.success,     labelAr: "صورة معتمدة",      labelEn: "Photo Approved"),
         "gallery_rejected":  .init(icon: "photo.fill",                               gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "صورة مرفوضة",      labelEn: "Photo Rejected"),
-        "diwaniya_pending":  .init(icon: "tent.fill",                                gradient: DS.Color.gradientPrimary, color: DS.Color.primary,     labelAr: "ديوانية جديدة",   labelEn: "New Diwaniya"),
-        "diwaniya_approved": .init(icon: "tent.fill",                                gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "ديوانية معتمدة",   labelEn: "Diwaniya Approved"),
+        "diwaniya_pending":  .init(icon: "tent.fill",                                gradient: DS.Color.gradientPrimary, color: DS.Color.warning,     labelAr: "ديوانية جديدة",   labelEn: "New Diwaniya"),
+        "diwaniya_approved": .init(icon: "tent.fill",                                gradient: DS.Color.gradientPrimary, color: DS.Color.success,     labelAr: "ديوانية معتمدة",   labelEn: "Diwaniya Approved"),
         "diwaniya_rejected": .init(icon: "tent.fill",                                gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "ديوانية مرفوضة",   labelEn: "Diwaniya Rejected"),
-        "project_pending":   .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "مشروع جديد",       labelEn: "New Project"),
-        "project_approved":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "مشروع معتمد",      labelEn: "Project Approved"),
+        "project_pending":   .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientAccent,  color: DS.Color.warning,     labelAr: "مشروع جديد",       labelEn: "New Project"),
+        "project_approved":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.success,     labelAr: "مشروع معتمد",      labelEn: "Project Approved"),
         "project_rejected":  .init(icon: "briefcase.fill",                           gradient: DS.Color.gradientPrimary, color: DS.Color.error,       labelAr: "مشروع مرفوض",      labelEn: "Project Rejected"),
     ]
 
@@ -184,7 +184,7 @@ struct NotificationsCenterView: View {
                 // الرجوع مكان أيقونة الصفحة (طلب المالك) — بلا علامة ×
                 Button { dismiss() } label: {
                     Image(systemName: L10n.isArabic ? "chevron.right" : "chevron.left")
-                        .font(DS.Font.scaled(19, weight: .bold))
+                        .font(DS.Font.icon(19, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 48, height: 48)
                         .dsHeaderGlassCircle()
@@ -415,7 +415,7 @@ struct NotificationsCenterView: View {
                             .font(DS.Font.scaled(11, weight: .black))
                             .foregroundColor(DS.Color.textOnPrimary)
                             .frame(minWidth: NotifLayout.badgeSize, minHeight: NotifLayout.badgeSize)
-                            .background(DS.Color.primary)
+                            .background(DS.Color.primaryFill)
                             .clipShape(Circle())
                     }
 
@@ -456,7 +456,7 @@ struct NotificationsCenterView: View {
                                 .foregroundColor(DS.Color.textOnPrimary)
                                 .frame(minWidth: 18, minHeight: 18)
                                 .padding(.horizontal, 4)
-                                .background(Capsule().fill(DS.Color.primary))
+                                .background(Capsule().fill(DS.Color.primaryFill))
                             Text(L10n.t("غير مقروء", "unread"))
                                 .font(DS.Font.scaled(11, weight: .semibold))
                                 .foregroundColor(DS.Color.textSecondary)
@@ -491,7 +491,7 @@ struct NotificationsCenterView: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(12, weight: .semibold))
+                    .font(DS.Font.icon(12, weight: .semibold))
                 Text(label)
                     .font(DS.Font.scaled(12, weight: .bold))
             }
@@ -562,13 +562,13 @@ struct NotificationsCenterView: View {
                         .symbolRenderingMode(.hierarchical)
 
                     Text(title)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(DS.Font.plexFixed(14, weight: .bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
 
                     if count > 0 {
                         Text("\(count)")
-                            .font(.system(size: 10, weight: .black, design: .rounded))
+                            .font(DS.Font.plexFixed(10, weight: .bold))
                             .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textOnPrimary)
                             .frame(minWidth: 16, minHeight: 16)
                             .padding(.horizontal, 3)
@@ -762,7 +762,7 @@ struct NotificationsCenterView: View {
                                     } label: {
                                         Label(L10n.t("مقروء", "Read"), systemImage: "envelope.open")
                                     }
-                                    .tint(DS.Color.primary)
+                                    .tint(DS.Color.primaryFill)
                                 }
                             }
                     }
@@ -812,7 +812,7 @@ struct NotificationsCenterView: View {
                 if isSelecting {
                     let isSelected = selectedIds.contains(item.id)
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(DS.Font.scaled(22, weight: .medium))
+                        .font(DS.Font.icon(22, weight: .medium))
                         .foregroundStyle(isSelected ? DS.Color.primary : DS.Color.textTertiary)
                         .animation(DS.Anim.snappy, value: isSelected)
                 }
@@ -824,7 +824,7 @@ struct NotificationsCenterView: View {
                         .frame(width: NotifLayout.rowIconSize, height: NotifLayout.rowIconSize)
 
                     Image(systemName: iconInfo.icon)
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                         .foregroundColor(isUnread ? iconInfo.color : DS.Color.textTertiary)
                 }
 
@@ -877,7 +877,7 @@ struct NotificationsCenterView: View {
                             // «من فلان» — يوضّح للإدارة أن الإشعار يخصّ عضواً بعينه
                             HStack(spacing: 3) {
                                 Image(systemName: isAdminNotif ? "shield.fill" : "person.fill")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(isAdminNotif ? creatorName : L10n.t("من \(creatorName)", "from \(creatorName)"))
                                     .font(DS.Font.scaled(11, weight: .bold))
                                     .lineLimit(1)
@@ -1226,7 +1226,7 @@ struct NotificationsCenterView: View {
                     .clipShape(Circle())
                 } else {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -1252,12 +1252,12 @@ struct NotificationsCenterView: View {
 
             // سهم — إشارة أن الكرت يفتح تفاصيل العضو
             Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                .font(DS.Font.scaled(12, weight: .bold))
+                .font(DS.Font.icon(12, weight: .bold))
                 .foregroundColor(DS.Color.textTertiary.opacity(0.6))
 
             // أيقونة صغيرة تشير لنوع الإشعار
             Image(systemName: iconInfo.icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
+                .font(DS.Font.icon(14, weight: .semibold))
                 .foregroundColor(iconInfo.color)
                 .padding(8)
                 .background(iconInfo.color.opacity(0.10))
@@ -1325,7 +1325,7 @@ struct NotificationsCenterView: View {
                 // chip التصنيف
                 HStack(spacing: 4) {
                     Image(systemName: iconInfo.icon)
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(iconInfo.label)
                         .font(DS.Font.scaled(11, weight: .bold))
                 }
@@ -1340,7 +1340,7 @@ struct NotificationsCenterView: View {
                 if isAdminSender {
                     HStack(spacing: 3) {
                         Image(systemName: "shield.lefthalf.filled")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                         Text(L10n.t("الإدارة", "Admin"))
                             .font(DS.Font.scaled(11, weight: .bold))
                     }
@@ -1356,7 +1356,7 @@ struct NotificationsCenterView: View {
                 if let creator = actualCreator {
                     HStack(spacing: 3) {
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                         Text(creator.shortFullName)
                             .font(DS.Font.scaled(11, weight: .bold))
                             .lineLimit(1)
@@ -1407,7 +1407,7 @@ struct NotificationsCenterView: View {
             // التاريخ والوقت الكامل (تذييل خفيف)
             HStack(spacing: 4) {
                 Image(systemName: "calendar")
-                    .font(DS.Font.scaled(11, weight: .semibold))
+                    .font(DS.Font.icon(11, weight: .semibold))
                 Text(fullDateTime(date))
                     .font(DS.Font.scaled(11, weight: .medium))
             }
@@ -1487,7 +1487,7 @@ struct NotificationsCenterView: View {
 
                 // سهم
                 Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                     .foregroundColor(DS.Color.textTertiary)
 
                 // قيمة بعد
@@ -1513,7 +1513,7 @@ struct NotificationsCenterView: View {
         HStack(spacing: 4) {
             if let icon {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
             }
             Text(text)
                 .font(DS.Font.scaled(11, weight: .bold))
@@ -1645,7 +1645,7 @@ struct NotificationsCenterView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "envelope.open")
-                            .font(DS.Font.scaled(11, weight: .semibold))
+                            .font(DS.Font.icon(11, weight: .semibold))
                         Text(L10n.t("تعليم كمقروء", "Mark as Read"))
                             .font(DS.Font.scaled(12, weight: .semibold))
                     }
@@ -1900,7 +1900,7 @@ struct NotificationsCenterView: View {
                 HStack(spacing: DS.Spacing.sm) {
                     HStack(spacing: 4) {
                         Image(systemName: "person.2.fill")
-                            .font(DS.Font.scaled(11, weight: .bold))
+                            .font(DS.Font.icon(11, weight: .bold))
                         Text(L10n.t("تطابقات محتملة", "Possible Matches"))
                             .font(DS.Font.scaled(11, weight: .bold))
                     }
@@ -1925,7 +1925,7 @@ struct NotificationsCenterView: View {
 
                             if !candidates.isEmpty {
                                 Image(systemName: joinMatchesExpanded ? "chevron.up" : "chevron.down")
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                     .foregroundColor(DS.Color.textTertiary)
                             }
                         }
@@ -1953,7 +1953,7 @@ struct NotificationsCenterView: View {
                 // Empty state — يظهر دائماً (بدون توسيع) لأن المعلومة مهمة
                 HStack(spacing: 6) {
                     Image(systemName: "person.fill.questionmark")
-                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .font(DS.Font.icon(12, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                     Text(L10n.t(
                         "لا توجد مطابقات في الشجرة — قد يكون عضو جديد",
@@ -1996,7 +1996,7 @@ struct NotificationsCenterView: View {
                     .clipShape(Circle())
                 } else {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(11, weight: .semibold))
+                        .font(DS.Font.icon(11, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -2021,7 +2021,7 @@ struct NotificationsCenterView: View {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "link")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                     Text(L10n.t("ربط", "Link"))
                         .font(DS.Font.scaled(11, weight: .bold))
                 }
@@ -2066,7 +2066,7 @@ struct NotificationsCenterView: View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(14, weight: .semibold))
+                    .font(DS.Font.icon(14, weight: .semibold))
                 Text(label)
                     .font(DS.Font.calloutBold)
             }
@@ -2088,7 +2088,7 @@ struct NotificationsCenterView: View {
     private func detailInfoRow(icon: String, label: String, value: some StringProtocol, color: Color) -> some View {
         HStack(spacing: DS.Spacing.md) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .semibold))
+                .font(DS.Font.icon(14, weight: .semibold))
                 .foregroundColor(color)
                 .frame(width: NotifLayout.infoIconWidth, alignment: .center)
 

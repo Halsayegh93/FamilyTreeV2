@@ -1,7 +1,8 @@
 /* English - App Display Name & Privacy Descriptions */
+/* The home-screen name stays Arabic on English devices too (the owner's choice, 17/10/2026). */
 
-"CFBundleDisplayName" = "Al-Mohammadali Family";
-"CFBundleName" = "Al-Mohammadali Family";
+"CFBundleDisplayName" = "عائلة المحمدعلي";
+"CFBundleName" = "عائلة المحمدعلي";
 "NSPhotoLibraryUsageDescription" = "The app needs access to your photo library to select profile pictures and news photos";
 "NSCameraUsageDescription" = "The app needs access to your camera to take profile photos and scan QR codes";
 "NSPhotoLibraryAddUsageDescription" = "The app needs permission to add to your photo library to save the occasion posts you design";

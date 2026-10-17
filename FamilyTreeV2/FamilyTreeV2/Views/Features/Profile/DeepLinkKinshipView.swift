@@ -100,7 +100,7 @@ struct DeepLinkKinshipView: View {
                 ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(22))
+                            .font(DS.Font.icon(22))
                             .foregroundStyle(DS.Color.textTertiary)
                     }
                 }

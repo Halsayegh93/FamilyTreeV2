@@ -60,7 +60,7 @@ struct AdminFamilyNamesView: View {
     private var introCard: some View {
         HStack(alignment: .center, spacing: DS.Spacing.md) {
             Image(systemName: "person.2.crop.square.stack.fill")
-                .font(DS.Font.scaled(15, weight: .bold))
+                .font(DS.Font.icon(15, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
                 .background(SwiftUI.Color.white.opacity(0.20))
@@ -73,7 +73,7 @@ struct AdminFamilyNamesView: View {
                 Text(L10n.t("يختار العضو عائلته منها، وتظهر بآخر اسمه في التطبيق.",
                             "Members pick from this list; it appears at the end of their name."))
                     .font(DS.Font.scaled(11))
-                    .foregroundColor(SwiftUI.Color.white.opacity(0.85))
+                    .foregroundColor(DS.Color.accentLight)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -98,7 +98,7 @@ struct AdminFamilyNamesView: View {
     private var addRow: some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: "plus.circle.fill")
-                .font(DS.Font.scaled(14, weight: .bold))
+                .font(DS.Font.icon(14, weight: .bold))
                 .foregroundColor(DS.Color.primary)
             TextField(L10n.t("أضف اسم عائلة", "Add a family name"), text: $newName)
                 .font(DS.Font.scaled(13))
@@ -125,7 +125,7 @@ struct AdminFamilyNamesView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: 5) {
                 Image(systemName: "list.bullet")
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                     .foregroundColor(DS.Color.primary.opacity(0.75))
                 Text(L10n.t("العوائل (\(vm.options.count))", "Families (\(vm.options.count))"))
                     .font(DS.Font.caption1)
@@ -164,7 +164,7 @@ struct AdminFamilyNamesView: View {
     private func row(_ option: FamilyNameOption) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: option.isActive ? "checkmark.circle.fill" : "circle.slash")
-                .font(DS.Font.scaled(12, weight: .bold))
+                .font(DS.Font.icon(12, weight: .bold))
                 .foregroundColor(option.isActive ? DS.Color.success : DS.Color.textTertiary)
 
             Text(option.name)
@@ -202,7 +202,7 @@ struct AdminFamilyNamesView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(DS.Font.scaled(13, weight: .semibold))
+                        .font(DS.Font.icon(13, weight: .semibold))
                         .foregroundColor(DS.Color.textTertiary)
                         .frame(width: 40, height: 32)
                         .contentShape(Rectangle())

@@ -327,7 +327,7 @@ struct FamilyProjectsView: View {
     /// شارة زر القائمة الظاهر (•••) — دائرة زجاجية صغيرة.
     private var cardMenuBadge: some View {
         Image(systemName: "ellipsis")
-            .font(DS.Font.scaled(13, weight: .black))
+            .font(DS.Font.icon(13, weight: .black))
             .foregroundColor(DS.Color.textSecondary)
             .frame(width: 26, height: 26)
             .background(Circle().fill(DS.Color.surface))
@@ -373,16 +373,16 @@ struct FamilyProjectsView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "clock.fill")
-                            .font(DS.Font.scaled(12, weight: .bold))
+                            .font(DS.Font.icon(12, weight: .bold))
                         Text(authVM.isAdmin ? L10n.t("بانتظار", "Pending") : L10n.t("طلباتي", "Mine"))
                             .font(DS.Font.scaled(12, weight: .bold))
                         Text("\(pendingCount)")
                             .font(DS.Font.scaled(11, weight: .heavy))
                     }
-                    .foregroundColor(on ? .white : DS.Color.warning)
+                    .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.warning)
                     .padding(.horizontal, DS.Spacing.md)
                     .frame(height: 34)
-                    .background(Capsule().fill(on ? DS.Color.warning : DS.Color.warning.opacity(0.12)))
+                    .background(Capsule().fill(on ? DS.Color.warningFill : DS.Color.warning.opacity(0.12)))
                 }
                 .buttonStyle(DSScaleButtonStyle())
             }
@@ -428,7 +428,7 @@ struct FamilyProjectsView: View {
             .foregroundColor(isSelected ? .white : DS.Color.textPrimary.opacity(0.7))
             .background(
                 Circle()
-                    .fill(isSelected ? DS.Color.primary : Color.white.opacity(0.85))
+                    .fill(isSelected ? DS.Color.primaryFill : Color.white.opacity(0.85))
                     .frame(width: 22, height: 22)
             )
             .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
@@ -442,7 +442,7 @@ struct FamilyProjectsView: View {
                 showBatchDeleteAlert = true
             } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: "trash.fill").font(DS.Font.scaled(12, weight: .bold))
+                    Image(systemName: "trash.fill").font(DS.Font.icon(12, weight: .bold))
                     Text(L10n.t("حذف", "Delete")).font(DS.Font.scaled(13, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -482,7 +482,7 @@ struct FamilyProjectsView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: "person.fill")
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.icon(10, weight: .bold))
                     Text(project.ownerName)
                         .font(DS.Font.plex(11, weight: .semibold))
                         .lineLimit(1)
@@ -511,9 +511,9 @@ struct FamilyProjectsView: View {
         )
         .overlay(alignment: .topLeading) {
             if project.approvalStatus == "pending" {
-                statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warning)
+                statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warningFill)
             } else if project.isHidden {
-                statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.textTertiary)
+                statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.slateFill)
             }
         }
         .opacity(project.approvalStatus == "pending" || project.isHidden ? 0.85 : 1.0)
@@ -534,7 +534,7 @@ struct FamilyProjectsView: View {
                 ZStack {
                     DS.Color.primary.opacity(0.12)
                     Image(systemName: "briefcase.fill")
-                        .font(DS.Font.scaled(18, weight: .bold))
+                        .font(DS.Font.icon(18, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                 }
             }
@@ -550,10 +550,10 @@ struct FamilyProjectsView: View {
 
     private func statusBadge(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(DS.Font.scaled(10, weight: .bold))
+            Image(systemName: icon).font(DS.Font.icon(10, weight: .bold))
             Text(text).font(DS.Font.scaled(10, weight: .bold))
         }
-        .foregroundColor(.white)
+        .foregroundColor(DS.Color.textOnPrimary)
         .padding(.horizontal, 6).padding(.vertical, 3)
         .background(Capsule().fill(color))
         .padding(DS.Spacing.xs)
@@ -562,7 +562,7 @@ struct FamilyProjectsView: View {
     /// أيقونات المنصات اللي عنده روابط فيها — مؤشّر بصري سريع.
     private func socialIndicators(project: Project) -> some View {
         HStack(spacing: 4) {
-            if project.phoneNumber?.isEmpty == false    { socialDot(icon: "phone.fill", color: DS.Color.success) }
+            if project.phoneNumber?.isEmpty == false    { socialDot(icon: "phone.fill", color: DS.Color.sea) }
             if project.whatsappNumber?.isEmpty == false { socialDot(icon: "message.fill", color: Color(hex: "#25D366")) }
             if project.instagramUrl?.isEmpty == false   { socialDot(icon: "camera.fill", color: Color(hex: "#E1306C")) }
             if project.twitterUrl?.isEmpty == false     { socialDot(icon: "xmark", color: Color(hex: "#000000")) }
@@ -573,7 +573,7 @@ struct FamilyProjectsView: View {
 
     private func socialDot(icon: String, color: Color) -> some View {
         Image(systemName: icon)
-            .font(DS.Font.scaled(11, weight: .bold))
+            .font(DS.Font.icon(11, weight: .bold))
             .foregroundColor(color)
             .frame(width: 16, height: 16)
             .background(Circle().fill(color.opacity(0.15)))
@@ -581,13 +581,10 @@ struct FamilyProjectsView: View {
 
     private var projectPlaceholderCover: some View {
         ZStack {
-            LinearGradient(
-                colors: [DS.Color.primary.opacity(0.30), DS.Color.accent.opacity(0.30)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
+            DS.Color.primaryFill
             Image(systemName: "briefcase.fill")
                 .font(.system(size: 38, weight: .light))
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(DS.Color.textOnPrimary.opacity(0.85))
         }
     }
 
@@ -733,7 +730,7 @@ struct AddProjectView: View {
     private var approvalHintCard: some View {
         HStack(alignment: .top, spacing: DS.Spacing.sm) {
             Image(systemName: "info.circle.fill")
-                .font(DS.Font.scaled(14, weight: .bold))
+                .font(DS.Font.icon(14, weight: .bold))
                 .foregroundColor(DS.Color.info)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("بانتظار موافقة الإدارة",
@@ -854,15 +851,15 @@ struct AddProjectView: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "link")
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.success)
+                        .font(DS.Font.icon(13, weight: .bold))
+                        .foregroundColor(DS.Color.sea)
                     Text(L10n.t("روابط التواصل", "Contact Links"))
                         .font(DS.Font.scaled(13, weight: .bold))
                         .foregroundColor(DS.Color.textPrimary)
                     Spacer()
                     Text(filled > 0 ? "\(filled)" : L10n.t("اختياري", "Optional"))
                         .font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(filled > 0 ? DS.Color.success : DS.Color.textTertiary)
+                        .foregroundColor(filled > 0 ? DS.Color.sea : DS.Color.textTertiary)
                     Image(systemName: contactsOpen ? "chevron.up" : "chevron.down")
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textTertiary)
@@ -881,12 +878,12 @@ struct AddProjectView: View {
                     ],
                     spacing: DS.Spacing.sm
                 ) {
-                    compactLink(icon: "phone.fill", color: DS.Color.success, placeholder: "+965...", text: $phoneNumber)
-                    compactLink(icon: "message.fill", color: DS.Color.success, placeholder: L10n.t("واتساب", "WhatsApp"), text: $whatsappNumber)
+                    compactLink(icon: "phone.fill", color: DS.Color.sea, placeholder: "+965...", text: $phoneNumber)
+                    compactLink(icon: "message.fill", color: DS.Color.sea, placeholder: L10n.t("واتساب", "WhatsApp"), text: $whatsappNumber)
                     compactLink(icon: "camera.fill", color: DS.Color.accent, placeholder: L10n.t("إنستغرام", "Instagram"), text: $instagramUrl)
                     compactLink(icon: "at", color: DS.Color.info, placeholder: L10n.t("إكس", "X"), text: $twitterUrl)
                     compactLink(icon: "globe", color: DS.Color.primary, placeholder: L10n.t("موقع", "Website"), text: $websiteUrl)
-                    compactLink(icon: "mappin.and.ellipse", color: DS.Color.error, placeholder: L10n.t("الموقع", "Maps"), text: $locationUrl)
+                    compactLink(icon: "mappin.and.ellipse", color: DS.Color.palm, placeholder: L10n.t("الموقع", "Maps"), text: $locationUrl)
                 }
                 .padding([.horizontal, .bottom], DS.Spacing.md)
             }
@@ -897,7 +894,7 @@ struct AddProjectView: View {
     private func compactLink(icon: String, color: Color, placeholder: String, text: Binding<String>) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(13, weight: .semibold))
+                .font(DS.Font.icon(13, weight: .semibold))
                 .foregroundColor(color)
             TextField(placeholder, text: text)
                 .font(DS.Font.scaled(13))

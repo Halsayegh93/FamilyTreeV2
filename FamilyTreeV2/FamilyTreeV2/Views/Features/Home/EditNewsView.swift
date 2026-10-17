@@ -118,8 +118,8 @@ struct EditNewsView: View {
                         }) {
                             HStack(spacing: DS.Spacing.sm) {
                                 Image(systemName: NewsTypeHelper.icon(for: type))
-                                    .font(DS.Font.scaled(14, weight: .semibold))
-                                    .foregroundColor(isSelected ? DS.Color.textOnPrimary : typeColor)
+                                    .font(DS.Font.icon(14, weight: .semibold))
+                                    .foregroundColor(isSelected ? DS.Color.readableText(on: typeColor) : typeColor)
                                     .frame(width: 28, height: 28)
                                     .background(isSelected ? typeColor : typeColor.opacity(0.12))
                                     .clipShape(Circle())
@@ -203,7 +203,7 @@ struct EditNewsView: View {
                             .tint(DS.Color.primary)
                     } else {
                         Image(systemName: "photo.on.rectangle.angled")
-                            .font(DS.Font.scaled(16, weight: .medium))
+                            .font(DS.Font.icon(16, weight: .medium))
                     }
 
                     if totalPhotos > 0 {
@@ -252,7 +252,7 @@ struct EditNewsView: View {
                             }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(DS.Font.scaled(18, weight: .bold))
+                                .font(DS.Font.icon(18, weight: .bold))
                                 .foregroundStyle(DS.Color.textOnPrimary, DS.Color.error)
                                 .dsCardShadow()
                         }
@@ -277,7 +277,7 @@ struct EditNewsView: View {
                             }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(DS.Font.scaled(18, weight: .bold))
+                                .font(DS.Font.icon(18, weight: .bold))
                                 .foregroundStyle(DS.Color.textOnPrimary, DS.Color.error)
                                 .dsCardShadow()
                         }
@@ -314,7 +314,7 @@ struct EditNewsView: View {
     private func pollField(placeholder: String, text: Binding<String>, icon: String) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(systemName: icon)
-                .font(DS.Font.scaled(14, weight: .medium))
+                .font(DS.Font.icon(14, weight: .medium))
                 .foregroundColor(DS.Color.newsVote)
                 .frame(width: 24)
 

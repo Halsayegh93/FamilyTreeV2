@@ -24,7 +24,7 @@ private struct EditLimitPopup: View {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                         .foregroundColor(DS.Color.warning)
                     Text(L10n.t("تم تجاوز حد التعديلات", "Edit limit reached"))
                         .font(DS.Font.plex(17, weight: .bold))
@@ -43,11 +43,11 @@ private struct EditLimitPopup: View {
                 Button(action: close) {
                     Text(L10n.t("حسناً", "OK"))
                         .font(DS.Font.calloutBold)
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(DS.Color.primary))
+                            .fill(DS.Color.primaryFill))
                 }
                 .buttonStyle(DSScaleButtonStyle())
                 .padding(.top, DS.Spacing.xs)
@@ -506,7 +506,7 @@ struct EditProfileView: View {
             Text(L10n.t("تعديل", "Edit"))
                 .font(DS.Font.scaled(13, weight: .bold))
             Image(systemName: "pencil")
-                .font(DS.Font.scaled(11, weight: .bold))
+                .font(DS.Font.icon(11, weight: .bold))
         }
         .foregroundColor(DS.Color.primary)
         .padding(.horizontal, DS.Spacing.md)
@@ -538,7 +538,7 @@ struct EditProfileView: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(13, weight: .bold))
+                            .font(DS.Font.icon(13, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                         Text(L10n.t("الاسم", "Name"))
                             .font(DS.Font.caption1)
@@ -617,7 +617,7 @@ struct EditProfileView: View {
             Spacer()
 
             Image(systemName: "lock.fill")
-                .font(DS.Font.scaled(12, weight: .semibold))
+                .font(DS.Font.icon(12, weight: .semibold))
                 .foregroundColor(DS.Color.textTertiary)
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -686,7 +686,7 @@ struct EditProfileView: View {
     }
 
     private var modernPhoneField: some View {
-        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.success,
+        DSLabeledFieldRow(icon: "phone.fill", iconColor: DS.Color.sea,
                           label: L10n.t("رقم الهاتف", "Phone Number")) {
             DSPhoneField(
                 country: $selectedPhoneCountry,
@@ -723,7 +723,7 @@ struct EditProfileView: View {
                     Button { showBioEditor = true } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             Image(systemName: "plus.circle.fill")
-                                .font(DS.Font.scaled(18))
+                                .font(DS.Font.icon(18))
                                 .foregroundColor(DS.Color.primary)
                             Text(L10n.t("أضف حدثاً لسيرتك", "Add to your biography"))
                                 .font(DS.Font.callout)
@@ -810,7 +810,7 @@ struct EditProfileView: View {
                     .foregroundColor(DS.Color.textOnPrimary)
                     .padding(.horizontal, DS.Spacing.sm)
                     .padding(.vertical, 3)
-                    .background(DS.Color.primary)
+                    .background(DS.Color.primaryFill)
                     .clipShape(Capsule())
                     .fixedSize()
             } else {
@@ -1163,10 +1163,10 @@ private struct FamilyRequestCard: View {
                 Button { if let s = selected { onSend(s) } } label: {
                     Text(L10n.t("إرسال", "Send"))
                         .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity).frame(height: 44)
                         .background(RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .fill(selected == nil ? DS.Color.primary.opacity(0.4) : DS.Color.primary))
+                            .fill(selected == nil ? DS.Color.primaryFill.opacity(0.4) : DS.Color.primaryFill))
                 }
                 .disabled(selected == nil)
             }

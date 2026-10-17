@@ -302,7 +302,7 @@ struct FamilyArchiveView: View {
             .foregroundColor(isSelected ? .white : DS.Color.textPrimary.opacity(0.7))
             .background(
                 Circle()
-                    .fill(isSelected ? DS.Color.primary : Color.white.opacity(0.85))
+                    .fill(isSelected ? DS.Color.primaryFill : Color.white.opacity(0.85))
                     .frame(width: 22, height: 22)
             )
             .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
@@ -320,7 +320,7 @@ struct FamilyArchiveView: View {
             if anyVisible {
                 actionPill(icon: "eye.slash.fill",
                            label: L10n.t("إخفاء", "Hide"),
-                           color: DS.Color.warning) {
+                           color: DS.Color.slateFill) {
                     let ids = selectedIDs
                     Task {
                         await archiveVM.setHidden(ids: ids, hidden: true)
@@ -334,7 +334,7 @@ struct FamilyArchiveView: View {
             if anyHidden {
                 actionPill(icon: "eye.fill",
                            label: L10n.t("إظهار", "Show"),
-                           color: DS.Color.success) {
+                           color: DS.Color.navyFill) {
                     let ids = selectedIDs
                     Task {
                         await archiveVM.setHidden(ids: ids, hidden: false)
@@ -369,7 +369,7 @@ struct FamilyArchiveView: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                 Text(label)
                     .font(DS.Font.scaled(13, weight: .bold))
             }
@@ -524,7 +524,7 @@ struct FamilyArchiveView: View {
     /// شارة زر القائمة الظاهر (•••) — دائرة زجاجية صغيرة.
     private var cardMenuBadge: some View {
         Image(systemName: "ellipsis")
-            .font(DS.Font.scaled(13, weight: .black))
+            .font(DS.Font.icon(13, weight: .black))
             .foregroundColor(DS.Color.textSecondary)
             .frame(width: 26, height: 26)
             .background(Circle().fill(DS.Color.surface))
@@ -544,12 +544,12 @@ struct FamilyArchiveView: View {
             // لسان الملف
             HStack(spacing: 4) {
                 Image(systemName: item.categoryIcon)
-                    .font(DS.Font.scaled(9, weight: .bold))
+                    .font(DS.Font.icon(9, weight: .bold))
                 Text(item.categoryDisplayName)
                     .font(DS.Font.plex(10, weight: .bold))
                     .lineLimit(1)
             }
-            .foregroundColor(.white)
+            .foregroundColor(DS.Color.readableText(on: accent))
             .padding(.horizontal, DS.Spacing.sm)
             .frame(height: 22)
             .background(
@@ -598,14 +598,8 @@ struct FamilyArchiveView: View {
             uploaderStrip(for: item, accent: accent)
         }
         .frame(width: cardSide, height: cardSide, alignment: .top)
-        .background(
-            // ورقة: تدرّج خفيف بلون التصنيف من الأعلى
-            LinearGradient(
-                colors: [accent.opacity(0.07), DS.Color.surface],
-                startPoint: .top, endPoint: .center
-            )
-            .background(DS.Color.surface)
-        )
+        // ورقة بيضاء — سطح صلب (الهوية: البطاقات بلا تدرّج)؛ التصنيف في شريط الرافع والإطار
+        .background(DS.Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
@@ -631,7 +625,7 @@ struct FamilyArchiveView: View {
                     ZStack {
                         accent.opacity(0.22)
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(8, weight: .bold))
+                            .font(DS.Font.icon(8, weight: .bold))
                             .foregroundColor(accent)
                     }
                 }
@@ -686,7 +680,7 @@ struct FamilyArchiveView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
-                .background(Capsule().fill(DS.Color.error.opacity(0.92)))
+                .background(Capsule().fill(DS.Color.saduFill.opacity(0.92)))
                 .padding(.horizontal, DS.Spacing.sm + 4)
                 .padding(.bottom, 6)
         }
@@ -730,11 +724,11 @@ struct FamilyArchiveView: View {
     @ViewBuilder
     private func statusStack(for item: ArchiveItem) -> some View {
         if item.approvalStatus == .pending {
-            statusBadge(icon: "clock.fill", label: L10n.t("بانتظار", "Pending"), color: DS.Color.warning)
+            statusBadge(icon: "clock.fill", label: L10n.t("بانتظار", "Pending"), color: DS.Color.warningFill)
         } else if item.approvalStatus == .rejected {
-            statusBadge(icon: "xmark.circle.fill", label: L10n.t("مرفوض", "Rejected"), color: DS.Color.error)
+            statusBadge(icon: "xmark.circle.fill", label: L10n.t("مرفوض", "Rejected"), color: DS.Color.errorFill)
         } else if item.isHidden {
-            statusBadge(icon: "eye.slash.fill", label: L10n.t("مخفي", "Hidden"), color: DS.Color.textTertiary)
+            statusBadge(icon: "eye.slash.fill", label: L10n.t("مخفي", "Hidden"), color: DS.Color.slateFill)
         }
     }
 
@@ -759,10 +753,10 @@ struct FamilyArchiveView: View {
     /// شارة حالة موحّدة (capsule صغيرة بأيقونة + نص).
     private func statusBadge(icon: String, label: String, color: Color) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(DS.Font.scaled(11, weight: .bold))
+            Image(systemName: icon).font(DS.Font.icon(11, weight: .bold))
             Text(label).font(DS.Font.scaled(11, weight: .bold))
         }
-        .foregroundColor(.white)
+        .foregroundColor(DS.Color.textOnPrimary)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(Capsule().fill(color))
@@ -854,7 +848,7 @@ struct ArchiveUploadSheet: View {
 
                             DSDivider()
 
-                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.success,
+                            DSLabeledFieldRow(icon: "calendar", iconColor: DS.Color.primary,
                                               label: L10n.t("السنة", "Year")) {
                                 TextField("1965", text: $yearText)
                                     .keyboardType(.numberPad)
@@ -874,7 +868,7 @@ struct ArchiveUploadSheet: View {
 
                             DSDivider()
 
-                            DSLabeledFieldRow(icon: "folder.fill", iconColor: DS.Color.warning,
+                            DSLabeledFieldRow(icon: "folder.fill", iconColor: DS.Color.sadu,
                                               label: L10n.t("القسم", "Category")) {
                                 categoryMenu
                             }
@@ -946,7 +940,7 @@ struct ArchiveUploadSheet: View {
                 // عرض الملف المختار
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: pickedMimeType == "application/pdf" ? "doc.text.fill" : "photo.fill")
-                        .font(DS.Font.scaled(20, weight: .bold))
+                        .font(DS.Font.icon(20, weight: .bold))
                         .foregroundColor(DS.Color.primary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(pickedFileName.isEmpty ? L10n.t("ملف مختار", "Selected file") : pickedFileName)
@@ -998,7 +992,7 @@ struct ArchiveUploadSheet: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(DS.Font.scaled(22, weight: .bold))
+                    .font(DS.Font.icon(22, weight: .bold))
                     .foregroundColor(DS.Color.primary)
                 Text(title)
                     .font(DS.Font.callout)
@@ -1051,7 +1045,7 @@ struct ArchiveUploadSheet: View {
             boxedField {
                 HStack(spacing: 6) {
                     Image(systemName: ArchiveItem.categoryIcon(categoryKey))
-                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .font(DS.Font.icon(12, weight: .semibold))
                         .foregroundColor(DS.Color.primary)
                     Text(ArchiveItem.categoryName(categoryKey))
                         .font(DS.Font.scaled(14))
@@ -1059,7 +1053,7 @@ struct ArchiveUploadSheet: View {
                         .lineLimit(1)
                     Spacer(minLength: 2)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -1249,7 +1243,7 @@ struct ArchiveEditSheet: View {
             editBoxedField {
                 HStack(spacing: 6) {
                     Image(systemName: ArchiveItem.categoryIcon(categoryKey))
-                        .font(DS.Font.scaled(12, weight: .semibold))
+                        .font(DS.Font.icon(12, weight: .semibold))
                         .foregroundColor(DS.Color.primary)
                     Text(ArchiveItem.categoryName(categoryKey))
                         .font(DS.Font.scaled(14))
@@ -1257,7 +1251,7 @@ struct ArchiveEditSheet: View {
                         .lineLimit(1)
                     Spacer(minLength: 2)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(DS.Font.scaled(11, weight: .bold))
+                        .font(DS.Font.icon(11, weight: .bold))
                         .foregroundColor(DS.Color.textTertiary)
                 }
             }
@@ -1303,11 +1297,8 @@ struct ArchiveItemViewer: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LinearGradient(
-                    colors: [accent.opacity(0.10), DS.Color.background],
-                    startPoint: .top, endPoint: .center
-                )
-                .ignoresSafeArea()
+                DS.Color.background
+                    .ignoresSafeArea()
 
                 VStack(spacing: DS.Spacing.md) {
                     documentSheet
@@ -1387,7 +1378,7 @@ struct ArchiveItemViewer: View {
                         } label: {
                             Text(L10n.t("حفظ الملف", "Save file"))
                                 .font(DS.Font.calloutBold)
-                                .foregroundColor(.white)
+                                .foregroundColor(DS.Color.readableText(on: accent))
                                 .padding(.horizontal, DS.Spacing.lg)
                                 .frame(height: 40)
                                 .background(Capsule().fill(accent))
@@ -1406,11 +1397,11 @@ struct ArchiveItemViewer: View {
             HStack(spacing: DS.Spacing.sm) {
                 HStack(spacing: 4) {
                     Image(systemName: item.categoryIcon)
-                        .font(DS.Font.scaled(10, weight: .bold))
+                        .font(DS.Font.icon(10, weight: .bold))
                     Text(item.categoryDisplayName)
                         .font(DS.Font.plex(11, weight: .bold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.readableText(on: accent))
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(accent))
@@ -1461,7 +1452,7 @@ struct ArchiveItemViewer: View {
                 if let uploaderName, !uploaderName.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "person.fill")
-                            .font(DS.Font.scaled(10, weight: .bold))
+                            .font(DS.Font.icon(10, weight: .bold))
                         Text(uploaderName)
                             .font(DS.Font.plex(11, weight: .semibold))
                             .lineLimit(1)
@@ -1478,8 +1469,7 @@ struct ArchiveItemViewer: View {
         .background(DS.Color.surface)
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(LinearGradient(colors: [accent, accent.opacity(0.6)],
-                                     startPoint: .top, endPoint: .bottom))
+                .fill(accent)
                 .frame(width: 5)
         }
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))

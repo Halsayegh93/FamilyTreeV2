@@ -64,7 +64,7 @@ struct QRScannerView: View {
                 ToolbarItem(placement: DSToolbar.cancelPlacement) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.scaled(24))
+                            .font(DS.Font.icon(24))
                             .foregroundStyle(.white.opacity(0.8))
                     }
                 }
@@ -89,10 +89,11 @@ struct QRScannerView: View {
 
             Text(L10n.t("وجّه الكاميرا نحو رمز QR", "Point camera at QR code"))
                 .font(DS.Font.calloutBold)
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.xl)
                 .padding(.vertical, DS.Spacing.md)
-                .background(DS.Color.textPrimary.opacity(0.55))
+                // ستارة كحلية ثابتة فوق الكاميرا — textPrimary يصير أبيض في الداكن
+                .background(DS.Color.bandFill.opacity(0.75))
                 .clipShape(Capsule())
                 .padding(.bottom, DS.Spacing.xxxxl)
         }
@@ -170,7 +171,7 @@ struct QRScannerView: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "qrcode.viewfinder")
-                        .font(DS.Font.scaled(18, weight: .semibold))
+                        .font(DS.Font.icon(18, weight: .semibold))
                     Text(L10n.t("مسح باركود آخر", "Scan another"))
                         .font(DS.Font.calloutBold)
                 }

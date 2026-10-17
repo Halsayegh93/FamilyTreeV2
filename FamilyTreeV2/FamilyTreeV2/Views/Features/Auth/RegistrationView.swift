@@ -112,7 +112,7 @@ struct RegistrationView: View {
                         .fill(DS.Color.overlayIcon)
                         .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
                     Image(systemName: "person.badge.plus")
-                        .font(DS.Font.scaled(20, weight: .bold))
+                        .font(DS.Font.icon(20, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                 }
                 .frame(width: 52, height: 52)
@@ -126,7 +126,7 @@ struct RegistrationView: View {
                     Text(L10n.t("خطوة واحدة وتنضم لشجرة العائلة",
                                 "One step to join the family tree"))
                         .font(DS.Font.plex(12, weight: .medium))
-                        .foregroundColor(DS.Color.overlayText)
+                        .foregroundColor(DS.Color.accentLight)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
@@ -136,7 +136,7 @@ struct RegistrationView: View {
                 // تسجيل الخروج — بنفس موضع زر الإغلاق في بقية الواجهات
                 Button(action: { Task { await authVM.signOut() } }) {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(DS.Font.scaled(17, weight: .bold))
+                        .font(DS.Font.icon(17, weight: .bold))
                         .foregroundColor(DS.Color.textOnPrimary)
                         .frame(width: 44, height: 44)
                         .background(Circle().fill(DS.Color.overlayIcon))
@@ -287,7 +287,7 @@ struct RegistrationView: View {
                         ProgressView().scaleEffect(0.7)
                     } else {
                         Image(systemName: "chevron.up.chevron.down")
-                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .font(DS.Font.icon(12, weight: .semibold))
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }

@@ -114,7 +114,7 @@ struct AdminIncompleteMembersView: View {
                 // حالة التحميل — البيانات لم تصل بعد
                 VStack(spacing: DS.Spacing.lg) {
                     ProgressView()
-                        .tint(DS.Color.warning)
+                        .tint(DS.Color.primary)
                         .scaleEffect(1.3)
                     Text(L10n.t("جاري فحص البيانات...", "Checking data..."))
                         .font(DS.Font.callout)
@@ -173,7 +173,7 @@ struct AdminIncompleteMembersView: View {
                                         } label: {
                                             Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
                                         }
-                                        .tint(DS.Color.primary)
+                                        .tint(DS.Color.primaryFill)
                                     }
                                 }
                             }
@@ -350,7 +350,7 @@ struct AdminIncompleteMembersView: View {
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: filter.icon)
-                    .font(DS.Font.scaled(11, weight: .bold))
+                    .font(DS.Font.icon(11, weight: .bold))
                 Text(filter.label)
                     .font(DS.Font.caption1)
                     .fontWeight(.semibold)
@@ -396,13 +396,7 @@ struct AdminIncompleteMembersView: View {
             // Avatar
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [DS.Color.warning.opacity(0.3), DS.Color.warning.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(DS.Color.warning.opacity(DS.Icon.opacity))
                     .frame(width: 50, height: 50)
 
                 Text(String(member.fullName.prefix(1)))
@@ -426,7 +420,7 @@ struct AdminIncompleteMembersView: View {
                         ForEach(missing, id: \.self) { field in
                             HStack(spacing: 2) {
                                 Image(systemName: field.icon)
-                                    .font(DS.Font.scaled(11, weight: .bold))
+                                    .font(DS.Font.icon(11, weight: .bold))
                                 Text(field.label)
                                     .font(DS.Font.caption2)
                                     .fontWeight(.medium)
@@ -468,10 +462,10 @@ struct AdminIncompleteMembersView: View {
 
             if isSelected {
                 Circle()
-                    .fill(DS.Color.primary)
+                    .fill(DS.Color.primaryFill)
                     .frame(width: 24, height: 24)
                 Image(systemName: "checkmark")
-                    .font(DS.Font.scaled(12, weight: .bold))
+                    .font(DS.Font.icon(12, weight: .bold))
                     .foregroundColor(DS.Color.textOnPrimary)
             }
         }
@@ -528,7 +522,7 @@ struct AdminIncompleteMembersView: View {
                         }
                     } label: {
                         Image(systemName: "pencil.circle.fill")
-                            .font(DS.Font.scaled(16, weight: .bold))
+                            .font(DS.Font.icon(16, weight: .bold))
                             .foregroundColor(DS.Color.primary)
                             .frame(width: 44, height: 44)
                             .background(DS.Color.primary.opacity(0.1))
