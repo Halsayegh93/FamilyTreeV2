@@ -52,10 +52,13 @@ jobs:
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl status_bar "$UDID" override --time "9:41" --wifiBars 3 --cellularBars 4 --batteryState charged --batteryLevel 100 || true
           xcrun simctl install "$UDID" "$APP"
+          { echo "== Info.plist UILaunchScreen"; /usr/libexec/PlistBuddy -c "Print :UILaunchScreen" "$APP/Info.plist" || true
+            echo "== Assets.car LaunchBackground"; xcrun assetutil --info "$APP/Assets.car" | grep -B2 -A12 '"Name" : "LaunchBackground"' || true; } > "$OUT/launch-screen-info.txt" 2>&1
           for MODE in light dark; do
             xcrun simctl ui "$UDID" appearance "$MODE"
             xcrun simctl terminate "$UDID" "$BID" || true
             xcrun simctl launch "$UDID" "$BID" -NoPushPrompt -HoldSplash
+            xcrun simctl io "$UDID" screenshot "$OUT/$MODE-launch.png"
             sleep 5; xcrun simctl io "$UDID" screenshot "$OUT/$MODE-splash.png"
             xcrun simctl terminate "$UDID" "$BID" || true
             xcrun simctl launch "$UDID" "$BID" -NoPushPrompt
@@ -72,7 +75,7 @@ jobs:
 
       - name: Push the screenshots to a side branch
         run: |
-          mkdir -p screens-out && cp "$RUNNER_TEMP"/shots/*.png screens-out/
+          rm -rf screens-out && mkdir -p screens-out && cp "$RUNNER_TEMP"/shots/*.png "$RUNNER_TEMP"/shots/*.txt screens-out/
           git config user.name "Claude" && git config user.email "noreply@anthropic.com"
           git add screens-out && git commit -q -m "Screens: simulator screenshots (temporary)"
           git push -f origin HEAD:refs/heads/claude/screens-out-2026-10-17
