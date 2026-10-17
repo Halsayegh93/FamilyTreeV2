@@ -123,7 +123,7 @@ function buildRoleChangedEmailForMember(p: RoleChangedPayload): EmailContent {
     preheader: `صلاحيتك الجديدة: ${newRole}`,
     body: `
       ${paragraph(`مرحباً <strong style="color:${BRAND.ink}">${escapeHtml(p.member_name)}</strong>،`)}
-      ${paragraph("تم تحديث صلاحيتك في تطبيق شجرة عائلة آل محمد علي.")}
+      ${paragraph("تم تحديث صلاحيتك في تطبيق شجرة عائلة المحمدعلي.")}
       ${dataTable(`
         ${dataRow("الصلاحية السابقة", escapeHtml(roleArabic(p.old_role)))}
         ${dataRow("الصلاحية الجديدة", escapeHtml(newRole), { accent: BRAND.emerald })}
@@ -134,7 +134,7 @@ function buildRoleChangedEmailForMember(p: RoleChangedPayload): EmailContent {
   const text = [
     `مرحباً ${p.member_name}،`,
     "",
-    "تم تحديث صلاحيتك في تطبيق شجرة عائلة آل محمد علي.",
+    "تم تحديث صلاحيتك في تطبيق شجرة عائلة المحمدعلي.",
     "",
     `الصلاحية السابقة: ${roleArabic(p.old_role)}`,
     `الصلاحية الجديدة: ${newRole}`,
@@ -177,8 +177,8 @@ function buildStatusChangedEmailForMember(p: StatusChangedPayload): EmailContent
     body: `
       ${paragraph(`مرحباً <strong style="color:${BRAND.ink}">${escapeHtml(p.member_name)}</strong>،`)}
       ${paragraph(isFrozen
-        ? "تم تجميد حسابك في تطبيق شجرة عائلة آل محمد علي."
-        : "تم تحديث حالة حسابك في تطبيق شجرة عائلة آل محمد علي.")}
+        ? "تم تجميد حسابك في تطبيق شجرة عائلة المحمدعلي."
+        : "تم تحديث حالة حسابك في تطبيق شجرة عائلة المحمدعلي.")}
       ${dataTable(`
         ${dataRow("الحالة السابقة", escapeHtml(statusArabic(p.old_status)))}
         ${dataRow("الحالة الجديدة", escapeHtml(newStatus), { accent })}
@@ -192,8 +192,8 @@ function buildStatusChangedEmailForMember(p: StatusChangedPayload): EmailContent
     `مرحباً ${p.member_name}،`,
     "",
     isFrozen
-      ? "تم تجميد حسابك في تطبيق شجرة عائلة آل محمد علي."
-      : "تم تحديث حالة حسابك في تطبيق شجرة عائلة آل محمد علي.",
+      ? "تم تجميد حسابك في تطبيق شجرة عائلة المحمدعلي."
+      : "تم تحديث حالة حسابك في تطبيق شجرة عائلة المحمدعلي.",
     "",
     `الحالة السابقة: ${statusArabic(p.old_status)}`,
     `الحالة الجديدة: ${newStatus}`,
@@ -214,7 +214,7 @@ function buildContactReplyEmail(p: ContactReplyPayload): EmailContent {
     preheader: "تلقّينا رسالتك وهذا ردّنا",
     body: `
       ${paragraph(`مرحباً <strong style="color:${BRAND.ink}">${escapeHtml(p.member_name)}</strong>،`)}
-      ${paragraph("تلقّينا رسالتك في تطبيق شجرة عائلة آل محمد علي وهذا ردّنا:")}
+      ${paragraph("تلقّينا رسالتك في تطبيق شجرة عائلة المحمدعلي وهذا ردّنا:")}
       ${quoteBox(p.reply_text, { accent: BRAND.blue })}
       ${originalSection}
       ${note('لو احتجت متابعة، تقدر ترسل رسالة جديدة من شاشة "التواصل" في التطبيق.')}
@@ -223,7 +223,7 @@ function buildContactReplyEmail(p: ContactReplyPayload): EmailContent {
   const text = [
     `مرحباً ${p.member_name}،`,
     "",
-    "تلقّينا رسالتك في تطبيق شجرة عائلة آل محمد علي وهذا ردّنا:",
+    "تلقّينا رسالتك في تطبيق شجرة عائلة المحمدعلي وهذا ردّنا:",
     "",
     "─────────────",
     p.reply_text,
