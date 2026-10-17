@@ -215,7 +215,7 @@ struct OccasionComposerView: View {
                         Button {
                             withAnimation(DS.Anim.quick) { vm.select(t) }
                         } label: {
-                            // مربع المناسبة بلونها (occ-*) ورمز أبيض — الوفاة كحلي ليلي بحلقة ورمز ذهبي — مثل الموقع
+                            // مربع المناسبة بلونها (occ-*) ورمز أبيض — الوفاة كحلي ليلي بحلقة ورمز ذهبي — مثل الموقع (OccasionTile)
                             let tile = t.tileStyle
                             VStack(spacing: DS.Spacing.xs) {
                                 ZStack {
@@ -234,13 +234,14 @@ struct OccasionComposerView: View {
                                     .minimumScaleFactor(0.85)
                             }
                             .frame(width: 104, height: 88)
+                            // المختار: حدّ ذهبي وأرضية ذهبية خفيفة (OccasionTile في الهوية)
                             .background(
                                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .fill(on ? DS.Color.cardBackgroundSoft : DS.Color.cardBackground)
+                                    .fill(on ? DS.Color.accentLight.opacity(0.12) : DS.Color.cardBackground)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .stroke(on ? DS.Color.primary : DS.Color.cardBorder, lineWidth: on ? 2 : 1)
+                                    .stroke(on ? DS.Color.accentLight : DS.Color.cardBorder, lineWidth: on ? 2 : 1)
                             )
                         }
                         .buttonStyle(DSScaleButtonStyle())
