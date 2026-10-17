@@ -21,7 +21,7 @@ serve(async (req) => {
     const body = await req.json();
     const record = body.record || body;
     const targetMemberId = record.target_member_id;
-    const title = record.title || "عائلة المحمدعلي 🌿";
+    const title = record.title || "عائلة المحمدعلي";
     const notifBody = record.body || "لديك إشعار جديد";
     const kind = record.kind || "notification";
 
