@@ -195,7 +195,7 @@ struct AdminMembersDirectoryView: View {
                     .foregroundColor(drillPath.isEmpty ? DS.Color.textOnPrimary : DS.Color.primary)
                     .padding(.horizontal, DS.Spacing.sm + 2)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(drillPath.isEmpty ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                    .background(Capsule().fill(drillPath.isEmpty ? DS.Color.primaryFill : DS.Color.primary.opacity(0.10)))
                 }
 
                 ForEach(Array(drillPath.enumerated()), id: \.element.id) { idx, node in
@@ -214,7 +214,7 @@ struct AdminMembersDirectoryView: View {
                             .lineLimit(1)
                             .padding(.horizontal, DS.Spacing.sm + 2)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(isLast ? DS.Color.primary : DS.Color.primary.opacity(0.10)))
+                            .background(Capsule().fill(isLast ? DS.Color.primaryFill : DS.Color.primary.opacity(0.10)))
                     }
                 }
             }

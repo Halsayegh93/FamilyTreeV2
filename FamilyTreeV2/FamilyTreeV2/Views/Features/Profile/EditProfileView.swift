@@ -1163,10 +1163,10 @@ private struct FamilyRequestCard: View {
                 Button { if let s = selected { onSend(s) } } label: {
                     Text(L10n.t("إرسال", "Send"))
                         .font(DS.Font.plex(14, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(DS.Color.textOnPrimary)
                         .frame(maxWidth: .infinity).frame(height: 44)
                         .background(RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .fill(selected == nil ? DS.Color.primary.opacity(0.4) : DS.Color.primary))
+                            .fill(selected == nil ? DS.Color.primaryFill.opacity(0.4) : DS.Color.primaryFill))
                 }
                 .disabled(selected == nil)
             }

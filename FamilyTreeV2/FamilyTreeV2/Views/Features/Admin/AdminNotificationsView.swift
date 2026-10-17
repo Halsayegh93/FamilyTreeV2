@@ -112,7 +112,7 @@ struct AdminNotificationsView: View {
             .frame(height: 44)
             .background(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(filled ? DS.Color.primary : DS.Color.primary.opacity(0.12))
+                    .fill(filled ? DS.Color.primaryFill : DS.Color.primary.opacity(0.12))
             )
         }
         .buttonStyle(DSScaleButtonStyle())
