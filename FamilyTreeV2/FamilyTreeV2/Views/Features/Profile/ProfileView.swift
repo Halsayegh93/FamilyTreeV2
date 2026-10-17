@@ -1358,7 +1358,8 @@ struct ProfileView: View {
     private func reorderIndexBadge(_ number: Int, color: Color) -> some View {
         Text("\(number)")
             .font(DS.Font.scaled(13, weight: .bold))
-            .foregroundColor(DS.Color.textOnPrimary)
+            // اللون متكيّف (primary / neonPink / error) يفتح في الداكن — النص onTint لا الأبيض
+            .foregroundColor(DS.Color.onTint)
             .frame(width: 28, height: 28)
             .background(color.opacity(0.8))
             .clipShape(Circle())
