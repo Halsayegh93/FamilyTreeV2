@@ -58,47 +58,37 @@ struct ImageCropperView: View {
                 .gesture(pinchGesture)
                 .simultaneousGesture(doubleTapGesture)
 
-                // Controls
-                VStack {
-                    HStack {
-                        Button { onCancel() } label: {
-                            Text(L10n.t("إلغاء", "Cancel"))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.error)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.sm)
-                        }
-
-                        Spacer()
-
-                        Text(L10n.t("تعديل الصورة", "Edit Photo"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-
-                        Spacer()
-
-                        Button {
-                            let cropped = performCrop()
-                            onCrop(cropped)
-                        } label: {
-                            Text(L10n.t("تأكيد", "Confirm"))
-                                .font(DS.Font.calloutBold)
-                                .foregroundColor(DS.Color.textOnPrimary)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.sm)
-                                .background(DS.Color.primaryFill)
-                                .clipShape(Capsule())
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 60)
+                // Controls — العنوان فوق، والزرّان جنب بعض تحت (طلب المالك):
+                // «إلغاء» يسار و«تأكيد» يمين، بنفس أزرار مربّعات التطبيق
+                VStack(spacing: 0) {
+                    Text(L10n.t("تعديل الصورة", "Edit Photo"))
+                        .dsFont(.title)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.vertical, DS.Spacing.sm)
+                        .background(DS.Color.shadowStrong, in: Capsule())
+                        .padding(.top, DSBox.logoSide)
 
                     Spacer()
 
                     Text(L10n.t("اسحب وكبّر الصورة للتعديل", "Drag and pinch to adjust"))
-                        .font(DS.Font.scaled(13))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .padding(.bottom, 50)
+                        .dsFont(.calloutCompactMedium)
+                        .foregroundColor(DS.Color.overlayText)
+                        .padding(.bottom, DS.Spacing.md)
+
+                    // الزرّ الواحد بمقاس الشاشة الكاملة (٤٨): «إلغاء» رمادي يسار و«تأكيد» بتعبئة القسم يمين
+                    HStack(spacing: DSBox.buttonSpacing) {
+                        // الاتجاه هنا يسار→يمين (للإيماءات)، فالأول = يسار
+                        DSButton(L10n.t("إلغاء", "Cancel"), role: .cancel, size: .large) { onCancel() }
+
+                        DSButton(L10n.t("تأكيد", "Confirm"), icon: "checkmark", size: .large) {
+                            let cropped = performCrop()
+                            onCrop(cropped)
+                        }
+                        .disabled(displayImage == nil)
+                    }
+                    .padding(.horizontal, DS.Spacing.xl)
+                    .padding(.bottom, DS.Icon.tapTarget)
                 }
             }
             .onAppear {

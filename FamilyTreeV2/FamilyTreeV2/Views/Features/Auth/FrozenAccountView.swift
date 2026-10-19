@@ -7,11 +7,11 @@ struct FrozenAccountView: View {
 
     @State private var iconScale: CGFloat = 0.5
     @State private var iconOpacity: Double = 0
-    @State private var textOpacity: Double = 0
     @State private var showContactSheet = false
     @State private var confirmDeletion = false
     @State private var deletingAccount = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — نلف المحتوى بـScrollView حتى لا يُقتص
     private var isLandscape: Bool { vSizeClass == .compact }
@@ -25,6 +25,7 @@ struct FrozenAccountView: View {
                     ScrollView(showsIndicators: false) {
                         frozenContent
                             .padding(.vertical, DS.Spacing.lg)
+                            .dsLandscapeReadable()
                     }
                 } else {
                     frozenContent
@@ -33,15 +34,16 @@ struct FrozenAccountView: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear {
-            withAnimation(DS.Anim.elastic.delay(0.2)) {
+            // الأيقونة أولاً («تقليل الحركة»: تلاشٍ قصير بلا تكبير)، ثم النص والأزرار تباعاً (dsStaggerIn)
+            withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.elastic.delay(0.2)) {
                 iconScale = 1.0
                 iconOpacity = 1.0
             }
-            withAnimation(DS.Anim.smooth.delay(0.5)) {
-                textOpacity = 1.0
-            }
         }
-        .confirmationDialog(t("حذف الحساب وبياناته نهائياً؟", "Permanently delete your account and personal data?"), isPresented: $confirmDeletion, titleVisibility: .visible) {
+        // تأكيد الحذف — مربّع التطبيق الموحّد بالمنتصف بدل القائمة السفلية
+        .dsAlert(t("حذف الحساب وبياناته نهائياً؟", "Permanently delete your account and personal data?"),
+                 isPresented: $confirmDeletion) {
+            Button(t("إلغاء", "Cancel"), role: .cancel) {}
             Button(t("حذف الحساب", "Delete account"), role: .destructive) {
                 Task {
                     deletingAccount = true
@@ -50,26 +52,10 @@ struct FrozenAccountView: View {
                 }
             }
         }
-        .sheet(isPresented: $showContactSheet) {
-            NavigationStack {
-                MemberContactFormView()
-                    .navigationTitle(t("تواصل مع الإدارة", "Contact Admin"))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                            Button { showContactSheet = false } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(DS.Font.icon(22, weight: .medium))
-                                    .foregroundStyle(DS.Color.textTertiary)
-                                    .symbolRenderingMode(.hierarchical)
-                            }
-                            .accessibilityLabel(t("إغلاق", "Close"))
-                        }
-                    }
-            }
-            .environmentObject(authVM)
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .presentationDragIndicator(.visible)
+        // مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك) — العنوان و«إلغاء» داخل المربّع
+        .dsCenterBox(isPresented: $showContactSheet) {
+            MemberContactFormView()
+                .environmentObject(authVM)
         }
     }
 
@@ -80,30 +66,21 @@ struct FrozenAccountView: View {
                 Spacer()
 
                 // أيقونة التجميد
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.warning.opacity(0.15))
-                        .frame(width: 110, height: 110)
-
-                    Image(systemName: "lock.shield.fill")
-                        .font(DS.Font.icon(48, weight: .bold))
-                        .foregroundStyle(DS.Color.warning)
-                }
-                .scaleEffect(iconScale)
+                DSStateIcon("lock.shield.fill", tint: DS.Color.warning, size: DS.Icon.stateHero)
+                .scaleEffect(reduceMotion ? 1 : iconScale)
                 .opacity(iconOpacity)
 
                 // العنوان والوصف
                 VStack(spacing: DS.Spacing.md) {
                     Text(t("الحساب مجمّد", "Account Frozen"))
-                        .font(DS.Font.title2)
-                        .fontWeight(.black)
+                        .dsFont(.emptyTitle)
                         .foregroundColor(DS.Color.textPrimary)
 
                     Text(t(
                         "تم تجميد حسابك من قبل الإدارة.\nللاستفسار تواصل مع مدير العائلة.",
                         "Your account has been frozen by admin.\nPlease contact the family admin for details."
                     ))
-                    .font(DS.Font.body)
+                    .dsFont(.body)
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.xxl)
@@ -111,15 +88,15 @@ struct FrozenAccountView: View {
                     // اسم المستخدم إذا متوفر
                     if let user = authVM.currentUser {
                         HStack(spacing: DS.Spacing.sm) {
-                            DSIcon("person.fill", color: DS.Color.warning, size: 32, iconSize: 14)
+                            DSStateIcon("person.fill", tint: DS.Color.warning, size: DS.Icon.row)
                             Text(user.displayFullName)
-                                .font(DS.Font.calloutBold)
+                                .dsFont(.rowTitle)
                                 .foregroundColor(DS.Color.textPrimary)
                         }
                         .padding(.top, DS.Spacing.sm)
                     }
                 }
-                .opacity(textOpacity)
+                .dsStaggerIn(0)
 
                 Spacer()
 
@@ -133,6 +110,7 @@ struct FrozenAccountView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+                .dsStaggerIn(1)
 
                 // زر التواصل مع الإدارة
                 DSSecondaryButton(
@@ -142,17 +120,18 @@ struct FrozenAccountView: View {
                     showContactSheet = true
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+                .dsStaggerIn(2)
 
                 if !authVM.isOwner {
-                    Button(role: .destructive) { confirmDeletion = true } label: {
-                        HStack {
-                            if deletingAccount { ProgressView() }
-                            Text(t("حذف الحساب / استكمال الحذف", "Delete account / resume deletion"))
-                        }
+                    // الزرّ الواحد بدور الحذف (كان رابطاً نصّياً أحمر)
+                    DSButton(t("حذف الحساب / استكمال الحذف", "Delete account / resume deletion"),
+                             icon: "trash", role: .destructive, isLoading: deletingAccount) {
+                        confirmDeletion = true
                     }
-                    .disabled(deletingAccount)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .dsStaggerIn(3)
                     if let error = authVM.deleteAccountError {
-                        Text(error).font(DS.Font.caption1).foregroundStyle(DS.Color.textSecondary)
+                        Text(error).dsFont(.subtitle).foregroundStyle(DS.Color.textSecondary)
                     }
                 }
 
@@ -167,6 +146,9 @@ struct FrozenAccountView: View {
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.bottom, DS.Spacing.xxxxl)
+                .dsStaggerIn(authVM.isOwner ? 3 : 4)
             }
+            // بعد الأيقونة: النص ← الأزرار واحداً بعد الآخر (نفس «بعد الرأس» في المربّعات)
+            .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
     }
 }

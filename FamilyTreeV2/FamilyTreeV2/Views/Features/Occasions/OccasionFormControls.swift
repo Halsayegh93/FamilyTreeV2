@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - عناصر نموذج «بوستات المناسبات»: اختيارات (شرائح) بدل الكتابة
+// MARK: - عناصر نموذج «منشورات المناسبات»: اختيارات (شرائح وقوائم منسدلة) بدل الكتابة
 
 /// صفوف تلتف تلقائياً (للشرائح). الاتجاه يتبع لغة التطبيق تلقائياً.
 struct OccasionFlowLayout: Layout {
@@ -50,6 +50,78 @@ struct OccasionFlowLayout: Layout {
             x += s.width + spacing
             lineHeight = max(lineHeight, s.height)
         }
+    }
+}
+
+/// مربعات الاختيار في «منشورات المناسبات» (القالب، النموذج، مكان النشر) — عائلة واحدة (طلب المالك ٢٠٢٦-١٠-١٧):
+/// أرضية بيضاء بحدّ شعري وزوايا md، والمختار حدّ ذهبي وأرضية ذهبية خفيفة (OccasionTile في الهوية)
+struct OccasionTileStyle: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(isOn ? DS.Color.accentLight.opacity(0.12) : DS.Color.cardBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .stroke(isOn ? DS.Color.accentLight : DS.Color.cardBorder, lineWidth: isOn ? 2 : 1)
+            )
+    }
+}
+
+extension View {
+    func occasionTile(isOn: Bool) -> some View { modifier(OccasionTileStyle(isOn: isOn)) }
+}
+
+/// مربع اختيار بقرص رمز فوق والعنوان تحته (وسطر صغير اختياري) — القالب والنموذج بنفس الشكل
+struct OccasionOptionTile: View {
+    let title: String
+    var subtitle: String? = nil
+    /// SF Symbol داخل القرص
+    let icon: String
+    /// القرص: أرضيته وحلقته ولون الرمز
+    let disc: (fill: Color, ring: Color, symbol: Color)
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: DS.Spacing.xs) {
+                ZStack {
+                    Circle().fill(disc.fill)
+                    Circle().strokeBorder(disc.ring, lineWidth: 1.5)
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(disc.symbol)
+                }
+                .frame(width: 36, height: 36)
+                .accessibilityHidden(true)
+                Text(title)
+                    .font(DS.Font.plex(13, weight: .semibold))
+                    .foregroundColor(DS.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(DS.Font.plex(11))
+                        .foregroundColor(DS.Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, minHeight: 88)
+            .occasionTile(isOn: isOn)
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
 
@@ -122,6 +194,92 @@ struct OccasionChips: View {
             }
             if let custom, selected == -1 {
                 OccasionTextInput(text: custom.text, placeholder: custom.placeholder, multiline: custom.multiline)
+            }
+        }
+    }
+}
+
+/// قائمة منسدلة بنفس منطق OccasionChips: الحقل يبين الاختيار الحالي (بشكل قائمة الحسينيات)، والقائمة فيها الاختيارات
+/// و«بدون» (اختياري، رقم بعد آخر عنصر) و«نص آخر» (‎-1) اللي يظهر حقل كتابة تحت — للقوائم الطويلة (الصفة، أيام العزاء ووقته)
+struct OccasionMenuField: View {
+    let options: [String]
+    let selected: Int
+    let onSelect: (Int) -> Void
+    /// رمز SF Symbols في بداية الحقل
+    var icon: String? = nil
+    var noneLabel: String? = nil
+    var custom: OccasionCustomOption? = nil
+    /// عنوان القائمة للقارئ الصوتي
+    var accessibilityTitle: String = ""
+
+    private var currentTitle: String {
+        if selected == -1 { return custom?.label ?? L10n.t("نص آخر", "Other") }
+        if options.indices.contains(selected) { return options[selected] }
+        return noneLabel ?? options.first ?? ""
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Menu {
+                ForEach(Array(options.enumerated()), id: \.offset) { i, option in
+                    menuItem(option, isOn: selected == i) { onSelect(i) }
+                }
+                if let noneLabel {
+                    menuItem(noneLabel, isOn: selected == options.count) { onSelect(options.count) }
+                }
+                if let custom {
+                    Divider()
+                    Button {
+                        onSelect(-1)
+                    } label: {
+                        Label(custom.label ?? L10n.t("نص آخر", "Other"), systemImage: selected == -1 ? "checkmark" : "pencil")
+                    }
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    if let icon {
+                        Image(systemName: icon)
+                            .font(DS.Font.icon(15, weight: .semibold))
+                            .accessibilityHidden(true)
+                    }
+                    Text(currentTitle)
+                        .font(DS.Font.plex(14, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(DS.Font.icon(12, weight: .semibold))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .accessibilityHidden(true)
+                }
+                .foregroundColor(DS.Color.textPrimary)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm + 2)
+                .frame(minHeight: DS.Icon.tapTarget)
+                .background(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.primary.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .stroke(DS.Color.primary, lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            }
+            .accessibilityLabel(accessibilityTitle.isEmpty ? currentTitle : "\(accessibilityTitle): \(currentTitle)")
+            if let custom, selected == -1 {
+                OccasionTextInput(text: custom.text, placeholder: custom.placeholder, multiline: custom.multiline)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func menuItem(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if isOn {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
             }
         }
     }
@@ -359,11 +517,12 @@ struct OccasionNameFormatPicker: View {
                     ForEach(r.options, id: \.count) { o in
                         OccasionFormatChip(
                             title: "\(o.label) — \(o.name)",
-                            warning: o.fits ? "" : (o.count == shortest
+                            warning: o.fits ? "" : ((o.count == shortest || o.usable)
                                 ? L10n.t("الخط يصغر ليدخل", "Smaller type to fit")
                                 : L10n.t("أطول من السطر", "Too long for one line")),
                             isOn: o.count == r.option.count,
-                            enabled: o.fits || o.count == shortest
+                            // اختيار المستخدم يُنفّذ إذا يدخل بسطر واحد ولو بخط أصغر (≥ ٦٠٪)
+                            enabled: o.fits || o.usable || o.count == shortest
                         ) {
                             onSelect(o.count)
                         }
@@ -400,7 +559,8 @@ struct OccasionFormatChip: View {
             .padding(.vertical, 9)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isOn ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.cardBackgroundSoft))
+                    // النص أبيض فوق المختار ← primaryFill (قاعدة الهوية؛ primary يفتح في الداكن)
+                    .fill(isOn ? AnyShapeStyle(DS.Color.primaryFill) : AnyShapeStyle(DS.Color.cardBackgroundSoft))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)

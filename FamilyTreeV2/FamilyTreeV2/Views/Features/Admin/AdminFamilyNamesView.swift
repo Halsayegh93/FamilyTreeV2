@@ -2,6 +2,8 @@ import SwiftUI
 
 /// إدارة أسماء العوائل — الإدارة تضع القائمة، والأعضاء يختارون منها
 /// عند التسجيل أو من تعديل الملف الشخصي.
+/// تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧، «أسلوب واحد» ٢٠٢٦-١٠-٠٧): صفّ أرقام حيّة ←
+/// «إضافة عائلة» (لمن يدير) ← «العوائل» صفوفاً `.dsRowBox()` وقائمة خيارات لكل صف.
 struct AdminFamilyNamesView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var vm = FamilyNamesViewModel()
@@ -10,9 +12,15 @@ struct AdminFamilyNamesView: View {
     @State private var renaming: FamilyNameOption?
     @State private var renameText = ""
     @State private var deleting: FamilyNameOption?
-    @FocusState private var addFocused: Bool
 
     private var canManage: Bool { authVM.canManageSettings || authVM.isAdmin }
+
+    /// لون مجال «الشجرة والأعضاء»
+    private let tint = DS.Color.composerProject
+
+    private var activeCount: Int { vm.options.filter(\.isActive).count }
+    /// أول تحميل لم يصل بعد
+    private var isFirstLoad: Bool { vm.isLoading && vm.options.isEmpty }
 
     var body: some View {
         ZStack {
@@ -20,13 +28,15 @@ struct AdminFamilyNamesView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    introCard
-                    if canManage { addRow }
-                    listCard
+                    hero
+                    if canManage { addSection }
+                    listSection
                 }
-                .padding(DS.Spacing.lg)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xxxl)
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task { await vm.fetch(force: true) }
@@ -35,6 +45,7 @@ struct AdminFamilyNamesView: View {
             get: { renaming != nil }, set: { if !$0 { renaming = nil } }
         )) {
             TextField(L10n.t("اسم العائلة", "Family name"), text: $renameText)
+                .dsAlertField()
             Button(L10n.t("حفظ", "Save")) {
                 if let r = renaming { Task { await vm.rename(id: r.id, to: renameText) } }
                 renaming = nil
@@ -55,129 +66,111 @@ struct AdminFamilyNamesView: View {
         }
     }
 
-    // MARK: - الأقسام
+    // MARK: - الأرقام السريعة (العنوان والوصف في رأس «إدارة الأعضاء» الملوّن)
 
-    private var introCard: some View {
-        HStack(alignment: .center, spacing: DS.Spacing.md) {
-            Image(systemName: "person.2.crop.square.stack.fill")
-                .font(DS.Font.icon(15, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
-                .background(SwiftUI.Color.white.opacity(0.20))
-                .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("قائمة عوائل العضوية", "Membership families"))
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(.white)
-                Text(L10n.t("يختار العضو عائلته منها، وتظهر بآخر اسمه في التطبيق.",
-                            "Members pick from this list; it appears at the end of their name."))
-                    .font(DS.Font.scaled(11))
-                    .foregroundColor(DS.Color.accentLight)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.md - 2)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(DS.Color.gradientBand)
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(DS.Color.headerVeil)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(DS.Color.headerBorder, lineWidth: 1)
-        )
+    private var hero: some View {
+        DSStatsRow([
+            DSHeroStat(value: isFirstLoad ? "—" : "\(vm.options.count)",
+                       label: L10n.t("عائلة", "Families"), icon: "list.bullet"),
+            DSHeroStat(value: isFirstLoad ? "—" : "\(activeCount)",
+                       label: L10n.t("متاحة للاختيار", "Selectable"), icon: "checkmark.circle.fill"),
+            DSHeroStat(value: isFirstLoad ? "—" : "\(vm.options.count - activeCount)",
+                       label: L10n.t("معطّلة", "Disabled"), icon: "eye.slash.fill")
+        ], tint: tint)
     }
 
-    private var addRow: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "plus.circle.fill")
-                .font(DS.Font.icon(14, weight: .bold))
-                .foregroundColor(DS.Color.primary)
-            TextField(L10n.t("أضف اسم عائلة", "Add a family name"), text: $newName)
-                .font(DS.Font.scaled(13))
-                .focused($addFocused)
-                .submitLabel(.done)
-                .onSubmit { submitAdd() }
-            if !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button(L10n.t("إضافة", "Add")) { submitAdd() }
-                    .font(DS.Font.scaled(12, weight: .bold))
-                    .foregroundColor(DS.Color.primary)
-            }
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm + 2)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .strokeBorder(DS.Color.primary.opacity(0.20), lineWidth: 1)
-        )
+    // MARK: - إضافة عائلة
+
+    private var canSubmit: Bool {
+        !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var listCard: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: 5) {
-                Image(systemName: "list.bullet")
-                    .font(DS.Font.icon(11, weight: .bold))
-                    .foregroundColor(DS.Color.primary.opacity(0.75))
-                Text(L10n.t("العوائل (\(vm.options.count))", "Families (\(vm.options.count))"))
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer(minLength: 0)
-                if vm.isLoading { ProgressView().scaleEffect(0.7) }
-            }
+    private var addSection: some View {
+        DSComposerSection(title: L10n.t("إضافة عائلة", "Add a family"),
+                          icon: "plus.circle.fill",
+                          tint: tint,
+                          index: 1) {
+            // الحقل الموحّد (`DSComposerField`) + شريحة «إضافة» ممتلئة بلون القسم
+            HStack(spacing: DS.Spacing.sm) {
+                DSComposerField(icon: "person.2.fill",
+                                label: L10n.t("اسم العائلة", "Family name"),
+                                placeholder: L10n.t("أضف اسم عائلة", "Add a family name"),
+                                text: $newName,
+                                tint: tint)
+                    .submitLabel(.done)
+                    .onSubmit { submitAdd() }
 
-            VStack(spacing: 0) {
-                if vm.options.isEmpty && !vm.isLoading {
-                    Text(L10n.t("لا توجد عوائل بعد — أضف أول اسم.",
-                                "No families yet — add the first one."))
-                        .font(DS.Font.scaled(11))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, DS.Spacing.xl)
-                } else {
-                    ForEach(Array(vm.options.enumerated()), id: \.element.id) { index, option in
-                        row(option)
-                        if index < vm.options.count - 1 { DSDivider() }
-                    }
+                if canSubmit {
+                    DSChipButton(L10n.t("إضافة", "Add"), icon: "plus", isSelected: true) { submitAdd() }
                 }
             }
-            .padding(DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-            )
+        }
+    }
+
+    // MARK: - العوائل
+
+    @ViewBuilder
+    private var listSection: some View {
+        if isFirstLoad {
+            DSPageLoader(L10n.t("جارٍ تحميل العوائل…", "Loading families…"), fillsSpace: false)
+        } else if vm.options.isEmpty, let error = vm.errorMessage {
+            // الجدول قد لا يكون مُهاجَراً بعد — السبب ظاهر بدل قائمة فارغة صامتة
+            DSStateCard(icon: "exclamationmark.triangle.fill",
+                         title: L10n.t("تعذّر تحميل العوائل", "Couldn't load families"),
+                         hint: error,
+                         tint: DS.Color.error,
+                         actionTitle: L10n.t("إعادة المحاولة", "Retry")) {
+                Task { await vm.fetch(force: true) }
+            }
+        } else if vm.options.isEmpty {
+            DSEmptyView(L10n.t("لا توجد عوائل بعد — أضف أول اسم.",
+                               "No families yet — add the first one."),
+                        style: .compact)
+        } else {
+            DSComposerSection(title: L10n.t("العوائل", "Families"),
+                              icon: "list.bullet",
+                              tint: tint,
+                              trailing: vm.isLoading ? L10n.t("تحديث…", "Updating…") : "\(vm.options.count)",
+                              index: 2) {
+                if let error = vm.errorMessage {
+                    errorRow(error)
+                }
+                ForEach(vm.options) { option in
+                    row(option)
+                }
+            }
+        }
+    }
+
+    /// سبب آخر فشل (إضافة مكرّرة، تعديل…) — الملاحظة الموحّدة بالأحمر، وتُغلق بـ ×
+    private func errorRow(_ message: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            DSNoteCard(message, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+            Button { vm.errorMessage = nil } label: {
+                Image(systemName: "xmark")
+                    .dsGlyph(DS.Glyph.smCompact)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.t("إغلاق", "Close"))
         }
     }
 
     private func row(_ option: FamilyNameOption) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: option.isActive ? "checkmark.circle.fill" : "circle.slash")
-                .font(DS.Font.icon(12, weight: .bold))
-                .foregroundColor(option.isActive ? DS.Color.success : DS.Color.textTertiary)
+            DSFieldIcon(name: option.isActive ? "checkmark.circle.fill" : "circle.slash",
+                        tint: option.isActive ? DS.Color.success : DS.Color.textTertiary)
+                .accessibilityHidden(true)
 
             Text(option.name)
-                .font(DS.Font.scaled(13, weight: .semibold))
-                .foregroundColor(option.isActive ? DS.Color.textPrimary : DS.Color.textTertiary)
+                .dsFieldFont(.rowTitle)
+                .foregroundColor(option.isActive ? DS.Color.fieldLabel : DS.Color.textTertiary)
+                .lineLimit(2)
 
             if !option.isActive {
-                Text(L10n.t("معطّلة", "Disabled"))
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(DS.Color.textTertiary.opacity(0.12)))
+                DSStatusChip(text: L10n.t("معطّلة", "Disabled"), tint: DS.Color.textTertiary)
             }
 
             Spacer(minLength: 0)
@@ -202,20 +195,25 @@ struct AdminFamilyNamesView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(DS.Font.icon(13, weight: .semibold))
-                        .foregroundColor(DS.Color.textTertiary)
-                        .frame(width: 40, height: 32)
+                        .dsGlyph(DS.Glyph.md)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                         .contentShape(Rectangle())
                 }
+                .padding(.vertical, -DS.Spacing.xsm)
+                .accessibilityLabel(L10n.t("خيارات \(option.name)", "Options for \(option.name)"))
             }
         }
-        .padding(.vertical, 7)
+        .frame(minHeight: DSBox.fieldMinHeight)
+        .dsRowBox()
+        .accessibilityElement(children: .contain)
     }
 
     private func submitAdd() {
         let name = newName
         newName = ""
-        addFocused = false
+        // لوحة المفاتيح تُغلق بعد الإضافة كما كانت (ضاع `addFocused = false` في التوحيد — ن-١١ فحص ٢٠٢٦-١٠-٠٧)
+        KeyboardDismisser.endEditing()
         Task { await vm.add(name) }
     }
 }

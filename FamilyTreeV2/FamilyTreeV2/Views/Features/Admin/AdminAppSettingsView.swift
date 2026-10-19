@@ -1,15 +1,41 @@
 import SwiftUI
 
 // MARK: - Admin App Settings — إعدادات التطبيق
+//
+// تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): أقسام `DSComposerSection` وصفوف
+// `.dsRowBox()` (أيقونة حقل + عنوان + وصف + مفتاح). المالك يعدّل، والمدير يتصفّح للقراءة
+// (الأقسام معطّلة له كما كانت).
+// ترتيب ٢٠٢٦-١٠-٠٩ (طلب المالك «أحس وايد أمور داخله ببعض» — خيار «أ»): مبدّل بالأعلى بثلاثة
+// تبويبات، كلٌّ بأقسامه فقط — «التطبيق» (اللغة، الميزات، الأخبار، التصنيفات، أسماء الفروع) ·
+// «الأعضاء» (التسجيل والأجهزة، عداد التعديل) · «النظام» (الصيانة، معلومات النظام، إعادة التعيين).
+// أُزيلت أرقام الرأس المكرّرة (موجودة في «معلومات النظام»).
 struct AdminAppSettingsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
+    /// «مسار الموافقات ٢»: الردود الجاهزة
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
 
     @State private var showResetConfirmation = false
     @State private var showResetCooldownAlert = false
     @State private var cooldownDisabled = ProfileEditCooldown.shared.isDisabled
+    @State private var tab: SettingsTab = .app
+    /// مربّع «أسماء الفروع» (شجرة الفروع بوضع التسمية)
+    @State private var branchNamesOpen = false
+    /// مربّع «الردود الجاهزة» («مسار الموافقات ٢»)
+    @State private var templatesOpen = false
+
+    /// تبويبات الصفحة
+    private enum SettingsTab: Hashable { case app, members, system }
+
+    private var tabOptions: [DSSegmentOption<SettingsTab>] {
+        [
+            DSSegmentOption(id: .app, title: L10n.t("التطبيق", "App"), icon: "app.badge.fill"),
+            DSSegmentOption(id: .members, title: L10n.t("الأعضاء", "Members"), icon: "person.2.fill"),
+            DSSegmentOption(id: .system, title: L10n.t("النظام", "System"), icon: "gearshape.fill")
+        ]
+    }
 
     /// المالك يعدّل، باقي المدراء يتصفّحون فقط.
     private var canEdit: Bool { authVM.canManageSettings }
@@ -25,108 +51,323 @@ struct AdminAppSettingsView: View {
     }
 
     private var page: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: DS.Spacing.lg) {
+                // المبدّل الواحد — نفس مقاس مبدّل لوحة الإدارة
+                DSSegmentedSwitch(options: tabOptions, selection: $tab)
+                    .dsStaggerIn(0)
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.xxl) {
-                    // الوضع الأفقي: الأقسام على عمودين
-                    AdaptiveCardStack(spacing: DS.Spacing.xxl, landscapeMinimum: 340) {
-                        sections
-                    }
+                // إشعار وضع القراءة فقط (لغير المالك) — مرة واحدة تحت المبدّل
+                if !canEdit {
+                    readOnlyBanner
+                }
 
-                    Spacer(minLength: DS.Spacing.xxxl)
+                // الوضع الأفقي: الأقسام على عمودين
+                AdaptiveCardStack(spacing: DS.Spacing.md, alignment: .leading) {
+                    sections
                 }
             }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xxxl)
         }
-        .navigationTitle(L10n.t("إعدادات التطبيق", "App Settings"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(L10n.t("إعدادات التطبيق", "App Settings"),
+                         subtitle: canEdit
+                            ? L10n.t("التطبيق · الأعضاء · النظام", "App · Members · System")
+                            : L10n.t("وضع القراءة فقط — التعديل للمالك", "Read-only — the owner edits"))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             await appSettingsVM.fetchSettings()
         }
         .modifier(alerts)
-    }
-
-    @ViewBuilder private var sections: some View {
-
-                    // إشعار وضع القراءة فقط (لغير المالك)
-                    if !canEdit {
-                        readOnlyBanner
-                            .padding(.top, DS.Spacing.md)
+        // أسماء الفروع — شجرة الفروع نفسها بوضع التسمية (مربّع طويل كبقية استدعاءاتها)
+        .dsTallBox(isPresented: $branchNamesOpen) {
+            BranchPickerSheet(
+                allMembers: memberVM.allMembers,
+                renamesBranches: true,
+                canRename: canEdit,
+                onRename: { id, name in
+                    Task {
+                        await appSettingsVM.updateBranchName(name, for: id, updatedBy: authVM.currentUser?.id)
                     }
-
-                    // معلومات النظام
-                    systemInfoSection
-                        .padding(.top, canEdit ? DS.Spacing.md : 0)
-
-                    // لغة التطبيق الرسمية
-                    languageSection
-                        .disabled(!canEdit)
-
-                    // التصنيفات — الأخبار والمكتبة
-                    categoriesSection
-
-                    // التسجيل والعضوية
-                    registrationSection
-                        .disabled(!canEdit)
-
-                    // الأخبار والمحتوى
-                    contentSection
-                        .disabled(!canEdit)
-
-                    // الميزات
-                    featuresSection
-                        .disabled(!canEdit)
-
-                    // عداد التعديل
-                    cooldownSection
-                        .disabled(!canEdit)
-
-                    // الأمان
-                    securitySection
-                        .disabled(!canEdit)
-
-                    // إعادة تعيين — يبقى مرئيّ بس مُعطّل لغير المالك
-                    resetSection
-                        .disabled(!canEdit)
+                }
+            )
+            .environmentObject(appSettingsVM)
+        }
+        // «مسار الموافقات ٢»: الردود الجاهزة — المالك يضيف ويحذف، والمدير يقرأ
+        .dsCenterBox(isPresented: $templatesOpen) {
+            ApprovalTemplatesBox(adminRequestVM: adminRequestVM, canEdit: canEdit) { templatesOpen = false }
+        }
     }
 
-    // MARK: - Registration & Membership
+    // MARK: - أرقام مساعدة
+
+    private var registeredUsersCount: Int {
+        memberVM.allMembers.filter { $0.isCountable && $0.phoneNumber != nil && !($0.phoneNumber ?? "").isEmpty }.count
+    }
+
+    /// الميزات الظاهرة للأعضاء (الديوانيات، المشاريع، شجرة النساء)
+    private var enabledFeaturesCount: Int {
+        let s = appSettingsVM.settings
+        // «ألبوم الصور» أُزيل — لا يوجد قسم ألبوم في التطبيق (طلب المالك ٢٠٢٦-١٠-٠٧)
+        return [s.diwaniyasEnabled ?? true, s.projectsEnabled ?? true, s.womenTreeEnabled ?? true]
+            .filter { $0 }.count
+    }
+
+    /// أقسام التبويب المختار فقط
+    @ViewBuilder private var sections: some View {
+        switch tab {
+        case .app:
+            // لغة التطبيق الرسمية
+            languageSection
+                .disabled(!canEdit)
+            // الميزات
+            featuresSection
+                .disabled(!canEdit)
+            // الأخبار
+            contentSection
+                .disabled(!canEdit)
+            // التصنيفات — الأخبار والمكتبة
+            categoriesSection
+            // أسماء الفروع — يتصفّحها غير المالك للقراءة (المربّع نفسه يمنع التعديل)
+            branchNamesSection
+
+        case .members:
+            // التسجيل والأجهزة
+            registrationSection
+                .disabled(!canEdit)
+            // عداد التعديل
+            cooldownSection
+                .disabled(!canEdit)
+            // مسار الموافقات (طلب المالك ٢٠٢٦-١٠-١٥) — التعطيل لغير المالك داخل القسم («الردود الجاهزة» تُتصفّح)
+            approvalsSection
+
+        case .system:
+            // وضع الصيانة
+            securitySection
+                .disabled(!canEdit)
+            // معلومات النظام
+            systemInfoSection
+            // إعادة تعيين — يبقى مرئيّ بس مُعطّل لغير المالك
+            resetSection
+                .disabled(!canEdit)
+        }
+    }
+
+    // MARK: - مسار الموافقات (طلب المالك ٢٠٢٦-١٠-١٥)
+    /// مفتاح واحد يرجع للطريقة القديمة فوراً — المالك يعدّل والمدير يقرأ (مثل باقي الإعدادات).
+    /// تحته والمسار شغّال («مسار الموافقات ٢»، طلب المالك ٢٠٢٦-١٠-١٦): المسار السريع، المهلة، الردود الجاهزة —
+    /// كلٌّ يظهر إذا كان عموده/جدوله على السيرفر
+    private var approvalsSection: some View {
+        let s = appSettingsVM.settings
+        return DSComposerSection(title: L10n.t("طلبات المراجعة", "Review Requests"),
+                                 icon: "checkmark.seal.fill",
+                                 tint: DS.Color.composerProject,
+                                 index: 3) {
+            settingToggle(
+                icon: "point.topleft.down.to.point.bottomright.curvepath.fill",
+                color: DS.Color.success,
+                title: L10n.t("مسار الموافقات", "Approvals path"),
+                subtitle: L10n.t("المختص يراجع ويرفع، المدير يعتمد، والمختص ينفّذ — إطفاؤه يرجّع الطريقة القديمة فوراً",
+                                 "The specialist reviews, the manager approves, the specialist carries out — off returns the old way instantly"),
+                isOn: s.approvalsWorkflow ?? false,
+                key: "approvals_workflow"
+            )
+            .disabled(!canEdit)
+            if s.approvalsWorkflow == true {
+                if let fastTypes = s.approvalsFastTypes {
+                    fastTrackBlock(fastTypes)
+                        .disabled(!canEdit)
+                }
+                if s.approvalsSlaHours != nil || s.approvalsEscalateHours != nil {
+                    slaBlock
+                        .disabled(!canEdit)
+                }
+                if adminRequestVM.approvalTemplatesAvailable == true {
+                    Button { templatesOpen = true } label: {
+                        DSRow(icon: "text.badge.plus", tint: DS.Color.composerDiwaniya,
+                              title: L10n.t("الردود الجاهزة", "Ready replies"),
+                              subtitle: L10n.t("ردود قصيرة تظهر فوق ملاحظة القرار", "Short replies above the decision note")) {
+                            HStack(spacing: DS.Spacing.xs) {
+                                if !adminRequestVM.approvalTemplates.isEmpty {
+                                    Text("\(adminRequestVM.approvalTemplates.count)")
+                                        .dsFont(.caption)
+                                        .foregroundColor(DS.Color.textTertiary)
+                                        .monospacedDigit()
+                                }
+                                DSChevron()
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                }
+            }
+        }
+        .task { await adminRequestVM.fetchApprovalTemplates() }
+    }
+
+    /// عنوان صندوق داخل القسم (قرص + عنوان + وصف) فوق محتواه
+    private func approvalsBlock<Content: View>(icon: String, tint: Color, title: String, subtitle: String,
+                                               @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: icon, tint: tint)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(title)
+                        .dsFieldFont(.rowTitle)
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Text(subtitle)
+                        .dsFieldFont(.subtitle)
+                        .foregroundColor(DS.Color.fieldValue)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dsRowBox()
+    }
+
+    /// «المسار السريع»: شرائح الأنواع (اختيار متعدد) — المختار يبدأ عند المدير مباشرة
+    private func fastTrackBlock(_ selected: [String]) -> some View {
+        approvalsBlock(icon: "bolt.fill", tint: DS.Color.info,
+                       title: L10n.t("المسار السريع", "Fast track"),
+                       subtitle: L10n.t("هذه الأنواع تروح للمدير مباشرة بلا مراجعة المختص",
+                                        "These types go straight to the manager, skipping the specialist")) {
+            ChangedWordsFlow(spacing: DS.Spacing.xs) {
+                ForEach(ApprovalTypeTitle.workflowTypes, id: \.self) { type in
+                    let on = selected.contains(type)
+                    DSChipButton(ApprovalTypeTitle.title(type), icon: on ? "checkmark" : ApprovalTypeTitle.icon(type),
+                                 tint: DS.Color.info, isSelected: on, size: .small) {
+                        toggleFastType(type, in: selected)
+                    }
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func toggleFastType(_ type: String, in selected: [String]) {
+        var next = selected
+        if let i = next.firstIndex(of: type) { next.remove(at: i) } else { next.append(type) }
+        // ترتيب ثابت (ترتيب العرض) — وأي نوع لا يعرفه هذا الإصدار يبقى كما هو
+        let known = ApprovalTypeTitle.workflowTypes.filter(next.contains)
+        let unknown = next.filter { !ApprovalTypeTitle.workflowTypes.contains($0) }
+        next = known + unknown
+        appSettingsVM.settings.approvalsFastTypes = next
+        Task { await appSettingsVM.updateSetting("approvals_fast_types", value: next, updatedBy: authVM.currentUser?.id) }
+    }
+
+    /// «المهلة»: تذكير بعد / تصعيد بعد — للعادي (بخطوة ٦ ساعات) وللمستعجل (بخطوة ساعة)
+    private var slaBlock: some View {
+        let s = appSettingsVM.settings
+        let sla = Int(s.approvalsSlaHours ?? 24), esc = Int(s.approvalsEscalateHours ?? 48)
+        let uSla = Int(s.approvalsUrgentSlaHours ?? 6), uEsc = Int(s.approvalsUrgentEscalateHours ?? 12)
+        return approvalsBlock(icon: "timer", tint: DS.Color.warning,
+                              title: L10n.t("المهلة", "Deadlines"),
+                              subtitle: L10n.t("تذكير لمن عنده الطلب، ثم تصعيد للمدير إذا تأخر",
+                                               "A reminder to whoever holds it, then escalation to the manager")) {
+            slaGroup(L10n.t("العادي", "Normal"), icon: "clock.fill", tint: DS.Color.actionNavy, rows: [
+                (L10n.t("تذكير بعد", "Remind after"), sla, 6...max(6, esc - 6), 6, "approvals_sla_hours"),
+                (L10n.t("تصعيد بعد", "Escalate after"), esc, min(336, sla + 6)...336, 6, "approvals_escalate_hours")
+            ])
+            slaGroup(L10n.t("المستعجل", "Urgent"), icon: "flame.fill", tint: DS.Color.error, rows: [
+                (L10n.t("تذكير بعد", "Remind after"), uSla, 1...max(1, uEsc - 1), 1, "approvals_urgent_sla_hours"),
+                (L10n.t("تصعيد بعد", "Escalate after"), uEsc, min(72, uSla + 1)...72, 1, "approvals_urgent_escalate_hours")
+            ])
+        }
+    }
+
+    private func slaGroup(_ title: String, icon: String, tint: Color,
+                          rows: [(String, Int, ClosedRange<Int>, Int, String)]) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: icon)
+                    .dsGlyph(DS.Glyph.xs)
+                    .foregroundColor(tint.dsReadableGlyph)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .dsFieldFont(.label)
+                    .foregroundColor(DS.Color.fieldLabel)
+            }
+            ForEach(rows, id: \.4) { row in
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(row.0)
+                        .dsFieldFont(.subtitle)
+                        .foregroundColor(DS.Color.fieldValue)
+                    Spacer(minLength: DS.Spacing.sm)
+                    ApprovalHoursStepper(value: row.1, range: row.2, step: row.3, label: "\(title) — \(row.0)") { v in
+                        setHours(row.4, v)
+                    }
+                }
+            }
+        }
+        .padding(.top, DS.Spacing.xxs)
+    }
+
+    /// تحديث متفائل للساعات ثم الحفظ
+    private func setHours(_ key: String, _ value: Int) {
+        let v = Double(value)
+        switch key {
+        case "approvals_sla_hours": appSettingsVM.settings.approvalsSlaHours = v
+        case "approvals_escalate_hours": appSettingsVM.settings.approvalsEscalateHours = v
+        case "approvals_urgent_sla_hours": appSettingsVM.settings.approvalsUrgentSlaHours = v
+        case "approvals_urgent_escalate_hours": appSettingsVM.settings.approvalsUrgentEscalateHours = v
+        default: return
+        }
+        Task { await appSettingsVM.updateSetting(key, value: value, updatedBy: authVM.currentUser?.id) }
+    }
+
+    // MARK: - أسماء الفروع (طلب المالك ٢٠٢٦-١٠-٠٩)
+    /// عدد الفروع التي لها اسم مخصّص
+    private var customBranchNamesCount: Int {
+        (appSettingsVM.settings.branchNames ?? [:]).values
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+    }
+
+    private var branchNamesSection: some View {
+        DSComposerSection(title: L10n.t("الفروع", "Branches"),
+                          icon: "tree.fill",
+                          tint: DS.Color.composerProject,
+                          trailing: customBranchNamesCount > 0 ? "\(customBranchNamesCount)" : nil,
+                          index: 5) {
+            Button { branchNamesOpen = true } label: {
+                DSRow(icon: "pencil", tint: DS.Color.composerProject,
+                       title: L10n.t("أسماء الفروع", "Branch names"),
+                       subtitle: L10n.t("اسم يظهر في قائمة اختيار الفرع",
+                                        "A name shown in the branch picker list")) {
+                    DSChevron()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(DSScaleButtonStyle())
+        }
+    }
+
     // MARK: - التصنيفات (طلب المالك)
     private var categoriesSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("التصنيفات", "Categories"),
-                icon: "tag.fill",
-                iconColor: DS.Color.accent
-            )
+        DSComposerSection(title: L10n.t("التصنيفات", "Categories"),
+                          icon: "tag.fill",
+                          tint: DS.Color.composerLibrary,
+                          index: 4) {
             NavigationLink {
                 CategoriesManagerView()
                     .environmentObject(authVM)
             } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب",
-                                    "Name, icon, colour, hide and order"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.icon(12, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
+                DSRow(icon: "tag.fill", tint: DS.Color.accent,
+                       title: L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"),
+                       subtitle: L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب",
+                                        "Name, icon, colour, hide and order")) {
+                    DSChevron()
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.bottom, DS.Spacing.lg)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DSScaleButtonStyle())
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - لغة التطبيق الرسمية (طلب المالك)
@@ -134,53 +375,45 @@ struct AdminAppSettingsView: View {
     // تُطبَّق على كل مستخدم لم يختر لغته بنفسه. من يغيّر اللغة من «الإعدادات»
     // تبقى لغته هو.
     private var languageSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("لغة التطبيق الرسمية", "Official App Language"),
-                icon: "character.bubble.fill",
-                iconColor: DS.Color.secondary
-            )
-
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Picker("", selection: Binding(
-                    get: { appSettingsVM.settings.defaultLanguage ?? "ar" },
-                    set: { newValue in
-                        Task {
-                            await appSettingsVM.updateSetting(
-                                "default_language",
-                                value: newValue,
-                                updatedBy: authVM.currentUser?.id
-                            )
-                        }
+        DSComposerSection(title: L10n.t("لغة التطبيق الرسمية", "Official App Language"),
+                          icon: "character.bubble.fill",
+                          tint: DS.Color.actionNavy,
+                          trailing: (appSettingsVM.settings.defaultLanguage ?? "ar") == "ar" ? "العربية" : "English",
+                          index: 1) {
+            // المبدّل الواحد (`DSSegmentedSwitch`) بدل مبدّل النظام الرمادي
+            DSSegmentedSwitch(options: [
+                DSSegmentOption(id: "ar", title: "العربية", icon: "character.bubble.fill.ar"),
+                DSSegmentOption(id: "en", title: "English", icon: "textformat.abc")
+            ], selection: Binding(
+                get: { appSettingsVM.settings.defaultLanguage ?? "ar" },
+                set: { newValue in
+                    Task {
+                        await appSettingsVM.updateSetting(
+                            "default_language",
+                            value: newValue,
+                            updatedBy: authVM.currentUser?.id
+                        )
                     }
-                )) {
-                    Text("العربية").tag("ar")
-                    Text("English").tag("en")
                 }
-                .pickerStyle(.segmented)
+            ), size: .regular)
+            .accessibilityLabel(L10n.t("لغة التطبيق الرسمية", "Official App Language"))
 
-                Text(L10n.t(
-                    "لغة التطبيق لكل الأعضاء. من يغيّر لغته من «الإعدادات» تبقى لغته هو.",
-                    "The app language for all members. Anyone who picks a language in Settings keeps their own."
-                ))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.lg)
+            Text(L10n.t(
+                "لغة التطبيق لكل الأعضاء. من يغيّر لغته من «الإعدادات» تبقى لغته هو.",
+                "The app language for all members. Anyone who picks a language in Settings keeps their own."
+            ))
+            .dsFieldFont(.footnote)
+            .foregroundColor(DS.Color.fieldValue)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
+    // MARK: - Registration & Membership
     private var registrationSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("التسجيل والعضوية", "Registration & Membership"),
-                icon: "person.badge.key.fill",
-                iconColor: DS.Color.primary
-            )
-
+        DSComposerSection(title: L10n.t("التسجيل والعضوية", "Registration & Membership"),
+                          icon: "person.badge.key.fill",
+                          tint: DS.Color.composerProject,
+                          index: 1) {
             // السماح بالتسجيل الجديد
             settingToggle(
                 icon: "person.badge.plus",
@@ -191,64 +424,49 @@ struct AdminAppSettingsView: View {
                 key: "allow_new_registrations"
             )
 
-            DSDivider()
-
             // الحد الأقصى للأجهزة
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("iphone.gen3.badge.play", color: DS.Color.info)
+            DSRow(icon: "iphone.gen3.badge.play", tint: DS.Color.info,
+                   title: L10n.t("الحد الأقصى للأجهزة", "Max Devices"),
+                   subtitle: L10n.t("عدد الأجهزة المسموحة لكل مستخدم", "Devices allowed per user")) {
+                HStack(spacing: DS.Spacing.sm) {
+                    Text("\(appSettingsVM.settings.maxDevicesPerUser)")
+                        .dsFont(.title)
+                        .foregroundColor(AppSection.admin.ink)
+                        .monospacedDigit()
+                        .frame(minWidth: DS.Icon.section)
+                        .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("الحد الأقصى للأجهزة", "Max Devices"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("عدد الأجهزة المسموحة لكل مستخدم", "Devices allowed per user"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-
-                Spacer()
-
-                Stepper(
-                    "\(appSettingsVM.settings.maxDevicesPerUser)",
-                    value: Binding(
-                        get: { appSettingsVM.settings.maxDevicesPerUser },
-                        set: { newVal in
-                            appSettingsVM.settings.maxDevicesPerUser = newVal
-                            Task {
-                                await appSettingsVM.updateSetting(
-                                    "max_devices_per_user",
-                                    value: newVal,
-                                    updatedBy: authVM.currentUser?.id
-                                )
+                    Stepper(
+                        "\(appSettingsVM.settings.maxDevicesPerUser)",
+                        value: Binding(
+                            get: { appSettingsVM.settings.maxDevicesPerUser },
+                            set: { newVal in
+                                appSettingsVM.settings.maxDevicesPerUser = newVal
+                                Task {
+                                    await appSettingsVM.updateSetting(
+                                        "max_devices_per_user",
+                                        value: newVal,
+                                        updatedBy: authVM.currentUser?.id
+                                    )
+                                }
                             }
-                        }
-                    ),
-                    in: 1...10
-                )
-                .labelsHidden()
-                .frame(width: 100)
-
-                Text("\(appSettingsVM.settings.maxDevicesPerUser)")
-                    .font(DS.Font.headline)
-                    .fontWeight(.black)
-                    .foregroundColor(DS.Color.primary)
-                    .frame(width: 24)
+                        ),
+                        in: 1...10
+                    )
+                    .labelsHidden()
+                    .accessibilityLabel(L10n.t("الحد الأقصى للأجهزة", "Max Devices"))
+                    .accessibilityValue("\(appSettingsVM.settings.maxDevicesPerUser)")
+                }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Content Settings
     private var contentSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("الأخبار والمحتوى", "News & Content"),
-                icon: "newspaper.fill",
-                iconColor: DS.Color.accent
-            )
-
+        DSComposerSection(title: L10n.t("الأخبار", "News"),
+                          icon: "newspaper.fill",
+                          tint: DS.Color.composerLibrary,
+                          index: 3) {
             // موافقة الأخبار
             settingToggle(
                 icon: "checkmark.shield.fill",
@@ -258,8 +476,6 @@ struct AdminAppSettingsView: View {
                 isOn: appSettingsVM.settings.newsRequiresApproval,
                 key: "news_requires_approval"
             )
-
-            DSDivider()
 
             // الاستطلاعات
             settingToggle(
@@ -271,28 +487,23 @@ struct AdminAppSettingsView: View {
                 key: "polls_enabled"
             )
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Features
     private var featuresSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("الميزات", "Features"),
-                icon: "star.fill",
-                iconColor: DS.Color.accent
-            )
-
+        DSComposerSection(title: L10n.t("الميزات", "Features"),
+                          icon: "star.fill",
+                          tint: DS.Color.actionNavy,
+                          trailing: "\(enabledFeaturesCount)/3",
+                          index: 2) {
             settingToggle(
-                icon: "map.fill",
-                color: DS.Color.primary,
+                icon: AppSection.diwaniyas.symbol,   // «مجلس»
+                color: AppSection.admin.ink,
                 title: L10n.t("الديوانيات", "Diwaniyas"),
                 subtitle: L10n.t("إظهار تاب الديوانيات للأعضاء", "Show Diwaniyas tab to members"),
                 isOn: appSettingsVM.settings.diwaniyasEnabled ?? true,
                 key: "diwaniyas_enabled"
             )
-
-            DSDivider()
 
             settingToggle(
                 icon: "briefcase.fill",
@@ -303,29 +514,25 @@ struct AdminAppSettingsView: View {
                 key: "projects_enabled"
             )
 
-            DSDivider()
-
+            // إخفاء «شجرة النساء» من قسم الشجرة (طلب المالك ٢٠٢٦-١٠-٠٧) — للجميع حتى يُعاد تشغيلها من هنا
             settingToggle(
-                icon: "photo.on.rectangle.angled.fill",
-                color: DS.Color.info,
-                title: L10n.t("ألبوم الصور", "Photo Albums"),
-                subtitle: L10n.t("إظهار قسم الصور في الرئيسية", "Show Photos section on Home"),
-                isOn: appSettingsVM.settings.albumsEnabled ?? true,
-                key: "albums_enabled"
+                icon: "person.2.fill",
+                color: DS.Color.female,
+                title: L10n.t("شجرة النساء", "Women's Tree"),
+                subtitle: L10n.t("إظهار تبويب النساء في قسم الشجرة", "Show the Women tab in the Tree section"),
+                isOn: appSettingsVM.settings.womenTreeEnabled ?? true,
+                key: "women_tree_enabled"
             )
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Security
     private var securitySection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("الأمان والصيانة", "Security & Maintenance"),
-                icon: "lock.shield.fill",
-                iconColor: DS.Color.primary
-            )
-
+        DSComposerSection(title: L10n.t("الصيانة", "Maintenance"),
+                          icon: "lock.shield.fill",
+                          tint: DS.Color.error,
+                          trailing: appSettingsVM.settings.maintenanceMode ? L10n.t("مفعّل", "On") : nil,
+                          index: 1) {
             // وضع الصيانة
             settingToggle(
                 icon: "wrench.and.screwdriver.fill",
@@ -336,167 +543,102 @@ struct AdminAppSettingsView: View {
                 key: "maintenance_mode"
             )
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Edit Cooldown
     private var cooldownSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("عداد التعديل", "Edit Cooldown"),
-                icon: "timer",
-                iconColor: DS.Color.palm
-            )
-
+        DSComposerSection(title: L10n.t("عداد التعديل", "Edit Cooldown"),
+                          icon: "timer",
+                          tint: DS.Color.composerProject,
+                          index: 2) {
             // إيقاف / تشغيل العداد
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("pause.circle.fill", color: DS.Color.warning)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("إيقاف العداد", "Disable Cooldown"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("السماح بالتعديل بدون حد (عادةً 3 تعديلات ثم موافقة الإدارة)", "Allow unlimited edits (normally 3 edits, then admin approval)"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-
-                Spacer()
-
+            DSRow(icon: "pause.circle.fill", tint: DS.Color.warning,
+                   title: L10n.t("إيقاف العداد", "Disable Cooldown"),
+                   subtitle: L10n.t("السماح بالتعديل بدون حد (عادةً 3 تعديلات ثم موافقة الإدارة)",
+                                    "Allow unlimited edits (normally 3 edits, then admin approval)")) {
                 Toggle("", isOn: $cooldownDisabled)
                     .labelsHidden()
                     .tint(DS.Color.warning)
+                    .accessibilityLabel(L10n.t("إيقاف العداد", "Disable Cooldown"))
                     .onChange(of: cooldownDisabled) { newValue in
                         ProfileEditCooldown.shared.isDisabled = newValue
                     }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
-
-            DSDivider()
 
             // تصفير العداد
             Button { showResetCooldownAlert = true } label: {
-                HStack(spacing: DS.Spacing.md) {
-                    DSIcon("arrow.counterclockwise.circle.fill", color: DS.Color.warning)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("تصفير العداد", "Reset Cooldown"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.warning)
-                        Text(L10n.t("إعادة عدّاد التعديلات من الصفر", "Reset edit counters"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    Spacer()
+                DSRow(icon: "arrow.counterclockwise.circle.fill", tint: DS.Color.warning,
+                       title: L10n.t("تصفير العداد", "Reset Cooldown"),
+                       subtitle: L10n.t("إعادة عدّاد التعديلات من الصفر", "Reset edit counters")) {
+                    DSChevron()
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.sm)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(DSBoldButtonStyle())
+            .buttonStyle(DSScaleButtonStyle())
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Read-Only Banner
     /// شارة "وضع القراءة فقط" — تظهر للمدير غير المالك
     private var readOnlyBanner: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: "eye.fill")
-                .font(DS.Font.icon(14, weight: .bold))
-                .foregroundColor(DS.Color.info)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.t("وضع القراءة فقط", "Read-only mode"))
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(L10n.t(
-                    "تقدر تتصفّح الإعدادات. التعديل متاح للمالك فقط.",
-                    "You can browse settings. Editing is owner-only."
-                ))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-            }
-            Spacer()
-        }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.info.opacity(0.10))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(DS.Color.info.opacity(0.25), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .padding(.horizontal, DS.Spacing.lg)
+        DSNoteCard(L10n.t("تقدر تتصفّح الإعدادات. التعديل متاح للمالك فقط.",
+                          "You can browse settings. Editing is owner-only."),
+                   title: L10n.t("وضع القراءة فقط", "Read-only mode"),
+                   icon: "eye.fill")
+            .dsStaggerIn(0)
     }
 
     // MARK: - System Info
     private var systemInfoSection: some View {
-        DSCard(padding: 0) {
-            DSSectionHeader(
-                title: L10n.t("معلومات النظام", "System Info"),
-                icon: "info.circle.fill",
-                iconColor: DS.Color.info
-            )
-
-            VStack(spacing: 0) {
-                infoRow(
-                    label: L10n.t("إصدار التطبيق", "App Version"),
-                    value: (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") + " (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))"
+        DSComposerSection(title: L10n.t("معلومات النظام", "System Info"),
+                          icon: "info.circle.fill",
+                          tint: DS.Color.actionNavy,
+                          index: 2) {
+            // حالة سريعة: التسجيل والصيانة
+            HStack(spacing: DS.Spacing.xs) {
+                DSStatusChip(
+                    text: appSettingsVM.settings.allowNewRegistrations
+                        ? L10n.t("التسجيل مفتوح", "Sign-up open")
+                        : L10n.t("التسجيل مغلق", "Sign-up closed"),
+                    icon: appSettingsVM.settings.allowNewRegistrations ? "person.badge.plus" : "person.fill.xmark",
+                    tint: appSettingsVM.settings.allowNewRegistrations ? DS.Color.success : DS.Color.warning
                 )
-                DSDivider()
-                infoRow(
-                    label: L10n.t("المنصة", "Platform"),
-                    value: UIDevice.current.systemName + " " + UIDevice.current.systemVersion
-                )
-                DSDivider()
-                infoRow(
-                    label: L10n.t("أعضاء العائلة", "Family Members"),
-                    value: "\(memberVM.allMembers.filter(\.isCountable).count)"
-                )
-                DSDivider()
-                infoRow(
-                    label: L10n.t("مستخدمين مسجلين", "Registered Users"),
-                    value: "\(memberVM.allMembers.filter { $0.isCountable && $0.phoneNumber != nil && !($0.phoneNumber ?? "").isEmpty }.count)"
-                )
-                DSDivider()
-                infoRow(
-                    label: L10n.t("السيرفر", "Server"),
-                    value: "Supabase · Stockholm"
-                )
-                DSDivider()
-                infoRow(
-                    label: L10n.t("آخر تحديث", "Last Update"),
-                    value: formatDate(appSettingsVM.settings.updatedAt)
-                )
+                if appSettingsVM.settings.maintenanceMode {
+                    DSStatusChip(text: L10n.t("وضع الصيانة", "Maintenance"),
+                                  icon: "wrench.and.screwdriver.fill", tint: DS.Color.error)
+                }
+                Spacer(minLength: 0)
             }
+
+            infoRow(icon: "app.badge.fill",
+                    label: L10n.t("إصدار التطبيق", "App Version"),
+                    value: (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") + " (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
+            infoRow(icon: "iphone",
+                    label: L10n.t("المنصة", "Platform"),
+                    value: UIDevice.current.systemName + " " + UIDevice.current.systemVersion)
+            infoRow(icon: "person.3.fill",
+                    label: L10n.t("أعضاء العائلة", "Family Members"),
+                    value: "\(memberVM.allMembers.filter(\.isCountable).count)")
+            infoRow(icon: "person.crop.circle.badge.checkmark",
+                    label: L10n.t("مستخدمين مسجلين", "Registered Users"),
+                    value: "\(registeredUsersCount)")
+            infoRow(icon: "server.rack",
+                    label: L10n.t("السيرفر", "Server"),
+                    value: "Supabase · Stockholm")
+            infoRow(icon: "clock.fill",
+                    label: L10n.t("آخر تحديث", "Last Update"),
+                    value: formatDate(appSettingsVM.settings.updatedAt))
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - Reset
     private var resetSection: some View {
-        Button {
+        // الزرّ الواحد بالأحمر (يسأل قبل التنفيذ)
+        DSButton(L10n.t("إعادة تعيين الإعدادات", "Reset Settings"), icon: "arrow.counterclockwise",
+                 role: .destructive) {
             showResetConfirmation = true
-        } label: {
-            HStack(spacing: DS.Spacing.md) {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(DS.Font.icon(14, weight: .bold))
-                Text(L10n.t("إعادة تعيين الإعدادات", "Reset Settings"))
-                    .font(DS.Font.calloutBold)
-            }
-            .foregroundColor(DS.Color.error)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.error.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(DS.Color.error.opacity(0.2), lineWidth: 1)
-            )
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsStaggerIn(3)
     }
 
     // MARK: - Helpers
@@ -509,21 +651,7 @@ struct AdminAppSettingsView: View {
         isOn: Bool,
         key: String
     ) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSIcon(icon, color: color)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(subtitle)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
-
+        DSRow(icon: icon, tint: color, title: title, subtitle: subtitle) {
             Toggle("", isOn: Binding(
                 get: { isOn },
                 set: { newVal in
@@ -537,24 +665,29 @@ struct AdminAppSettingsView: View {
                 }
             ))
             .labelsHidden()
-            .tint(DS.Color.primary)
+            .tint(AppSection.admin.ink)
+            .accessibilityLabel(title)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
     }
 
-    private func infoRow(label: String, value: String) -> some View {
-        HStack {
+    private func infoRow(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: DS.Color.actionNavy)
+                .accessibilityHidden(true)
             Text(label)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer()
+                .dsFieldFont(.sectionTitle)
+                .foregroundColor(DS.Color.fieldValue)
+                .lineLimit(1)
+            Spacer(minLength: DS.Spacing.sm)
             Text(value)
-                .font(DS.Font.calloutBold)
-                .foregroundColor(DS.Color.textPrimary)
+                .dsFieldFont(.rowTitleCompact)
+                .foregroundColor(DS.Color.fieldLabel)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
+        .dsRowBox()
+        .accessibilityElement(children: .combine)
     }
 
     private func formatDate(_ isoString: String?) -> String {

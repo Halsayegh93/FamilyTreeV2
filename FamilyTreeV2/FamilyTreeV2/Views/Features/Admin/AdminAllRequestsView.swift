@@ -13,8 +13,10 @@ struct AdminAllRequestsView: View {
     @State private var editedName: String = ""
     @State private var phoneEditRequest: PhoneChangeRequest? = nil
     @State private var editedPhone: String = ""
+    /// ما فُتح عليه مربّعا تعديل الاسم/الرقم — «إلغاء» يسأل فقط إذا تغيّر (توصية أبل)
+    @State private var editedNameStart: String = ""
+    @State private var editedPhoneStart: String = ""
     @State private var selectedDetail: RequestDetail? = nil
-    @State private var detailSheetHeight: CGFloat = 0
     // إدخال سبب الرفض — يُرسل كرسالة لمقدّم الطلب
     @State private var showRejectReason = false
     @State private var rejectReasonText: String = ""
@@ -181,11 +183,11 @@ struct AdminAllRequestsView: View {
 
         var color: Color {
             switch self {
-            case .all: return DS.Color.primary
+            case .all: return AppSection.admin.ink
             case .joinRequests: return DS.Color.info
             case .news: return DS.Color.accent
             case .reports: return DS.Color.error
-            case .phone: return DS.Color.primary
+            case .phone: return AppSection.admin.ink
             case .nameChange: return DS.Color.palm
             case .diwaniya: return DS.Color.gridDiwaniya
             case .archive: return DS.Color.sadu
@@ -193,11 +195,11 @@ struct AdminAllRequestsView: View {
             case .children: return DS.Color.info
             case .treeAdd: return DS.Color.palm
             case .treeEditName: return DS.Color.palm
-            case .treeEditPhone: return DS.Color.primary
+            case .treeEditPhone: return AppSection.admin.ink
             case .treeEditBirth: return DS.Color.palm
             case .treeDeceased: return DS.Color.slate
             case .treeAddDeathDate: return DS.Color.slate
-            case .treeAddPhoto: return DS.Color.primary
+            case .treeAddPhoto: return AppSection.admin.ink
             case .treeDelete: return DS.Color.error
             case .treeOther: return DS.Color.accent
             case .photos: return DS.Color.sadu
@@ -223,8 +225,14 @@ struct AdminAllRequestsView: View {
     }
 
     @State private var selectedTab: RequestTab = .all
+    /// «مسار الموافقات ٢» (طلب المالك ٢٠٢٦-١٠-١٦ مسار الموافقات ٢): الكل · بانتظارك · مستعجل · متأخر
+    @State private var approvalFilter: ApprovalListFilter = .all
+    /// «تقرير الموافقات» من زرّ الرأس
+    @State private var showApprovalsReport = false
     @State private var selectedSection: RequestSection? = nil   // nil = وضع الكل
-    @Namespace private var tabAnimation
+    /// التحميل الأول (قبل أول `recalculateCounts`) — بطاقة «جارٍ التحميل» بدل «لا توجد طلبات»
+    @State private var isInitialLoading = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showBulkApproveChildrenConfirm = false
     @State private var bulkApproveResult: String?
     @State private var showBulkApproveResult = false
@@ -238,6 +246,9 @@ struct AdminAllRequestsView: View {
     @State private var showBulkRejectConfirm = false
     @State private var bulkSelectRejectResult: String?
     @State private var showBulkSelectRejectResult = false
+
+    /// عضو «صحة الشجرة» المسحوب للحذف — ينتظر تأكيد المربّع الأحمر قبل الحذف (مثل أندرويد)
+    @State private var healthMemberToDelete: FamilyMember? = nil
 
     // Join request states
     @State private var memberToLink: FamilyMember? = nil
@@ -262,7 +273,6 @@ struct AdminAllRequestsView: View {
     @State private var cachedHealthIssueMembers: [FamilyMember] = []
     @State private var cachedHealthMemberIssues: [UUID: Set<TreeHealthIssue>] = [:]
     @State private var cachedHealthCounts: [TreeHealthIssue: Int] = [:]
-    @State private var openTreeHealthFilter: AdminTreeHealthView.TreeIssueFilter? = nil
 
     enum TreeHealthIssue: String, Hashable {
         case orphan, noName, brokenParent, hiddenFromTree, duplicatePhone
@@ -350,112 +360,44 @@ struct AdminAllRequestsView: View {
     }
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // شريط التابات الأفقي (يظهر فقط إذا في طلبات)
-                if totalCount > 0 {
-                    tabBar
-                        .padding(.top, DS.Spacing.sm)
-                }
-
-                // المحتوى
-                if totalCount == 0 || itemCount(for: selectedTab) == 0 {
-                    Spacer()
-                    emptyState
-                    Spacer()
-                } else {
-                    tabContent
-                }
-            }
-
-            // شريط العمليات الجماعية — مثبّت في الأسفل
-            if isSelectMode && !selectedIds.isEmpty {
-                VStack(spacing: 0) {
-                    Spacer()
-                    Divider()
-                    HStack(spacing: DS.Spacing.md) {
-                        // عداد المحددين
-                        VStack(spacing: 2) {
-                            Text("\(selectedIds.count)")
-                                .font(DS.Font.scaled(18, weight: .black))
-                                .foregroundColor(DS.Color.textPrimary)
-                            Text(L10n.t("محدد", "selected"))
-                                .font(DS.Font.scaled(11, weight: .medium))
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                        .frame(minWidth: 44)
-
-                        Spacer()
-
-                        // زر الرفض — يظهر فقط لمن يملك الصلاحية
-                        if authVM.canRejectRequests {
-                            Button {
-                                showBulkRejectConfirm = true
-                            } label: {
-                                HStack(spacing: DS.Spacing.xs) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(DS.Font.icon(14, weight: .semibold))
-                                    Text(L10n.t("رفض", "Reject"))
-                                        .font(DS.Font.calloutBold)
-                                }
-                                .foregroundColor(DS.Color.error)
-                                .padding(.horizontal, DS.Spacing.lg)
-                                .padding(.vertical, DS.Spacing.sm)
-                                .background(DS.Color.error.opacity(0.1))
-                                .clipShape(Capsule())
-                                .overlay(Capsule().stroke(DS.Color.error.opacity(0.3), lineWidth: 1))
-                            }
-                            .disabled(adminRequestVM.isLoading)
-                            .buttonStyle(DSScaleButtonStyle())
-                        }
-
-                        // زر القبول
-                        Button {
-                            showBulkApproveConfirm = true
-                        } label: {
-                            HStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(DS.Font.icon(14, weight: .semibold))
-                                Text(L10n.t("قبول", "Approve"))
-                                    .font(DS.Font.calloutBold)
-                            }
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .padding(.vertical, DS.Spacing.sm)
-                            .background(DS.Color.gradientPrimary)
-                            .clipShape(Capsule())
-                        }
-                        .disabled(adminRequestVM.isLoading)
-                        .buttonStyle(DSScaleButtonStyle())
-                    }
+        VStack(spacing: 0) {
+            // وضع التحديد: شريط ملخّص التحديد مثبّت أعلى القائمة (إلغاء · العدد · تحديد الكل)
+            // — يحلّ محل الفلاتر كما كان، ويبقى ظاهراً مهما نزلت القائمة.
+            if isSelectMode && totalCount > 0 {
+                selectionSummaryBar
                     .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .dsGlass(Rectangle())
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.top, DS.Spacing.sm)
+                    .padding(.bottom, DS.Spacing.xs)
+                    .transition(.opacity)
             }
+
+            // صفّ الأرقام ← الفلاتر ← الطلبات: قائمة واحدة تتمرّر (List لأجل أزرار السحب)
+            requestsList
+                // شريط العمليات الجماعية — مثبّت في الأسفل، وآخر صف في القائمة يبقى فوقه
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if isSelectMode && !selectedIds.isEmpty {
+                        bulkActionBar
+                            .transition(reduceMotion ? .opacity
+                                        : .move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
         }
         .animation(DS.Anim.snappy, value: isSelectMode && !selectedIds.isEmpty)
-        .navigationTitle(L10n.t("طلبات المراجعة", "Review Requests"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            // زر التحديد المتعدّد — أيقونة فقط بدون خلفية
-            ToolbarItem(placement: .topBarTrailing) {
-                if !isSelectMode && itemCount(for: selectedTab) > 0
-                    && selectedTab.section != .treeHealth {
-                    Button {
-                        withAnimation(DS.Anim.snappy) {
-                            isSelectMode = true
-                            selectedIds.removeAll()
-                        }
-                    } label: {
-                        Image(systemName: "checkmark.circle")
-                            .font(DS.Font.icon(16, weight: .semibold))
-                            .foregroundColor(DS.Color.primary)
+        // الرأس الملوّن الموحّد (بدل شريط النظام وبطاقة الرأس) — زرّ التحديد المتعدّد في الرأس
+        .dsSubPageHeader(L10n.t("طلبات المراجعة", "Review Requests"), subtitle: heroSubtitle) {
+            // «تقرير الموافقات» — زرّ صغير (المالك والمدير والمراقب، والمسار شغّال)
+            if !isSelectMode && canSeeApprovalsReport {
+                DSHeaderButton(symbol: "chart.bar.xaxis", label: L10n.t("تقرير الموافقات", "Approvals report")) {
+                    showApprovalsReport = true
+                }
+            }
+            if !isSelectMode && itemCount(for: selectedTab) > 0
+                && selectedTab.section != .treeHealth {
+                DSHeaderButton(symbol: "checkmark.circle", label: L10n.t("تحديد", "Select")) {
+                    withAnimation(DS.Anim.snappy) {
+                        isSelectMode = true
+                        selectedIds.removeAll()
                     }
-                    .accessibilityLabel(L10n.t("تحديد", "Select"))
                 }
             }
         }
@@ -471,24 +413,29 @@ struct AdminAllRequestsView: View {
         .onChange(of: memberVM.allMembers.count) { _ in
             rebuildTreeHealthCache()
         }
-        .sheet(item: $openTreeHealthFilter) { filter in
-            NavigationStack {
-                AdminTreeHealthView(initialFilter: filter)
-                    .environmentObject(memberVM)
-                    .toolbar {
-                        ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                            Button(L10n.t("إغلاق", "Close")) { openTreeHealthFilter = nil }
-                                .foregroundColor(DS.Color.primary)
-                        }
-                    }
+        .navigationDestination(isPresented: $showApprovalsReport) {
+            ApprovalsReportView()
+        }
+        // (كان على شريط التابات) إذا التاب الحالي صار فارغ، انقل لأول تاب غير فارغ (لو فيه)
+        .onChange(of: totalCount) { _ in
+            if itemCount(for: selectedTab) == 0,
+               let firstNonEmpty = RequestTab.allCases.first(where: { itemCount(for: $0) > 0 }) {
+                withAnimation(DS.Anim.snappy) {
+                    selectedTab = firstNonEmpty
+                    selectedSection = firstNonEmpty.section
+                }
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
+            // رسالة قديمة من إجراء خارج هذه الشاشة (قبول من الإشعار مثلاً) لا تظهر عند الفتح
+            adminRequestVM.errorMessage = nil
             diwaniyaVM.notificationVM = notificationVM
             diwaniyaVM.canModerate = authVM.canModerate
             diwaniyaVM.authVM = authVM
             archiveVM.configure(authVM: authVM, notificationVM: notificationVM)
+            // «مسار الموافقات»: المفتاح طازجاً قبل القوائم (مطفأ = لا شيء يتغيّر)
+            await adminRequestVM.refreshApprovalsFlag()
             // تحميل متوازي لجميع الطلبات — أسرع بكثير
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { @MainActor in await memberVM.fetchAllMembers() }
@@ -503,6 +450,8 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
                 group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
                 group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests(force: true) }
+                // مراحل طلبات الانضمام (المسار شغّال فقط — وإلا لا طلب)
+                group.addTask { @MainActor in await adminRequestVM.fetchJoinApprovalRequests() }
             }
             await fetchAllRegistrationMatches()
             recalculateCounts()
@@ -511,6 +460,8 @@ struct AdminAllRequestsView: View {
             if let firstWithItems = cachedAvailableTabs.first {
                 selectedTab = firstWithItems
             }
+            // انتهى التحميل الأول — تظهر الفلاتر والطلبات بدل بطاقة التحميل
+            withAnimation(.easeInOut(duration: 0.2)) { isInitialLoading = false }
         }
         .dsAlert(
             L10n.t("تأكيد الموافقة على الكل", "Confirm Approve All"),
@@ -535,7 +486,8 @@ struct AdminAllRequestsView: View {
         }
         .dsAlert(
             L10n.t("تم", "Done"),
-            isPresented: $showBulkApproveResult
+            isPresented: $showBulkApproveResult,
+            moment: .approved
         ) {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
@@ -566,7 +518,8 @@ struct AdminAllRequestsView: View {
         }
         .dsAlert(
             L10n.t("تم", "Done"),
-            isPresented: $showBulkSelectApproveResult
+            isPresented: $showBulkSelectApproveResult,
+            moment: .approved
         ) {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
@@ -603,19 +556,24 @@ struct AdminAllRequestsView: View {
         } message: {
             Text(bulkSelectRejectResult ?? "")
         }
-        .sheet(item: $selectedDetail) { detail in
+        // أخطاء الموافقة/الرفض ظاهرة (كانت تُسجَّل فقط): طلب عالجه غيرك، لا صلاحية، فشل التنفيذ
+        .dsAlert(
+            L10n.t("تنبيه", "Notice"),
+            isPresented: Binding(
+                get: { adminRequestVM.errorMessage != nil },
+                set: { if !$0 { adminRequestVM.errorMessage = nil } }
+            )
+        ) {
+            Button(L10n.t("حسناً", "OK")) { adminRequestVM.errorMessage = nil }
+        } message: {
+            Text(adminRequestVM.errorMessage ?? "")
+        }
+        // تفاصيل الطلب — مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
+        .dsCenterBox(item: $selectedDetail) { detail in
             requestDetailSheet(detail)
-                .onPreferenceChange(DetailSheetHeightKey.self) { h in
-                    // ارتفاع المحتوى + شريط التنقّل (~56)
-                    detailSheetHeight = h + 56
-                }
-                .presentationDetents(
-                    detailSheetHeight > 0 ? [.height(detailSheetHeight), .large] : [.medium, .large]
-                )
-                .presentationDragIndicator(.visible)
-                .onDisappear { detailSheetHeight = 0 }
                 .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReason) {
                     TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $rejectReasonText)
+                        .dsAlertField()
                     Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) {
                         if let d = rejectReasonDetail {
                             rejectDetail(d, reason: rejectReasonText)
@@ -628,7 +586,7 @@ struct AdminAllRequestsView: View {
                                 "The reason will be sent as a message to the requester."))
                 }
         }
-        .sheet(item: $healthPhoneMember) { member in
+        .dsCenterBox(item: $healthPhoneMember) { member in
             PendingMemberPhoneSheet(member: member, activateOnSave: true)
                 .environmentObject(adminRequestVM)
         }
@@ -671,8 +629,30 @@ struct AdminAllRequestsView: View {
                 "This request will be permanently removed and cannot be undone."
             ))
         }
-        .sheet(item: $memberToLink) { member in
-            LinkToExistingMemberSheet(pendingMember: member)
+        // حذف عضو من «صحة الشجرة» بالسحب — تأكيد أحمر بنص أندرويد قبل الحذف.
+        // الحذف نفسه كما هو (`rejectOrDeleteMember`: السجل أولاً، ورسالة `family_links_protected` إن رُفض)
+        .dsAlert(
+            L10n.t("حذف الطلب", "Delete Request"),
+            isPresented: Binding(
+                get: { healthMemberToDelete != nil },
+                set: { if !$0 { healthMemberToDelete = nil } }
+            ),
+            presenting: healthMemberToDelete
+        ) { member in
+            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                healthMemberToDelete = nil
+                Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { healthMemberToDelete = nil }
+        } message: { member in
+            let name = member.fullName.trimmingCharacters(in: .whitespaces).isEmpty
+                ? L10n.t("بدون اسم", "No name") : member.fullName
+            Text(L10n.t("سيتم حذف طلب «\(name)» نهائيًا.",
+                        "The request “\(name)” will be permanently deleted."))
+        }
+        .dsTallBox(item: $memberToLink) { member in   // قائمة أعضاء طويلة (توصية أبل)
+            LinkToExistingMemberSheet(pendingMember: member,
+                                      suggested: orderedMatchList(for: member).map(\.member))
                 .environmentObject(memberVM)
                 .environmentObject(adminRequestVM)
         }
@@ -720,7 +700,8 @@ struct AdminAllRequestsView: View {
                 }
                 return L10n.t("تم الدمج", "Merge Complete")
             }(),
-            isPresented: $showMergeSuccess
+            isPresented: $showMergeSuccess,
+            moment: { if case .success = adminRequestVM.mergeResult { return .success }; return nil }()
         ) {
             Button(L10n.t("حسناً", "OK")) {
                 adminRequestVM.mergeResult = nil
@@ -807,8 +788,10 @@ struct AdminAllRequestsView: View {
         if authVM.currentUser?.role == .supervisor {
             return tabs.filter { $0 == .all || Self.contentTabs.contains($0) }
         }
-        // المراقب: الشجرة والأعضاء
-        return tabs.filter { $0 == .all || !Self.contentTabs.contains($0) }
+        // المراقب: الشجرة والأعضاء — و«صور مقترحة» والمسار شغّال (مختصّها المراقب)
+        return tabs.filter {
+            $0 == .all || !Self.contentTabs.contains($0) || ($0 == .photos && adminRequestVM.approvalsWorkflowOn)
+        }
     }
 
     private func recalculateCounts() {
@@ -819,7 +802,8 @@ struct AdminAllRequestsView: View {
         cachedTotalCount = Self.reviewRequestsTotal(
             memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
             diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
-            pendingArchiveCount: pendingArchiveItems.count
+            pendingArchiveCount: pendingArchiveItems.count,
+            scope: Self.reviewScope(for: authVM)
         )
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية)
         // ما عدا التابات المخفية (مغطّاة بأقسام أخرى).
@@ -828,6 +812,17 @@ struct AdminAllRequestsView: View {
 
     /// مصدر واحد للحقيقة لعدد «طلبات المراجعة» — يستخدمه «الكل» داخل الطلبات وبادج لوحة الإدارة
     /// حتى يتطابق الرقمان دائماً. يطابق مجموع عدّادات كل التابات (joinRequests…صحة الشجرة).
+    /// مجال العدّاد حسب الدور — نفس `tabsForRole`: الإدارة كل شيء، المشرف المحتوى والبلاغات،
+    /// والمراقب الشجرة والأعضاء (مع صحة الشجرة) — حتى يطابق الرقم ما يراه في القائمة.
+    enum ReviewScope { case all, content, tree }
+
+    @MainActor
+    static func reviewScope(for authVM: AuthViewModel) -> ReviewScope {
+        if authVM.isAdmin { return .all }
+        if authVM.currentUser?.role == .supervisor { return .content }
+        return .tree
+    }
+
     @MainActor
     static func reviewRequestsTotal(
         memberVM: MemberViewModel,
@@ -835,7 +830,8 @@ struct AdminAllRequestsView: View {
         adminRequestVM: AdminRequestViewModel,
         diwaniyaVM: DiwaniyasViewModel,
         projectsVM: ProjectsViewModel,
-        pendingArchiveCount: Int = 0
+        pendingArchiveCount: Int = 0,
+        scope: ReviewScope = .all
     ) -> Int {
         let members = memberVM.allMembers
         let pending = members.filter { $0.role == .pending }.count
@@ -863,203 +859,222 @@ struct AdminAllRequestsView: View {
             healthTotal += issues.values.filter { $0.contains(issue) }.count
         }
 
-        return pending
-            + newsVM.pendingNewsRequests.count
+        // المحتوى والبلاغات = تبويبات `contentTabs`، والباقي الشجرة والأعضاء
+        let content = newsVM.pendingNewsRequests.count
             + adminRequestVM.newsReportRequests.count
-            + adminRequestVM.phoneChangeRequests.count
-            + adminRequestVM.nameChangeRequests.count
             + diwaniyaVM.pendingDiwaniyas.count
-            + adminRequestVM.deceasedRequests.count
-            + adminRequestVM.childAddRequests.count
-            + adminRequestVM.treeEditRequests.count
             + adminRequestVM.photoSuggestionRequests.count
             + projectsVM.pendingProjects.count
             + pendingArchiveCount
+        // «مسار الموافقات»: مختص الصور المقترحة المراقب — فتُحسب في مجال الشجرة أيضاً
+        let photosInTree = adminRequestVM.approvalsWorkflowOn ? adminRequestVM.photoSuggestionRequests.count : 0
+        let tree = pending
+            + adminRequestVM.phoneChangeRequests.count
+            + adminRequestVM.nameChangeRequests.count
+            + adminRequestVM.deceasedRequests.count
+            + adminRequestVM.childAddRequests.count
+            + adminRequestVM.treeEditRequests.count
             + healthTotal
+            + photosInTree
+        switch scope {
+        case .all:     return content + tree - photosInTree
+        case .content: return content
+        case .tree:    return tree
+        }
     }
 
-    /// شريط الفلاتر بنمط أرشيف العائلة — في وضع التحديد يتحوّل لشريط ملخّص التحديد.
-    /// خارج وضع التحديد: صف "الكل" + الأقسام أعلى + صف فلاتر القسم الحالي تحت.
-    private var tabBar: some View {
-        Group {
-            if isSelectMode {
-                selectionSummaryBar
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .transition(.opacity)
-            } else {
-                VStack(spacing: DS.Spacing.xs) {
-                    sectionSelector
-                    if let section = selectedSection {
-                        subFilterCapsule(for: section)
-                            .transition(.opacity)
+    // MARK: - بطاقة الرأس (صفحات الإدارة الموحّدة — طلب المالك ٢٠٢٦-٠٩-٢٧)
+
+    /// لون مجال المشاهد — نفس منطق `tabsForRole`: الإدارة كل المجالات (بلون تبويب الإدارة)،
+    /// المشرف المحتوى والبلاغات (ذهبي)، والمراقب الشجرة والأعضاء (أخضر).
+    private var pageTint: Color {
+        if authVM.isAdmin { return AppSection.admin.fill }
+        if authVM.currentUser?.role == .supervisor { return DS.Color.composerLibrary }
+        return DS.Color.composerProject
+    }
+
+    private var heroSubtitle: String {
+        if authVM.isAdmin {
+            return L10n.t("كل ما ينتظر قرارك في مكان واحد", "Everything awaiting your decision, in one place")
+        }
+        if authVM.currentUser?.role == .supervisor {
+            return L10n.t("مجالك: المحتوى والبلاغات", "Your scope: content & reports")
+        }
+        return L10n.t("مجالك: الشجرة والأعضاء", "Your scope: tree & members")
+    }
+
+    /// الأرقام السريعة — العنوان والوصف في الرأس الملوّن
+    private var heroSection: some View {
+        DSStatsRow(heroStats, tint: pageTint)
+    }
+
+    /// ٣ أرقام حيّة من البيانات المحمّلة أصلاً (بلا طلبات جديدة للسيرفر): المجموع (نفس
+    /// عدّاد «الكل» وبادج لوحة الإدارة)، ما وصل اليوم، وعمر أقدم طلب ينتظر — «—» أثناء التحميل.
+    private var heroStats: [DSHeroStat] {
+        var total = "—", today = "—", oldest = "—"
+        if !isInitialLoading {
+            let dates = visibleRequestDates
+            total = "\(cachedTotalCount)"
+            today = "\(dates.filter { Calendar.current.isDateInToday($0) }.count)"
+            if let first = dates.min() { oldest = ageText(days: daysWaiting(since: first)) }
+        }
+        return [
+            DSHeroStat(value: total, label: L10n.t("بانتظار المراجعة", "Awaiting review"), icon: "tray.full.fill"),
+            DSHeroStat(value: today, label: L10n.t("جديد اليوم", "New today"), icon: "sparkles"),
+            DSHeroStat(value: oldest, label: L10n.t("أقدم طلب", "Oldest request"), icon: "hourglass")
+        ]
+    }
+
+    /// تواريخ الطلبات التي يراها هذا الدور (نفس فلترة قائمة «الكل») — بلا صحة الشجرة
+    /// (ليست طلبات) ولا الديوانيات (بلا تاريخ).
+    private var visibleRequestDates: [Date] {
+        let visible = Set(tabsForRole(RequestTab.allCases))
+        var dates: [Date] = []
+        func add(_ tab: RequestTab, _ items: [Date?]) {
+            guard visible.contains(tab) else { return }
+            dates.append(contentsOf: items.compactMap { $0 })
+        }
+        add(.joinRequests, pendingMembers.map { Self.requestDate($0.createdAt) })
+        add(.news, newsVM.pendingNewsRequests.map { Optional($0.timestamp) })
+        add(.reports, adminRequestVM.newsReportRequests.map { Self.requestDate($0.createdAt) })
+        add(.phone, adminRequestVM.phoneChangeRequests.map { Self.requestDate($0.createdAt) })
+        add(.nameChange, adminRequestVM.nameChangeRequests.map { Self.requestDate($0.createdAt) })
+        add(.deceased, adminRequestVM.deceasedRequests.map { Self.requestDate($0.createdAt) })
+        add(.children, adminRequestVM.childAddRequests.map { Self.requestDate($0.createdAt) })
+        add(.photos, adminRequestVM.photoSuggestionRequests.map { Self.requestDate($0.createdAt) })
+        add(.projects, projectsVM.pendingProjects.map { Self.requestDate($0.createdAt) })
+        add(.archive, pendingArchiveItems.map { Optional($0.createdAt) })
+        // طلبات الشجرة تتبع في «الكل» تبويب «طلب آخر» (allItemTab)
+        add(.treeOther, adminRequestVM.treeEditRequests.map { Self.requestDate($0.createdAt) })
+        return dates
+    }
+
+    // MARK: - الفلاتر (مستويان: الأقسام ← تبويبات القسم)
+
+    // (المستويان القديمان «الأقسام ← تبويبات القسم» حُذفا — لا مرجع لهما منذ صارت شبكة الأنواع)
+
+    // MARK: - شبكة أنواع الطلبات (بلاطات ديناميكية)
+
+    /// الأنواع التي تظهر: «الكل» ثم كل نوع في مجال الدور عليه طلبات (بترتيب الأقسام)،
+    /// ويبقى المختار ظاهراً ولو صار فارغاً حتى لا يختفي من تحت إصبع المستخدم.
+    private var tileTabs: [RequestTab] {
+        let withItems = availableTabs.filter { $0 != .all && (itemCount(for: $0) > 0 || $0 == selectedTab) }
+        return [.all] + withItems
+    }
+
+    private var typeTiles: some View {
+        let tabs = tileTabs
+        let columns = 5
+        let rows = stride(from: 0, to: tabs.count, by: columns).map { Array(tabs[$0..<min($0 + columns, tabs.count)]) }
+        return VStack(spacing: DS.Spacing.xsm) {
+            ForEach(rows.indices, id: \.self) { r in
+                HStack(spacing: DS.Spacing.xsm) {
+                    ForEach(rows[r], id: \.self) { tab in
+                        typeTile(tab)
+                    }
+                    // أكمل الصف الأخير بفراغات حتى تبقى البلاطات بنفس العرض
+                    ForEach(0..<(columns - rows[r].count), id: \.self) { _ in
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: DS.Border.width)
                     }
                 }
-                .transition(.opacity)
             }
         }
-        .padding(.vertical, DS.Spacing.xs)
-        .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedTab)
-        .animation(.spring(response: 0.40, dampingFraction: 0.78), value: selectedSection)
-        .animation(.spring(response: 0.35, dampingFraction: 0.80), value: isSelectMode)
-        .onChange(of: totalCount) { _ in
-            // إذا التاب الحالي صار فارغ، انقل لأول تاب غير فارغ (لو فيه)
-            if itemCount(for: selectedTab) == 0,
-               let firstNonEmpty = RequestTab.allCases.first(where: { itemCount(for: $0) > 0 }) {
-                withAnimation(DS.Anim.snappy) {
-                    selectedTab = firstNonEmpty
-                    selectedSection = firstNonEmpty.section
-                }
-            }
-        }
+        .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.82),
+                   value: tabs)
     }
 
-    /// صف الأقسام الأعلى: "الكل" + 3 أقسام (أعضاء/شجرة/محتوى) — أيقونات فقط بدون خلفية.
-    private var sectionSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
-                Spacer(minLength: 0)
-                sectionChip(
-                    title: L10n.t("الكل", "All"),
-                    icon: "tray.full.fill",
-                    color: DS.Color.primary,
-                    count: cachedTotalCount,
-                    isActive: selectedTab == .all
-                ) {
-                    selectedTab = .all
-                    selectedSection = nil
-                }
-
-                ForEach(RequestSection.allCases) { section in
-                    sectionChip(
-                        title: section.title,
-                        icon: section.icon,
-                        color: section.color,
-                        count: sectionCount(section),
-                        isActive: selectedSection == section
-                    ) {
-                        selectedSection = section
-                        if let firstTab = RequestTab.allCases.first(where: { $0.section == section && !Self.hiddenTabs.contains($0) }) {
-                            selectedTab = firstTab
+    /// بلاطة نوع بنفس شكل مربّعات الاختيار الموحّدة (`DSOptionTiles`: قرص `DSOptionTileIcon` + الاسم،
+    /// المختارة بلونها الخفيف وإطارها) + شارة العدد على القرص — كانت مرسومة باليد (تدرّج وظل)
+    private func typeTile(_ tab: RequestTab) -> some View {
+        let selected = selectedTab == tab
+        let count = tab == .all ? cachedTotalCount : itemCount(for: tab)
+        let tint = (tab == .all ? pageTint : tab.color).dsReadableGlyph
+        let title = tab == .all ? L10n.t("الكل", "All") : chipTitle(tab)
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+        return Button {
+            guard !selected else { return }
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.4, dampingFraction: 0.82)) {
+                selectedTab = tab
+                selectedSection = tab.section
+            }
+        } label: {
+            VStack(spacing: DS.Spacing.xsm) {
+                DSOptionTileIcon(icon: tab.icon, tint: tint, selected: selected)
+                    .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
+                    .overlay(alignment: .topTrailing) {
+                        if count > 0 {
+                            Text(count > 99 ? "99+" : "\(count)")
+                                .dsFont(.micro)
+                                .monospacedDigit()
+                                .foregroundColor(DS.Color.textOnPrimary)
+                                .padding(.horizontal, DS.Spacing.xs)
+                                .frame(minWidth: DS.Icon.avatarBadge, minHeight: DS.Icon.inline)
+                                .background(Capsule().fill(DS.Color.errorFill))
+                                .overlay(Capsule().strokeBorder(DS.Color.surface, lineWidth: DS.Border.widthBold))
+                                .offset(x: DS.Spacing.xsm, y: -DS.Spacing.xs)
+                                .contentTransition(.numericText())
                         }
                     }
-                }
-                Spacer(minLength: 0)
+                    .scaleEffect(selected && !reduceMotion ? 1.05 : 1)
+                    .accessibilityHidden(true)
+
+                Text(title)
+                    .dsFont(.micro)
+                    .foregroundColor(selected ? tint : DS.Color.fieldLabel)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, 4) // مساحة لظل النشط
-            .frame(minWidth: UIScreen.main.bounds.width - DS.Spacing.lg)
+            .padding(.top, DS.Spacing.xsm)
+            .padding(.bottom, DS.Spacing.xxs)
+            .frame(maxWidth: .infinity)
+            .background(shape.fill(selected ? tint.opacity(DS.Opacity.tintFillSoft) : DS.Color.surface))
+            .overlay(shape.strokeBorder(selected ? tint.opacity(DS.Opacity.selectedStroke)
+                                                 : DS.Color.textTertiary.opacity(DS.Opacity.border),
+                                        lineWidth: selected ? DS.Border.widthBold : DS.Border.width))
+            .trialCardSkin(radius: DS.Radius.md, solid: !selected)   // المختار بلون شفّاف
+            .contentShape(shape)
         }
+        .buttonStyle(DSPressStyle())
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
+        .accessibilityLabel(count > 0 ? "\(title)، \(count)" : title)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// chip القسم — أيقونة فقط افتراضياً، النشط يتمدّد لكبسولة بخلفية + نص.
-    @ViewBuilder
-    private func sectionChip(title: String, icon: String, color: Color, count: Int, isActive: Bool, action: @escaping () -> Void) -> some View {
-        if isActive {
-            activeChip(title: title, icon: icon, color: color, count: count, namespace: "section", action: action)
-        } else {
-            inactiveChip(icon: icon, color: color, count: count, namespace: "section", action: action, accessibilityLabel: title)
-        }
+    /// داخل قسم «الشجرة» لا حاجة لتكرار «(شجرة)» في كل شريحة
+    private func chipTitle(_ tab: RequestTab) -> String {
+        guard tab.section == .tree else { return tab.title }
+        return tab.title
+            .replacingOccurrences(of: " (شجرة)", with: "")
+            .replacingOccurrences(of: "Tree · ", with: "")
     }
 
-    /// مجموع طلبات القسم.
-    private func sectionCount(_ section: RequestSection) -> Int {
-        RequestTab.allCases
-            .filter { $0.section == section && !Self.hiddenTabs.contains($0) }
-            .reduce(0) { $0 + itemCount(for: $1) }
-    }
-
-    /// صف الفلاتر الفرعية داخل القسم — أيقونات بدون خلفية، النشط يكشف الاسم.
-    private func subFilterCapsule(for section: RequestSection) -> some View {
-        let sectionTabs = RequestTab.allCases.filter { $0.section == section && !Self.hiddenTabs.contains($0) }
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.sm) {
-                Spacer(minLength: 0)
-                ForEach(sectionTabs) { tab in
-                    if selectedTab == tab {
-                        activeTabPill(tab).transition(.opacity)
-                    } else {
-                        inactiveTabIcon(tab).transition(.opacity)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, 4) // مساحة لظل النشط
-            .frame(minWidth: UIScreen.main.bounds.width - DS.Spacing.lg)
-        }
-    }
-
-    /// كبسولة الفلاتر — تابات + زر التحديد مدمج آخر الصف.
-    private var filterCapsule: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(availableTabs) { tab in
-                    if selectedTab == tab {
-                        activeTabPill(tab)
-                            .transition(.scale(scale: 0.85).combined(with: .opacity))
-                    } else {
-                        inactiveTabIcon(tab)
-                            .transition(.scale(scale: 0.85).combined(with: .opacity))
-                    }
-                }
-
-                // زر التحديد المدمج — يظهر فقط لو في الـ tab الحالي طلبات
-                if itemCount(for: selectedTab) > 0 {
-                    Capsule()
-                        .fill(DS.Color.textTertiary.opacity(0.25))
-                        .frame(width: 1, height: 22)
-                        .padding(.horizontal, 2)
-
-                    Button {
-                        withAnimation(DS.Anim.snappy) {
-                            isSelectMode = true
-                            selectedIds.removeAll()
-                        }
-                    } label: {
-                        Image(systemName: "checkmark.circle")
-                            .font(DS.Font.icon(13, weight: .bold))
-                            .foregroundColor(DS.Color.primary)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(DS.Color.primary.opacity(0.12)))
-                            .overlay(Circle().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
-                    }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityLabel(L10n.t("تحديد متعدّد", "Multi-select"))
-                }
-            }
-            .padding(6)
-            .dsGlass(Capsule(style: .continuous))
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
-            .padding(.horizontal, DS.Spacing.lg)
-        }
-    }
-
-    /// شريط ملخّص التحديد — يحلّ محل الفلاتر في وضع التحديد.
+    /// شريط ملخّص التحديد — يحلّ محل الفلاتر في وضع التحديد: «إلغاء» · العدد · «تحديد الكل».
     private var selectionSummaryBar: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Button {
+        // تحديد الكل في التاب الحالي
+        let currentIds = currentTabIds
+        let allSelected = !currentIds.isEmpty && currentIds.allSatisfy { selectedIds.contains($0) }
+        return HStack(spacing: DS.Spacing.xs) {
+            DSChipButton(L10n.t("إلغاء", "Cancel"), tint: DS.Color.error) {
                 withAnimation(DS.Anim.snappy) {
                     isSelectMode = false
                     selectedIds.removeAll()
                 }
-            } label: {
-                Text(L10n.t("إلغاء", "Cancel"))
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(DS.Color.error)
             }
-            Spacer()
-            Text(L10n.t("اختيار \(selectedIds.count)", "Selected \(selectedIds.count)"))
-                .font(DS.Font.scaled(13, weight: .bold))
-                .foregroundColor(DS.Color.textPrimary)
-            Spacer()
-            // تحديد الكل في التاب الحالي
-            let currentIds = currentTabIds
-            let allSelected = !currentIds.isEmpty && currentIds.allSatisfy { selectedIds.contains($0) }
-            Button {
+
+            Spacer(minLength: 0)
+
+            DSStatusChip(text: L10n.t("اختيار \(selectedIds.count)", "Selected \(selectedIds.count)"),
+                          icon: "checkmark.circle.fill",
+                          tint: AppSection.admin.ink)
+
+            Spacer(minLength: 0)
+
+            DSChipButton(allSelected
+                         ? L10n.t("إلغاء الكل", "Clear all")
+                         : L10n.t("تحديد الكل", "Select all")) {
                 withAnimation(DS.Anim.snappy) {
                     if allSelected {
                         currentIds.forEach { selectedIds.remove($0) }
@@ -1067,39 +1082,72 @@ struct AdminAllRequestsView: View {
                         currentIds.forEach { selectedIds.insert($0) }
                     }
                 }
-            } label: {
-                Text(allSelected
-                     ? L10n.t("إلغاء الكل", "Clear all")
-                     : L10n.t("تحديد الكل", "Select all"))
-                    .font(DS.Font.scaled(13, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
             }
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
-        .dsGlass(Capsule(style: .continuous))
-        .overlay(
-            Capsule(style: .continuous).strokeBorder(DS.Color.primary.opacity(0.18), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+        .padding(.horizontal, DS.Spacing.xs)
+        .background(Capsule().fill(DS.Color.surface))
+        .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.border), lineWidth: DS.Border.width))
     }
 
-    /// معرّفات عناصر التاب الحالي (للاستخدام في "تحديد الكل").
+    /// شريط العمليات الجماعية أسفل الشاشة: العدد ← «رفض» (لمن يملكه) ← «قبول» الكحلي
+    private var bulkActionBar: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            // عداد المحددين
+            VStack(spacing: 0) {
+                Text("\(selectedIds.count)")
+                    .dsFont(.title)
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .monospacedDigit()
+                Text(L10n.t("محدد", "selected"))
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .frame(minWidth: DS.Icon.tapTarget)
+            .accessibilityElement(children: .combine)
+
+            Spacer(minLength: 0)
+
+            // زر الرفض — يظهر فقط لمن يملك الصلاحية
+            if authVM.canRejectRequests {
+                DSButton(L10n.t("رفض", "Reject"), icon: "xmark.circle.fill", role: .destructive, tint: DS.Color.reject, fullWidth: false) {
+                    showBulkRejectConfirm = true
+                }
+                .disabled(adminRequestVM.isLoading)
+            }
+
+            // زر القبول — الزرّ الواحد بتعبئة القسم
+            DSButton(L10n.t("قبول", "Approve"), icon: "checkmark.circle.fill", fullWidth: false) {
+                showBulkApproveConfirm = true
+            }
+            .disabled(adminRequestVM.isLoading)
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.sm)
+        .background(
+            DS.Color.surface
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(DS.Color.textTertiary.opacity(DS.Opacity.border))
+                        .frame(height: DS.Border.width)
+                }
+                .ignoresSafeArea(edges: .bottom)
+        )
+    }
+
+    /// معرّفات عناصر التاب الحالي الظاهرة (للاستخدام في "تحديد الكل") — بعد فلتر «مسار ٢»
     private var currentTabIds: [UUID] {
+        let ids = unfilteredTabIds
+        guard isApprovalFilterActive else { return ids }
+        return ids.filter { passesApprovalFilter($0, tab: selectedTab) }
+    }
+
+    /// كل معرّفات التاب الحالي (قبل الفلتر)
+    private var unfilteredTabIds: [UUID] {
         switch selectedTab {
         case .all:
-            return pendingMembers.map { $0.id }
-                + newsVM.pendingNewsRequests.map { $0.id }
-                + adminRequestVM.newsReportRequests.map { $0.id }
-                + adminRequestVM.phoneChangeRequests.map { $0.id }
-                + adminRequestVM.nameChangeRequests.map { $0.id }
-                + diwaniyaVM.pendingDiwaniyas.map { $0.id }
-                + adminRequestVM.deceasedRequests.map { $0.id }
-                + adminRequestVM.childAddRequests.map { $0.id }
-                + adminRequestVM.treeEditRequests.map { $0.id }
-                + adminRequestVM.photoSuggestionRequests.map { $0.id }
-                + projectsVM.pendingProjects.map { $0.id }
-                + pendingArchiveItems.map { $0.id }
+            // «الكل» = عناصر مجال الدور فقط، كما تُعرض (فحص الثغرات ب-٧): كان «تحديد الكل»
+            // يلتقط أنواع كل المجالات فتتجاوز الموافقة الجماعية صلاحية المراقب/المشرف
+            return sortedAllItems.compactMap(selectableId)
         case .joinRequests: return pendingMembers.map { $0.id }
         case .news:         return newsVM.pendingNewsRequests.map { $0.id }
         case .reports:      return adminRequestVM.newsReportRequests.map { $0.id }
@@ -1126,386 +1174,291 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// التاب النشط — pill ممتدّ بـ gradient + نص + عدّاد.
-    private func activeTabPill(_ tab: RequestTab) -> some View {
-        tabChipBody(tab: tab, isActive: true) {}
-    }
+    // MARK: - القائمة
 
-    /// التاب غير النشط — كبسولة شفّافة بنص (مش أيقونة فقط).
-    private func inactiveTabIcon(_ tab: RequestTab) -> some View {
-        tabChipBody(tab: tab, isActive: false) {
-            selectedTab = tab
-        }
-    }
-
-    /// chip فلتر فرعي موحّد — أيقونة فقط، النشط يتمدّد لكبسولة ملوّنة.
-    @ViewBuilder
-    private func tabChipBody(tab: RequestTab, isActive: Bool, action: @escaping () -> Void) -> some View {
-        let count = itemCount(for: tab)
-        if isActive {
-            activeChip(title: tab.title, icon: tab.icon, color: tab.color, count: count, namespace: "tab", action: action)
-        } else {
-            inactiveChip(icon: tab.icon, color: tab.color, count: count, namespace: "tab", action: action, accessibilityLabel: tab.title)
-        }
-    }
-
-    // MARK: - Shared Chip Components
-
-    /// شيب نشط — كبسولة ممتدّة بـ gradient + أيقونة + نص + عدّاد. حركة matchedGeometry.
-    private func activeChip(
-        title: String,
-        icon: String,
-        color: Color,
-        count: Int,
-        namespace: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(DS.Font.icon(13, weight: .bold))
-                    .foregroundColor(DS.Color.onTint)
-                Text(title)
-                    .font(DS.Font.scaled(13, weight: .bold))
-                    .foregroundColor(DS.Color.onTint)
-                    .lineLimit(1)
-                if count > 0 {
-                    Text("\(count)")
-                        .font(DS.Font.scaled(11, weight: .black))
-                        .foregroundColor(DS.Color.onTint)
-                        .frame(minWidth: 18, minHeight: 18)
-                        .padding(.horizontal, 4)
-                        .background(Capsule().fill(Color.white.opacity(0.28)))
-                }
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, 8)
-            .background(Capsule(style: .continuous).fill(color))
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
-            )
-            .shadow(color: color.opacity(0.35), radius: 8, x: 0, y: 3)
-            .contentShape(Capsule())
-            .matchedGeometryEffect(id: "chip-\(namespace)-active", in: tabAnimation)
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(title)
-    }
-
-    /// شيب غير نشط — أيقونة دائرية فقط، عدّاد كنقطة صغيرة بالزاوية.
-    /// نستخدم padding على الأيقونة بدل offset على badge ليكون layout
-    /// bounds يشمل badge كاملاً (و إلا الـ ScrollView يقصّه).
-    private func inactiveChip(
-        icon: String,
-        color: Color,
-        count: Int,
-        namespace: String,
-        action: @escaping () -> Void,
-        accessibilityLabel: String
-    ) -> some View {
-        let hasBadge = count > 0
-        return Button(action: action) {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: icon)
-                    .font(DS.Font.icon(14, weight: .bold))
-                    .foregroundColor(color)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(color.opacity(0.10)))
-                    .overlay(Circle().strokeBorder(color.opacity(0.22), lineWidth: 1))
-                    .padding(.top, hasBadge ? 6 : 0)
-                    .padding(.trailing, hasBadge ? 6 : 0)
-
-                if hasBadge {
-                    Text("\(count)")
-                        .font(DS.Font.scaled(11, weight: .black))
-                        .foregroundColor(.white)
-                        .frame(minWidth: 18, minHeight: 18)
-                        .padding(.horizontal, 4)
-                        .background(Capsule().fill(DS.Color.errorFill))
-                        .overlay(Capsule().strokeBorder(DS.Color.background, lineWidth: 1.5))
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(accessibilityLabel)
-    }
-
-    // MARK: - Tab Content
-
-    @ViewBuilder
-    private var tabContent: some View {
+    /// بطاقة الرأس ← (تحميل) ← الفلاتر ← الطلبات أو بطاقة «لا توجد طلبات» — صفوف قائمة واحدة
+    /// تتمرّر معاً. بقيت `List` لأجل أزرار السحب (موافقة / رفض / حذف).
+    /// (أُزيل `.id(selectedTab)` — كان يعيد بناء القائمة كلها ومعها بطاقة الرأس وحركتها عند كل تبويب.)
+    private var requestsList: some View {
         List {
-            // زر الموافقة على الكل — أبناء فقط
-            if selectedTab == .children && adminRequestVM.childAddRequests.count > 1 {
-                Button {
-                    showBulkApproveChildrenConfirm = true
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(DS.Font.icon(14, weight: .semibold))
-                        Text(L10n.t(
-                            "الموافقة على الكل (\(adminRequestVM.childAddRequests.count))",
-                            "Approve All (\(adminRequestVM.childAddRequests.count))"
-                        ))
-                        .font(DS.Font.calloutBold)
-                    }
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(DS.Color.successFill)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-                }
-                .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .disabled(adminRequestVM.isLoading)
-            }
+            heroSection
+                .reviewListRow(top: DS.Spacing.sm, bottom: DS.Spacing.sm)
 
-            switch selectedTab {
-            case .joinRequests:
-                selectAllButton(ids: pendingMembers.map { $0.id })
-                ForEach(pendingMembers) { member in
-                    selectableRow(
-                        id: member.id,
-                        accentColor: RequestTab.joinRequests.color,
-                        approveLabel: L10n.t("ربط", "Link"),
-                        approveIcon: "link.badge.plus",
-                        onApprove: { memberToLink = member },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
-                        onTap: { selectedDetail = .join(member) }
-                    ) {
-                        joinRequestRow(for: member)
-                    }
+            if isInitialLoading {
+                DSPageLoader(L10n.t("جارٍ تحميل الطلبات…", "Loading requests…"), fillsSpace: false)
+                    .padding(.top, DS.Spacing.xl)
+                    .dsStaggerIn(1)
+                    .reviewListRow()
+            } else {
+                // شبكة أنواع الطلبات (فكرة جديدة — طلب المالك): بلاطة لكل نوع فيه طلبات فقط،
+                // بأيقونة ملوّنة كبيرة واسمه وعدده — ضغطة واحدة تفتح النوع (بدل قسم ثم نوع).
+                // وفي وضع التحديد يحلّ محلها شريط الملخّص أعلاه.
+                if totalCount > 0 && !isSelectMode {
+                    typeTiles
+                        .dsStaggerIn(1)
+                        .reviewListRow(top: 0, bottom: DS.Spacing.xs)
                 }
-            case .news:
-                selectAllButton(ids: newsVM.pendingNewsRequests.map { $0.id })
-                ForEach(newsVM.pendingNewsRequests) { post in
-                    selectableRow(
-                        id: post.id,
-                        accentColor: RequestTab.news.color,
-                        onApprove: { Task { await newsVM.approveNewsPost(postId: post.id) } },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .news(post) },
-                        onTap: { selectedDetail = .news(post) }
-                    ) {
-                        newsRow(for: post)
-                    }
+
+                // «مسار ٢»: فلتر صغير تحت الأنواع — لأنواع المسار فقط
+                if totalCount > 0 && !isSelectMode && tabSupportsApprovalFilter(selectedTab)
+                    && itemCount(for: selectedTab) > 0 {
+                    approvalFilterRow
+                        .dsStaggerIn(1)
+                        .reviewListRow(top: 0, bottom: DS.Spacing.xs)
                 }
-            case .reports:
-                selectAllButton(ids: adminRequestVM.newsReportRequests.map { $0.id })
-                ForEach(adminRequestVM.newsReportRequests) { request in
-                    selectableRow(
-                        id: request.id,
-                        accentColor: RequestTab.reports.color,
-                        onApprove: { Task { await adminRequestVM.approveNewsReport(request: request) } },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .report(request) },
-                        onTap: { selectedDetail = .report(request) }
-                    ) {
-                        reportRow(for: request)
-                    }
+
+                if totalCount == 0 || itemCount(for: selectedTab) == 0 {
+                    emptyState
+                        .padding(.top, DS.Spacing.xs)
+                        .dsStaggerIn(2)
+                        .reviewListRow()
+                } else if isApprovalFilterActive && currentTabIds.isEmpty {
+                    DSEmptyView(L10n.t("لا طلبات هنا", "Nothing here"),
+                                message: L10n.t("لا طلب يطابق هذا الفلتر الحين.", "No request matches this filter right now."),
+                                style: .card)
+                        .padding(.top, DS.Spacing.xs)
+                        .reviewListRow()
+                } else {
+                    tabRows
                 }
-            case .phone:
-                ForEach(adminRequestVM.phoneChangeRequests) { request in
-                    selectableRow(
-                        id: request.id,
-                        accentColor: RequestTab.phone.color,
-                        onApprove: { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .phone(request) },
-                        onTap: { selectedDetail = .phone(request) }
-                    ) {
-                        phoneRow(for: request)
-                    }
-                }
-                .sheet(item: $phoneEditRequest) { request in
-                    adminPhoneEditSheet(request: request)
-                }
-            case .nameChange:
-                ForEach(adminRequestVM.nameChangeRequests) { request in
-                    selectableRow(
-                        id: request.id,
-                        accentColor: RequestTab.nameChange.color,
-                        onApprove: { Task { await adminRequestVM.approveNameChangeRequest(request: request) } },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .nameChange(request) },
-                        onTap: { selectedDetail = .nameChange(request) }
-                    ) {
-                        nameChangeRow(for: request)
-                    }
-                }
-                .sheet(item: $nameEditRequest) { request in
-                    adminNameEditSheet(request: request)
-                }
-            case .diwaniya:
-                selectAllButton(ids: diwaniyaVM.pendingDiwaniyas.map { $0.id })
-                ForEach(diwaniyaVM.pendingDiwaniyas) { diwaniya in
-                    selectableRow(
-                        id: diwaniya.id,
-                        accentColor: RequestTab.diwaniya.color,
-                        onApprove: {
-                            if let adminId = authVM.currentUser?.id {
-                                Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
-                            }
-                        },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .diwaniya(diwaniya) },
-                        onTap: { selectedDetail = .diwaniya(diwaniya) }
-                    ) {
-                        diwaniyaRow(for: diwaniya)
-                    }
-                }
-            case .deceased:
-                selectAllButton(ids: adminRequestVM.deceasedRequests.map { $0.id })
-                ForEach(adminRequestVM.deceasedRequests) { request in
-                    selectableRow(
-                        id: request.id,
-                        accentColor: RequestTab.deceased.color,
-                        onApprove: { Task { await adminRequestVM.approveDeceasedRequest(request: request) } },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .deceased(request) },
-                        onTap: { selectedDetail = .deceased(request) }
-                    ) {
-                        deceasedRow(for: request)
-                    }
-                }
-            case .children:
-                selectAllButton(ids: adminRequestVM.childAddRequests.map { $0.id })
-                ForEach(adminRequestVM.childAddRequests) { request in
-                    selectableRow(
-                        id: request.id,
-                        accentColor: RequestTab.children.color,
-                        approveLabel: L10n.t("تأكيد", "Confirm"),
-                        onApprove: { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .child(request) },
-                        onTap: { selectedDetail = .child(request) }
-                    ) {
-                        childRow(for: request)
-                    }
-                }
-            case .photos:
-                selectAllButton(ids: adminRequestVM.photoSuggestionRequests.map { $0.id })
-                ForEach(adminRequestVM.photoSuggestionRequests) { request in
-                    selectableRow(
-                        id: request.id,
-                        accentColor: RequestTab.photos.color,
-                        onApprove: { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .photo(request) },
-                        onTap: { selectedDetail = .photo(request) }
-                    ) {
-                        photoRow(for: request)
-                    }
-                }
-            case .projects:
-                selectAllButton(ids: projectsVM.pendingProjects.map { $0.id })
-                ForEach(projectsVM.pendingProjects) { project in
-                    selectableRow(
-                        id: project.id,
-                        accentColor: RequestTab.projects.color,
-                        onApprove: {
-                            if let adminId = authVM.currentUser?.id {
-                                Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
-                            }
-                        },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .project(project) },
-                        onTap: { selectedDetail = .project(project) }
-                    ) {
-                        projectRow(for: project)
-                    }
-                }
-            case .archive:
-                selectAllButton(ids: pendingArchiveItems.map { $0.id })
-                ForEach(pendingArchiveItems) { item in
-                    selectableRow(
-                        id: item.id,
-                        accentColor: RequestTab.archive.color,
-                        onApprove: { Task { await archiveVM.approveItem(item) } },
-                        onReject: { swipeRejectReason = ""; swipeRejectDetail = .archive(item) },
-                        onTap: { selectedDetail = .archive(item) }
-                    ) {
-                        archiveRow(for: item)
-                    }
-                }
-            case .treeAdd:
-                treeEditList(action: .add, color: RequestTab.treeAdd.color)
-            case .treeEditName:
-                treeEditList(action: .editName, color: RequestTab.treeEditName.color)
-            case .treeEditPhone:
-                treeEditList(action: .editPhone, color: RequestTab.treeEditPhone.color)
-            case .treeEditBirth:
-                treeEditList(action: .editBirth, color: RequestTab.treeEditBirth.color)
-            case .treeDeceased:
-                treeEditList(action: .deceased, color: RequestTab.treeDeceased.color)
-            case .treeAddDeathDate:
-                treeEditList(action: .addDeathDate, color: RequestTab.treeAddDeathDate.color)
-            case .treeAddPhoto:
-                treeEditList(action: .addPhoto, color: RequestTab.treeAddPhoto.color)
-            case .treeDelete:
-                treeEditList(action: .delete, color: RequestTab.treeDelete.color)
-            case .treeOther:
-                treeEditList(action: .other, color: RequestTab.treeOther.color)
-            case .healthOrphan:
-                treeHealthList(issue: .orphan, color: RequestTab.healthOrphan.color)
-            case .healthNoName:
-                treeHealthList(issue: .noName, color: RequestTab.healthNoName.color)
-            case .healthBrokenParent:
-                treeHealthList(issue: .brokenParent, color: RequestTab.healthBrokenParent.color)
-            case .healthHidden:
-                treeHealthList(issue: .hiddenFromTree, color: RequestTab.healthHidden.color)
-            case .healthDupPhone:
-                treeHealthList(issue: .duplicatePhone, color: RequestTab.healthDupPhone.color)
-            case .all:
-                allRequestsContent()
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .id(selectedTab) // إعادة رسم سريعة عند تغيير التاب
-        .animation(.snappy(duration: 0.2), value: selectedTab)
+        .environment(\.defaultMinListRowHeight, 0)
+        .animation(reduceMotion ? Animation.easeInOut(duration: 0.15) : Animation.snappy(duration: 0.2),
+                   value: selectedTab)
+    }
+
+    /// صفوف التبويب المختار — نفس الاستدعاءات والصلاحيات السابقة تماماً
+    @ViewBuilder
+    private var tabRows: some View {
+        // زر الموافقة على الكل — أبناء فقط
+        if selectedTab == .children && adminRequestVM.childAddRequests.count > 1
+            && !adminRequestVM.approvalsWorkflowOn {
+            DSActionButton(
+                title: L10n.t(
+                    "الموافقة على الكل (\(adminRequestVM.childAddRequests.count))",
+                    "Approve All (\(adminRequestVM.childAddRequests.count))"
+                ),
+                icon: "checkmark.circle.fill",
+                tint: DS.Color.success,
+                enabled: !adminRequestVM.isLoading
+            ) {
+                showBulkApproveChildrenConfirm = true
+            }
+            .reviewListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xs)
+        }
+
+        switch selectedTab {
+        case .joinRequests:
+            selectAllButton(ids: pendingMembers.map { $0.id })
+            ForEach(adminRequestVM.approvalOrdered(pendingMembers)) { member in
+                selectableRow(
+                    id: member.id,
+                    accentColor: RequestTab.joinRequests.color,
+                    approveLabel: L10n.t("ربط", "Link"),
+                    approveIcon: "link.badge.plus",
+                    onApprove: { memberToLink = member },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
+                    onTap: { selectedDetail = .join(member) }
+                ) {
+                    joinRequestRow(for: member)
+                }
+            }
+        case .news:
+            selectAllButton(ids: newsVM.pendingNewsRequests.map { $0.id })
+            ForEach(newsVM.pendingNewsRequests) { post in
+                selectableRow(
+                    id: post.id,
+                    accentColor: RequestTab.news.color,
+                    onApprove: { Task { await newsVM.approveNewsPost(postId: post.id) } },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .news(post) },
+                    onTap: { selectedDetail = .news(post) }
+                ) {
+                    newsRow(for: post)
+                }
+            }
+        case .reports:
+            selectAllButton(ids: adminRequestVM.newsReportRequests.map { $0.id })
+            ForEach(adminRequestVM.approvalOrdered(adminRequestVM.newsReportRequests)) { request in
+                selectableRow(
+                    id: request.id,
+                    accentColor: RequestTab.reports.color,
+                    onApprove: { Task { await adminRequestVM.approveNewsReport(request: request) } },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .report(request) },
+                    onTap: { selectedDetail = .report(request) }
+                ) {
+                    reportRow(for: request)
+                }
+            }
+        case .phone:
+            ForEach(adminRequestVM.approvalOrdered(adminRequestVM.phoneChangeRequests)) { request in
+                selectableRow(
+                    id: request.id,
+                    accentColor: RequestTab.phone.color,
+                    onApprove: { Task { await adminRequestVM.approvePhoneChangeRequest(request: request) } },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .phone(request) },
+                    onTap: { selectedDetail = .phone(request) }
+                ) {
+                    phoneRow(for: request)
+                }
+            }
+            .dsCenterBox(item: $phoneEditRequest) { request in
+                adminPhoneEditSheet(request: request)
+            }
+        case .nameChange:
+            ForEach(adminRequestVM.approvalOrdered(adminRequestVM.nameChangeRequests)) { request in
+                selectableRow(
+                    id: request.id,
+                    accentColor: RequestTab.nameChange.color,
+                    onApprove: { Task { await adminRequestVM.approveNameChangeRequest(request: request) } },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .nameChange(request) },
+                    onTap: { selectedDetail = .nameChange(request) }
+                ) {
+                    nameChangeRow(for: request)
+                }
+            }
+            .dsCenterBox(item: $nameEditRequest) { request in
+                adminNameEditSheet(request: request)
+            }
+        case .diwaniya:
+            selectAllButton(ids: diwaniyaVM.pendingDiwaniyas.map { $0.id })
+            ForEach(diwaniyaVM.pendingDiwaniyas) { diwaniya in
+                selectableRow(
+                    id: diwaniya.id,
+                    accentColor: RequestTab.diwaniya.color,
+                    onApprove: {
+                        if let adminId = authVM.currentUser?.id {
+                            Task { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
+                        }
+                    },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .diwaniya(diwaniya) },
+                    onTap: { selectedDetail = .diwaniya(diwaniya) }
+                ) {
+                    diwaniyaRow(for: diwaniya)
+                }
+            }
+        case .deceased:
+            selectAllButton(ids: adminRequestVM.deceasedRequests.map { $0.id })
+            ForEach(adminRequestVM.approvalOrdered(adminRequestVM.deceasedRequests)) { request in
+                selectableRow(
+                    id: request.id,
+                    accentColor: RequestTab.deceased.color,
+                    onApprove: { Task { await adminRequestVM.approveDeceasedRequest(request: request) } },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .deceased(request) },
+                    onTap: { selectedDetail = .deceased(request) }
+                ) {
+                    deceasedRow(for: request)
+                }
+            }
+        case .children:
+            selectAllButton(ids: adminRequestVM.childAddRequests.map { $0.id })
+            ForEach(adminRequestVM.approvalOrdered(adminRequestVM.childAddRequests)) { request in
+                selectableRow(
+                    id: request.id,
+                    accentColor: RequestTab.children.color,
+                    approveLabel: L10n.t("تأكيد", "Confirm"),
+                    onApprove: { Task { await adminRequestVM.acknowledgeChildAddRequest(request: request) } },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .child(request) },
+                    onTap: { selectedDetail = .child(request) }
+                ) {
+                    childRow(for: request)
+                }
+            }
+        case .photos:
+            selectAllButton(ids: adminRequestVM.photoSuggestionRequests.map { $0.id })
+            ForEach(adminRequestVM.approvalOrdered(adminRequestVM.photoSuggestionRequests)) { request in
+                selectableRow(
+                    id: request.id,
+                    accentColor: RequestTab.photos.color,
+                    onApprove: { Task { await adminRequestVM.approvePhotoSuggestion(request: request) } },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .photo(request) },
+                    onTap: { selectedDetail = .photo(request) }
+                ) {
+                    photoRow(for: request)
+                }
+            }
+        case .projects:
+            selectAllButton(ids: projectsVM.pendingProjects.map { $0.id })
+            ForEach(projectsVM.pendingProjects) { project in
+                selectableRow(
+                    id: project.id,
+                    accentColor: RequestTab.projects.color,
+                    onApprove: {
+                        if let adminId = authVM.currentUser?.id {
+                            Task { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
+                        }
+                    },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .project(project) },
+                    onTap: { selectedDetail = .project(project) }
+                ) {
+                    projectRow(for: project)
+                }
+            }
+        case .archive:
+            selectAllButton(ids: pendingArchiveItems.map { $0.id })
+            ForEach(pendingArchiveItems) { item in
+                selectableRow(
+                    id: item.id,
+                    accentColor: RequestTab.archive.color,
+                    onApprove: { Task { await archiveVM.approveItem(item) } },
+                    onReject: { swipeRejectReason = ""; swipeRejectDetail = .archive(item) },
+                    onTap: { selectedDetail = .archive(item) }
+                ) {
+                    archiveRow(for: item)
+                }
+            }
+        case .treeAdd:
+            treeEditList(action: .add, color: RequestTab.treeAdd.color)
+        case .treeEditName:
+            treeEditList(action: .editName, color: RequestTab.treeEditName.color)
+        case .treeEditPhone:
+            treeEditList(action: .editPhone, color: RequestTab.treeEditPhone.color)
+        case .treeEditBirth:
+            treeEditList(action: .editBirth, color: RequestTab.treeEditBirth.color)
+        case .treeDeceased:
+            treeEditList(action: .deceased, color: RequestTab.treeDeceased.color)
+        case .treeAddDeathDate:
+            treeEditList(action: .addDeathDate, color: RequestTab.treeAddDeathDate.color)
+        case .treeAddPhoto:
+            treeEditList(action: .addPhoto, color: RequestTab.treeAddPhoto.color)
+        case .treeDelete:
+            treeEditList(action: .delete, color: RequestTab.treeDelete.color)
+        case .treeOther:
+            treeEditList(action: .other, color: RequestTab.treeOther.color)
+        case .healthOrphan:
+            treeHealthList(issue: .orphan, color: RequestTab.healthOrphan.color)
+        case .healthNoName:
+            treeHealthList(issue: .noName, color: RequestTab.healthNoName.color)
+        case .healthBrokenParent:
+            treeHealthList(issue: .brokenParent, color: RequestTab.healthBrokenParent.color)
+        case .healthHidden:
+            treeHealthList(issue: .hiddenFromTree, color: RequestTab.healthHidden.color)
+        case .healthDupPhone:
+            treeHealthList(issue: .duplicatePhone, color: RequestTab.healthDupPhone.color)
+        case .all:
+            allRequestsContent()
+        }
     }
 
     // MARK: - Select Mode Helpers
 
-    @ViewBuilder
+    /// «تحديد الكل» انتقل إلى `selectionSummaryBar` أعلى الشاشة — بقيت الدالّة فارغة لاستدعاءاتها
     private func selectAllButton(ids: [UUID]) -> some View {
-        // "تحديد الكل" انتقل إلى selectionSummaryBar أعلى الشاشة — هذا أصبح no-op
-        // (احتفظنا بالاستدعاءات لتجنّب تعديل 12 موقعاً في tabContent)
-        if false {
-            let allSelected = ids.allSatisfy { selectedIds.contains($0) }
-            Button {
-                withAnimation(DS.Anim.snappy) {
-                    if allSelected {
-                        ids.forEach { selectedIds.remove($0) }
-                    } else {
-                        ids.forEach { selectedIds.insert($0) }
-                    }
-                }
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: allSelected ? "checkmark.circle.fill" : "circle.dotted")
-                        .font(DS.Font.icon(15, weight: .semibold))
-                    Text(allSelected
-                        ? L10n.t("إلغاء تحديد الكل", "Deselect All")
-                        : L10n.t("تحديد الكل (\(ids.count))", "Select All (\(ids.count))")
-                    )
-                    .font(DS.Font.callout)
-                }
-                .foregroundColor(DS.Color.primary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.Spacing.xs)
-            }
-            .buttonStyle(DSScaleButtonStyle())
-            .listRowBackground(DS.Color.primary.opacity(0.05))
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
-        }
+        EmptyView()
     }
 
-    /// بطاقة طلب موحّدة — تشمل محتوى الطلب + أزرار موافقة/رفض مرئية + إطار نظيف.
-    /// - `accentColor`: لون الـ tab — يُستخدم لإطار البطاقة (إشارة بصرية للنوع)
-    /// - `approveLabel`: نص زر الموافقة (افتراضي: "موافقة")
+    /// صف طلب موحّد بإطار صفوف المربّعات (`.dsRowBox()`): المحتوى (أيقونة الحقل + العنوان +
+    /// الوصف + شارة الحالة) ثم سهم التفاصيل — وفي وضع التحديد دائرة اختيار في أول الصف.
+    /// - `accentColor`: لون نوع الطلب — صار في أيقونة الصف نفسها (بقي للاستدعاءات)
+    /// - `approveLabel`: نص زر الموافقة بالسحب (افتراضي: "موافقة")
     /// - `approveIcon`: أيقونة زر الموافقة (افتراضي: checkmark)
     /// - `onApprove`/`onReject`: nil = الزر يختفي
     private func selectableRow<Content: View>(
         id: UUID,
         forTab: RequestTab? = nil,
-        accentColor: Color = DS.Color.primary,
+        accentColor: Color = AppSection.admin.ink,
         approveLabel: String? = nil,
         approveIcon: String = "checkmark",
         approveColor: Color = DS.Color.successFill,
@@ -1516,86 +1469,105 @@ struct AdminAllRequestsView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         let isSelected = isSelectMode && selectedIds.contains(id)
-        return HStack(spacing: 0) {
-            // شريط لوني جانبي يشير لنوع الطلب — لمسة احترافية
-            Rectangle()
-                .fill(accentColor)
-                .frame(width: 4)
-
-            // المحتوى — قابل للنقر، يفتح تفاصيل الطلب
-            Button {
-                if isSelectMode {
-                    withAnimation(DS.Anim.snappy) {
-                        if selectedIds.contains(id) { selectedIds.remove(id) }
-                        else { selectedIds.insert(id) }
-                    }
-                } else {
-                    onTap()
-                }
-            } label: {
-                HStack(alignment: .center, spacing: DS.Spacing.sm) {
+        // «مسار الموافقات»: لقطة الصف (لا لعناصر صحة الشجرة) — مطفأ = nil = الصف كما كان
+        let flow = (forTab ?? selectedTab).section == .treeHealth ? nil : adminRequestVM.approvalSnapshot(forRowId: id)
+        // «مسار ٢»: فلتر الكل · بانتظارك · مستعجل · متأخر — الصف لا يظهر إن لم يطابق
+        let visible = passesApprovalFilter(id, tab: selectedTab, flow: flow)
+        // بالمسار: الموافقة بالسحب = «تنفيذ» للمختص والطلب معتمد، والرفض من مربّع التفاصيل (بسبب يصل للعضو)
+        let allowsApprove = flow.map(adminRequestVM.canExecuteApproval) ?? canApprove(forTab ?? selectedTab)
+        let allowsReject = flow == nil && canReject(forTab ?? selectedTab)
+        // المحتوى — قابل للنقر، يفتح تفاصيل الطلب (وفي وضع التحديد يحدّده)
+        return Group {
+            if visible {
+                Button {
                     if isSelectMode {
-                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .font(DS.Font.icon(22, weight: .regular))
-                            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
-                            .transition(.scale.combined(with: .opacity))
+                        withAnimation(DS.Anim.snappy) {
+                            if selectedIds.contains(id) { selectedIds.remove(id) }
+                            else { selectedIds.insert(id) }
+                        }
+                    } else {
+                        onTap()
                     }
-                    content()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    // chevron — إشارة إن الكرت يفتح التفاصيل (تظهر خارج وضع التحديد)
-                    if !isSelectMode {
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.icon(13, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary.opacity(0.55))
+                } label: {
+                    HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                        if isSelectMode {
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .dsGlyph(DS.Glyph.xxl, weight: .regular)
+                                .foregroundColor(isSelected ? AppSection.admin.ink : DS.Color.textTertiary)
+                                .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+                                .accessibilityHidden(true)
+                        }
+                        if let flow {
+                            // شارة المرحلة (+ «بانتظارك» و«متأخر») تحت محتوى الصف، بمحاذاة العنوان
+                            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                                content()
+                                ApprovalStageChips(snapshot: flow, waitingForMe: adminRequestVM.isApprovalWaitingForMe(flow),
+                                                   holderLabel: adminRequestVM.approvalHolderLabel(flow))
+                                    .padding(.leading, DS.Icon.row + DS.Spacing.sm)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            content()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        // سهم — إشارة إن الصف يفتح التفاصيل (خارج وضع التحديد)
+                        if !isSelectMode {
+                            DSChevron()
+                        }
+                    }
+                    .dsRowBox()
+                    .overlay {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                .fill(AppSection.admin.ink.opacity(DS.Opacity.tintFillSoft))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                                        .strokeBorder(AppSection.admin.ink.opacity(DS.Opacity.selectedStroke),
+                                                      lineWidth: DS.Border.widthBold)
+                                )
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: DS.Spacing.xs, leading: DS.Spacing.lg, bottom: DS.Spacing.xs, trailing: DS.Spacing.lg))
+                // الموافقة/الرفض عبر السحب — خارج وضع التحديد فقط
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if !isSelectMode, allowsApprove, let onApprove {
+                        Button(action: onApprove) {
+                            Label(approveLabel ?? L10n.t("موافقة", "Approve"), systemImage: approveIcon)
+                        }
+                        .tint(approveColor)
                     }
                 }
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.md)
-            }
-            .buttonStyle(.plain)
-        }
-        .background(isSelected ? DS.Color.primary.opacity(0.06) : DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .strokeBorder(
-                    isSelected ? DS.Color.primary.opacity(0.40) : accentColor.opacity(0.12),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 4, leading: DS.Spacing.lg, bottom: 4, trailing: DS.Spacing.lg))
-        // الموافقة/الرفض عبر السحب — خارج وضع التحديد فقط
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if !isSelectMode, canApprove(forTab ?? selectedTab), let onApprove {
-                Button(action: onApprove) {
-                    Label(approveLabel ?? L10n.t("موافقة", "Approve"), systemImage: approveIcon)
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    if !isSelectMode, let onReject, allowsReject {
+                        Button(action: onReject) {
+                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
+                        }
+                        .tint(DS.Color.warningFill)
+                    }
+                    // حذف نهائي — جنب الرفض (للمالك/المدير)
+                    if !isSelectMode, let onDelete, authVM.canDeleteMembers {
+                        Button(role: .destructive, action: onDelete) {
+                            Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                        }
+                        .tint(DS.Color.error)
+                    }
                 }
-                .tint(approveColor)
-            }
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            if !isSelectMode, let onReject, canReject(forTab ?? selectedTab) {
-                Button(action: onReject) {
-                    Label(L10n.t("رفض", "Reject"), systemImage: "xmark.circle.fill")
-                }
-                .tint(DS.Color.warningFill)
-            }
-            // حذف نهائي — جنب الرفض (للمالك/المدير)
-            if !isSelectMode, let onDelete, authVM.canDeleteMembers {
-                Button(role: .destructive, action: onDelete) {
-                    Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
-                }
-                .tint(DS.Color.errorFill)
             }
         }
     }
 
     private func bulkApproveSelected() async -> Int {
-        let ids = Array(selectedIds)
+        let ids = approvalScopedIds(Array(selectedIds), approving: true)
         var count = 0
+        // مجال الدور (ب-٧): لا موافقة جماعية على تبويب ليس من صلاحيته
+        guard selectedTab == .all || canApprove(selectedTab) else { return 0 }
         switch selectedTab {
         case .all:
             // في وضع "الكل": نمشي عبر كل القوائم بنفس الترتيب ونوافق على كل ID مطابق
@@ -1690,8 +1662,10 @@ struct AdminAllRequestsView: View {
     }
 
     private func bulkRejectSelected() async -> Int {
-        let ids = Array(selectedIds)
+        let ids = approvalScopedIds(Array(selectedIds), approving: false)
         var count = 0
+        // مجال الدور (ب-٧): لا رفض جماعي على تبويب ليس من صلاحيته
+        guard selectedTab == .all || canReject(selectedTab) else { return 0 }
         switch selectedTab {
         case .all:
             count = await bulkRejectAcrossAllTypes(ids: ids)
@@ -1783,6 +1757,59 @@ struct AdminAllRequestsView: View {
         return count
     }
 
+    /// «مسار الموافقات» في العمليات الجماعية: طلب في المسار يُقبل فقط إذا كان معتمداً وأنت مختصه (تنفيذ)،
+    /// ويُرفض فقط من المدير — والباقي (المحتوى، أو المسار مطفأ) كما كان
+    private func approvalScopedIds(_ ids: [UUID], approving: Bool) -> [UUID] {
+        guard adminRequestVM.approvalsWorkflowOn else { return ids }
+        return ids.filter { id in
+            guard let flow = adminRequestVM.approvalSnapshot(forRowId: id) else { return true }
+            return approving ? adminRequestVM.canExecuteApproval(flow) : adminRequestVM.canRejectApproval(flow)
+        }
+    }
+
+    // MARK: - «مسار الموافقات ٢»: الفلتر والتقرير (طلب المالك ٢٠٢٦-١٠-١٦ مسار الموافقات ٢)
+
+    /// تابات بلا مسار (المحتوى يعتمده المدير مباشرة) — لا فلتر فيها
+    private static let nonFlowTabs: Set<RequestTab> = [.news, .diwaniya, .projects, .archive]
+
+    /// الفلتر لأنواع المسار و«الكل» فقط (لا صحة الشجرة ولا المحتوى)، والمسار شغّال
+    private func tabSupportsApprovalFilter(_ tab: RequestTab) -> Bool {
+        adminRequestVM.approvalsWorkflowOn && tab.section != .treeHealth && !Self.nonFlowTabs.contains(tab)
+    }
+
+    private var isApprovalFilterActive: Bool {
+        approvalFilter != .all && tabSupportsApprovalFilter(selectedTab)
+    }
+
+    /// الصف يظهر مع الفلتر الحالي — ما ليس في المسار لا يطابق «بانتظارك/مستعجل/متأخر»
+    private func passesApprovalFilter(_ id: UUID, tab: RequestTab, flow: ApprovalSnapshot? = nil) -> Bool {
+        guard approvalFilter != .all, tabSupportsApprovalFilter(tab) else { return true }
+        guard let flow = flow ?? adminRequestVM.approvalSnapshot(forRowId: id) else { return false }
+        return adminRequestVM.approvalMatches(flow, filter: approvalFilter)
+    }
+
+    /// الكل · بانتظارك · مستعجل · متأخر — بأعداد التاب الحالي («مستعجل» يظهر إذا رُحِّل السيرفر)
+    private var approvalFilterRow: some View {
+        let visible = unfilteredTabIds.compactMap(adminRequestVM.approvalSnapshot(forRowId:))
+        func count(_ f: ApprovalListFilter) -> Int { adminRequestVM.approvalFilterCount(f, in: visible) }
+        var options: [DSFilterOption<ApprovalListFilter>] = [
+            DSFilterOption(id: .all, title: L10n.t("الكل", "All")),
+            DSFilterOption(id: .waiting, title: L10n.t("بانتظارك", "For you"), icon: "bell.badge.fill", count: count(.waiting))
+        ]
+        if adminRequestVM.approvalsV2Seen {
+            options.append(DSFilterOption(id: .urgent, title: L10n.t("مستعجل", "Urgent"), icon: "flame.fill", count: count(.urgent)))
+        }
+        options.append(DSFilterOption(id: .late, title: L10n.t("متأخر", "Late"), icon: "exclamationmark.circle.fill",
+                                      count: count(.late)))
+        return DSFilterChips(options: options, selection: $approvalFilter, tint: pageTint)
+            .accessibilityLabel(L10n.t("فلتر الطلبات", "Request filter"))
+    }
+
+    /// التقرير للمالك والمدير والمراقب، والمسار شغّال
+    private var canSeeApprovalsReport: Bool {
+        adminRequestVM.approvalsWorkflowOn && (authVM.isAdmin || authVM.currentUser?.role == .monitor)
+    }
+
     /// قائمة عناصر صحة الشجرة لفئة معيّنة — صف بسيط بدون موافقة/رفض، تفتح شيت تفاصيل العضو بالنقر.
     @ViewBuilder
     private func treeHealthList(issue: TreeHealthIssue, color: Color) -> some View {
@@ -1812,7 +1839,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
                     }
-                    .tint(DS.Color.primaryFill)
+                    .tint(AppSection.admin.ink)
 
                     Button {
                         Task { await adminRequestVM.activateAccount(memberId: member.id) }
@@ -1824,8 +1851,9 @@ struct AdminAllRequestsView: View {
             }
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                 if authVM.canDeleteMembers {
+                    // تأكيد قبل الحذف (مثل أندرويد) — كان يحذف فوراً بالسحب
                     Button(role: .destructive) {
-                        Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
+                        healthMemberToDelete = member
                     } label: {
                         Label(L10n.t("حذف", "Delete"), systemImage: "trash")
                     }
@@ -1834,30 +1862,19 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// صف بسيط لعنصر صحة شجرة — اسم العضو + الـ issue badge.
+    /// صف عنصر صحة الشجرة — اسم العضو + شارة المشكلة بلونها + وقت إضافته.
     private func treeHealthRow(member: FamilyMember, issue: TreeHealthIssue, color: Color) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            iconCircle(icon: issue.asTab.icon, color: color, size: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(member.fullName.isEmpty ? L10n.t("بدون اسم", "(no name)") : member.displayFullName)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                Text(issue.asTab.title)
-                    .font(DS.Font.caption2)
-                    .foregroundColor(color)
-                if let createdAt = member.createdAt {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "clock")
-                            .font(DS.Font.icon(11, weight: .medium))
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(formatRegistrationDate(createdAt))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
-            }
-            Spacer()
+        let added: String? = member.createdAt.map { raw in
+            let formatted = formatRegistrationDate(raw)
+            return L10n.t("أُضيف: \(formatted)", "Added: \(formatted)")
+        }
+        return requestRowHeader(
+            icon: issue.asTab.icon,
+            tint: color,
+            title: member.fullName.isEmpty ? L10n.t("بدون اسم", "(no name)") : member.displayFullName,
+            subtitle: added
+        ) {
+            DSStatusChip(text: issue.asTab.title, tint: color)
         }
     }
 
@@ -1882,7 +1899,7 @@ struct AdminAllRequestsView: View {
     /// قائمة طلبات الشجرة لإجراء معيّن (الموافقة/الرفض يستخدمان APIs الخاصة بالشجرة).
     @ViewBuilder
     private func treeEditList(action: TreeEditAction, color: Color) -> some View {
-        ForEach(treeEdits(action: action)) { request in
+        ForEach(adminRequestVM.approvalOrdered(treeEdits(action: action))) { request in
             selectableRow(
                 id: request.id,
                 accentColor: color,
@@ -1895,43 +1912,39 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// صف موحّد لطلبات الشجرة — يعرض الإجراء واسم العضو والقيمة الجديدة + الوقت.
+    /// صف موحّد لطلبات الشجرة — الإجراء واسم العضو، ثم القيمة الجديدة والوقت.
     private func treeEditRow(request: AdminRequest, action: TreeEditAction, color: Color) -> some View {
         let payload = request.treeEditPayload
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: action.iconName, color: color, size: 36)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t(action.arabicLabel, action.englishLabel))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(request.member?.displayFullName ?? L10n.t("عضو", "Member"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                Spacer()
+        let newDisplay = treeEditNewValue(payload: payload, action: action)
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            requestRowHeader(icon: action.iconName,
+                             tint: color,
+                             title: L10n.t(action.arabicLabel, action.englishLabel),
+                             subtitle: request.member?.displayFullName ?? L10n.t("عضو", "Member")) {
+                pendingChip(Self.requestDate(request.createdAt))
             }
 
-            // قيمة جديدة حسب الإجراء
-            if let newDisplay = treeEditNewValue(payload: payload, action: action) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(DS.Font.icon(11, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
-                    Text(L10n.t("القيمة الجديدة:", "New:")).font(DS.Font.caption2).foregroundColor(DS.Color.textSecondary)
-                    Text(newDisplay).font(DS.Font.caption1).fontWeight(.semibold).foregroundColor(DS.Color.textPrimary)
-                    Spacer()
-                }
-            }
-
-            if let date = request.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.icon(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(formatRegistrationDate(date))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
+            if newDisplay != nil || request.createdAt != nil {
+                rowExtras {
+                    // قيمة جديدة حسب الإجراء
+                    if let newDisplay {
+                        HStack(spacing: DS.Spacing.xs) {
+                            Image(systemName: "arrow.forward.circle.fill")
+                                .dsGlyph(DS.Glyph.xs)
+                                .foregroundColor(DS.Color.primary)
+                                .accessibilityHidden(true)
+                            Text(L10n.t("القيمة الجديدة:", "New:"))
+                                .dsFont(.footnote)
+                                .foregroundColor(DS.Color.textTertiary)
+                            Text(newDisplay)
+                                .dsFieldFont(.chip)
+                                .foregroundColor(DS.Color.fieldLabel)
+                                .lineLimit(1)
+                        }
+                    }
+                    if let date = request.createdAt {
+                        metaItem("clock", formatRegistrationDate(date))
+                    }
                 }
             }
         }
@@ -2018,9 +2031,19 @@ struct AdminAllRequestsView: View {
         }
         // «الكل» يعرض لكل دور عناصر مجاله فقط — مثل التابات (فحص الثغرات)
         let visible = Set(tabsForRole(RequestTab.allCases))
-        return items
+        let sorted = items
             .filter { visible.contains(allItemTab($0)) }
             .sorted { allItemDate($0) > allItemDate($1) }
+        // «مسار الموافقات ٢»: المستعجل أولاً ثم ما ينتظرك («بانتظارك») — الأقدم أولاً في كلٍّ منهما —
+        // ثم الباقي بترتيبه. مطفأ = كما كان
+        guard adminRequestVM.approvalsWorkflowOn else { return sorted }
+        return adminRequestVM.approvalPrioritized(sorted) { approvalSnapshot(for: $0) }
+    }
+
+    /// لقطة المسار لعنصر في «الكل» — عناصر صحة الشجرة والمحتوى بلا مسار
+    private func approvalSnapshot(for item: AllItem) -> ApprovalSnapshot? {
+        if case .health = item { return nil }
+        return selectableId(item).flatMap(adminRequestVM.approvalSnapshot(forRowId:))
     }
 
     /// تاب كل عنصر في «الكل» — لتحديد صلاحية الموافقة/الرفض عليه
@@ -2050,17 +2073,25 @@ struct AdminAllRequestsView: View {
         case .editBirth: return DS.Color.palm
         case .deceased: return RequestTab.treeDeceased.color
         case .addDeathDate: return DS.Color.textTertiary
-        case .addPhoto: return DS.Color.primary
+        case .addPhoto: return AppSection.admin.ink
         case .delete: return RequestTab.treeDelete.color
         case .other: return DS.Color.accent
         }
     }
 
     /// محتوى تاب "الكل" — كل الأنواع مدمجة ومرتّبة حسب الوقت (الأحدث أولاً).
+    /// «الكل» مفلتر بمجال الدور — وإن لم يبقَ فيه شيء تظهر بطاقة «لا توجد طلبات» بدل فراغ.
     @ViewBuilder
     private func allRequestsContent() -> some View {
-        ForEach(sortedAllItems) { item in
-            allItemRow(item)
+        let items = sortedAllItems
+        if items.isEmpty {
+            emptyState
+                .padding(.top, DS.Spacing.xs)
+                .reviewListRow()
+        } else {
+            ForEach(items) { item in
+                allItemRow(item)
+            }
         }
     }
 
@@ -2195,7 +2226,7 @@ struct AdminAllRequestsView: View {
                     } label: {
                         Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
                     }
-                    .tint(DS.Color.primaryFill)
+                    .tint(AppSection.admin.ink)
 
                     Button {
                         Task { await adminRequestVM.activateAccount(memberId: member.id) }
@@ -2207,8 +2238,9 @@ struct AdminAllRequestsView: View {
             }
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                 if authVM.canDeleteMembers {
+                    // تأكيد قبل الحذف (مثل أندرويد) — كان يحذف فوراً بالسحب
                     Button(role: .destructive) {
-                        Task { await adminRequestVM.rejectOrDeleteMember(memberId: member.id) }
+                        healthMemberToDelete = member
                     } label: {
                         Label(L10n.t("حذف", "Delete"), systemImage: "trash")
                     }
@@ -2217,12 +2249,38 @@ struct AdminAllRequestsView: View {
         }
     }
 
+    /// معرّف العنصر للتحديد المتعدّد — عناصر صحة الشجرة لا تُحدَّد
+    private func selectableId(_ item: AllItem) -> UUID? {
+        switch item {
+        case .join(let m): return m.id
+        case .news(let p): return p.id
+        case .report(let r), .nameChange(let r), .deceased(let r),
+             .child(let r), .photo(let r): return r.id
+        case .treeEdit(let r, _): return r.id
+        case .phone(let r): return r.id
+        case .diwaniya(let d): return d.id
+        case .project(let p): return p.id
+        case .archive(let a): return a.id
+        case .health: return nil
+        }
+    }
+
+    /// المعرّفات التي يملك هذا الدور الإجراء عليها في «الكل» — نفس `canApprove`/`canReject`
+    /// لكل نوع (مطابق `can_handle_admin_request` في السيرفر: المراقب الشجرة والأعضاء،
+    /// المشرف البلاغات، المالك/المدير الكل)
+    private func idsInRoleScope(approving: Bool) -> Set<UUID> {
+        Set(sortedAllItems
+            .filter { approving ? canApprove(allItemTab($0)) : canReject(allItemTab($0)) }
+            .compactMap(selectableId))
+    }
+
     /// موافقة دفعية تعبر كل الأنواع (لوضع "الكل").
     private func bulkApproveAcrossAllTypes(ids: [UUID]) async -> Int {
         var count = 0
-        let idSet = Set(ids)
+        // ما خرج عن مجال الدور لا يُقبل ولو حُدّد (فحص الثغرات ب-٧)
+        let idSet = idsInRoleScope(approving: true)
 
-        for id in ids {
+        for id in ids where idSet.contains(id) {
             if pendingMembers.contains(where: { $0.id == id }) {
                 _ = await adminRequestVM.bulkApproveJoinRequests(memberIds: [id])
                 count += 1
@@ -2252,15 +2310,16 @@ struct AdminAllRequestsView: View {
                 await adminRequestVM.approveTreeEditRequest(request: req); count += 1
             }
         }
-        _ = idSet // silence unused
         return count
     }
 
     /// رفض دفعي يعبر كل الأنواع (لوضع "الكل").
     private func bulkRejectAcrossAllTypes(ids: [UUID]) async -> Int {
         var count = 0
+        // ما خرج عن مجال الدور لا يُرفض ولو حُدّد (فحص الثغرات ب-٧)
+        let idSet = idsInRoleScope(approving: false)
 
-        for id in ids {
+        for id in ids where idSet.contains(id) {
             if pendingMembers.contains(where: { $0.id == id }) {
                 await adminRequestVM.rejectOrDeleteMember(memberId: id); count += 1
             } else if let post = newsVM.pendingNewsRequests.first(where: { $0.id == id }) {
@@ -2292,179 +2351,167 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Empty State
 
+    /// بطاقة «لا توجد طلبات» الموحّدة — للقائمة كلها أو للتبويب المختار
     private var emptyState: some View {
-        DSEmptyState(
-            icon: "checkmark.circle.fill",
-            title: L10n.t("لا توجد طلبات معلقة", "No pending requests"),
-            style: .halo,
-            tint: DS.Color.success
-        )
+        DSEmptyView(L10n.t("لا توجد طلبات معلقة", "No pending requests"),
+                    message: (totalCount == 0 || selectedTab == .all)
+                        ? L10n.t("كل الطلبات متابَعة — ما فيه شي ينتظر قرارك",
+                                 "All caught up — nothing is awaiting your decision")
+                        : L10n.t("لا شيء في «\(selectedTab.title)» الآن",
+                                 "Nothing in \(selectedTab.title) right now"),
+                    tint: DS.Color.success, style: .compact)
+            .padding(.vertical, DS.Spacing.xl)
     }
 
     // MARK: - Join Request Row
 
+    private typealias JoinMatch = (member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)
+
+    /// صف طلب الانضمام — أنيق ومحترم (طلب المالك ٢٠٢٦-١٠-٠١): صورة بأول حرف بحلقة لون الحالة،
+    /// الاسم عنواناً، سطر حالة هادئ (مطابقة/اسم جديد · من الموقع)، عمر الطلب نصاً خفيفاً،
+    /// ثم الرقم وزر واتساب دائري، وأقرب تطابق فقط. التفاصيل الكاملة داخل الطلب.
     private func joinRequestRow(for member: FamilyMember) -> some View {
         // كل المتغيرات خارج ViewBuilder لتفادي مشاكل @ViewBuilder مع let
-        let registrationTime = member.createdAt.map { formatRegistrationDate($0) } ?? "—"
-        let uname = member.username
-        let orderedResults = orderedMatchList(for: member)
-        let hasMatches = !orderedResults.isEmpty
-        let serverMatchCount = orderedResults.count
-        let isExpanded = expandedMatchMembers.contains(member.id)
-        let visible = isExpanded ? orderedResults : Array(orderedResults.prefix(5))
+        let phone: String? = {
+            guard let p = member.phoneNumber, !p.isEmpty else { return nil }
+            return p
+        }()
+        let results = orderedMatchList(for: member)
+        let hasMatches = !results.isEmpty
+        let fromWeb = member.registrationPlatform == "web"
+        let age = Self.requestDate(member.createdAt).map { ageText(days: daysWaiting(since: $0)) }
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "person.badge.shield.checkmark", color: hasMatches ? DS.Color.success : DS.Color.warning, size: 36)
+            HStack(alignment: .center, spacing: DS.Spacing.md) {
+                joinPersonAvatar(member, ring: hasMatches ? DS.Color.success : DS.Color.warning, size: Self.joinAvatar)
 
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    // رأس الكرت: نوع الطلب
-                    Text(L10n.t("طلب انضمام", "Join Request"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    // اسم المنضم — سطر ثاني
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(member.displayFullName)
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.textSecondary)
+                        .dsFieldFont(.headlineCompact)
+                        .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
-
-                    // اسم المستخدم (من الموقع)
-                    if let uname {
-                        HStack(spacing: 3) {
-                            Image(systemName: "at")
-                                .font(DS.Font.icon(11, weight: .bold))
-                            Text(uname)
-                                .font(DS.Font.scaled(11, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.primary)
-                    }
-
-                    // رقم هاتف المنضم
-                    if let phone = member.phoneNumber, !phone.isEmpty {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "phone.fill")
-                                .font(DS.Font.icon(11))
-                            Text(KuwaitPhone.display(phone))
-                                .font(DS.Font.scaled(11, weight: .medium))
-                                .monospacedDigit()
-                        }
-                        .foregroundColor(DS.Color.textSecondary)
-                    }
-
-                    // الوقت والتاريخ
-                    HStack(spacing: 3) {
-                        Image(systemName: "clock.fill")
-                            .font(DS.Font.icon(11))
-                        Text(registrationTime)
-                            .font(DS.Font.scaled(11, weight: .semibold))
-                    }
-                    .foregroundColor(DS.Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    joinStatusLine(matches: results.count, fromWeb: fromWeb)
                 }
 
-                Spacer()
+                Spacer(minLength: DS.Spacing.xs)
 
-                VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
-                    // زر واتساب — تواصل مباشر مع المنضم من الكرت الخارجي
-                    if let phone = member.phoneNumber, !phone.isEmpty,
-                       let wa = KuwaitPhone.whatsappURL(phone) {
-                        Button {
-                            UIApplication.shared.open(wa)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "message.fill")
-                                    .font(DS.Font.icon(11, weight: .bold))
-                                Text(L10n.t("واتساب", "WhatsApp"))
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(DS.Color.seaFill))
-                            .shadow(color: DS.Color.seaFill.opacity(0.30), radius: 4, x: 0, y: 2)
-                        }
-                        .buttonStyle(DSScaleButtonStyle())
-                    }
-
-                    // بادج مطابقات التسجيل
-                    if serverMatchCount > 0 {
-                        VStack(spacing: 2) {
-                            Text("\(serverMatchCount)")
-                                .font(DS.Font.scaled(14, weight: .black))
-                                .foregroundColor(DS.Color.info)
-                            Text(L10n.t("مطابقة", "match"))
-                                .font(DS.Font.scaled(11, weight: .bold))
-                                .foregroundColor(DS.Color.info)
-                        }
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.vertical, DS.Spacing.xs)
-                        .background(DS.Color.info.opacity(0.1))
-                        .cornerRadius(DS.Radius.md)
-                    }
+                if let age {
+                    Text(age)
+                        .dsFont(.caption)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .fixedSize()
                 }
             }
 
-            // نتائج التطابق — لستة مرتبة من الاسم الأول للأخير
-            if !orderedResults.isEmpty {
-                VStack(spacing: DS.Spacing.xs) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "person.2.fill")
-                            .font(DS.Font.icon(13, weight: .semibold))
-                            .foregroundColor(DS.Color.primary)
-                        Text(L10n.t(
-                            "تطابق محتمل (\(orderedResults.count))",
-                            "Potential matches (\(orderedResults.count))"
-                        ))
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        Spacer()
-                    }
-
-                    ForEach(visible, id: \.member.id) { match in
-                        joinMatchRow(match: match, pendingMember: member)
-                    }
-
-                    if orderedResults.count > 5 && !isExpanded {
-                        Button {
-                            withAnimation(DS.Anim.snappy) {
-                                _ = expandedMatchMembers.insert(member.id)
-                            }
-                        } label: {
-                            HStack(spacing: DS.Spacing.xs) {
-                                Image(systemName: "chevron.down")
-                                    .font(DS.Font.icon(11, weight: .bold))
-                                Text(L10n.t(
-                                    "عرض الكل (\(orderedResults.count))",
-                                    "Show all (\(orderedResults.count))"
-                                ))
-                                .font(DS.Font.scaled(11, weight: .bold))
-                            }
-                            .foregroundColor(DS.Color.primary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, DS.Spacing.xs)
-                        }
-                        .buttonStyle(DSScaleButtonStyle())
-                    }
-                }
-                .padding(DS.Spacing.sm)
-                .background(DS.Color.primary.opacity(0.04))
-                .cornerRadius(DS.Radius.md)
-            } else {
+            if let phone {
                 HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "person.badge.plus")
-                        .font(DS.Font.icon(12, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(L10n.t("لا يوجد تطابق — اسم جديد", "No tree matches — new name"))
-                        .font(DS.Font.scaled(11, weight: .bold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    Spacer()
+                    metaItem("phone.fill", KuwaitPhone.display(phone), color: DS.Color.fieldValue)
+                    Spacer(minLength: 0)
+                    if let wa = KuwaitPhone.whatsappURL(phone) {
+                        roundContactButton(icon: "message.fill", tint: DS.Color.sea,
+                                           label: L10n.t("واتساب", "WhatsApp")) {
+                            UIApplication.shared.open(wa)
+                        }
+                    }
                 }
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, DS.Spacing.xs)
-                .background(DS.Color.surface)
-                .cornerRadius(DS.Radius.sm)
+                .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
+            }
+
+            if hasMatches {
+                joinBestMatches(for: member, results: results)
             }
         }
+    }
+
+    /// صورة المنضم في صفّه (= مساحة الضغط) وفي بطاقة تفاصيله
+    private static let joinAvatar: CGFloat = DS.Icon.tapTarget
+
+    /// سطر حالة هادئ بلا شارات: «٣ مطابقات في الشجرة» أو «اسم جديد» · «من الموقع»
+    private func joinStatusLine(matches: Int, fromWeb: Bool) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: matches > 0 ? "checkmark.seal.fill" : "sparkles")
+                .dsGlyph(DS.Glyph.xsCompact)
+                .accessibilityHidden(true)
+            Text(matches > 0 ? L10n.t("\(matches) مطابقة في الشجرة", "\(matches) in the tree")
+                             : L10n.t("اسم جديد", "New name"))
+            if fromWeb {
+                Text("·").foregroundColor(DS.Color.textTertiary)
+                Image(systemName: "globe")
+                    .dsGlyph(DS.Glyph.xsCompact)
+                    .foregroundColor(DS.Color.info.dsReadableGlyph)
+                    .accessibilityHidden(true)
+                Text(L10n.t("من الموقع", "From website"))
+                    .foregroundColor(DS.Color.info.dsReadableGlyph)
+            }
+        }
+        .dsFont(.caption)
+        .foregroundColor(matches > 0 ? DS.Color.success.dsReadableGlyph : DS.Color.textSecondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+    }
+
+    /// صورة المنضم (أو أول حرف من اسمه) بحلقة رفيعة بلون الحالة: أخضر له مطابقة، كهرماني اسم جديد
+    private func joinPersonAvatar(_ member: FamilyMember, ring: Color, size: CGFloat) -> some View {
+        let initial = member.firstName.trimmingCharacters(in: .whitespaces).first
+            ?? member.fullName.trimmingCharacters(in: .whitespaces).first ?? "؟"
+        let ringColor = ring.dsReadableGlyph
+        return ZStack {
+            Circle().fill(AppSection.admin.ink.opacity(DS.Opacity.tintFillSoft))
+            if let raw = member.avatarUrl, !raw.isEmpty, let url = URL(string: raw) {
+                CachedAsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    Color.clear
+                }
+                .clipShape(Circle())
+            } else {
+                Text(String(initial))
+                    .font(DS.Font.plex(size * 0.4, weight: .bold))
+                    .foregroundColor(AppSection.admin.ink)
+            }
+        }
+        .frame(width: size, height: size)
+        .overlay(Circle().strokeBorder(ringColor, lineWidth: size > Self.joinAvatar ? DS.Border.widthBold * 2 : DS.Border.widthBold))
+        .accessibilityHidden(true)
+    }
+
+    /// زر تواصل (واتساب/اتصال): قرص الحالة المجسّم بلون المعنى، بمساحة ضغط ٤٤ نقطة
+    private func roundContactButton(icon: String, tint: Color, label: String,
+                                    action: @escaping () -> Void) -> some View {
+        let pad = (DS.Icon.tapTarget - DS.Icon.rowCompact) / 2
+        return Button(action: action) {
+            DSStateIcon(icon, tint: tint.dsReadableGlyph, size: DS.Icon.rowCompact, mapsChrome: false)
+                .padding(pad)
+                .contentShape(Rectangle())
+                .padding(-pad)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(label)
+    }
+
+    /// أقرب تطابق فقط — والباقي بزر «عرض كل المطابقات»
+    @ViewBuilder
+    private func joinBestMatches(for member: FamilyMember, results: [JoinMatch]) -> some View {
+        let isExpanded = expandedMatchMembers.contains(member.id)
+        let visible = isExpanded ? results : Array(results.prefix(1))
+        VStack(spacing: DS.Spacing.xsm) {
+            ForEach(visible, id: \.member.id) { match in
+                joinMatchRow(match: match, pendingMember: member)
+            }
+            if results.count > 1 && !isExpanded {
+                // الشريحة الموحّدة في وسط السطر
+                DSChipButton(L10n.t("عرض كل المطابقات (\(results.count))",
+                                    "Show all matches (\(results.count))"),
+                             icon: "chevron.down", tint: AppSection.admin.ink) {
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
+                        _ = expandedMatchMembers.insert(member.id)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
     }
 
     // MARK: - تنسيق تاريخ التسجيل مع الوقت
@@ -2491,77 +2538,58 @@ struct AdminAllRequestsView: View {
         let matchPercent = hasNameMatch ? Int(Double(match.matchCount) / Double(max(totalParts, 1)) * 100) : 0
 
         return HStack(spacing: DS.Spacing.sm) {
-            // نسبة التطابق كدائرة
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.1))
-                    .frame(width: 36, height: 36)
-                Text("\(matchPercent)%")
-                    .font(DS.Font.scaled(11, weight: .black))
-                    .foregroundColor(DS.Color.primary)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(match.member.displayFullName)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
+            // نسبة التطابق كحلقة صغيرة
+            DSRing(progress: Double(matchPercent) / 100, tint: AppSection.admin.ink,
+                   lineWidth: DS.Border.widthBold * 2, size: DS.Icon.rowLarge) {
+                Text(L10n.t("\(matchPercent)٪", "\(matchPercent)%"))
+                    .dsFont(.micro)
+                    .foregroundColor(AppSection.admin.ink)
+                    .monospacedDigit()
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(match.member.displayFullName)
+                    .dsFieldFont(.rowTitleCompact)
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsNameLines()
 
                 HStack(spacing: DS.Spacing.xs) {
                     Text(L10n.t(
                         "\(match.matchCount) من \(totalParts) أسماء متطابقة",
                         "\(match.matchCount) of \(totalParts) names match"
                     ))
-                    .font(DS.Font.scaled(11, weight: .medium))
-                    .foregroundColor(DS.Color.textSecondary)
+                    .dsFieldFont(.footnote)
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
                     if match.isRegistrationMatch {
-                        Text(L10n.t("تسجيل", "Reg"))
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(DS.Color.primaryFill)
-                            .clipShape(Capsule())
+                        DSStatusChip(text: L10n.t("تسجيل", "Reg"), tint: AppSection.admin.ink)
                     }
                 }
 
                 // رقم الهاتف
                 if let phone = match.member.phoneNumber, !phone.isEmpty {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "phone.fill")
-                            .font(DS.Font.icon(11))
-                        Text(KuwaitPhone.display(phone))
-                            .font(DS.Font.scaled(11, weight: .medium))
-                            .monospacedDigit()
-                    }
-                    .foregroundColor(DS.Color.textTertiary)
+                    metaItem("phone.fill", KuwaitPhone.display(phone))
                 }
             }
+            .accessibilityElement(children: .combine)
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Button {
+            // «ربط» — الشريحة الموحّدة ممتلئة بتعبئة القسم
+            DSChipButton(L10n.t("ربط", "Link"), isSelected: true) {
                 mergeTarget = (pendingMember: pendingMember, treeMember: match.member)
                 showMergeConfirm = true
-            } label: {
-                Text(L10n.t("ربط", "Link"))
-                    .font(DS.Font.scaled(12, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.gradientPrimary)
-                    .clipShape(Capsule())
             }
-            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("ربط بـ \(match.member.displayFullName)",
+                                       "Link to \(match.member.displayFullName)"))
         }
-        .padding(DS.Spacing.sm)
-        .background(DS.Color.surface)
-        .cornerRadius(DS.Radius.md)
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md)
-                .stroke(DS.Color.primary.opacity(0.1), lineWidth: 1)
-        )
+        // البطاقة الواحدة
+        .dsCard(padding: DS.Spacing.sm)
     }
 
     // MARK: - Registration Matches
@@ -2794,48 +2822,24 @@ struct AdminAllRequestsView: View {
     // MARK: - News Row
 
     private func newsRow(for post: NewsPost) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "newspaper.fill", color: newsTypeColor(post.type), size: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("خبر", "News"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-
-                    Text(post.author_name)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                typeBadge(text: post.type, color: newsTypeColor(post.type))
+        let tint = newsTypeColor(post.type)
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            requestRowHeader(icon: "newspaper.fill",
+                             tint: tint,
+                             title: L10n.t("خبر", "News"),
+                             subtitle: post.author_name) {
+                pendingChip(post.timestamp)
             }
 
-            Text(post.content)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            // التاريخ تحت + إشارة صور إن وُجدت
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "clock")
-                    .font(DS.Font.icon(11, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(formatRegistrationDate(String(post.created_at)))
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
-                if !post.mediaURLs.isEmpty {
-                    Image(systemName: "photo.fill")
-                        .font(DS.Font.icon(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text("\(post.mediaURLs.count)")
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
+            rowExtras {
+                previewText(post.content)
+                // النوع + التاريخ + إشارة صور إن وُجدت
+                HStack(spacing: DS.Spacing.sm) {
+                    DSStatusChip(text: post.type, tint: tint)
+                    metaItem("clock", formatRegistrationDate(String(post.created_at)))
+                    if !post.mediaURLs.isEmpty {
+                        metaItem("photo.fill", "\(post.mediaURLs.count)")
+                    }
                 }
             }
         }
@@ -2844,39 +2848,18 @@ struct AdminAllRequestsView: View {
     // MARK: - Report Row
 
     private func reportRow(for request: AdminRequest) -> some View {
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "exclamationmark.triangle.fill", color: DS.Color.error, size: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("بلاغ", "Report"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    if let name = request.member?.fullName {
-                        Text(L10n.t("عن: \(name)", "About: \(name)"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                }
-
-                Spacer()
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            requestRowHeader(icon: "exclamationmark.triangle.fill",
+                             tint: DS.Color.error,
+                             title: L10n.t("بلاغ", "Report"),
+                             subtitle: request.member.map { L10n.t("عن: \($0.fullName)", "About: \($0.fullName)") }) {
+                pendingChip(Self.requestDate(request.createdAt))
             }
 
-            Text(request.details ?? L10n.t("بلاغ بدون تفاصيل", "Report without details"))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            // التاريخ تحت
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "clock")
-                    .font(DS.Font.icon(11, weight: .medium))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(request.createdAt.map { formatRegistrationDate($0) } ?? "—")
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
+            rowExtras {
+                previewText(request.details ?? L10n.t("بلاغ بدون تفاصيل", "Report without details"))
+                // التاريخ تحت
+                metaItem("clock", request.createdAt.map { formatRegistrationDate($0) } ?? "—")
             }
         }
     }
@@ -2888,49 +2871,20 @@ struct AdminAllRequestsView: View {
         let newPhone = KuwaitPhone.display(request.newValue)
         let memberName = request.member?.fullName ?? "Member"
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "phone.arrow.right", color: DS.Color.primary, size: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("طلب تغيير رقم", "Phone Change"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Text(memberName)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-
-                Spacer()
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            requestRowHeader(icon: "phone.arrow.right",
+                             tint: AppSection.admin.ink,
+                             title: L10n.t("طلب تغيير رقم", "Phone Change"),
+                             subtitle: memberName) {
+                pendingChip(Self.requestDate(request.createdAt))
             }
 
-            // سطر مقارنة مدمج: الحالي ← الجديد
-            HStack(spacing: DS.Spacing.xs) {
-                Text(currentPhone)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .strikethrough()
-                    .monospacedDigit()
-                Image(systemName: "arrow.forward")
-                    .font(DS.Font.icon(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(newPhone)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.primary)
-                    .monospacedDigit()
-            }
-
-            // التاريخ تحت
-            if let createdAt = request.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.icon(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(formatRegistrationDate(String(createdAt)))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
+            rowExtras {
+                // سطر مقارنة مدمج: الحالي ← الجديد
+                changeLine(old: currentPhone, new: newPhone)
+                // التاريخ تحت
+                if let createdAt = request.createdAt {
+                    metaItem("clock", formatRegistrationDate(String(createdAt)))
                 }
             }
         }
@@ -2939,31 +2893,25 @@ struct AdminAllRequestsView: View {
     // MARK: - Diwaniya Row
 
     private func diwaniyaRow(for diwaniya: Diwaniya) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "tent.fill", color: DS.Color.gridDiwaniya, size: 36)
+        let schedule = diwaniya.scheduleText ?? ""
+        let address = diwaniya.address ?? ""
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            requestRowHeader(icon: "tent.fill",
+                             tint: DS.Color.gridDiwaniya,
+                             title: L10n.t("طلب ديوانية", "Diwaniya Request"),
+                             subtitle: diwaniya.title) {
+                pendingChip(nil)
+            }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("طلب ديوانية", "Diwaniya Request"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-
-                    Text(diwaniya.title)
-                        .font(DS.Font.caption1)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
+            if !schedule.isEmpty || !address.isEmpty {
+                rowExtras {
+                    if !schedule.isEmpty {
+                        detailRow(icon: "calendar", text: schedule)
+                    }
+                    if !address.isEmpty {
+                        detailRow(icon: "mappin.and.ellipse", text: address)
+                    }
                 }
-
-                Spacer()
-            }
-
-            if let schedule = diwaniya.scheduleText, !schedule.isEmpty {
-                detailRow(icon: "calendar", text: schedule)
-            }
-            if let address = diwaniya.address, !address.isEmpty {
-                detailRow(icon: "mappin.and.ellipse", text: address)
             }
         }
     }
@@ -2971,32 +2919,19 @@ struct AdminAllRequestsView: View {
     // MARK: - Archive Row
 
     private func archiveRow(for item: ArchiveItem) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: item.categoryIcon, color: DS.Color.sadu, size: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("عنصر أرشيف", "Archive Item"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-
-                    Text(item.title)
-                        .font(DS.Font.caption1)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            requestRowHeader(icon: item.categoryIcon,
+                             tint: DS.Color.warning,
+                             title: L10n.t("عنصر أرشيف", "Archive Item"),
+                             subtitle: item.title) {
+                pendingChip(item.createdAt)
             }
 
-            detailRow(
-                icon: item.categoryIcon,
-                text: item.categoryDisplayName
-            )
-            if let year = item.year {
-                detailRow(icon: "calendar", text: "\(year)")
+            rowExtras {
+                detailRow(icon: item.categoryIcon, text: item.categoryDisplayName)
+                if let year = item.year {
+                    detailRow(icon: "calendar", text: "\(year)")
+                }
             }
         }
     }
@@ -3004,43 +2939,27 @@ struct AdminAllRequestsView: View {
     // MARK: - Deceased Row
 
     private func deceasedRow(for request: AdminRequest) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "bolt.heart.fill", color: DS.Color.slate, size: 36)
+        let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            requestRowHeader(icon: "bolt.heart.fill",
+                             tint: DS.Color.error,
+                             title: L10n.t("تسجيل وفاة", "Deceased"),
+                             subtitle: L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
+                                              "For: \(request.member?.fullName ?? "Member")")) {
+                pendingChip(Self.requestDate(request.createdAt))
+            }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("تسجيل وفاة", "Deceased"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Text(L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
-                                "For: \(request.member?.fullName ?? "Member")"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-
-                    if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
+            rowExtras {
+                // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
+                if let requester, requester.id != request.memberId {
+                    requesterLine(requester)
                 }
-
-                Spacer()
-            }
-
-            if let details = request.details, !details.isEmpty {
-                contentBlock(details)
-            }
-
-            // التاريخ تحت
-            if let createdAt = request.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.icon(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(formatRegistrationDate(String(createdAt)))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
+                if let details = request.details, !details.isEmpty {
+                    contentBlock(details)
+                }
+                // التاريخ تحت
+                if let createdAt = request.createdAt {
+                    metaItem("clock", formatRegistrationDate(String(createdAt)))
                 }
             }
         }
@@ -3049,43 +2968,27 @@ struct AdminAllRequestsView: View {
     // MARK: - Child Row
 
     private func childRow(for request: AdminRequest) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "person.badge.plus", color: DS.Color.info, size: 36)
+        let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            requestRowHeader(icon: "person.badge.plus",
+                             tint: DS.Color.info,
+                             title: L10n.t("إضافة ابن", "Child Add"),
+                             subtitle: L10n.t("الأب: \(request.member?.displayFullName ?? "عضو")",
+                                              "Father: \(request.member?.fullName ?? "Member")")) {
+                pendingChip(Self.requestDate(request.createdAt))
+            }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("إضافة ابن", "Child Add"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Text(L10n.t("الأب: \(request.member?.displayFullName ?? "عضو")",
-                                "Father: \(request.member?.fullName ?? "Member")"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-
-                    if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
+            rowExtras {
+                // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
+                if let requester, requester.id != request.memberId {
+                    requesterLine(requester)
                 }
-
-                Spacer()
-            }
-
-            if let details = request.details, !details.isEmpty {
-                contentBlock(details)
-            }
-
-            // التاريخ تحت
-            if let createdAt = request.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.icon(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(formatRegistrationDate(String(createdAt)))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
+                if let details = request.details, !details.isEmpty {
+                    contentBlock(details)
+                }
+                // التاريخ تحت
+                if let createdAt = request.createdAt {
+                    metaItem("clock", formatRegistrationDate(String(createdAt)))
                 }
             }
         }
@@ -3094,62 +2997,46 @@ struct AdminAllRequestsView: View {
     // MARK: - Photo Row
 
     private func photoRow(for request: AdminRequest) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "camera.badge.ellipsis", color: DS.Color.neonBlue, size: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("اقتراح صورة", "Photo Suggestion"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Text(L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
-                                "For: \(request.member?.fullName ?? "Member")"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-
-                    if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
-
-                Spacer()
+        let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            requestRowHeader(icon: "camera.badge.ellipsis",
+                             tint: DS.Color.neonBlue,
+                             title: L10n.t("اقتراح صورة", "Photo Suggestion"),
+                             subtitle: L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
+                                              "For: \(request.member?.fullName ?? "Member")")) {
+                pendingChip(Self.requestDate(request.createdAt))
             }
 
-            if let details = request.details, !details.isEmpty {
-                contentBlock(details)
-            }
-
-            HStack(spacing: DS.Spacing.sm) {
-                if let photoUrl = request.newValue, let url = URL(string: photoUrl) {
-                    CachedAsyncImage(url: url) { img in
-                        img.resizable()
-                            .scaledToFill()
-                            .frame(width: 44, height: 44)
-                            .clipped()
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                    } placeholder: {
-                        RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                            .fill(DS.Color.surface)
-                            .frame(width: 44, height: 44)
-                            .overlay(ProgressView().tint(DS.Color.primary))
-                    }
+            rowExtras {
+                // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
+                if let requester, requester.id != request.memberId {
+                    requesterLine(requester)
                 }
-
-                // التاريخ
-                if let createdAt = request.createdAt {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "clock")
-                            .font(DS.Font.icon(11, weight: .medium))
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(formatRegistrationDate(String(createdAt)))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
+                if let details = request.details, !details.isEmpty {
+                    contentBlock(details)
                 }
-                Spacer()
+                HStack(spacing: DS.Spacing.sm) {
+                    if let photoUrl = request.newValue, let url = URL(string: photoUrl) {
+                        CachedAsyncImage(url: url) { img in
+                            img.resizable()
+                                .scaledToFill()
+                                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                                .fill(DS.Color.surface)
+                                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                        }
+                        .accessibilityHidden(true)
+                    }
+
+                    // التاريخ
+                    if let createdAt = request.createdAt {
+                        metaItem("clock", formatRegistrationDate(String(createdAt)))
+                    }
+                    Spacer(minLength: 0)
+                }
             }
         }
     }
@@ -3168,197 +3055,158 @@ struct AdminAllRequestsView: View {
         let newName = isFamily
             ? FamilyNameCatalog.words(baseName, family: request.newValue).joined(separator: " ")
             : (request.newValue ?? "—")
+        let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // الصف الأول: الأيقونة + الاسم + البادج
-            HStack(spacing: DS.Spacing.sm) {
-                iconCircle(icon: "rectangle.and.pencil.and.ellipsis", color: DS.Color.palm, size: 36)
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            // الصف الأول: الأيقونة + نوع الطلب + الاسم الحالي + عمر الطلب
+            requestRowHeader(icon: "rectangle.and.pencil.and.ellipsis",
+                             tint: DS.Color.neonPurple,
+                             title: isFamily ? L10n.t("تغيير العائلة", "Family Change") : L10n.t("تغيير اسم", "Name Change"),
+                             subtitle: currentName) {
+                pendingChip(Self.requestDate(request.createdAt))
+            }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isFamily ? L10n.t("تغيير العائلة", "Family Change") : L10n.t("تغيير اسم", "Name Change"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-
-                    Text(currentName)
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-
-                    if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
-                        Text(L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
+            rowExtras {
+                // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
+                if let requester, requester.id != request.memberId {
+                    requesterLine(requester)
                 }
-
-                Spacer()
-            }
-
-            // الاسم: الحالي ← الجديد (سطر مدمج)
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "arrow.forward")
-                    .font(DS.Font.icon(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(newName)
-                    .font(DS.Font.caption1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DS.Color.primary)
-                    .lineLimit(1)
-            }
-
-            // التاريخ تحت
-            if let createdAt = request.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.icon(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(formatRegistrationDate(String(createdAt)))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
+                // الاسم: الحالي ← الجديد (سطر مدمج)
+                changeLine(old: nil, new: newName)
+                // التاريخ تحت
+                if let createdAt = request.createdAt {
+                    metaItem("clock", formatRegistrationDate(String(createdAt)))
                 }
             }
         }
     }
 
-    // MARK: - Admin Name Edit Sheet
+    // MARK: - Admin Name Edit Box
+    /// تعديل الاسم قبل الموافقة — مربّع بمنتصف الشاشة بنفس تصميم المربّعات الموحّد
+    /// (طلب المالك): رأس كحلي، الاسم الحالي ثم حقل الاسم المعدّل، و«موافقة» / «إلغاء» أسفله.
     private func adminNameEditSheet(request: AdminRequest) -> some View {
-        NavigationStack {
-            VStack(spacing: DS.Spacing.xl) {
-                // الاسم الحالي
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(L10n.t("الاسم الحالي:", "Current name:"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(request.member?.displayFullName ?? "—")
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
+        DSComposer(
+            title: L10n.t("تعديل الاسم", "Edit Name"),
+            subtitle: L10n.t("يمكنك تعديل الاسم قبل الموافقة عليه.", "You can modify the name before approving."),
+            icon: "rectangle.and.pencil.and.ellipsis",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("موافقة", "Approve"),
+            actionIcon: "checkmark.circle.fill",
+            canSubmit: !editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            hasUnsavedChanges: editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+                != editedNameStart.trimmingCharacters(in: .whitespacesAndNewlines),
+            onSubmit: {
+                let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                Task {
+                    var modifiedRequest = request
+                    modifiedRequest.newValue = trimmed
+                    await adminRequestVM.approveNameChangeRequest(request: modifiedRequest)
+                    nameEditRequest = nil
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                // حقل تعديل الاسم
-                DSTextField(
-                    label: L10n.t("الاسم المعدّل", "Modified Name"),
-                    placeholder: L10n.t("اكتب الاسم الصحيح", "Enter correct name"),
-                    text: $editedName,
-                    icon: "pencil",
-                    iconColor: DS.Color.primary
-                )
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Text(L10n.t(
-                    "يمكنك تعديل الاسم قبل الموافقة عليه.",
-                    "You can modify the name before approving."
-                ))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textTertiary)
-                .padding(.horizontal, DS.Spacing.xxl)
-
-                DSPrimaryButton(
-                    L10n.t("موافقة بالاسم المعدّل", "Approve with Modified Name"),
-                    icon: "checkmark.circle.fill"
-                ) {
-                    let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    Task {
-                        var modifiedRequest = request
-                        modifiedRequest.newValue = trimmed
-                        await adminRequestVM.approveNameChangeRequest(request: modifiedRequest)
-                        nameEditRequest = nil
-                    }
-                }
-                .disabled(editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Spacer()
+            },
+            onCancel: { nameEditRequest = nil }
+        ) {
+            DSComposerSection(title: L10n.t("الاسم", "Name"),
+                              icon: "person.fill",
+                              tint: AppSection.admin.ink,
+                              index: 0) {
+                editBoxValueRow(icon: "person.fill",
+                                label: L10n.t("الاسم الحالي", "Current Name"),
+                                value: request.member?.displayFullName ?? "—",
+                                tint: AppSection.admin.ink)
             }
-            .padding(.top, DS.Spacing.xl)
-            .navigationTitle(L10n.t("تعديل الاسم", "Edit Name"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { nameEditRequest = nil }
-                        .foregroundColor(DS.Color.primary)
-                }
+
+            DSComposerSection(title: L10n.t("التعديل", "Edit"),
+                              icon: "pencil",
+                              tint: DS.Color.success,
+                              index: 1) {
+                DSComposerField(icon: "pencil",
+                                label: L10n.t("الاسم المعدّل", "Modified Name"),
+                                placeholder: L10n.t("اكتب الاسم الصحيح", "Enter correct name"),
+                                text: $editedName,
+                                tint: DS.Color.success)
             }
         }
+        .onAppear { editedNameStart = editedName }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    // MARK: - Admin Phone Edit Sheet
-    private func adminPhoneEditSheet(request: PhoneChangeRequest) -> some View {
-        NavigationStack {
-            VStack(spacing: DS.Spacing.xl) {
-                // الرقم الحالي
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(L10n.t("الرقم الحالي:", "Current number:"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(KuwaitPhone.display(request.member?.phoneNumber))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                // الرقم المطلوب
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(L10n.t("الرقم المطلوب:", "Requested number:"))
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(KuwaitPhone.display(request.newValue))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                // حقل تعديل الرقم
-                DSTextField(
-                    label: L10n.t("الرقم المعدّل", "Modified Number"),
-                    placeholder: L10n.t("اكتب الرقم الصحيح", "Enter correct number"),
-                    text: $editedPhone,
-                    icon: "phone",
-                    iconColor: DS.Color.primary
-                )
-                .keyboardType(.phonePad)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Text(L10n.t(
-                    "يمكنك تعديل الرقم قبل الموافقة عليه.",
-                    "You can modify the number before approving."
-                ))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textTertiary)
-                .padding(.horizontal, DS.Spacing.xxl)
-
-                DSPrimaryButton(
-                    L10n.t("موافقة بالرقم المعدّل", "Approve with Modified Number"),
-                    icon: "checkmark.circle.fill"
-                ) {
-                    let trimmed = editedPhone.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    Task {
-                        var modifiedRequest = request
-                        modifiedRequest.newValue = trimmed
-                        await adminRequestVM.approvePhoneChangeRequest(request: modifiedRequest)
-                        phoneEditRequest = nil
-                    }
-                }
-                .disabled(editedPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .padding(.horizontal, DS.Spacing.lg)
-
-                Spacer()
+    /// صف قراءة فقط داخل مربّعي تعديل الاسم/الرقم — أيقونة الحقل + العنوان + القيمة
+    private func editBoxValueRow(icon: String, label: String, value: String,
+                                 tint: Color, valueColor: Color = DS.Color.fieldValue) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: tint)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(label)
+                    .dsFieldFont(.label)
+                    .foregroundColor(DS.Color.fieldLabel)
+                Text(value)
+                    .dsFieldFont(.body)
+                    .foregroundColor(valueColor)
+                    .lineLimit(2)
             }
-            .padding(.top, DS.Spacing.xl)
-            .navigationTitle(L10n.t("تعديل الرقم", "Edit Number"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { phoneEditRequest = nil }
-                        .foregroundColor(DS.Color.primary)
+            Spacer(minLength: 0)
+        }
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
+    }
+
+    // MARK: - Admin Phone Edit Box
+    /// تعديل الرقم قبل الموافقة — مربّع بمنتصف الشاشة بنفس تصميم المربّعات الموحّد
+    /// (طلب المالك): الرقم الحالي والمطلوب، ثم حقل الرقم المعدّل، و«موافقة» / «إلغاء» أسفله.
+    private func adminPhoneEditSheet(request: PhoneChangeRequest) -> some View {
+        DSComposer(
+            title: L10n.t("تعديل الرقم", "Edit Number"),
+            subtitle: L10n.t("يمكنك تعديل الرقم قبل الموافقة عليه.", "You can modify the number before approving."),
+            icon: "phone.badge.checkmark",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("موافقة", "Approve"),
+            actionIcon: "checkmark.circle.fill",
+            canSubmit: !editedPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            hasUnsavedChanges: editedPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+                != editedPhoneStart.trimmingCharacters(in: .whitespacesAndNewlines),
+            onSubmit: {
+                let trimmed = editedPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                Task {
+                    var modifiedRequest = request
+                    modifiedRequest.newValue = trimmed
+                    await adminRequestVM.approvePhoneChangeRequest(request: modifiedRequest)
+                    phoneEditRequest = nil
                 }
+            },
+            onCancel: { phoneEditRequest = nil }
+        ) {
+            DSComposerSection(title: L10n.t("رقم الهاتف", "Phone"),
+                              icon: "phone.fill",
+                              tint: AppSection.admin.ink,
+                              index: 0) {
+                editBoxValueRow(icon: "phone.fill",
+                                label: L10n.t("الرقم الحالي", "Current number"),
+                                value: KuwaitPhone.display(request.member?.phoneNumber),
+                                tint: AppSection.admin.ink)
+                editBoxValueRow(icon: "phone.arrow.right",
+                                label: L10n.t("الرقم المطلوب", "Requested number"),
+                                value: KuwaitPhone.display(request.newValue),
+                                tint: DS.Color.success,
+                                valueColor: DS.Color.success)
+            }
+
+            DSComposerSection(title: L10n.t("التعديل", "Edit"),
+                              icon: "pencil",
+                              tint: DS.Color.success,
+                              index: 1) {
+                DSComposerField(icon: "phone",
+                                label: L10n.t("الرقم المعدّل", "Modified Number"),
+                                placeholder: L10n.t("اكتب الرقم الصحيح", "Enter correct number"),
+                                text: $editedPhone,
+                                tint: DS.Color.success,
+                                keyboard: .phonePad)
             }
         }
+        .onAppear { editedPhoneStart = editedPhone }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -3367,185 +3215,544 @@ struct AdminAllRequestsView: View {
     // MARK: - Project Row
 
     private func projectRow(for project: Project) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                // Logo or placeholder
-                if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
-                    CachedAsyncImage(url: url) { img in
-                        img.resizable().scaledToFill()
-                    } placeholder: {
-                        iconCircle(icon: "briefcase.fill", color: DS.Color.accent, size: 36)
-                    }
-                    .frame(width: 36, height: 36)
-                    .clipShape(Circle())
-                } else {
-                    iconCircle(icon: "briefcase.fill", color: DS.Color.accent, size: 36)
-                }
-
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(L10n.t("طلب مشروع", "Project Request"))
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-
-                    Text(project.title)
-                        .font(DS.Font.caption1)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                projectLogo(project)
+                rowTitles(title: L10n.t("طلب مشروع", "Project Request"), subtitle: project.title)
+                Spacer(minLength: 0)
+                pendingChip(Self.requestDate(project.createdAt))
+                    .fixedSize()
             }
 
-            if let desc = project.description, !desc.isEmpty {
-                contentBlock(desc)
-            }
-
-            // التاريخ تحت
-            if let date = project.createdAt {
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "clock")
-                        .font(DS.Font.icon(11, weight: .medium))
-                        .foregroundColor(DS.Color.textTertiary)
-                    Text(L10n.t("أُضيف: \(formatRegistrationDate(date))", "Added: \(formatRegistrationDate(date))"))
-                        .font(DS.Font.caption2)
-                        .foregroundColor(DS.Color.textTertiary)
+            rowExtras {
+                if let desc = project.description, !desc.isEmpty {
+                    contentBlock(desc)
+                }
+                // التاريخ تحت
+                if let date = project.createdAt {
+                    let formatted = formatRegistrationDate(date)
+                    metaItem("clock", L10n.t("أُضيف: \(formatted)", "Added: \(formatted)"))
                 }
             }
         }
-        .padding(.vertical, DS.Spacing.xs)
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+    }
+
+    /// شعار المشروع بمقاس أيقونة الحقل — أو أيقونة الحقيبة إن لم يوجد
+    @ViewBuilder
+    private func projectLogo(_ project: Project) -> some View {
+        if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
+            CachedAsyncImage(url: url) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                DSFieldIcon(name: "briefcase.fill", tint: DS.Color.neonPurple)
+            }
+            .frame(width: DS.Icon.row, height: DS.Icon.row)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous))
+            .accessibilityHidden(true)
+        } else {
+            DSFieldIcon(name: "briefcase.fill", tint: DS.Color.neonPurple)
+                .accessibilityHidden(true)
+        }
     }
 
     // MARK: - Shared Components
 
-    private func accentBar(color: Color) -> some View {
-        color
-            .frame(height: 4)
-            .cornerRadius(DS.Radius.full)
-    }
-
-    private func iconCircle(icon: String, color: Color, size: CGFloat = 44) -> some View {
-        ZStack {
-            Circle()
-                .fill(color.opacity(DS.Icon.opacity))
-                .frame(width: size, height: size)
-            Image(systemName: icon)
-                .foregroundColor(color)
-                .font(DS.Font.icon(size * 0.4, weight: .semibold))
-        }
-    }
-
-    private func memberAvatar(urlStr: String?, name: String) -> some View {
-        DSMemberAvatar(name: name, avatarUrl: urlStr, size: 40, roleColor: DS.Color.primary)
-    }
-
-    private func typeBadge(text: String, color: Color) -> some View {
-        Text(text)
-            .font(DS.Font.caption2)
-            .fontWeight(.bold)
-            .foregroundColor(color)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.12))
-            .clipShape(Capsule())
-    }
-
+    /// سطر معلومة بأيقونة صغيرة (الموعد، العنوان، القسم…) — Plex 12 بلون القيم
     private func detailRow(icon: String, text: String) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: icon)
-                .font(DS.Font.icon(12, weight: .medium))
+        HStack(spacing: DS.Spacing.xsm) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.xs, weight: .semibold)
                 .foregroundColor(DS.Color.textTertiary)
-                .frame(width: 18)
+                .frame(width: DS.Glyph.md)
+                .accessibilityHidden(true)
             Text(text)
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
+                .dsFieldFont(.subtitle)
+                .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(2)
         }
     }
 
-    /// بلوك محتوى/تفاصيل موحد — ليبل + نص بخط أكبر
+    /// بلوك التفاصيل داخل الصف — عنوان صغير + النص (٣ أسطر) على بطاقة خفيفة
     private func contentBlock(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(L10n.t("التفاصيل", "Details"))
-                .font(DS.Font.caption2)
+                .dsFont(.badgeCompact)
                 .foregroundColor(DS.Color.textTertiary)
             Text(text)
-                .font(DS.Font.callout)
-                .foregroundColor(DS.Color.textSecondary)
+                .dsFieldFont(.calloutCompact)
+                .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DS.Spacing.sm)
-        .background(DS.Color.cardBackgroundSoft)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xsm)
+        // البطاقة الواحدة (زواياها الصغيرة داخل الصف)
+        .dsCard(padding: nil, radius: DS.Radius.sm)
+        .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Request Detail Sheet
+    // MARK: - قطع صف الطلب الموحّد (نفس `DSRow` في صفحات الإدارة)
 
-    /// شيت تفاصيل الطلب — تصميم موحّد لكل الأنواع.
+    /// رأس الصف: أيقونة الحقل بلون النوع + العنوان (Plex 13.5 عريض) + الوصف (Plex 12) + طرف
+    /// (شارة الحالة عادةً).
+    private func requestRowHeader<Trailing: View>(
+        icon: String,
+        tint: Color,
+        title: String,
+        subtitle: String?,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(alignment: .center, spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: tint)
+                .accessibilityHidden(true)
+            rowTitles(title: title, subtitle: subtitle)
+            Spacer(minLength: 0)
+            // الشارة بمقاسها — الاسم الطويل يلتفّ بدل أن تنضغط الشارة
+            trailing()
+                .fixedSize()
+        }
+    }
+
+    private func rowTitles(title: String, subtitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            Text(title)
+                .dsFieldFont(.rowTitle)
+                .foregroundColor(DS.Color.fieldLabel)
+                .lineLimit(1)
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .dsFieldFont(.subtitle)
+                    .foregroundColor(DS.Color.fieldValue)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    /// أسطر إضافية تحت الرأس — تبدأ تحت العنوان (بعد عمود الأيقونة + المسافة)
+    private func rowExtras<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            content()
+        }
+        .padding(.leading, DS.Icon.row + DS.Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// معلومة صغيرة: أيقونة + نص (Plex 11) — التاريخ، الهاتف، مقدّم الطلب…
+    private func metaItem(_ icon: String, _ text: String, color: Color = DS.Color.textTertiary) -> some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.micro, weight: .semibold)
+                .accessibilityHidden(true)
+            Text(text)
+                .dsFont(.footnote)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .foregroundColor(color)
+    }
+
+    /// «من: …» — مقدّم الطلب
+    private func requesterLine(_ requester: FamilyMember) -> some View {
+        metaItem("person.fill", L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
+    }
+
+    /// معاينة نصّ الطلب (سطران) — Plex 12 بلون القيم
+    @ViewBuilder
+    private func previewText(_ text: String) -> some View {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            Text(trimmed)
+                .dsFieldFont(.subtitle)
+                .foregroundColor(DS.Color.fieldValue)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// سطر «الحالي ← الجديد»: القديم مشطوب، والجديد عريض بلون أساسي
+    private func changeLine(old: String?, new: String) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            if let old {
+                Text(old)
+                    .dsFieldFont(.subtitle)
+                    .foregroundColor(DS.Color.fieldValue)
+                    .strikethrough(true, color: DS.Color.error.opacity(DS.Opacity.disabled))
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+            Image(systemName: "arrow.forward")
+                .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityHidden(true)
+            Text(new)
+                .dsFont(.sectionTitle)
+                .foregroundColor(AppSection.admin.ink)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+    }
+
+    /// شارة «بانتظار» — بعمر الطلب إن عُرف تاريخه (اليوم، أمس، ٣ أيام…)
+    private func pendingChip(_ date: Date?) -> some View {
+        let text = date.map { ageText(days: daysWaiting(since: $0)) } ?? L10n.t("بانتظار", "Pending")
+        return DSStatusChip(text: text, icon: "clock", tint: DS.Color.warning)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(date == nil ? text : L10n.t("بانتظار: \(text)", "Pending: \(text)"))
+    }
+
+    /// أيام الانتظار بالتقويم (اليوم = ٠)
+    private func daysWaiting(since date: Date) -> Int {
+        let cal = Calendar.current
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: date),
+                                      to: cal.startOfDay(for: Date())).day ?? 0
+        return max(0, days)
+    }
+
+    /// عمر مختصر يصلح للشارة ولبطاقة الرأس
+    private func ageText(days: Int) -> String {
+        switch days {
+        case ..<1:    return L10n.t("اليوم", "Today")
+        case 1:       return L10n.t("أمس", "1 day")
+        case 2:       return L10n.t("يومان", "2 days")
+        case 3...10:  return L10n.t("\(days) أيام", "\(days) days")
+        default:      return L10n.t("\(days) يوماً", "\(days) days")
+        }
+    }
+
+    /// تاريخ الطلب من نصّ ISO — بمحلّلين ثابتين (الصفوف والأرقام تُرسم كثيراً)
+    private static let isoWithFraction: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let isoPlain: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static func requestDate(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        return isoWithFraction.date(from: raw) ?? isoPlain.date(from: raw)
+    }
+
+    // MARK: - Request Detail Box
+
+    /// أسباب «طلب آخر» الداخلية التي يرسلها تعديل الملف الشخصي (EditProfileView) ← عنوان عربي مفهوم.
+    /// كانت تظهر للإدارة كما هي («profile_marital») تحت «السبب» وبعنوان «طلب آخر».
+    static func profileReasonTitle(_ reason: String?) -> String? {
+        guard let reason, reason.hasPrefix("profile_") else { return nil }
+        switch reason {
+        case "profile_marital": return L10n.t("تغيير الحالة الاجتماعية", "Marital Status Change")
+        case "profile_bio": return L10n.t("تعديل السيرة الذاتية", "Bio Update")
+        case "profile_phone_hidden": return L10n.t("إظهار أو إخفاء الرقم", "Phone Visibility")
+        default: return L10n.t("تعديل الملف الشخصي", "Profile Update")
+        }
+    }
+
+    /// مربّع تفاصيل الطلب بمنتصف الشاشة — نفس تصميم المربّعات الموحّد (طلب المالك):
+    /// رأس كحلي بأيقونة نوع الطلب ووقته، الصورة (إن وُجدت)، قسم «بيانات الطلب» بصفوف،
+    /// ثم شريط أزرار المربّع نفسه (طلب المالك ٢٠٢٦-١٠-٠٧ «أدمج أزرار الإجراءات مع بوكس العمل»):
+    /// صفّ «تعديل الرقم / رفض / حذف نهائي» فوق صفّ «الموافقة / إغلاق» — بنفس الصلاحيات.
+    /// عناصر صحة الشجرة للعرض فقط («إغلاق» وحده).
     private func requestDetailSheet(_ detail: RequestDetail) -> some View {
         let meta = detailMeta(for: detail)
-        return NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    // Hero — أيقونة كبيرة + نوع الطلب + الوقت
-                    detailHero(icon: meta.icon, color: meta.color, title: meta.title, timestamp: meta.timestamp, imageUrl: meta.imageUrl)
-
-                    // محتوى مخصّص لكل نوع
-                    detailContent(for: detail)
-
-                    // أزرار الموافقة/الرفض — أسفل الطلب (غير ثابتة)
-                    stickyActionsBar(for: detail, accent: meta.color)
-                        .padding(.top, DS.Spacing.xs)
+        return Group {
+            if let flow = approvalSnapshot(for: detail) {
+                // «مسار الموافقات» شغّال: نفس البيانات داخل مربّع المسار، والأزرار بحسب الدور والمرحلة
+                approvalDetailBox(detail, meta: meta, flow: flow)
+            } else {
+                DSComposer(
+                    title: meta.title,
+                    subtitle: meta.timestamp ?? L10n.t("تفاصيل الطلب", "Request Details"),
+                    icon: meta.icon,
+                    tint: DS.Color.actionNavy,
+                    actionTitle: approveLabelFor(detail),
+                    actionIcon: approveIconFor(detail),
+                    showsAction: detailHasDecision(detail),
+                    cancelTitle: L10n.t("إغلاق", "Close"),
+                    canSubmit: !adminRequestVM.isLoading,
+                    extraActions: detailExtraActions(for: detail),
+                    onSubmit: { approveDetail(detail) },
+                    onCancel: { selectedDetail = nil }
+                ) {
+                    detailBoxContent(detail, meta: meta)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.lg)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: DetailSheetHeightKey.self, value: geo.size.height)
-                    }
-                )
-            }
-            .background(DS.Color.background)
-            .navigationTitle(L10n.t("تفاصيل الطلب", "Request Details"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إغلاق", "Close")) { selectedDetail = nil }
-                        .font(DS.Font.calloutBold)
-                        .foregroundColor(DS.Color.primary)
-                }
-            }
-            .dsAlert(
-                L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
-                isPresented: Binding(
-                    get: { deleteConfirmDetail != nil },
-                    set: { if !$0 { deleteConfirmDetail = nil } }
-                )
-            ) {
-                Button(L10n.t("حذف نهائي", "Delete Permanently"), role: .destructive) {
-                    if let d = deleteConfirmDetail {
-                        hardDeleteDetail(d)
-                    }
-                    deleteConfirmDetail = nil
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { deleteConfirmDetail = nil }
-            } message: {
-                Text(L10n.t(
-                    "سيُحذف هذا الطلب نهائياً من قاعدة البيانات ولا يمكن التراجع.",
-                    "This request will be permanently removed and cannot be undone."
-                ))
-            }
-            .sheet(item: $phoneEditPendingMember) { member in
-                PendingMemberPhoneSheet(member: member)
-                    .environmentObject(adminRequestVM)
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .dsAlert(
+            L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
+            isPresented: Binding(
+                get: { deleteConfirmDetail != nil },
+                set: { if !$0 { deleteConfirmDetail = nil } }
+            )
+        ) {
+            Button(L10n.t("حذف نهائي", "Delete Permanently"), role: .destructive) {
+                if let d = deleteConfirmDetail {
+                    hardDeleteDetail(d)
+                }
+                deleteConfirmDetail = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { deleteConfirmDetail = nil }
+        } message: {
+            Text(L10n.t(
+                "سيُحذف هذا الطلب نهائياً من قاعدة البيانات ولا يمكن التراجع.",
+                "This request will be permanently removed and cannot be undone."
+            ))
+        }
+        .dsCenterBox(item: $phoneEditPendingMember) { member in
+            PendingMemberPhoneSheet(member: member)
+                .environmentObject(adminRequestVM)
+        }
+    }
+
+    // MARK: - «مسار الموافقات» في مربّع التفاصيل (طلب المالك ٢٠٢٦-١٠-١٥)
+
+    /// معرّف صفّ التفاصيل للمسار — طلبات `admin_requests` فقط (للانضمام: العضو المعلّق)
+    private func approvalSnapshot(for detail: RequestDetail) -> ApprovalSnapshot? {
+        switch detail {
+        case .join(let m): return adminRequestVM.approvalSnapshot(forRowId: m.id)
+        case .report(let r), .nameChange(let r), .deceased(let r), .child(let r), .photo(let r):
+            return adminRequestVM.approvalSnapshot(forRowId: r.id)
+        case .treeEdit(let r, _): return adminRequestVM.approvalSnapshot(forRowId: r.id)
+        case .phone(let r): return adminRequestVM.approvalSnapshot(forRowId: r.id)
+        case .news, .diwaniya, .project, .archive, .healthMember: return nil
+        }
+    }
+
+    /// التنفيذ = مسار الموافقة القديم (`approveDetail`)، ورفض المدير = مسار الرفض القديم بالسبب.
+    /// «تعديل رقم فعلي» و«حذف نهائي» باقيان كما كانا؛ «رفض» القديم يحلّ محله رفض المسار
+    private func approvalDetailBox(_ detail: RequestDetail, meta: DetailMeta, flow: ApprovalSnapshot) -> some View {
+        ApprovalRequestBox(
+            adminRequestVM: adminRequestVM,
+            memberVM: memberVM,
+            snapshot: flow,
+            title: meta.title,
+            subtitle: meta.timestamp ?? L10n.t("تفاصيل الطلب", "Request Details"),
+            icon: meta.icon,
+            onExecute: { approveDetail(detail) },
+            onReject: { reason in rejectDetail(detail, reason: reason) },
+            onClose: { selectedDetail = nil },
+            otherActions: detailExtraActions(for: detail).filter { $0.id != "reject" }
+        ) {
+            detailBoxContent(detail, meta: meta)
+        }
+    }
+
+    /// عناصر صحة الشجرة للعرض فقط — لا موافقة ولا رفض ولا حذف (كما كانت)
+    private func detailHasDecision(_ detail: RequestDetail) -> Bool {
+        if case .healthMember = detail { return false }
+        return true
+    }
+
+    /// محتوى المربّع: الصورة (إن وُجدت) ← «بيانات الطلب» (الإجراءات في شريط أزرار المربّع)
+    @ViewBuilder
+    private func detailBoxContent(_ detail: RequestDetail, meta: DetailMeta) -> some View {
+        if case .join(let member) = detail {
+            joinDetailContent(member)
+        } else {
+            genericDetailBoxContent(detail, meta: meta)
+        }
+    }
+
+    /// تفاصيل طلب الانضمام — مرتّبة ومحترمة (طلب المالك ٢٠٢٦-١٠-٠١):
+    /// بطاقة الشخص (صورته، اسمه، طريقة تسجيله) ← «بيانات المنضم» صفوفاً بعنوان وقيمة
+    /// ← «في الشجرة» (المطابقات بزر «ربط» أو «اسم جديد») ← «الإجراءات». وقت الطلب في الرأس فقط.
+    @ViewBuilder
+    private func joinDetailContent(_ member: FamilyMember) -> some View {
+        let results = orderedMatchList(for: member)
+        let fromWeb = member.registrationPlatform == "web"
+        let uname = member.username?.trimmingCharacters(in: .whitespaces) ?? ""
+        let phone = member.phoneNumber?.trimmingCharacters(in: .whitespaces) ?? ""
+        let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        // ١) بطاقة الشخص
+        VStack(spacing: DS.Spacing.xsm) {
+            joinPersonAvatar(member, ring: results.isEmpty ? DS.Color.warning : DS.Color.success, size: DS.Icon.avatarLarge)
+                .padding(.bottom, DS.Spacing.xxs)
+            Text(member.fullName)
+                .dsFont(.title)
+                .foregroundColor(DS.Color.fieldLabel)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: fromWeb ? "globe" : "iphone")
+                    .dsGlyph(DS.Glyph.smCompact)
+                    .accessibilityHidden(true)
+                Text(fromWeb
+                     ? (uname.isEmpty ? L10n.t("سجّل من الموقع", "Signed up on the website")
+                                      : L10n.t("سجّل من الموقع · \u{2066}@\(uname)\u{2069}", "Website · @\(uname)"))
+                     : L10n.t("سجّل من التطبيق برقم الجوال", "Signed up in the app by phone"))
+            }
+            .dsFieldFont(.chip)
+            .foregroundColor(fromWeb ? DS.Color.info.dsReadableGlyph : DS.Color.fieldValue)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xs)
+        .dsStaggerIn(0)
+
+        // ٢) بيانات المنضم — صفوف بعنوان وقيمة وفاصل رفيع
+        DSComposerSection(title: L10n.t("بيانات المنضم", "Applicant"),
+                          icon: "person.text.rectangle.fill",
+                          tint: AppSection.admin.ink,
+                          index: 1) {
+            VStack(spacing: 0) {
+                joinFactRow(icon: "phone.fill", tint: DS.Color.sea,
+                            label: L10n.t("الهاتف", "Phone"),
+                            value: phone.isEmpty ? L10n.t("غير مسجّل", "Not set") : KuwaitPhone.display(phone)) {
+                    if !phone.isEmpty {
+                        HStack(spacing: DS.Spacing.xsm) {
+                            if let wa = KuwaitPhone.whatsappURL(phone) {
+                                roundContactButton(icon: "message.fill", tint: DS.Color.sea,
+                                                   label: L10n.t("واتساب", "WhatsApp")) {
+                                    UIApplication.shared.open(wa)
+                                }
+                            }
+                            if let tel = KuwaitPhone.telURL(phone) {
+                                roundContactButton(icon: "phone.fill", tint: AppSection.admin.ink,
+                                                   label: L10n.t("اتصال", "Call")) {
+                                    UIApplication.shared.open(tel)
+                                }
+                            }
+                        }
+                    }
+                }
+                Divider().padding(.leading, DS.Icon.row + DS.Spacing.sm + DS.Spacing.xs)
+                joinFactRow(icon: "calendar", tint: DS.Color.neonPurple,
+                            label: L10n.t("تاريخ الميلاد", "Birth date"),
+                            value: birth.isEmpty ? L10n.t("غير مذكور", "Not given") : birth) { EmptyView() }
+            }
+            .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
+            // البطاقة الواحدة (صندوق فوق بطاقة القسم)
+            .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
+        }
+
+        // ٣) في الشجرة — المطابقات بزر «ربط»، أو اسم جديد
+        DSComposerSection(title: L10n.t("في الشجرة", "In the tree"),
+                          icon: results.isEmpty ? "sparkles" : "person.2.fill",
+                          tint: results.isEmpty ? DS.Color.warning : DS.Color.success,
+                          trailing: results.isEmpty ? nil : "\(results.count)",
+                          index: 2) {
+            if results.isEmpty {
+                // الملاحظة الموحّدة
+                DSNoteCard(L10n.t("لا يوجد اسم مطابق في الشجرة — عند «ربط بالشجرة» يُضاف عضواً جديداً.",
+                                  "No matching name in the tree — linking adds them as a new member."),
+                           icon: "person.badge.plus", tint: DS.Color.warning)
+            } else {
+                VStack(spacing: DS.Spacing.xsm) {
+                    ForEach(results, id: \.member.id) { match in
+                        joinMatchRow(match: match, pendingMember: member)
+                    }
+                }
+            }
+        }
+    }
+
+    /// صف معلومة: أيقونة + العنوان فوق القيمة (وأزرار اختيارية) — مثل بطاقات جهات الاتصال
+    private func joinFactRow<Trailing: View>(icon: String, tint: Color, label: String, value: String,
+                                             @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: tint)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(label)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
+                Text(value)
+                    .dsFieldFont(.headlineCompact)
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: DS.Spacing.xs)
+            trailing()
+        }
+        .frame(minHeight: DS.Icon.tapTarget + DS.Spacing.sm)
+    }
+
+    @ViewBuilder
+    private func genericDetailBoxContent(_ detail: RequestDetail, meta: DetailMeta) -> some View {
+        if let imageUrl = meta.imageUrl, let url = URL(string: imageUrl) {
+            detailHeroImage(url: url, color: meta.color)
+                .dsStaggerIn(0)
+        }
+
+        DSComposerSection(title: detailInfoTitle(detail),
+                          icon: detailInfoIcon(detail),
+                          tint: AppSection.admin.ink,
+                          index: 1) {
+            detailContent(for: detail)
+        }
+    }
+
+    private func detailInfoTitle(_ detail: RequestDetail) -> String {
+        if case .healthMember = detail { return L10n.t("بيانات العضو", "Member Info") }
+        return L10n.t("بيانات الطلب", "Request Info")
+    }
+
+    private func detailInfoIcon(_ detail: RequestDetail) -> String {
+        if case .healthMember = detail { return "person.text.rectangle.fill" }
+        return "doc.text.fill"
+    }
+
+    /// صورة الطلب (العضو، المشروع، الصورة المقترحة…) دائرية بمنتصف المربّع تحت الرأس
+    private func detailHeroImage(url: URL, color: Color) -> some View {
+        CachedAsyncImage(url: url) { img in
+            img.resizable().scaledToFill()
+        } placeholder: {
+            Circle().fill(color.opacity(DS.Opacity.tintFill))
+        }
+        .frame(width: DS.Icon.photoPickerCompact, height: DS.Icon.photoPickerCompact)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(color.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.widthBold))
+        .dsSubtleShadow()
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xs)
+        .accessibilityHidden(true)   // صورة زخرفية فوق البيانات — الصورة المقترحة لها صفّها
+    }
+
+    /// أزرار المربّع الأخرى (في شريطه السفلي فوق «الموافقة / إغلاق») — بنفس الصلاحيات السابقة:
+    /// تعديل/إضافة رقم فعلي (طلب انضمام + canModerate)، رفض (canRejectRequests)، حذف نهائي
+    /// (canDeleteMembers، معطّل أثناء العمل). عناصر صحة الشجرة بلا إجراءات.
+    private func detailExtraActions(for detail: RequestDetail) -> [DSComposerAction] {
+        let decision = detailHasDecision(detail)
+        var items: [DSComposerAction] = []
+        // تعديل / إضافة رقم فعلي قبل الربط
+        if let member = detailPhoneEditMember(detail) {
+            // صفّ مستقل بعرض كامل كما كان قبل التوحيد (ن-٥ فحص ٢٠٢٦-١٠-٠٧)
+            items.append(DSComposerAction(id: "phone", title: L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"),
+                                          icon: "phone.badge.plus", role: .cancel, fullRow: true) {
+                phoneEditPendingMember = member
+            })
+        }
+        if decision && authVM.canRejectRequests {
+            // الرفض برتقالي والحذف النهائي أحمر — لونان مختلفان (طلب المالك)
+            items.append(DSComposerAction(id: "reject", title: L10n.t("رفض", "Reject"),
+                                          icon: "xmark", role: .destructive, tint: DS.Color.reject) {
+                rejectReasonText = ""
+                rejectReasonDetail = detail
+                showRejectReason = true
+            })
+        }
+        // حذف نهائي — يمسح الطلب كلياً (للمالك/المدير فقط)
+        if decision && authVM.canDeleteMembers {
+            items.append(DSComposerAction(id: "delete", title: L10n.t("حذف نهائي", "Delete Permanently"),
+                                          icon: "trash", role: .destructive,
+                                          isEnabled: !adminRequestVM.isLoading) {
+                deleteConfirmDetail = detail
+            })
+        }
+        return items
+    }
+
+    /// العضو المعلّق الذي يُعدَّل رقمه — لطلبات الانضمام فقط ولمن يملك canModerate
+    private func detailPhoneEditMember(_ detail: RequestDetail) -> FamilyMember? {
+        guard authVM.canModerate, case .join(let member) = detail else { return nil }
+        return member
     }
 
     /// metadata موحَّدة لكل نوع طلب — يُستخدم في hero + actions.
@@ -3574,7 +3781,7 @@ struct AdminAllRequestsView: View {
                          title: L10n.t("بلاغ", "Report"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
         case .phone(let r):
-            return .init(icon: "phone.arrow.right", color: DS.Color.primary,
+            return .init(icon: "phone.arrow.right", color: AppSection.admin.ink,
                          title: L10n.t("تغيير رقم هاتف", "Phone Change"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
         case .nameChange(let r):
@@ -3611,7 +3818,9 @@ struct AdminAllRequestsView: View {
                          imageUrl: a.thumbnailUrl)
         case .treeEdit(let request, let action):
             return .init(icon: action.iconName, color: treeEditColor(action),
-                         title: L10n.t(action.arabicLabel, action.englishLabel),
+                         // «طلب آخر» من تعديل الملف الشخصي يحمل عنوانه الحقيقي (تغيير الحالة الاجتماعية…)
+                         title: Self.profileReasonTitle(request.treeEditPayload?.reason)
+                             ?? L10n.t(action.arabicLabel, action.englishLabel),
                          timestamp: request.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: request.member?.avatarUrl)
         case .healthMember(let member, let issue):
@@ -3623,103 +3832,43 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// Hero فاخر: دائرة كبيرة بـ gradient + اسم الطلب + الوقت.
-    private func detailHero(icon: String, color: Color, title: String, timestamp: String?, imageUrl: String? = nil) -> some View {
-        VStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                if let imageUrl, let url = URL(string: imageUrl) {
-                    // صورة دائرية حقيقية (نفس صفحة المشاريع)
-                    CachedAsyncImage(url: url) { img in
-                        img.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle().fill(color.opacity(0.12))
-                            .overlay(ProgressView().tint(color))
-                    }
-                    .frame(width: 96, height: 96)
-                    .clipped()
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(color.opacity(0.18), lineWidth: 1))
-                    .shadow(color: color.opacity(0.25), radius: 10, x: 0, y: 5)
-                } else {
-                    Circle()
-                        .fill(color)
-                        .frame(width: 72, height: 72)
-                        .shadow(color: color.opacity(0.35), radius: 10, x: 0, y: 5)
-                    Image(systemName: icon)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(DS.Color.onTint)
-                }
-            }
-
-            Text(title)
-                .font(DS.Font.scaled(20, weight: .black))
-                .foregroundColor(DS.Color.textPrimary)
-
-            if let timestamp {
-                HStack(spacing: 4) {
-                    Image(systemName: "clock.fill")
-                        .font(DS.Font.icon(11, weight: .bold))
-                    Text(timestamp)
-                        .font(DS.Font.scaled(11, weight: .semibold))
-                }
-                .foregroundColor(DS.Color.textSecondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DS.Spacing.md)
-    }
-
-    /// المحتوى المخصّص لكل نوع — بطاقات معلومات.
+    /// المحتوى المخصّص لكل نوع — صفوف داخل قسم «بيانات الطلب».
     @ViewBuilder
     private func detailContent(for detail: RequestDetail) -> some View {
         switch detail {
         case .join(let member):
             infoCard(icon: "person.fill", label: L10n.t("الاسم الكامل", "Full Name"),
-                     value: member.fullName, color: DS.Color.primary)
-            if let uname = member.username, !uname.isEmpty {
-                infoCard(icon: "at", label: L10n.t("اسم المستخدم", "Username"),
-                         value: uname, color: DS.Color.info)
+                     value: member.fullName, color: AppSection.admin.ink)
+            if let phone = member.phoneNumber, !phone.isEmpty {
+                infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
+                         value: KuwaitPhone.display(phone), color: DS.Color.sea)
             }
             if let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines), !birth.isEmpty {
                 infoCard(icon: "calendar", label: L10n.t("تاريخ الميلاد", "Birth Date"),
                          value: birth, color: DS.Color.palm)
             }
-            if let phone = member.phoneNumber, !phone.isEmpty {
-                infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
-                         value: KuwaitPhone.display(phone), color: DS.Color.sea)
+            // طريقة التسجيل في سطر واحد: الموقع باسم دخول وكلمة مرور، والتطبيق برقم الجوال
+            if member.registrationPlatform == "web" {
+                let uname = member.username?.trimmingCharacters(in: .whitespaces) ?? ""
+                infoCard(icon: "globe", label: L10n.t("التسجيل", "Signed up"),
+                         value: uname.isEmpty
+                            ? L10n.t("من الموقع", "Website")
+                            : L10n.t("من الموقع · اسم الدخول: \(uname)", "Website · username: \(uname)"),
+                         color: DS.Color.info)
+            } else {
+                infoCard(icon: "iphone", label: L10n.t("التسجيل", "Signed up"),
+                         value: L10n.t("من التطبيق برقم الجوال", "App, with phone number"),
+                         color: DS.Color.info)
             }
-            // تعديل / إضافة رقم فعلي قبل الربط
-            if authVM.canModerate {
-                Button {
-                    phoneEditPendingMember = member
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "phone.badge.plus")
-                            .font(DS.Font.icon(13, weight: .semibold))
-                        Text(L10n.t("تعديل / إضافة رقم فعلي", "Edit / Add real number"))
-                            .font(DS.Font.scaled(13, weight: .bold))
-                        Spacer()
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .font(DS.Font.icon(11, weight: .bold))
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .frame(maxWidth: .infinity)
-                    .background(DS.Color.primary.opacity(0.08))
-                    .cornerRadius(DS.Radius.md)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .stroke(DS.Color.primary.opacity(0.2), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
+            if let created = member.createdAt {
+                infoCard(icon: "clock.fill", label: L10n.t("وقت الطلب", "Requested"),
+                         value: formatRegistrationDate(created), color: DS.Color.warning)
             }
+            // «تعديل / إضافة رقم فعلي» انتقل إلى قسم «الإجراءات» (detailActionsSection)
 
         case .news(let post):
             infoCard(icon: "person.fill", label: L10n.t("الكاتب", "Author"),
-                     value: post.author_name, color: DS.Color.primary)
+                     value: post.author_name, color: AppSection.admin.ink)
             infoCard(icon: "tag.fill", label: L10n.t("النوع", "Type"),
                      value: post.type, color: newsTypeColor(post.type))
             longTextCard(icon: "text.alignleft",
@@ -3731,14 +3880,14 @@ struct AdminAllRequestsView: View {
 
         case .report(let request):
             infoCard(icon: "person.fill", label: L10n.t("مقدم البلاغ", "Reporter"),
-                     value: request.member?.fullName ?? "—", color: DS.Color.primary)
+                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
             longTextCard(icon: "exclamationmark.bubble.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .phone(let request):
             infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.fullName ?? "—", color: DS.Color.primary)
+                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
             comparisonCard(
                 oldLabel: L10n.t("الرقم الحالي", "Current"),
                 oldValue: KuwaitPhone.display(request.member?.phoneNumber),
@@ -3772,7 +3921,7 @@ struct AdminAllRequestsView: View {
             infoCard(icon: "tent.fill", label: L10n.t("اسم الديوانية", "Name"),
                      value: diwaniya.title, color: DS.Color.gridDiwaniya)
             infoCard(icon: "person.fill", label: L10n.t("صاحب الديوانية", "Owner"),
-                     value: diwaniya.ownerName, color: DS.Color.primary)
+                     value: diwaniya.ownerName, color: AppSection.admin.ink)
             if let schedule = diwaniya.scheduleText, !schedule.isEmpty {
                 infoCard(icon: "calendar", label: L10n.t("الموعد", "Schedule"),
                          value: schedule, color: DS.Color.info)
@@ -3784,21 +3933,21 @@ struct AdminAllRequestsView: View {
 
         case .deceased(let request):
             infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.fullName ?? "—", color: DS.Color.primary)
+                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
             longTextCard(icon: "doc.text.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .child(let request):
             infoCard(icon: "person.fill", label: L10n.t("الأب", "Father"),
-                     value: request.member?.fullName ?? "—", color: DS.Color.primary)
+                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
             longTextCard(icon: "doc.text.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .photo(let request):
             infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.fullName ?? "—", color: DS.Color.primary)
+                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
             if !(request.details ?? "").isEmpty {
                 longTextCard(icon: "text.bubble.fill",
                              label: L10n.t("ملاحظات", "Notes"),
@@ -3812,7 +3961,7 @@ struct AdminAllRequestsView: View {
             infoCard(icon: "briefcase.fill", label: L10n.t("اسم المشروع", "Project"),
                      value: project.title, color: DS.Color.accent)
             infoCard(icon: "person.fill", label: L10n.t("صاحب المشروع", "Owner"),
-                     value: project.ownerName, color: DS.Color.primary)
+                     value: project.ownerName, color: AppSection.admin.ink)
             if let desc = project.description, !desc.isEmpty {
                 longTextCard(icon: "doc.text.fill",
                              label: L10n.t("الوصف", "Description"),
@@ -3825,7 +3974,7 @@ struct AdminAllRequestsView: View {
             }
             if let phone = project.phoneNumber, !phone.isEmpty, let url = KuwaitPhone.telURL(phone) {
                 contactLinkCard(icon: "phone.fill", label: L10n.t("هاتف", "Phone"),
-                                value: KuwaitPhone.display(phone), color: DS.Color.primary, url: url)
+                                value: KuwaitPhone.display(phone), color: AppSection.admin.ink, url: url)
             }
             if let web = project.websiteUrl, !web.isEmpty,
                let url = URL(string: web.lowercased().hasPrefix("http") ? web : "https://\(web)") {
@@ -3858,7 +4007,7 @@ struct AdminAllRequestsView: View {
                      color: DS.Color.info)
             if let year = item.year {
                 infoCard(icon: "calendar", label: L10n.t("السنة", "Year"),
-                         value: "\(year)", color: DS.Color.primary)
+                         value: "\(year)", color: AppSection.admin.ink)
             }
             if let desc = item.description, !desc.isEmpty {
                 longTextCard(icon: "doc.text.fill",
@@ -3871,6 +4020,12 @@ struct AdminAllRequestsView: View {
             let memberName = payload?.targetMemberName
                 ?? request.member?.fullName
                 ?? L10n.t("عضو", "Member")
+            // مقدّم الطلب هو العضو نفسه (مقارنة كمعرّفات — الآيفون يرسل حروفاً كبيرة) → يظهر مرة
+            // واحدة بعنوان «صاحب الطلب» بدل «العضو» + «مقدّم التعديل» (طلب المالك ٢٠٢٦-١٠-٠٧)
+            let targetId = payload?.targetMemberId.flatMap { UUID(uuidString: $0) } ?? request.memberId
+            let selfRequest = targetId == request.requesterId
+            let memberLabel = selfRequest ? L10n.t("صاحب الطلب", "Requester") : L10n.t("العضو", "Member")
+            let showsMemberRow = action != .editName && action != .add
             switch action {
             case .editName:
                 comparisonCard(
@@ -3881,8 +4036,8 @@ struct AdminAllRequestsView: View {
                     icon: "person.fill"
                 )
             case .editPhone:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                         value: memberName, color: DS.Color.primary)
+                infoCard(icon: "person.fill", label: memberLabel,
+                         value: memberName, color: AppSection.admin.ink)
                 comparisonCard(
                     oldLabel: L10n.t("الرقم الحالي", "Current"),
                     oldValue: KuwaitPhone.display(request.member?.phoneNumber),
@@ -3891,22 +4046,22 @@ struct AdminAllRequestsView: View {
                     icon: "phone.fill"
                 )
             case .deceased:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                         value: memberName, color: DS.Color.primary)
+                infoCard(icon: "person.fill", label: memberLabel,
+                         value: memberName, color: AppSection.admin.ink)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Death Date"),
                              value: death, color: DS.Color.slate)
                 }
             case .addDeathDate:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                         value: memberName, color: DS.Color.primary)
+                infoCard(icon: "person.fill", label: memberLabel,
+                         value: memberName, color: AppSection.admin.ink)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Death Date"),
                              value: death, color: DS.Color.slate)
                 }
             case .addPhoto:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                         value: memberName, color: DS.Color.primary)
+                infoCard(icon: "person.fill", label: memberLabel,
+                         value: memberName, color: AppSection.admin.ink)
                 if let photoStr = payload?.newPhotoUrl, let url = URL(string: photoStr) {
                     photoCard(url: url)
                 }
@@ -3915,28 +4070,30 @@ struct AdminAllRequestsView: View {
                          value: payload?.newMemberName ?? memberName, color: DS.Color.palm)
                 if let parent = payload?.parentMemberName, !parent.isEmpty {
                     infoCard(icon: "person.2.fill", label: L10n.t("الأب", "Father"),
-                             value: parent, color: DS.Color.primary)
+                             value: parent, color: AppSection.admin.ink)
                 }
             case .delete:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: DS.Color.error)
             case .editBirth:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                         value: memberName, color: DS.Color.primary)
+                infoCard(icon: "person.fill", label: memberLabel,
+                         value: memberName, color: AppSection.admin.ink)
                 if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
                     infoCard(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New Birth Date"),
                              value: newDate, color: DS.Color.palm)
                 }
             case .other:
-                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: DS.Color.accent)
             }
-            if let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
+            if !(selfRequest && showsMemberRow),
+               let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                 infoCard(icon: "person.crop.circle.badge.checkmark",
-                         label: L10n.t("مقدّم التعديل", "Requested by"),
+                         label: selfRequest ? L10n.t("صاحب الطلب", "Requester") : L10n.t("مقدّم التعديل", "Requested by"),
                          value: requester.fullName, color: DS.Color.info)
             }
-            if let reason = payload?.reason, !reason.isEmpty {
+            // سبب داخلي من تعديل الملف الشخصي (profile_marital…) لا يُعرض كما هو — عنوانه في رأس المربّع
+            if let reason = payload?.reason, !reason.isEmpty, Self.profileReasonTitle(reason) == nil {
                 longTextCard(icon: "text.bubble.fill",
                              label: L10n.t("السبب", "Reason"), text: reason)
             }
@@ -3956,7 +4113,7 @@ struct AdminAllRequestsView: View {
             infoCard(icon: "person.fill",
                      label: L10n.t("الاسم", "Name"),
                      value: displayName.isEmpty ? L10n.t("بدون اسم", "(no name)") : displayName,
-                     color: DS.Color.primary)
+                     color: AppSection.admin.ink)
             // رقم الهاتف + واتساب
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill",
@@ -3976,76 +4133,55 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// بطاقة معلومة بسيطة — أيقونة دائرية + label + قيمة.
+    /// صف معلومة — أيقونة الحقل + العنوان الغامق + القيمة (نفس صفوف المربّعات الموحّدة).
     private func infoCard(icon: String, label: String, value: String, color: Color) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                Image(systemName: icon)
-                    .font(DS.Font.icon(13, weight: .bold))
-                    .foregroundColor(color)
-            }
-            VStack(alignment: .leading, spacing: 2) {
+            DSFieldIcon(name: icon, tint: color)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textSecondary)
+                    .dsFieldFont(.label)
+                    .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .font(DS.Font.scaled(15, weight: .bold))
-                    .foregroundColor(DS.Color.textPrimary)
+                    .dsFieldFont(.body)
+                    .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(color.opacity(0.12), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity)
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
     }
 
-    /// بطاقة رابط قابلة للنقر — تفتح URL (واتساب/موقع/سوشال).
+    /// صف رابط قابل للنقر — يفتح URL (واتساب/موقع/سوشال) بنفس صفوف المربّعات.
     private func contactLinkCard(icon: String, label: String, value: String, color: Color, url: URL) -> some View {
         Button {
             UIApplication.shared.open(url)
         } label: {
             HStack(spacing: DS.Spacing.sm) {
-                ZStack {
-                    Circle().fill(color.opacity(0.15)).frame(width: 36, height: 36)
-                    Image(systemName: icon)
-                        .font(DS.Font.icon(13, weight: .bold))
-                        .foregroundColor(color)
-                }
-                VStack(alignment: .leading, spacing: 2) {
+                DSFieldIcon(name: icon, tint: color)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(label)
-                        .font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
+                        .dsFieldFont(.label)
+                        .foregroundColor(DS.Color.fieldLabel)
                     Text(value)
-                        .font(DS.Font.scaled(15, weight: .bold))
-                        .foregroundColor(DS.Color.textPrimary)
+                        .dsFieldFont(.body)
+                        .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
-                Spacer()
+                Spacer(minLength: 0)
                 Image(systemName: "arrow.up.forward")
-                    .font(DS.Font.icon(12, weight: .bold))
-                    .foregroundColor(color.opacity(0.7))
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(color.dsReadableGlyph)
+                    .accessibilityHidden(true)
             }
-            .padding(DS.Spacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(color.opacity(0.20), lineWidth: 1)
-            )
+            .frame(maxWidth: .infinity)
+            .dsRowBox()
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSScaleButtonStyle())
     }
 
     /// يبني رابط سوشال من handle (@user) أو URL كامل.
@@ -4057,171 +4193,102 @@ struct AdminAllRequestsView: View {
         return URL(string: base + handle)
     }
 
-    /// بطاقة نص طويل — label + محتوى متعدد الأسطر.
+    /// صف نص طويل — أيقونة الحقل + العنوان، ثم المحتوى متعدد الأسطر بعرض الصف.
     private func longTextCard(icon: String, label: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(DS.Font.icon(11, weight: .bold))
-                    .foregroundColor(DS.Color.textSecondary)
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: icon, tint: AppSection.admin.ink)
+                    .accessibilityHidden(true)
                 Text(label)
-                    .font(DS.Font.scaled(11, weight: .semibold))
-                    .foregroundColor(DS.Color.textSecondary)
+                    .dsFieldFont(.label)
+                    .foregroundColor(DS.Color.fieldLabel)
+                Spacer(minLength: 0)
             }
             Text(text)
-                .font(DS.Font.body)
+                .dsFieldFont(.body)
                 .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
-        )
+        .dsRowBox()
+        .accessibilityElement(children: .combine)
     }
 
-    /// بطاقة مقارنة "قبل/بعد" — مفيدة لتغييرات الاسم/الهاتف.
+    /// صف مقارنة «قبل/بعد» — القديم مشطوب بالأحمر ← الجديد بالأخضر (تغييرات الاسم/الهاتف).
     private func comparisonCard(oldLabel: String, oldValue: String,
                                  newLabel: String, newValue: String, icon: String) -> some View {
-        VStack(spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.sm) {
-                ZStack {
-                    Circle().fill(DS.Color.error.opacity(0.12)).frame(width: 32, height: 32)
-                    Image(systemName: icon).font(DS.Font.icon(11, weight: .bold))
-                        .foregroundColor(DS.Color.error)
+                DSFieldIcon(name: icon, tint: DS.Color.error)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(oldLabel)
+                        .dsFieldFont(.label)
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Text(oldValue)
+                        .dsFieldFont(.body)
+                        .foregroundColor(DS.Color.fieldValue)
+                        .strikethrough(true, color: DS.Color.error.opacity(DS.Opacity.disabled))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(oldLabel).font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    Text(oldValue).font(DS.Font.scaled(14, weight: .semibold))
-                        .foregroundColor(DS.Color.textPrimary)
-                        .strikethrough(true, color: DS.Color.error.opacity(0.5))
-                }
-                Spacer()
+                Spacer(minLength: 0)
             }
 
-            HStack(spacing: 4) {
-                Spacer()
-                Image(systemName: "arrow.down")
-                    .font(DS.Font.icon(11, weight: .bold))
-                    .foregroundColor(DS.Color.textTertiary)
-                Spacer()
-            }
+            // سهم تحت عمود الأيقونات: من القديم إلى الجديد
+            Image(systemName: "arrow.down")
+                .dsGlyph(DS.Glyph.smCompact)
+                .foregroundColor(DS.Color.textTertiary)
+                .frame(width: DS.Icon.row)
+                .accessibilityHidden(true)
 
             HStack(spacing: DS.Spacing.sm) {
-                ZStack {
-                    Circle().fill(DS.Color.success.opacity(0.15)).frame(width: 32, height: 32)
-                    Image(systemName: icon).font(DS.Font.icon(11, weight: .bold))
+                DSFieldIcon(name: icon, tint: DS.Color.success)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(newLabel)
+                        .dsFieldFont(.label)
                         .foregroundColor(DS.Color.success)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(newLabel).font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.success)
-                    Text(newValue).font(DS.Font.scaled(14, weight: .bold))
+                    Text(newValue)
+                        .dsFieldFont(.headline)
                         .foregroundColor(DS.Color.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer()
+                Spacer(minLength: 0)
             }
         }
-        .padding(DS.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(DS.Color.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.primary.opacity(0.10), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dsRowBox()
+        .accessibilityElement(children: .combine)   // «الحالي… الجديد…» عنصراً واحداً
     }
 
-    /// بطاقة صورة كبيرة (للصور المقترحة).
+    /// ارتفاع مكان الصورة المقترحة قبل تحميلها، وارتفاع صورة الخبر في شبكة الصور
+    private static let photoCardPlaceholder: CGFloat = 200
+    private static let newsMediaTileHeight: CGFloat = 90
+
+    /// صورة كبيرة (للصور المقترحة) بنفس إطار صفوف المربّعات.
     private func photoCard(url: URL) -> some View {
         CachedAsyncImage(url: url) { img in
             img.resizable().scaledToFit()
         } placeholder: {
-            RoundedRectangle(cornerRadius: DS.Radius.md).fill(DS.Color.surface)
-                .frame(height: 200)
-                .overlay(ProgressView().tint(DS.Color.primary))
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background)
+                .frame(height: Self.photoCardPlaceholder)
+                .overlay(DSPageLoader(size: DS.Icon.rowLarge, fillsSpace: false))
         }
         .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width)
+        )
+        // صورة محتوى (المقترحة/الجديدة) — اسم واضح بدل «صورة» بلا وصف
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.t("الصورة", "Photo"))
+        .accessibilityAddTraits(.isImage)
     }
 
-    /// شريط إجراءات سفلي ثابت بـ ultraThinMaterial.
-    @ViewBuilder
-    private func stickyActionsBar(for detail: RequestDetail, accent: Color) -> some View {
-        if case .healthMember = detail {
-            // عناصر صحة الشجرة — شيت للعرض فقط، لا إجراءات موافقة/رفض
-            EmptyView()
-        } else {
-            VStack(spacing: 0) {
-                HStack(spacing: DS.Spacing.sm) {
-                    if authVM.canRejectRequests {
-                        Button {
-                            rejectReasonText = ""
-                            rejectReasonDetail = detail
-                            showRejectReason = true
-                        } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "xmark").font(DS.Font.icon(12, weight: .bold))
-                                Text(L10n.t("رفض", "Reject")).font(DS.Font.scaled(14, weight: .bold))
-                            }
-                            .foregroundColor(DS.Color.error)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Capsule().fill(DS.Color.error.opacity(0.10)))
-                            .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.25), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    Button {
-                        approveDetail(detail)
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: approveIconFor(detail))
-                                .font(DS.Font.icon(12, weight: .bold))
-                            Text(approveLabelFor(detail))
-                                .font(DS.Font.scaled(14, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Capsule().fill(DS.Color.successFill))
-                        .shadow(color: DS.Color.success.opacity(0.35), radius: 6, x: 0, y: 3)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(adminRequestVM.isLoading)
-                }
-
-                // حذف نهائي — يمسح الطلب كلياً (للمالك/المدير فقط)
-                if authVM.canDeleteMembers {
-                    Button {
-                        deleteConfirmDetail = detail
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "trash").font(DS.Font.icon(11, weight: .bold))
-                            Text(L10n.t("حذف نهائي", "Delete Permanently"))
-                                .font(DS.Font.scaled(13, weight: .bold))
-                        }
-                        .foregroundColor(DS.Color.error)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(DS.Color.error.opacity(0.08)))
-                        .overlay(Capsule().strokeBorder(DS.Color.error.opacity(0.20), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, DS.Spacing.sm)
-                    .disabled(adminRequestVM.isLoading)
-                }
-            }
-        }
-    }
+    // الموافقة صارت زر الشريط السفلي للمربّع، والرفض والحذف النهائي في قسم «الإجراءات»
+    // (detailActionsSection) — بنفس الصلاحيات وحالة التحميل السابقة.
 
     private func approveLabelFor(_ detail: RequestDetail) -> String {
         switch detail {
@@ -4361,198 +4428,55 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    // legacy helpers — لم تعد ضرورية لكن نتركها للتوافق مع أي استدعاءات أخرى
-    private func detailHeader(icon: String, color: Color, title: String, iconSize: CGFloat = 40) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            iconCircle(icon: icon, color: color, size: iconSize)
-            Text(title)
-                .font(DS.Font.title3)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textPrimary)
-            Spacer()
-        }
-        .padding(.bottom, DS.Spacing.sm)
-    }
+    // (المساعدات القديمة detailHeader / detailActions / detailField / detailFullText حُذفت — بلا مرجع)
 
-    /// مجال الطلب المعروض في التفاصيل — لإخفاء الأزرار عمّن لا يملك اعتماده
-    private func detailIsContent(_ detail: RequestDetail) -> Bool {
-        switch detail {
-        case .news, .project, .archive, .diwaniya, .photo, .report: return true
-        default: return false
-        }
-    }
-
-    private func canApproveDetail(_ detail: RequestDetail) -> Bool {
-        if case .report = detail { return authVM.canModerateContent }
-        return detailIsContent(detail) ? authVM.canApproveContent : authVM.canApproveTreeRequests
-    }
-
-    @ViewBuilder
-    private func detailActions(for detail: RequestDetail) -> some View {
-        if canApproveDetail(detail) {
-        DSApproveRejectButtons(
-            approveTitle: {
-                switch detail {
-                case .join: return L10n.t("ربط بالشجرة", "Link to Tree")
-                default: return L10n.t("موافقة", "Approve")
-                }
-            }(),
-            rejectTitle: L10n.t("رفض", "Reject"),
-            isLoading: adminRequestVM.isLoading,
-            showReject: canApproveDetail(detail) && (detailIsContent(detail) || authVM.canRejectRequests),
-            useCapsule: true
-        ) {
-            // موافقة
-            Task {
-                switch detail {
-                case .join(let member):
-                    await MainActor.run {
-                        memberToLink = member
-                        selectedDetail = nil
-                    }
-                case .news(let post):
-                    await newsVM.approveNewsPost(postId: post.id)
-                    selectedDetail = nil
-                case .report(let request):
-                    await adminRequestVM.approveNewsReport(request: request)
-                    selectedDetail = nil
-                case .phone(let request):
-                    await adminRequestVM.approvePhoneChangeRequest(request: request)
-                    selectedDetail = nil
-                case .nameChange(let request):
-                    await adminRequestVM.approveNameChangeRequest(request: request)
-                    selectedDetail = nil
-                case .diwaniya(let diwaniya):
-                    if let adminId = authVM.currentUser?.id {
-                        await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId)
-                    }
-                    selectedDetail = nil
-                case .deceased(let request):
-                    await adminRequestVM.approveDeceasedRequest(request: request)
-                    selectedDetail = nil
-                case .child(let request):
-                    await adminRequestVM.acknowledgeChildAddRequest(request: request)
-                    selectedDetail = nil
-                case .photo(let request):
-                    await adminRequestVM.approvePhotoSuggestion(request: request)
-                    selectedDetail = nil
-                case .project(let project):
-                    if let adminId = authVM.currentUser?.id {
-                        await projectsVM.approveProject(id: project.id, approvedBy: adminId)
-                    }
-                    selectedDetail = nil
-                case .archive(let item):
-                    await archiveVM.approveItem(item)
-                    selectedDetail = nil
-                case .treeEdit(let request, _):
-                    await adminRequestVM.approveTreeEditRequest(request: request)
-                    selectedDetail = nil
-                case .healthMember:
-                    selectedDetail = nil
-                }
-            }
-        } onReject: {
-            // رفض
-            Task {
-                switch detail {
-                case .join(let member):
-                    await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
-                    selectedDetail = nil
-                case .news(let post):
-                    await newsVM.rejectNewsPost(postId: post.id)
-                    selectedDetail = nil
-                case .report(let request):
-                    await adminRequestVM.rejectNewsReport(request: request)
-                    selectedDetail = nil
-                case .phone(let request):
-                    await adminRequestVM.rejectPhoneChangeRequest(request: request)
-                    selectedDetail = nil
-                case .nameChange(let request):
-                    await adminRequestVM.rejectNameChangeRequest(request: request)
-                    selectedDetail = nil
-                case .diwaniya(let diwaniya):
-                    await diwaniyaVM.rejectDiwaniya(id: diwaniya.id)
-                    selectedDetail = nil
-                case .deceased(let request):
-                    await adminRequestVM.rejectDeceasedRequest(request: request)
-                    selectedDetail = nil
-                case .child(let request):
-                    await adminRequestVM.rejectChildAddRequest(request: request)
-                    selectedDetail = nil
-                case .photo(let request):
-                    await adminRequestVM.rejectPhotoSuggestion(request: request)
-                    selectedDetail = nil
-                case .project(let project):
-                    await projectsVM.rejectProject(id: project.id)
-                    selectedDetail = nil
-                case .archive(let item):
-                    await archiveVM.rejectItem(item)
-                    selectedDetail = nil
-                case .treeEdit(let request, _):
-                    await adminRequestVM.rejectTreeEditRequest(request: request, reason: nil)
-                    selectedDetail = nil
-                case .healthMember:
-                    selectedDetail = nil
-                }
-            }
-        }
-        .padding(.top, DS.Spacing.md)
-        }
-    }
-
-    private func detailField(_ label: String, _ value: String, color: Color = DS.Color.textPrimary) -> some View {
-        DSCard(padding: DS.Spacing.md) {
-            HStack {
-                Text(label)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-                Text(value)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(color)
-                    .multilineTextAlignment(.trailing)
-            }
-        }
-    }
-
-    private func detailFullText(_ label: String, _ text: String) -> some View {
-        DSCard(padding: DS.Spacing.md) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Text(label)
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                Text(text)
-                    .font(DS.Font.body)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
+    /// صور الخبر داخل «بيانات الطلب» — صفوف عادية لا LazyVGrid (الشبكة الكسولة
+    /// تُبلِّغ ارتفاعاً ناقصاً داخل المربّع فيُقصّ آخر صف)
     private func newsMediaGrid(urls: [String]) -> some View {
-        DSCard(padding: DS.Spacing.md) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        let items = urls.compactMap { URL(string: $0) }
+        let columns = 3
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "photo.on.rectangle", tint: DS.Color.accent)
+                    .accessibilityHidden(true)
                 Text(L10n.t("الصور", "Images"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: DS.Spacing.sm)], spacing: DS.Spacing.sm) {
-                    ForEach(urls, id: \.self) { urlStr in
-                        if let url = URL(string: urlStr) {
-                            CachedAsyncImage(url: url) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: {
-                                RoundedRectangle(cornerRadius: DS.Radius.sm)
-                                    .fill(DS.Color.surface)
-                                    .overlay(ProgressView().tint(DS.Color.primary))
-                            }
-                            .frame(height: 100)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+                    .dsFieldFont(.label)
+                    .foregroundColor(DS.Color.fieldLabel)
+                Spacer(minLength: 0)
+            }
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(Array(stride(from: 0, to: items.count, by: columns)), id: \.self) { start in
+                    let end = min(start + columns, items.count)
+                    HStack(spacing: DS.Spacing.sm) {
+                        ForEach(start..<end, id: \.self) { index in
+                            newsMediaTile(items[index])
+                        }
+                        ForEach(0..<(columns - (end - start)), id: \.self) { _ in
+                            Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
                         }
                     }
                 }
             }
         }
+        .dsRowBox()
+    }
+
+    private func newsMediaTile(_ url: URL) -> some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.newsMediaTileHeight)
+            .overlay(
+                CachedAsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    Rectangle()
+                        .fill(DS.Color.surface)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.t("صورة الخبر", "News image"))
+            .accessibilityAddTraits(.isImage)
     }
 
     private func newsTypeColor(_ type: String) -> Color {
@@ -4565,15 +4489,19 @@ struct AdminAllRequestsView: View {
         case "تهنئة": return DS.Color.newsCongrats
         case "تذكير": return DS.Color.newsReminder
         case "دعوة": return DS.Color.newsInvitation
-        default: return DS.Color.primary
+        default: return AppSection.admin.ink
         }
     }
 }
 
-// MARK: - Detail Sheet Height Preference
-private struct DetailSheetHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
+// MARK: - صف القائمة الشفاف (نمط صفحات الإدارة)
+
+private extension View {
+    /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
+    func reviewListRow(top: CGFloat = 4, bottom: CGFloat = 4) -> some View {
+        self
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: top, leading: DS.Spacing.lg, bottom: bottom, trailing: DS.Spacing.lg))
     }
 }

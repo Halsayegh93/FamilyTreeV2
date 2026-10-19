@@ -1,23 +1,5 @@
 import SwiftUI
 
-/// أدوات تخطيط الوضع الأفقي (Landscape)
-///
-/// كل ما في هذا الملف مشروط بأن يكون `verticalSizeClass == .compact`
-/// (أي جوال بوضع أفقي). في الوضع العمودي يرجع التخطيط الأصلي حرفياً
-/// بدون أي تغيير بالبكسل.
-enum LandscapeLayout {
-
-    /// أعمدة شبكة: في الوضع الأفقي نستخدم شبكة تكيّفية (أعمدة أكثر)
-    /// وفي الوضع العمودي نرجّع نفس الأعمدة الأصلية بلا أي تعديل.
-    static func columns(isLandscape: Bool,
-                        portrait: [GridItem],
-                        minimum: CGFloat,
-                        spacing: CGFloat? = nil) -> [GridItem] {
-        guard isLandscape else { return portrait }
-        return [GridItem(.adaptive(minimum: minimum), spacing: spacing, alignment: .top)]
-    }
-}
-
 /// حاوية تعرض المحتوى:
 /// - عمودياً (VStack) في الوضع العمودي — مطابق تماماً للسلوك السابق.
 /// - على شكل شبكة تكيّفية (عمودين أو أكثر) في الوضع الأفقي لاستغلال العرض.
@@ -32,8 +14,8 @@ struct AdaptiveCardStack<Content: View>: View {
     private let alignment: HorizontalAlignment
     private let content: () -> Content
 
-    init(spacing: CGFloat = DS.Spacing.md,
-         landscapeMinimum: CGFloat = 330,
+    init(spacing: CGFloat = DS.Landscape.columnSpacing,
+         landscapeMinimum: CGFloat = DS.Landscape.columnMinWidth,
          alignment: HorizontalAlignment = .center,
          @ViewBuilder content: @escaping () -> Content) {
         self.spacing = spacing
@@ -72,8 +54,8 @@ struct AdaptiveLazyStack<Content: View>: View {
     private let alignment: HorizontalAlignment
     private let content: () -> Content
 
-    init(spacing: CGFloat = DS.Spacing.md,
-         landscapeMinimum: CGFloat = 330,
+    init(spacing: CGFloat = DS.Landscape.columnSpacing,
+         landscapeMinimum: CGFloat = DS.Landscape.columnMinWidth,
          alignment: HorizontalAlignment = .center,
          @ViewBuilder content: @escaping () -> Content) {
         self.spacing = spacing
@@ -101,13 +83,15 @@ struct AdaptiveLazyStack<Content: View>: View {
     }
 }
 
-/// يلفّ المحتوى بـ`ScrollView` في الوضع الأفقي فقط — الوضع العمودي يبقى كما هو.
-struct LandscapeScrollWrapper: ViewModifier {
-    let isLandscape: Bool
+// MARK: - عمود القراءة (يقرأ الوضع من البيئة)
+
+private struct DSLandscapeReadable: ViewModifier {
+    var maxWidth: CGFloat
+    @Environment(\.dsLandscape) private var landscape
 
     func body(content: Content) -> some View {
-        if isLandscape {
-            ScrollView(showsIndicators: false) { content }
+        if landscape {
+            content.frame(maxWidth: maxWidth).frame(maxWidth: .infinity)
         } else {
             content
         }
@@ -115,15 +99,79 @@ struct LandscapeScrollWrapper: ViewModifier {
 }
 
 extension View {
-    /// يحدّ عرض المحتوى ويوسّطه في الوضع الأفقي فقط (للنماذج الطويلة على شاشة عريضة).
-    /// لا يؤثر على الوضع العمودي إطلاقاً.
-    @ViewBuilder
-    func landscapeReadableWidth(_ isLandscape: Bool, maxWidth: CGFloat = 720) -> some View {
-        if isLandscape {
-            self.frame(maxWidth: maxWidth)
-                .frame(maxWidth: .infinity)
+    /// أفقياً: المحتوى بعمود قراءة متوسّط (`DS.Landscape.maxContentWidth`) بدل التمدّد عبر الشاشة.
+    /// العمودي كما هو تماماً.
+    func dsLandscapeReadable(maxWidth: CGFloat = DS.Landscape.maxContentWidth) -> some View {
+        modifier(DSLandscapeReadable(maxWidth: maxWidth))
+    }
+}
+
+// MARK: - صفحة كاملة تتمرّر أفقياً
+
+private struct DSLandscapeScroll: ViewModifier {
+    @Environment(\.dsLandscape) private var landscape
+
+    func body(content: Content) -> some View {
+        if landscape {
+            ScrollView(showsIndicators: false) {
+                content.padding(.vertical, DS.Spacing.lg)
+            }
         } else {
-            self
+            content
         }
+    }
+}
+
+extension View {
+    /// أفقياً: الصفحة الثابتة (أيقونة + نص + أزرار بفراغات مرنة) تتمرّر بدل أن يُقصّ نصّها أو أزرارها.
+    /// العمودي كما هو تماماً.
+    func dsLandscapeScroll() -> some View {
+        modifier(DSLandscapeScroll())
+    }
+}
+
+// MARK: - محتوى مربّع يتمرّر إن لم يتّسع الارتفاع
+
+private struct DSLandscapeFitScroll: ViewModifier {
+    @Environment(\.dsLandscape) private var landscape
+    @State private var height: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        if landscape {
+            // نسخة واحدة من المحتوى (حقول الكتابة وتركيزها كما هي): على قدر ارتفاعه، ويتمرّر إن ضاق المكان
+            ScrollView(showsIndicators: false) {
+                content.readHeight($height)
+            }
+            .frame(maxHeight: height)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// أفقياً: محتوى البطاقة/المربّع على قدر ارتفاعه ويتمرّر داخلها إن لم يتّسع (الرأس والأزرار حولها ثابتة).
+    /// العمودي كما هو تماماً.
+    func dsLandscapeFitScroll() -> some View {
+        modifier(DSLandscapeFitScroll())
+    }
+}
+
+// MARK: - فراغ فوق شريط التبويبات العائم (مكان واحد)
+
+private struct DSTabBarClearance: ViewModifier {
+    @Environment(\.dsLandscape) private var landscape
+
+    func body(content: Content) -> some View {
+        // حشوة صفر عمودياً (لا تغيّر التخطيط ولا هوية العرض عند التدوير)
+        content.padding(.bottom, landscape ? DS.Landscape.tabBarClearance : 0)
+    }
+}
+
+extension View {
+    /// أفقياً: فراغ `DS.Landscape.tabBarClearance` أسفل محتوى صفحة التبويب المتمرّر — آخر صفّ لا يختفي تحت
+    /// شريط التبويبات العائم (الرئيسية، الديوانيات، حسابي، الإدارة). العمودي كما هو تماماً.
+    func dsTabBarClearance() -> some View {
+        modifier(DSTabBarClearance())
     }
 }

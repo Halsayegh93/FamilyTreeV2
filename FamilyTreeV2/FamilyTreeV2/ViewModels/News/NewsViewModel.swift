@@ -487,7 +487,10 @@ class NewsViewModel: ObservableObject {
     // MARK: - Upload News Image
 
     func uploadNewsImage(image: UIImage, for authorId: UUID) async -> String? {
-        guard let imageData = ImageProcessor.process(image, for: .news) else { return nil }
+        // الضغط خارج الخيط الرئيسي — كان زر النشر يبدو معلّقاً لكل صورة
+        guard let imageData = await Task.detached(priority: .userInitiated, operation: {
+            ImageProcessor.process(image, for: .news)
+        }).value else { return nil }
 
         let imageId = UUID()
         // Stable ASCII keys work with Storage and remain attributable after renaming.
@@ -882,10 +885,13 @@ class NewsViewModel: ObservableObject {
 
     // MARK: - Report News Post
 
-    func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر") async {
+    /// يرجع true عند وصول البلاغ — لتأكيد «تم الإبلاغ» في الواجهة
+    @discardableResult
+    func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر") async -> Bool {
         // الإبلاغ متاح لجميع المستخدمين (أعضاء وإدارة) — سياسة Apple
-        guard let userId = currentUser?.id else { return }
+        guard let userId = currentUser?.id else { return false }
         self.isLoading = true
+        var delivered = false
 
         do {
             let payload: [String: AnyEncodable] = [
@@ -906,6 +912,7 @@ class NewsViewModel: ObservableObject {
                 .execute()
                 .value
 
+            delivered = true
             let reporterName = currentUser?.fullName ?? ""
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("بلاغ على منشور", "Post Report"),
@@ -920,7 +927,8 @@ class NewsViewModel: ObservableObject {
 
             await notificationVM?.sendNotification(
                 title: L10n.t("تم استلام بلاغك", "Report Received"),
-                body: L10n.t("بلاغك وصلنا وسيتم مراجعته من الإدارة", "Your report was received and will be reviewed"),
+                body: L10n.t("بلاغك وصلنا وسيتم مراجعته من الإدارة خلال ٢٤ ساعة",
+                             "Your report was received and will be reviewed within 24 hours"),
                 targetMemberIds: [userId]
             )
         } catch {
@@ -928,5 +936,6 @@ class NewsViewModel: ObservableObject {
         }
 
         self.isLoading = false
+        return delivered
     }
 }

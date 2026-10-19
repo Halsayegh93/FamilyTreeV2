@@ -1,7 +1,7 @@
 import { deliveryGuard } from "../_shared/delivery-guard.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { handleCors, validatePost, json } from "../_shared/cors.ts";
-import { authenticateRequest, parseBody } from "../_shared/auth.ts";
+import { authenticateRequest, createServiceClient, parseBody } from "../_shared/auth.ts";
 
 /** رد الإدارة — قالب بسيط: الرد أولاً، ثم الرسالة الأصلية مقتبسة. */
 type ReplyPayload = {
@@ -83,6 +83,17 @@ serve(async (req) => {
     if (!reply) return json(400, { ok: false, message: "reply is required" });
 
     if (reply.length > 10000 || original.length > 10000 || category.length > 100) return json(400, { ok: false, message: "Message too long" });
+
+    // المستلم يجب أن يكون صاحب رسالة تواصل وصلتنا (فحص الثغرات ٢٠٢٦-١٠-٠٤): كانت الدالة
+    // ترسل لأي عنوان من بريد العائلة. العنوان في سطر «وسيلة التواصل» داخل الرسالة نفسها.
+    const pattern = `%${to.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const { count, error: lookupError } = await createServiceClient()
+      .from("admin_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("request_type", "contact_message")
+      .ilike("details", pattern);
+    if (lookupError) return json(503, { ok: false, message: "Unable to verify recipient" });
+    if (!count) return json(403, { ok: false, message: "Recipient is not a contact-message sender" });
     const limited = await deliveryGuard("admin-reply-email", auth.profileId, [to,reply], 30);
     if (limited) return limited;
     const subject = category ? `رد على رسالتك — ${category}` : "رد على رسالتك";

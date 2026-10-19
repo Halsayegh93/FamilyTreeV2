@@ -101,7 +101,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         let rawFirst = try container.decodeIfPresent(String.self, forKey: .firstName)
         let rawFull = try container.decodeIfPresent(String.self, forKey: .fullName)
         // استخدام الاسم المتوفر كبديل إذا كان الآخر فارغ
-        self.firstName = rawFirst ?? rawFull?.split(separator: " ").first.map(String.init) ?? ""
+        // بلا first_name: أول وحدة من الاسم الكامل (القاعدة ٣ — «زين العابدين» وحدة واحدة)
+        self.firstName = rawFirst ?? rawFull.map(PersonName.firstUnit) ?? ""
         self.fullName = rawFull ?? rawFirst ?? ""
         self.familyName = try container.decodeIfPresent(String.self, forKey: .familyName)
         self.phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
@@ -220,16 +221,27 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     /// كلمات الاسم بعد جعل آخرها العائلة المختارة (طلب المالك):
     /// إن كانت آخر كلمة اسم عائلة (المختارة نفسها أو عائلة من القائمة) تُستبدل،
     /// وإلا تُضاف العائلة في الآخر. بلا عائلة مختارة → الاسم كما هو.
+    /// كلمات مفردة — للبحث والمطابقة فقط؛ العرض والاختصار يستخدمان `nameUnitsWithFamily`.
     var nameWordsWithFamily: [String] {
         FamilyNameCatalog.words(fullName, family: familyName)
     }
 
-    /// الاسم الأخير = العائلة المختارة إن وُجدت، وإلا آخر كلمة في الاسم
-    var lastName: String { nameWordsWithFamily.last ?? fullName }
+    /// وحدات الاسم من سلسلة الشجرة (القاعدة ٢ في PersonName): «زين العابدين» و«محمد باقر» وحدة واحدة
+    var nameUnits: [String] {
+        PersonName.chainUnits(fullName: fullName, firstName: firstName, fatherId: fatherId)
+    }
+
+    /// وحدات الاسم مع العائلة المختارة آخر وحدة — للعرض والاختصار (ثلاثي/رباعي/خماسي)
+    var nameUnitsWithFamily: [String] {
+        FamilyNameCatalog.units(nameUnits, family: familyName)
+    }
+
+    /// الاسم الأخير = العائلة المختارة إن وُجدت، وإلا آخر وحدة في الاسم
+    var lastName: String { nameUnitsWithFamily.last ?? fullName }
 
     /// الاسم الأول + الأخير
     var displayName: String {
-        let parts = nameWordsWithFamily
+        let parts = nameUnitsWithFamily
         if parts.count >= 2, let first = parts.first, let last = parts.last {
             return "\(first) \(last)"
         }
@@ -248,7 +260,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     /// الاسم الخماسي: الأول + الثاني + الثالث + الرابع + العائلة (الأخير)
     /// يُستخدم في تفاصيل عناصر المكتبة (طلب المالك)
     var fivePartName: String {
-        let parts = nameWordsWithFamily
+        let parts = nameUnitsWithFamily
         guard parts.count > 5 else { return parts.isEmpty ? fullName : parts.joined(separator: " ") }
         let firstFour = parts.prefix(4).joined(separator: " ")
         let family = parts.last ?? ""
@@ -259,7 +271,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح عبدالحميد الصايغ"
     /// أوضح من الاسم الأول، أقصر من الكامل، يحتوي اسم العائلة للتمييز.
     var fourPartName: String {
-        let parts = nameWordsWithFamily
+        let parts = nameUnitsWithFamily
         guard parts.count > 4 else { return parts.isEmpty ? fullName : parts.joined(separator: " ") }
         let firstThree = parts.prefix(3).joined(separator: " ")
         let family = parts.last ?? ""
@@ -270,23 +282,33 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح عبدالحميد حسن"
     /// يُستخدم في شاشات التطابق ليُعرَض سلسلة النسب الفعلية بدون قفز لاسم العائلة.
     var chainFourNames: String {
-        let parts = fullName.trimmingCharacters(in: .whitespaces)
-            .split(whereSeparator: \.isWhitespace)
-            .map(String.init)
+        let parts = nameUnits
         guard parts.count > 4 else { return fullName }
         return parts.prefix(4).joined(separator: " ")
+    }
+
+    /// الاسم الثلاثي من الاسم الكامل (بلا تبديل العائلة): الأول + الثاني + الأخير — بوحدات الشجرة
+    /// («زين العابدين محمد باقر … المحمدعلي» ← «زين العابدين محمد باقر المحمدعلي»)
+    var threePartName: String {
+        let parts = nameUnits
+        guard parts.count > 3 else { return fullName }
+        return PersonName.shorten(parts, to: 3).joined(separator: " ")
     }
 
     /// الاسم الثلاثي: الأول + الثاني + الأخير (العائلة)
     /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح الصايغ"
     var shortFullName: String {
-        let parts = nameWordsWithFamily
-        guard parts.count >= 3, let first = parts.first, let last = parts.last else {
-            return parts.isEmpty ? fullName : parts.joined(separator: " ")
-        }
-        guard let second = parts.dropFirst().first else { return fullName }
-        if second == last { return "\(first) \(second)" }
-        return "\(first) \(second) \(last)"
+        let parts = shortNameUnits
+        return parts.isEmpty ? fullName : parts.joined(separator: " ")
+    }
+
+    /// وحدات الاسم الثلاثي (الأول + الثاني + العائلة) — `shortFullName` كقائمة (للبوستات)
+    var shortNameUnits: [String] {
+        let parts = nameUnitsWithFamily
+        guard parts.count >= 3, let first = parts.first, let last = parts.last else { return parts }
+        let second = parts[1]
+        if second == last { return [first, second] }
+        return [first, second, last]
     }
 
     /// المعيار القانوني لـ"عضو في العائلة" — يطابق نفس الفلتر في الويب
@@ -498,6 +520,15 @@ enum KuwaitPhone {
         return digits
     }
 
+    /// مفتاح مطابقة الحظر — نفس `phones_match_suffix` في السيرفر: أرقام فقط بلا 00 في البداية،
+    /// والرقم المحلي (٨ خانات) يُسبق بـ965، والأجنبي يبقى كاملاً برمز دولته
+    /// (كان الحظر يحفظ أول ٨ أرقام من الرقم الأجنبي فلا يطابقه السيرفر — ٢٠٢٦-١٠-١٠)
+    static func banKey(_ raw: String) -> String {
+        var digits = normalizeDigits(raw).filter(\.isNumber)
+        if digits.hasPrefix("00") { digits = String(digits.dropFirst(2)) }
+        return digits.count == 8 ? "965" + digits : digits
+    }
+
     static func isValidLocal(_ raw: String) -> Bool {
         localEightDigits(raw).count == 8
     }
@@ -572,4 +603,11 @@ extension Sequence where Element == FamilyMember {
             return a.firstName < b.firstName
         }
     }
+}
+
+// MARK: - الاسم الثلاثي (طلب المالك ٢٠٢٦-١٠-٠٧: في تعديل «عائلتي» يظهر الأول والثاني والأخير فقط)
+extension String {
+    /// نص حرّ: «الأول الثاني … الأخير» ← الأول + الثاني + اسم العائلة بالوحدات (القاعدة ٣)؛
+    /// القصير يبقى كما هو. لعضو معروف استخدم `FamilyMember.threePartName` (سلسلة الشجرة).
+    var nameThreeParts: String { PersonName.threeParts(self) }
 }

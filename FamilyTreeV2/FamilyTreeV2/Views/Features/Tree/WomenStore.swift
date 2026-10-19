@@ -155,7 +155,8 @@ enum WomenStore {
 
     static func update(id: UUID, fullName: String, isDeceased: Bool, deathDate: String?,
                        birthDate: String?, gender: String? = nil, isHidden: Bool) async throws {
-        let first = fullName.components(separatedBy: " ").first ?? fullName
+        // أول وحدة لا أول كلمة (PersonName القاعدة ١-ج) — «زين العابدين»/«فاطمة الزهراء» وحدة واحدة
+        let first = PersonName.firstUnit(fullName)
         var payload: [String: AnyEncodable] = [
             "full_name": AnyEncodable(fullName),
             "first_name": AnyEncodable(first),
@@ -218,6 +219,14 @@ enum WomenStore {
     static func setSelfMother(motherId: UUID?) async throws {
         try await SupabaseConfig.client
             .rpc("set_self_mother", params: ["p_mother_id": AnyEncodable(motherId?.uuidString)]).execute()
+    }
+
+    /// نص خطأ الكتابة للمستخدم (م-٢ فحص ٢٠٢٦-١٠-٠٧): رسالة السيرفر العربية حين يرفض حارس روابط العائلة
+    /// الحذف (`hint = family_links_protected`، كما في شجرة العائلة) — وإلا رسالة عامة
+    static func failureMessage(_ error: Error) -> String {
+        if let pg = error as? PostgrestError, pg.hint == "family_links_protected" { return pg.message }
+        return L10n.t("لم يتم الحفظ. تحقّق من الاتصال وحاول مرة أخرى.",
+                      "Not saved. Check your connection and try again.")
     }
 
     static func delete(id: UUID) async throws {

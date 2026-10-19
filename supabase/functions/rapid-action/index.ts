@@ -1,142 +1,20 @@
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { handleCors, validatePost, json } from "../_shared/cors.ts";
-import { authenticateRequest, createServiceClient, parseBody } from "../_shared/auth.ts";
-import { BRAND, dataRow, dataTable, escapeHtml, quoteBox, renderEmail } from "../_shared/email.ts";
-
-type ContactEmailPayload = {
-  category?: string;
-  message?: string;
-  preferred_contact?: string;
-  sender_name?: string;
-  sender_phone?: string;
+// rapid-action — موقوفة (فحص الثغرات ٢٠٢٦-١٠-٠٤، بموافقة المالك).
+//
+// كانت نسخة من contact-email بلا حد الإرسال (deliveryGuard: ٥ رسائل)، فأي حساب مسجّل — حتى
+// المعلّق — يقدر يغرق بريد الإدارة برسائل بلا حد. لا يستدعيها أي تطبيق (الآيفون والأندرويد
+// والموقع يرسلون عبر contact-email). الكود القديم في تاريخ git (آخر نسخة: الإصدار ٥١).
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-serve(async (req) => {
-  const cors = handleCors(req);
-  if (cors) return cors;
-
-  const notPost = validatePost(req);
-  if (notPost) return notPost;
-
-  // أمان: يتطلّب تسجيل دخول (يمنع البريد العشوائي من غير المسجّلين).
-  const auth = await authenticateRequest(req, undefined, { allowInactive: true });
-  if (auth instanceof Response) return auth;
-  if (!["active", "pending"].includes(auth.status ?? "")) return json(403, { ok: false, message: "Account not authorized" });
-
-  const resendApiKey = (Deno.env.get("RESEND_API_KEY") ?? "").trim();
-  const sendgridApiKey = (Deno.env.get("SENDGRID_API_KEY") ?? "").trim();
-  const emailFrom = (Deno.env.get("CONTACT_EMAIL_FROM") ?? "").trim();
-  const emailTo = (Deno.env.get("CONTACT_EMAIL_TO") ?? "").trim();
-
-  if (!emailFrom || !emailTo || (!resendApiKey && !sendgridApiKey)) {
-    return json(500, {
-      ok: false,
-      message: "Missing env vars: CONTACT_EMAIL_FROM / CONTACT_EMAIL_TO and one provider key (RESEND_API_KEY or SENDGRID_API_KEY)",
-    });
+Deno.serve((req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
-
-  const body = await parseBody<ContactEmailPayload>(req);
-  if (body instanceof Response) return body;
-  const payload = body;
-
-  const category = (payload.category ?? "تواصل").trim();
-  const message = (payload.message ?? "").trim();
-  const preferredContact = (payload.preferred_contact ?? "").trim();
-  const senderName = (payload.sender_name ?? "مستخدم التطبيق").trim();
-  const senderPhone = (payload.sender_phone ?? "").trim();
-
-  if (!message) {
-    return json(400, { ok: false, message: "message is required" });
-  }
-
-  const recipients = emailTo
-    .split(",")
-    .map((v) => v.trim())
-    .filter((v) => v.length > 0);
-
-  const subject = `رسالة تواصل جديدة - ${category}`;
-  const textBody = [
-    `التصنيف: ${category}`,
-    `الاسم: ${senderName}`,
-    `الهاتف: ${senderPhone || "غير متوفر"}`,
-    `وسيلة التواصل المفضلة: ${preferredContact || "غير محدد"}`,
-    "",
-    "محتوى الرسالة:",
-    message,
-  ].join("\n");
-
-  const htmlBody = renderEmail({
-    title: "رسالة تواصل جديدة",
-    badge: category,
-    emoji: "✉️",
-    accentColor: BRAND.blue,
-    preheader: `${senderName}: ${message.slice(0, 80)}`,
-    body: `
-      ${dataTable(`
-        ${dataRow("المُرسِل", escapeHtml(senderName), { bold: true })}
-        ${dataRow("الهاتف", escapeHtml(senderPhone || "غير متوفر"))}
-        ${dataRow("وسيلة التواصل المفضّلة", escapeHtml(preferredContact || "غير محدد"))}
-        ${dataRow("التصنيف", escapeHtml(category))}
-      `)}
-      ${quoteBox(message, { label: "محتوى الرسالة", accent: BRAND.blue })}
-    `,
-  });
-
-  if (resendApiKey) {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: emailFrom,
-        to: recipients,
-        subject,
-        text: textBody,
-        html: htmlBody,
-      }),
-    });
-
-    const raw = await response.text();
-    if (!response.ok) {
-      return json(502, {
-        ok: false,
-        provider: "resend",
-        message: `Resend failed: ${response.status}`,
-        details: raw,
-      });
-    }
-
-    return json(200, { ok: true, provider: "resend", message: "Email sent", details: raw });
-  }
-
-  const sgResponse = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${sendgridApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: recipients.map((email) => ({ email })) }],
-      from: { email: emailFrom.includes("<") ? emailFrom.split("<")[1].replace(">", "").trim() : emailFrom },
-      subject,
-      content: [
-        { type: "text/plain", value: textBody },
-        { type: "text/html", value: htmlBody },
-      ],
-    }),
-  });
-
-  const sgRaw = await sgResponse.text();
-  if (!sgResponse.ok) {
-    return json(502, {
-      ok: false,
-      provider: "sendgrid",
-      message: `SendGrid failed: ${sgResponse.status}`,
-      details: sgRaw,
-    });
-  }
-
-  return json(200, { ok: true, provider: "sendgrid", message: "Email sent", details: sgRaw });
+  return new Response(
+    JSON.stringify({ ok: false, message: "This function is disabled — use contact-email" }),
+    { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
 });

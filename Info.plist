@@ -30,11 +30,11 @@
 		<string>remote-notification</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>يحتاج التطبيق للوصول إلى مكتبة الصور لاختيار صور الملف الشخصي والأخبار</string>
-	<key>NSCameraUsageDescription</key>
-	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صور الملف الشخصي ومسح الباركود</string>
+	<string>يستخدم التطبيق الصور التي تختارها بنفسك فقط لإضافتها، مثل صورتك الشخصية أو صور الأخبار والمشاريع ومكتبة العائلة.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>يحتاج التطبيق إذن الإضافة إلى الصور لحفظ بوستات المناسبات التي تصممها</string>
+	<string>لحفظ الصور التي تختار حفظها من التطبيق في ألبوم صورك، مثل رمز QR الخاص بك أو صور مكتبة العائلة أو بوستات المناسبات.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>يستخدم التطبيق الكاميرا لمسح رمز QR الخاص بأحد أفراد العائلة ومعرفة صلة القرابة بينكما.</string>
 	<key>OCCASION_KIT_BASE_URL</key>
 	<string>https://app.almohali.com/occasion-kit/</string>
 	<key>CFBundleURLTypes</key>

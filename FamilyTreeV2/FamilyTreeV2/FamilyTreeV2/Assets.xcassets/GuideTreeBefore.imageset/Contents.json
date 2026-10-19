@@ -1,0 +1,25 @@
+{
+  "images": [
+    {
+      "filename": "GuideTreeBefore_light.jpg",
+      "idiom": "universal"
+    },
+    {
+      "filename": "GuideTreeBefore_dark.jpg",
+      "idiom": "universal",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ]
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  },
+  "properties": {
+    "preserves-vector-representation": false
+  }
+}

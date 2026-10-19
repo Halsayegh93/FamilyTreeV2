@@ -9,20 +9,26 @@ struct RegistrationView: View {
     var topInset: CGFloat = 0
 
     @StateObject private var familyNamesVM = FamilyNamesViewModel()
+    /// انتهى أول جلب لقائمة العوائل؟ — تلميح «القائمة فارغة» لا يومض قبل الجلب
+    @State private var familiesFetched = false
     /// إدخال يدوي لاسم العائلة — يُستخدم إن تعذّر جلب القائمة أو لم تكن مدرجة
     @State private var showManualFamily = false
     @State private var manualFamilyText = ""
 
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
+    /// اختار تاريخه فعلاً؟ — وإلا لا يُحفظ تاريخ «قبل ٢٠ سنة» الافتراضي كأنه تاريخ ميلاده (حدث ٢٠٢٦-١٠-٠٥)
+    @State private var birthDateChosen = false
     @State private var selectedGender: String = "male"
     @State private var selectedImage: UIImage? = nil
 
     // Animation states
     @State private var headerScale: CGFloat = 0.8
     @State private var headerOpacity: CGFloat = 0
-    @State private var cardsAppeared = false
     @State private var hasAttemptedSubmit = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showConfirmSubmit = false
+    /// الموافقة على شروط الاستخدام (EULA — Guideline 1.2) — شرط لإرسال طلب الانضمام
+    @State private var termsAccepted = false
 
     var body: some View {
         ZStack {
@@ -33,39 +39,46 @@ struct RegistrationView: View {
                 topBar
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.xl) {
+                    // مسافات أضيق (طلب المالك ٢٠٢٦-١٠-١٩ «أبسط»)
+                    VStack(spacing: DS.Spacing.lg) {
                         if topInset > 0 { Color.clear.frame(height: topInset) }
                         // الصورة الشخصية — في الأعلى مثل حسابي
                         photoSection
                             .scaleEffect(headerScale)
                             .opacity(headerOpacity)
 
-                        // الحقول
+                        // الحقول — بطاقة القسم الواحدة وحقول المربّعات (نفس «تسجيل عضو جديد» في الإدارة)،
+                        // تدخل بعد الصورة: البيانات ← الشروط ← زر الإرسال
                         VStack(spacing: DS.Spacing.md) {
-                            nameFieldSection
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 20)
-
-                            familyNameSection
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 25)
-
-                            birthDateSection
-                                .opacity(cardsAppeared ? 1 : 0)
-                                .offset(y: cardsAppeared ? 0 : 30)
+                            // بلا شارة «مطلوب» — الحقول المطلوبة عليها النجمة الحمراء
+                            DSComposerSection(title: L10n.t("البيانات الأساسية", "Basic Info"),
+                                              icon: "person.text.rectangle.fill",
+                                              tint: DS.Color.primary,
+                                              index: 0) {
+                                nameFieldSection
+                                familyNameSection
+                                birthDateSection
+                            }
 
                             // TODO: gender — re-enable when needed
                             // genderSection
-                            //     .opacity(cardsAppeared ? 1 : 0)
-                            //     .offset(y: cardsAppeared ? 0 : 35)
+                            //     .dsStaggerIn(3)
+
+                            // الموافقة على الشروط — قبل زر الإرسال مباشرة
+                            TermsConsentRow(isAccepted: $termsAccepted,
+                                            showError: hasAttemptedSubmit)
+                                .dsStaggerIn(1)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // زر الإرسال
                         submitButton
-                            .opacity(cardsAppeared ? 1 : 0)
-                            .offset(y: cardsAppeared ? 0 : 40)
+                            .dsStaggerIn(2)
                     }
+                    // الحقول تبدأ بعد الصورة (نفس «بعد الرأس» في المربّعات)
+                    .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
+                    // وضع العرض: النموذج بعمود قراءة متوسّط
+                    .dsLandscapeReadable()
                 }
             }
         }
@@ -84,136 +97,77 @@ struct RegistrationView: View {
         }
         .dsAlert(L10n.t("اسم العائلة", "Family name"), isPresented: $showManualFamily) {
             TextField(L10n.t("مثال: الصايغ", "e.g. Al-Sayegh"), text: $manualFamilyText)
+                .dsAlertField()
             Button(L10n.t("حفظ", "Save")) {
                 let t = manualFamilyText.trimmingCharacters(in: .whitespaces)
                 if !t.isEmpty { familyName = t }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         }
-        .task { await familyNamesVM.fetch() }
+        .task {
+            await familyNamesVM.fetch()
+            familiesFetched = true
+        }
         .onAppear {
+            // «تعديل البيانات» من شاشة الانتظار: وافق سابقاً فتبقى الموافقة محدّدة
+            if TermsAgreement.hasAccepted([AccountIdentity.authUserId, authVM.currentUser?.id]) {
+                termsAccepted = true
+            }
             Log.info("[REGISTRATION] RegistrationView ظهرت — البروفايل غير موجود. phone=\(Log.masked(authVM.phoneNumber))")
+            // «تقليل الحركة»: الصورة تظهر بتلاشٍ فقط بلا تكبير
+            guard !reduceMotion else {
+                headerScale = 1.0
+                withAnimation(DSMotion.fade) { headerOpacity = 1.0 }
+                return
+            }
             withAnimation(DS.Anim.elastic.delay(0.2)) {
                 headerScale = 1.0
                 headerOpacity = 1.0
             }
-            withAnimation(DS.Anim.smooth.delay(0.5)) {
-                cardsAppeared = true
-            }
         }
     }
 
-    // MARK: - Top Bar — الهيدر الموحّد (أيقونة + عنوان + وصف + شريط سدو)
+    // MARK: - Top Bar — الرأس الملوّن الموحّد للصفحات الفرعية (كان نسخة يدوية بشريط سدو قديم)
     private var topBar: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.overlayIcon)
-                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                    Image(systemName: "person.badge.plus")
-                        .font(DS.Font.icon(20, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                }
-                .frame(width: 52, height: 52)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("إكمال البيانات", "Complete Profile"))
-                        .font(DS.Font.plex(19, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Text(L10n.t("خطوة واحدة وتنضم لشجرة العائلة",
-                                "One step to join the family tree"))
-                        .font(DS.Font.plex(12, weight: .medium))
-                        .foregroundColor(DS.Color.accentLight)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-
-                Spacer(minLength: DS.Spacing.xs)
-
-                // تسجيل الخروج — بنفس موضع زر الإغلاق في بقية الواجهات
-                Button(action: { Task { await authVM.signOut() } }) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(DS.Font.icon(17, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(DS.Color.overlayIcon))
-                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("تسجيل الخروج", "Sign out"))
+        DSSubPageHeader(title: L10n.t("إكمال البيانات", "Complete Profile"),
+                        subtitle: L10n.t("خطوة واحدة وتنضم لشجرة العائلة",
+                                         "One step to join the family tree"),
+                        icon: "person.badge.plus",
+                        nav: .none) {
+            // تسجيل الخروج — بزرّ الرأس الموحّد في موضع الإغلاق
+            DSHeaderButton(symbol: "rectangle.portrait.and.arrow.right",
+                           label: L10n.t("تسجيل الخروج", "Sign out")) {
+                Task { await authVM.signOut() }
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.sm)
-            .frame(minHeight: 70, alignment: .bottom)
-
-            saduStrip
         }
-        .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                DS.Color.gradientBand
-                DS.Color.headerVeil
-            }
-            .ignoresSafeArea(edges: .top)
-        )
-    }
-
-    /// شريط سدو زخرفي — نفس بقية الهيدرات
-    private var saduStrip: some View {
-        HStack(spacing: 5) {
-            Rectangle()
-                .fill(DS.Color.textOnPrimary.opacity(0.16))
-                .frame(height: 1)
-            ForEach(0..<5, id: \.self) { i in
-                Rectangle()
-                    .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.55 : 0.30))
-                    .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
-                    .rotationEffect(.degrees(45))
-            }
-            Rectangle()
-                .fill(DS.Color.textOnPrimary.opacity(0.16))
-                .frame(height: 1)
-        }
-        .padding(.horizontal, DS.Spacing.xl)
-        .padding(.bottom, DS.Spacing.xs)
     }
 
     // MARK: - Photo Section — كاميرا على الصورة مباشرة
+    /// دائرة أصغر (٨٨) وتحتها «اختياري» فقط (طلب المالك ٢٠٢٦-١٠-١٩ «أبسط»)
     private var photoSection: some View {
-        VStack(spacing: DS.Spacing.xs) {
-            DSProfilePhotoPicker(
-                selectedImage: $selectedImage,
-                enableCrop: true,
-                cropShape: .circle,
-                title: L10n.t("الصورة الشخصية", "Profile Photo"),
-                trailing: L10n.t("اختياري", "Optional"),
-                compactEmptyState: true
-            )
-
-            Text(L10n.t(
-                "سوف تُستخدم كصورة في شجرة العائلة",
-                "Will be used as your photo in the family tree"
-            ))
-            .font(DS.Font.caption1)
-            .foregroundColor(DS.Color.textTertiary)
-        }
-        .padding(.top, DS.Spacing.xl)
+        DSProfilePhotoPicker(
+            selectedImage: $selectedImage,
+            enableCrop: true,
+            cropShape: .circle,
+            title: L10n.t("الصورة الشخصية", "Profile Photo"),
+            trailing: L10n.t("اختياري", "Optional"),
+            compactEmptyState: true,
+            avatarSize: DS.Icon.photoPickerCompact
+        )
+        .padding(.top, DS.Spacing.md)
     }
 
     // MARK: - Name Field — الاسم الرباعي
     private var nameFieldSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            DSTextField(
-                label: L10n.t("الاسم الرباعي", "Full Name (4 parts)"),
+            // حقل المربّعات الموحّد (كان `DSTextField` القديم)
+            DSComposerField(
+                icon: "person.fill",
+                label: L10n.t("الاسم الرباعي", "Full Name (4 parts)") + " " + L10n.t("(باللغة العربية)", "(in Arabic)"),
                 placeholder: L10n.t("محمد عبدالله علي أحمد", "Mohammad Abdullah Ali Ahmad"),
                 text: $fullName,
-                icon: "person.fill",
-                iconColor: DS.Color.primary,
-                required: true,
-                hint: L10n.t("(باللغة العربية)", "(in Arabic)")
+                tint: DS.Color.primary,
+                required: true
             )
             .onChange(of: fullName) { _ in
                 if fullName.count > 100 {
@@ -262,21 +216,22 @@ struct RegistrationView: View {
                           systemImage: "pencil")
                 }
             } label: {
-                HStack(spacing: DS.Spacing.md) {
-                    DSIcon("person.2.fill", color: DS.Color.accent)
+                // نفس صفّ حقول المربّعات: قرص مجسّم + عنوان + قيمة
+                HStack(spacing: DS.Spacing.sm) {
+                    DSFieldIcon(name: "person.2.fill", tint: DS.Color.accent)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 2) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        HStack(spacing: DS.Spacing.xxs) {
                             Text(L10n.t("العائلة", "Family"))
-                                .foregroundColor(DS.Color.textSecondary)
+                                .foregroundColor(DS.Color.fieldLabel)
                             Text("*").foregroundColor(DS.Color.error)
                         }
-                        .font(DS.Font.caption1)
+                        .dsFieldFont(.label)
 
                         Text(familyName.isEmpty
                              ? L10n.t("اختر عائلتك", "Choose your family")
                              : familyName)
-                            .font(DS.Font.body)
+                            .dsFieldFont(.body)
                             .foregroundColor(familyName.isEmpty
                                              ? DS.Color.textTertiary
                                              : DS.Color.textPrimary)
@@ -284,21 +239,15 @@ struct RegistrationView: View {
                     }
 
                     if familyNamesVM.isLoading {
-                        ProgressView().scaleEffect(0.7)
+                        ProgressView().scaleEffect(0.7)   // دوّارة صغيرة داخل الحقل
                     } else {
                         Image(systemName: "chevron.up.chevron.down")
-                            .font(DS.Font.icon(12, weight: .semibold))
+                            .dsGlyph(DS.Glyph.sm, weight: .semibold)
                             .foregroundColor(DS.Color.textTertiary)
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.vertical, DS.Spacing.md)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(SwiftUI.Color.white.opacity(0.15), lineWidth: 0.5)
-                )
+                .frame(minHeight: DSBox.fieldMinHeight)
+                .dsRowBox()
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -307,12 +256,14 @@ struct RegistrationView: View {
                 validationError(L10n.t("اختيار العائلة مطلوب", "Choosing a family is required"))
             }
 
-            if familyNamesVM.errorMessage == nil
+            // فقط إن جاءت القائمة فارغة فعلاً (بعد انتهاء الجلب بلا خطأ)
+            if familiesFetched
+                && familyNamesVM.errorMessage == nil
                 && !familyNamesVM.isLoading
                 && familyNamesVM.activeNames.isEmpty {
                 Text(L10n.t("القائمة فارغة — تظهر العوائل بعد تسجيل الدخول",
                             "Empty list — families load after sign-in"))
-                    .font(DS.Font.scaled(11))
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -320,61 +271,38 @@ struct RegistrationView: View {
             if let err = familyNamesVM.errorMessage {
                 Text(L10n.t("تعذّر جلب قائمة العوائل: \(err)",
                             "Could not load families: \(err)"))
-                    .font(DS.Font.scaled(11))
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.error)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    // MARK: - Birth Date
+    // MARK: - Birth Date — صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف (نفس «تسجيل عضو جديد»)
     private var birthDateSection: some View {
-        DSDateField(
-            label: L10n.t("تاريخ الميلاد", "Birth Date"),
-            date: $birthDate,
-            range: ...Date(),
-            // نفس مقاسات نصوص حقلي الاسم والعائلة
-            labelFont: DS.Font.caption1,
-            valueFont: DS.Font.body
-        )
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
-        // نفس هيئة حقل «الاسم الرباعي» — مادة زجاجية وحدّ أبيض خفيف
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(SwiftUI.Color.white.opacity(0.15), lineWidth: 0.5)
-        )
+        Button {
+            dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                initial: birthDate, allowClear: false) { picked in
+                guard let picked else { return }
+                birthDate = picked
+                birthDateChosen = true
+            }
+        } label: {
+            DSRow(icon: "gift.fill", tint: DS.Color.warning,
+                  title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                  subtitle: birthDateChosen ? DSDateText.display(birthDate) : L10n.t("بدون تاريخ", "No date")) {
+                DSStateIcon("pencil", tint: DS.Color.primary, size: DS.Icon.row)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
     }
 
-    // MARK: - Gender
+    // MARK: - Gender — اختيار الجنس الموحّد (مخفي حالياً)
     private var genderSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.md) {
-                DSIcon("figure.dress.line.vertical.figure", color: DS.Color.info)
-
-                Text(L10n.t("الجنس", "Gender"))
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.textSecondary)
-
-                Spacer()
-
-                Picker("", selection: $selectedGender) {
-                    Text(L10n.t("ذكر", "Male")).tag("male")
-                    Text(L10n.t("أنثى", "Female")).tag("female")
-                }
-                .pickerStyle(.menu)
-                .tint(DS.Color.primary)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(DS.Color.inactiveBorder, lineWidth: 1)
-            )
+            DSGenderPicker(selection: $selectedGender)
 
             // ملاحظة الربط — الاسم الأخير هو العائلة المختارة
             Text(familyName.isEmpty
@@ -382,7 +310,7 @@ struct RegistrationView: View {
                           "The family you choose is added automatically as your last name")
                  : L10n.t("اسمك الأخير سيكون: \(familyName)",
                           "Your last name will be: \(familyName)"))
-            .font(DS.Font.caption1)
+            .dsFont(.subtitle)
             .foregroundColor(DS.Color.textTertiary)
             .padding(.leading, DS.Spacing.sm)
         }
@@ -398,6 +326,7 @@ struct RegistrationView: View {
             let familyLetterCount = trimmedFamily.filter { $0.isLetter }.count
             let isValid = trimmedFull.count >= 2 && trimmedFull.count <= 50 && fullLetterCount >= 2
                        && trimmedFamily.count >= 2 && trimmedFamily.count <= 50 && familyLetterCount >= 2
+                       && termsAccepted
             let isDisabled = !isValid || authVM.isLoading
 
             DSPrimaryButton(
@@ -414,23 +343,26 @@ struct RegistrationView: View {
             .disabled(authVM.isLoading)
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.xxl)
-            .confirmationDialog(
+            // تأكيد الإرسال — مربّع التطبيق الموحّد بالمنتصف بدل القائمة السفلية
+            .dsAlert(
                 L10n.t("تأكيد إرسال الطلب", "Confirm Submission"),
-                isPresented: $showConfirmSubmit,
-                titleVisibility: .visible
+                isPresented: $showConfirmSubmit
             ) {
+                Button(L10n.t("مراجعة البيانات", "Review"), role: .cancel) {}
                 Button(L10n.t("إرسال", "Submit")) {
+                    // الموافقة على الشروط تُسجَّل لحساب الدخول الآن، ولملفه بعد إنشائه
+                    TermsAgreement.accept([AccountIdentity.authUserId])
                     Task {
                         await authVM.registerNewUser(
                             firstName: trimmedFull,
                             familyName: trimmedFamily,
-                            birthDate: birthDate,
+                            birthDate: birthDateChosen ? birthDate : nil,
                             gender: selectedGender,
                             avatarImage: selectedImage
                         )
+                        TermsAgreement.accept([authVM.currentUser?.id])
                     }
                 }
-                Button(L10n.t("مراجعة البيانات", "Review"), role: .cancel) {}
             } message: {
                 let composed = "\(FamilyNameCatalog.stripTrailingFamily(trimmedFull, chosen: trimmedFamily)) \(trimmedFamily)"
                 Text(L10n.t(
@@ -445,12 +377,13 @@ struct RegistrationView: View {
     private func validationError(_ text: String) -> some View {
         HStack(spacing: DS.Spacing.xs) {
             Image(systemName: "exclamationmark.circle.fill")
-                .font(DS.Font.caption2)
+                .dsGlyph(DS.Glyph.smCompact)
             Text(text)
-                .font(DS.Font.caption1)
+                .dsFont(.caption)
         }
         .foregroundColor(DS.Color.error)
         .padding(.leading, DS.Spacing.sm)
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        // «تقليل الحركة»: تلاشٍ فقط بلا انزلاق
+        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 }

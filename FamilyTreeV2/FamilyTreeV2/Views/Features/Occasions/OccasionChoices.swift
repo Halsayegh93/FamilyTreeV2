@@ -15,10 +15,18 @@ enum OccasionChoices {
             : ["الأخت العزيزة", "الابنة العزيزة", "العمة العزيزة", "الخالة العزيزة", "الجدة العزيزة", "الحاجة", "الدكتورة", "المهندسة", "الأستاذة", "الشابة"]
     }
 
-    /// «الأخ العزيز» ← «للأخ العزيز»
+    /// «الأخ العزيز» ← «للأخ العزيز» (فاضي يبقى فاضي — «نص آخر» قبل ما ينكتب)
     static func dative(_ honor: String) -> String {
         let h = honor.trimmingCharacters(in: .whitespaces)
+        guard !h.isEmpty else { return "" }
         return h.hasPrefix("ال") ? "لل" + String(h.dropFirst(2)) : "ل" + h
+    }
+
+    /// الصفة المختارة: من القائمة (له/لها)، أو «نص آخر» المكتوب (‎-1 ← texts["honorCustom"]) — طلب المالك ٢٠٢٦-١٠-١٧
+    static func honor(_ f: OccasionForm) -> String {
+        if f.sel("honor") == -1 { return f.txt("honorCustom").trimmingCharacters(in: .whitespacesAndNewlines) }
+        let list = honorifics(f.gender)
+        return list.indices.contains(f.sel("honor")) ? list[f.sel("honor")] : list[0]
     }
 
     /// {d} = الصفة مع لام الجر، {n} = الصفة كما هي
@@ -38,6 +46,7 @@ enum OccasionChoices {
         opening
             .replacingOccurrences(of: "{d}", with: dative(honor))
             .replacingOccurrences(of: "{n}", with: honor.trimmingCharacters(in: .whitespaces))
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
     // MARK: سطر المناسبة
@@ -197,9 +206,27 @@ enum OccasionChoices {
         g == .male ? ["ديوان العائلة", "منزل الفقيد"] : ["ديوان العائلة", "منزل الفقيدة"]
     }
 
-    static let venueTimes = ["صباحاً ومساءً", "عصراً ومساءً", "مساءً", "بعد صلاة المغرب", ""]
-    static var venueTimeLabels: [String] {
-        ["صباحاً ومساءً", "عصراً ومساءً", "مساءً", "بعد صلاة المغرب", L10n.t("بدون وقت", "No time")]
+    // MARK: أوقات العزاء — بصيغة النعي الرسمية في الكويت (صفحات «وفيات» في الجرايد مثل الراي)، طلب المالك ٢٠٢٦-١٠-١٧:
+    // الأيام والوقت اختياران منفصلان (+ «نص آخر»)، وفي البوست «<الأيام>، <الوقت>»: «اليوم وغداً وبعد غد، عقب صلاة العصر»
+
+    static let condolenceDays = ["اليوم فقط", "هذا اليوم فقط", "اليوم وغداً فقط", "اليوم وغداً وبعد غد",
+                                 "خلال الأيام الثلاثة القادمة", "يومياً"]
+    static let condolenceTimes = ["عقب صلاة العصر", "بعد صلاة العصر مباشرة", "عصراً فقط", "بعد صلاة المغرب",
+                                  "بعد صلاة الظهر حتى العصر", "من الساعة ٧:٣٠ مساءً", "صباحاً ومساءً"]
+    /// الافتراضي: «اليوم وغداً وبعد غد» + «عقب صلاة العصر»
+    static let defaultCondolenceDay = 3
+    static let defaultCondolenceTime = 0
+
+    /// اختيارات الوقت لكل جهة — الرجال لهم «العزاء في المقبرة فقط» آخر القائمة (نفس condolenceTimes في الموقع)
+    static func condolenceTimes(_ side: String) -> [String] {
+        side == "men" ? condolenceTimes + ["العزاء في المقبرة فقط"] : condolenceTimes
+    }
+
+    /// «اليوم وغداً وبعد غد، عقب صلاة العصر» — الفاضي يختفي
+    static func composeVenueTimes(days: String, time: String) -> String {
+        [days, time].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "، ")
     }
 
     /// مناطق الكويت حسب المحافظة (للاختيار السريع — والكتابة متاحة)
@@ -353,7 +380,11 @@ struct OccasionForm: Equatable {
     var condolenceDate = Date()
 
     /// المجموعات اللي اختيارها الافتراضي مو الأول
-    static let defaultSelections: [String: Int] = ["men": 1, "women": 1, "funeral": 1, "cond": 1, "fTime": 1]
+    static let defaultSelections: [String: Int] = [
+        "men": 1, "women": 1, "funeral": 1, "cond": 1, "fTime": 1,
+        "menDays": OccasionChoices.defaultCondolenceDay, "womenDays": OccasionChoices.defaultCondolenceDay,
+        "menTime": OccasionChoices.defaultCondolenceTime, "womenTime": OccasionChoices.defaultCondolenceTime,
+    ]
 
     func sel(_ key: String) -> Int { selections[key] ?? Self.defaultSelections[key] ?? 0 }
     func txt(_ key: String) -> String { texts[key] ?? "" }
@@ -373,14 +404,14 @@ enum OccasionCompose {
         return list.indices.contains(i) ? list[i] : ""
     }
 
-    static func values(_ t: OccasionTemplate, _ f: OccasionForm, name: String) -> [String: String] {
+    static func values(_ t: OccasionTemplate, _ f: OccasionForm, name: String,
+                       hints: OccasionNames.Hints = [:]) -> [String: String] {
         let g = f.gender
         var out: [String: String] = [:]
 
         switch t.kind {
         case .happy:
-            let honors = OccasionChoices.honorifics(g)
-            let honor = honors.indices.contains(f.sel("honor")) ? honors[f.sel("honor")] : honors[0]
+            let honor = OccasionChoices.honor(f)
             if f.sel("opening") == -1 {
                 out["intro"] = clean(f.txt("introCustom"))
             } else {
@@ -389,7 +420,7 @@ enum OccasionCompose {
                 out["intro"] = OccasionChoices.composeIntro(opening, honor: honor)
             }
             // الاسم والمولود مطلوبين: فاضيين ما ينرسمون، والحفظ يوقف لين ينكتبون (missingRequired)
-            out["name"] = OccasionNames.capped(name)
+            out["name"] = OccasionNames.capped(name, hints: hints)
             if t.id == "graduation" {
                 let inst = f.sel("inst") == -1
                     ? f.txt("instCustom")
@@ -413,43 +444,42 @@ enum OccasionCompose {
             let format = formats.indices.contains(f.sel("toFmt")) ? formats[f.sel("toFmt")] : formats[0]
             out["to"] = OccasionChoices.composeSolaceTo(format: format, family: f.txt("toFamily"))
             out["lead"] = pick(OccasionChoices.solaceLeads(g), f.sel("slead"), custom: f.txt("sleadCustom"))
-            out["name"] = OccasionNames.capped(name)
+            out["name"] = OccasionNames.capped(name, hints: hints)
             out["dua"] = pick(OccasionChoices.duas("solace", g), f.sel("dua"), custom: f.txt("duaCustom"))
 
         case .death, .deathText:
+            // «إعلان عزاء»: نموذج واحد للنسختين — كل الحقول تطلع، وكل تخطيط يرسم اللي له (آخر الدالة):
+            // مع صورة «صلة القرابة» سطر واحد؛ بدون صورة الزوج والأبناء والإخوان والتشييع وبداية العزاء — نفس compose.ts
             out["lead"] = pick(OccasionChoices.deathLeads(g), f.sel("lead"), custom: f.txt("leadCustom"))
             out["title"] = pick(OccasionChoices.deathTitles(g), f.sel("title"), custom: f.txt("titleCustom"))
-            out["name"] = OccasionNames.capped(name)
+            out["name"] = OccasionNames.capped(name, hints: hints)
 
-            if t.kind == .death {
-                out["relation"] = clean(f.txt("relation"))
+            out["relation"] = clean(f.txt("relation"))
+            out["rel1"] = clean(f.txt("rel1"))
+            out["rel2"] = clean(f.txt("rel2"))
+            out["rel3"] = clean(f.txt("rel3"))
+            if f.sel("funeral") == 1 {
+                let cem = f.sel("cem") == -1
+                    ? f.txt("cemCustom")
+                    : (OccasionChoices.cemeteries.indices.contains(f.sel("cem")) ? OccasionChoices.cemeteries[f.sel("cem")] : "")
+                let days = OccasionChoices.funeralDays
+                let times = OccasionChoices.funeralTimes
+                out["funeral"] = OccasionChoices.composeFuneral(
+                    day: days.indices.contains(f.sel("fDay")) ? days[f.sel("fDay")] : "",
+                    time: times.indices.contains(f.sel("fTime")) ? times[f.sel("fTime")] : "",
+                    cemetery: cem
+                )
             } else {
-                out["rel1"] = clean(f.txt("rel1"))
-                out["rel2"] = clean(f.txt("rel2"))
-                out["rel3"] = clean(f.txt("rel3"))
-                if f.sel("funeral") == 1 {
-                    let cem = f.sel("cem") == -1
-                        ? f.txt("cemCustom")
-                        : (OccasionChoices.cemeteries.indices.contains(f.sel("cem")) ? OccasionChoices.cemeteries[f.sel("cem")] : "")
-                    let days = OccasionChoices.funeralDays
-                    let times = OccasionChoices.funeralTimes
-                    out["funeral"] = OccasionChoices.composeFuneral(
-                        day: days.indices.contains(f.sel("fDay")) ? days[f.sel("fDay")] : "",
-                        time: times.indices.contains(f.sel("fTime")) ? times[f.sel("fTime")] : "",
-                        cemetery: cem
-                    )
-                } else {
-                    out["funeral"] = ""
-                }
-                if f.sel("cond") == 1 {
-                    let durations = OccasionChoices.condolenceDurations
-                    out["condolence"] = OccasionChoices.composeCondolence(
-                        f.condolenceDate,
-                        duration: durations.indices.contains(f.sel("dur")) ? durations[f.sel("dur")] : ""
-                    )
-                } else {
-                    out["condolence"] = ""
-                }
+                out["funeral"] = ""
+            }
+            if f.sel("cond") == 1 {
+                let durations = OccasionChoices.condolenceDurations
+                out["condolence"] = OccasionChoices.composeCondolence(
+                    f.condolenceDate,
+                    duration: durations.indices.contains(f.sel("dur")) ? durations[f.sel("dur")] : ""
+                )
+            } else {
+                out["condolence"] = ""
             }
 
             for side in ["men", "women"] {
@@ -457,8 +487,10 @@ enum OccasionCompose {
                     let place = clean(f.txt("\(side)Place"))
                     out["\(side)Place"] = place.isEmpty ? "ديوان العائلة" : place
                     out["\(side)Area"] = clean(f.txt("\(side)Area"))
-                    let times = OccasionChoices.venueTimes
-                    out["\(side)Times"] = times.indices.contains(f.sel("\(side)Times")) ? times[f.sel("\(side)Times")] : ""
+                    // «<الأيام>، <الوقت>» — كل واحد من القائمة أو «نص آخر» (‎-1)، و«بدون» (بعد آخر عنصر) يختفي
+                    let days = pick(OccasionChoices.condolenceDays, f.sel("\(side)Days"), custom: f.txt("\(side)DaysCustom"))
+                    let time = pick(OccasionChoices.condolenceTimes(side), f.sel("\(side)Time"), custom: f.txt("\(side)TimeCustom"))
+                    out["\(side)Times"] = OccasionChoices.composeVenueTimes(days: days, time: time)
                 } else {
                     out["\(side)Place"] = ""
                     out["\(side)Area"] = ""
@@ -475,6 +507,9 @@ enum OccasionCompose {
                 out["dua1"] = d.0
                 out["dua2"] = d.1
             }
+            // كل نسخة تبقى بتخطيطها: مع صورة «صلة القرابة» فقط، وبدون صورة القرابة كاملة والتشييع وبداية العزاء
+            let undrawn = t.kind == .death ? ["rel1", "rel2", "rel3", "funeral", "condolence"] : ["relation"]
+            for key in undrawn { out[key] = "" }
         }
         return out
     }
@@ -499,9 +534,10 @@ extension OccasionCompose {
     }
 
     /// عناصر الأسماء في القالب: الاسم، العائلة (مشاركة العزاء)، وسطور القرابة اللي فيها اسم شخص واحد
-    static func nameElements(_ t: OccasionTemplate, _ f: OccasionForm, values: [String: String]) -> [OccasionNameElement] {
+    static func nameElements(_ t: OccasionTemplate, _ f: OccasionForm, values: [String: String],
+                             hints: OccasionNames.Hints = [:]) -> [OccasionNameElement] {
         var list: [OccasionNameElement] = []
-        let words = OccasionNames.words(values["name"] ?? "")
+        let words = OccasionNames.words(values["name"] ?? "", hints: hints)
         if !words.isEmpty {
             list.append(OccasionNameElement(key: "name", title: nameTitle(t, f.gender), prefix: "", words: words, suffix: ""))
         }
@@ -516,7 +552,7 @@ extension OccasionCompose {
             }
         }
         for key in ["relation", "rel1", "rel2", "rel3"] {
-            if let line = values[key], let r = OccasionNames.relationName(line), !r.words.isEmpty {
+            if let line = values[key], let r = OccasionNames.relationName(line, hints: hints), !r.words.isEmpty {
                 list.append(OccasionNameElement(key: key, title: relationTitle(key), prefix: r.prefix, words: r.words, suffix: ""))
             }
         }
@@ -526,11 +562,14 @@ extension OccasionCompose {
     /// نصوص البوست النهائية: كل اسم بالصيغة اللي تدخل بسطر واحد (بالنموذج والمقاس والنسخة الحالية).
     /// counts = الصيغة المطلوبة لكل عنصر (الافتراضي الأطول)؛ قبل ما يتحمّل الخط كل شي يعتبر داخل.
     static func post(_ t: OccasionTemplate, _ f: OccasionForm, name: String, model: OccasionModel, size: OccasionSize,
-                     withPhoto: Bool, counts: [String: Int]) -> (values: [String: String], names: [OccasionNameResolution]) {
-        var out = values(t, f, name: name)
+                     withPhoto: Bool, counts: [String: Int],
+                     hints: OccasionNames.Hints = [:]) -> (values: [String: String], names: [OccasionNameResolution]) {
+        var out = values(t, f, name: name, hints: hints)
         let slots = t.nameSlots(model: model, size: size, withPhoto: withPhoto)
-        let names = nameElements(t, f, values: out).compactMap { e in
-            OccasionNames.resolve(e, slot: slots[e.key], requested: counts[e.key] ?? OccasionNames.maxWords)
+        // العناصر اللي يرسمها تخطيط النسخة الحالية فقط (إعلان العزاء: «صلة القرابة» مع صورة، والقرابة كاملة بدون صورة)
+        let names = nameElements(t, f, values: out, hints: hints).filter { slots[$0.key] != nil }.compactMap { e in
+            OccasionNames.resolve(e, slot: slots[e.key], requested: counts[e.key] ?? OccasionNames.maxWords,
+                                  explicit: counts[e.key] != nil)
         }
         for r in names { out[r.element.key] = r.option.line }
         return (out, names)
@@ -627,7 +666,7 @@ struct OccasionFamilyIndex {
     }
 
     static func firstName(_ m: FamilyMember) -> String {
-        m.nameWordsWithFamily.first ?? m.firstName
+        m.nameUnitsWithFamily.first ?? m.firstName
     }
 
     /// المتوفى يسبقه «المرحوم» مثل نعي الجرايد

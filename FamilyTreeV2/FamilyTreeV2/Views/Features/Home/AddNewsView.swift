@@ -7,6 +7,8 @@ struct AddNewsView: View {
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @Environment(\.dismiss) var dismiss
+    /// «تقليل الحركة» (توصية أبل): تلاشٍ بدل التكبير والانزلاق
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var content = ""
     @State private var selectedType = "إعلان"
     /// النشر باسم «إدارة العائلة» بدل الاسم الشخصي (للإدارة فقط)
@@ -34,9 +36,10 @@ struct AddNewsView: View {
 
     private var isPoll: Bool { selectedType == "تصويت" }
 
-    /// الأنواع بلا «خبر» (طلب المالك) وبلا «تصويت» — التصويت من زره جنب الصور
+    /// الأنواع كما فعّلتها الإدارة في «التصنيفات» (المصدر الواحد — كان «خبر» مُستثنى هنا يدوياً فلا يظهر
+    /// وهو مفعّل في اللوحة، ٢٠٢٦-١٠-٠٩)، بلا «تصويت» — التصويت من زره جنب الصور
     private var availableTypes: [String] {
-        NewsTypeHelper.mainTypes.filter { $0 != "تصويت" && $0 != "خبر" }
+        NewsTypeHelper.mainTypes.filter { $0 != "تصويت" }
     }
 
     private var pollsEnabled: Bool { appSettingsVM.settings.pollsEnabled ?? true }
@@ -48,428 +51,259 @@ struct AddNewsView: View {
         return !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// ما أدخله المستخدم ولم يُنشر (نص، صور، تصويت) — «إلغاء» يسأل قبل التجاهل (توصية أبل).
+    /// التصنيف و«النشر باسم» اختيار فقط فلا يُحتسبان.
+    private var hasUnsavedChanges: Bool {
+        !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !selectedImages.isEmpty || isLoadingPhotos
+            || isPoll
+    }
+
+    // MARK: - المربّع الإضافي (التصويت)
+
+    private enum NewsExtra: String, Identifiable { case poll; var id: String { rawValue } }
+    @State private var activeExtra: NewsExtra?
+    @State private var draftQuestion = ""
+    @State private var draftOptions: [PollDraft] = [PollDraft(), PollDraft()]
+    @FocusState private var contentFocused: Bool
+
+    private struct PollDraft: Identifiable, Equatable {
+        let id = UUID()
+        var text = ""
+    }
+
+    /// «خبر» العادي (أو نوع بلا لون خاص) — إطار المربّع بلون قسم الأخبار لا بكحلي العلامة
+    /// (طلب المالك ٢٠٢٦-١٠-٠٥ «وحتى الاخبار»). الأنواع ذات المعنى (إعلان، زواج، وفاة…) بلونها.
+    private var isPlainNewsType: Bool {
+        selectedType != "إعلان" && NewsTypeHelper.color(for: selectedType) == DS.Color.brand
+    }
+
+    /// لون القسم يتبع نوع الخبر المختار (الإعلان كحلي رسمي ثابت — معنى لا يتبع لون التبويب)
+    private var headerTint: Color {
+        if isPoll { return DS.Color.newsVote }
+        if isPlainNewsType { return AppSection.news.fill }
+        return selectedType == "إعلان" ? DS.Color.brandFill : NewsTypeHelper.color(for: selectedType)
+    }
+
+    /// لون أيقونات الأقسام وإطار الكتابة — مثل الرأس، لكن «إعلان» بـ brand: نفس الكحلي
+    /// في الفاتح، وأزرق فاتح في الداكن (كحلي الرأس الغامق كان يختفي على بطاقات الداكن)
+    private var sectionTint: Color {
+        if isPoll { return DS.Color.newsVote }
+        if isPlainNewsType { return AppSection.news.ink }
+        return selectedType == "إعلان" ? DS.Color.brand : NewsTypeHelper.color(for: selectedType)
+    }
+
+    private var headerIcon: String {
+        isPoll ? "chart.bar.fill" : NewsTypeHelper.icon(for: selectedType)
+    }
+
     var body: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.md) {
-                    addNewsTypeSelector
-
-                    // النشر باسم — في مكانه الأصلي داخل الصفحة
-                    if authVM.canModerate { adminIdentityCard }
-
-                    addNewsContentSection
-
-                    addNewsReviewNote
-                }
-                .animation(DS.Anim.snappy, value: isPoll)
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xxxl)
-            }
-            .background(DS.Color.background)
-            .navigationTitle(L10n.t("خبر جديد", "New Post"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    DSToolbarCancelButton { dismiss() }
-                }
-                // زر النشر — علوي بدل أسفل الصفحة
-                ToolbarItem(placement: DSToolbar.confirmPlacement) { publishToolbarButton }
-            }
-            .dsAlert(L10n.t("تعذر النشر", "Post Failed"), isPresented: $showPostErrorAlert) {
-                Button(L10n.t("حسناً", "OK")) {}
-            } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء نشر الخبر.", "An error occurred.")) }
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-            .onChange(of: pickerItems) { items in
-                guard !items.isEmpty else { return }
-                loadImages(from: items)
-            }
+        DSComposer(
+            title: L10n.t("خبر جديد", "New Post"),
+            subtitle: isPoll ? L10n.t("تصويت لأفراد العائلة", "A poll for the family")
+                             : L10n.t("شارك العائلة · \(NewsTypeHelper.displayName(for: selectedType))",
+                                      "Share with the family · \(NewsTypeHelper.displayName(for: selectedType))"),
+            icon: headerIcon,
+            tint: headerTint,
+            actionTitle: newsVM.canAutoPublishNews ? L10n.t("نشر", "Publish") : L10n.t("إرسال للمراجعة", "Submit"),
+            actionIcon: "paperplane.fill",
+            canSubmit: canSubmit,
+            isBusy: isSubmitting,
+            note: newsVM.canAutoPublishNews ? nil : L10n.t("يحتاج موافقة الإدارة قبل الظهور", "Needs admin approval before it appears"),
+            isBehindExtra: activeExtra != nil,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: { Task { await submitNews() } },
+            onCancel: { dismiss() }
+        ) {
+            categorySection
+            if authVM.canModerate { identitySection }
+            contentSection
         }
-        // الاتجاه على الـNavigationStack نفسه — داخله فقط يجعل شريط الأزرار LTR
-        // فتنعكس مواضع «إضافة/إلغاء» (طلب المالك)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .dsExtraBox(item: $activeExtra) { _ in pollBox }
+        .dsAlert(L10n.t("تعذر النشر", "Post Failed"), isPresented: $showPostErrorAlert) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: { Text(newsVM.newsPostErrorMessage ?? L10n.t("حدث خطأ أثناء نشر الخبر.", "An error occurred.")) }
+        .onChange(of: pickerItems) { items in
+            guard !items.isEmpty else { return }
+            loadImages(from: items)
+        }
+        // مربّع الأخبار بلون قسم الأخبار (زر النشر، النشر باسم، التصويت، الرسائل)
+        .dsSectionPage(.news)
     }
 
-    // MARK: - هوية الناشر
+    // MARK: - التصنيف
 
-    /// زر النشر — كبسولة علوية بلون الزر الأساسي
-    private var publishToolbarButton: some View {
-        Button {
-            Task { await submitNews() }
-        } label: {
-            Group {
-                if isSubmitting {
-                    ProgressView().scaleEffect(0.8).tint(DS.Color.primary)
-                } else {
-                    Image(systemName: "paperplane.fill")
-                        .font(DS.Font.icon(16, weight: .semibold))
-                }
-            }
-            .foregroundColor(canSubmit ? DS.Color.primary : DS.Color.textTertiary)
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!canSubmit)
-        .accessibilityLabel(newsVM.canAutoPublishNews ? L10n.t("نشر الخبر", "Publish Post")
-                                                      : L10n.t("إرسال للمراجعة", "Submit for Review"))
-    }
-
-    /// بدل مفتاح تشغيل/إطفاء غامض: اختيار هويّة صريح بين بطاقتين —
-    /// صورتك واسمك مقابل شعار الإدارة. تشوف بمن ستُنشر قبل ما تنشر.
-    private var adminIdentityCard: some View {
-        compactCard {
-            compactHeader(L10n.t("النشر باسم", "Post as"),
-                          icon: "person.crop.circle.badge.checkmark",
-                          color: DS.Color.primary, size: 9.5)
-
-            HStack(spacing: DS.Spacing.sm) {
-                identityOption(isAdmin: false)
-                identityOption(isAdmin: true)
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.sm + 2)
+    private var categorySection: some View {
+        DSComposerSection(
+            title: L10n.t("التصنيف", "Category"),
+            icon: "square.grid.2x2.fill",
+            tint: sectionTint,
+            trailing: isPoll ? L10n.t("غير مطلوب للتصويت", "Not needed for polls") : nil,
+            index: 0
+        ) {
+            // مربّعات الاختيار الموحّدة (`DSOptionTiles`) بشارة كل نوع — مشتركة مع «تعديل الخبر»
+            NewsTypeTiles(types: availableTypes, selection: $selectedType, disabled: isPoll)
         }
     }
 
-    private func identityOption(isAdmin: Bool) -> some View {
-        let selected = (postAsAdmin == isAdmin)
-        let myName = authVM.currentUser?.firstName ?? L10n.t("باسمي", "Me")
+    // MARK: - النشر باسم (للإدارة)
 
-        return Button {
-            guard postAsAdmin != isAdmin else { return }
-            withAnimation(DS.Anim.snappy) { postAsAdmin = isAdmin }
-            UISelectionFeedbackGenerator().selectionChanged()
-        } label: {
-            VStack(spacing: 3) {
-                ZStack {
-                    if isAdmin {
-                        Circle()
-                            .fill(DS.Color.gradientPrimary)
-                            .frame(width: 30, height: 30)
-                            .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: 1))
-                        Image(systemName: "megaphone.fill")
-                            .font(DS.Font.icon(13, weight: .bold))
-                            .foregroundColor(.white)
-                    } else {
-                        DSMemberAvatar(
-                            name: myName,
-                            avatarUrl: authVM.currentUser?.avatarUrl,
-                            size: 30,
-                            roleColor: DS.Color.primary
-                        )
-                    }
-
-                    // علامة الاختيار — تحلّ محلّ المفتاح
-                    if selected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(DS.Font.icon(13, weight: .bold))
-                            .foregroundStyle(DS.Color.textOnPrimary, DS.Color.primaryFill)
-                            .background(Circle().fill(DS.Color.cardBackground).frame(width: 15, height: 15))
-                            .offset(x: 11, y: 11)
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .frame(height: 34)
-
-                Text(isAdmin ? L10n.t("إدارة العائلة", "Family Admin") : myName)
-                    .font(DS.Font.scaled(11, weight: .bold))
-                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                Text(isAdmin ? L10n.t("منشور رسمي", "Official post")
-                             : L10n.t("منشور شخصي", "Personal post"))
-                    .font(DS.Font.scaled(11))
-                    .foregroundColor(DS.Color.textTertiary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(selected ? DS.Color.primary.opacity(0.07) : DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(selected ? DS.Color.primary.opacity(0.45)
-                                           : DS.Color.textTertiary.opacity(0.12),
-                                  lineWidth: selected ? 1.6 : 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - بطاقة وهيدر مصغّران (نفس التوزيعة، أصغر)
-
-    private func compactCard<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        VStack(spacing: 0) { content() }
-            .background(DS.Color.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(0.10), lineWidth: 1)
-            )
-            .dsSubtleShadow()
-    }
-
-    private func compactHeader(_ title: String, icon: String, color: Color,
-                               size: CGFloat = 11) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(DS.Font.icon(size - 1, weight: .bold))
-                .foregroundColor(color)
-            Text(title)
-                .font(DS.Font.scaled(size, weight: .bold))
-                .foregroundColor(color)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, DS.Spacing.sm + 2)
-        .padding(.bottom, DS.Spacing.xs)
-    }
-
-    // MARK: - Type Selector
-
-    private var addNewsTypeSelector: some View {
-        compactCard {
-            compactHeader(L10n.t("نوع الخبر", "Post Type"), icon: "tag.fill", color: DS.Color.primary)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(availableTypes, id: \.self) { type in
-                        let isSelected = selectedType == type
-                        let typeColor = NewsTypeHelper.color(for: type)
-
-                        Button(action: {
-                            withAnimation(DS.Anim.snappy) { selectedType = type }
-                        }) {
-                            HStack(spacing: DS.Spacing.sm) {
-                                Image(systemName: NewsTypeHelper.icon(for: type))
-                                    .font(DS.Font.icon(11, weight: .bold))
-                                    .foregroundColor(isSelected ? DS.Color.readableText(on: typeColor) : typeColor)
-                                    .frame(width: 22, height: 22)
-                                    .background(isSelected ? typeColor : typeColor.opacity(0.12))
-                                    .clipShape(Circle())
-
-                                Text(NewsTypeHelper.displayName(for: type))
-                                    .font(DS.Font.scaled(11, weight: .bold))
-                                    .foregroundColor(isSelected ? typeColor : DS.Color.textSecondary)
-                            }
-                            .padding(.horizontal, DS.Spacing.sm + 2)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(isSelected ? typeColor.opacity(0.1) : DS.Color.surface.opacity(0.5))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(isSelected ? typeColor.opacity(0.4) : DS.Color.primary.opacity(0.08), lineWidth: 1.5)
-                            )
-                        }
-                        .buttonStyle(DSBoldButtonStyle())
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.md)
-            }
-            .padding(.bottom, DS.Spacing.sm + 2)
+    private var identitySection: some View {
+        DSComposerSection(
+            title: L10n.t("النشر باسم", "Post as"),
+            icon: "person.crop.circle.badge.checkmark",
+            tint: DS.Color.primary,
+            trailing: postAsAdmin ? L10n.t("منشور رسمي", "Official") : L10n.t("منشور شخصي", "Personal"),
+            index: 1
+        ) {
+            // المبدّل الموحّد (`DSSegmentedSwitch`) بدل الكبسولة المرسومة باليد
+            DSSegmentedSwitch(options: [
+                DSSegmentOption(id: false, title: authVM.currentUser?.firstName ?? L10n.t("باسمي", "Me"),
+                                icon: "person.fill"),
+                DSSegmentOption(id: true, title: L10n.t("إدارة العائلة", "Family Admin"), icon: "megaphone.fill")
+            ], selection: $postAsAdmin)
         }
     }
 
-    // MARK: - Content Section (مع شريط الأدوات والصور)
-    private var addNewsContentSection: some View {
-        compactCard {
-            compactHeader(isPoll ? L10n.t("التصويت", "Poll") : L10n.t("محتوى الخبر", "Post Content"),
-                          icon: isPoll ? "chart.bar.fill" : "text.alignright",
-                          color: isPoll ? DS.Color.newsVote : DS.Color.accent)
+    // MARK: - المحتوى (مع الصور والتصويت)
 
-            // حقل النص — يختفي عند تفعيل التصويت (سؤال التصويت يغني عنه)
-            if !isPoll {
-                ZStack(alignment: .topTrailing) {
-                    TextEditor(text: $content)
-                        .frame(minHeight: 52, maxHeight: .infinity)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .scrollContentBackground(.hidden)
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .padding(DS.Spacing.sm)
-
-                    if content.isEmpty {
-                        Text(L10n.t("اكتب الخبر هنا...", "Write your post here..."))
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .padding(.top, DS.Spacing.md)
-                            .padding(.trailing, DS.Spacing.md)
-                            .allowsHitTesting(false)
-                    }
-                }
-
-                // خط يفصل نص الخبر عن الإضافات — داخل نفس البطاقة
-                DSDivider()
-                    .padding(.top, DS.Spacing.xs)
-            }
-
-            if !selectedImages.isEmpty {
-                photosPreview
-            }
-
-            contentToolbar
-
+    private var contentSection: some View {
+        DSComposerSection(
+            title: isPoll ? L10n.t("التصويت", "Poll") : L10n.t("محتوى الخبر", "Post Content"),
+            icon: isPoll ? "chart.bar.fill" : "text.alignright",
+            tint: sectionTint,
+            trailing: (!isPoll && !content.isEmpty) ? "\(content.count)" : nil,
+            index: 2
+        ) {
             if isPoll {
-                pollFields
-            }
-        }
-    }
+                pollPreview
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.92).combined(with: .opacity))
+            } else {
+                NewsContentEditor(text: $content,
+                                  placeholder: L10n.t("اكتب الخبر هنا… مناسبة، إعلان، أو خبر يهم العائلة",
+                                                      "Write your post… an occasion, announcement or family news"),
+                                  tint: sectionTint, focused: $contentFocused)
 
-    // MARK: - Content Toolbar
-    private var contentToolbar: some View {
-        HStack(spacing: DS.Spacing.md) {
-            // زر إضافة صور
-            PhotosPicker(
-                selection: $pickerItems,
-                maxSelectionCount: 5,
-                matching: .images
-            ) {
-                HStack(spacing: DS.Spacing.xs) {
-                    if isLoadingPhotos {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                            .tint(DS.Color.primary)
-                    } else {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(DS.Font.icon(16, weight: .medium))
-                    }
-
-                    if !selectedImages.isEmpty {
-                        Text("\(selectedImages.count)/5")
-                            .font(DS.Font.caption2)
-                            .fontWeight(.bold)
-                    }
+                if !selectedImages.isEmpty {
+                    DSComposerPhotoStrip(images: $selectedImages, limit: 5, tint: sectionTint)
+                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
-                .foregroundColor(DS.Color.primary)
-                .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm)
-                .background(DS.Color.primary.opacity(0.06))
-                .clipShape(Capsule())
-            }
-            .disabled(isLoadingPhotos)
-
-            // التصويت — جنب الصور مباشرةً بدل أن يكون نوع خبر منفصلاً
-            if pollsEnabled {
-                Button {
-                    withAnimation(DS.Anim.snappy) {
-                        selectedType = isPoll ? "إعلان" : "تصويت"
-                    }
-                    UISelectionFeedbackGenerator().selectionChanged()
-                } label: {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "chart.bar.fill")
-                            .font(DS.Font.icon(15, weight: .medium))
-                        if isPoll {
-                            Text(L10n.t("تصويت", "Poll"))
-                                .font(DS.Font.caption2)
-                                .fontWeight(.bold)
-                        }
-                    }
-                    .foregroundColor(isPoll ? DS.Color.onTint : DS.Color.newsVote)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.sm)
-                    .background(isPoll ? DS.Color.newsVote : DS.Color.newsVote.opacity(0.10))
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
             }
 
-            Spacer()
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.bottom, DS.Spacing.md)
-    }
-
-    // MARK: - Photos Preview
-    private var photosPreview: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+            // أدوات المحتوى: الصور والتصويت داخل محتوى الخبر (طلب المالك)
             HStack(spacing: DS.Spacing.sm) {
-                ForEach(Array(selectedImages.enumerated()), id: \.offset) { idx, image in
-                    ZStack(alignment: .topTrailing) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 72, height: 72)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                if !isPoll && selectedImages.isEmpty {
+                    PhotosPicker(selection: $pickerItems, maxSelectionCount: 5, matching: .images) {
+                        // نفس وجه شريحة «تصويت» جنبها (DSExtraChip)
+                        DSAddChipLabel(icon: "photo.on.rectangle.angled", title: L10n.t("صور", "Photos"),
+                                       isLoading: isLoadingPhotos)
+                    }
+                    .disabled(isLoadingPhotos)
+                    .accessibilityLabel(L10n.t("إضافة صور", "Add photos"))
+                }
+                if pollsEnabled {
+                    DSExtraChip(
+                        icon: "chart.bar.fill",
+                        title: L10n.t("تصويت", "Poll"),
+                        tint: DS.Color.newsVote,
+                        summary: isPoll ? L10n.t("تصويت · \(normalizedPollOptions.count) خيارات",
+                                                 "Poll · \(normalizedPollOptions.count) options") : nil
+                    ) { openPollBox() }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isPoll)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedImages.count)
+    }
 
-                        // زر حذف الصورة
-                        Button {
-                            let generator = UIImpactFeedbackGenerator(style: .light)
-                            generator.impactOccurred()
-                            _ = withAnimation(DS.Anim.snappy) {
-                                selectedImages.remove(at: idx)
+    /// معاينة التصويت داخل المحتوى — الضغط يفتحه للتعديل (القطعة المشتركة مع «تعديل الخبر»)
+    private var pollPreview: some View {
+        NewsPollPreview(question: pollQuestion, options: normalizedPollOptions,
+                        onEdit: { openPollBox() },
+                        onRemove: { withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { removePoll() } })
+    }
+
+    // MARK: - مربّع التصويت
+
+    private var draftValidCount: Int {
+        draftOptions.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+    }
+
+    private var pollBox: some View {
+        DSExtraBox(
+            title: L10n.t("تصويت", "Poll"),
+            subtitle: L10n.t("خياران على الأقل، وحتى أربعة", "At least two options, up to four"),
+            icon: "chart.bar.fill",
+            tint: DS.Color.newsVote,
+            doneTitle: isPoll ? L10n.t("حفظ", "Save") : L10n.t("إضافة التصويت", "Add poll"),
+            doneEnabled: draftValidCount >= 2,
+            onDone: commitPoll,
+            onCancel: { dsCloseExtra { activeExtra = nil } }
+        ) {
+            VStack(spacing: DS.Spacing.sm) {
+                TextField(L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $draftQuestion)
+                    .dsAlertField()
+                ForEach(Array(draftOptions.enumerated()), id: \.element.id) { idx, option in
+                    HStack(spacing: DS.Spacing.sm) {
+                        NewsPollNumber(number: idx + 1, size: DS.Spacing.xxl)
+                        TextField(idx < 2 ? L10n.t("الخيار \(idx + 1)", "Option \(idx + 1)")
+                                          : L10n.t("الخيار \(idx + 1) (اختياري)", "Option \(idx + 1) (optional)"),
+                                  text: Binding(
+                                    get: { draftOptions.first(where: { $0.id == option.id })?.text ?? "" },
+                                    set: { v in
+                                        if let i = draftOptions.firstIndex(where: { $0.id == option.id }) {
+                                            draftOptions[i].text = v
+                                        }
+                                    }))
+                            .dsAlertField()
+                        if draftOptions.count > 2 {
+                            NewsPollRemoveOptionButton(label: L10n.t("حذف الخيار \(idx + 1)", "Remove option \(idx + 1)")) {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                                    draftOptions.removeAll { $0.id == option.id }
+                                }
                             }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(DS.Font.icon(18, weight: .bold))
-                                .foregroundStyle(DS.Color.textOnPrimary, DS.Color.error)
-                                .dsCardShadow()
                         }
-                        .offset(x: 6, y: -6)
+                    }
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                }
+                if draftOptions.count < 4 {
+                    NewsPollAddOptionButton {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                            draftOptions.append(PollDraft())
+                        }
                     }
                 }
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
         }
     }
 
-    // MARK: - حقول التصويت
-    private var pollFields: some View {
-        VStack(spacing: 6) {
-            DSDivider()
-                .padding(.bottom, 2)
-            pollField(placeholder: L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $pollQuestion, icon: "questionmark.circle")
-            pollField(placeholder: L10n.t("الخيار الأول", "Option 1"), text: $pollOption1, icon: "1.circle.fill")
-            pollField(placeholder: L10n.t("الخيار الثاني", "Option 2"), text: $pollOption2, icon: "2.circle.fill")
-            pollField(placeholder: L10n.t("الخيار الثالث (اختياري)", "Option 3 (optional)"), text: $pollOption3, icon: "3.circle.fill")
-            pollField(placeholder: L10n.t("الخيار الرابع (اختياري)", "Option 4 (optional)"), text: $pollOption4, icon: "4.circle.fill")
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.bottom, DS.Spacing.sm + 2)
+    private func openPollBox() {
+        draftQuestion = pollQuestion
+        let existing = [pollOption1, pollOption2, pollOption3, pollOption4]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        var drafts = existing.map { PollDraft(text: $0) }
+        while drafts.count < 2 { drafts.append(PollDraft()) }
+        draftOptions = drafts
+        contentFocused = false
+        activeExtra = .poll
     }
 
-    // MARK: - ملاحظة المراجعة (الزر انتقل للأعلى)
-    @ViewBuilder
-    private var addNewsReviewNote: some View {
-        if !newsVM.canAutoPublishNews {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "info.circle.fill")
-                    .font(DS.Font.icon(11))
-                Text(L10n.t("يحتاج موافقة الإدارة", "Pending admin review"))
-                    .font(DS.Font.caption2)
-            }
-            .foregroundColor(DS.Color.textTertiary)
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
+    private func commitPoll() {
+        let opts = draftOptions.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        pollQuestion = draftQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        pollOption1 = opts.count > 0 ? opts[0] : ""
+        pollOption2 = opts.count > 1 ? opts[1] : ""
+        pollOption3 = opts.count > 2 ? opts[2] : ""
+        pollOption4 = opts.count > 3 ? opts[3] : ""
+        dsCloseExtra { activeExtra = nil }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) { selectedType = "تصويت" }
     }
 
-    private func pollField(placeholder: String, text: Binding<String>, icon: String) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: icon)
-                .font(DS.Font.icon(12, weight: .semibold))
-                .foregroundColor(DS.Color.newsVote)
-                .frame(width: 20)
-
-            TextField(placeholder, text: text)
-                .font(DS.Font.scaled(13))
-                .foregroundColor(DS.Color.textPrimary)
-        }
-        .padding(.horizontal, DS.Spacing.sm + 2)
-        .padding(.vertical, 5)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-        )
+    private func removePoll() {
+        pollQuestion = ""; pollOption1 = ""; pollOption2 = ""; pollOption3 = ""; pollOption4 = ""
+        selectedType = availableTypes.first ?? "إعلان"
     }
 
     // MARK: - Load Images
@@ -478,8 +312,11 @@ struct AddNewsView: View {
             isLoadingPhotos = true
             var loaded: [UIImage] = []
             for item in items {
+                // فكّ مصغّر خارج الخيط الرئيسي (كان يعلّق عند إضافة الصور — ٢٠٢٦-١٠-٠٥)
                 if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
+                   let image = await Task.detached(priority: .userInitiated, operation: {
+                       ImageProcessor.downsampled(data)
+                   }).value {
                     loaded.append(image)
                 }
             }

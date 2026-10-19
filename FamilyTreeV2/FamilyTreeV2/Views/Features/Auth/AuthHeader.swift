@@ -1,80 +1,21 @@
 import SwiftUI
 
-/// الهيدر الموحّد لشاشات المصادقة (الدخول/الرمز/التسجيل/الانتظار) — نفس
-/// هوية هيدرات بقية الواجهات: تدرّج + طبقة veil + أيقونة ٥٢ + عنوان ووصف
-/// + شريط سدو.
+/// رأس شاشات المصادقة (خطوة الرمز، الانتظار) — صار الرأس الملوّن الموحّد للصفحات الفرعية
+/// (`DSSubPageHeader`: تدرّج القسم + مجسّم + عنوان ووصف + زرّ الرجوع الموحّد) بدل نسخة يدوية
+/// رابعة بأيقونة مسطّحة وشريط سدو قديم. خارج التبويبات القسم = الرئيسية (كحلي العلامة).
 extension View {
-    @ViewBuilder
     func authHeader(
         icon: String,
         title: String,
         subtitle: String,
+        /// وجود زرّ الإجراء — الرجوع الموحّد في بداية السطر (خطوة الرمز)
         actionIcon: String? = nil,
+        /// نص القارئ الصوتي — زرّ الرجوع الموحّد يقرأ «رجوع»
+        actionLabel: String = L10n.t("رجوع", "Back"),
         action: (() -> Void)? = nil
     ) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.overlayIcon)
-                        .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                    Image(systemName: icon)
-                        .font(DS.Font.icon(20, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                }
-                .frame(width: 52, height: 52)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(DS.Font.plex(19, weight: .bold))
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    Text(subtitle)
-                        .font(DS.Font.plex(12, weight: .medium))
-                        .foregroundColor(DS.Color.accentLight)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                }
-
-                Spacer(minLength: DS.Spacing.xs)
-
-                if let actionIcon, let action {
-                    Button(action: action) {
-                        Image(systemName: actionIcon)
-                            .font(DS.Font.icon(17, weight: .bold))
-                            .foregroundColor(DS.Color.textOnPrimary)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(DS.Color.overlayIcon))
-                            .overlay(Circle().strokeBorder(DS.Color.overlayIconBorder, lineWidth: 1.5))
-                    }
-                    .buttonStyle(BounceButtonStyle())
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.sm)
-            .frame(minHeight: 70, alignment: .bottom)
-
-            // شريط سدو — نفس بقية الهيدرات
-            HStack(spacing: 5) {
-                Rectangle().fill(DS.Color.textOnPrimary.opacity(0.16)).frame(height: 1)
-                ForEach(0..<5, id: \.self) { i in
-                    Rectangle()
-                        .fill(DS.Color.textOnPrimary.opacity(i == 2 ? 0.55 : 0.30))
-                        .frame(width: i == 2 ? 6 : 4, height: i == 2 ? 6 : 4)
-                        .rotationEffect(.degrees(45))
-                }
-                Rectangle().fill(DS.Color.textOnPrimary.opacity(0.16)).frame(height: 1)
-            }
-            .padding(.horizontal, DS.Spacing.xl)
-            .padding(.bottom, DS.Spacing.xs)
-        }
-        .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                DS.Color.gradientBand
-                DS.Color.headerVeil
-            }
-            .ignoresSafeArea(edges: .top)
-        )
+        DSSubPageHeader(title: title, subtitle: subtitle, icon: icon,
+                        nav: (actionIcon != nil && action != nil) ? .back : .none,
+                        onBack: action)
     }
-
 }

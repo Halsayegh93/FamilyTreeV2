@@ -47,9 +47,25 @@
 		B4C38DDD4B2FAA669DB70856 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5E1AF0D12F9A000100C0FFEE /* Exceptions for "FamilyTreeV2" folder in "ShareExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"FamilyTreeV2/Resources/Fonts/IBMPlexSansArabic-Bold.ttf",
+				"FamilyTreeV2/Resources/Fonts/IBMPlexSansArabic-Medium.ttf",
+				"FamilyTreeV2/Resources/Fonts/IBMPlexSansArabic-Regular.ttf",
+				"FamilyTreeV2/Resources/Fonts/IBMPlexSansArabic-SemiBold.ttf",
+			);
+			target = 996F75BB2A873739B64ADF65 /* ShareExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5E1AF0D12F9A000100C0FFEE /* Exceptions for "FamilyTreeV2" folder in "ShareExtension" target */,
+			);
 			path = FamilyTreeV2;
 			sourceTree = "<group>";
 		};
@@ -284,7 +300,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = ShareExtensionConfig/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 44;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = G8GVN83P97;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -306,7 +322,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = ShareExtensionConfig/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 44;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = G8GVN83P97;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -332,13 +348,12 @@
 				CODE_SIGN_ENTITLEMENTS = FamilyTreeV2/FamilyTreeV2.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 44;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = G8GVN83P97;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = AlmohamadAli;
-				INFOPLIST_KEY_OTP_FALLBACK_API_KEY = MY_OTP_KEY_2026;
+				INFOPLIST_KEY_CFBundleDisplayName = "عائلة المحمدعلي";
 				INFOPLIST_KEY_OTP_FALLBACK_URL = "https://poxyxsgvzwmnmewytsiw.supabase.co/functions/v1/otp-fallback";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -373,13 +388,12 @@
 				CODE_SIGN_ENTITLEMENTS = FamilyTreeV2/FamilyTreeV2.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 44;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = G8GVN83P97;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = AlmohamadAli;
-				INFOPLIST_KEY_OTP_FALLBACK_API_KEY = MY_OTP_KEY_2026;
+				INFOPLIST_KEY_CFBundleDisplayName = "عائلة المحمدعلي";
 				INFOPLIST_KEY_OTP_FALLBACK_URL = "https://poxyxsgvzwmnmewytsiw.supabase.co/functions/v1/otp-fallback";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

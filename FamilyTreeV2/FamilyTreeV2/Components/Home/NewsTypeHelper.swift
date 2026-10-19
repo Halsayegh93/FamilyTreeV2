@@ -22,14 +22,14 @@ enum NewsTypeHelper {
         case "تهنئة": return DS.Color.newsCongrats
         case "تذكير": return DS.Color.newsReminder
         case "دعوة": return DS.Color.newsInvitation
-        default: return DS.Color.primary
+        default: return DS.Color.brand   // «خبر» والافتراضي: كحلي ثابت لا يتبع القسم
         }
     }
 
     static func icon(for type: String) -> String {
-        if let custom = CategoryStore.lookup(.news, type) { return custom.iconKey }
+        if let custom = CategoryStore.lookup(.news, type) { return custom.symbol }
         switch type {
-        case "وفاة": return "heart.slash.fill"
+        case "وفاة": return "grave.fill"   // قبر بشاهدين (كان قلباً مشطوباً) — رمز مخصّص في الأصول
         case "زواج": return "heart.fill"
         case "مولود": return "figure.child"
         case "تصويت": return "chart.bar.fill"

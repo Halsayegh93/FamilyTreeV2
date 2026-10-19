@@ -69,6 +69,21 @@ nonisolated enum FamilyNameCatalog {
         return parts + famWords
     }
 
+    /// نفس `words` لكن على وحدات الاسم (PersonName — «زين العابدين» وحدة واحدة): للعرض والاختصار.
+    static func units(_ units: [String], family: String?) -> [String] {
+        var parts = units
+        guard let fam = family?.trimmingCharacters(in: .whitespacesAndNewlines), !fam.isEmpty else {
+            return parts
+        }
+        let famWords = fam.split(whereSeparator: \.isWhitespace).map(String.init)
+        let words = parts.flatMap { $0.split(whereSeparator: \.isWhitespace).map(String.init) }
+        // العائلة موجودة أصلاً في الآخر (ولو كانت أكثر من كلمة) → كما هي
+        if words.count >= famWords.count, Array(words.suffix(famWords.count)) == famWords { return parts }
+        // آخر وحدة اسم عائلة آخر (أو نفس العائلة بصيغة مختلفة) → تُستبدل
+        if parts.count > 1, let last = parts.last, isFamilyWord(last, chosen: fam) { parts.removeLast() }
+        return parts + famWords
+    }
+
     /// الاسم المكتوب بلا العائلة في آخره — حتى لا تتكرّر عند إضافتها
     static func stripTrailingFamily(_ name: String, chosen: String?) -> String {
         var parts = name.trimmingCharacters(in: .whitespacesAndNewlines)
