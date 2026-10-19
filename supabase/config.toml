@@ -420,3 +420,7 @@ verify_jwt = false
 
 [functions.cleanup-tokens]
 verify_jwt = false
+
+# Supabase Auth webhook signature is verified inside the handler.
+[functions.send-sms-kwtsms]
+verify_jwt = false
