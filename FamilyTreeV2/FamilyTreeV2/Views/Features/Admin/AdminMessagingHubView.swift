@@ -15,6 +15,11 @@ struct AdminMessagingHubView: View {
 
     private enum Mode: Hashable { case notification, appUpdate }
     @State private var mode: Mode = .notification
+
+    /// «رسالة تحديث التطبيق» من صفّها في قسم «الإعلانات» تفتح على وضع التحديث (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠)
+    init(startsWithUpdate: Bool = false) {
+        _mode = State(initialValue: startsWithUpdate ? .appUpdate : .notification)
+    }
     /// الكيبورد ظاهر — تنطوي بطاقة الرأس
     @State private var keyboardVisible = false
     /// بالعرض (ارتفاع مضغوط) نخفي بطاقة الرأس حتى يبقى للنموذج مكان

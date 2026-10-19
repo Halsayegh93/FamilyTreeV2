@@ -165,11 +165,11 @@ struct FamilyTreeV2App: App {
                     } else {
                         NotificationCenter.default.post(name: .openAdminRequests, object: nil)
                         // بعد ظهور تاب الإدارة: ادفع شاشة «طلبات المراجعة» (نفس مهلة صلة القرابة)
+                        // «الوارد» على الطلب نفسه إن عُرف معرّفه (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠)
+                        var info: [String: String] = ["kind": NotificationKind.adminRequest.rawValue]
+                        if let requestIdString { info["request_id"] = requestIdString }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                            NotificationCenter.default.post(
-                                name: .openAdminReviewForKind, object: nil,
-                                userInfo: ["kind": NotificationKind.adminRequest.rawValue]
-                            )
+                            NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil, userInfo: info)
                         }
                     }
 

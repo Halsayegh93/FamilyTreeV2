@@ -60,6 +60,11 @@ struct AdminMembersManagementView: View {
     }
 
     @State private var selectedTab: Tab = .overview
+
+    /// يُفتح على تبويب بعينه من صفّه في قسم «العائلة» (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠) — الافتراضي «نظرة»
+    init(initialTab: Tab = .overview) {
+        _selectedTab = State(initialValue: initialTab)
+    }
     @State private var showRegisterMember = false
     /// التصنيف الذي تفتح عليه المحطة عند الضغط على بطاقة جودة بيانات
     @State private var issueFocus: AdminActivateAccountsView.IssueFocus = .all

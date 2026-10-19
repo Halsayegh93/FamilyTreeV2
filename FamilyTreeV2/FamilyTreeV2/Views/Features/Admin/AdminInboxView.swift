@@ -10,6 +10,8 @@ import Supabase
 /// وتأكيداتهما، السحب للتحديث، ومربّع التفاصيل كما كانت تماماً.
 struct AdminInboxView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    /// داخل «الوارد» (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠): بلا رأس خاص — رأس «الوارد» فوقها، و«تحديد» شريحة أعلى المحتوى
+    var embedded: Bool = false
 
     @State private var searchText: String = ""
     @State private var isLoading = false
@@ -133,20 +135,9 @@ struct AdminInboxView: View {
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
-        // الرأس الملوّن الموحّد — «تحديد» (كان في شريط النظام) زرّ الرأس
-        .dsSubPageHeader(L10n.t("رسائل التواصل", "Contact Messages"),
-                         subtitle: L10n.t("رسائل الأعضاء من «تواصل مع الإدارة» — اضغط أي رسالة للرد عليها",
-                                          "Members' messages from “Contact Admin” — tap one to reply")) {
-            if !messages.isEmpty {
-                DSHeaderButton(symbol: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle",
-                               label: isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select")) {
-                    withAnimation(DS.Anim.quick) {
-                        isSelectMode.toggle()
-                        if !isSelectMode { selectedIDs.removeAll() }
-                    }
-                }
-            }
-        }
+        // الرأس الملوّن الموحّد — «تحديد» (كان في شريط النظام) زرّ الرأس؛ داخل «الوارد» بلا رأس
+        .modifier(InboxHeader(embedded: embedded, hasMessages: !messages.isEmpty, isSelectMode: isSelectMode,
+                              toggleSelect: toggleSelectMode))
         .dsAlert(L10n.t("حذف الرسائل", "Delete Messages"), isPresented: $showDeleteConfirm) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 Task { await deleteSelected() }
@@ -183,11 +174,30 @@ struct AdminInboxView: View {
         }
     }
 
+    private func toggleSelectMode() {
+        withAnimation(DS.Anim.quick) {
+            isSelectMode.toggle()
+            if !isSelectMode { selectedIDs.removeAll() }
+        }
+    }
+
     // MARK: - هيكل الصفحة
 
     private func pageContent(messages: [AdminRequest], counts: [InboxFilter: Int]) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            heroSection(counts: counts)
+            if embedded {
+                // داخل «الوارد»: الأرقام في رأسه، و«تحديد» هنا
+                if !messages.isEmpty {
+                    HStack {
+                        Spacer(minLength: 0)
+                        DSChipButton(isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select"),
+                                     icon: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle",
+                                     isSelected: isSelectMode, size: .small, action: toggleSelectMode)
+                    }
+                }
+            } else {
+                heroSection(counts: counts)
+            }
 
             if isInitialLoading {
                 DSPageLoader(L10n.t("جارٍ تحميل الرسائل…", "Loading messages…"), fillsSpace: false)
@@ -1042,5 +1052,32 @@ private struct ReplyComposerField: View {
         .dsFocusFieldBox(focused: focused, tint: tint)
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
+    }
+}
+
+
+/// رأس صفحة «رسائل التواصل» — يُحذف داخل «الوارد» (رأسه فوقها)
+private struct InboxHeader: ViewModifier {
+    let embedded: Bool
+    let hasMessages: Bool
+    let isSelectMode: Bool
+    let toggleSelect: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if embedded {
+            content
+        } else {
+            content
+                .dsSubPageHeader(L10n.t("رسائل التواصل", "Contact Messages"),
+                                 subtitle: L10n.t("رسائل الأعضاء من «تواصل مع الإدارة» — اضغط أي رسالة للرد عليها",
+                                                  "Members' messages from “Contact Admin” — tap one to reply")) {
+                    if hasMessages {
+                        DSHeaderButton(symbol: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle",
+                                       label: isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select"),
+                                       action: toggleSelect)
+                    }
+                }
+        }
     }
 }

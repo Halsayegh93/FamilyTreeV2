@@ -2184,3 +2184,107 @@ extension DS.Border {
     /// حلقة حول صورة العضو وشارة الكاميرا فوقها
     static let ring: CGFloat = 2.5
 }
+
+// MARK: - لوحة الإدارة «مركز القيادة» (طلب المالك ٢٠٢٦-١٠-٢٠: الاتجاه «أ» + لمستان من «ب»)
+//
+// رأس كحلي بتدرّج خفيف وحلقة ذهبية ساكنة، وأرقام كبيرة («اللوحة العلوي ب أ ممتازه» — المالك ٢٠٢٦-١٠-٢٠،
+// فأرقام الرأس والنبض استثناء مقصود من «لا نصّ فوق ١٧ إلا العناوين»)، بطاقات على أرضية رملية، وشبكة أقسام.
+// كل ألوان ومقاسات الرأس والبطاقات وأزرارها من هنا — الشاشات (`AdminHubKit.swift`) لا تكتب أرقاماً.
+extension DS {
+    enum Hub {
+        // الألوان
+        /// أرضية صفحات اللوحة (الرملي الفاتح) — أسود صافٍ في الداكن
+        static let background = SwiftUI.Color.adaptive(light: "#F5F2EC", dark: "#000000")
+        /// طرفا تدرّج الرأس: كحلي المصمم ← كحلي أفتح؛ وفي الداكن أعمق
+        static let bandTop = SwiftUI.Color.adaptive(light: "#172536", dark: "#0B111A")
+        static let bandBottom = SwiftUI.Color.adaptive(light: "#2A3E5C", dark: "#1B2638")
+        /// عمودي (حافته العليا كحلي واحد فتلتقي بشريط الحالة الثابت بلا خطّ)
+        static let band = LinearGradient(colors: [bandTop, bandBottom], startPoint: .top, endPoint: .bottom)
+        /// زجاج الرأس (الأزرار الدائرية، مربّعات الأرقام، شرائح الفلتر) وإطاره الداخلي
+        static let glass = SwiftUI.Color.white.opacity(0.09)
+        static let glassLine = SwiftUI.Color.white.opacity(0.14)
+        /// الحلقة الذهبية الساكنة في طرف الرأس وهالتها
+        static let ringStroke = DS.Color.accentLight.opacity(0.22)
+        static let ringHalo = DS.Color.accentLight.opacity(0.05)
+        /// نص ثانوي فوق الرأس (التاريخ، عناوين الأرقام)
+        static let onBandMuted = SwiftUI.Color.white.opacity(0.72)
+        /// شارة الدور فوق الرأس
+        static let rolePillFill = DS.Color.accentLight.opacity(0.2)
+        static let rolePillInk = SwiftUI.Color(hex: "#E7D3A6")
+        static let rolePillStroke = DS.Color.accentLight.opacity(0.45)
+        /// أرقام الرأس: «بانتظارك» ذهبي فاتح، «مستعجل» مرجاني، «متأخر» كهرماني (ثابتة في الوضعين — فوق الكحلي)
+        static let kpiMine = SwiftUI.Color(hex: "#E7D3A6")
+        static let kpiHot = SwiftUI.Color(hex: "#FF9C8F")
+        static let kpiLate = SwiftUI.Color(hex: "#F5C46B")
+        /// نقطة «جديد» على جرس الرأس
+        static let bellDot = SwiftUI.Color(hex: "#F47370")
+        /// نص فوق الشريحة الذهبية المختارة
+        static let onGold = SwiftUI.Color(hex: "#1B1407")
+        /// قسم «الدخول والأمان» (صدئي من عائلة الكحلي والذهبي)
+        static let securityFill = SwiftUI.Color(hex: "#9A3B2E")
+
+        // المقاسات
+        static let cardRadius: CGFloat = DS.Radius.xl
+        static let cardPadding: CGFloat = 14
+        static let tileRadius: CGFloat = 18
+        static let kpiRadius: CGFloat = DS.Radius.lg
+        static let kpiPadding: CGFloat = 10
+        static let stackSpacing: CGFloat = 14
+        /// عرض عمود اللوحة أفقياً (الرأس والبطاقات معاً) — أعرض من عمود القراءة لأن البطاقات شبكات
+        static var landscapeWidth: CGFloat { DS.Landscape.maxContentWidth * 1.4 }
+        /// الهوامش داخل الرأس، وكم تصعد البطاقة الأولى فوقه
+        static let headerSide: CGFloat = 18
+        static let headerTop: CGFloat = DS.Spacing.sm
+        static let headerBottom: CGFloat = 46
+        static let headerBottomCompact: CGFloat = 20
+        static let headerOverlap: CGFloat = 30
+        /// الأزرار الدائرية الزجاجية في الرأس
+        static let glassButton: CGFloat = 36
+        static let bellDotSize: CGFloat = 8
+        /// مربّع الأيقونة الملوّن في صفوف البطاقات، ومربّع الأقسام، ومربّع نوع الطلب
+        static let iconSquare: CGFloat = 36
+        static let iconSquareRadius: CGFloat = 11
+        static let tileIcon: CGFloat = 34
+        static let tileIconRadius: CGFloat = 10
+        static let typeIcon: CGFloat = 24
+        static let typeIconRadius: CGFloat = 7
+        static let tileMinHeight: CGFloat = 96
+        /// الحلقة الذهبية: قطرها، عرض الهالة، وكم تخرج من طرف الرأس
+        static let ringSide: CGFloat = 260
+        static let ringHaloWidth: CGFloat = 28
+        static let ringOffsetX: CGFloat = 60
+        static let ringOffsetY: CGFloat = 90
+        /// أزرار الكبسولة في الصفوف والبطاقات (اشحن، أعلن، رفض…)
+        static let pillHeight: CGFloat = 32
+        static let pillHeightCard: CGFloat = 36
+        static let pillPadding: CGFloat = 13
+        /// الإجراءات السريعة: الدائرة وعرض العمود
+        static let quickCircle: CGFloat = 54
+        static let quickWidth: CGFloat = 66
+        /// خط حالة الطلب على طرف البطاقة، ومقياس الرصيد، وشريط مراحل الطلب
+        static let stripeWidth: CGFloat = 4
+        static let meterHeight: CGFloat = 6
+        static let trackHeight: CGFloat = 4
+        /// دائرة إنجاز المهمة («مهام اليوم»)
+        static let taskRing: CGFloat = 23
+        /// مقياس الرصيد نصف الدائري في صفحة رسائل الدخول
+        static let gaugeWidth: CGFloat = 112
+        static let gaugeHeight: CGFloat = 70
+        static let gaugeLine: CGFloat = 10
+    }
+}
+
+extension DS.TextRole {
+    /// التحية في رأس «اليوم» وعنوان صفحة القسم — Title 1 (٢٨)
+    static let hubTitle = DS.TextRole(.title, weight: .bold)
+    /// رقم مربّع الرأس (بانتظارك، مستعجل…) — Title 1 (٢٨) بموافقة المالك على رأس «أ»
+    static let hubKPI = DS.TextRole(.title, weight: .bold)
+    /// رقم بطاقة «نبض العائلة» — Title 2 (٢٢)
+    static let hubPulse = DS.TextRole(.title2, weight: .bold)
+    /// عنوان صفّ داخل بطاقات اللوحة وعنوان مربّع القسم — Subheadline (١٥) عريض
+    static let hubRow = DS.TextRole(.subheadline, weight: .bold)
+    /// نص زرّ الكبسولة في الصفوف — Footnote (١٣) عريض
+    static let hubButton = DS.TextRole(.footnote, weight: .bold)
+    /// رصيد رسائل الدخول الكبير في رأس صفحتها — رسم بمقاس ثابت مقيّد بـ Large Title
+    static let hubBalance = DS.TextRole(size: 56, weight: .bold, style: .largeTitle)
+}

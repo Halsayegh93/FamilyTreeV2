@@ -29,6 +29,37 @@ struct AdminAppSettingsView: View {
     /// تبويبات الصفحة
     private enum SettingsTab: Hashable { case app, members, system }
 
+    /// إعادة تصميم لوحة الإدارة (طلب المالك ٢٠٢٦-١٠-٢٠): كل إعداد يُفتح من صفّه في قسمه («التطبيق»،
+    /// «الدخول والأمان»، ⚙︎ «الوارد») — نفس الأقسام والمفاتيح والصلاحيات تماماً، الصفحة تعرض المطلوب فقط.
+    /// `.all` = الصفحة الكاملة بتبويباتها الثلاثة كما كانت.
+    enum Scope: Hashable {
+        case all
+        case featuresLanguage, newsCategories, branches, cooldown
+        case maintenance, systemInfo, reset
+        case registration, approvals
+    }
+
+    private let scope: Scope
+
+    init(scope: Scope = .all) {
+        self.scope = scope
+    }
+
+    private var scopeTitle: String {
+        switch scope {
+        case .all:              return L10n.t("إعدادات التطبيق", "App Settings")
+        case .featuresLanguage: return L10n.t("الميزات واللغة", "Features & Language")
+        case .newsCategories:   return L10n.t("الأخبار والتصنيفات", "News & Categories")
+        case .branches:         return L10n.t("أسماء الفروع", "Branch Names")
+        case .cooldown:         return L10n.t("عداد التعديل", "Edit Counter")
+        case .maintenance:      return L10n.t("الصيانة", "Maintenance")
+        case .systemInfo:       return L10n.t("معلومات النظام", "System Info")
+        case .reset:            return L10n.t("إعادة التعيين", "Reset")
+        case .registration:     return L10n.t("قواعد التسجيل", "Sign-up Rules")
+        case .approvals:        return L10n.t("إعدادات المسار", "Approval Path Settings")
+        }
+    }
+
     private var tabOptions: [DSSegmentOption<SettingsTab>] {
         [
             DSSegmentOption(id: .app, title: L10n.t("التطبيق", "App"), icon: "app.badge.fill"),
@@ -53,9 +84,11 @@ struct AdminAppSettingsView: View {
     private var page: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: DS.Spacing.lg) {
-                // المبدّل الواحد — نفس مقاس مبدّل لوحة الإدارة
-                DSSegmentedSwitch(options: tabOptions, selection: $tab)
-                    .dsStaggerIn(0)
+                // المبدّل الواحد — نفس مقاس مبدّل لوحة الإدارة (الصفحة الكاملة فقط)
+                if scope == .all {
+                    DSSegmentedSwitch(options: tabOptions, selection: $tab)
+                        .dsStaggerIn(0)
+                }
 
                 // إشعار وضع القراءة فقط (لغير المالك) — مرة واحدة تحت المبدّل
                 if !canEdit {
@@ -72,10 +105,10 @@ struct AdminAppSettingsView: View {
             .padding(.bottom, DS.Spacing.xxxl)
         }
         // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
-        .dsSubPageHeader(L10n.t("إعدادات التطبيق", "App Settings"),
-                         subtitle: canEdit
-                            ? L10n.t("التطبيق · الأعضاء · النظام", "App · Members · System")
-                            : L10n.t("وضع القراءة فقط — التعديل للمالك", "Read-only — the owner edits"))
+        .dsSubPageHeader(scopeTitle,
+                         subtitle: !canEdit
+                            ? L10n.t("وضع القراءة فقط — التعديل للمالك", "Read-only — the owner edits")
+                            : scope == .all ? L10n.t("التطبيق · الأعضاء · النظام", "App · Members · System") : nil)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             await appSettingsVM.fetchSettings()
@@ -115,8 +148,43 @@ struct AdminAppSettingsView: View {
             .filter { $0 }.count
     }
 
-    /// أقسام التبويب المختار فقط
+    /// أقسام الإعداد المطلوب وحده (من صفّه في قسمه)، أو أقسام التبويب المختار في الصفحة الكاملة
     @ViewBuilder private var sections: some View {
+        switch scope {
+        case .all:
+            tabSections
+        case .featuresLanguage:
+            languageSection
+                .disabled(!canEdit)
+            featuresSection
+                .disabled(!canEdit)
+        case .newsCategories:
+            contentSection
+                .disabled(!canEdit)
+            categoriesSection
+        case .branches:
+            branchNamesSection
+        case .cooldown:
+            cooldownSection
+                .disabled(!canEdit)
+        case .maintenance:
+            securitySection
+                .disabled(!canEdit)
+        case .systemInfo:
+            systemInfoSection
+        case .reset:
+            resetSection
+                .disabled(!canEdit)
+        case .registration:
+            registrationSection
+                .disabled(!canEdit)
+        case .approvals:
+            approvalsSection
+        }
+    }
+
+    /// أقسام التبويب المختار فقط (الصفحة الكاملة)
+    @ViewBuilder private var tabSections: some View {
         switch tab {
         case .app:
             // لغة التطبيق الرسمية
@@ -161,7 +229,7 @@ struct AdminAppSettingsView: View {
     /// كلٌّ يظهر إذا كان عموده/جدوله على السيرفر
     private var approvalsSection: some View {
         let s = appSettingsVM.settings
-        return DSComposerSection(title: L10n.t("طلبات المراجعة", "Review Requests"),
+        return DSComposerSection(title: L10n.t("طلبات الوارد", "Inbox requests"),
                                  icon: "checkmark.seal.fill",
                                  tint: DS.Color.composerProject,
                                  index: 3) {

@@ -13,6 +13,8 @@ struct TreeTabContainer: View {
     /// واختفى الشريط الذي ضُغط عليه لحظة — التبديل يبقى تلاشياً متقاطعاً كما هو.
     @State private var chromeAppeared = false
     @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
+    /// «شجرة النساء» من قسم «العائلة» في لوحة الإدارة (٢٠٢٦-١٠-٢٠) — يُقرأ عند ظهور التبويب إن لم يكن حياً
+    static var openWomenOnAppear = false
 
     /// «شجرة النساء» ظاهرة؟ — مفتاح في «الإدارة ← إعدادات التطبيق ← الميزات» (طلب المالك ٢٠٢٦-١٠-٠٧)
     private var womenTreeEnabled: Bool { appSettingsVM.settings.womenTreeEnabled ?? true }
@@ -34,8 +36,16 @@ struct TreeTabContainer: View {
         // قسم الشجرة دائماً (العُدّة المشتركة تأخذ لونها من البيئة — هنا مرة لكل الشجرتين)
         .dsSection(.tree)
         .onAppear {
+            if Self.openWomenOnAppear {
+                Self.openWomenOnAppear = false
+                if womenTreeEnabled { treeTab = 1 }
+            }
             guard !chromeAppeared else { return }
             chromeAppeared = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openWomenTree)) { _ in
+            Self.openWomenOnAppear = false
+            if womenTreeEnabled { treeTab = 1 }
         }
         // طلب صلة القرابة يُرسم في شجرة العائلة — من تبويب النساء نرجع لها أولاً
         .onReceive(NotificationCenter.default.publisher(for: .requestKinshipPath)) { _ in

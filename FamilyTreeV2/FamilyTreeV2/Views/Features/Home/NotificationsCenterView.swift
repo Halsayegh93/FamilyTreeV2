@@ -977,6 +977,19 @@ struct NotificationsCenterView: View {
             approvalLinkSection(notification, index: bodyIndex + 1)
         }
 
+        // «رصيد رسائل الدخول منخفض» ← صفحة رسائل الدخول في «الدخول والأمان» (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠)
+        if notification.kind == "sms_balance_low" && authVM.canViewSystemSettings {
+            DSButton(L10n.t("فتح رسائل الدخول", "Open sign-in messages"), icon: "ellipsis.message.fill") {
+                selectedNotification = nil
+                NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil,
+                                                    userInfo: ["kind": "sms_balance_low"])
+                }
+            }
+            .dsStaggerIn(bodyIndex + 1)
+        }
+
         if authVM.isAdmin,
            let details = notification.details,
            !details.changes.isEmpty {
@@ -1013,7 +1026,7 @@ struct NotificationsCenterView: View {
                 ApprovalStageChips(snapshot: flow, audience: .member)
             }
         } else if authVM.canModerate && adminRequestVM.approvalsWorkflowOn {
-            DSButton(L10n.t("فتح في طلبات المراجعة", "Open in Review Requests"),
+            DSButton(L10n.t("فتح في الوارد", "Open in the inbox"),
                      icon: "point.topleft.down.to.point.bottomright.curvepath.fill") {
                 selectedNotification = nil
                 NotificationCenter.default.post(name: .openAdminRequests, object: nil)
