@@ -50,6 +50,10 @@ final class OccasionKit: ObservableObject {
             case .extrabold: return 1.644
             }
         }
+
+        /// ارتفاع منطقة الحروف (ascent + descent بلا lineGap) بوحدة em — هذا ارتفاع Text بسطر واحد في SwiftUI.
+        /// خطوط URW الثلاثة: ٠٫٧٣ + ٠٫٢٧ = ١٫٠٠ (قياس CoreText ٢٠٢٦-١٠-١٧)
+        var contentEm: CGFloat { 1.0 }
     }
 
     @Published private(set) var isLoading = false
@@ -73,12 +77,14 @@ final class OccasionKit: ObservableObject {
 
     func image(_ path: String) -> UIImage? { images[path] }
 
-    /// يجهّز الخط + ملفات القالب المطلوبة. يرجع false إذا فشل تحميل أي ملف.
+    /// يجهّز الخط + ملفات القالب المطلوبة. يرجع false إذا فشل تحميل أي ملف مطلوب.
+    /// optional = ملفات أحسن لو توفّرت (مثل الفضي الجديد لـ«إعلان عزاء» قبل ما ينزل في الموقع) — غيابها مو فشل، والرسم له بديل
     @discardableResult
-    func prepare(_ paths: [String]) async -> Bool {
+    func prepare(_ paths: [String], optional: [String] = []) async -> Bool {
         let fontPaths = FontWeight.allCases.map(\.file).filter { !registeredFonts.contains($0) }
-        let imagePaths = paths.filter { images[$0] == nil }
-        touch(paths)
+        let imagePaths = (paths + optional).filter { images[$0] == nil }
+        let optionalSet = Set(optional)
+        touch(paths + optional)
         let missing = fontPaths + imagePaths
         guard !missing.isEmpty else {
             failed = false
@@ -114,8 +120,10 @@ final class OccasionKit: ObservableObject {
             }
             for await (path, fileURL, img) in group {
                 guard let fileURL else {
-                    ok = false
-                    Log.warning("OccasionKit: failed to load \(path)")
+                    if !optionalSet.contains(path) {
+                        ok = false
+                        Log.warning("OccasionKit: failed to load \(path)")
+                    }
                     continue
                 }
                 if path.hasPrefix("fonts/") {
@@ -127,7 +135,7 @@ final class OccasionKit: ObservableObject {
                     }
                 } else if let img {
                     images[path] = img
-                } else {
+                } else if !optionalSet.contains(path) {
                     ok = false
                 }
             }

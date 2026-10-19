@@ -68,6 +68,15 @@ struct TreeSearchOverlay: View {
             case .deceased: return L10n.t("متوفين", "Deceased")
             }
         }
+
+        /// رمز الخيار في المبدّل الواحد (`DSSegmentedSwitch`)
+        var icon: String {
+            switch self {
+            case .all: return "person.3.fill"
+            case .alive: return "heart.fill"
+            case .deceased: return "heart.slash.fill"
+            }
+        }
     }
 
     /// عضو جذر الفرع المختار (إن وُجد).
@@ -114,17 +123,17 @@ struct TreeSearchOverlay: View {
             resultsSection
         }
         .zIndex(100)
-        .sheet(isPresented: $branchPickerOpen) {
+        // اختيار الفرع — مربّع بمنتصف الشاشة (بحجم محتواه)
+        .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
             BranchPickerSheet(
                 allMembers: memberVM.allMembers,
+                selectedId: branchRootId,
+                showsSearch: false,
                 onSelect: { id in
                     branchRootId = id
                     branchPickerOpen = false
                 }
             )
-            // الشيت بحجم يناسب المحتوى (متوسط) مع إمكانية التوسعة لكامل الشاشة
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
         .onAppear {
             if autoFocus {
@@ -154,22 +163,21 @@ struct TreeSearchOverlay: View {
 
     // MARK: - Search Bar
 
+    /// حقل البحث بشكل حقل البحث الموحّد في الصفحات (`DSSearchField`: عدسة + نص + × وصندوق
+    /// `dsFocusFieldBox` بارتفاع `DSBox.searchHeight`) — هنا بتركيز تلقائي وزرّ إغلاق اللوحة
     private var searchBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(DS.Color.primary.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: "magnifyingglass")
-                    .font(DS.Font.icon(14, weight: .semibold))
-                    .foregroundColor(DS.Color.primary)
-            }
+            Image(systemName: "magnifyingglass")
+                .dsGlyph(DS.Glyph.md, weight: .semibold)
+                .foregroundColor(isSearchFocused ? AppSection.tree.ink : DS.Color.textTertiary)
+                .accessibilityHidden(true)
 
             TextField(L10n.t("ابحث بالاسم أو الهاتف...", "Search by name or phone..."), text: $searchText, onEditingChanged: { focused in
                 isSearchFocused = focused
             })
             .focused($fieldFocused)
-            .font(DS.Font.body)
+            .dsFieldFont(.body)
+            .foregroundColor(DS.Color.textPrimary)
             .multilineTextAlignment(.leading)
             .submitLabel(.search)
             .autocorrectionDisabled()
@@ -177,34 +185,31 @@ struct TreeSearchOverlay: View {
             // زر داخل المربع: يمسح النص إذا فيه نص، وإلا يغلق لوحة البحث (إن توفّر onClose).
             if !searchText.isEmpty {
                 Button(action: { searchText = "" }) { searchTrailingIcon }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
             } else if onClose != nil {
                 Button(action: { onClose?() }) { searchTrailingIcon }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("إغلاق", "Close"))
             }
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .stroke(
-                    isSearchFocused ? DS.Color.primary.opacity(0.4) : DS.Color.inactiveBorder,
-                    lineWidth: isSearchFocused ? 1.5 : 1
-                )
-        )
-        .dsGlowShadow()
+        .frame(minHeight: DSBox.searchHeight)
+        .dsFocusFieldBox(focused: isSearchFocused, tint: AppSection.tree.ink, fill: DS.Color.surface)
+        // فوق كانفس الشجرة — ظلّ خفيف يفصله عنها
+        .dsSubtleShadow()
     }
 
     /// أيقونة الزر داخل المربع (✕) — تُستخدم للمسح والإغلاق.
+    /// نفس × مسح البحث في بقية الحقول (رمادي خافت) — كانت حمراء، والأحمر للحذف فقط
     private var searchTrailingIcon: some View {
-        ZStack {
-            Circle()
-                .fill(DS.Color.error.opacity(0.12))
-                .frame(width: 28, height: 28)
-            Image(systemName: "xmark")
-                .font(DS.Font.icon(11, weight: .bold))
-                .foregroundColor(DS.Color.error)
-        }
+        Image(systemName: "xmark.circle.fill")
+            .dsGlyph(DS.Glyph.lg, weight: .regular)
+            .foregroundColor(DS.Color.textTertiary)
+            // مساحة ضغط ٤٤ (توصية أبل) بلا تغيير ارتفاع الشريط
+            .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
+            .padding(.vertical, -DS.Spacing.sm)
     }
 
     // MARK: - Filters Bar (ثابتة طوال البحث — لا تختفي مع غياب النتائج)
@@ -215,65 +220,24 @@ struct TreeSearchOverlay: View {
     @ViewBuilder
     private var filtersBar: some View {
         if usesFullHeight || showFiltersWhenEmpty || !searchText.isEmpty {
-            HStack(spacing: DS.Spacing.sm) {
-                Picker("", selection: $statusFilter) {
-                    ForEach(StatusFilter.allCases, id: \.self) { filter in
-                        Text(filter.label).tag(filter)
-                    }
+            // طلب المالك ٢٠٢٦-١٠-٠٩: الحالة شرائح صغيرة بسطر الفرع، والفرع المختار باسمه وعدده
+            // (بلا «آخر عمليات البحث» ولا فروع جاهزة — طلبه)
+            // الشرائح بمنتصف عرض الشاشة (طلب المالك ٢٠٢٦-١٠-٠٩)؛ إن ضاقت (خط كبير) تتمرّر أفقياً
+            ViewThatFits(in: .horizontal) {
+                // شرائح واسعة تملأ عرض البطاقة (طلب المالك «خلها وسيعة»)
+                filterChipsRow(fill: true)
+                    .padding(.horizontal, DS.Spacing.sm)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    filterChipsRow(fill: false)
+                        .padding(.horizontal, DS.Spacing.sm)
                 }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: .infinity)
-
-                branchPill
             }
+            .padding(.vertical, DS.Spacing.xs)
+            // فوق الكانفس: بطاقة الأدوات الزجاجية الواحدة (لا تظهر العُقد من خلف الشرائح)
+            .treeToolbarCard()
             .padding(.horizontal, DS.Spacing.md)
             .padding(.top, DS.Spacing.sm)
             .padding(.bottom, DS.Spacing.xs)
-        }
-    }
-
-    // MARK: - Recent Searches Section
-
-    @ViewBuilder
-    private var recentSearchesSection: some View {
-        if isSearchFocused && searchText.isEmpty && !recentSearches.isEmpty {
-            VStack(spacing: DS.Spacing.xs) {
-                HStack {
-                    Text(L10n.t("بحث سابق", "Recent"))
-                        .font(DS.Font.scaled(11, weight: .semibold))
-                        .foregroundColor(DS.Color.textSecondary)
-                    Spacer()
-                    Button(action: clearRecentSearches) {
-                        Text(L10n.t("مسح", "Clear"))
-                            .font(DS.Font.scaled(11, weight: .medium))
-                            .foregroundColor(DS.Color.error)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.sm)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        ForEach(recentSearches, id: \.self) { query in
-                            Button(action: { searchText = query }) {
-                                HStack(spacing: DS.Spacing.xs) {
-                                    Image(systemName: "clock.arrow.circlepath")
-                                        .font(DS.Font.icon(11, weight: .regular))
-                                    Text(query)
-                                        .font(DS.Font.caption1)
-                                }
-                                .foregroundColor(DS.Color.primary)
-                                .padding(.horizontal, DS.Spacing.md)
-                                .padding(.vertical, DS.Spacing.xs + 2)
-                                .background(DS.Color.primary.opacity(0.08))
-                                .clipShape(Capsule())
-                            }
-                        }
-                    }
-                    .padding(.horizontal, DS.Spacing.sm)
-                }
-            }
-            .padding(.top, DS.Spacing.xs)
-            .transition(.opacity)
         }
     }
 
@@ -284,16 +248,9 @@ struct TreeSearchOverlay: View {
         if !searchResults.isEmpty {
             VStack(spacing: 0) {
                 if filteredResults.isEmpty {
-                    HStack(spacing: DS.Spacing.sm) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(DS.Font.icon(16))
-                            .foregroundColor(DS.Color.textTertiary)
-                        Text(L10n.t("لا توجد نتائج ضمن هذه التصفية", "No results for this filter"))
-                            .font(DS.Font.callout)
-                            .foregroundColor(DS.Color.textSecondary)
-                        Spacer()
-                    }
-                    .padding(DS.Spacing.md)
+                    // الحالة الفارغة الواحدة (مجسّم القسم + العنوان) — صغيرة داخل البطاقة
+                    DSEmptyView(L10n.t("لا توجد نتائج ضمن هذه التصفية", "No results for this filter"),
+                                section: .tree, style: .inline)
                 } else if filteredResults.count <= 4 {
                     // نتائج قليلة — بدون سكرول، حسب المحتوى
                     VStack(spacing: 0) {
@@ -336,24 +293,16 @@ struct TreeSearchOverlay: View {
                             }
                         }
                     }
-                    .frame(maxHeight: usesFullHeight ? .infinity : 280)
+                    .frame(maxHeight: usesFullHeight ? .infinity : DSBox.overlayListMaxHeight)
                 }
             }
-            .glassCard(radius: DS.Radius.lg)
+            // البطاقة الواحدة
+            .dsCard(padding: nil)
             .padding(.top, DS.Spacing.xs)
         } else if !debouncedSearchText.isEmpty && searchText == debouncedSearchText {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "person.slash.fill")
-                    .font(DS.Font.icon(16))
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(L10n.t("لا توجد نتائج", "No results found"))
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer()
-            }
-            .padding(DS.Spacing.md)
-            .glassCard(radius: DS.Radius.lg)
-            .padding(.top, DS.Spacing.xs)
+            DSEmptyView(L10n.t("لا توجد نتائج", "No results found"), section: .tree, style: .inline)
+                .dsCard(padding: nil)
+                .padding(.top, DS.Spacing.xs)
         }
     }
 
@@ -527,53 +476,48 @@ struct TreeSearchOverlay: View {
         return parts.joined(separator: " ")
     }
 
+    /// شرائح الحالة + فاصل + شريحة الفرع — `fill`: تتمدّد بعرض البطاقة، وإلا بعرض نصّها (للتمرير)
+    @ViewBuilder
+    private func filterChipsRow(fill: Bool) -> some View {
+        let row = HStack(spacing: DS.Spacing.xs) {
+            ForEach(StatusFilter.allCases, id: \.self) { f in
+                DSChipButton(f.label, isSelected: statusFilter == f, size: .small, fillsWidth: fill) {
+                    withAnimation(DS.Anim.snappy) { statusFilter = f }
+                }
+            }
+            Capsule()
+                .fill(DS.Color.textTertiary.opacity(DS.Opacity.divider))
+                .frame(width: DS.Border.width, height: DSBox.chipHeightSmall * 0.6)
+                .padding(.horizontal, DS.Spacing.xxs)
+            // الفرع بعرض نصّه كاملاً (لا يُقصّ) — الشرائح الثلاث تتقاسم الباقي
+            branchPill(fill: false)
+                .fixedSize()
+        }
+        if fill { row } else { row.fixedSize() }
+    }
+
     // MARK: - Branch Pill (مدمج داخل صف الفلاتر)
 
-    /// كبسولة الفرع — تتغيّر شكلاً حسب وجود تحديد. مدمجة بجانب فلتر الحالة.
+    /// شريحة الفرع (`DSChipButton`) — مختارة: ممتلئة بـ«فرع <الاسم>» وعدد أفراده، و× بجانبها يلغيه.
     @ViewBuilder
-    private var branchPill: some View {
+    private func branchPill(fill: Bool) -> some View {
         if let m = branchRootMember {
-            // فرع مختار: كبسولة ملوّنة فيها الاسم + ✕
-            Button { branchPickerOpen = true } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "tree.fill")
-                        .font(DS.Font.icon(11, weight: .bold))
-                    Text(m.firstName)
-                        .font(DS.Font.scaled(12, weight: .bold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-
-                    Button {
-                        branchRootId = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(DS.Font.icon(13, weight: .semibold))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.leading, 2)
+            HStack(spacing: DS.Spacing.xxs) {
+                DSChipButton(L10n.t("فرع \(m.firstName)", "\(m.firstName)'s branch"), icon: "tree.fill",
+                             isSelected: true, count: branchDescendantIds?.count, size: .small,
+                             fillsWidth: fill) { branchPickerOpen = true }
+                Button {
+                    branchRootId = nil
+                } label: {
+                    searchTrailingIcon
                 }
-                .foregroundColor(DS.Color.textOnPrimary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(DS.Color.primaryFill))
+                .buttonStyle(.plain)
+                .padding(.horizontal, -DS.Spacing.sm)
+                .accessibilityLabel(L10n.t("إلغاء الفرع", "Clear branch"))
             }
-            .buttonStyle(DSScaleButtonStyle())
         } else {
-            // لا فرع: كبسولة شفّافة بأيقونة فقط
-            Button { branchPickerOpen = true } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "tree")
-                        .font(DS.Font.icon(11, weight: .bold))
-                    Text(L10n.t("الفرع", "Branch"))
-                        .font(DS.Font.scaled(12, weight: .semibold))
-                }
-                .foregroundColor(DS.Color.primary)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(DS.Color.primary.opacity(0.10)))
-                .overlay(Capsule().strokeBorder(DS.Color.primary.opacity(0.25), lineWidth: 1))
-            }
-            .buttonStyle(DSScaleButtonStyle())
+            DSChipButton(L10n.t("اختر فرعاً", "Pick branch"), icon: "tree", size: .small,
+                         fillsWidth: fill) { branchPickerOpen = true }
         }
     }
 
@@ -581,81 +525,42 @@ struct TreeSearchOverlay: View {
 
     private func searchResultRow(_ result: SearchResult) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(result.member.roleColor)
-                    .frame(width: 36, height: 36)
-
-                if let urlStr = result.member.avatarUrl, let url = URL(string: urlStr) {
-                    CachedAsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Text(String(result.member.firstName.prefix(1)))
-                            .font(DS.Font.scaled(14, weight: .bold))
+            // صورة العضو الواحدة في صفوف القوائم (`DSMemberAvatar`) + شارة الوفاة على طرفها
+            DSMemberAvatar(name: result.member.firstName, avatarUrl: result.member.avatarUrl,
+                           size: DS.Icon.avatarRow, roleColor: result.member.roleColor)
+                .overlay(alignment: .bottomTrailing) {
+                    if result.member.isDeceased ?? false {
+                        Image(systemName: "heart.slash.fill")
+                            .dsGlyph(DS.Glyph.micro)
                             .foregroundColor(DS.Color.onTint) // نص فوق لون الدور: داكن في الوضع الداكن
+                            .frame(width: DS.Icon.avatarBadge, height: DS.Icon.avatarBadge)
+                            .background(Circle().fill(DS.Color.deceased))
                     }
-                    .frame(width: 36, height: 36)
-                    .clipShape(Circle())
-                } else {
-                    Text(String(result.member.firstName.prefix(1)))
-                        .font(DS.Font.scaled(14, weight: .bold))
-                        .foregroundColor(DS.Color.onTint) // نص فوق لون الدور: داكن في الوضع الداكن
                 }
 
-                if result.member.isDeceased ?? false {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Circle()
-                                .fill(DS.Color.deceasedFill)
-                                .frame(width: 16, height: 16)
-                                .overlay(
-                                    Image(systemName: "heart.slash.fill")
-                                        .font(DS.Font.icon(11, weight: .bold))
-                                        .foregroundColor(DS.Color.textOnPrimary)
-                                )
-                        }
-                    }
-                    .frame(width: 36, height: 36)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(result.displayName)
-                    .font(DS.Font.scaled(15, weight: .semibold))
+                    .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: DS.Spacing.xs) {
                     if result.member.isDeceased ?? false {
-                        Text(L10n.t("متوفى", "Deceased"))
-                            .font(DS.Font.scaled(11, weight: .medium))
-                            .foregroundColor(DS.Color.deceased)
-                            .padding(.horizontal, DS.Spacing.xs)
-                            .padding(.vertical, 2)
-                            .background(DS.Color.deceased.opacity(0.1))
-                            .clipShape(Capsule())
+                        DSStatusChip(text: L10n.t("متوفى", "Deceased"), tint: DS.Color.deceased, size: .mini)
                     }
-
                     if let context = result.matchContext {
-                        Text(context)
-                            .font(DS.Font.scaled(11, weight: .medium))
-                            .foregroundColor(DS.Color.info)
-                            .padding(.horizontal, DS.Spacing.xs)
-                            .padding(.vertical, 2)
-                            .background(DS.Color.info.opacity(0.1))
-                            .clipShape(Capsule())
+                        DSStatusChip(text: context, tint: DS.Color.info, size: .mini)
                     }
                 }
             }
             Spacer()
             Image(systemName: "arrow.up.left.circle.fill")
-                .font(DS.Font.icon(18))
-                .foregroundColor(result.member.roleColor.opacity(0.6))
+                .dsGlyph(DS.Glyph.xlCompact, weight: .regular)
+                .foregroundColor(result.member.roleColor.opacity(DS.Opacity.selectedStroke))
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Recent Searches
@@ -667,9 +572,5 @@ struct TreeSearchOverlay: View {
         searches.insert(trimmed, at: 0)
         if searches.count > 10 { searches = Array(searches.prefix(10)) }
         recentSearchesData = (try? JSONEncoder().encode(searches)) ?? Data()
-    }
-
-    private func clearRecentSearches() {
-        recentSearchesData = (try? JSONEncoder().encode([String]())) ?? Data()
     }
 }

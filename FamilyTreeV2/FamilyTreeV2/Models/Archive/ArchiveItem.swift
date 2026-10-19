@@ -60,7 +60,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
 
         /// أيقونة SF Symbol مناسبة للقسم.
         var iconName: String {
-            if let custom = CategoryStore.lookup(.archive, rawValue) { return custom.iconKey }
+            if let custom = CategoryStore.lookup(.archive, rawValue) { return custom.symbol }
             switch self {
             case .documents:  return "doc.text.fill"
             case .books:      return "book.closed.fill"
@@ -96,7 +96,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         return key
     }
     static func categoryIcon(_ key: String) -> String {
-        CategoryStore.lookup(.archive, key)?.iconKey ?? Category(rawValue: key)?.iconName ?? "folder.fill"
+        CategoryStore.lookup(.archive, key)?.symbol ?? Category(rawValue: key)?.iconName ?? "folder.fill"
     }
     static func categoryColor(_ key: String) -> Color {
         CategoryStore.lookup(.archive, key)?.color ?? Category(rawValue: key)?.accentColor ?? DS.Color.textSecondary

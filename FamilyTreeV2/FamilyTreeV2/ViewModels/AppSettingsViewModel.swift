@@ -15,6 +15,8 @@ struct AppSettings: Codable {
     var diwaniyasEnabled: Bool?
     var projectsEnabled: Bool?
     var albumsEnabled: Bool?
+    /// إظهار «شجرة النساء» في قسم الشجرة (العمود موجود ويقرؤه الأندرويد لاختصار الرئيسية) — nil = ظاهرة
+    var womenTreeEnabled: Bool?
     /// لغة التطبيق الرسمية (ar / en) — للمستخدمين الذين لم يختاروا لغتهم
     var defaultLanguage: String?
     /// التحديث الإجباري — أقل رقم بناء مسموح لكل منصة (0 = بلا إجبار) + رابط المتجر
@@ -26,6 +28,19 @@ struct AppSettings: Codable {
     var androidMinBuild: Int?
     var iosUpdateUrl: String?
     var androidUpdateUrl: String?
+    /// أسماء الفروع المخصّصة (طلب المالك ٢٠٢٦-١٠-٠٩): معرّف رأس الفرع (uuid نصّاً بحروف صغيرة) ← الاسم.
+    /// تظهر في قائمة «اختر فرعاً» فقط — لا تغيّر أسماء الأعضاء في أي مكان آخر. nil/فارغ = الأسماء الافتراضية.
+    var branchNames: [String: String]?
+    /// «مسار الموافقات» (طلب المالك ٢٠٢٦-١٠-١٥): المختص يراجع ← المدير يعتمد ← المختص ينفّذ.
+    /// nil (العمود غير موجود بعد) أو false = الطريقة القديمة كما هي
+    var approvalsWorkflow: Bool?
+    /// «مسار الموافقات ٢» (طلب المالك ٢٠٢٦-١٠-١٦): أنواع «المسار السريع» (تبدأ عند المدير مباشرة)
+    /// والمهلة بالساعات (تذكير/تصعيد، والمستعجل) — nil = العمود غير موجود بعد (يختفي الإعداد)
+    var approvalsFastTypes: [String]?
+    var approvalsSlaHours: Double?
+    var approvalsEscalateHours: Double?
+    var approvalsUrgentSlaHours: Double?
+    var approvalsUrgentEscalateHours: Double?
     var updatedAt: String?
     var updatedBy: UUID?
 
@@ -39,6 +54,7 @@ struct AppSettings: Codable {
         case diwaniyasEnabled = "diwaniyas_enabled"
         case projectsEnabled = "projects_enabled"
         case albumsEnabled = "albums_enabled"
+        case womenTreeEnabled = "women_tree_enabled"
         case defaultLanguage = "default_language"
         case iosMinBuild = "ios_min_build"
         case forceUpdate = "force_update"
@@ -47,6 +63,13 @@ struct AppSettings: Codable {
         case androidMinBuild = "android_min_build"
         case iosUpdateUrl = "ios_update_url"
         case androidUpdateUrl = "android_update_url"
+        case branchNames = "branch_names"
+        case approvalsWorkflow = "approvals_workflow"
+        case approvalsFastTypes = "approvals_fast_types"
+        case approvalsSlaHours = "approvals_sla_hours"
+        case approvalsEscalateHours = "approvals_escalate_hours"
+        case approvalsUrgentSlaHours = "approvals_urgent_sla_hours"
+        case approvalsUrgentEscalateHours = "approvals_urgent_escalate_hours"
         case updatedAt = "updated_at"
         case updatedBy = "updated_by"
     }
@@ -131,6 +154,58 @@ class AppSettingsViewModel: ObservableObject {
         isSaving = false
     }
 
+    // MARK: - أسماء الفروع (طلب المالك ٢٠٢٦-١٠-٠٩)
+
+    /// الاسم المخصّص لفرع — المفتاح يُطابق بلا اعتبار لحالة الحروف؛ الفارغ/المسافات = لا اسم مخصّص
+    func branchName(for id: UUID) -> String? {
+        guard let names = settings.branchNames, !names.isEmpty else { return nil }
+        let key = id.uuidString.lowercased()
+        let raw = names[key] ?? names.first { $0.key.lowercased() == key }?.value
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// حفظ اسم فرع مخصّص — nil أو فارغ = حذف المفتاح (يرجع الاسم الافتراضي). للمالك وحده.
+    /// تحديث متفائل: الاسم يظهر فوراً ويُعاد السابق إن فشل الحفظ.
+    func updateBranchName(_ name: String?, for branchId: UUID, updatedBy: UUID?) async {
+        guard canManageSettings else {
+            Log.warning("[AUTH] Unauthorized updateBranchName attempt — owner only")
+            return
+        }
+        let key = branchId.uuidString.lowercased()
+        let previous = settings.branchNames
+        // مفتاح واحد لكل فرع (يُزال أي مفتاح قديم بحروف كبيرة)
+        var names = (previous ?? [:]).filter { $0.key.lowercased() != key }
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty { names[key] = trimmed }
+
+        settings.branchNames = names
+        isSaving = true
+        do {
+            var updateData: [String: AnyEncodable] = [
+                "branch_names": AnyEncodable(names),
+                "updated_at": AnyEncodable(DateHelper.now)
+            ]
+            if let updatedBy {
+                updateData["updated_by"] = AnyEncodable(updatedBy.uuidString)
+            }
+
+            try await supabase
+                .from("app_settings")
+                .update(updateData)
+                .eq("id", value: settings.id.uuidString)
+                .execute()
+
+            await fetchSettings()
+            Log.info("تم تحديث اسم الفرع")
+        } catch {
+            settings.branchNames = previous
+            Log.error("خطأ في حفظ اسم الفرع: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+        }
+        isSaving = false
+    }
+
     /// إعادة تعيين جميع الإعدادات للقيم الافتراضية
     func resetToDefaults(updatedBy: UUID?) async {
         guard canManageSettings else {
@@ -148,6 +223,7 @@ class AppSettingsViewModel: ObservableObject {
                 "diwaniyas_enabled": AnyEncodable(true),
                 "projects_enabled": AnyEncodable(true),
                 "albums_enabled": AnyEncodable(true),
+                "women_tree_enabled": AnyEncodable(true),
                 "updated_at": AnyEncodable(DateHelper.now),
                 "updated_by": AnyEncodable(updatedBy?.uuidString)
             ]

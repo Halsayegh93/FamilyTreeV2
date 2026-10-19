@@ -61,12 +61,25 @@ nonisolated enum ImageProcessor {
             return nil
         }
 
-        let originalSize = image.jpegData(compressionQuality: 1.0)?.count ?? 0
-        let newSize = data.count
-        let reduction = originalSize > 0 ? Int((1.0 - Double(newSize) / Double(originalSize)) * 100) : 0
-        Log.info("[ImageProcessor] \(useCase): \(formatBytes(originalSize)) → \(formatBytes(newSize)) (-\(reduction)%)")
+        // كان يضغط الأصل بجودة ١٫٠ فقط لسطر السجل — ثقيل على الخيط الرئيسي بلا فائدة
+        Log.info("[ImageProcessor] \(useCase): → \(formatBytes(data.count))")
 
         return data
+    }
+
+    /// فكّ الصورة مصغّرة مباشرة من بياناتها (ImageIO) — بدل UIImage(data:) بالدقّة الكاملة التي تُفكّ
+    /// على الخيط الرئيسي عند أول عرض (٢٤ ميغا بكسل ≈ ١٠٠ ميغابايت لكل صورة). يُستدعى خارج الخيط الرئيسي.
+    static func downsampled(_ data: Data, maxPixel: CGFloat = 1600) -> UIImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData,
+                                                    [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: cg)
     }
 
     /// تصغير الصورة مع الحفاظ على النسبة

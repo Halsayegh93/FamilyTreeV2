@@ -6,7 +6,8 @@ import UIKit
 // نفس OccasionPostM3.tsx في الموقع، وبنفس أرقام ملف التصميم «منشورات مناسبات المحمدعلي» (صفحة نموذج ٣):
 // التهاني: الآية بالمخطوطة كبيرة فوق ونسخة عملاقة منها خافتة خلفها ونجوم حولها، والصورة بقوس دائري الرأس
 // بحاشية رملية وخطين ذهبيين تطلع من بطاقة رملية، والشعار ختماً نافراً عند زاوية البطاقة، والشعار الكريمي تحت.
-// إعلان الوفاة («اللوح المفتوح»): النص على الأرضية الداكنة مباشرة، والعزاءان بخط رفيع بينهما بلا زخارف فوقهما ولا تحتهما.
+// إعلان العزاء («اللوح المفتوح»): النص على الأرضية الرصاصية الفحمية مباشرة بالفضي والأبيض، والعزاءان بخط رفيع بينهما
+// بلا زخارف فوقهما ولا تحتهما.
 // مشاركة العزاء: بطاقة بيضاء تحمل الآية والنص على أرضية رصاصية.
 //
 // التصميم بإحداثيات ثابتة 1080×1350 (من فوق يسار مثل position: absolute)؛ الستوري والمربع نفس التصميم داخل
@@ -39,6 +40,15 @@ enum OccasionM3 {
 
     static func rgba(_ r: Double, _ g: Double, _ b: Double, _ a: Double) -> Color {
         Color(red: r / 255, green: g / 255, blue: b / 255).opacity(a)
+    }
+
+    /// مشاركة العزاء في الستوري (طلب المالك ٢٠٢٦-١٠-١٧ «رصاصي فاضي كثير حول البطاقة»): البطاقة البيضاء أعرض وأطول —
+    /// التصميم كله مكبّر ×1.04 (هامش الجنب 24 بدل 44)، والبطاقة من حد الأمان فوق (250) لين فوق الشعار، والشعار ينتهي
+    /// عند حد الأمان تحت (1670). المنشور والمربع كما هم. نفس M3_SOLACE_STORY في الموقع (cardBottom وfooterTop بإحداثيات التصميم)
+    enum SolaceStory {
+        static let frame: (x: CGFloat, y: CGFloat, k: CGFloat) = (-22, 204, 1.04)
+        static let cardBottom: CGFloat = 1290
+        static let footerTop: CGFloat = 1316
     }
 
     /// مكان التصميم في كل مقاس: الستوري في الوسط (هوامش الأمان ٢٥٠ تبقى فاضية)، والمربع مصغّر ×0.8 في الوسط
@@ -93,19 +103,72 @@ enum OccasionM3 {
         }
     }
 
-    /// إعلان الوفاة: الأرضية من #2B3038 إلى occ-obituary، والشامبين occ-obituary-gold
+    /// «إعلان عزاء» (طلب المالك ٢٠٢٦-١٠-١٧): أرضية رصاصية فحمية (غرافيت) وفضي بدل الكحلي الليلي والذهبي (الشامبين) —
+    /// نفس M3_DEATH في الموقع. الفضي: الآية واللقب والنجوم والسدو والقوس والدبابيس وخطوط الشعار؛ الاسم والقرابة أبيض.
+    /// التباين عند أفتح نقطة تحت النص (#42474F): الفضي 6.6، المقدمة 6.5، الدعاء 6.8، سطر المكان/الوقت 5.5، الأبيض 9.3
     enum Death {
-        static let fill = Color(hex: "#2B3038")
-        static let deep = Color(hex: "#14171C")
-        static let champ = Color(hex: "#E9D5A6")
-        static let lead = Color(hex: "#C9CED5")
-        static let grey = Color(hex: "#AEB4BC")
-        static let dua = Color(hex: "#D5D9DE")
-        /// الظل الداكن خلف النص
-        static let pool = Color(red: 4 / 255, green: 5 / 255, blue: 6 / 255)
+        static let fill = Color(hex: "#4A4F57")
+        static let deep = Color(hex: "#2B2F35")
+        static let silver = Color(hex: "#D5DAE0")
+        /// حاشية الصورة الفضية (مكان الحاشية الرملية في التهاني) — طلب المالك «إطار فضي» (#D5DAE0 مثل الموقع)
+        static let frame = Color(hex: "#D5DAE0")
+        /// لو ما نزلت ملفات الفضي بعد (verse/*-silver، logo/flat-silver): ملفات الشامبين رمادية بلمسة باردة
+        static let calliTint = Color(hex: "#F4F7FB")
+        static let lead = Color(hex: "#D3D7DD")
+        static let grey = Color(hex: "#C3C8CF")
+        static let dua = Color(hex: "#D9DDE2")
+        /// الظل الخفيف خلف النص (أخف من قبل — الأرضية تبقى رصاصية مو سوداء)
+        static let pool = Color(red: 14 / 255, green: 16 / 255, blue: 19 / 255)
+        /// الشعار والآية بالفضي (ملفات جديدة في occasion-kit من الموقع)
+        static let logo = "logo/flat-silver.png"
+        static func silverVerse(_ file: String) -> String {
+            "m3/verse/" + file.replacingOccurrences(of: "-champ", with: "-silver") + ".png"
+        }
     }
 
-    /// مشاركة العزاء: بطاقة بيضاء على الرصاصي
+    /// ألوان «إعلان عزاء» في نموذج ٣ حسب اختيار «الألوان»: silver = الفضي أعلاه (Death)، original = الكحلي الليلي
+    /// والشامبين قبل الفضي (كما كانت قبل ٢٠٢٦-١٠-١٧ بالضبط)
+    struct DeathLook {
+        let fill: Color
+        let deep: Color
+        /// تدرّج الأرضية عمودي (فوق ← تحت) بدل 225°
+        let vertical: Bool
+        /// الآية (ملفات الفضي)، النجوم، السدو، الضوء، القوس، اللقب، التشييع، الدبابيس، عناوين العزاءين، الفاصل، خطّا الشعار
+        let accent: Color
+        /// الاسم والقرابة
+        let name: Color
+        let lead: Color
+        let grey: Color
+        let dua: Color
+        /// حاشية الصورة
+        let frame: Color
+        let pool: Color
+        let poolOpacity: (Double, Double)
+        let sealOpacity: Double
+        /// أرضية كبسولة القرابة وحدّها (nil = بلا حدّ)
+        let chipFill: Double
+        let chipStroke: Double?
+        /// الآية والشعار بالملفات الفضية (وإلا الشامبين والكريمي)
+        let silverFiles: Bool
+
+        static let silver = DeathLook(fill: Death.fill, deep: Death.deep, vertical: true, accent: Death.silver, name: .white, lead: Death.lead,
+                                      grey: Death.grey, dua: Death.dua, frame: Death.frame, pool: Death.pool, poolOpacity: (0.32, 0.14),
+                                      sealOpacity: Seal.groundOpacity, chipFill: 0.10, chipStroke: 0.35, silverFiles: true)
+        static let original = DeathLook(fill: Color(hex: "#2B3038"), deep: Color(hex: "#14171C"), vertical: false, accent: Color(hex: "#E9D5A6"),
+                                        name: Color(hex: "#E9D5A6"), lead: Color(hex: "#C9CED5"), grey: Color(hex: "#AEB4BC"),
+                                        dua: Color(hex: "#D5D9DE"), frame: OccasionM3.sand, pool: Color(red: 4 / 255, green: 5 / 255, blue: 6 / 255),
+                                        poolOpacity: (0.55, 0.25), sealOpacity: 1, chipFill: 0.12, chipStroke: nil, silverFiles: false)
+    }
+
+    /// الشعار المحفور (الختم) — طلب المالك ٢٠٢٦-١٠-١٧ «باهت»: على البطاقة كامل (كان ٠٫٩) وأغمق ٤٪،
+    /// وعلى أرضية العزاء ٠٫٧٥ — نفس M3_SEAL في الموقع
+    enum Seal {
+        static let cardOpacity: Double = 1
+        static let cardShade = Color(white: 0.96)
+        static let groundOpacity: Double = 0.75
+    }
+
+    /// مشاركة العزاء: بطاقة بيضاء على الرصاصي — وفي «فحمي وفضي» بطاقة فاتحة (OccasionSilver.card) على الغرافيت
     enum Solace {
         static let fill = Color(hex: "#4D5B67")
         static let deep = Color(hex: "#2B353E")
@@ -550,48 +613,61 @@ extension OccasionPostView {
         }
     }
 
-    // MARK: إعلان وفاة — مع صورة («اللوح المفتوح»)
+    // MARK: إعلان عزاء — مع صورة («اللوح المفتوح»)
 
     private var m3DeathPost: some View {
-        let D = OccasionM3.Death.self
+        let D = m3DeathLook
         let v = OccasionM3.deathPhotoVerse
         let top: CGFloat = 416
         let aw: CGFloat = 244
         let ah: CGFloat = 284
-        return m3Canvas(fill: D.fill, deep: D.deep) {
-            OccasionM3StarsView(stars: OccasionM3.StarSets.death, color: D.champ)
+        return m3Canvas(fill: D.fill, deep: D.deep, vertical: D.vertical) {
+            OccasionM3StarsView(stars: OccasionM3.StarSets.death, color: D.accent)
                 .frame(width: OccasionM3.width, height: OccasionM3.height, alignment: .topLeading)
             m3Echo(v.echo)
-            m3Zone(height: 350, padTop: 22, gap: 20, strip: D.champ) {
-                m3SabrBlock(v, gap: 12)
+            m3Zone(height: 350, padTop: 22, gap: 20, strip: D.accent) {
+                m3DeathSabr(v, gap: 12)
             }
-            m3Glow(cx: OccasionM3.width / 2, cy: top + 130, r: 330, color: D.champ, opacity: 0.15)
+            m3Glow(cx: OccasionM3.width / 2, cy: top + 130, r: 330, color: D.accent, opacity: 0.15)
             m3GroundLayers(poolTop: 640)
-            m3Arches(top: top, aw: aw, ah: ah, color: D.champ, fading: true)
+            m3Arches(top: top, aw: aw, ah: ah, color: D.accent, fading: true)
             m3DeathInfo(top: top + ah + 12, k0: 1, gap0: 1, rels: ["relation"])
-            m3ArchPhoto(top: top, aw: aw, ah: ah, avatar: .grey)
+            m3ArchPhoto(top: top, aw: aw, ah: ah, avatar: .grey, frame: D.frame)
                 .accessibilityLabel(L10n.t("صورة الفقيد", "Photo of the deceased"))
-            m3Footer(top: 1240, line: D.champ)
+            m3Footer(top: 1240, line: D.accent, monoLogo: D.silverFiles)
         }
     }
 
-    // MARK: إعلان وفاة — بدون صورة: الآية أكبر، والنص يبدأ أعلى وبخط أكبر (× deathTextK)
+    /// ألوان «إعلان عزاء» حسب اختيار «الألوان»
+    private var m3DeathLook: OccasionM3.DeathLook { silver ? .silver : .original }
+
+    /// الآية: بالفضي (ملفات الفضي أو الشامبين رمادي)، أو بالشامبين نفسه في «الأصلية»
+    @ViewBuilder
+    private func m3DeathSabr(_ v: OccasionM3.SabrVerse, gap: CGFloat) -> some View {
+        if m3DeathLook.silverFiles {
+            m3SilverSabr(v, gap: gap)
+        } else {
+            m3SabrBlock(v, gap: gap)
+        }
+    }
+
+    // MARK: إعلان عزاء — بدون صورة: الآية أكبر، والنص يبدأ أعلى وبخط أكبر (× deathTextK)
 
     private var m3DeathTextPost: some View {
-        let D = OccasionM3.Death.self
+        let D = m3DeathLook
         let v = OccasionM3.deathNoPhotoVerse
         let infoTop: CGFloat = 540
-        return m3Canvas(fill: D.fill, deep: D.deep) {
-            OccasionM3StarsView(stars: OccasionM3.StarSets.deathNP, color: D.champ)
+        return m3Canvas(fill: D.fill, deep: D.deep, vertical: D.vertical) {
+            OccasionM3StarsView(stars: OccasionM3.StarSets.deathNP, color: D.accent)
                 .frame(width: OccasionM3.width, height: OccasionM3.height, alignment: .topLeading)
             m3Echo(v.echo)
-            m3Zone(height: 420, padTop: 30, gap: 28, strip: D.champ) {
-                m3SabrBlock(v, gap: 14)
+            m3Zone(height: 420, padTop: 30, gap: 28, strip: D.accent) {
+                m3DeathSabr(v, gap: 14)
             }
-            m3Glow(cx: OccasionM3.width / 2, cy: infoTop + 170, r: 380, color: D.champ, opacity: 0.10)
+            m3Glow(cx: OccasionM3.width / 2, cy: infoTop + 170, r: 380, color: D.accent, opacity: 0.10)
             m3GroundLayers(poolTop: infoTop - 40)
             m3DeathInfo(top: infoTop, k0: OccasionM3.deathTextK, gap0: 1.5, rels: ["rel1", "rel2", "rel3"])
-            m3Footer(top: 1240, line: D.champ)
+            m3Footer(top: 1240, line: D.accent, monoLogo: D.silverFiles)
         }
     }
 
@@ -600,7 +676,7 @@ extension OccasionPostView {
     /// 17/10/2026 مع بقاء المسافة نفسها). k0 = حجم التصميم، gap0 = نسبة المسافات.
     /// يصغر الكل بنسبة وحدة لين يدخل فوق الشعار — نفس DeathInfo في الموقع
     private func m3DeathInfo(top: CGFloat, k0: CGFloat, gap0: CGFloat, rels: [String]) -> some View {
-        let D = OccasionM3.Death.self
+        let D = m3DeathLook
         let relKeys = rels.filter { has($0) }
         let venues = m3Venues()
         let fc = ["funeral", "condolence"].filter { has($0) }
@@ -618,8 +694,8 @@ extension OccasionPostView {
         func venueHeight(_ v: OccasionM3Venue, _ d: OccasionM3DeathDims) -> CGFloat {
             let placeRows = CGFloat(min(2, OccasionM3.lines(v.place, .semibold, d.vPlace, d.venueW)))
             var h: CGFloat = d.vTitle * 1.4 + 2 + placeRows * d.vPlace * 1.4
-            if !v.line.isEmpty {
-                let lineRows = CGFloat(min(2, OccasionM3.lines(v.line, .regular, d.vLine, d.venueW)))
+            for line in v.lines {
+                let lineRows = CGFloat(min(2, OccasionM3.lines(line, .regular, d.vLine, d.venueW)))
                 h += 2 + lineRows * d.vLine * 1.4
             }
             return h
@@ -664,15 +740,16 @@ extension OccasionPostView {
         let multi = multiRel(d)
         return VStack(spacing: 0) {
             if has("lead") { m3OneLine(value("lead"), .semibold, d.lead, width: 960, color: D.lead, lineHeight: 1.4) }
-            if has("title") { m3OneLine(value("title"), .semibold, d.lead, width: 960, color: D.champ, lineHeight: 1.4) }
-            if has("name") { m3NameLine("name", color: D.champ, scale: s) }
+            if has("title") { m3OneLine(value("title"), .semibold, d.lead, width: 960, color: D.accent, lineHeight: 1.4) }
+            // الاسم أبيض (كان بالشامبين) — الفضي للعناوين والزخارف؛ «الأصلية»: بالشامبين
+            if has("name") { m3NameLine("name", color: D.name, scale: s) }
             if !relKeys.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(relKeys, id: \.self) { key in
                         if isNameLine(key) {
-                            m3NameLine(key, color: D.champ, scale: s)
+                            m3NameLine(key, color: D.name, scale: s)
                         } else {
-                            m3Lines(value(key), .semibold, d.rel, lineHeight: 1.45, width: relWidth, color: D.champ, maxLines: 4)
+                            m3Lines(value(key), .semibold, d.rel, lineHeight: 1.45, width: relWidth, color: D.name, maxLines: 4)
                         }
                     }
                 }
@@ -680,10 +757,15 @@ extension OccasionPostView {
                 .padding(.top, multi ? 8 : 3)
                 .padding(.bottom, multi ? 13 : 8)
                 .background {
+                    // أرضية فضية خفيفة بحدّ فضي رفيع (نفس الموقع)؛ «الأصلية»: شامبين خفيف بلا حدّ
+                    let stroke = D.accent.opacity(D.chipStroke ?? 0)
+                    let width: CGFloat = D.chipStroke == nil ? 0 : 1
                     if multi {
-                        RoundedRectangle(cornerRadius: 30, style: .circular).fill(D.champ.opacity(0.12))
+                        RoundedRectangle(cornerRadius: 30, style: .circular).fill(D.accent.opacity(D.chipFill))
+                            .overlay(RoundedRectangle(cornerRadius: 30, style: .circular).stroke(stroke, lineWidth: width))
                     } else {
-                        Capsule().fill(D.champ.opacity(0.12))
+                        Capsule().fill(D.accent.opacity(D.chipFill))
+                            .overlay(Capsule().stroke(stroke, lineWidth: width))
                     }
                 }
                 .padding(.top, 6)
@@ -695,7 +777,7 @@ extension OccasionPostView {
                 if !fc.isEmpty {
                     VStack(spacing: 0) {
                         if has("funeral") {
-                            m3Lines(value("funeral"), .semibold, d.fc, lineHeight: 1.45, width: 900, color: D.champ, maxLines: 3)
+                            m3Lines(value("funeral"), .semibold, d.fc, lineHeight: 1.45, width: 900, color: D.accent, maxLines: 3)
                         }
                         if has("condolence") {
                             m3Lines(value("condolence"), .semibold, d.fc, lineHeight: 1.45, width: 900, color: .white, maxLines: 3)
@@ -726,37 +808,36 @@ extension OccasionPostView {
         .offset(x: 60, y: top)
     }
 
-    /// العزاءان: «عزاء الرجال / النساء» والمكان، والمنطقة · الأوقات
+    /// العزاءان: «عزاء الرجال / النساء» والمكان، ثم المنطقة، ثم الأوقات («اليوم وغداً وبعد غد، عقب صلاة العصر») كل واحد بسطره
     private func m3Venues() -> [OccasionM3Venue] {
         var out: [OccasionM3Venue] = []
         for (side, title) in [("men", "عزاء الرجال"), ("women", "عزاء النساء")] {
             guard has("\(side)Place") else { continue }
-            let line = [value("\(side)Area"), value("\(side)Times")]
+            let lines = [value("\(side)Area"), value("\(side)Times")]
                 .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                .joined(separator: " · ")
-            out.append(OccasionM3Venue(title: title, place: value("\(side)Place"), line: line))
+            out.append(OccasionM3Venue(title: title, place: value("\(side)Place"), lines: lines))
         }
         return out
     }
 
     private func m3Venue(_ v: OccasionM3Venue, _ d: OccasionM3DeathDims) -> some View {
-        let D = OccasionM3.Death.self
+        let D = m3DeathLook
         return VStack(spacing: 2) {
             HStack(spacing: 8) {
                 OccasionM3Pin()
-                    .fill(D.champ, style: FillStyle(eoFill: true))
+                    .fill(D.accent, style: FillStyle(eoFill: true))
                     .frame(width: 24, height: 24)
                 Text(v.title)
                     .font(.custom(OccasionKit.FontWeight.extrabold.postScriptName, fixedSize: d.vTitle))
-                    .foregroundColor(D.champ)
+                    .foregroundColor(D.accent)
                     .occasionLineBox(.extrabold, size: d.vTitle, lineHeight: 1.4)
                     .fixedSize()
             }
             // الدبوس يمين العنوان مثل التصميم
             .environment(\.layoutDirection, .rightToLeft)
             m3Lines(v.place, .semibold, d.vPlace, lineHeight: 1.4, width: d.venueW, color: .white, maxLines: 2)
-            if !v.line.isEmpty {
-                m3Lines(v.line, .regular, d.vLine, lineHeight: 1.4, width: d.venueW, color: D.grey, maxLines: 2)
+            ForEach(v.lines, id: \.self) { line in
+                m3Lines(line, .regular, d.vLine, lineHeight: 1.4, width: d.venueW, color: D.grey, maxLines: 2)
             }
         }
         .frame(maxWidth: .infinity)
@@ -764,7 +845,7 @@ extension OccasionPostView {
 
     /// خط رفيع بين العزاءين يتلاشى من طرفيه
     private func m3VenueSeparator(height: CGFloat) -> some View {
-        let c = OccasionM3.Death.champ
+        let c = m3DeathLook.accent
         return LinearGradient(stops: [
             .init(color: c.opacity(0), location: 0), .init(color: c.opacity(0.45), location: 0.3),
             .init(color: c.opacity(0.45), location: 0.7), .init(color: c.opacity(0), location: 1),
@@ -776,15 +857,16 @@ extension OccasionPostView {
     private func m3GroundLayers(poolTop: CGFloat) -> some View {
         let f = OccasionM3.frame(size)
         let sealTop = (canvas.height - f.y) / f.k - (466 - 115)
-        let pool = OccasionM3.Death.pool
+        let D = m3DeathLook
+        let pool = D.pool
         return ZStack(alignment: .topLeading) {
             EllipticalGradient(stops: [
-                .init(color: pool.opacity(0.55), location: 0), .init(color: pool.opacity(0.25), location: 0.45),
+                .init(color: pool.opacity(D.poolOpacity.0), location: 0), .init(color: pool.opacity(D.poolOpacity.1), location: 0.45),
                 .init(color: pool.opacity(0), location: 0.72),
             ], center: .center, startRadiusFraction: 0, endRadiusFraction: CGFloat(2).squareRoot() / 2)
             .frame(width: 1200, height: 640)
             .offset(x: -60, y: poolTop)
-            m3Image("m3/wm/emboss-dark.png", w: 620, h: 466)
+            m3Image("m3/wm/emboss-dark.png", w: 620, h: 466, opacity: D.sealOpacity)
                 .offset(x: -190, y: sealTop)
         }
         .accessibilityHidden(true)
@@ -795,16 +877,23 @@ extension OccasionPostView {
     private var m3SolacePost: some View {
         let S = OccasionM3.Solace.self
         let v = OccasionM3.solaceVerse
+        // الستوري: البطاقة أعرض وأطول (OccasionM3.SolaceStory)؛ المنشور والمربع كما هم
+        let story = size == .story
         let top = OccasionM3.margin
-        let cardHeight = OccasionM3.cardBottom - top
-        let ink = OccasionM3.solaceInk
-        let muted = OccasionM3.muted
+        let bottom = story ? OccasionM3.SolaceStory.cardBottom : OccasionM3.cardBottom
+        let cardWidth = OccasionM3.cardWidth
+        let cardHeight = bottom - top
+        // «فحمي وفضي»: أرضية غرافيت وبطاقة فاتحة بنص فحمي وزخارف فضية أعمق، والشعار فضي تحتها
+        let SV = OccasionSilver.self
+        let ink = silver ? SV.cardText : OccasionM3.solaceInk
+        let muted = silver ? SV.cardText2 : OccasionM3.muted
+        let ornament = silver ? SV.cardAccent : OccasionM3.gold
         var items: [AnyView] = [
-            AnyView(m3SabrBlock(v, gap: 10)),
-            AnyView(OccasionM3Sadu(color: OccasionM3.gold, width: 420, big: 14, small: 10, opLine: 0.8, opSmall: 0.6)),
+            AnyView(m3SabrBlock(v, gap: 10, silverFiles: silver)),
+            AnyView(OccasionM3Sadu(color: ornament, width: 420, big: 14, small: 10, opLine: 0.8, opSmall: 0.6)),
             // «تتقدم عائلة المحمدعلي» أساس الفكرة: ملاصق للعنوان، و«مشاركة عزاء» ممدودة بالكشيدة لعرضه — مثل الموقع
             AnyView(OccasionSolaceHeadingView(from: has("from") ? value("from") : "", fromSize: 54, titleSize: 68, fromLineHeight: 1.4,
-                                              titleColor: ink, fromColor: OccasionM3.navy)),
+                                              titleColor: ink, fromColor: silver ? SV.cardText : OccasionM3.navy)),
             AnyView(VStack(spacing: 0) {
                 m3Fixed("بأحر التعازي وأصدق المواساة إلى", .regular, 27, color: muted, lineHeight: 1.45)
                 if has("to") { m3NameLine("to", color: ink, scale: 1) }
@@ -815,35 +904,45 @@ extension OccasionPostView {
             }),
         ]
         if has("dua") {
-            items.append(AnyView(m3Lines(value("dua"), .regular, 25, lineHeight: 1.6, width: 820, color: OccasionM3.ink2, maxLines: 3)))
+            items.append(AnyView(m3Lines(value("dua"), .regular, 25, lineHeight: 1.6, width: 820, color: silver ? SV.cardText2 : OccasionM3.ink2,
+                                         maxLines: 3)))
         } else {
             items.append(AnyView(Color.clear.frame(height: 0)))
         }
-        return m3Canvas(fill: S.fill, deep: S.deep) {
-            m3Card(top: top, padTop: 40, background: .white, spaceBetween: true, layers: {
-                OccasionM3StarsView(stars: OccasionM3.StarSets.solace, color: OccasionM3.gold)
-                    .frame(width: OccasionM3.cardWidth, height: cardHeight, alignment: .topLeading)
-                m3Echo(v.echo, frameWidth: OccasionM3.cardWidth)
-                m3Seal("white", cardHeight: cardHeight)
+        return m3Canvas(fill: silver ? SV.groundTop : S.fill, deep: silver ? SV.groundBottom : S.deep, vertical: silver,
+                        frame: story ? OccasionM3.SolaceStory.frame : nil) {
+            m3Card(top: top, padTop: 40, background: silver ? SV.card : .white, spaceBetween: true, bottom: bottom, layers: {
+                OccasionM3StarsView(stars: OccasionM3.StarSets.solace, color: ornament)
+                    .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
+                m3Echo(v.echo, frameWidth: cardWidth, silverFile: silver)
+                // «فحمي وفضي»: الختم الأبيض مضروب بلون البطاقة الفاتحة (0.915 بدل 0.96) حتى يبقى بدرجتها — مثل الموقع
+                m3Seal("white", cardHeight: cardHeight, shade: silver ? Color(white: 0.915) : OccasionM3.Seal.cardShade)
             }) {
                 OccasionSpacedColumn(items: items)
             }
-            m3Footer(top: 1229, line: OccasionM3.goldLight)
+            m3Footer(top: story ? OccasionM3.SolaceStory.footerTop : 1229, line: silver ? SV.silver : OccasionM3.goldLight,
+                     monoLogo: silver)
         }
     }
 
     // MARK: قطع نموذج ٣
 
-    /// المقاس كامل بالأرضية المتدرجة، والتصميم (1080×1350) داخل الإطار
-    private func m3Canvas<Content: View>(fill: Color, deep: Color, @ViewBuilder _ content: () -> Content) -> some View {
-        let f = OccasionM3.frame(size)
+    /// المقاس كامل بالأرضية المتدرجة، والتصميم (1080×1350) داخل الإطار — frame يغيّر الإطار (مشاركة العزاء في الستوري:
+    /// مكبّر ونازل لين حد الأمان، والتصميم يطول لآخر المقاس)
+    /// vertical = «فحمي وفضي»: التدرّج من فوق لتحت بدل 225°
+    private func m3Canvas<Content: View>(fill: Color, deep: Color, vertical: Bool = false,
+                                         frame: (x: CGFloat, y: CGFloat, k: CGFloat)? = nil,
+                                         @ViewBuilder _ content: () -> Content) -> some View {
+        let f = frame ?? OccasionM3.frame(size)
+        let designHeight = frame == nil ? OccasionM3.height : (canvas.height - f.y) / f.k
         return ZStack(alignment: .topLeading) {
-            OccasionCSSGradient(angle: 225, stops: [Gradient.Stop(color: fill, location: 0), Gradient.Stop(color: deep, location: 1)])
+            OccasionCSSGradient(angle: vertical ? 180 : 225,
+                                stops: [Gradient.Stop(color: fill, location: 0), Gradient.Stop(color: deep, location: 1)])
                 .frame(width: canvas.width, height: canvas.height)
             ZStack(alignment: .topLeading) {
                 content()
             }
-            .frame(width: OccasionM3.width, height: OccasionM3.height, alignment: .topLeading)
+            .frame(width: OccasionM3.width, height: designHeight, alignment: .topLeading)
             .scaleEffect(f.k, anchor: .topLeading)
             .offset(x: f.x, y: f.y)
         }
@@ -866,17 +965,62 @@ extension OccasionPostView {
         m3Image("m3/verse/\(v.file).png", w: v.w, h: v.h).accessibilityLabel(label)
     }
 
-    /// «وبشر الصابرين…» صغيرة فوق «إنا لله وإنا إليه راجعون» كبيرة
-    private func m3SabrBlock(_ v: OccasionM3.SabrVerse, gap: CGFloat) -> some View {
+    /// «وبشر الصابرين…» و«إنا لله…» بالفضي في «إعلان عزاء»: ملفات الفضي (verse/*-silver) إذا نزلت، وإلا ملفات
+    /// الشامبين نفسها رمادية بلمسة باردة — المنشور ما ينكسر قبل ما ينزل الموقع الملفات الجديدة. الآية نفسها ما تتغيّر
+    private func m3SilverSabr(_ v: OccasionM3.SabrVerse, gap: CGFloat) -> some View {
         VStack(spacing: gap) {
-            m3Calli(v.lead, label: OccasionM3.leadLabel)
-            m3Calli(v.inna, label: OccasionM3.innaLabel)
+            m3SilverCalli(v.lead, label: OccasionM3.leadLabel)
+            m3SilverCalli(v.inna, label: OccasionM3.innaLabel)
+        }
+    }
+
+    @ViewBuilder
+    private func m3SilverCalli(_ img: OccasionM3.Img, label: String) -> some View {
+        let silver = OccasionM3.Death.silverVerse(img.file)
+        if image(silver) != nil {
+            m3Image(silver, w: img.w, h: img.h).accessibilityLabel(label)
+        } else {
+            m3Calli(img, label: label)
+                .grayscale(1)
+                .colorMultiply(OccasionM3.Death.calliTint)
+        }
+    }
+
+    /// «وبشر الصابرين…» صغيرة فوق «إنا لله وإنا إليه راجعون» كبيرة. silverFiles = مشاركة العزاء بـ«فحمي وفضي»:
+    /// نسخ الفحمي (m3/verse/*-navytone-silver)، أو الكحلية نفسها رمادية لين تنزل
+    @ViewBuilder
+    private func m3SabrBlock(_ v: OccasionM3.SabrVerse, gap: CGFloat, silverFiles: Bool = false) -> some View {
+        if silverFiles {
+            VStack(spacing: gap) {
+                m3CharcoalCalli(v.lead, label: OccasionM3.leadLabel)
+                m3CharcoalCalli(v.inna, label: OccasionM3.innaLabel)
+            }
+        } else {
+            VStack(spacing: gap) {
+                m3Calli(v.lead, label: OccasionM3.leadLabel)
+                m3Calli(v.inna, label: OccasionM3.innaLabel)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func m3CharcoalCalli(_ img: OccasionM3.Img, label: String) -> some View {
+        let file = OccasionSilver.path("m3/verse/\(img.file).png")
+        if image(file) != nil {
+            m3Image(file, w: img.w, h: img.h).accessibilityLabel(label)
+        } else {
+            m3Calli(img, label: label).grayscale(1)
         }
     }
 
     /// الآية عملاقة خافتة — في وسط الإطار (أو البطاقة) وتنقصها حوافه
-    private func m3Echo(_ e: OccasionM3.Echo, frameWidth: CGFloat = OccasionM3.width) -> some View {
-        m3Image("m3/verse/\(e.file).png", w: e.w, h: e.h, opacity: e.opacity)
+    /// silverFile = نسخة «-silver» (مشاركة العزاء بالفحمي)، أو الأصلية رمادية لين تنزل
+    private func m3Echo(_ e: OccasionM3.Echo, frameWidth: CGFloat = OccasionM3.width, silverFile: Bool = false) -> some View {
+        let original = "m3/verse/\(e.file).png"
+        let silverPath = OccasionSilver.path(original)
+        let useSilver = silverFile && image(silverPath) != nil
+        return m3Image(useSilver ? silverPath : original, w: e.w, h: e.h, opacity: e.opacity)
+            .grayscale(silverFile && !useSilver ? 1 : 0)
             .offset(x: ((frameWidth - e.w) / 2).rounded(.down), y: e.top)
             .accessibilityHidden(true)
     }
@@ -936,12 +1080,13 @@ extension OccasionPostView {
         .offset(x: x, y: top - off)
     }
 
-    /// الصورة بقوس دائري الرأس وحاشية رملية 10
-    private func m3ArchPhoto(top: CGFloat, aw: CGFloat, ah: CGFloat, avatar: OccasionM3.Avatar) -> some View {
+    /// الصورة بقوس دائري الرأس وحاشية 10 (رملية، وفضية في «إعلان عزاء»)
+    private func m3ArchPhoto(top: CGFloat, aw: CGFloat, ah: CGFloat, avatar: OccasionM3.Avatar,
+                             frame: Color = OccasionM3.sand) -> some View {
         let r = (aw / 2).rounded(.down)
         let pad: CGFloat = 10
         return ZStack(alignment: .topLeading) {
-            OccasionM3ArchShape(topRadius: r, bottomRadius: 30).fill(OccasionM3.sand)
+            OccasionM3ArchShape(topRadius: r, bottomRadius: 30).fill(frame)
             OccasionM3PhotoFill(photo: photo, avatar: avatar, width: aw - 2 * pad, height: ah - 2 * pad)
                 .clipShape(OccasionM3ArchShape(topRadius: r - pad, bottomRadius: 21))
                 .offset(x: pad, y: pad)
@@ -953,10 +1098,11 @@ extension OccasionPostView {
     /// البطاقة: layers طبقات خلف النص مقصوصة بحوافها (الختم، النجوم…)، والنص في المساحة بين الحشوتين
     private func m3Card<Layers: View, Content: View>(top: CGFloat, padTop: CGFloat, padBottom: CGFloat = 40,
                                                      background: Color = OccasionM3.sand, spaceBetween: Bool = false,
+                                                     bottom: CGFloat = OccasionM3.cardBottom,
                                                      @ViewBuilder layers: () -> Layers,
                                                      @ViewBuilder content: () -> Content) -> some View {
         let w = OccasionM3.cardWidth
-        let h = OccasionM3.cardBottom - top
+        let h = bottom - top
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 40, style: .circular)
                 .fill(background)
@@ -983,23 +1129,27 @@ extension OccasionPostView {
         .offset(x: OccasionM3.margin, y: top)
     }
 
-    /// الشعار ختماً نافراً بلون البطاقة عند زاويتها اليسرى السفلى، مقصوصاً بحافتها
-    private func m3Seal(_ face: String, cardHeight: CGFloat) -> some View {
-        m3Image("m3/wm/emboss-\(face).png", w: 620, h: 466, opacity: 0.9)
+    /// الشعار ختماً نافراً بلون البطاقة عند زاويتها اليسرى السفلى، مقصوصاً بحافتها — أوضح شوي (OccasionM3.Seal)
+    private func m3Seal(_ face: String, cardHeight: CGFloat, shade: Color = OccasionM3.Seal.cardShade) -> some View {
+        m3Image("m3/wm/emboss-\(face).png", w: 620, h: 466, opacity: OccasionM3.Seal.cardOpacity)
+            .colorMultiply(shade)
             .offset(x: -150, y: cardHeight - 466 + 135)
     }
 
-    /// الشعار الكريمي في الأسفل بين خطين
-    private func m3Footer(top: CGFloat, line: Color) -> some View {
-        HStack(spacing: 30) {
+    /// الشعار الكريمي في الأسفل بين خطين — monoLogo: الفضي («إعلان عزاء» بلا ذهبي): logo/flat-silver إذا نزل،
+    /// وإلا الكريمي رمادياً
+    private func m3Footer(top: CGFloat, line: Color, monoLogo: Bool = false) -> some View {
+        let silver = monoLogo ? image(OccasionM3.Death.logo) : nil
+        return HStack(spacing: 30) {
             LinearGradient(colors: [line.opacity(0), line], startPoint: .leading, endPoint: .trailing)
                 .frame(width: 200, height: 2)
                 .opacity(0.8)
             Group {
-                if let ui = image("logo/flat-cream.png") {
+                if let ui = silver ?? image("logo/flat-cream.png") {
                     Image(uiImage: ui)
                         .resizable()
                         .frame(width: 92 * ui.size.width / max(ui.size.height, 1), height: 92)
+                        .grayscale(monoLogo && silver == nil ? 1 : 0)
                         .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
                 } else {
                     Color.clear.frame(width: 92 * 1200 / 895, height: 92)
@@ -1089,7 +1239,8 @@ extension OccasionPostView {
 struct OccasionM3Venue {
     let title: String
     let place: String
-    let line: String
+    /// المنطقة ثم الأوقات — كل واحد بسطره
+    let lines: [String]
 }
 
 /// مقاسات نص إعلان الوفاة بنسبة s (مقرّبة لأقرب بكسل مثل ملف التصميم)

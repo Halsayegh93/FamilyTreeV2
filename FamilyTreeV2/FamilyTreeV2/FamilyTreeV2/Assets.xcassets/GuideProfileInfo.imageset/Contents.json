@@ -1,0 +1,22 @@
+{
+  "images": [
+    {
+      "filename": "GuideProfileInfo_light.jpg",
+      "idiom": "universal"
+    },
+    {
+      "filename": "GuideProfileInfo_dark.jpg",
+      "idiom": "universal",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ]
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

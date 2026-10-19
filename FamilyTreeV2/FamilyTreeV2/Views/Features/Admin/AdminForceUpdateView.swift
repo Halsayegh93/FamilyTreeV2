@@ -3,6 +3,8 @@ import SwiftUI
 /// «التحديث الإجباري» — شاشة مستقلة في إعدادات النظام (طلب المالك).
 /// لكل منصة أقل رقم بناء مسموح + رابط المتجر. أي نسخة أقل تنقفل بشاشة «حدّث التطبيق».
 /// التعديل للمالك فقط؛ المدير يشوفها للقراءة.
+/// التصميم («أسلوب واحد» ٢٠٢٦-١٠-٠٧): الرأس الملوّن الموحّد، صفّ أرقام بالحدّين ونسختك، ثم أقسام
+/// `DSComposerSection` بصفوف `.dsRowBox()`.
 struct AdminForceUpdateView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
@@ -17,42 +19,60 @@ struct AdminForceUpdateView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: DS.Spacing.lg) {
-                explainer
+                hero
 
-                platformCard(
-                    title: L10n.t("الآيفون", "iPhone"), icon: "apple.logo",
-                    key: "ios_min_build", value: s.iosMinBuild ?? 0,
-                    hint: L10n.t("نسختك الحالية: \(AppBuild.current)", "Your build: \(AppBuild.current)"),
-                    urlTitle: L10n.t("رابط App Store / TestFlight", "App Store / TestFlight link"),
-                    urlDraft: $iosURLDraft, urlKey: "ios_update_url"
-                )
+                VStack(spacing: DS.Spacing.md) {
+                    explainer
 
-                platformCard(
-                    title: L10n.t("الأندرويد", "Android"), icon: "candybarphone",
-                    key: "android_min_build", value: s.androidMinBuild ?? 0,
-                    hint: L10n.t("رقم البناء (versionCode) لنسخة الأندرويد", "Android versionCode"),
-                    urlTitle: L10n.t("رابط Google Play / التحميل", "Google Play / download link"),
-                    urlDraft: $androidURLDraft, urlKey: "android_update_url"
-                )
+                    platformSection(
+                        title: L10n.t("الآيفون", "iPhone"), icon: "apple.logo",
+                        key: "ios_min_build", value: s.iosMinBuild ?? 0,
+                        hint: L10n.t("نسختك الحالية: \(AppBuild.current)", "Your build: \(AppBuild.current)"),
+                        urlTitle: L10n.t("رابط App Store / TestFlight", "App Store / TestFlight link"),
+                        urlDraft: $iosURLDraft, urlKey: "ios_update_url",
+                        index: 1
+                    )
 
-                legacyAndroidCard
-                messageCard
+                    platformSection(
+                        title: L10n.t("الأندرويد", "Android"), icon: "candybarphone",
+                        key: "android_min_build", value: s.androidMinBuild ?? 0,
+                        hint: L10n.t("رقم البناء (versionCode) لنسخة الأندرويد", "Android versionCode"),
+                        urlTitle: L10n.t("رابط Google Play / التحميل", "Google Play / download link"),
+                        urlDraft: $androidURLDraft, urlKey: "android_update_url",
+                        index: 2
+                    )
 
-                Text(L10n.t(
-                    "المالك مستثنى من القفل حتى ما يقفل نفسه لو رفع الحد قبل ما يحدّث جهازه.",
-                    "The owner is exempt so you can't lock yourself out."
-                ))
-                .font(DS.Font.caption2)
-                .foregroundColor(DS.Color.textTertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.lg)
+                    legacyAndroidSection
+                    messageSection
+
+                    HStack(alignment: .top, spacing: DS.Spacing.xsm) {
+                        Image(systemName: "crown.fill")
+                            .dsGlyph(DS.Glyph.xs)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .padding(.top, DS.Spacing.xxs)
+                            .accessibilityHidden(true)
+                        Text(L10n.t(
+                            "المالك مستثنى من القفل حتى ما يقفل نفسه لو رفع الحد قبل ما يحدّث جهازه.",
+                            "The owner is exempt so you can't lock yourself out."
+                        ))
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, DS.Spacing.xxs)
+                }
+                .disabled(!canEdit)
             }
-            .padding(.vertical, DS.Spacing.lg)
-            .disabled(!canEdit)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xxxl)
         }
-        .background(DS.Color.background)
-        .navigationTitle(L10n.t("التحديث الإجباري", "Force Update"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
+        .dsSubPageHeader(L10n.t("التحديث الإجباري", "Force Update"),
+                         subtitle: canEdit
+                            ? L10n.t("أقل نسخة مسموحة لكل منصة — الأقدم تنقفل", "Minimum build per platform — older ones are blocked")
+                            : L10n.t("للقراءة فقط — التعديل للمالك.", "Read only — the owner edits this."))
         .onAppear {
             iosURLDraft = s.iosUpdateUrl ?? ""
             androidURLDraft = s.androidUpdateUrl ?? ""
@@ -61,75 +81,100 @@ struct AdminForceUpdateView: View {
         .task { await appSettingsVM.fetchSettings() }
     }
 
-    private var explainer: some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
-            Image(systemName: "info.circle.fill")
-                .foregroundColor(DS.Color.info)
-            Text(canEdit
-                 ? L10n.t("أي نسخة رقمها أقل من الحد تنقفل بشاشة «حدّث التطبيق» لين يحدّث العضو. 0 = بلا إجبار.",
-                          "Any build below the minimum is blocked until the member updates. 0 = off.")
-                 : L10n.t("للقراءة فقط — التعديل للمالك.", "Read only — the owner edits this."))
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(DS.Spacing.md)
-        .background(DS.Color.info.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.lg))
-        .padding(.horizontal, DS.Spacing.lg)
+    // MARK: - بطاقة الرأس
+
+    private func minLabel(_ value: Int?) -> String {
+        let v = value ?? 0
+        return v == 0 ? L10n.t("بلا", "Off") : "\(v)"
     }
 
-    private func platformCard(title: String, icon: String, key: String, value: Int, hint: String,
-                              urlTitle: String, urlDraft: Binding<String>, urlKey: String) -> some View {
-        DSCard(padding: DS.Spacing.lg) {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack(spacing: DS.Spacing.md) {
-                    Image(systemName: icon)
-                        .font(DS.Font.icon(18, weight: .semibold))
-                        .foregroundColor(DS.Color.primary)
-                        .frame(width: 28)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(DS.Font.calloutBold).foregroundColor(DS.Color.textPrimary)
-                        Text(hint).font(DS.Font.caption2).foregroundColor(DS.Color.textTertiary)
-                    }
-                    Spacer()
+    /// العنوان والوصف في الرأس الملوّن — الأرقام هنا
+    private var hero: some View {
+        DSStatsRow([
+                DSHeroStat(value: minLabel(s.iosMinBuild), label: L10n.t("حد الآيفون", "iPhone min"), icon: "apple.logo"),
+                DSHeroStat(value: minLabel(s.androidMinBuild), label: L10n.t("حد الأندرويد", "Android min"), icon: "candybarphone"),
+                DSHeroStat(value: "\(AppBuild.current)", label: L10n.t("نسختك", "Your build"), icon: "iphone.gen3")
+        ], tint: DS.Color.actionNavy)
+    }
+
+    // MARK: - الأقسام
+
+    private var explainer: some View {
+        DSNoteCard(canEdit
+                   ? L10n.t("أي نسخة رقمها أقل من الحد تنقفل بشاشة «حدّث التطبيق» لين يحدّث العضو. 0 = بلا إجبار.",
+                            "Any build below the minimum is blocked until the member updates. 0 = off.")
+                   : L10n.t("للقراءة فقط — التعديل للمالك.", "Read only — the owner edits this."),
+                   icon: canEdit ? "info.circle.fill" : "eye.fill")
+            .dsStaggerIn(0)
+    }
+
+    private func platformSection(title: String, icon: String, key: String, value: Int, hint: String,
+                                 urlTitle: String, urlDraft: Binding<String>, urlKey: String,
+                                 index: Int) -> some View {
+        DSComposerSection(title: title,
+                          icon: icon,
+                          tint: DS.Color.actionNavy,
+                          trailing: value == 0 ? L10n.t("بلا إجبار", "Off") : L10n.t("مفعّل", "On"),
+                          index: index) {
+            // أقل رقم بناء مسموح
+            DSRow(icon: "number", tint: value == 0 ? DS.Color.textTertiary : AppSection.admin.ink,
+                   title: L10n.t("أقل رقم بناء", "Minimum build"),
+                   subtitle: hint) {
+                HStack(spacing: DS.Spacing.sm) {
                     Text(value == 0 ? L10n.t("بلا", "Off") : "\(value)")
-                        .font(DS.Font.plex(18, weight: .bold))
+                        .dsFont(.title)
                         .monospacedDigit()
-                        .foregroundColor(value == 0 ? DS.Color.textTertiary : DS.Color.primary)
-                        .frame(minWidth: 40)
+                        .foregroundColor(value == 0 ? DS.Color.textTertiary : AppSection.admin.ink)
+                        .frame(minWidth: DS.Icon.rowLarge)
+                        .accessibilityHidden(true)
                     Stepper("", value: Binding(
                         get: { value },
                         set: { save(key, max(0, $0)) }
                     ), in: 0...100_000)
                     .labelsHidden()
+                    .accessibilityLabel(L10n.t("أقل رقم بناء — \(title)", "Minimum build — \(title)"))
+                    .accessibilityValue(value == 0 ? L10n.t("بلا", "Off") : "\(value)")
                 }
+            }
 
-                HStack(spacing: DS.Spacing.sm) {
+            // رابط المتجر
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "link", tint: DS.Color.actionNavy)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(urlTitle)
+                        .dsFieldFont(.label)
+                        .foregroundColor(DS.Color.fieldLabel)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     TextField(urlTitle, text: urlDraft)
-                        .font(DS.Font.caption1)
+                        .dsFieldFont(.bodyCompact)
+                        .foregroundColor(DS.Color.textPrimary)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .environment(\.layoutDirection, .leftToRight)
-                        .padding(DS.Spacing.sm)
-                        .background(DS.Color.mutedBackground, in: RoundedRectangle(cornerRadius: DS.Radius.sm))
-                    Button(L10n.t("حفظ", "Save")) {
-                        let v = urlDraft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                        save(urlKey, v.isEmpty ? nil : v)
-                    }
-                    .font(DS.Font.calloutBold)
+                }
+                saveButton {
+                    let v = urlDraft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    save(urlKey, v.isEmpty ? nil : v)
                 }
             }
+            .dsRowBox()
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
     /// نسخ الأندرويد القديمة (قبل هذا التحديث) تقرأ force_update + latest_build فقط
-    private var legacyAndroidCard: some View {
-        DSCard(padding: DS.Spacing.lg) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Toggle(isOn: Binding(
+    private var legacyAndroidSection: some View {
+        DSComposerSection(title: L10n.t("النسخ القديمة", "Legacy versions"),
+                          icon: "clock.arrow.circlepath",
+                          tint: DS.Color.actionNavy,
+                          index: 3) {
+            DSRow(icon: "candybarphone", tint: DS.Color.warning,
+                   title: L10n.t("إيقاف نسخ الأندرويد القديمة", "Block old Android versions"),
+                   subtitle: L10n.t("للنسخ المثبّتة قبل هذا التحديث — ما تعرف الحد الجديد",
+                                    "For copies installed before this update")) {
+                Toggle("", isOn: Binding(
                     get: { (s.forceUpdate ?? false) && (s.latestBuild ?? 0) > 1 },
                     set: { on in
                         Task {
@@ -139,45 +184,39 @@ struct AdminForceUpdateView: View {
                                                               updatedBy: authVM.currentUser?.id)
                         }
                     }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("إيقاف نسخ الأندرويد القديمة", "Block old Android versions"))
-                            .font(DS.Font.calloutBold)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(L10n.t("للنسخ المثبّتة قبل هذا التحديث — ما تعرف الحد الجديد",
-                                    "For copies installed before this update"))
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
+                ))
+                .labelsHidden()
                 .tint(DS.Color.warning)
+                .accessibilityLabel(L10n.t("إيقاف نسخ الأندرويد القديمة", "Block old Android versions"))
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
     }
 
-    private var messageCard: some View {
-        DSCard(padding: DS.Spacing.lg) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                Text(L10n.t("رسالة شاشة التحديث (اختياري)", "Update screen message (optional)"))
-                    .font(DS.Font.calloutBold)
+    private var messageSection: some View {
+        DSComposerSection(title: L10n.t("رسالة شاشة التحديث (اختياري)", "Update screen message (optional)"),
+                          icon: "text.bubble.fill",
+                          tint: DS.Color.actionNavy,
+                          index: 4) {
+            HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "text.quote", tint: DS.Color.actionNavy)
+                    .accessibilityHidden(true)
+                TextField(L10n.t("مثال: نسخة جديدة فيها حماية أكثر لبياناتك", "e.g. New version with better privacy"),
+                          text: $messageDraft, axis: .vertical)
+                    .dsFieldFont(.bodyCompact)
                     .foregroundColor(DS.Color.textPrimary)
-                HStack(spacing: DS.Spacing.sm) {
-                    TextField(L10n.t("مثال: نسخة جديدة فيها حماية أكثر لبياناتك", "e.g. New version with better privacy"),
-                              text: $messageDraft, axis: .vertical)
-                        .font(DS.Font.caption1)
-                        .lineLimit(1...3)
-                        .padding(DS.Spacing.sm)
-                        .background(DS.Color.mutedBackground, in: RoundedRectangle(cornerRadius: DS.Radius.sm))
-                    Button(L10n.t("حفظ", "Save")) {
-                        let v = messageDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                        save("update_message", v.isEmpty ? nil : v)
-                    }
-                    .font(DS.Font.calloutBold)
+                    .lineLimit(1...3)
+                saveButton {
+                    let v = messageDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    save("update_message", v.isEmpty ? nil : v)
                 }
             }
+            .dsRowBox()
         }
-        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    /// «حفظ» — الشريحة الواحدة ممتلئة بتعبئة القسم (مساحة ضغط ٤٤)
+    private func saveButton(_ action: @escaping () -> Void) -> some View {
+        DSChipButton(L10n.t("حفظ", "Save"), isSelected: true, action: action)
     }
 
     private func save<T: Encodable>(_ key: String, _ value: T) {

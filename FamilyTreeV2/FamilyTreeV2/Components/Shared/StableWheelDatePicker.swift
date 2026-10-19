@@ -17,7 +17,7 @@ struct StableWheelDatePicker: View {
     init(
         selection: Binding<Date>,
         in range: PartialRangeThrough<Date>? = nil,
-        height: CGFloat = 180
+        height: CGFloat = 216   // ارتفاع العجلة الطبيعي — ١٨٠ كان يقصّ صفاً بالحافة
     ) {
         self._selection = selection
         self.range = range

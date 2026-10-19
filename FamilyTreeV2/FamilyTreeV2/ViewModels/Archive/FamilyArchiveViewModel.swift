@@ -11,6 +11,10 @@ final class FamilyArchiveViewModel: ObservableObject {
     private let supabase = SupabaseConfig.client
     private let tableName = "family_archive"
     private let bucketName = "family-archive"
+    /// حدود مستودع المكتبة على السيرفر (20261007120000)
+    static let maxUploadBytes = 25 * 1024 * 1024
+    static let allowedMimeTypes: Set<String> = ["application/pdf", "image/jpeg", "image/jpg", "image/png",
+                                                 "image/heic", "image/heif", "image/webp"]
 
     weak var authVM: AuthViewModel?
     weak var notificationVM: NotificationViewModel?
@@ -88,6 +92,18 @@ final class FamilyArchiveViewModel: ObservableObject {
         guard NetworkMonitor.shared.requireOnline() else { return nil }
         guard let uploaderId = authVM?.currentUser?.id else {
             errorMessage = L10n.t("لم يتم تسجيل الدخول.", "Not signed in.")
+            return nil
+        }
+        // حدّ السيرفر للمكتبة ٢٥ ميغابايت (20261007120000) — رسالة واضحة قبل الرفع بدل رفض عام
+        guard fileData.count <= Self.maxUploadBytes else {
+            errorMessage = L10n.t("الملف أكبر من ٢٥ ميغابايت — اختر ملفاً أصغر أو صورة مضغوطة.",
+                                  "The file is larger than 25 MB — choose a smaller file or a compressed photo.")
+            return nil
+        }
+        // السيرفر يقبل pdf والصور (jpeg/png/heic/webp) فقط
+        guard Self.allowedMimeTypes.contains(mimeType.lowercased()) else {
+            errorMessage = L10n.t("نوع الملف غير مدعوم — المسموح: PDF أو صورة (JPG، PNG، HEIC، WEBP).",
+                                  "Unsupported file type — allowed: PDF or an image (JPG, PNG, HEIC, WEBP).")
             return nil
         }
 

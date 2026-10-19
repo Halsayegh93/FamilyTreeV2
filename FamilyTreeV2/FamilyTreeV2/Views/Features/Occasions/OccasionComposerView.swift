@@ -2,9 +2,12 @@ import SwiftUI
 import UIKit
 import PhotosUI
 
-/// بوستات المناسبات — للإدارة والمشرفين (canModerate).
-/// كل شي اختيار بدل الكتابة: القالب، النموذج (١ أو ٢)، مكان النشر (يحدد المقاس)، الاختيارات، الاسم من شجرة العائلة
-/// (وتنزل معه صورته وسطور القرابة)، الصورة («مع صورة / بدون صورة» للتهاني)، ثم حفظ في الصور أو مشاركة.
+/// منشورات المناسبات — للإدارة والمشرفين (canModerate).
+/// كل شي اختيار بدل الكتابة: القالب، النموذج (١ أو ٢ أو ٣)، مكان النشر (يحدد المقاس)، الاختيارات، الاسم من شجرة العائلة
+/// (وتنزل معه صورته وسطور القرابة)، الصورة («مع صورة / بدون صورة» للتهاني و«إعلان عزاء»)، ثم حفظ في الصور أو مشاركة.
+/// الشاشة (تجربة طلب المالك ٢٠٢٦-١٠-١٧): الرأس فيه العنوان وزرّا حفظ الصورة والمشاركة؛ تحته معاينة المنشور ثابتة
+/// (~٤٠٪ من المساحة، وتصغر مع الكيبورد) وتحتها سطر القالب · مكان النشر · المقاس، والنموذج وحده يتمرّر تحتها.
+/// المعاينة تكبر (~٩٠٪) بالسحب لتحت عليها أو بسحب النموذج لتحت من أوله، وترجع بالسحب لفوق أو تمرير النموذج أو بالضغط.
 struct OccasionComposerView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -14,20 +17,56 @@ struct OccasionComposerView: View {
     @ObservedObject private var kit = OccasionKit.shared
     @State private var pickerItem: PhotosPickerItem?
     @State private var showMemberPicker = false
+    /// «إعلان عزاء»: قسم «بيانات العزاء» (التشييع، بداية العزاء، العزاءان، الدعاء) مطوي افتراضياً
+    @State private var condolenceExpanded = false
+    /// المعاينة مكبّرة لفحص التصميم (طلب المالك ٢٠٢٦-١٠-١٧ «لمن انزل تحت يكبر القالب»)
+    @State private var previewExpanded = false
+    /// حجم المعاينة اللي اختاره المستخدم بالسحب (٠ = الافتراضي) — يتذكّره الجهاز
+    /// (طلب المالك ٢٠٢٦-١٠-١٧ «خل اتحكم في مكان القالب اصغره او اكبره»)
+    @AppStorage("occasionPreviewHeight") private var chosenPreviewHeight: Double = 0
+    /// السحب الجاري على المعاينة (تكبر/تصغر مع الإصبع) — يرجع صفر وحده لو انقطع السحب
+    @GestureState private var previewDrag: CGFloat = 0
+    /// آخر تكبير/تصغير — مهلة قصيرة حتى ما يرجع التمرير اللي سببه التغيير نفسه يعكسه
+    @State private var previewToggledAt = Date.distantPast
+    /// متابعة تمرير النموذج (صندوق مرجعي — يتغيّر مع كل إطار تمرير بدون ما يعيد رسم الشاشة)
+    @State private var formScroll = OccasionFormScrollTracker()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// نصيب المعاينة الثابتة من المساحة تحت الرأس (الباقي للنموذج اللي يتمرّر) — مع الكيبورد المساحة تنقص فتصغر هي بعد.
+    /// كان ٠٫٤٢ — المالك ٢٠٢٦-١٠-١٧ «اصغر الصورة زيادة»
+    private static let previewShare: CGFloat = 0.32
+    /// أقل ارتفاع للمعاينة (الشاشات الصغيرة والكيبورد ظاهر)
+    private static let previewMinHeight: CGFloat = 120
+    /// المعاينة المكبّرة: نصيبها من المساحة تحت الرأس (يبقى شريط من النموذج تحتها)
+    private static let previewExpandedShare: CGFloat = 0.88
+    /// سحب النموذج لتحت من أوله بهالمقدار يكبّر المعاينة، وتمريره لفوق بهالمقدار يصغّرها
+    private static let previewPullToExpand: CGFloat = 70
+    private static let previewScrollToCollapse: CGFloat = 24
+    /// ترك السحب على المعاينة قريب من آخر حد (بهالمقدار) = مكبّرة
+    private static let previewSnapToExpanded: CGFloat = 24
+    /// خطوة تكبير/تصغير المعاينة لقارئ الشاشة
+    private static let previewAccessibilityStep: CGFloat = 60
+    /// حول المنشور في المعاينة: الحشوة فوق وتحت، سطر القالب · المكان · المقاس، والمقبض
+    private static let previewPad = DS.Spacing.sm
+    private static let previewInfoHeight: CGFloat = 18
+    private static let previewGrabber = CGSize(width: 36, height: 5)
+    private static var previewChrome: CGFloat { 2 * previewPad + previewInfoHeight + previewGrabber.height + 2 * DS.Spacing.xs }
+    /// شفافية أرضية المعاينة الثابتة: regularMaterial ما بان شي تحتها، و٠٫٥٥ بلا ضباب «شفافة بزيادة» (المالك ٢٠٢٦-١٠-١٧)
+    private static let previewBackdropOpacity: Double = 0.7
 
     var body: some View {
         Group {
             if authVM.canModerate {
                 composer
             } else {
-                DSEmptyState(
-                    icon: "lock.fill",
-                    title: L10n.t("هذي الصفحة للإدارة والمشرفين", "Admins and moderators only")
-                )
+                DSEmptyView(L10n.t("هذي الصفحة للإدارة والمشرفين", "Admins and moderators only"),
+                            icon: "lock.fill")
             }
         }
-        .navigationTitle(L10n.t("بوستات المناسبات", "Occasion Posts"))
-        .navigationBarTitleDisplayMode(.inline)
+        // الرأس الموحّد: العنوان، وفي الطرف حفظ الصورة (الأساسي) والمشاركة
+        .dsSubPageHeader(L10n.t("منشورات المناسبات", "Occasion Posts"), icon: "") {
+            if authVM.canModerate { headerActions }
+        }
         .task(id: vm.assetKey) { await vm.prepareAssets() }
         .task { await loadData() }
         .onChange(of: memberVM.membersVersion) { _ in
@@ -66,141 +105,242 @@ struct OccasionComposerView: View {
     }
 
     private var composer: some View {
-        ScrollViewReader { proxy in
+        GeometryReader { geo in
+            // المعاينة ما تطول عن اللي يحتاجه المنشور بعرض الشاشة (المكبّرة للمنشور 4:5 يحدّها العرض) — والباقي للنموذج
+            let canvas = vm.size.canvas
+            let fitsWidth = ((geo.size.width - 2 * DS.Spacing.lg) * canvas.height / canvas.width + Self.previewChrome).rounded()
+            let defaultCompact = min(fitsWidth, max(Self.previewMinHeight, (geo.size.height * Self.previewShare).rounded()))
+            let expanded = min(fitsWidth, max(defaultCompact, (geo.size.height * Self.previewExpandedShare).rounded()))
+            // المدى اللي يتحكّم فيه المستخدم: من أصغر حجم لين المكبّرة — وحجمه المختار داخله (يصغر وحده مع الكيبورد)
+            let range = min(Self.previewMinHeight, expanded)...expanded
+            let compact = chosenPreviewHeight > 0 ? min(range.upperBound, max(range.lowerBound, CGFloat(chosenPreviewHeight))) : defaultCompact
+            let base = previewExpanded ? expanded : compact
+            let height = min(range.upperBound, max(range.lowerBound, base + previewDrag))
+            // أول النموذج وهو مستقر (من أعلى الشاشة): تحت المعاينة + الحشوة
+            let restTop = geo.frame(in: .global).minY + height + DS.Spacing.lg
             ScrollView {
                 VStack(alignment: .leading, spacing: DS.Spacing.xxl) {
-                    preview.id("preview")
+                    // يقيس أول النموذج: السحب لتحت من أوله يكبّر المعاينة، والتمرير لفوق يصغّرها
+                    Color.clear
+                        .frame(height: 0)
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
+                            formTopChanged(top, restTop: restTop)
+                        }
+                    // «رابط الموقع» — روابط عامة لمولّد المنشورات على الموقع (المالك والمدير، نفس صلاحية
+                    // جدول occasion_links). من النسخة المحلية (٢٠٢٦-١٠-١٢)؛ main ما فيه مقابل في التطبيق.
+                    if authVM.isAdmin {
+                        OccasionLinksSection()
+                    }
                     templateSection
                     if vm.template.models.count > 1 { modelSection }
                     placementSection
                     detailsSection
-                    // التهاني: القسم دايماً (فيه «بدون صورة»)؛ الوفاة مع صورة: الصورة؛ الباقي بدون صورة
+                    // التهاني و«إعلان عزاء»: القسم دايماً (فيه «مع صورة / بدون صورة»)؛ مشاركة العزاء بدون صورة
                     if vm.template.photoOptional || vm.showsPhoto { photoSection }
                     actions
                 }
                 .padding(DS.Spacing.lg)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(DS.Color.background.ignoresSafeArea())
-            .safeAreaInset(edge: .bottom) { bottomBar(proxy) }
+            // المعاينة ثابتة فوق والنموذج يتمرّر تحتها (يبان خافت من خلف أرضيتها الشفافة شوي)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                pinnedPreview(height: height, width: geo.size.width, base: base, range: range)
+            }
+        }
+        .background(DS.Color.background.ignoresSafeArea())
+    }
+
+    /// top = أول النموذج من أعلى الشاشة الآن، restTop = مكانه وهو مستقر تحت المعاينة.
+    /// صغيرة: سحب النموذج لتحت من أوله (top فوق restTop بـ previewPullToExpand) يكبّرها.
+    /// مكبّرة: تمرير النموذج لفوق (مسافة previewScrollToCollapse، والنموذج داخل في المعاينة — مو رجوع ارتداد السحب) يصغّرها.
+    private func formTopChanged(_ top: CGFloat, restTop: CGFloat) {
+        let tracker = formScroll
+        defer { tracker.lastTop = top }
+        guard previewDrag == 0, Date().timeIntervalSince(previewToggledAt) > 0.45, let last = tracker.lastTop else {
+            tracker.upTravel = 0
+            return
+        }
+        if previewExpanded {
+            let delta = top - last
+            tracker.upTravel = delta < 0 && top < restTop ? tracker.upTravel - delta : 0
+            if tracker.upTravel > Self.previewScrollToCollapse {
+                tracker.upTravel = 0
+                setPreviewExpanded(false)
+            }
+        } else if top - restTop > Self.previewPullToExpand && top > last {
+            // سحب فعلي لتحت (أول النموذج ينزل الحين) — مو فراغ فوق النموذج تركه تصغير المعاينة بالسحب عليها
+            setPreviewExpanded(true)
+        }
+    }
+
+    private func setPreviewExpanded(_ on: Bool) {
+        guard on != previewExpanded else { return }
+        previewToggledAt = Date()
+        // سبرنق التطبيق؛ «تقليل الحركة»: تغيير حجم سريع بلا ارتداد
+        withAnimation(reduceMotion ? DS.Anim.quick : DS.Anim.smooth) {
+            previewExpanded = on
         }
     }
 
     private func postView() -> OccasionPostView {
-        OccasionPostView(template: vm.template, size: vm.size, values: vm.values, photo: vm.photo,
-                         kit: kit, revision: kit.revision, model: vm.model, withPhoto: vm.withPhoto)
+        OccasionPostView(template: vm.layoutTemplate, size: vm.size, values: vm.values, photo: vm.photo,
+                         kit: kit, revision: kit.revision, model: vm.model, withPhoto: vm.withPhoto, palette: vm.palette)
     }
 
-    // MARK: المعاينة
+    // MARK: الرأس (حفظ الصورة والمشاركة) وسطر المعاينة (القالب · مكان النشر · المقاس)
 
-    private var preview: some View {
-        let canvas = vm.size.canvas
-        return VStack(spacing: DS.Spacing.sm) {
-            GeometryReader { geo in
-                let scale = geo.size.width / canvas.width
-                postView()
-                    .scaleEffect(scale, anchor: .topLeading)
-                    .frame(width: geo.size.width, height: canvas.height * scale, alignment: .topLeading)
-            }
-            .aspectRatio(canvas.width / canvas.height, contentMode: .fit)
-            .environment(\.layoutDirection, .leftToRight)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(DS.Color.cardBorder, lineWidth: 1)
-            )
-            .overlay {
-                if kit.isLoading || !kit.fontsReady {
-                    ProgressView()
-                        .padding(DS.Spacing.lg)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                }
-            }
-            .frame(maxWidth: 360)
-            .dsCardShadow()
-            .frame(maxWidth: .infinity)
-
-            Text(L10n.t("المقاس: ", "Size: ") + "\(Int(canvas.width))×\(Int(canvas.height)) · \(vm.size.title) \(vm.size.ratio)")
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.textSecondary)
-                .frame(maxWidth: .infinity)
-
-            if kit.failed {
-                Button {
-                    Task { await vm.prepareAssets() }
-                } label: {
-                    Label(L10n.t("تعذّر تحميل ملفات التصميم — إعادة المحاولة", "Couldn't load design files — retry"),
-                          systemImage: "arrow.clockwise")
-                        .font(DS.Font.caption1)
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
+    /// «عقد قران · انستقرام — منشور · 1,080×1,350» — تحت المعاينة الثابتة
+    private var previewInfo: String {
+        let c = vm.size.canvas
+        // المقاس معزول باتجاه LTR (U+2066…U+2069) حتى ما ينقلب «1,080×1,350» داخل السطر العربي
+        return "\(vm.template.title) · \(vm.placement.title) · \u{2066}\(Self.pixels(c.width))×\(Self.pixels(c.height))\u{2069}"
     }
 
-    // MARK: الشريط السفلي — معاينة مصغّرة + حفظ ومشاركة (يبين البوست وانت تختار)
+    /// أرقام لاتينية بفاصل الآلاف (1,080) مثل الموقع
+    private static func pixels(_ v: CGFloat) -> String {
+        Int(v).formatted(.number.locale(Locale(identifier: "en_US")))
+    }
 
-    private func bottomBar(_ proxy: ScrollViewProxy) -> some View {
-        let canvas = vm.size.canvas
-        let thumbHeight: CGFloat = 64
-        let s = thumbHeight / canvas.height
-        return HStack(spacing: DS.Spacing.md) {
-            Button {
-                withAnimation(DS.Anim.medium) { proxy.scrollTo("preview", anchor: .top) }
-            } label: {
-                postView()
-                    .scaleEffect(s, anchor: .topLeading)
-                    .frame(width: canvas.width * s, height: thumbHeight, alignment: .topLeading)
-                    .environment(\.layoutDirection, .leftToRight)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(DS.Color.cardBorder, lineWidth: 1))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.t("عرض المعاينة", "Show preview"))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(vm.template.title)
-                    .font(DS.Font.calloutBold)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                Text("\(Int(canvas.width))×\(Int(canvas.height)) · \(vm.placement.title)")
-                    .font(DS.Font.caption2)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
+    /// المشاركة زر الرأس العادي (أهدأ)، وحفظ الصورة الإجراء الأساسي: دائرة بيضاء ممتلئة ورمز كحلي في طرف الرأس
+    private var headerActions: some View {
+        HStack(spacing: DS.Spacing.xs) {
             if vm.isWorking {
                 ProgressView()
-                    .frame(width: 44, height: 44)
+                    .tint(DS.Color.headerGlyph)
+                    .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
             } else {
-                Group {
-                    barButton("square.and.arrow.down", label: L10n.t("حفظ في الصور", "Save to Photos")) {
-                        Task { await vm.saveToPhotos() }
-                    }
-                    barButton("square.and.arrow.up", label: L10n.t("مشاركة", "Share")) {
-                        Task { await vm.share() }
-                    }
+                DSHeaderButton(symbol: "square.and.arrow.up", label: L10n.t("مشاركة", "Share")) {
+                    Task { await vm.share() }
                 }
-                .opacity(vm.missing.isEmpty ? 1 : 0.5)
+                Button {
+                    Task { await vm.saveToPhotos() }
+                } label: {
+                    Image(systemName: "photo.badge.arrow.down")
+                        .font(DS.Font.scaled(DSBox.navGlyph, weight: .bold))
+                        .foregroundColor(DS.Color.primaryFill)
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                        .frame(width: DSBox.navButtonOnColor, height: DSBox.navButtonOnColor)
+                        .background(Circle().fill(DS.Color.textOnPrimary))
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("حفظ الصورة", "Save image"))
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) { Divider() }
+        // ناقص حقل مطلوب: الزرّان باهتان (والضغط يقول وش الناقص)
+        .opacity(vm.missing.isEmpty ? 1 : 0.5)
     }
 
-    private func barButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(DS.Font.icon(17, weight: .semibold))
-                .foregroundColor(DS.Color.textOnPrimary)
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(DS.Color.primary))
+    // MARK: المعاينة الثابتة فوق النموذج
+
+    private func pinnedPreview(height: CGFloat, width: CGFloat, base: CGFloat, range: ClosedRange<CGFloat>) -> some View {
+        let canvas = vm.size.canvas
+        let pad = Self.previewPad
+        /// سطر القالب · مكان النشر · المقاس تحت المعاينة (ثابت معها)، والمقبض تحته يلمّح إن المعاينة تنسحب
+        let infoHeight = Self.previewInfoHeight
+        let grabber = Self.previewGrabber
+        let scale = min((height - Self.previewChrome) / canvas.height, (width - 2 * DS.Spacing.lg) / canvas.width)
+        return VStack(spacing: DS.Spacing.xs) {
+            ZStack(alignment: .bottom) {
+                postView()
+                    .scaleEffect(scale, anchor: .topLeading)
+                    .frame(width: canvas.width * scale, height: canvas.height * scale, alignment: .topLeading)
+                    .environment(\.layoutDirection, .leftToRight)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .stroke(DS.Color.cardBorder, lineWidth: 1)
+                    )
+                    .overlay {
+                        if kit.isLoading || !kit.fontsReady {
+                            ProgressView()
+                                .padding(DS.Spacing.md)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        }
+                    }
+                    .dsCardShadow()
+                    .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.t("معاينة المنشور", "Post preview"))
+                    .accessibilityHint(L10n.t("اسحب لتحت أو لفوق لتكبير المعاينة أو تصغيرها — تبقى بالحجم اللي تختاره",
+                                              "Drag down or up to resize the preview — it stays at the size you choose"))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { setPreviewExpanded(!previewExpanded) }
+                    // قارئ الشاشة: تمرير لفوق/لتحت يكبّر/يصغّر بخطوات
+                    .accessibilityAdjustableAction { direction in
+                        let step = direction == .increment ? Self.previewAccessibilityStep : -Self.previewAccessibilityStep
+                        let target = min(range.upperBound, max(range.lowerBound, base + step))
+                        withAnimation(DS.Anim.quick) {
+                            chosenPreviewHeight = Double(target.rounded())
+                            previewExpanded = false
+                        }
+                    }
+                if kit.failed {
+                    Button {
+                        Task { await vm.prepareAssets() }
+                    } label: {
+                        Label(L10n.t("تعذّر تحميل ملفات التصميم — إعادة المحاولة", "Couldn't load design files — retry"),
+                              systemImage: "arrow.clockwise")
+                            .font(DS.Font.caption1)
+                            .padding(.horizontal, DS.Spacing.md)
+                            .padding(.vertical, DS.Spacing.xs)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
+                    .padding(.bottom, pad)
+                }
+            }
+            Text(previewInfo)
+                .font(DS.Font.caption1)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(height: infoHeight)
+                .padding(.horizontal, DS.Spacing.lg)
+            Capsule()
+                .fill(DS.Color.textTertiary.opacity(0.45))
+                .frame(width: grabber.width, height: grabber.height)
+                .accessibilityHidden(true)
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(label)
+        .padding(.vertical, pad)
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        // أرضية شوي شفافة (طلب المالك ٢٠٢٦-١٠-١٧): ضباب خفيف + لون الصفحة بشفافية — أشكال النموذج اللي يتمرّر تحت
+        // المعاينة تبان خافتة من الجنبين وتحت سطر المعلومات بلا ما ينقرأ الكلام (فاتح وداكن)، والمنشور نفسه معتم
+        .background {
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                DS.Color.background.opacity(Self.previewBackdropOpacity)
+            }
+        }
+        // حدّ المعاينة: النموذج يتمرّر تحت هذا الخط
+        .overlay(alignment: .bottom) { Divider() }
+        .contentShape(Rectangle())
+        // الضغط يكبّر لآخر حد / يرجع لحجمك. السحب لتحت يكبّر ولفوق يصغّر، والحجم يوقف وين ما تترك إصبعك
+        // (يتذكّره الجهاز)؛ الترك قريب من آخر حد = مكبّرة
+        .onTapGesture { setPreviewExpanded(!previewExpanded) }
+        .gesture(
+            DragGesture(minimumDistance: 8)
+                .updating($previewDrag) { g, drag, _ in drag = g.translation.height }
+                .onEnded { g in
+                    let target = min(range.upperBound, max(range.lowerBound, base + g.translation.height))
+                    if target >= range.upperBound - Self.previewSnapToExpanded {
+                        setPreviewExpanded(true)
+                    } else {
+                        previewToggledAt = Date()
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) {
+                            chosenPreviewHeight = Double(target.rounded())
+                            previewExpanded = false
+                        }
+                    }
+                }
+        )
+        // الكتابة في حقل: المعاينة ترجع صغيرة حتى يبان الحقل فوق الكيبورد
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            setPreviewExpanded(false)
+        }
     }
 
     // MARK: القالب
@@ -211,41 +351,11 @@ struct OccasionComposerView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DS.Spacing.sm) {
                     ForEach(vm.templates) { t in
-                        let on = t.id == vm.template.id
-                        Button {
+                        // مربع المناسبة بلونها (occ-*) ورمز أبيض — إعلان العزاء كحلي ليلي بحلقة ورمز ذهبي — مثل الموقع (OccasionTile)
+                        OccasionOptionTile(title: t.title, icon: t.icon, disc: t.tileStyle, isOn: t.id == vm.template.id) {
                             withAnimation(DS.Anim.quick) { vm.select(t) }
-                        } label: {
-                            // مربع المناسبة بلونها (occ-*) ورمز أبيض — الوفاة كحلي ليلي بحلقة ورمز ذهبي — مثل الموقع (OccasionTile)
-                            let tile = t.tileStyle
-                            VStack(spacing: DS.Spacing.xs) {
-                                ZStack {
-                                    Circle().fill(tile.fill)
-                                    Circle().strokeBorder(tile.ring, lineWidth: 1.5)
-                                    Image(systemName: t.icon)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(tile.symbol)
-                                }
-                                .frame(width: 36, height: 36)
-                                Text(t.title)
-                                    .font(DS.Font.plex(13, weight: .semibold))
-                                    .foregroundColor(DS.Color.textPrimary)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.85)
-                            }
-                            .frame(width: 104, height: 88)
-                            // المختار: حدّ ذهبي وأرضية ذهبية خفيفة (OccasionTile في الهوية)
-                            .background(
-                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .fill(on ? DS.Color.accentLight.opacity(0.12) : DS.Color.cardBackground)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                    .stroke(on ? DS.Color.accentLight : DS.Color.cardBorder, lineWidth: on ? 2 : 1)
-                            )
                         }
-                        .buttonStyle(DSScaleButtonStyle())
-                        .accessibilityAddTraits(on ? .isSelected : [])
+                        .frame(width: 104)
                     }
                 }
                 .padding(.vertical, 2)
@@ -266,40 +376,14 @@ struct OccasionComposerView: View {
         }
     }
 
+    /// نفس مربع القالب (OccasionOptionTile): قرص الرسمة، الاسم، وشكل الصورة — والمختار بالذهبي مثله، ثلاثة في سطر
     private func modelCard(_ m: OccasionModel) -> some View {
-        let on = vm.effectiveModel == m
-        return Button {
+        // القالب أو النسخة اللي ما فيها صورة (مشاركة العزاء، «بدون صورة») يقول «بدون صورة»
+        OccasionOptionTile(title: m.title, subtitle: vm.showsPhoto ? m.subtitle : L10n.t("بدون صورة", "No photo"),
+                           icon: m.symbol, disc: (DS.Color.primaryFill, .clear, DS.Color.textOnPrimary),
+                           isOn: vm.effectiveModel == m) {
             withAnimation(DS.Anim.quick) { vm.model = m }
-        } label: {
-            // ثلاث خانات بعرض الشاشة: الرسمة فوق، ثم الاسم وشكل الصورة
-            VStack(spacing: DS.Spacing.xs) {
-                Image(systemName: m.symbol)
-                    .font(DS.Font.icon(20, weight: .semibold))
-                Text(m.title)
-                    .font(DS.Font.plex(15, weight: .bold))
-                // القالب أو النسخة اللي ما فيها صورة (مشاركة العزاء، الوفاة بدون صورة، «بدون صورة») يقول «بدون صورة»
-                Text(vm.showsPhoto ? m.subtitle : L10n.t("بدون صورة", "No photo"))
-                    .font(DS.Font.plex(12))
-                    .opacity(0.8)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.textPrimary)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.vertical, DS.Spacing.md)
-            .frame(maxWidth: .infinity, minHeight: 96)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .fill(on ? AnyShapeStyle(DS.Color.gradientPrimary) : AnyShapeStyle(DS.Color.cardBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(on ? Color.clear : DS.Color.cardBorder, lineWidth: 1)
-            )
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     // MARK: مكان النشر
@@ -313,17 +397,15 @@ struct OccasionComposerView: View {
                     Button {
                         withAnimation(DS.Anim.quick) { vm.placement = p }
                     } label: {
+                        // نفس عائلة مربعات القالب والنموذج: حدّ شعري، والمختار ذهبي
                         Text(p.title)
                             .font(DS.Font.plex(13, weight: .semibold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.textPrimary)
+                            .foregroundColor(DS.Color.textPrimary)
                             .frame(maxWidth: .infinity, minHeight: 40)
                             .padding(.horizontal, DS.Spacing.sm)
-                            .background(
-                                Capsule().fill(on ? AnyShapeStyle(DS.Color.primary) : AnyShapeStyle(DS.Color.cardBackground))
-                            )
-                            .overlay(Capsule().stroke(on ? Color.clear : DS.Color.cardBorder, lineWidth: 1))
+                            .occasionTile(isOn: on)
                     }
                     .buttonStyle(DSScaleButtonStyle())
                     .accessibilityAddTraits(on ? .isSelected : [])
@@ -343,6 +425,8 @@ struct OccasionComposerView: View {
     private var detailsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             DSSectionHeader(title: L10n.t("التفاصيل", "Details"), icon: "checklist")
+            // «الألوان» أول شي في التفاصيل (مثل الموقع)
+            if vm.template.hasPalette { paletteCard }
             HStack(spacing: DS.Spacing.sm) {
                 Text(L10n.t("اختر من القوائم — والكتابة متاحة من «نص آخر»", "Pick from the lists — use “Other” to type"))
                     .font(DS.Font.caption1)
@@ -358,6 +442,16 @@ struct OccasionComposerView: View {
             case .happy: happyForm
             case .death, .deathText: deathForm
             case .solace: solaceForm
+            }
+        }
+    }
+
+    /// «الألوان» («إعلان عزاء» و«مشاركة عزاء»): «فحمي وفضي» (الافتراضي) أو «الأصلية» — للنماذج الثلاثة (طلب المالك ٢٠٢٦-١٠-١٧)
+    private var paletteCard: some View {
+        OccasionFormCard(title: L10n.t("الألوان", "Colours"), hint: L10n.t("لكل النماذج", "All designs")) {
+            OccasionChips(options: OccasionPalette.allCases.map(\.title),
+                          selected: OccasionPalette.allCases.firstIndex(of: vm.palette) ?? 0) { i in
+                withAnimation(DS.Anim.quick) { vm.palette = OccasionPalette.allCases[i] }
             }
         }
     }
@@ -475,16 +569,24 @@ struct OccasionComposerView: View {
         }
     }
 
+    /// له/لها + الصفة في قائمة منسدلة (طلب المالك ٢٠٢٦-١٠-١٧) فيها «نص آخر» لصفة مكتوبة
     private var happyRecipient: some View {
         OccasionFormCard(title: L10n.t("لمن التهنئة", "Congratulating")) {
             genderChips([L10n.t("له", "Him"), L10n.t("لها", "Her")])
-            OccasionChips(options: OccasionChoices.honorifics(vm.gender), selected: vm.sel("honor")) { vm.setSel("honor", $0) }
+            OccasionMenuField(
+                options: OccasionChoices.honorifics(vm.gender),
+                selected: vm.sel("honor"),
+                onSelect: { i in withAnimation(DS.Anim.quick) { vm.setSel("honor", i) } },
+                icon: "person.fill",
+                custom: OccasionCustomOption(text: vm.text("honorCustom"),
+                                             placeholder: L10n.t("اكتب الصفة — مثال: الأخ الغالي", "Type the title")),
+                accessibilityTitle: L10n.t("الصفة", "Title")
+            )
         }
     }
 
     private var happyGreeting: some View {
-        let honors = OccasionChoices.honorifics(vm.gender)
-        let honor = honors.indices.contains(vm.sel("honor")) ? honors[vm.sel("honor")] : honors[0]
+        let honor = OccasionChoices.honor(vm.form)
         let openings = OccasionChoices.openings(vm.template.id).map { OccasionChoices.composeIntro($0, honor: honor) }
         return OccasionFormCard(title: L10n.t("صيغة التهنئة", "Greeting")) {
             OccasionChips(
@@ -552,27 +654,86 @@ struct OccasionComposerView: View {
         }
     }
 
-    // MARK: إعلان الوفاة (مع صورة / بدون صورة)
+    // MARK: إعلان عزاء — نموذج واحد للنسختين (مع صورة / بدون صورة) — نفس الموقع (OccasionStudio)
+    // كل الحقول للنسختين (اتحاد اللي كان في القالبين)، وكل نسخة ترسم اللي لها: «مع صورة» «صلة القرابة» سطر واحد،
+    // و«بدون صورة» الزوج والأبناء والإخوان والتشييع وبداية العزاء — التلميح يقول وش ما يظهر في النسخة الحالية
 
     private var deathForm: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             deceasedCard
             nameSection(vm.gender == .male ? L10n.t("اسم الفقيد", "Name of the deceased") : L10n.t("اسم الفقيدة", "Name of the deceased"))
-            if vm.template.kind == .death {
-                OccasionFormCard(title: L10n.t("صلة القرابة", "Relation"), hint: L10n.t("اتركها فاضية لتختفي", "Leave empty to hide")) {
-                    OccasionQuickText(text: vm.text("relation"), suggestions: vm.relationSuggestions,
-                                      placeholder: L10n.t("مثال: والد كل من: [الاسم]، [الاسم]", "e.g. والد كل من: [الاسم]، [الاسم]"))
-                    formatPicker("relation")
-                }
-            } else {
-                relationsCard
-                funeralCard
-                condolenceCard
+            OccasionFormCard(title: L10n.t("صلة القرابة", "Relation"),
+                             hint: vm.showsPhoto ? L10n.t("اتركها فاضية لتختفي", "Leave empty to hide") : onlyWithPhotoHint) {
+                OccasionQuickText(text: vm.text("relation"), suggestions: vm.relationSuggestions,
+                                  placeholder: L10n.t("مثال: والد كل من: الأسماء", "e.g. والد كل من: الأسماء"))
+                formatPicker("relation")
             }
-            venueCard("men")
-            venueCard("women")
-            deathDuaCard
+            relationsCard
+            // «بيانات العزاء» قسم واحد مطوي (طلب المالك ٢٠٢٦-١٠-١٧ «طويل») — ملخّصه سطر لكل عزاء، ويفتح بالضغط
+            condolenceDetailsHeader
+            if condolenceExpanded {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    funeralCard
+                    condolenceCard
+                    venueCard("men")
+                    venueCard("women")
+                    deathDuaCard
+                }
+                .padding(.leading, DS.Spacing.md)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
+    }
+
+    /// ملخّص «بيانات العزاء» وهو مطوي: «الرجال: ديوان العائلة · اليوم وغداً وبعد غد، عقب صلاة العصر» (سطر لكل عزاء)
+    private var condolenceSummary: [String] {
+        let v = vm.values
+        var lines: [String] = []
+        for (side, label) in [("men", L10n.t("الرجال", "Men")), ("women", L10n.t("النساء", "Women"))] {
+            let place = v["\(side)Place"] ?? ""
+            guard !place.isEmpty else { continue }
+            lines.append("\(label): " + [place, v["\(side)Times"] ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+        }
+        return lines.isEmpty ? [L10n.t("بدون أماكن عزاء", "No condolence venues")] : lines
+    }
+
+    private var condolenceDetailsHeader: some View {
+        Button {
+            withAnimation(DS.Anim.quick) { condolenceExpanded.toggle() }
+        } label: {
+            DSCard(padding: DS.Spacing.md) {
+                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                        Text(L10n.t("بيانات العزاء", "Condolence details"))
+                            .font(DS.Font.headline)
+                            .foregroundColor(DS.Color.textPrimary)
+                        if condolenceExpanded {
+                            Text(L10n.t("التشييع، بداية العزاء، أماكن العزاء وأوقاته، والدعاء",
+                                        "Funeral, condolence start, venues and times, and the prayer"))
+                                .font(DS.Font.caption2)
+                                .foregroundColor(DS.Color.textTertiary)
+                        } else {
+                            ForEach(condolenceSummary, id: \.self) { line in
+                                Text(line)
+                                    .font(DS.Font.caption1)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.down")
+                        .font(DS.Font.icon(14, weight: .semibold))
+                        .foregroundColor(DS.Color.primary)
+                        .rotationEffect(.degrees(condolenceExpanded ? 180 : 0))
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                        .accessibilityHidden(true)
+                }
+                .multilineTextAlignment(.leading)
+            }
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityHint(condolenceExpanded ? L10n.t("اضغط للطي", "Tap to collapse") : L10n.t("اضغط للفتح", "Tap to expand"))
     }
 
     private var deceasedCard: some View {
@@ -598,7 +759,8 @@ struct OccasionComposerView: View {
 
     private var relationsCard: some View {
         let male = vm.gender == .male
-        return OccasionFormCard(title: L10n.t("القرابة", "Relatives"), hint: L10n.t("أي سطر فاضي يختفي", "Empty lines are hidden")) {
+        return OccasionFormCard(title: L10n.t("القرابة", "Relatives"),
+                                hint: noPhotoOnlyHint ?? L10n.t("أي سطر فاضي يختفي", "Empty lines are hidden")) {
             OccasionFieldLabel(L10n.t("الزوج / الزوجة", "Spouse"))
             OccasionTextInput(text: vm.text("rel1"), placeholder: male ? "زوج: الاسم" : "زوجة: الاسم")
             formatPicker("rel1")
@@ -614,7 +776,7 @@ struct OccasionComposerView: View {
     }
 
     private var funeralCard: some View {
-        OccasionFormCard(title: L10n.t("التشييع", "Funeral"), toggle: toggle("funeral")) {
+        OccasionFormCard(title: L10n.t("التشييع", "Funeral"), hint: noPhotoOnlyHint, toggle: toggle("funeral")) {
             OccasionFieldLabel(L10n.t("اليوم", "Day"))
             OccasionChips(options: OccasionChoices.funeralDays, selected: vm.sel("fDay")) { vm.setSel("fDay", $0) }
             OccasionFieldLabel(L10n.t("الوقت", "Time"))
@@ -630,7 +792,7 @@ struct OccasionComposerView: View {
     }
 
     private var condolenceCard: some View {
-        OccasionFormCard(title: L10n.t("بداية العزاء", "Condolences start"), toggle: toggle("cond")) {
+        OccasionFormCard(title: L10n.t("بداية العزاء", "Condolences start"), hint: noPhotoOnlyHint, toggle: toggle("cond")) {
             DatePicker(L10n.t("التاريخ", "Date"), selection: $vm.form.condolenceDate, displayedComponents: .date)
                 .environment(\.calendar, Calendar(identifier: .gregorian))
                 .font(DS.Font.callout)
@@ -639,6 +801,13 @@ struct OccasionComposerView: View {
             OccasionChips(options: OccasionChoices.durationLabels, selected: vm.sel("dur")) { vm.setSel("dur", $0) }
         }
     }
+
+    /// القرابة كاملة والتشييع وبداية العزاء ترسمهم نسخة «بدون صورة» بس، و«صلة القرابة» نسخة «مع صورة» بس
+    private var noPhotoOnlyHint: String? {
+        vm.showsPhoto ? L10n.t("يظهر في نسخة «بدون صورة» فقط", "No-photo version only") : nil
+    }
+
+    private var onlyWithPhotoHint: String { L10n.t("يظهر في نسخة «مع صورة» فقط", "Photo version only") }
 
     private func venueCard(_ side: String) -> some View {
         OccasionFormCard(
@@ -658,10 +827,30 @@ struct OccasionComposerView: View {
             )
             OccasionFieldLabel(L10n.t("المنطقة", "Area"))
             OccasionAreaField(text: vm.text("\(side)Area"))
-            OccasionFieldLabel(L10n.t("الأوقات", "Times"))
-            OccasionChips(options: OccasionChoices.venueTimeLabels, selected: vm.sel("\(side)Times")) {
-                vm.setSel("\(side)Times", $0)
-            }
+            // الأيام والوقت بصيغة النعي الرسمية في الكويت — وفي المنشور «<الأيام>، <الوقت>»
+            OccasionFieldLabel(L10n.t("الأيام", "Days"))
+            OccasionMenuField(
+                options: OccasionChoices.condolenceDays,
+                selected: vm.sel("\(side)Days"),
+                onSelect: { i in withAnimation(DS.Anim.quick) { vm.setSel("\(side)Days", i) } },
+                icon: "calendar",
+                noneLabel: L10n.t("بدون أيام", "No days"),
+                custom: OccasionCustomOption(text: vm.text("\(side)DaysCustom"),
+                                             placeholder: L10n.t("مثال: يومي السبت والأحد", "e.g. Saturday and Sunday")),
+                accessibilityTitle: L10n.t("أيام العزاء", "Condolence days")
+            )
+            // الرجال: «العزاء في المقبرة فقط» آخر القائمة
+            OccasionFieldLabel(L10n.t("الوقت", "Time"))
+            OccasionMenuField(
+                options: OccasionChoices.condolenceTimes(side),
+                selected: vm.sel("\(side)Time"),
+                onSelect: { i in withAnimation(DS.Anim.quick) { vm.setSel("\(side)Time", i) } },
+                icon: "clock",
+                noneLabel: L10n.t("بدون وقت", "No time"),
+                custom: OccasionCustomOption(text: vm.text("\(side)TimeCustom"),
+                                             placeholder: L10n.t("مثال: من الساعة ٨ مساءً", "e.g. from 8 pm")),
+                accessibilityTitle: L10n.t("وقت العزاء", "Condolence time")
+            )
         }
     }
 
@@ -694,7 +883,7 @@ struct OccasionComposerView: View {
             }
             OccasionFormCard(title: L10n.t("إلى", "To"), hint: L10n.t("اسم العائلة المعزّى فيها", "The bereaved family")) {
                 OccasionQuickText(text: vm.text("toFamily"), suggestions: Array(vm.familyNames.prefix(16)),
-                                  placeholder: L10n.t("مثال: [اسم العائلة]", "e.g. [اسم العائلة]"))
+                                  placeholder: L10n.t("اكتب اسم العائلة", "Type the family name"))
                 if OccasionChoices.solaceFamily(vm.form.txt("toFamily")).isEmpty {
                     OccasionRequiredHint(L10n.t("مطلوب — اكتب اسم العائلة", "Required — type the family name"))
                 } else {
@@ -731,7 +920,10 @@ struct OccasionComposerView: View {
                     withAnimation(DS.Anim.quick) { vm.withPhoto = i == 0 }
                 }
                 if !vm.showsPhoto {
-                    Text(L10n.t("مكان الصورة يروح للآية والاسم — بخط أكبر.", "The photo's space goes to the verse and the name, in larger type."))
+                    Text(vm.isDeath
+                         ? L10n.t("مكان الصورة يروح للآية والقرابة والتشييع وبداية العزاء — بخط أكبر.",
+                                  "The photo's space goes to the verse, relatives, funeral and condolence start, in larger type.")
+                         : L10n.t("مكان الصورة يروح للآية والاسم — بخط أكبر.", "The photo's space goes to the verse and the name, in larger type."))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textTertiary)
                 }
@@ -830,4 +1022,11 @@ private struct OccasionShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+/// متابعة تمرير النموذج تحت المعاينة — مرجعي حتى ما تنعاد الشاشة مع كل إطار تمرير
+private final class OccasionFormScrollTracker {
+    var lastTop: CGFloat?
+    /// كم تمرّر النموذج لفوق متتالياً (يصفر لما يرجع لتحت)
+    var upTravel: CGFloat = 0
 }

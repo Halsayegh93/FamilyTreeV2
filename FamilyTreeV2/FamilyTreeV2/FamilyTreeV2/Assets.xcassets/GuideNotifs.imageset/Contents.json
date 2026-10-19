@@ -1,0 +1,22 @@
+{
+  "images": [
+    {
+      "filename": "GuideNotifs_light.jpg",
+      "idiom": "universal"
+    },
+    {
+      "filename": "GuideNotifs_dark.jpg",
+      "idiom": "universal",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ]
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

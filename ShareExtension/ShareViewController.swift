@@ -9,7 +9,7 @@ final class ShareViewController: UIViewController {
 
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
-        // بدون هذا يرسم النظام خلفية معتمة خلف الامتداد فيظهر فراغ أسود
+        // ملء الشاشة شفافاً — المربّع يُرسم بنفسه أسفل الشاشة بارتفاع محتواه (طلب المالك ٢٠٢٦-١٠-٠٧)
         modalPresentationStyle = .overFullScreen
     }
 
@@ -22,20 +22,7 @@ final class ShareViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .clear
         view.isOpaque = false
-        configureSheetHeight()
         Task { await loadSharedItem() }
-    }
-
-    /// النظام يفتح الامتداد بشيت بكامل الشاشة، فيبقى فراغ أبيض تحت المحتوى.
-    /// نضبط ارتفاعه على قدر النموذج مع إمكانية سحبه لأعلى.
-    private func configureSheetHeight() {
-        guard let sheet = sheetPresentationController else { return }
-        let fitted = UISheetPresentationController.Detent.custom(identifier: .init("fitted")) { ctx in
-            ctx.maximumDetentValue * 0.66
-        }
-        sheet.detents = [fitted, .large()]
-        sheet.prefersGrabberVisible = true
-        sheet.preferredCornerRadius = 24
     }
 
     /// يقرأ أول مرفق صالح (PDF أو صورة) من عنصر المشاركة.

@@ -1,11 +1,29 @@
 import SwiftUI
 
-/// شيت اختيار فرع — شجري متوسّع
+/// مربّع اختيار فرع — شجري متوسّع بتصميم المربّعات الموحّد (رأس ملوّن + الفروع صفوفاً + «إلغاء»):
+/// الضغط على الاسم يختار الفرع، والسهم يعرض أبناءه تحته. يُفتح بـ `.dsTallBox(isPresented:)`.
+/// القائمة نفسها في كل مكان (طلب المالك ٢٠٢٦-١٠-٠٩): بحث الشجرة، مركز التقارير، سجل الأعضاء —
+/// بلا حقل بحث، بعدد أفراد كل فرع، وبالاسم المخصّص للفرع إن وُجد (`app_settings.branch_names`،
+/// يُقرأ من `AppSettingsViewModel` في البيئة — يصل للورقة لأنها تحمل بيئة من فتحها).
+/// وضع التسمية (`renamesBranches`، «إعدادات التطبيق ← أسماء الفروع»): الضغط على فرع يفتح مربّع اسمه.
 /// المستوى الأول: أبناء عبدالله المباشرين (يخفي عبدالله نفسه)
 /// كل ابن يتوسّع ليبين أحفاده (مستوى ثاني)
 struct BranchPickerSheet: View {
+    @Environment(\.dsSection) private var dsSectionEnv
+    /// أسماء الفروع المخصّصة (للعرض في صفوف القائمة فقط)
+    @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
     let allMembers: [FamilyMember]
-    let onSelect: (UUID) -> Void
+    /// الفرع المختار حالياً — عليه علامة ✓ (اختياري؛ الاستدعاء بدونه يبقى كما هو)
+    var selectedId: UUID? = nil
+    /// حقل البحث داخل المربّع — مخفي افتراضياً في كل الاستدعاءات (طلب المالك ٢٠٢٦-١٠-٠٩): الفروع فقط
+    var showsSearch: Bool = false
+    /// وضع التسمية: الضغط على فرع يفتح مربّع اسمه المخصّص بدل اختياره
+    var renamesBranches: Bool = false
+    /// في وضع التسمية: false = للقراءة فقط (غير المالك)
+    var canRename: Bool = false
+    /// حفظ الاسم (nil = حذفه والرجوع للاسم الافتراضي) — المُستدعي يحفظه على السيرفر
+    var onRename: (UUID, String?) -> Void = { _, _ in }
+    var onSelect: (UUID) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
@@ -13,6 +31,14 @@ struct BranchPickerSheet: View {
     @State private var expanded: Set<UUID> = []
     @State private var isLoading = true
     @State private var allDescendants: [UUID: Int] = [:]
+    /// مربّع تسمية الفرع
+    @State private var renameTarget: BranchNode? = nil
+    @State private var renameDraft = ""
+    @State private var showRename = false
+
+    /// نتائج البحث (من كل الأعضاء — قد تكون آلافاً) فوق هذا العدد تُبنى كسولةً؛
+    /// دونه صفوف عادية حتى يُقاس ارتفاع المربّع بدقّة (الكسولة تُبلِّغ ارتفاعاً ناقصاً للقصيرة)
+    private static let lazyListThreshold = 40
 
     struct BranchNode: Identifiable {
         let member: FamilyMember
@@ -23,66 +49,134 @@ struct BranchPickerSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // عنوان أعلى القائمة
-                Text(L10n.t("البحث بالفرع", "Search by branch"))
-                    .font(DS.Font.headline)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, DS.Spacing.sm)
-                    .padding(.bottom, DS.Spacing.xs)
-
-                if isLoading {
-                    ProgressView().scaleEffect(1.2)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List {
-                        ForEach(filteredNodes) { node in
-                            branchRow(node, depth: 0)
-                        }
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .environment(\.defaultMinListRowHeight, 44)
-                    .scrollDismissesKeyboard(.interactively)
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
-                }
+        let nodes = filteredNodes
+        let searching = !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // الاختيار بالضغط على الاسم (المُستدعي يغلق المربّع كالسابق) — لا زر إجراء، «إلغاء» وحده
+        return DSComposer(
+            title: renamesBranches ? L10n.t("أسماء الفروع", "Branch names")
+                                   : L10n.t("البحث بالفرع", "Search by branch"),
+            subtitle: renamesBranches
+                ? (canRename ? L10n.t("اضغط فرعاً لتسميته", "Tap a branch to name it")
+                             : L10n.t("وضع القراءة فقط — التسمية للمالك", "Read-only — the owner names branches"))
+                : L10n.t("اختر فرعاً لحصر النتائج عليه", "Pick a branch to narrow the results"),
+            icon: "tree.fill",
+            tint: DS.Color.actionNavy,
+            actionTitle: "",
+            showsAction: false,
+            cancelTitle: renamesBranches ? L10n.t("إغلاق", "Close") : L10n.t("إلغاء", "Cancel"),
+            canSubmit: false,
+            onSubmit: {},
+            onCancel: { dismiss() }
+        ) {
+            if renamesBranches {
+                DSNoteCard(canRename
+                           ? L10n.t("الاسم يظهر في قائمة «اختر فرعاً» فقط، ولا يغيّر أسماء الأعضاء.",
+                                    "The name shows only in the «Pick branch» list; member names stay as they are.")
+                           : L10n.t("تقدر تتصفّح الأسماء. التسمية متاحة للمالك فقط.",
+                                    "You can browse the names. Only the owner can rename."),
+                           icon: canRename ? "info.circle.fill" : "eye.fill")
+                    .dsStaggerIn(0)
             }
-            .background(DS.Color.background)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                }
-                // شريط البحث داخل الـ navigation bar — أعلى نقطة ممكنة
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 12))
-                            .foregroundColor(DS.Color.textTertiary)
-                        TextField(L10n.t("ابحث بالاسم...", "Search by name..."), text: $search)
-                            .font(DS.Font.footnote)
-                            .textFieldStyle(.plain)
-                            .submitLabel(.search)
-                            .frame(minWidth: 180)
-                        if !search.isEmpty {
-                            Button { search = "" } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(DS.Color.surface, in: Capsule())
-                }
+
+            if showsSearch {
+                searchField
+                    .dsStaggerIn(0)
+            }
+
+            DSComposerSection(
+                title: searching ? L10n.t("نتائج البحث", "Search results")
+                                 : L10n.t("فروع العائلة", "Family branches"),
+                icon: searching ? "person.2.fill" : "tree.fill",
+                tint: DS.Color.primary.dsChrome(in: dsSectionEnv),
+                trailing: isLoading ? nil : "\(nodes.count)",
+                index: 1
+            ) {
+                branchList(nodes, searching: searching)
             }
         }
         .task {
             await computeTree()
+        }
+        .modifier(renameAlert)
+    }
+
+    // MARK: - تسمية الفرع (وضع التسمية)
+
+    /// مربّع الاسم — حقل مُعبّأ بالاسم الحالي، «حفظ»، «الاسم الافتراضي» (إن كان له اسم)، «إلغاء»
+    private var renameAlert: BranchRenameAlert {
+        let target = renameTarget
+        let hasCustom = target.map { appSettingsVM.branchName(for: $0.id) != nil } ?? false
+        return BranchRenameAlert(
+            isPresented: $showRename,
+            draft: $renameDraft,
+            defaultName: target?.displayName ?? "",
+            hasCustom: hasCustom,
+            onSave: { name in
+                guard let target else { return }
+                onRename(target.id, name)
+            }
+        )
+    }
+
+    private func openRename(_ node: BranchNode) {
+        guard canRename else { return }
+        renameTarget = node
+        renameDraft = appSettingsVM.branchName(for: node.id) ?? ""
+        showRename = true
+    }
+
+    // MARK: - أجزاء المربّع
+
+    /// البحث — حقل المربّعات بأيقونة العدسة، مع ✕ للمسح كالسابق
+    private var searchField: some View {
+        DSComposerField(icon: "magnifyingglass",
+                        label: L10n.t("بحث", "Search"),
+                        placeholder: L10n.t("ابحث بالاسم...", "Search by name..."),
+                        text: $search)
+            .submitLabel(.search)
+            .overlay(alignment: .trailing) { clearSearchButton }
+    }
+
+    @ViewBuilder
+    private var clearSearchButton: some View {
+        if !search.isEmpty {
+            Button { search = "" } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .dsGlyph(DS.Glyph.lg, weight: .regular)
+                    .foregroundColor(DS.Color.textTertiary)
+                    // مساحة ضغط ٤٤ نقطة (حد أبل) — مركز الأيقونة في مكانه (كان ٣٦ + هامش ٤)
+                    .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
+        }
+    }
+
+    /// القائمة: تحميل ← لا نتائج ← الفروع (شجرة تتوسّع) أو نتائج البحث
+    @ViewBuilder
+    private func branchList(_ nodes: [BranchNode], searching: Bool) -> some View {
+        if isLoading {
+            // التحميل الواحد: مجسّم القسم يتنفّس (بدل الدوّارة)
+            DSPageLoader(fillsSpace: false)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.sm)
+        } else if nodes.isEmpty {
+            DSEmptyView(L10n.t("لا توجد نتائج", "No results"), style: .inline)
+        } else if searching && nodes.count > Self.lazyListThreshold {
+            // كسولة — البحث يشمل كل الأعضاء: تُبنى الصفوف الظاهرة فقط
+            LazyVStack(spacing: DS.Spacing.sm) {
+                ForEach(nodes) { node in
+                    branchRow(node, depth: 0)
+                }
+            }
+        } else {
+            // صفوف عادية لا كسولة — تُقاس كاملةً فيأخذ المربّع ارتفاعها الصحيح
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(nodes) { node in
+                    branchTree(node, depth: 0)
+                }
+            }
         }
     }
 
@@ -105,75 +199,144 @@ struct BranchPickerSheet: View {
             }
     }
 
-    private func branchRow(_ node: BranchNode, depth: Int) -> AnyView {
-        AnyView(branchRowContent(node, depth: depth))
+    /// الفرع + أبناؤه تحته عند التوسيع (مُزاحون بخط جانبي خفيف) — AnyView لأنها متداخلة
+    private func branchTree(_ node: BranchNode, depth: Int) -> AnyView {
+        let showsChildren = expanded.contains(node.id) && !node.children.isEmpty
+        return AnyView(
+            VStack(spacing: DS.Spacing.sm) {
+                branchRow(node, depth: depth)
+                if showsChildren {
+                    childrenStack(node, depth: depth)
+                }
+            }
+        )
     }
 
-    @ViewBuilder
-    private func branchRowContent(_ node: BranchNode, depth: Int) -> some View {
-        let isExpanded = expanded.contains(node.id)
-        let canExpand = !node.children.isEmpty
-
-        VStack(spacing: 0) {
-            HStack(spacing: DS.Spacing.sm) {
-                // زر التوسعة
-                if canExpand {
-                    Button {
-                        withAnimation(DS.Anim.snappy) {
-                            if isExpanded { expanded.remove(node.id) }
-                            else { expanded.insert(node.id) }
-                        }
-                    } label: {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.left")
-                            .font(DS.Font.icon(11, weight: .bold))
-                            .foregroundColor(DS.Color.textSecondary)
-                            .frame(width: 22, height: 22)
-                            .background(Circle().fill(DS.Color.surface))
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Spacer().frame(width: 22)
-                }
-
-                // الاختيار — معكوس: الاسم على الجهة الأولى، الـ avatar على الجهة الثانية
-                Button {
-                    onSelect(node.member.id)
-                } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        HStack(spacing: 4) {
-                            if node.member.isDeceased == true {
-                                Image(systemName: "leaf.fill")
-                                    .font(DS.Font.icon(11))
-                                    .foregroundColor(DS.Color.textTertiary)
-                            }
-                            Text(node.displayName)
-                                .font(depth == 0 ? DS.Font.calloutBold : DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        DSMemberAvatar(
-                            name: node.member.fullName,
-                            avatarUrl: node.member.avatarUrl,
-                            size: depth == 0 ? 40 : 34,
-                            roleColor: DS.Color.textTertiary
-                        )
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.leading, CGFloat(depth) * 24)
-            .padding(.vertical, 4)
-
-            // أبناء هذا الفرع
-            if isExpanded {
-                ForEach(node.children) { child in
-                    branchRow(child, depth: depth + 1)
-                }
+    /// أبناء الفرع — مُزاحون لجهة البداية مع خط يربطهم بالأب
+    private func childrenStack(_ node: BranchNode, depth: Int) -> some View {
+        VStack(spacing: DS.Spacing.sm) {
+            ForEach(node.children) { child in
+                branchTree(child, depth: depth + 1)
             }
         }
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+        .padding(.leading, DS.Spacing.lg)
+        .overlay(alignment: .leading) {
+            Capsule()
+                .fill(DS.Color.primary.dsChrome(in: dsSectionEnv).opacity(DS.Opacity.tintFillStrong))
+                .frame(width: DS.Border.widthBold + DS.Border.width / 2)
+                .padding(.leading, DS.Spacing.xsm)
+        }
+        .transition(.opacity)
+    }
+
+    /// صف فرع: الصورة + الاسم (🍃 للمتوفى، ✓ للمختار حالياً) ثم سهم التوسعة إن كان له أبناء.
+    /// الضغط على الصف يختار الفرع، والسهم يعرض أبناءه — نفس السابق.
+    private func branchRow(_ node: BranchNode, depth: Int) -> some View {
+        let isSelected = node.id == selectedId
+        let isTop = depth == 0
+        let canExpand = !node.children.isEmpty
+        // الاسم المخصّص لصفوف الفروع فقط (لا لنتائج البحث بالاسم)
+        let searching = !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let customName = searching ? nil : appSettingsVM.branchName(for: node.id)
+        let shownName = customName ?? node.displayName
+        return Button {
+            if renamesBranches {
+                openRename(node)
+            } else {
+                onSelect(node.member.id)
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                DSMemberAvatar(
+                    name: node.member.fullName,
+                    avatarUrl: node.member.avatarUrl,
+                    size: isTop ? DS.Icon.avatarRow : DS.Icon.row,
+                    roleColor: DS.Color.primary.dsChrome(in: dsSectionEnv)
+                )
+                if node.member.isDeceased == true {
+                    Image(systemName: "leaf.fill")
+                        .dsGlyph(DS.Glyph.smCompact, weight: .regular)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(shownName)
+                        .dsFont(isTop ? .headlineCompact : isSelected ? .bodyStrong : .body)
+                        .foregroundColor((isTop || isSelected) ? DS.Color.fieldLabel : DS.Color.fieldValue)
+                        .lineLimit(1)
+                    // وضع التسمية: الاسم الأصلي تحت الاسم المخصّص (ليُعرف أي فرع هو)
+                    if renamesBranches, customName != nil {
+                        Text(node.displayName)
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                if renamesBranches && canRename {
+                    Image(systemName: "pencil")
+                        .dsGlyph(DS.Glyph.smCompact)
+                        .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
+                        .accessibilityHidden(true)
+                }
+                // عدد أفراد الفرع (هو + ذرّيته) — طلب المالك ٢٠٢٦-١٠-٠٩
+                DSStatusChip(text: "\(node.totalCount)", tint: DS.Color.primary.dsChrome(in: dsSectionEnv), size: .mini)
+                    .accessibilityLabel(L10n.t("\(node.totalCount) فرد", "\(node.totalCount) members"))
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .dsGlyph(DS.Glyph.xl, weight: .regular)
+                        .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
+                }
+                if canExpand {
+                    // مكان سهم التوسعة — الزر نفسه فوق الصف (ضغطته لا تختار الفرع)
+                    Color.clear.frame(width: Self.expandButtonSize, height: Self.expandButtonSize)
+                }
+            }
+            .branchRowBox(selected: isSelected, tint: DS.Color.primary.dsChrome(in: dsSectionEnv))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // القارئ الصوتي: اسم الفرع (+ «متوفى») بلا حرف الصورة البديلة ولا أسماء الرموز
+        .accessibilityLabel(shownName
+                            + (node.member.isDeceased == true ? L10n.t("، متوفى", ", deceased") : ""))
+        .accessibilityHint(renamesBranches && canRename ? L10n.t("يفتح مربّع اسم الفرع", "Opens the branch name box") : "")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .overlay(alignment: .trailing) {
+            if canExpand {
+                expandButton(for: node)
+                    // الدائرة في مكانها السابق (هامش الصف ١٠ + نصف ٣٠) ومنطقة الضغط ٤٤ حولها
+                    .padding(.trailing, DS.Spacing.sm + 2 - (Self.expandHitSize - Self.expandButtonSize) / 2)
+            }
+        }
+    }
+
+    private static let expandButtonSize: CGFloat = DS.Icon.discSmall
+    /// منطقة ضغط سهم التوسعة — ٤٤ نقطة (حد أبل)، والدائرة ٣٠ كما هي
+    private static let expandHitSize: CGFloat = DS.Icon.tapTarget
+
+    /// سهم التوسعة — مغلق يشير لجهة القراءة (يسار بالعربي)، ومفتوح للأسفل
+    private func expandButton(for node: BranchNode) -> some View {
+        let isExpanded = expanded.contains(node.id)
+        return Button {
+            withAnimation(DS.Anim.snappy) {
+                if isExpanded { expanded.remove(node.id) }
+                else { expanded.insert(node.id) }
+            }
+        } label: {
+            Image(systemName: "chevron.down")
+                .dsGlyph(DS.Glyph.smCompact)
+                .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
+                // الاتجاه يُعكس تلقائياً بالعربي — زاوية واحدة تشير لجهة القراءة باللغتين
+                .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                .frame(width: Self.expandButtonSize, height: Self.expandButtonSize)
+                .background(Circle().fill(DS.Color.primary.dsChrome(in: dsSectionEnv)
+                    .opacity(isExpanded ? DS.Opacity.tintFillStrong : DS.Opacity.tintFill)))
+                // مساحة ضغط ٤٤ نقطة (حد أبل) حول الدائرة — الصف ٤٨+ فيسعها
+                .frame(width: Self.expandHitSize, height: Self.expandHitSize)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isExpanded ? L10n.t("إخفاء الأبناء", "Hide sons")
+                                       : L10n.t("عرض الأبناء", "Show sons"))
     }
 
     private func computeTree() async {
@@ -362,5 +525,48 @@ struct BranchPickerSheet: View {
         let lastQC = compressName(lastQ)
         guard !restQC.isEmpty, !lastQC.isEmpty else { return false }
         return fnC.hasPrefix(restQC) && fnC.hasSuffix(lastQC)
+    }
+}
+
+/// مربّع اسم الفرع — `dsAlert` بحقل واحد (نمط «سبب الإبلاغ»): حفظ / الاسم الافتراضي / إلغاء.
+/// الحفظ بنص فارغ = الرجوع للاسم الافتراضي.
+private struct BranchRenameAlert: ViewModifier {
+    @Binding var isPresented: Bool
+    @Binding var draft: String
+    let defaultName: String
+    let hasCustom: Bool
+    let onSave: (String?) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .dsAlert(L10n.t("اسم الفرع", "Branch name"), isPresented: $isPresented, icon: "pencil") {
+                TextField(L10n.t("اكتب اسم الفرع", "Type the branch name"), text: $draft)
+                    .dsAlertField()
+                    .submitLabel(.done)
+                Button(L10n.t("حفظ", "Save")) {
+                    let name = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    onSave(name.isEmpty ? nil : name)
+                }
+                if hasCustom {
+                    Button(L10n.t("الاسم الافتراضي", "Default name"), role: .destructive) {
+                        onSave(nil)
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("«\(defaultName)» — اتركه فارغاً للاسم الافتراضي.",
+                            "«\(defaultName)» — leave empty for the default name."))
+            }
+    }
+}
+
+private extension View {
+    /// صف الفرع: صندوق صفوف المربّعات + إطار بلون التطبيق للفرع المختار حالياً
+    func branchRowBox(selected: Bool, tint: Color) -> some View {
+        dsRowBox()
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(tint.opacity(selected ? 0.6 : 0), lineWidth: 1.5)
+            )
     }
 }

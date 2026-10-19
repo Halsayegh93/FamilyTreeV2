@@ -1,8 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// واجهة امتداد المشاركة — بسيطة ومكتفية بذاتها (لا تستورد DS التطبيق
-/// حتى يبقى الامتداد خفيفاً وسريع الفتح).
+/// واجهة امتداد المشاركة — بشكل التطبيق اليوم (طلب المالك ٢٠٢٦-١٠-٠٧ «ما طوّرت مربّع المشاركة»):
+/// رأس مربّع العمل الملوّن بالبحري، بطاقات `.dsCard()`، مربّعات الاختيار، حقول المربّع، وأزرار ٤٤ الموحّدة،
+/// بخط IBM Plex Sans Arabic. القيم من `ShareDS` (مرآة صغيرة لـ DS التطبيق — الامتداد لا يستورده
+/// حتى يبقى خفيفاً وسريع الفتح). السلوك (جسر الجلسة والرفع) كما هو.
 struct ShareRootView: View {
     enum State {
         case ready(SharedFile)
@@ -14,7 +16,11 @@ struct ShareRootView: View {
 
     @SwiftUI.State private var title = ""
     @SwiftUI.State private var note = ""
-    @SwiftUI.State private var category: ShareUploader.Category = .documents
+    @SwiftUI.State private var category: ShareUploader.LiveCategory =
+        (ShareUploader.cachedCategories() ?? ShareUploader.builtInCategories)[0]
+    /// تصنيفات المكتبة كما في «التصنيفات» بالإدارة: آخر نسخة من التطبيق، ثم السيرفر إن أمكن، والمدمجة آخراً
+    @SwiftUI.State private var categories: [ShareUploader.LiveCategory] =
+        ShareUploader.cachedCategories() ?? ShareUploader.builtInCategories
     /// وجهة الملف — الصور تقبل الوجهتين، وPDF للمكتبة فقط
     @SwiftUI.State private var destination: Destination = .library
 
@@ -24,6 +30,8 @@ struct ShareRootView: View {
     @SwiftUI.State private var errorText: String?
     @SwiftUI.State private var keyboardHeight: CGFloat = 0
     @SwiftUI.State private var keyboardDuration: Double = 0.25
+    /// طول المحتوى — منطقة التمرير بطوله (حتى المساحة المتاحة) فتلحقه الأزرار مباشرة
+    @SwiftUI.State private var contentHeight: CGFloat = 0
 
     /// منطقة الأمان السفلى (شريط الهوم) — تُقرأ من GeometryReader لأن
     /// UIApplication.shared غير متاح داخل الامتدادات.
@@ -31,19 +39,10 @@ struct ShareRootView: View {
 
     private var keyboardVisible: Bool { keyboardHeight > 0 }
 
-    /// حشو أسفل المحتوى: مع الكيبورد هامش صغير يكفي، وبدونه نترك
+    /// حشو أسفل الأزرار: مع الكيبورد هامش صغير يكفي، وبدونه نترك
     /// مساحة شريط الهوم حتى لا يلتصق الزر بحافة الشاشة.
     private var contentBottomInset: CGFloat {
-        keyboardVisible ? 0 : safeBottom + 20
-    }
-
-    private let brand = Color(red: 0.21, green: 0.49, blue: 0.93)      // #357DED
-    private let brandDeep = Color(red: 0.14, green: 0.38, blue: 0.75)  // #2460C0
-    private let indigo = Color(red: 0.33, green: 0.22, blue: 0.86)     // #5438DC
-
-    private var gradient: LinearGradient {
-        LinearGradient(colors: [brandDeep, brand, indigo],
-                       startPoint: .bottomTrailing, endPoint: .topLeading)
+        keyboardVisible ? ShareDS.Box.footerBottom : safeBottom + ShareDS.Box.homeBarClearance
     }
 
     private var canUpload: Bool {
@@ -55,7 +54,15 @@ struct ShareRootView: View {
 
     var body: some View {
         ZStack {
-            Color(.systemBackground).ignoresSafeArea()
+            // ما فوق المربّع شفاف بتعتيم خفيف — المربّع على قدر محتواه أسفل الشاشة (طلب المالك ٢٠٢٦-١٠-٠٧)
+            Color.black.opacity(0.25).ignoresSafeArea()
+                .onTapGesture { onClose() }
+                // أسماء التصنيفات الحالية من السيرفر (مثل «مجلة العائلة») — يبقى الاختيار على نفس المفتاح
+                .task {
+                    guard let live = await ShareUploader.fetchCategories() else { return }
+                    categories = live
+                    category = live.first(where: { $0.key == category.key }) ?? live[0]
+                }
 
             GeometryReader { proxy in
                 Color.clear
@@ -87,12 +94,19 @@ struct ShareRootView: View {
                 }
         }
         .environment(\.layoutDirection, .rightToLeft)
+        .font(ShareDS.Typeface.role(.body))
     }
 
     private var card: some View {
         VStack(spacing: 0) {
+          // الرأس + المحتوى + الأزرار بارتفاعها الطبيعي — مربّع على قدر المحتوى أسفل الشاشة (طلب المالك ٢٠٢٦-١٠-٠٧)
+          VStack(spacing: 0) {
+            // رأس مربّع العمل الموحّد (`DSComposerHeader`)
+            ShareBoxHeader(title: "مكتبة العائلة", subtitle: "رفع ملف من المشاركة", icon: "archivebox.fill")
+
+            // المحتوى بطوله ثم يمرّر إن زاد — والأزرار تلحقه مباشرة (لا تُدفع لأسفل الشاشة)
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
+                VStack(spacing: ShareDS.Box.sectionSpacing) {
                     switch state {
                     case .failed(let message):
                         failureView(message)
@@ -104,239 +118,162 @@ struct ShareRootView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 2)
+                .padding(.horizontal, ShareDS.Box.contentPadding)
+                .padding(.top, ShareDS.Box.contentTop + ShareDS.Spacing.xs)
+                .padding(.bottom, ShareDS.Box.contentBottom)
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: ShareContentHeightKey.self, value: proxy.size.height)
+                })
             }
+            .frame(maxHeight: contentHeight > 0 ? contentHeight : .infinity)
+            .layoutPriority(1)
+            .onPreferenceChange(ShareContentHeightKey.self) { contentHeight = $0 }
 
-            // الزر يلحق المحتوى مباشرة — لا يُدفع لأسفل الشاشة
             if case .ready(let file) = state, !didUpload {
-                uploadButton(file)
-                    .padding(.horizontal, 16)
+                footer(file)
+                    .padding(.horizontal, ShareDS.Box.footerHorizontal)
+                    .padding(.top, ShareDS.Box.footerTop)
                     .padding(.bottom, contentBottomInset)
             }
-
-            Spacer(minLength: 0)
+          }
+          // سطح المربّع بزاويتين علويتين مستديرتين (الشكل يمتد تحت الحافة فتختفي السفليتان) — iOS 16
+          .background(ShareDS.Palette.background)
+          .mask(RoundedRectangle(cornerRadius: ShareDS.Box.cardRadius, style: .continuous)
+                    .padding(.bottom, -ShareDS.Box.cardRadius))
+          .background(ShareDS.Palette.background.ignoresSafeArea(edges: .bottom)
+                        .padding(.top, ShareDS.Box.cardRadius))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // المربّع أسفل الشاشة بارتفاعه الطبيعي، وما فوقه للتعتيم
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     // MARK: - نموذج الرفع
 
     private func formView(_ file: SharedFile) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header
-
-            // الملف المشارَك
-            HStack(spacing: 10) {
-                Image(systemName: file.isPDF ? "doc.text.fill" : "photo.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(brand)
-                    .frame(width: 34, height: 34)
-                    .background(brand.opacity(0.10))
-                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(file.name)
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Text(file.sizeText)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(10)
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        VStack(spacing: ShareDS.Box.sectionSpacing) {
+            fileCard(file)
 
             // وجهة الرفع — تظهر للصور فقط
             if !file.isPDF {
-                VStack(alignment: .leading, spacing: 6) {
-                    label("أين تريدها؟")
-                    HStack(spacing: 8) {
-                        destinationChip(.library, icon: "archivebox.fill", title: "للمكتبة")
-                        destinationChip(.avatar, icon: "person.crop.circle.fill", title: "صورتي الشخصية")
-                    }
+                ShareSection(title: "أين تريدها؟", icon: "tray.and.arrow.down.fill") {
+                    ShareOptionTiles(options: destinationOptions, selection: $destination, columns: 2)
                 }
             }
 
             if destination == .library {
-                field("العنوان", text: $title, placeholder: "اسم يعرّف الملف")
-                field("وصف (اختياري)", text: $note, placeholder: "ملاحظات أو سياق")
+                VStack(spacing: ShareDS.Box.sectionInnerSpacing) {
+                    ShareField(icon: "textformat", label: "العنوان", placeholder: "اسم يعرّف الملف", text: $title)
+                    ShareField(icon: "text.alignright", label: "وصف (اختياري)", placeholder: "ملاحظات أو سياق", text: $note)
+                }
+                .shareCard()
 
-                // القسم
-                VStack(alignment: .leading, spacing: 6) {
-                    label("القسم")
-                    HStack(spacing: 6) {
-                        ForEach(ShareUploader.Category.allCases) { c in
-                            categoryChip(c)
-                        }
-                    }
+                ShareSection(title: "القسم", icon: "folder.fill") {
+                    ShareOptionTiles(options: categoryOptions, selection: $category, columns: 4)
                 }
             } else {
-                HStack(spacing: 7) {
+                HStack(spacing: ShareDS.Spacing.xsm) {
                     Image(systemName: "crop")
-                        .font(.system(size: 11, weight: .bold))
+                        .shareGlyph(ShareDS.Glyph.sm)
+                        .foregroundColor(ShareDS.Palette.ink)
+                        .accessibilityHidden(true)
                     Text("تُقصّ مربّعة من المنتصف تلقائياً")
-                        .font(.system(size: 11))
+                        .shareFont(.footnote)
+                        .foregroundColor(ShareDS.Palette.fieldValue)
+                    Spacer(minLength: 0)
                 }
-                .foregroundColor(.secondary)
+                .shareCard()
             }
 
             if let errorText {
-                Text(errorText)
-                    .font(.system(size: 11))
-                    .foregroundColor(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-        }
-    }
-
-    /// زر الرفع — مثبّت أسفل الشاشة فلا يبقى فراغ أبيض تحته
-    private func uploadButton(_ file: SharedFile) -> some View {
-        Button {
-            Task { await upload(file) }
-        } label: {
-            HStack(spacing: 7) {
-                if isUploading {
-                    ProgressView().tint(.white).scaleEffect(0.85)
-                } else {
-                    Image(systemName: "icloud.and.arrow.up.fill")
-                        .font(.system(size: 13, weight: .bold))
+                HStack(alignment: .top, spacing: ShareDS.Spacing.xsm) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .shareGlyph(ShareDS.Glyph.sm)
+                        .accessibilityHidden(true)
+                    Text(errorText)
+                        .shareFont(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
                 }
-                Text(isUploading
-                     ? "جارٍ الرفع…"
-                     : (destination == .avatar ? "تعيين صورتي الشخصية" : "رفع للمكتبة"))
-                    .font(.system(size: 15, weight: .bold))
+                .foregroundColor(ShareDS.Palette.error)
+                .shareCard(fill: ShareDS.Palette.error.opacity(ShareDS.Opacity.tintFillSoft))
             }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .background(canUpload ? AnyShapeStyle(gradient)
-                                  : AnyShapeStyle(Color.secondary.opacity(0.35)))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .disabled(!canUpload)
     }
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "archivebox.fill")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(gradient))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("مكتبة العائلة")
-                    .font(.system(size: 14, weight: .bold))
-                Text("رفع ملف من المشاركة")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+    /// الملف المشارَك — بطاقة واحدة: قرص مجسّم + الاسم والحجم
+    private func fileCard(_ file: SharedFile) -> some View {
+        HStack(spacing: ShareDS.Spacing.sm) {
+            ShareClayDisc(icon: file.isPDF ? "doc.text.fill" : "photo.fill", size: ShareDS.Icon.row)
+            VStack(alignment: .leading, spacing: ShareDS.Spacing.xxs) {
+                Text(file.name)
+                    .shareFont(.rowTitle)
+                    .foregroundColor(ShareDS.Palette.fieldLabel)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(file.sizeText)
+                    .shareFont(.footnote)
+                    .foregroundColor(ShareDS.Palette.fieldValue)
             }
             Spacer(minLength: 0)
-            Button("إلغاء") { onClose() }
-                .font(.system(size: 13))
-                .foregroundColor(.secondary)
+        }
+        .shareCard()
+    }
+
+    private var destinationOptions: [ShareOption<Destination>] {
+        [ShareOption(id: .library, title: "للمكتبة", icon: "archivebox.fill"),
+         ShareOption(id: .avatar, title: "صورتي الشخصية", icon: "person.crop.circle.fill")]
+    }
+
+    private var categoryOptions: [ShareOption<ShareUploader.LiveCategory>] {
+        categories.map { ShareOption(id: $0, title: $0.title, icon: $0.icon) }
+    }
+
+    /// صفّ الأزرار الموحّد (`DSBoxButtons`): الإجراء بلون القسم يميناً، والإلغاء الرمادي يساراً
+    private func footer(_ file: SharedFile) -> some View {
+        HStack(spacing: ShareDS.Box.buttonSpacing) {
+            Button {
+                Task { await upload(file) }
+            } label: {
+                HStack(spacing: ShareDS.Box.buttonSpacing) {
+                    if isUploading {
+                        ProgressView().tint(.white).scaleEffect(ShareDS.Box.spinnerScale)
+                    } else {
+                        Image(systemName: "icloud.and.arrow.up.fill")
+                            .shareGlyph(ShareDS.Glyph.md)
+                    }
+                    Text(isUploading
+                         ? "جارٍ الرفع…"
+                         : (destination == .avatar ? "تعيين صورتي الشخصية" : "رفع للمكتبة"))
+                }
+            }
+            .buttonStyle(ShareButtonStyle())
+            // أثناء الرفع: نفس اللون بلا خفوت المعطّل، ولا يُضغط مرة ثانية (مثل `DSButton(isLoading:)`)
+            .disabled(!canUpload && !isUploading)
+            .allowsHitTesting(!isUploading)
+
+            Button("إلغاء", role: .cancel) { onClose() }
+                .buttonStyle(ShareButtonStyle(role: .cancel))
                 .disabled(isUploading)
         }
-    }
-
-    private func destinationChip(_ d: Destination, icon: String, title: String) -> some View {
-        let selected = destination == d
-        return Button {
-            destination = d
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .bold))
-                Text(title)
-                    .font(.system(size: 11.5, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundColor(selected ? .white : .secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(
-                Group {
-                    if selected {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(gradient)
-                    } else {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
-                    }
-                }
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func categoryChip(_ c: ShareUploader.Category) -> some View {
-        let selected = category == c
-        return Button {
-            category = c
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: c.icon)
-                    .font(.system(size: 12, weight: .bold))
-                Text(c.title)
-                    .font(.system(size: 9.5, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .foregroundColor(selected ? .white : .secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(
-                Group {
-                    if selected {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous).fill(gradient)
-                    } else {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
-                    }
-                }
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func field(_ label: String, text: Binding<String>, placeholder: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            self.label(label)
-            TextField(placeholder, text: text)
-                .font(.system(size: 13))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-    }
-
-    private func label(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(.secondary)
     }
 
     // MARK: - النجاح والفشل
 
     private var successView: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 46))
-                .foregroundColor(.green)
+        VStack(spacing: ShareDS.Spacing.sm) {
+            ShareClayDisc(icon: "checkmark", tint: ShareDS.Palette.success, size: ShareDS.Icon.state)
             Text(destination == .avatar ? "تم تحديث صورتك" : "تم الرفع للمكتبة")
-                .font(.system(size: 16, weight: .bold))
+                .shareFont(.headline)
+                .foregroundColor(ShareDS.Palette.fieldLabel)
             Text(destination == .avatar
                  ? "تلقاها في: حسابي"
                  : "تلقاه في: الرئيسية ← مكتبة العائلة")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+                .shareFont(.footnote)
+                .foregroundColor(ShareDS.Palette.fieldValue)
         }
-        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, ShareDS.Spacing.lg)
+        .shareCard()
         .onAppear {
             Task {
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
@@ -346,20 +283,20 @@ struct ShareRootView: View {
     }
 
     private func failureView(_ message: String) -> some View {
-        VStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 34))
-                .foregroundColor(.orange)
+        VStack(spacing: ShareDS.Spacing.md) {
+            ShareClayDisc(icon: "exclamationmark.triangle.fill", tint: ShareDS.Palette.warning, size: ShareDS.Icon.state)
             Text(message)
-                .font(.system(size: 13))
+                .shareFont(.callout)
+                .foregroundColor(ShareDS.Palette.fieldLabel)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("إغلاق") { onClose() }
-                .font(.system(size: 14, weight: .bold))
-                .padding(.top, 4)
+            Button("إغلاق", role: .cancel) { onClose() }
+                .buttonStyle(ShareButtonStyle(role: .cancel))
         }
-        .padding(.vertical, 20)
-        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, ShareDS.Spacing.md)
+        .padding(.horizontal, ShareDS.Spacing.sm)
+        .shareCard()
     }
 
     // MARK: - الرفع
@@ -387,4 +324,10 @@ struct ShareRootView: View {
             errorText = error.localizedDescription
         }
     }
+}
+
+/// طول محتوى المربّع (لتحجيم منطقة التمرير على قدره)
+private struct ShareContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }

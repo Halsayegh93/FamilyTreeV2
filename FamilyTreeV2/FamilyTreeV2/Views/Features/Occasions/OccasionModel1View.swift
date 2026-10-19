@@ -100,16 +100,19 @@ extension OccasionPostView {
         }
     }
 
-    // MARK: إعلان وفاة — مع صورة (Condolence-Photo): الصورة بالحلقة البيضاء بين الآية والاسم
+    // MARK: إعلان عزاء — مع صورة (Condolence-Photo): الصورة بالحلقة البيضاء بين الآية والاسم
 
     var m1DeathPhotoPost: some View {
         let L = OccasionM1Layout.deathPhoto(size)
+        let ring = silverAsset("m1/frame/white.png")
         let k = L.k
         let contentW = canvas.width - 2 * L.pad.side
         var items: [AnyView] = [
             AnyView(deathVerses(lead: 391 * k / OccasionVerse.sabrLead.width, main: 541 * k / OccasionVerse.inna.width,
                                 leadPull: 30 * k, mainPull: 28 * k)),
-            AnyView(OccasionCirclePhoto(box: 286 * k, frame: image("m1/frame/white.png"), avatar: .dark, photo: photo)),
+            // «فحمي وفضي»: الحلقة الفضية (m1/frame/white-silver)، أو البيضاء مضروبة بالفضي لين تنزل
+            AnyView(OccasionCirclePhoto(box: 286 * k, frame: ring.image, avatar: .dark, photo: photo,
+                                        frameTint: ring.tint ? OccasionSilver.silver : nil)),
             AnyView(m1DeathName(k: k)),
         ]
         if has("relation") {
@@ -131,15 +134,13 @@ extension OccasionPostView {
                 .frame(maxWidth: contentW)
             ))
         }
-        if has("menPlace") || has("womenPlace") {
-            items.append(AnyView(venues(scale: 0.9 * k, accent: .white, line: Color.white.opacity(0.75))))
-        }
+        if has("menPlace") || has("womenPlace") { items.append(AnyView(m1DeathVenues(scale: 0.9 * k))) }
         if has("dua1") || has("dua2") { items.append(AnyView(deathDua(size: 24 * k))) }
         items.append(AnyView(m1Logo("white", height: 134 * k).padding(.top, -6 * k).padding(.bottom, -8 * k)))
         return m1Canvas(root: OccasionDeathPalette.root, bg: "death", pad: L.pad, items: items)
     }
 
-    // MARK: إعلان وفاة — بدون صورة (Condolence) بالتفاصيل كاملة: القرابة داخل بطاقة، ثم التشييع والعزاء
+    // MARK: إعلان عزاء — بدون صورة (Condolence) بالتفاصيل كاملة: القرابة داخل بطاقة، ثم التشييع والعزاء
 
     var m1DeathTextPost: some View {
         let L = OccasionM1Layout.deathText(size)
@@ -182,14 +183,13 @@ extension OccasionPostView {
                         text(value("funeral"), .semibold, 29 * k, color: .white, lineHeight: 1.45, balanceWidth: contentW)
                     }
                     if has("condolence") {
-                        text(value("condolence"), .semibold, 27 * k, color: OccasionDeathPalette.soft, lineHeight: 1.45, balanceWidth: contentW)
+                        text(value("condolence"), .semibold, 27 * k, color: silver ? OccasionSilver.silver : OccasionDeathPalette.soft,
+                             lineHeight: 1.45, balanceWidth: contentW)
                     }
                 }
             ))
         }
-        if has("menPlace") || has("womenPlace") {
-            items.append(AnyView(venues(scale: 0.9 * k, accent: .white, line: Color.white.opacity(0.75))))
-        }
+        if has("menPlace") || has("womenPlace") { items.append(AnyView(m1DeathVenues(scale: 0.9 * k))) }
         if has("dua1") || has("dua2") { items.append(AnyView(deathDua(size: 25 * k))) }
         items.append(AnyView(m1Logo("white", height: 150 * k).padding(.top, -6 * k).padding(.bottom, -8 * k)))
         return m1Canvas(root: OccasionDeathPalette.root, bg: "death", pad: L.pad, items: items)
@@ -202,11 +202,11 @@ extension OccasionPostView {
                 text(value("lead"), .semibold, 30 * k, color: .white, lineHeight: 1.4)
             }
             if has("title") {
-                text(value("title"), .extrabold, 36 * k, color: OccasionDeathPalette.soft, lineHeight: 1.35)
+                text(value("title"), .extrabold, 36 * k, color: silver ? OccasionSilver.silver : OccasionDeathPalette.soft, lineHeight: 1.35)
             }
             if has("name") {
-                // الاسم بذهبي الوفاة (occ-obituary-gold) مثل النموذجين ٢ و٣
-                nameLine("name", color: OccasionDeathPalette.gold)
+                // الاسم بذهبي الوفاة (occ-obituary-gold) مثل النموذجين ٢ و٣ — وأبيض في «فحمي وفضي»
+                nameLine("name", color: silver ? OccasionSilver.text : OccasionDeathPalette.gold)
                     .shadow(color: .black.opacity(0.65), radius: 13 * k, x: 0, y: 10 * k)
             }
         }
@@ -218,8 +218,10 @@ extension OccasionPostView {
         let L = OccasionM1Layout.solace(size)
         let k = L.k
         let contentW = canvas.width - 2 * L.pad.side
-        let ink = Color(hex: "#20262D")
-        let muted = Color(hex: "#4A5560")
+        // «فحمي وفضي»: الأرضية الفاتحة بألوان البطاقة الفاتحة
+        let S = OccasionSilver.self
+        let ink = silver ? S.cardText : Color(hex: "#20262D")
+        let muted = silver ? S.cardText2 : Color(hex: "#4A5560")
         let shadow = OccasionLightShadow(k: k)
         var items: [AnyView] = [
             AnyView(verse(template.verse ?? .sabr, scale: k, pull: 30 * k)),
@@ -246,7 +248,7 @@ extension OccasionPostView {
         if has("dua") {
             let duaW = min(860 * k, contentW)
             items.append(AnyView(
-                text(value("dua"), .regular, 31 * k, color: Color(hex: "#55657A"), lineHeight: 1.75)
+                text(value("dua"), .regular, 31 * k, color: silver ? S.cardText2 : Color(hex: "#55657A"), lineHeight: 1.75)
                     .frame(maxWidth: duaW)
             ))
         }
@@ -257,18 +259,20 @@ extension OccasionPostView {
     // MARK: قطع نموذج ١
 
     /// الخلفية: صورة وحدة بمقاس المنشور (أو الستوري للعزاء) تغطي أي مقاس — مثل object-fit: cover
+    /// («فحمي وفضي»: m1/bg/<bg>-silver.jpg — postBackground)
     private func m1Background(root: Color, bg: String) -> some View {
-        ZStack {
-            root
-            if let ui = image("m1/bg/\(bg).jpg") {
-                Image(uiImage: ui)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: canvas.width, height: canvas.height)
-                    .clipped()
+        postBackground(root: root, path: "m1/bg/\(bg).jpg", fill: true)
+    }
+
+    /// العزاءان في نموذج ١: العنوان والدبوس والفاصل أبيض (نفسه بالألوان كلها)؛ «فحمي وفضي»: المنطقة والأوقات فضي (venues)
+    private func m1DeathVenues(scale s: CGFloat) -> some View {
+        Group {
+            if silver {
+                venues(scale: s, accent: .white, line: Color.white.opacity(0.75), secondary: OccasionSilver.silver)
+            } else {
+                venues(scale: s, accent: .white, line: Color.white.opacity(0.75))
             }
         }
-        .frame(width: canvas.width, height: canvas.height)
     }
 
     /// العناصر موزّعة (space-between) داخل هوامش التخطيط فوق الخلفية
@@ -287,10 +291,12 @@ extension OccasionPostView {
     private func m1Logo(_ name: String, height lh: CGFloat) -> some View {
         Group {
             let h = lh * OccasionFlatLogo.scale
-            if let ui = image(OccasionFlatLogo.path(name)) {
+            let flat = flatLogo(name)
+            if let ui = flat.image {
                 Image(uiImage: ui)
                     .resizable()
                     .frame(width: h * ui.size.width / max(ui.size.height, 1), height: h)
+                    .grayscale(flat.gray ? 1 : 0)
                     .padding(.vertical, (lh - h) / 2)
                     .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
             } else {
@@ -310,6 +316,8 @@ struct OccasionCirclePhoto: View {
     let frame: UIImage?
     let avatar: OccasionAvatar
     let photo: OccasionPhoto
+    /// تلوين الإطار (رمادي مضروب بهاللون) — «فحمي وفضي» قبل ما ينزل الإطار الفضي
+    var frameTint: Color? = nil
 
     var body: some View {
         let d = box * 232 / 336
@@ -317,6 +325,8 @@ struct OccasionCirclePhoto: View {
         return ZStack(alignment: .topLeading) {
             if let frame {
                 Image(uiImage: frame).resizable().frame(width: box, height: box)
+                    .grayscale(frameTint == nil ? 0 : 1)
+                    .colorMultiply(frameTint ?? .white)
             }
             photoContent(d)
                 .frame(width: d, height: d)

@@ -5,7 +5,7 @@ import Photos
 import PhotosUI
 import ImageIO
 
-/// حالة شاشة «بوستات المناسبات»: القالب، مكان النشر، الاختيارات، الاسم من الشجرة، الصورة، والتصدير.
+/// حالة شاشة «منشورات المناسبات»: القالب، مكان النشر، الاختيارات، الاسم من الشجرة، الصورة، والتصدير.
 /// النصوص تطلع من الاختيارات (OccasionCompose) — نفس منطق الموقع.
 @MainActor
 final class OccasionComposerViewModel: ObservableObject {
@@ -19,8 +19,10 @@ final class OccasionComposerViewModel: ObservableObject {
     /// نموذج ١ (صورة دائرية فوق)، نموذج ٢ (صورة سداسية جانبية)، أو نموذج ٣ (صورة بقوس فوق بطاقة) —
     /// الافتراضي المعتمد (نموذج ٣) مثل الموقع
     @Published var model: OccasionModel = .standard
-    /// التهاني: «مع صورة» أو «بدون صورة» (يبقى لما يتغيّر القالب مثل النموذج)
+    /// التهاني و«إعلان عزاء»: «مع صورة» أو «بدون صورة» (يبقى لما يتغيّر القالب مثل النموذج)
     @Published var withPhoto = true
+    /// «إعلان عزاء» و«مشاركة عزاء»: «فحمي وفضي» (الافتراضي) أو «الأصلية» — لكل النماذج (يبقى لما يتغيّر القالب مثل النموذج)
+    @Published var palette: OccasionPalette = .standard
     @Published var photo = OccasionPhoto()
     /// الصورة الحالية صورة العضو من الشجرة (مو صورة اختارها المستخدم)
     @Published private(set) var photoFromMember = false
@@ -42,6 +44,7 @@ final class OccasionComposerViewModel: ObservableObject {
     let templates = OccasionTemplate.all
     let placements = OccasionPlacement.all
 
+    /// سطور القرابة اللي تتعبّى من الشجرة (الزوج/الزوجة كتابة)
     static let relationKeys = ["relation", "rel2", "rel3"]
 
     init() {
@@ -56,18 +59,33 @@ final class OccasionComposerViewModel: ObservableObject {
     /// النموذج اللي ينرسم فعلاً
     var effectiveModel: OccasionModel { template.effectiveModel(model) }
 
-    /// فيه صورة في البوست الحالي؟ (التهاني حسب «مع صورة / بدون صورة»)
+    /// فيه صورة في المنشور الحالي؟ (التهاني و«إعلان عزاء» حسب «مع صورة / بدون صورة»)
     var showsPhoto: Bool { template.showsPhoto(withPhoto) }
 
-    /// مفتاح الملفات المطلوبة — يتغيّر مع القالب أو المقاس أو النموذج أو النسخة
-    var assetKey: String { "\(template.id)-\(size.rawValue)-\(effectiveModel.rawValue)-\(showsPhoto)" }
+    /// القالب اللي ينرسم: «إعلان عزاء» بدون صورة يرسم تصميم الإعلان بدون صورة (OccasionTemplate.layout)
+    var layoutTemplate: OccasionTemplate { template.layout(withPhoto: withPhoto) }
 
-    private var assetPaths: [String] { template.assetPaths(for: size, model: model, withPhoto: withPhoto) }
+    /// مفتاح الملفات المطلوبة — يتغيّر مع القالب أو المقاس أو النموذج أو النسخة
+    var assetKey: String { "\(template.id)-\(size.rawValue)-\(effectiveModel.rawValue)-\(showsPhoto)-\(palette.rawValue)" }
+
+    private var assetPaths: [String] { layoutTemplate.assetPaths(for: size, model: model, withPhoto: withPhoto) }
+    private var optionalAssetPaths: [String] {
+        layoutTemplate.optionalAssetPaths(for: size, model: model, withPhoto: withPhoto, palette: palette)
+    }
 
     /// الاسم كامل: من الشجرة (مع العائلة) أو المكتوب — الصيغة تنختار بعدين حسب السطر (OccasionNames)
     var name: String {
-        if let member { return member.nameWordsWithFamily.joined(separator: " ") }
+        if let member { return member.nameUnitsWithFamily.joined(separator: " ") }
         return form.txt("nameTyped")
+    }
+
+    /// وحدات الأسماء من الشجرة (PersonName القاعدة ٢): العضو المختار واسم أبوه في «ابن …» —
+    /// «محمد باقر» يبقى اسماً واحداً لما ينختصر الاسم. النص المكتوب يتقسّم بالقاعدة ٣.
+    var nameHints: OccasionNames.Hints {
+        guard let member else { return [:] }
+        var lists = [member.nameUnitsWithFamily]
+        if let fid = member.fatherId, let father = family.byId[fid] { lists.append(father.shortNameUnits) }
+        return OccasionNames.hints(lists)
     }
 
     private struct ComposeKey: Equatable {
@@ -78,6 +96,8 @@ final class OccasionComposerViewModel: ObservableObject {
         let size: OccasionSize
         let withPhoto: Bool
         let counts: [String: Int]
+        /// وحدات الأسماء من الشجرة (تتغيّر لو انحمّلت الشجرة بعد اختيار العضو)
+        let hints: OccasionNames.Hints
         /// القياس يتغيّر لما يتسجّل الخط
         let fontsReady: Bool
     }
@@ -87,10 +107,12 @@ final class OccasionComposerViewModel: ObservableObject {
     /// نصوص البوست النهائية + صيغة كل اسم (بالنموذج والمقاس والنسخة الحالية) — نفس composePost في الموقع.
     /// تنحسب مرة وحدة لكل تغيير (القياس بالخط مكلف شوي، والشاشة تقراها أكثر من مرة بكل رسم)
     var composed: (values: [String: String], names: [OccasionNameResolution]) {
+        let hints = nameHints
         let key = ComposeKey(template: template.id, form: form, name: name, model: model, size: size,
-                             withPhoto: withPhoto, counts: nameCounts, fontsReady: kit.fontsReady)
+                             withPhoto: withPhoto, counts: nameCounts, hints: hints, fontsReady: kit.fontsReady)
         if let cached = composeCache, cached.key == key { return cached.value }
-        let value = OccasionCompose.post(template, form, name: name, model: model, size: size, withPhoto: withPhoto, counts: nameCounts)
+        let value = OccasionCompose.post(layoutTemplate, form, name: name, model: model, size: size, withPhoto: withPhoto,
+                                         counts: nameCounts, hints: hints)
         composeCache = (key, value)
         return value
     }
@@ -239,7 +261,7 @@ final class OccasionComposerViewModel: ObservableObject {
         }
     }
 
-    /// سطور مقترحة من الشجرة للعضو المختار
+    /// سطور مقترحة من الشجرة للعضو المختار («صلة القرابة» في النسخة مع صورة)
     var relationSuggestions: [String] {
         guard let m = member else { return [] }
         return [family.sonsLine(m), family.fatherLine(m), family.brothersLine(m)].filter { !$0.isEmpty }
@@ -267,9 +289,11 @@ final class OccasionComposerViewModel: ObservableObject {
         avatarTask?.cancel()
         isLoadingMemberPhoto = true
         avatarTask = Task { [weak self] in
+            // الصور الخاصة: رابط موقَّع إن أمكن (وإلا الأصلي)
+            let fetchURL = await StorageURLResolver.shared.displayURL(for: url)
             // التنزيل وفك الصورة خارج الخيط الرئيسي
             let image = await Task.detached(priority: .userInitiated) {
-                await Self.fetchImage(url, maxPixel: 1600)
+                await Self.fetchImage(fetchURL, maxPixel: 1600)
             }.value
             guard let self, !Task.isCancelled else { return }
             self.isLoadingMemberPhoto = false
@@ -293,7 +317,7 @@ final class OccasionComposerViewModel: ObservableObject {
     }
 
     func prepareAssets() async {
-        await kit.prepare(assetPaths)
+        await kit.prepare(assetPaths, optional: optionalAssetPaths)
     }
 
     // MARK: الصورة
@@ -347,9 +371,9 @@ final class OccasionComposerViewModel: ObservableObject {
 
     /// يرسم البوست بمقاسه الحقيقي (1080 × الارتفاع) بكسل
     func render() async -> UIImage? {
-        guard await kit.prepare(assetPaths), kit.fontsReady else { return nil }
-        let view = OccasionPostView(template: template, size: size, values: values, photo: photo, kit: kit, revision: kit.revision,
-                                    model: model, withPhoto: withPhoto)
+        guard await kit.prepare(assetPaths, optional: optionalAssetPaths), kit.fontsReady else { return nil }
+        let view = OccasionPostView(template: layoutTemplate, size: size, values: values, photo: photo, kit: kit, revision: kit.revision,
+                                    model: model, withPhoto: withPhoto, palette: palette)
         let renderer = ImageRenderer(content: view)
         renderer.proposedSize = ProposedViewSize(size.canvas)
         renderer.scale = 1
@@ -383,7 +407,7 @@ final class OccasionComposerViewModel: ObservableObject {
                 let request = PHAssetCreationRequest.forAsset()
                 request.addResource(with: .photo, data: data, options: nil)
             }
-            message = L10n.t("انحفظ البوست في الصور ✓", "Saved to Photos ✓")
+            message = L10n.t("انحفظ المنشور في الصور ✓", "Saved to Photos ✓")
         } catch {
             Log.error("Occasion save to Photos failed: \(error.localizedDescription)")
             message = L10n.t("ما انحفظت الصورة — حاول مرة ثانية.", "Couldn't save the image — please try again.")

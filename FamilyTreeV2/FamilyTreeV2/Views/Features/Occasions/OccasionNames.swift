@@ -42,6 +42,8 @@ struct OccasionNameOption {
     let scale: CGFloat
     let label: String
     let fits: Bool
+    /// يدخل بسطر واحد ولو بخط أصغر (أقل شي ٦٠٪) — يقدر المستخدم يختاره بنفسه (من النسخة المحلية ٢٠٢٦-١٠-١٣)
+    var usable: Bool { scale >= OccasionNames.minScale }
 }
 
 /// الصيغة اللي انختارت لعنصر اسم
@@ -82,35 +84,36 @@ enum OccasionNames {
 
     // MARK: الكلمات والصيغ
 
-    private static let joinNext: Set<String> = ["عبد", "أبو", "ابو", "بو"]
+    /// وحدات أسماء معروفة من الشجرة (PersonName القاعدة ٢) لنصوص بعينها: اسم العضو المختار واسم أبوه
+    /// في سطر القرابة. المفتاح النص نفسه — لو المستخدم عدّل النص يرجع التقسيم للقاعدة ٣.
+    typealias Hints = [String: [String]]
 
-    /// كلمات الاسم — «عبد/أبو + الاسم» و«المحمد علي» المكتوبة بمسافة تنحسب اسم واحد (ما ينفصلون بالبوست أصلاً)
-    static func words(_ name: String) -> [String] {
-        let raw = name.split(whereSeparator: \.isWhitespace).map(String.init)
-        var out: [String] = []
-        var i = 0
-        while i < raw.count {
-            let w = raw[i]
-            if i + 1 < raw.count && (joinNext.contains(w) || (w == "المحمد" && raw[i + 1] == "علي")) {
-                out.append(w + " " + raw[i + 1])
-                i += 2
-            } else {
-                out.append(w)
-                i += 1
-            }
+    /// تلميحات من قوائم وحدات (كاملة + مختصرة لأقصى صيغة، لأن الاسم ينحفظ مختصراً قبل التقسيم)
+    static func hints(_ unitLists: [[String]]) -> Hints {
+        var out: Hints = [:]
+        for units in unitLists where !units.isEmpty {
+            out[units.joined(separator: " ")] = units
+            let top = shorten(units, to: maxWords)
+            out[top.joined(separator: " ")] = top
         }
         return out
     }
 
+    /// وحدات الاسم — من الشجرة إن كان النص معروفاً، وإلا القاعدة ٣ (PersonName.units):
+    /// «عبد/أبو + الاسم» و«المحمد علي» و«زين العابدين» (كلمة «ال…» مو الأخيرة) تنحسب اسم واحد
+    static func words(_ name: String, hints: Hints = [:]) -> [String] {
+        if let known = hints[PersonName.clean(name)] { return known }
+        return PersonName.units(name)
+    }
+
     /// أول (n-1) أسماء + الأخير (العائلة)
     static func shorten(_ words: [String], to n: Int) -> [String] {
-        guard words.count > n, n >= 2, let last = words.last else { return words }
-        return Array(words.prefix(n - 1)) + [last]
+        PersonName.shorten(words, to: n)
     }
 
     /// الاسم المكتوب أو من الشجرة: أقصى شي سداسي
-    static func capped(_ name: String) -> String {
-        shorten(words(name), to: maxWords).joined(separator: " ")
+    static func capped(_ name: String, hints: Hints = [:]) -> String {
+        shorten(words(name, hints: hints), to: maxWords).joined(separator: " ")
     }
 
     // MARK: سطور القرابة
@@ -123,7 +126,7 @@ enum OccasionNames {
 
     /// سطر قرابة فيه اسم شخص واحد («ابن المرحوم صالح حسن المحمدعلي»، «زوج: فاطمة أحمد») → البادئة وكلمات الاسم.
     /// القوائم («والد كل من: علي، حسين») والسطور بدون بادئة قرابة ترجع nil وتبقى تلتف مثل التصميم.
-    static func relationName(_ line: String) -> (prefix: String, words: [String])? {
+    static func relationName(_ line: String, hints: Hints = [:]) -> (prefix: String, words: [String])? {
         let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty || t.contains("،") || t.contains(",") || t.contains("كل من") { return nil }
         var tokens = t.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -136,7 +139,7 @@ enum OccasionNames {
             prefix.append(tokens.removeFirst())
         }
         guard !prefix.isEmpty, !tokens.isEmpty else { return nil }
-        return (prefix.joined(separator: " ") + " ", words(tokens.joined(separator: " ")))
+        return (prefix.joined(separator: " ") + " ", words(tokens.joined(separator: " "), hints: hints))
     }
 
     // MARK: القياس واختيار الصيغة
@@ -161,15 +164,19 @@ enum OccasionNames {
         return Array((minWords...top).reversed())
     }
 
-    /// أطول صيغة ≤ المطلوب تدخل بـ ٨٥٪ أو أكثر؛ وإلا أقصر صيغة (تصغر لين تدخل)
-    static func resolve(_ e: OccasionNameElement, slot: OccasionNameSlot?, requested: Int) -> OccasionNameResolution? {
+    /// تلقائياً: أطول صيغة ≤ المطلوب تدخل بـ ٨٥٪ أو أكثر؛ وإلا أقصر صيغة (تصغر لين تدخل).
+    /// اختيار المستخدم (`explicit`) ينفّذ كما هو إذا يدخل بسطر واحد ولو بخط أصغر (≥ ٦٠٪) — طلب المالك
+    /// ٢٠٢٦-١٠-١٣ «ليش ما يشتغل خيار طول الاسم ثلاثي رباعي خماسي؟» (كان يرجع للأقصر بصمت؛ منقول من النسخة المحلية)
+    static func resolve(_ e: OccasionNameElement, slot: OccasionNameSlot?, requested: Int,
+                        explicit: Bool = false) -> OccasionNameResolution? {
         let options: [OccasionNameOption] = counts(e).map { n in
             let line = e.line(n)
             let scale = slot.map { scaleToFit(OccasionText.postText(line), slot: $0) } ?? 1
             return OccasionNameOption(count: n, name: e.name(n), line: line, scale: scale, label: formatLabel(n), fits: scale >= fitThreshold)
         }
         guard let shortest = options.last else { return nil }
-        let option = options.first { $0.count <= requested && $0.fits } ?? shortest
+        let chosenExplicitly = explicit ? options.first { $0.count == requested && $0.usable } : nil
+        let option = chosenExplicitly ?? options.first { $0.count <= requested && $0.fits } ?? shortest
         let longest = options.first?.count ?? requested
         return OccasionNameResolution(element: e, options: options, option: option, requested: requested,
                                       autoShortened: option.count < min(requested, longest), shrunk: option.scale < 1)

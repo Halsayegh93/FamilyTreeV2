@@ -4,9 +4,13 @@ import SwiftUI
 // منشورات الإدارة تلبس هوية الهيدر (درع متدرّج + خيط علوي)،
 // والتصويت بأشرطة نسب حيّة بدل أرقام صمّاء.
 struct HomeNewsCardView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.colorScheme) private var colorScheme
+    /// قسم الصفحة (الأخبار) — إطار البطاقة (التحميل، اختيار التصويت) يتبعه
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     let postId: UUID
     let authorName: String
@@ -38,6 +42,9 @@ struct HomeNewsCardView: View {
     let onMemberTap: (FamilyMember) -> Void
     /// تاريخ النشر — ما مضى عليه أكثر من شهرين يظهر بتاريخه أسفل البطاقة يساراً
     var postDate: Date? = nil
+    /// «حظر العضو» في قائمة «…» — لغير صاحب الخبر (Guideline 1.2)
+    var canBlock: Bool = false
+    var onBlockTap: () -> Void = {}
 
     // Double-tap like animation
     @State private var showDoubleTapHeart = false
@@ -69,7 +76,8 @@ struct HomeNewsCardView: View {
         // هوية الإدارة: نعرض الاسم المحفوظ كما هو ولا نستبدله باسم العضو
         if isAdminIdentityPost { return authorName }
         let name = authorMember?.fullName ?? authorName
-        let parts = name.split(separator: " ")
+        // وحدات لا كلمات (PersonName): عضو معروف ← سلسلة الشجرة، وإلا النص الحرّ
+        let parts = authorMember?.nameUnits ?? PersonName.units(name)
         guard parts.count > 3, let last = parts.last else { return name }
         let first3 = parts.prefix(3).joined(separator: " ")
         if parts.dropFirst(2).first == last { return first3 }
@@ -85,14 +93,14 @@ struct HomeNewsCardView: View {
             // المحتوى — ينزل قليلاً عن الترويسة الرسمية حتى لا يلتصق بها
             if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(content)
-                    .font(DS.Font.plex(13.5, weight: .regular))
-                    .foregroundColor(DS.Color.textPrimary.opacity(0.95))
+                    .dsFont(.bodyCompact)
+                    .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.leading)
                     .lineSpacing(2.5)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, DS.Spacing.md)
                     .padding(.top, isAdminIdentityPost ? DS.Spacing.md : 0)
-                    .padding(.bottom, DS.Spacing.xs + 2)
+                    .padding(.bottom, DS.Spacing.xsm)
             }
 
             // منطقة الميديا (صور) — double-tap like
@@ -110,23 +118,15 @@ struct HomeNewsCardView: View {
             // شريط الإجراءات — بلا فاصل: المسافة تكفي
             actionBar
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.top, 2)
-                .padding(.bottom, 4)
+                .padding(.top, DS.Spacing.xxs)
+                .padding(.bottom, DS.Spacing.xs)
         }
-        // منشور الإدارة: خلفية مزرقّة تميّزه عن المنشورات الشخصية البيضاء
-        .background(
-            ZStack {
-                DS.Color.surface
-                if isAdminIdentityPost { DS.Color.accent.opacity(0.05) }
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                // خبر الإدارة بلا إطار (طلب المالك) — الإطار الخفيف للأخبار العادية فقط
-                .stroke(isAdminIdentityPost ? Color.clear : DS.Color.textTertiary.opacity(0.15),
-                        lineWidth: 0.75)
-        )
+        // منشور الإدارة: لمسة ذهبية خفيفة تميّزه عن المنشورات الشخصية
+        .background(isAdminIdentityPost ? DS.Color.accent.opacity(DS.Opacity.tintFillSoft) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
+        // البطاقة الواحدة (`.dsCard`) — سطح + إطار شعري + لمسة «مجسّمات»
+        // خبر الإدارة بلا إطار (طلب المالك) — الإطار الخفيف للأخبار العادية فقط
+        .dsCard(padding: nil, stroked: !isAdminIdentityPost)
     }
 
     // MARK: - هيدر الكرت
@@ -143,11 +143,11 @@ struct HomeNewsCardView: View {
                 Button(action: openAuthor) { authorAvatar }
                     .buttonStyle(.plain)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Button(action: openAuthor) {
                         // اسم صاحب الخبر على سطر واحد (طلب المالك)
                         Text(shortDisplayName)
-                            .font(DS.Font.plex(14, weight: .semibold))
+                            .dsFont(.rowTitle)
                             .foregroundColor(DS.Color.textPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
@@ -156,17 +156,17 @@ struct HomeNewsCardView: View {
                     .buttonStyle(.plain)
 
                     // سطر خفيف: النوع · الوقت — بدل الكبسولة والوقت أسفل البطاقة
-                    HStack(spacing: 4) {
-                        Image(systemName: NewsTypeHelper.icon(for: type))
-                            .font(DS.Font.icon(10, weight: .bold))
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(dsSymbol: NewsTypeHelper.icon(for: type))
+                            .dsGlyph(DS.Glyph.micro)
                         Text(NewsTypeHelper.displayName(for: type))
-                            .font(DS.Font.plex(11, weight: .semibold))
+                            .dsFont(.caption)
                         if !isOlderThanTwoMonths {
                             Text("·")
-                                .font(DS.Font.plex(11, weight: .regular))
+                                .dsFont(.footnote)
                                 .foregroundColor(DS.Color.textTertiary)
                             Text(time)
-                                .font(DS.Font.plex(11, weight: .regular))
+                                .dsFont(.footnote)
                                 .foregroundColor(DS.Color.textTertiary)
                                 .lineLimit(1)
                         }
@@ -179,19 +179,11 @@ struct HomeNewsCardView: View {
             Spacer()
 
             if approvalStatus == "pending" {
-                Text(L10n.t("مراجعة", "Review"))
-                    .font(DS.Font.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.warning)
-                    .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.xs)
-                    .background(DS.Color.warning.opacity(0.10))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(DS.Color.warning.opacity(0.30), lineWidth: 1))
+                DSStatusChip(text: L10n.t("مراجعة", "Review"), tint: DS.Color.warning)
             }
 
-            // قائمة «…»: تعديل/حذف للإدارة وصاحب الخبر، و«إبلاغ» لغير صاحبه (طلب المالك)
-            if canDelete || canEdit || canReport {
+            // قائمة «…»: تعديل/حذف للإدارة وصاحب الخبر، و«إبلاغ» و«حظر» لغير صاحبه (طلب المالك)
+            if canDelete || canEdit || canReport || canBlock {
                 Menu {
                     if canEdit {
                         Button(action: onEditTap) { Label(L10n.t("تعديل", "Edit"), systemImage: "pencil") }
@@ -199,28 +191,34 @@ struct HomeNewsCardView: View {
                     if canReport {
                         Button(action: onReportTap) { Label(L10n.t("إبلاغ", "Report"), systemImage: "flag") }
                     }
+                    if canBlock {
+                        Button(role: .destructive, action: onBlockTap) {
+                            Label(L10n.t("حظر العضو", "Block Member"), systemImage: "hand.raised.fill")
+                        }
+                    }
                     if canDelete {
                         Button(role: .destructive, action: onDeleteTap) { Label(L10n.t("حذف", "Delete"), systemImage: "trash") }
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(DS.Font.icon(14, weight: .semibold))
+                        .dsGlyph(DS.Glyph.md, weight: .semibold)
                         .foregroundColor(isAdminIdentityPost ? DS.Color.accentDark
                                                              : DS.Color.textTertiary)
-                        .frame(width: 36, height: 36)
+                        .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
                         .contentShape(Rectangle())
                 }
+                .accessibilityLabel(L10n.t("خيارات الخبر", "Post options"))
             }
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.top, isAdminIdentityPost ? DS.Spacing.sm + 2 : DS.Spacing.sm + 2)
+        .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.sm)
         // ترويسة رسمية بتدرّج الهيدر — كورقة رسمية للعائلة
         .background(
             Group {
                 // منشور باسم الإدارة بلون مختلف — ذهبي فاتح هادئ لا فاقع (طلب المالك)
                 if isAdminIdentityPost {
-                    DS.Color.accent.opacity(0.14)
+                    DS.Color.accent.opacity(DS.Opacity.tintFill)
                 }
             }
         )
@@ -231,19 +229,19 @@ struct HomeNewsCardView: View {
     private var authorAvatar: some View {
         if isAdminIdentityPost {
             ZStack {
-                Circle()
-                    .fill(DS.Color.accent)
-                Image(systemName: "megaphone.fill")
-                    .font(DS.Font.icon(15, weight: .bold))
-                    .foregroundColor(.white)
+                // كحلي مثل بطاقة الرئيسية — قوس الإعلان الذهبي لا يضيع فوق ذهبي
+                Circle().fill(DS.Color.gradientPrimary)
+                // مكبّر صوت مصمت ونبضة ذهبية واحدة كل ٨ ث (طلب المالك ٢٠٢٦-١٠-٠٥ «باعتدال»)
+                FTNewsBadge(type: "إعلان", tint: DS.Color.textOnPrimary, seed: abs(authorName.hashValue % 89), style: .onColor)
             }
-            .frame(width: 32, height: 32)
+            .frame(width: DS.Icon.row, height: DS.Icon.row)
+            .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: DS.Border.width))
         } else {
             DSMemberAvatar(name: authorName,
                            avatarUrl: authorMember?.avatarUrl,
-                           size: 30,
+                           size: DS.Icon.discSmall,
                            roleColor: typeColor)
-                .overlay(Circle().stroke(DS.Color.textTertiary.opacity(0.30), lineWidth: 1))
+                .overlay(Circle().stroke(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
         }
     }
 
@@ -263,7 +261,7 @@ struct HomeNewsCardView: View {
                             } placeholder: {
                                 ZStack {
                                     DS.Color.surface
-                                    ProgressView().tint(DS.Color.primary)
+                                    DSPageLoader(size: DS.Icon.state, fillsSpace: false)
                                 }
                             }
                         }
@@ -283,7 +281,7 @@ struct HomeNewsCardView: View {
                 } placeholder: {
                     ZStack {
                         DS.Color.surface
-                        ProgressView().tint(DS.Color.primary)
+                        DSPageLoader(size: DS.Icon.state, fillsSpace: false)
                     }
                 }
                 .aspectRatio(2, contentMode: .fit)
@@ -293,21 +291,21 @@ struct HomeNewsCardView: View {
             // قلب الإعجاب
             if showDoubleTapHeart {
                 Image(systemName: "heart.fill")
-                    .font(DS.Font.icon(60, weight: .bold))
+                    .dsGlyph(DS.Glyph.doubleTapHeart)
                     .foregroundStyle(DS.Color.textOnPrimary)
                     .dsCardShadow()
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(DS.Color.textTertiary.opacity(0.12), lineWidth: 0.75)
+                .stroke(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke), lineWidth: DS.Card.strokeWidth)
         )
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             if !isLiked { onLikeTap() }
-            withAnimation(DS.Anim.bouncy) {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.15) : DS.Anim.bouncy) {
                 showDoubleTapHeart = true
             }
             Task {
@@ -328,10 +326,10 @@ struct HomeNewsCardView: View {
     }
 
     private var pollSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             if let q = pollQuestion, !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(q)
-                    .font(DS.Font.scaled(13.5, weight: .bold))
+                    .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
             }
 
@@ -341,9 +339,8 @@ struct HomeNewsCardView: View {
 
             if totalPollVotes > 0 {
                 Text(L10n.t("\(totalPollVotes) صوت", "\(totalPollVotes) votes"))
-                    .font(DS.Font.scaled(11))
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
-                    .padding(.top, 1)
             }
         }
     }
@@ -364,20 +361,20 @@ struct HomeNewsCardView: View {
                 if hasVoted {
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(isSelected ? DS.Color.primary.opacity(0.18)
-                                             : DS.Color.textTertiary.opacity(0.10))
-                            .frame(width: max(geo.size.width * ratio, ratio > 0 ? 8 : 0))
+                            .fill(isSelected ? chromeInk.opacity(DS.Opacity.tintFillStrong)
+                                             : DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
+                            .frame(width: max(geo.size.width * ratio, ratio > 0 ? DS.Spacing.sm : 0))
                             .animation(DS.Anim.smooth, value: ratio)
                     }
                 }
 
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(DS.Font.icon(16, weight: .semibold))
-                        .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textTertiary)
+                        .dsGlyph(DS.Glyph.lg, weight: .semibold)
+                        .foregroundColor(isSelected ? chromeInk : DS.Color.textTertiary)
 
                     Text(option)
-                        .font(DS.Font.scaled(13, weight: isSelected ? .bold : .regular))
+                        .dsFont(isSelected ? .rowTitle : .callout)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
 
@@ -385,20 +382,20 @@ struct HomeNewsCardView: View {
 
                     if hasVoted {
                         Text("\(percent)٪")
-                            .font(DS.Font.scaled(11, weight: .bold))
-                            .foregroundColor(isSelected ? DS.Color.primary : DS.Color.textSecondary)
+                            .dsFont(.badge)
+                            .foregroundColor(isSelected ? chromeInk : DS.Color.textSecondary)
                             .monospacedDigit()
                     }
                 }
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm + 1)
+                .padding(.vertical, DS.Spacing.sm)
             }
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(isSelected ? DS.Color.primary.opacity(0.40)
-                                       : DS.Color.textTertiary.opacity(0.15),
-                            lineWidth: isSelected ? 1.3 : 1)
+                    .stroke(isSelected ? chromeInk.opacity(DS.Opacity.selectedStroke)
+                                       : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
+                            lineWidth: isSelected ? DS.Border.widthBold : DS.Border.width)
             )
         }
         .buttonStyle(.plain)
@@ -410,7 +407,7 @@ struct HomeNewsCardView: View {
         HStack(spacing: DS.Spacing.xs) {
             // Like
             Button(action: onLikeTap) {
-                HStack(spacing: 5) {
+                HStack(spacing: DS.Spacing.xs) {
                     Group {
                         if #available(iOS 17.0, *) {
                             Image(systemName: isLiked ? "heart.fill" : "heart")
@@ -421,18 +418,18 @@ struct HomeNewsCardView: View {
                                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
                         }
                     }
-                    .font(DS.Font.icon(16, weight: .medium))
+                    .dsGlyph(DS.Glyph.lg, weight: .medium)
                     .foregroundColor(isLiked ? DS.Color.sadu : DS.Color.textSecondary)
 
                     if likeCount > 0 {
                         Text("\(likeCount)")
-                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .dsFont(.chip)
                             .foregroundColor(isLiked ? DS.Color.sadu : DS.Color.textSecondary)
                             .monospacedDigit()
                     }
                 }
                 .padding(.horizontal, DS.Spacing.sm)
-                .frame(minWidth: 40, minHeight: 36)
+                .frame(minWidth: DSBox.composerIcon, minHeight: DS.Icon.rowLarge)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -441,20 +438,20 @@ struct HomeNewsCardView: View {
 
             // Comment
             Button(action: onCommentTap) {
-                HStack(spacing: 5) {
+                HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "bubble.right")
-                        .font(DS.Font.icon(15, weight: .medium))
+                        .dsGlyph(DS.Glyph.lgCompact, weight: .medium)
                         .foregroundColor(DS.Color.textSecondary)
 
                     if commentCount > 0 {
                         Text("\(commentCount)")
-                            .font(DS.Font.scaled(12, weight: .semibold))
+                            .dsFont(.chip)
                             .foregroundColor(DS.Color.textSecondary)
                             .monospacedDigit()
                     }
                 }
                 .padding(.horizontal, DS.Spacing.sm)
-                .frame(minWidth: 40, minHeight: 36)
+                .frame(minWidth: DSBox.composerIcon, minHeight: DS.Icon.rowLarge)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -466,7 +463,7 @@ struct HomeNewsCardView: View {
             // أكثر من شهرين → التاريخ في الزاوية السفلية اليسرى (طلب المالك)
             if isOlderThanTwoMonths, let postDate {
                 Text(Self.dateFormatter(for: postDate))
-                    .font(DS.Font.plex(11, weight: .medium))
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
                     .environment(\.layoutDirection, .leftToRight)
             }

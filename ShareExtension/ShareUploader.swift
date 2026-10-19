@@ -36,7 +36,7 @@ enum ShareUploader {
 
         var title: String {
             switch self {
-            case .documents: return "مستندات"
+            case .documents: return "وثائق"   // نفس الاسم المدمج في التطبيق
             case .books:     return "كتب"
             case .oldPhotos: return "صور قديمة"
             case .other:     return "أخرى"
@@ -53,13 +53,65 @@ enum ShareUploader {
         }
     }
 
+    /// تصنيف المكتبة كما في «التصنيفات» على السيرفر (الاسم والأيقونة والترتيب) — مثل CategoryStore في التطبيق.
+    /// المفتاح المدمج (documents/books/old_photos/other) يُحفظ في `category`، والمخصّص في `category_key` مع `other`.
+    struct LiveCategory: Identifiable, Hashable {
+        let key: String
+        let title: String
+        let icon: String
+        var id: String { key }
+        var builtIn: Category? { Category(rawValue: key) }
+    }
+
+    /// يجلب تصنيفات المكتبة الظاهرة — nil عند الفشل (يعرض الامتداد القائمة المدمجة)
+    static func fetchCategories() async -> [LiveCategory]? {
+        guard let session = SharedSessionStore.current() else { return nil }
+        var comps = URLComponents(url: ShareConfig.url.appendingPathComponent("rest/v1/content_categories"),
+                                  resolvingAgainstBaseURL: false)
+        comps?.queryItems = [URLQueryItem(name: "select", value: "key,name_ar,icon_key,sort_order"),
+                             URLQueryItem(name: "section", value: "eq.archive"),
+                             URLQueryItem(name: "is_active", value: "eq.true"),
+                             URLQueryItem(name: "order", value: "sort_order")]
+        guard let url = comps?.url else { return nil }
+        var request = URLRequest(url: url)
+        request.setValue(ShareConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        struct Row: Decodable { let key: String; let name_ar: String; let icon_key: String? }
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([Row].self, from: data), !rows.isEmpty else { return nil }
+        return rows.map { row in
+            // «وفاة/قلب مشطوب» وأمثاله لا تخصّ المكتبة؛ الرمز كما خزّنته الإدارة وإلا رمز المدمج
+            let icon = row.icon_key.flatMap { UIImage(systemName: $0) != nil ? $0 : nil }
+                ?? Category(rawValue: row.key)?.icon ?? "folder.fill"
+            return LiveCategory(key: row.key, title: row.name_ar, icon: icon)
+        }
+    }
+
+    /// آخر تصنيفات حمّلها التطبيق (CategoryStore ينشرها لحاوية App Group) — لا تحتاج شبكة ولا جلسة
+    static func cachedCategories() -> [LiveCategory]? {
+        guard let data = UserDefaults(suiteName: SharedSessionStore.appGroupId)?.data(forKey: "shared.archiveCategories"),
+              let list = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] else { return nil }
+        let items = list.compactMap { d -> LiveCategory? in
+            guard let key = d["key"], let name = d["name_ar"] else { return nil }
+            let icon = d["icon"].flatMap { UIImage(systemName: $0) != nil ? $0 : nil }
+                ?? Category(rawValue: key)?.icon ?? "folder.fill"
+            return LiveCategory(key: key, title: name, icon: icon)
+        }
+        return items.isEmpty ? nil : items
+    }
+
+    static var builtInCategories: [LiveCategory] {
+        Category.allCases.map { LiveCategory(key: $0.rawValue, title: $0.title, icon: $0.icon) }
+    }
+
     private static let bucket = "family-archive"
     private static let table = "family_archive"
     private static let avatarBucket = "avatars"
 
     static func upload(title: String,
                        description: String?,
-                       category: Category,
+                       category: LiveCategory,
                        fileName: String,
                        mimeType: String,
                        data: Data) async throws {
@@ -70,7 +122,9 @@ enum ShareUploader {
         let itemId = UUID().uuidString
         var ext = (fileName as NSString).pathExtension.lowercased()
         if ext.isEmpty { ext = defaultExtension(for: mimeType) }
-        let storagePath = "\(category.rawValue)/\(itemId).\(ext)"
+        // المدمج في `category`، والمخصّص `other` + `category_key` (مثل ArchiveItem.storageFields في التطبيق)
+        let storedCategory = category.builtIn?.rawValue ?? Category.other.rawValue
+        let storagePath = "\(storedCategory)/\(itemId).\(ext)"
 
         // ١) رفع الملف إلى Storage
         var uploadRequest = URLRequest(
@@ -97,7 +151,7 @@ enum ShareUploader {
         var row: [String: Any] = [
             "id": itemId,
             "title": title,
-            "category": category.rawValue,
+            "category": storedCategory,
             "file_url": publicURL,
             "file_type": mimeType,
             "file_size": data.count,
@@ -108,6 +162,7 @@ enum ShareUploader {
         if let description, !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             row["description"] = description
         }
+        if category.builtIn == nil { row["category_key"] = category.key }
         if session.isAdmin {
             row["approved_by"] = session.memberId
             row["approved_at"] = now

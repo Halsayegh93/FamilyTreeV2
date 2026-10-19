@@ -12,6 +12,9 @@ struct AdminMemberDetailSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) var dismiss
+    /// لون القسم الذي فُتح منه (الشجرة، الإدارة، حسابي…) — كحلي «الإطار» يتبعه
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     let member: FamilyMember
 
@@ -19,7 +22,15 @@ struct AdminMemberDetailSheet: View {
     @State private var selectedPhoneCountry: KuwaitPhone.Country
     @State private var phoneNumber: String
     @State private var selectedFatherId: UUID?
+    /// مربّع «السيرة الذاتية» (مربّع عمل)
+    @State private var showBioBox = false
     @State private var fullName: String
+    /// «الاسم الأول» (طلب المالك ٢٠٢٦-١٠-١٨): يبدأ بالمخزّن، وتعديله يستبدل بادئة الاسم الكامل مباشرة
+    /// (PersonName القاعدة ١)، ويُحفظ كما هو في first_name — للأسماء المركّبة مثل «زين العابدين»
+    @State private var firstName: String
+    /// آخر اسم أول طُبّق على الاسم الكامل — مرجع الاستبدال عند الكتابة حرفاً حرفاً
+    @State private var appliedFirstName: String
+    private let startFirstName: String
     @State private var familyName: String
 
     @State private var birthDate: Date
@@ -34,7 +45,6 @@ struct AdminMemberDetailSheet: View {
     @State private var editMode: EditMode = .inactive
 
     @State private var bioStations: [FamilyMember.BioStation] = []
-    @State private var showBioEditor = false
 
     @State private var localAvatarPreview: UIImage? = nil
     @State private var currentAvatarURL: String?
@@ -50,22 +60,87 @@ struct AdminMemberDetailSheet: View {
     @State private var showEmptyNameAlert = false
     @State private var showAvatarUploadError = false
 
+    // «حالة الحساب»: تجميد / حظر الرقم وإلغاؤهما من هنا (طلب المالك ٢٠٢٦-١٠-١٠)
+    private enum AccountAction: Identifiable { case activate, freeze, unfreeze, ban, unban; var id: Self { self } }
+    @State private var pendingAccountAction: AccountAction?
+    @State private var accountBusy: AccountAction?
+    /// حالة الحساب هنا — المجمّد قد لا يكون في قائمة الأعضاء المحمّلة، فلا يُقرأ منها
+    @State private var accountStatus: FamilyMember.MemberStatus?
+    @State private var activeBan: BannedPhone?
+    @State private var accountError = false
+    /// سبب الفشل إن عُرف (مثل تفعيل حساب بلا أب) — وإلا رسالة الاتصال العامة
+    @State private var accountErrorText: String?
+
+    // MARK: - تغييرات لم تُحفظ (توصية أبل)
+    // ما يُحفظ بزر «حفظ» فقط يُقارن بما فُتح عليه السجل — الصورة والأبناء (إضافة/تعديل/حذف)
+    // تُحفظ فوراً فلا تُحسب.
+
+    /// اسم العائلة وتاريخا الميلاد والوفاة كما فُتح السجل («yyyy-MM-dd» أو nil)
+    private let startFamilyName: String
+    private let startBirthKey: String?
+    private let startDeathKey: String?
+    /// ترتيب الأبناء كما حُمّل آخر مرة (setupLocalChildren)
+    @State private var loadedChildIds: [UUID] = []
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private var hasUnsavedChanges: Bool {
+        if fullName != member.fullName || familyName != startFamilyName { return true }
+        if PersonName.clean(firstName) != startFirstName { return true }
+        let original = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
+        if selectedPhoneCountry.id != original.country.id || phoneNumber != original.localDigits { return true }
+        if selectedFatherId != member.fatherId || selectedGender != (member.gender ?? "male") { return true }
+        if isDeceased != (member.isDeceased ?? false) { return true }
+        let birthKey = hasBirthDate ? Self.dayFormatter.string(from: birthDate) : nil
+        let deathKey = hasDeathDate ? Self.dayFormatter.string(from: deathDate) : nil
+        if birthKey != startBirthKey || deathKey != startDeathKey { return true }
+        let bioKey: ([FamilyMember.BioStation]) -> String = { list in
+            list.map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
+        }
+        if bioKey(bioStations) != bioKey(member.bio ?? []) { return true }
+        // الترتيب النسبي فقط — حذف ابن (يُحفظ فوراً) لا يُعدّ تغييراً في الترتيب
+        let localIds = localChildren.map(\.id)
+        let remaining = Set(localIds)
+        return localIds != loadedChildIds.filter { remaining.contains($0) }
+    }
+
     /// لا يُعرض حذف المالك ولا حذف سجلك أنت (فحص الثغرات)
     private var canDeleteMember: Bool {
         authVM.canDeleteMembers && member.role != .owner && member.id != authVM.currentUser?.id
     }
+    /// رأس الشجرة (المحمدعلي): بلا أب وله ذرّية — اسمه هو العائلة نفسها، فلا
+    /// «اسم العائلة» ولا «الأب في الشجرة» (طلب المالك). عضو بلا أب وبلا أبناء
+    /// (غير مرتبط) يبقى له ربط الأب.
+    private var isFamilyRoot: Bool {
+        member.fatherId == nil && memberVM.allMembers.contains { $0.fatherId == member.id }
+    }
+
     private var isMonitorOnly: Bool { authVM.currentUser?.role == .monitor }
 
     init(member: FamilyMember) {
         self.member = member
         self._currentAvatarURL = State(initialValue: member.avatarUrl)
+        self._accountStatus = State(initialValue: member.status)
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         self._selectedPhoneCountry = State(initialValue: detectedPhone.country)
         self._phoneNumber = State(initialValue: detectedPhone.localDigits)
         self._selectedFatherId = State(initialValue: member.fatherId)
         self._fullName = State(initialValue: member.fullName)
+        // المخزّن كما هو؛ سجلّ بلا first_name ← أول وحدة من الاسم الكامل
+        let storedFirst = PersonName.clean(member.firstName)
+        let startFirst = storedFirst.isEmpty ? PersonName.firstUnit(member.fullName) : storedFirst
+        self._firstName = State(initialValue: startFirst)
+        self._appliedFirstName = State(initialValue: startFirst)
+        self.startFirstName = startFirst
         let nameParts = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines).split(whereSeparator: \.isWhitespace).map(String.init)
-        self._familyName = State(initialValue: nameParts.count > 1 ? (nameParts.last ?? "") : "")
+        let startFamily = nameParts.count > 1 ? (nameParts.last ?? "") : ""
+        self._familyName = State(initialValue: startFamily)
+        self.startFamilyName = startFamily
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -75,9 +150,11 @@ struct AdminMemberDetailSheet: View {
         if let bDateStr = member.birthDate, !bDateStr.isEmpty, let date = formatter.date(from: bDateStr) {
             self._birthDate = State(initialValue: date)
             self._hasBirthDate = State(initialValue: true)
+            self.startBirthKey = formatter.string(from: date)
         } else {
             self._birthDate = State(initialValue: Date())
             self._hasBirthDate = State(initialValue: false)
+            self.startBirthKey = nil
         }
 
         self._bioStations = State(initialValue: member.bio ?? [])
@@ -86,66 +163,94 @@ struct AdminMemberDetailSheet: View {
         if let dDateStr = member.deathDate, !dDateStr.isEmpty, let date = formatter.date(from: dDateStr) {
             self._deathDate = State(initialValue: date)
             self._hasDeathDate = State(initialValue: true)
+            self.startDeathKey = formatter.string(from: date)
         } else {
             self._deathDate = State(initialValue: Date())
             self._hasDeathDate = State(initialValue: false)
+            self.startDeathKey = nil
         }
     }
 
     // MARK: - Body
     var body: some View {
-        NavigationStack {
-            Form {
-                heroSection
-                identitySection
-                genderSection
-                datesSection
-                phoneSection
-                bioSection
-                if !isMonitorOnly {
-                    fatherSection
-                    childrenSection
-                    if canDeleteMember { deleteSection }
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .background(DS.Color.background)
-            .environment(\.editMode, $editMode)
-            .navigationTitle(L10n.t("إدارة السجل", "Member Admin"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                ToolbarItem(placement: DSToolbar.confirmPlacement) {
-                    Button(action: saveAction) {
-                        if isSaving {
-                            ProgressView().tint(DS.Color.primary)
-                        } else {
-                            Text(L10n.t("حفظ", "Save"))
-                                .font(DS.Font.callout)
-                                .fontWeight(.bold)
-                                .foregroundColor(DS.Color.primary)
-                        }
-                    }
-                    .disabled(isSaving || !isPhoneValid)
-                }
-            }
-            .sheet(isPresented: $showBioEditor) {
-                BioStationsEditorSheet(stations: $bioStations)
-            }
-            .sheet(isPresented: $showFatherPicker) {
+        // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك): رأس متدرّج، أقسام تدخل
+        // تباعاً، و«حفظ» / «إلغاء» أسفل المربّع
+        DSComposer(
+            title: L10n.t("إدارة السجل", "Member Admin"),
+            subtitle: member.fullName,
+            icon: "person.badge.shield.checkmark.fill",
+            tint: member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
+            actionTitle: L10n.t("حفظ", "Save"),
+            actionIcon: "checkmark",
+            canSubmit: isPhoneValid && isFirstNameValid,
+            isBusy: isSaving,
+            hasUnsavedChanges: hasUnsavedChanges,
+            onSubmit: saveAction,
+            onCancel: { dismiss() }
+        ) {
+            heroSection.dsStaggerIn(0)
+            basicsCard.dsStaggerIn(1)
+            datesCard.dsStaggerIn(2)
+            if !isMonitorOnly { lineageCard.dsStaggerIn(3) }
+            bioCard.dsStaggerIn(4)
+            if showsAccountCard { accountCard.dsStaggerIn(5) }
+            if !isMonitorOnly, canDeleteMember { deleteButton.dsStaggerIn(6) }
+        }
+            // كل نوافذ التعديل المباشر ألواح بمنتصف الشاشة (طلب المالك)
+            // قائمة أعضاء طويلة — مربّع طويل من الأسفل يُغلق بالسحب (توصية أبل)
+            .dsTallBox(isPresented: $showFatherPicker) {
                 FatherPickerSheet(selectedId: $selectedFatherId, editingMemberId: member.id)
             }
-            .sheet(isPresented: $showAddSonSheet) {
-                AddSonByAdminSheet(parent: member)
+            .dsCenterBox(isPresented: $showBioBox) {
+                BioEditCard(
+                    initial: bioStations,
+                    goesToAdmins: false,
+                    remaining: 3,
+                    onCancel: { showBioBox = false },
+                    onDone: { updated in
+                        showBioBox = false
+                        bioStations = updated   // يُحفظ مع «حفظ» السجل
+                    }
+                )
             }
-            .sheet(item: $childToEdit) { child in
-                AddSonByAdminSheet(parent: member, editingChild: child)
+            .fullScreenCover(isPresented: $showAddSonSheet) {
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                    AddSonByAdminSheet(parent: member)
+                }
+                .background(ClearPresentationBackground())
+            }
+            .fullScreenCover(item: $childToEdit) { child in
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                    AddSonByAdminSheet(parent: member, editingChild: child)
+                }
+                .background(ClearPresentationBackground())
+            }
+            .transaction { t in
+                // بلا انزلاق من الأسفل — الألواح تظهر في المنتصف
+                if showAddSonSheet || childToEdit != nil {
+                    t.disablesAnimations = true
+                }
             }
             .onAppear { setupLocalChildren() }
+            .task { await refreshAccount() }
+            // تأكيد التجميد / الحظر وإلغائهما — المربّع الوسطي الموحّد
+            .dsAlert(pendingAccountAction.map(accountActionTitle) ?? "",
+                     isPresented: Binding(get: { pendingAccountAction != nil },
+                                          set: { if !$0 { pendingAccountAction = nil } }),
+                     presenting: pendingAccountAction) { action in
+                Button(accountActionButton(action),
+                       role: action == .freeze || action == .ban ? .destructive : nil) {
+                    performAccountAction(action)
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { pendingAccountAction = nil }
+            } message: { action in
+                Text(accountActionMessage(action))
+            }
+            .dsAlert(L10n.t("تعذّر التنفيذ", "Couldn't Complete"), isPresented: $accountError) {
+                Button(L10n.t("حسناً", "OK")) { accountErrorText = nil }
+            } message: {
+                Text(accountErrorText ?? L10n.t("تأكد من الاتصال ثم حاول مرة أخرى.", "Check your connection and try again."))
+            }
             .onChange(of: showAddSonSheet) { isShowing in
                 if !isShowing { setupLocalChildren() }
             }
@@ -233,321 +338,279 @@ struct AdminMemberDetailSheet: View {
                     Text(L10n.t("حذف \(child.firstName)؟", "Delete \(child.firstName)?"))
                 }
             }
-        }
+        // حين يُدفع صفحةً (سجل الأعضاء) لا شريط نظام أبيض فوق رأس المربّع الملوّن («أسلوب واحد»
+        // ٢٠٢٦-١٠-٠٧) — الرجوع بـ«إلغاء» أسفل المربّع أو السحب من الحافة؛ داخل المربّع الطويل لا أثر له
+        .background(DS.Color.background.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     // MARK: - Hero Section (Avatar + Name + Role)
     private var heroSection: some View {
-        Section {
-            VStack(spacing: DS.Spacing.sm) {
-                DSProfilePhotoPicker(
-                    selectedImage: $localAvatarPreview,
-                    existingURL: currentAvatarURL,
-                    enableCrop: true,
-                    cropShape: .circle,
-                    trailing: nil,
-                    showDeleteForExisting: currentAvatarURL != nil,
-                    onDeleteExisting: {
-                        Task {
-                            await memberVM.deleteAvatar(for: member.id)
-                            await MainActor.run { currentAvatarURL = nil }
-                            await memberVM.notificationVM?.notifyAdminsWithPush(
-                                title: L10n.t("حذف صورة عضو", "Member Photo Removed"),
-                                body: L10n.t(
-                                    "تم حذف صورة: «\(member.fullName)»",
-                                    "Photo removed for: «\(member.fullName)»"
-                                ),
-                                kind: "admin_edit_avatar_remove"
-                            )
-                        }
-                    },
-                    useOverlayActionsOnly: true
-                )
-                .onChange(of: localAvatarPreview) { newImage in
-                    guard let newImage else { return }
+        VStack(spacing: DS.Spacing.sm) {
+            DSProfilePhotoPicker(
+                selectedImage: $localAvatarPreview,
+                existingURL: currentAvatarURL,
+                enableCrop: true,
+                cropShape: .circle,
+                trailing: nil,
+                showDeleteForExisting: currentAvatarURL != nil,
+                onDeleteExisting: {
                     Task {
-                        let uploaded = await memberVM.uploadAvatar(image: newImage, for: member.id)
-                        guard uploaded else {
-                            // فشل الرفع: رجّع المعاينة للصورة الحالية وأظهر الخطأ
-                            await MainActor.run {
-                                localAvatarPreview = nil
-                                showAvatarUploadError = true
-                            }
-                            return
-                        }
-                        if let updated = memberVM.member(byId: member.id) {
-                            await MainActor.run { currentAvatarURL = updated.avatarUrl }
-                        }
-                        let adminName = authVM.currentUser?.firstName ?? "مدير"
+                        await memberVM.deleteAvatar(for: member.id)
+                        await MainActor.run { currentAvatarURL = nil }
                         await memberVM.notificationVM?.notifyAdminsWithPush(
-                            title: L10n.t("تحديث صورة عضو", "Member Photo Updated"),
+                            title: L10n.t("حذف صورة عضو", "Member Photo Removed"),
                             body: L10n.t(
-                                "تم تحديث صورة: «\(member.fullName)»",
-                                "Photo updated: «\(member.fullName)»"
+                                "تم حذف صورة: «\(member.fullName)»",
+                                "Photo removed for: «\(member.fullName)»"
                             ),
-                            kind: "admin_edit_avatar"
+                            kind: "admin_edit_avatar_remove"
                         )
-                        Log.info("[Admin] \(adminName) عدّل صورة \(member.firstName)")
                     }
-                }
-
-                VStack(spacing: 4) {
-                    Text(member.displayFullName)
-                        .font(DS.Font.callout)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.7)
-
-                    DSRoleBadge(title: member.roleName, color: member.roleColor)
+                },
+                useOverlayActionsOnly: true
+            )
+            .onChange(of: localAvatarPreview) { newImage in
+                guard let newImage else { return }
+                Task {
+                    let uploaded = await memberVM.uploadAvatar(image: newImage, for: member.id)
+                    guard uploaded else {
+                        // فشل الرفع: رجّع المعاينة للصورة الحالية وأظهر الخطأ
+                        await MainActor.run {
+                            localAvatarPreview = nil
+                            showAvatarUploadError = true
+                        }
+                        return
+                    }
+                    if let updated = memberVM.member(byId: member.id) {
+                        await MainActor.run { currentAvatarURL = updated.avatarUrl }
+                    }
+                    let adminName = authVM.currentUser?.firstName ?? "مدير"
+                    await memberVM.notificationVM?.notifyAdminsWithPush(
+                        title: L10n.t("تحديث صورة عضو", "Member Photo Updated"),
+                        body: L10n.t(
+                            "تم تحديث صورة: «\(member.fullName)»",
+                            "Photo updated: «\(member.fullName)»"
+                        ),
+                        kind: "admin_edit_avatar"
+                    )
+                    Log.info("[Admin] \(adminName) عدّل صورة \(member.firstName)")
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.xs)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
+
+            VStack(spacing: DS.Spacing.xs) {
+                Text(member.displayFullName)
+                    .dsFont(.headline)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+
+                DSRoleBadge(title: member.roleName, color: member.roleColor)
+            }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DS.Spacing.xs)
     }
 
-    // MARK: - Identity Section
-    private var identitySection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 4) {
-                Label(L10n.t("الاسم الكامل", "Full Name"), systemImage: "person.fill")
-                    .foregroundColor(DS.Color.textSecondary)
-                    .font(DS.Font.caption1)
-                TextField(L10n.t("الاسم الكامل", "Full Name"), text: $fullName)
-                    .font(DS.Font.callout)
+    // MARK: - مكوّنات التصميم — مشتركة في DSFormBoxes.swift (طلب المالك)
+
+    private func adminCard<Content: View, Trailing: View>(
+        _ title: String,
+        icon: String,
+        color: Color,
+        @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() },
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        DSFormCard(title, icon: icon, color: color, trailing: trailing, content: content)
+    }
+
+    /// الاسم الأول موجود والاسم الكامل يبدأ فيه
+    private var isFirstNameValid: Bool {
+        PersonName.startsWithFirstName(fullName, firstName)
+    }
+
+    /// تعديل «الاسم الأول» يستبدل بادئته في «الاسم الكامل» مباشرة (القاعدة ١): الباقي = اسم الأب الكامل
+    /// إن كان الاسم ينتهي به (يصلّح سجلاً محفوظاً أوله «زين» فقط)، وإلا ما بعد الاسم الأول السابق.
+    private func applyFirstNameToFullName() {
+        if firstName.count > 50 { firstName = String(firstName.prefix(50)) }
+        let fatherFullName = member.fatherId.flatMap { memberVM.member(byId: $0)?.fullName }
+        let updated = PersonName.replacingFirstName(in: fullName, old: appliedFirstName, new: firstName,
+                                                    fatherFullName: fatherFullName)
+        appliedFirstName = firstName
+        // مسافة في آخر الحقل وهو يكتب ما تغيّر الاسم الكامل — لا نلمسه
+        if PersonName.clean(updated) != PersonName.clean(fullName) { fullName = updated }
+    }
+
+    private func fieldBox<Content: View>(_ label: String, @ViewBuilder content: @escaping () -> Content) -> some View {
+        DSFieldBox(label, content: content)
+    }
+
+    private func toggleBox(_ title: String, isOn: Binding<Bool>, tint: Color) -> some View {
+        DSToggleBox(title: title, isOn: isOn, tint: tint)
+    }
+
+    // MARK: - البيانات الأساسية: الاسم، العائلة، الرقم، الجنس
+    private var basicsCard: some View {
+        adminCard(L10n.t("البيانات الأساسية", "Basic Info"),
+                  icon: "person.text.rectangle.fill", color: chromeInk) {
+            fieldBox(L10n.t("الاسم الأول", "First Name")) {
+                TextField(L10n.t("الاسم الأول", "First Name"), text: $firstName)
+                    .padding(.vertical, DS.Spacing.sm)
+                    .onChange(of: firstName) { _ in applyFirstNameToFullName() }
+            }
+            Text(L10n.t("للأسماء المركبة مثل زين العابدين اكتبها كاملة هنا",
+                        "For compound names like Zain Al-Abidin, write the whole name here"))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+
+            fieldBox(L10n.t("الاسم الكامل", "Full Name")) {
+                TextField(L10n.t("الاسم الكامل", "Full Name"), text: $fullName, axis: .vertical)
+                    .lineLimit(1...3)
+                    .padding(.vertical, DS.Spacing.sm)
                     .onChange(of: fullName) { _ in
                         if fullName.count > 100 { fullName = String(fullName.prefix(100)) }
                     }
             }
-            .padding(.vertical, 2)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Label(L10n.t("اسم العائلة", "Family Name"), systemImage: "person.2.fill")
-                    .foregroundColor(DS.Color.textSecondary)
-                    .font(DS.Font.caption1)
-                TextField(L10n.t("اسم العائلة", "Family Name"), text: $familyName)
-                    .font(DS.Font.callout)
-                    .onChange(of: familyName) { _ in
-                        if familyName.count > 50 { familyName = String(familyName.prefix(50)) }
-                    }
-            }
-            .padding(.vertical, 2)
-        } header: {
-            sectionHeader(L10n.t("الهوية", "Identity"), icon: "person.text.rectangle.fill", color: DS.Color.primary)
-        }
-    }
-
-    // MARK: - Gender Section
-    private var genderSection: some View {
-        Section {
-            Picker(L10n.t("الجنس", "Gender"), selection: $selectedGender) {
-                Label(L10n.t("ذكر", "Male"), systemImage: "figure.stand").tag("male")
-                Label(L10n.t("أنثى", "Female"), systemImage: "figure.stand.dress").tag("female")
-            }
-            .pickerStyle(.segmented)
-            .padding(.vertical, DS.Spacing.xs)
-        } header: {
-            sectionHeader(L10n.t("الجنس", "Gender"), icon: "person.crop.circle", color: DS.Color.accent)
-        }
-    }
-
-    // MARK: - Dates Section
-    private var datesSection: some View {
-        Section {
-            Toggle(isOn: $hasBirthDate.animation(DS.Anim.snappy)) {
-                Label(L10n.t("تاريخ الميلاد متوفر", "Birth date available"), systemImage: "calendar")
-                    .foregroundColor(DS.Color.textPrimary)
-            }
-            .tint(DS.Color.primary)
-
-            if hasBirthDate {
-                DSDateField(
-                    label: L10n.t("تاريخ الميلاد", "Birth Date"),
-                    date: $birthDate,
-                    icon: "calendar.badge.clock",
-                    range: ...Date(),
-                    compact: true
-                )
+            if !isFirstNameValid {
+                Label(L10n.t("الاسم الكامل لازم يبدأ بالاسم الأول", "The full name must start with the first name"),
+                      systemImage: "exclamationmark.circle.fill")
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.error)
             }
 
-            Toggle(isOn: $isDeceased.animation(DS.Anim.snappy)) {
-                Label(L10n.t("متوفي", "Deceased"), systemImage: "heart.text.square.fill")
-                    .foregroundColor(DS.Color.textPrimary)
-            }
-            .tint(DS.Color.neonPink)
-
-            if isDeceased {
-                Toggle(isOn: $hasDeathDate.animation(DS.Anim.snappy)) {
-                    Label(L10n.t("تاريخ الوفاة متوفر", "Death date available"), systemImage: "calendar.badge.minus")
-                        .foregroundColor(DS.Color.textPrimary)
+            // رأس الشجرة: اسمه هو العائلة نفسها — لا حقل «اسم العائلة» (طلب المالك)
+            if !isFamilyRoot {
+                fieldBox(L10n.t("اسم العائلة", "Family Name")) {
+                    TextField(L10n.t("اسم العائلة", "Family Name"), text: $familyName)
+                        .onChange(of: familyName) { _ in
+                            if familyName.count > 50 { familyName = String(familyName.prefix(50)) }
+                        }
                 }
-                .tint(DS.Color.neonPink)
+            }
 
-                if hasDeathDate {
-                    DSDateField(
-                        label: L10n.t("تاريخ الوفاة", "Death Date"),
-                        date: $deathDate,
-                        icon: "calendar.badge.exclamationmark",
-                        range: ...Date(),
-                        compact: true
+            // المتوفّى بلا رقم هاتف (طلب المالك)
+            if !isDeceased {
+                fieldBox(L10n.t("رقم الهاتف", "Phone Number")) {
+                    DSPhoneField(
+                        country: $selectedPhoneCountry,
+                        digits: $phoneNumber,
+                        placeholder: L10n.t("الرقم", "Number"),
+                        compact: true,
+                        bordered: false
                     )
-                }
-            }
-        } header: {
-            sectionHeader(L10n.t("التواريخ والحالة", "Dates & Status"), icon: "calendar", color: DS.Color.secondary)
-        }
-    }
-
-    // MARK: - Phone Section — حقل موحّد مع كود الدولة على الجهة المقابلة
-    private var phoneSection: some View {
-        Section {
-            DSPhoneField(
-                country: $selectedPhoneCountry,
-                digits: $phoneNumber,
-                placeholder: L10n.t("الرقم", "Number")
-            )
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-            .onChange(of: phoneNumber) { _ in checkPhoneDuplicate() }
-            .onChange(of: selectedPhoneCountry) { _ in checkPhoneDuplicate() }
-
-            if let warning = phoneDuplicateWarning {
-                Label(warning, systemImage: "exclamationmark.triangle.fill")
-                    .font(DS.Font.caption1)
-                    .foregroundColor(DS.Color.warning)
-            }
-
-            if !isPhoneValid {
-                Label(
-                    L10n.t(
-                        "أدخل رقماً صحيحاً للدولة أو اترك الحقل فارغاً.",
-                        "Enter a valid number or leave it empty."
-                    ),
-                    systemImage: "exclamationmark.circle.fill"
-                )
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.error)
-            }
-        } header: {
-            sectionHeader(L10n.t("رقم الهاتف", "Phone Number"), icon: "phone.fill", color: DS.Color.secondary)
-        }
-    }
-
-    // MARK: - Bio Section
-    private var bioSection: some View {
-        Section {
-            if bioStations.isEmpty {
-                Button {
-                    showBioEditor = true
-                } label: {
-                    Label(L10n.t("إضافة حدث للسيرة", "Add Biography Entry"), systemImage: "plus.circle.fill")
-                        .foregroundColor(DS.Color.accent)
-                        .font(DS.Font.callout)
-                }
-            } else {
-                ForEach(bioStations) { station in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            if let year = station.year, !year.isEmpty {
-                                Text(year)
-                                    .font(DS.Font.caption1)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(DS.Color.accent)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(DS.Color.accent.opacity(0.12))
-                                    .clipShape(Capsule())
-                            }
-                            Text(station.title)
-                                .font(DS.Font.callout)
-                                .fontWeight(.semibold)
-                                .foregroundColor(DS.Color.textPrimary)
-                        }
-                        if !station.details.isEmpty {
-                            Text(station.details)
-                                .font(DS.Font.caption1)
-                                .foregroundColor(DS.Color.textSecondary)
-                                .lineLimit(2)
-                        }
-                    }
-                    .padding(.vertical, 2)
+                    .onChange(of: phoneNumber) { _ in checkPhoneDuplicate() }
+                    .onChange(of: selectedPhoneCountry) { _ in checkPhoneDuplicate() }
                 }
 
-                Button {
-                    showBioEditor = true
-                } label: {
+                if let warning = phoneDuplicateWarning {
+                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Color.warning)
+                }
+                if !isPhoneValid {
                     Label(
-                        L10n.t("تعديل السيرة (\(bioStations.count))", "Edit Biography (\(bioStations.count))"),
-                        systemImage: "pencil"
+                        L10n.t("أدخل رقماً صحيحاً للدولة أو اترك الحقل فارغاً.",
+                               "Enter a valid number or leave it empty."),
+                        systemImage: "exclamationmark.circle.fill"
                     )
-                    .foregroundColor(DS.Color.accent)
-                    .font(DS.Font.callout)
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.error)
                 }
             }
-        } header: {
-            sectionHeader(L10n.t("السيرة الذاتية", "Biography"), icon: "book.pages.fill", color: DS.Color.accent)
+
+            DSGenderPicker(selection: $selectedGender)
         }
     }
 
-    // MARK: - Father Section
-    private var fatherSection: some View {
-        Section {
-            Button {
-                showFatherPicker = true
-            } label: {
-                HStack(spacing: DS.Spacing.sm) {
-                    Image(systemName: "person.line.dotted.person.fill")
-                        .font(DS.Font.icon(15, weight: .semibold))
-                        .foregroundColor(DS.Color.primary)
-                        .frame(width: 28, height: 28)
-                        .background(DS.Color.primary.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
+    // MARK: - التواريخ والحالة (طلب المالك)
+    private var datesCard: some View {
+        adminCard(L10n.t("التواريخ والحالة", "Dates & Status"),
+                  icon: "calendar", color: DS.Color.palm) {
+            DSLifeDatesBox(hasBirthDate: $hasBirthDate, birthDate: $birthDate,
+                           isDeceased: $isDeceased,
+                           hasDeathDate: $hasDeathDate, deathDate: $deathDate)
+        }
+    }
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("الأب في الشجرة", "Father in Tree"))
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textTertiary)
+    // MARK: - النسب: الأب والأبناء
+    private var isSortingChildren: Bool { editMode == .active }
 
-                        if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
-                            Text(father.displayFullName)
-                                .font(DS.Font.callout)
-                                .fontWeight(.semibold)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .lineLimit(1)
-                        } else {
-                            Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textSecondary)
+    private var lineageCard: some View {
+        adminCard(L10n.t("النسب", "Lineage"), icon: "link", color: chromeInk) {
+            // الأب — لا يظهر لرأس الشجرة (طلب المالك)
+            if !isFamilyRoot {
+                VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+                    Text(L10n.t("الأب في الشجرة", "Father in Tree"))
+                        .dsFont(.sectionTitle)
+                        .foregroundColor(DS.Color.fieldValue)
+                    Button { showFatherPicker = true } label: {
+                        HStack(spacing: DS.Spacing.sm) {
+                            if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
+                                Text(father.displayFullName)
+                                    .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .dsNameLines()
+                            } else {
+                                Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
+                                    .dsFieldFont(.body)
+                                    .foregroundColor(DS.Color.textSecondary)
+                            }
+                            Spacer(minLength: 0)
+                            DSChevron()
                         }
+                        .frame(minHeight: DS.Icon.tapTarget)
+                        // صندوق صفوف المربّعات الموحّد
+                        .dsRowBox()
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                }
 
-                    Spacer()
-
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.icon(12, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
+                if selectedFatherId != member.fatherId, descendantCount > 0 {
+                    Label(
+                        L10n.t("سيُعاد بناء أسماء \(descendantCount) من الذرّية.",
+                               "\(descendantCount) descendant names will be rebuilt."),
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.warning)
                 }
             }
-            .buttonStyle(.plain)
 
-            if selectedFatherId != member.fatherId, descendantCount > 0 {
-                Label(
-                    L10n.t(
-                        "سيُعاد بناء أسماء \(descendantCount) من الذرّية.",
-                        "\(descendantCount) descendant names will be rebuilt."
-                    ),
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .font(DS.Font.caption1)
-                .foregroundColor(DS.Color.warning)
+            // الأبناء
+            HStack {
+                Text(L10n.t("الأبناء (\(localChildren.count))", "Children (\(localChildren.count))"))
+                    .dsFont(.sectionTitle)
+                    .foregroundColor(DS.Color.fieldValue)
+                Spacer()
+                if localChildren.count > 1 {
+                    // «ترتيب» / «تم» — الشريحة الموحّدة (مساحة ضغط ٤٤ فيها)
+                    DSChipButton(isSortingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"),
+                                 icon: isSortingChildren ? "checkmark" : "arrow.up.arrow.down",
+                                 tint: chromeInk,
+                                 isSelected: isSortingChildren, size: .small) {
+                        withAnimation(DS.Anim.snappy) {
+                            editMode = isSortingChildren ? .inactive : .active
+                        }
+                    }
+                }
             }
-        } header: {
-            sectionHeader(L10n.t("ربط الأب", "Parent Link"), icon: "link", color: DS.Color.primary)
+            .padding(.top, DS.Spacing.xs)
+
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(Array(localChildren.enumerated()), id: \.element.id) { index, child in
+                    childRow(child: child, index: index)
+                }
+
+                // الزرّ الواحد — ثانوي (رمادي) داخل البطاقة، والإجراء الرئيسي «حفظ» أسفل المربّع
+                DSButton(localChildren.isEmpty ? L10n.t("إضافة ابن", "Add Child")
+                                               : L10n.t("إضافة ابن آخر", "Add Another Child"),
+                         icon: "plus.circle.fill", role: .cancel) {
+                    showAddSonSheet = true
+                }
+            }
         }
     }
 
@@ -566,129 +629,369 @@ struct AdminMemberDetailSheet: View {
         return count
     }
 
-    // MARK: - Children Section
-    private var childrenSection: some View {
-        Section {
-            if localChildren.isEmpty {
-                Button {
-                    showAddSonSheet = true
-                } label: {
-                    Label(L10n.t("إضافة ابن", "Add Child"), systemImage: "plus.circle.fill")
-                        .foregroundColor(DS.Color.secondary)
-                        .font(DS.Font.callout)
+    /// ابن واحد داخل مربّع. وضع «ترتيب»: أسهم للأعلى/الأسفل وزر حذف.
+    private func childRow(child: FamilyMember, index: Int) -> some View {
+        let isChildDeceased = child.isDeceased ?? false
+        // الكحلي يتبع لون القسم (كان يبقى كحلياً داخل الشجرة)؛ الأحمر للوفاة يبقى بمعناه
+        let tint = isChildDeceased ? DS.Color.error : chromeInk
+
+        return HStack(spacing: DS.Spacing.sm) {
+            DSStateIcon(isChildDeceased ? "person.fill.xmark" : "person.fill",
+                        tint: tint, size: DS.Icon.discSmall, mapsChrome: false)
+                // القارئ الصوتي: الأيقونة زخرفة، إلا علامة الوفاة فتُقرأ كلمةً
+                .accessibilityLabel(L10n.t("متوفى", "Deceased"))
+                .accessibilityHidden(!isChildDeceased)
+
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(child.firstName)
+                    .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                if let birth = child.birthDate, !birth.isEmpty {
+                    Text(birth)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            if isSortingChildren {
+                // منطقة ضغط ٤٤×٤٤ لكل زر (حد أبل) بلا تداخل والأقراص كما هي: الطرفان
+                // يمتدّان للخارج بفرق المقاسين، والأوسط (مع زر الحذف) يأخذ نصفه من كل جهة
+                let canDelete = authVM.canDeleteMembers
+                let hit = Self.sortHit
+                HStack(spacing: hit / 2) {
+                    sortArrow("chevron.up", enabled: index > 0,
+                              label: L10n.t("نقل لأعلى", "Move up"),
+                              hitLeading: hit, hitTrailing: 0) {
+                        localChildren.swapAt(index, index - 1)
+                    }
+                    sortArrow("chevron.down", enabled: index < localChildren.count - 1,
+                              label: L10n.t("نقل لأسفل", "Move down"),
+                              hitLeading: canDelete ? hit / 2 : 0, hitTrailing: canDelete ? hit / 2 : hit) {
+                        localChildren.swapAt(index, index + 1)
+                    }
+                    if canDelete {
+                        Button { childToDelete = child } label: {
+                            Image(systemName: "trash")
+                                .dsGlyph(DS.Glyph.sm)
+                                .foregroundColor(DS.Color.error)
+                                .frame(width: Self.sortDisc, height: Self.sortDisc)
+                                .background(DS.Color.error.opacity(DS.Opacity.tintFill), in: Circle())
+                                .padding(.trailing, hit)
+                                .padding(.vertical, hit / 2)
+                                .contentShape(Rectangle())
+                                .padding(.trailing, -hit)
+                                .padding(.vertical, -hit / 2)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.t("حذف \(child.firstName)", "Delete \(child.firstName)"))
+                    }
                 }
             } else {
-                ForEach(localChildren, id: \.id) { child in
-                    childRow(child: child)
-                }
-                .onMove { source, destination in
-                    localChildren.move(fromOffsets: source, toOffset: destination)
-                }
-                .onDelete { offsets in
-                    guard authVM.canDeleteMembers, let idx = offsets.first else { return }
-                    childToDelete = localChildren[idx]
-                }
-
-                Button {
-                    showAddSonSheet = true
-                } label: {
-                    Label(L10n.t("إضافة ابن آخر", "Add Another Child"), systemImage: "plus.circle.fill")
-                        .foregroundColor(DS.Color.secondary)
-                        .font(DS.Font.callout)
-                }
-            }
-        } header: {
-            HStack {
-                sectionHeader(L10n.t("الأبناء", "Children"), icon: "person.2.fill", color: DS.Color.secondary)
-                Spacer()
-                if !localChildren.isEmpty {
-                    Button {
-                        withAnimation(DS.Anim.snappy) {
-                            editMode = (editMode == .active) ? .inactive : .active
-                        }
-                    } label: {
-                        Text(editMode == .active ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.bold)
-                            .foregroundColor(editMode == .active ? DS.Color.secondary : DS.Color.primary)
-                            .textCase(nil)
-                    }
-                }
+                DSChevron()
             }
         }
+        .frame(minHeight: DS.Icon.tapTarget)
+        // صندوق صفوف المربّعات الموحّد
+        .dsRowBox()
+        .contentShape(Rectangle())
+        .onTapGesture { if !isSortingChildren { childToEdit = child } }
+        // القارئ الصوتي: خارج الترتيب الصف كله زر «تعديل»؛ في الترتيب تبقى أزراره منفصلة
+        .accessibilityElement(children: isSortingChildren ? .contain : .combine)
+        .accessibilityAddTraits(isSortingChildren ? [] : .isButton)
     }
 
-    private func childRow(child: FamilyMember) -> some View {
-        let isChildDeceased = child.isDeceased ?? false
-        let iconName = isChildDeceased ? "person.fill.xmark" : "person.fill"
-        let iconColor = isChildDeceased ? DS.Color.error : DS.Color.primary
+    /// قرص أسهم الترتيب وزرّ الحذف (قرص الصفّ)، وفرقه عن مساحة الضغط ٤٤
+    private static let sortDisc: CGFloat = DS.Icon.row
+    private static let sortHit: CGFloat = DS.Icon.tapTarget - DS.Icon.row
 
-        return Button {
-            if editMode != .active { childToEdit = child }
-        } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: iconName)
-                    .font(DS.Font.icon(14, weight: .bold))
-                    .foregroundColor(iconColor)
-                    .frame(width: 30, height: 30)
-                    .background(iconColor.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(child.firstName)
-                        .font(DS.Font.callout)
-                        .fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-
-                    if let birth = child.birthDate, !birth.isEmpty {
-                        Text(birth)
-                            .font(DS.Font.caption1)
-                            .foregroundColor(DS.Color.textSecondary)
-                    }
-                }
-
-                Spacer()
-
-                if editMode != .active {
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .font(DS.Font.icon(11, weight: .bold))
-                        .foregroundColor(DS.Color.textTertiary)
-                }
-            }
+    /// سهم ترتيب: القرص كما هو، ومنطقة ضغط ٤٤×٤٤ (حد أبل) حولها بلا تغيير مكانها —
+    /// الحشو الموجب يوسّع منطقة الضغط، والسالب يعيد حجمها في التخطيط
+    private func sortArrow(_ icon: String, enabled: Bool, label: String,
+                           hitLeading: CGFloat, hitTrailing: CGFloat,
+                           action: @escaping () -> Void) -> some View {
+        Button { withAnimation(DS.Anim.snappy) { action() } } label: {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.sm)
+                .foregroundColor(enabled ? chromeInk : DS.Color.textTertiary.opacity(DS.Opacity.disabled))
+                .frame(width: Self.sortDisc, height: Self.sortDisc)
+                .background(chromeInk.opacity(enabled ? DS.Opacity.tintFill : DS.Opacity.tintFillSoft / 2), in: Circle())
+                .padding(.leading, hitLeading)
+                .padding(.trailing, hitTrailing)
+                .padding(.vertical, Self.sortHit / 2)
+                .contentShape(Rectangle())
+                .padding(.leading, -hitLeading)
+                .padding(.trailing, -hitTrailing)
+                .padding(.vertical, -Self.sortHit / 2)
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 
-    // MARK: - Delete Section
-    private var deleteSection: some View {
-        Section {
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                HStack {
-                    Spacer()
-                    Label(L10n.t("حذف السجل نهائياً", "Permanently Delete"), systemImage: "trash.fill")
-                        .font(DS.Font.callout)
-                        .fontWeight(.bold)
-                    Spacer()
+    // MARK: - السيرة الذاتية
+    private var bioCard: some View {
+        adminCard(L10n.t("السيرة الذاتية", "Biography"),
+                  icon: "book.pages.fill", color: DS.Color.accent) {
+            if !bioStations.isEmpty {
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(bioStations) { station in
+                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                            HStack(spacing: DS.Spacing.xs) {
+                                if let year = station.year, !year.isEmpty {
+                                    DSStatusChip(text: year, tint: DS.Color.accent, size: .mini)
+                                }
+                                Text(station.title)
+                                    .dsFont(.rowTitle)
+                                    .foregroundColor(DS.Color.textPrimary)
+                            }
+                            if !station.details.isEmpty {
+                                Text(station.details)
+                                    .dsFont(.subtitle)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                    .lineLimit(2)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // صندوق صفوف المربّعات الموحّد
+                        .dsRowBox()
+                    }
                 }
+            }
+
+            // الزرّ الواحد — ثانوي (رمادي) داخل البطاقة
+            DSButton(bioStations.isEmpty ? L10n.t("إضافة حدث للسيرة", "Add Biography Entry")
+                                         : L10n.t("تعديل السيرة", "Edit Biography"),
+                     icon: bioStations.isEmpty ? "plus.circle.fill" : "pencil", role: .cancel) {
+                openBioPopup()
             }
         }
     }
 
-    // MARK: - Section Header Helper
-    private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(DS.Font.icon(11, weight: .bold))
-                .foregroundColor(color)
-            Text(title)
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textSecondary)
-                .textCase(nil)
+    /// السيرة: مربّع عمل بمنتصف الشاشة (`dsCenterBox`) — نفس مربّع تعديل البيانات
+    private func openBioPopup() { showBioBox = true }
+
+    // MARK: - حالة الحساب: التفعيل والتجميد وحظر الرقم (طلب المالك ٢٠٢٦-١٠-١٠)
+    /// لكل عضو مفعّلاً كان أو غير مفعّل («ابي حالة الحساب في السجل كامل») — للإدارة والمراقب
+    /// (نفس صلاحية التجميد في السجل)، لا على المالك ولا على النفس ولا على المتوفى
+    private var showsAccountCard: Bool {
+        authVM.canEditMembers && member.role != .owner
+            && member.id != authVM.currentUser?.id && member.isDeceased != true
+    }
+    /// مفعّل = حالته فعّالة وله رقم يدخل به (نفس تعريف «تفعيل الحسابات»)
+    private var isActivated: Bool { accountStatus == .active && !savedPhone.isEmpty }
+    /// زرّ «تفعيل الحساب»: بانتظار التفعيل وله رقم — طلبات الانضمام تُعتمد من «الطلبات»
+    private var canActivate: Bool {
+        (accountStatus == nil || accountStatus == .pending) && !savedPhone.isEmpty && member.role != .pending
+    }
+
+    /// شارة الحالة في رأس البطاقة
+    private var accountChip: (text: String, tint: Color) {
+        if isFrozen { return (L10n.t("مجمّد", "Frozen"), DS.Color.info) }
+        if isActivated { return (L10n.t("مفعّل", "Active"), DS.Color.success) }
+        return (L10n.t("غير مفعّل", "Not active"), DS.Color.warning)
+    }
+
+    /// سطر التفعيل لغير المفعّل: لماذا، وما المطلوب
+    private var activationNote: String {
+        if savedPhone.isEmpty {
+            return L10n.t("لا يوجد رقم يدخل به — أضف رقمه في «البيانات الأساسية» واحفظ.",
+                          "No number to sign in with — add it under Basic Info and save.")
         }
+        if member.role == .pending {
+            return L10n.t("طلب انضمام بانتظار الموافقة من «الطلبات».", "A join request awaiting approval in Requests.")
+        }
+        return L10n.t("الحساب بانتظار التفعيل — بعد التفعيل يدخل للتطبيق برقمه.",
+                      "Awaiting activation — once active they can sign in with their number.")
+    }
+    /// حظر الأرقام للمالك وحده (نفس صفحة «الأرقام المحظورة» وصلاحية السيرفر)
+    private var canBan: Bool { authVM.canManageBannedPhones }
+    private var isFrozen: Bool { accountStatus == .frozen }
+    private var savedPhone: String {
+        (memberVM.member(byId: member.id)?.phoneNumber ?? member.phoneNumber ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// زرّان بالصفّ ونصّ الزرّ نفسه يقول الحالة، وتحتهما سطر يشرح فائدة كلٍّ منهما
+    /// (طلب المالك ٢٠٢٦-١٠-١٠ «بسّط الأزرار» — بدل مربّع لكل إجراء بشارة ووصف طويل)
+    private var accountCard: some View {
+        adminCard(L10n.t("حالة الحساب", "Account Status"), icon: "lock.shield.fill", color: DS.Color.error,
+                  trailing: {
+                      DSStatusChip(text: accountChip.text, tint: accountChip.tint)
+                          .id(accountChip.text)
+                          .transition(.scale(scale: 0.8).combined(with: .opacity))
+                  }) {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                // غير المفعّل (وغير المجمّد): سبب عدم التفعيل، وزرّ «تفعيل الحساب» إن أمكن
+                if !isActivated && !isFrozen {
+                    accountNote(L10n.t("التفعيل", "Activation"), activationNote)
+                    if canActivate {
+                        DSButton(L10n.t("تفعيل الحساب", "Activate Account"), icon: "checkmark.seal.fill",
+                                 tint: DS.Color.success, isLoading: accountBusy == .activate) {
+                            pendingAccountAction = .activate
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    }
+                }
+                HStack(spacing: DSBox.buttonSpacing) {
+                    if isFrozen {
+                        DSButton(L10n.t("إلغاء التجميد", "Unfreeze"), icon: "checkmark.circle.fill",
+                                 tint: DS.Color.success, isLoading: accountBusy == .unfreeze) {
+                            pendingAccountAction = .unfreeze
+                        }
+                    } else {
+                        DSButton(L10n.t("تجميد", "Freeze"), icon: "snowflake",
+                                 tint: DS.Color.info, isLoading: accountBusy == .freeze) {
+                            pendingAccountAction = .freeze
+                        }
+                    }
+                    if canBan {
+                        if activeBan != nil {
+                            DSButton(L10n.t("إلغاء الحظر", "Lift Ban"), icon: "checkmark.circle.fill",
+                                     tint: DS.Color.success, isLoading: accountBusy == .unban) {
+                                pendingAccountAction = .unban
+                            }
+                        } else {
+                            // برتقالي «الرفض» لا أحمر الحذف — يتميّز عن «حذف السجل نهائياً» (طلب المالك ٢٠٢٦-١٠-١١)
+                            DSButton(L10n.t("حظر الرقم", "Ban Number"), icon: "phone.down.fill",
+                                     tint: DS.Color.reject, isLoading: accountBusy == .ban) {
+                                pendingAccountAction = .ban
+                            }
+                            .disabled(savedPhone.isEmpty)
+                        }
+                    }
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+                accountNote(L10n.t("التجميد", "Freeze"),
+                            L10n.t("يوقف الحساب مؤقتاً ويخفيه من الشجرة، وبياناته محفوظة.",
+                                   "Pauses the account and hides it from the tree; data is kept."))
+                if canBan {
+                    accountNote(L10n.t("الحظر", "Ban"),
+                                savedPhone.isEmpty
+                                ? L10n.t("لا يوجد رقم محفوظ لهذا العضو.", "No saved number for this member.")
+                                : L10n.t("يمنع الرقم من التسجيل نهائياً ويجمّد حساب صاحبه. إلغاء الحظر لا يلغي التجميد.",
+                                         "Blocks the number from signing up and freezes its account. Lifting the ban doesn't unfreeze."))
+                }
+            }
+            .animation(DS.Anim.snappy, value: accountStatus)
+            .animation(DS.Anim.snappy, value: activeBan?.id)
+        }
+    }
+
+    /// سطر الشرح: اسم الإجراء بخطّ أثقل ثم فائدته
+    private func accountNote(_ title: String, _ text: String) -> some View {
+        (Text(title + ": ").fontWeight(.semibold) + Text(text))
+            .dsFont(.footnote)
+            .foregroundColor(DS.Color.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func accountActionTitle(_ action: AccountAction) -> String {
+        switch action {
+        case .activate: return L10n.t("تفعيل حساب \(member.firstName)؟", "Activate \(member.firstName)'s account?")
+        case .freeze: return L10n.t("تجميد حساب \(member.firstName)؟", "Freeze \(member.firstName)'s account?")
+        case .unfreeze: return L10n.t("إلغاء تجميد \(member.firstName)؟", "Unfreeze \(member.firstName)?")
+        case .ban: return L10n.t("حظر رقم \(member.firstName)؟", "Ban \(member.firstName)'s number?")
+        case .unban: return L10n.t("إلغاء حظر رقم \(member.firstName)؟", "Lift the ban on \(member.firstName)'s number?")
+        }
+    }
+
+    private func accountActionButton(_ action: AccountAction) -> String {
+        switch action {
+        case .activate: return L10n.t("تفعيل الحساب", "Activate Account")
+        case .freeze: return L10n.t("تجميد الحساب", "Freeze Account")
+        case .unfreeze: return L10n.t("إلغاء التجميد", "Unfreeze")
+        case .ban: return L10n.t("حظر الرقم", "Ban Number")
+        case .unban: return L10n.t("إلغاء الحظر", "Lift Ban")
+        }
+    }
+
+    private func accountActionMessage(_ action: AccountAction) -> String {
+        switch action {
+        case .activate: return L10n.t("سيتمكن من الدخول للتطبيق برقمه.", "They will be able to sign in with their number.")
+        case .freeze: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُلغى التجميد.",
+                                    "They won't be able to use the app until unfrozen.")
+        case .unfreeze: return L10n.t("سيتمكن من الدخول للتطبيق مجدداً.", "They will be able to use the app again.")
+        case .ban: return L10n.t("لن يتمكن هذا الرقم من التسجيل، ويُجمَّد حساب صاحبه.",
+                                 "This number won't be able to sign up, and its account will be frozen.")
+        case .unban: return L10n.t("سيتمكن هذا الرقم من التسجيل مجدداً. الحساب يبقى مجمّداً حتى تلغي تجميده.",
+                                   "This number can sign up again. The account stays frozen until you unfreeze it.")
+        }
+    }
+
+    private func performAccountAction(_ action: AccountAction) {
+        pendingAccountAction = nil
+        accountBusy = action
+        Task {
+            var ok = true
+            switch action {
+            case .activate:
+                adminRequestVM.errorMessage = nil
+                await adminRequestVM.activateAccount(memberId: member.id)
+                // يرفض تفعيل حساب بلا أب في الشجرة ويشرح السبب
+                if let reason = adminRequestVM.errorMessage {
+                    adminRequestVM.errorMessage = nil
+                    accountErrorText = reason
+                    ok = false
+                }
+                await refreshStatus()
+            case .freeze, .unfreeze:
+                let target: FamilyMember.MemberStatus = action == .freeze ? .frozen : .active
+                ok = await memberVM.setMemberStatus(memberId: member.id, status: target)
+                if ok { withAnimation(DS.Anim.snappy) { accountStatus = target } }
+            case .ban:
+                ok = await authVM.banPhone(savedPhone, reason: L10n.t("من «إدارة السجل»: \(member.fullName)",
+                                                                      "From Member Admin: \(member.fullName)"))
+                await refreshBan()
+                await refreshStatus()   // السيرفر يجمّد صاحب الرقم المحظور
+            case .unban:
+                if let ban = activeBan { ok = await authVM.unbanPhone(ban.id) }
+                await refreshBan()
+            }
+            accountBusy = nil
+            if !ok { accountError = true }
+        }
+    }
+
+    /// الحالة والحظر من السيرفر عند الفتح — العضو المعروض قد يكون قديماً
+    private func refreshAccount() async {
+        guard showsAccountCard else { return }
+        await refreshStatus()
+        await refreshBan()
+    }
+
+    private func refreshStatus() async {
+        guard let status = await memberVM.fetchMemberStatus(memberId: member.id) else { return }
+        withAnimation(DS.Anim.snappy) { accountStatus = status }
+    }
+
+    private func refreshBan() async {
+        guard canBan, showsAccountCard, !savedPhone.isEmpty else { return }
+        let ban = await authVM.activeBan(for: savedPhone)
+        withAnimation(DS.Anim.snappy) { activeBan = ban }
+    }
+
+    // MARK: - حذف السجل
+    /// نصّ أحمر صغير في آخر المربّع مع تنبيه تحته — يختلف بالشكل والحجم والمكان عن «حظر الرقم»
+    /// (طلب المالك ٢٠٢٦-١٠-١١، نفس تفريق «حذف الحساب» في الإعدادات) — التأكيد كما هو
+    private var deleteButton: some View {
+        VStack(spacing: DS.Spacing.xs) {
+            DSDangerTextButton(L10n.t("حذف السجل نهائياً", "Permanently Delete")) {
+                showDeleteConfirmation = true
+            }
+            Text(L10n.t("يحذف العضو وكل بياناته من الشجرة، ولا يمكن التراجع عنه.",
+                        "Removes the member and all their data from the tree. This can't be undone."))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, DS.Spacing.md)
     }
 
     // MARK: - Setup / Validation Helpers
@@ -702,6 +1005,7 @@ struct AdminMemberDetailSheet: View {
         let newKeys = newChildren.map { "\($0.id.uuidString)-\($0.sortOrder)" }
         if currentKeys != newKeys {
             localChildren = newChildren
+            loadedChildIds = newChildren.map(\.id)   // نقطة البداية لـ«ترتيب لم يُحفظ»
         }
     }
 
@@ -787,8 +1091,15 @@ struct AdminMemberDetailSheet: View {
             showEmptyNameAlert = true
             return
         }
+        // الاسم الكامل لازم يبدأ بالاسم الأول (التنبيه ظاهر تحت الحقل)
+        guard PersonName.startsWithFirstName(capturedFullName, firstName) else {
+            isSaving = false
+            return
+        }
 
-        let nameChanged = capturedFullName != member.fullName
+        // الاسم الأول = الحقل (القاعدة ١) — يتغيّر بروحه أيضاً (تصحيح «زين» ← «زين العابدين»)
+        let capturedFirstName = PersonName.clean(firstName)
+        let nameChanged = capturedFullName != member.fullName || capturedFirstName != PersonName.clean(member.firstName)
         let phoneChanged: Bool = {
             let original = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
             return capturedPhoneCountry.id != original.country.id || capturedPhone != original.localDigits
@@ -846,9 +1157,7 @@ struct AdminMemberDetailSheet: View {
         if var updatedMember = memberVM.member(byId: capturedMemberId) {
             if nameChanged {
                 updatedMember.fullName = capturedFullName
-                updatedMember.firstName = capturedFullName
-                    .components(separatedBy: " ")
-                    .first ?? capturedFullName
+                updatedMember.firstName = capturedFirstName
             }
             if phoneChanged {
                 if capturedPhone.isEmpty {
@@ -900,7 +1209,8 @@ struct AdminMemberDetailSheet: View {
         Task {
             if nameChanged {
                 Log.info("[AdminEdit] 📝 تعديل الاسم: \(capturedFullName)")
-                await memberVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName, silent: true)
+                await memberVM.updateMemberName(memberId: capturedMemberId, fullName: capturedFullName,
+                                                firstName: capturedFirstName, silent: true)
                 if let err = memberVM.errorMessage {
                     Log.error("[AdminEdit] ❌ فشل حفظ الاسم: \(err)")
                 }
@@ -942,13 +1252,23 @@ struct AdminMemberDetailSheet: View {
             }
             if datesChanged {
                 Log.info("[AdminEdit] 📅 تعديل التواريخ: deceased=\(capturedIsDeceased), birth=\(capturedBirthDate?.description ?? "—"), death=\(capturedDeathDate?.description ?? "—")")
-                await memberVM.updateMemberHealthAndBirth(
+                let datesSaved = await memberVM.updateMemberHealthAndBirth(
                     memberId: capturedMemberId,
                     birthDate: capturedBirthDate,
                     isDeceased: capturedIsDeceased,
                     deathDate: capturedDeathDate
                 )
                 if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث التواريخ: \(err)") }
+                // وفاة سُجّلت الآن (كان حياً) → مربّع «إعلان وفاة» — الإداري يختار «نشر» أو «ليس الآن»
+                if datesSaved, deceasedJustMarked {
+                    let target = DeathAnnouncementTarget(
+                        id: capturedMemberId,
+                        name: nameChanged ? capturedFullName : auditMemberName,
+                        isFemale: capturedGender == "female",
+                        deathDate: DeathRecency.string(from: capturedDeathDate))
+                    let canAnnounce = authVM.isAdmin   // إعلان الوفاة للمالك والمدير (السيرفر 20261007130000)
+                    Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
+                }
             }
             if bioChanged {
                 Log.info("[AdminEdit] 📖 تعديل السيرة: \(capturedBioStations.count) محطّة")
@@ -1105,6 +1425,9 @@ struct AdminMemberDetailSheet: View {
 }
 
 // MARK: - واجهة اختيار الأب
+/// مربّع اختيار الأب بنفس تصميم المربّعات (طلب المالك ٢٠٢٦-٠٩-٢٦): رأس متدرّج، بحث،
+/// صفوف الأعضاء بعلامة الاختيار، و«تأكيد» كحلي يمين / «إغلاق» رمادي يسار أسفل المربّع.
+/// الضغط على صف يحدّده، و«تأكيد» يعرض رسالة التأكيد نفسها قبل الربط.
 struct FatherPickerSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -1113,13 +1436,25 @@ struct FatherPickerSheet: View {
     /// (عشان ما يصير حلقة: ابن يصير أب لأبيه)
     var editingMemberId: UUID? = nil
     @Environment(\.dismiss) var dismiss
+    /// لون القسم الذي فُتح منه (الشجرة، الإدارة، حسابي…) — كحلي «الإطار» يتبعه
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
     @State private var searchText = ""
     @State private var debouncedSearch = ""
     @State private var debounceTask: Task<Void, Never>? = nil
     @State private var pendingSelection: FamilyMember? = nil
     @State private var showUnlinkConfirm = false
+    /// المحدَّد قبل «تأكيد» — nil = لم يُغيَّر بعد (العلامة على الأب الحالي)
+    @State private var choice: FatherChoice? = nil
+    /// «تقليل الحركة» (توصية أبل): علامة الاختيار تظهر بتلاشٍ فقط بلا تكبير
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var prepared: [(member: FamilyMember, normalized: String)] = []
+
+    private enum FatherChoice {
+        case noFather
+        case father(FamilyMember)
+    }
 
     private static func normalizeArabicFast(_ s: String) -> String {
         var out = String()
@@ -1152,19 +1487,6 @@ struct FatherPickerSheet: View {
         }
         if normalized.contains(query) { return 2 }
         return nil
-    }
-
-    private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(DS.Font.icon(11, weight: .bold))
-                .foregroundColor(color)
-            Text(title)
-                .font(DS.Font.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(DS.Color.textSecondary)
-                .textCase(nil)
-        }
     }
 
     private func rebuildPrepared() {
@@ -1205,152 +1527,179 @@ struct FatherPickerSheet: View {
             .map(\.0)
     }
 
+    /// هل على هذا الصف علامة الاختيار — المحدَّد الآن، وإلا الأب الحالي (nil = بدون أب)
+    private func isChecked(_ id: UUID?) -> Bool {
+        switch choice {
+        case nil: return selectedId == id
+        case .noFather?: return id == nil
+        case .father(let m)?: return m.id == id
+        }
+    }
+
+    /// «تأكيد» يعمل فقط لما يختلف المحدَّد عن الحالي
+    private var hasChange: Bool {
+        switch choice {
+        case nil: return false
+        case .noFather?: return selectedId != nil
+        case .father(let m)?: return m.id != selectedId
+        }
+    }
+
+    private func pick(_ c: FatherChoice) {
+        withAnimation(DS.Anim.snappy) { choice = c }
+    }
+
+    /// «تأكيد» في شريط المربّع — يعرض رسالة التأكيد نفسها (ربط الأب / إزالة الربط)
+    private func confirmChoice() {
+        switch choice {
+        case .noFather?: showUnlinkConfirm = true
+        case .father(let m)?: pendingSelection = m
+        case nil: break
+        }
+    }
+
     var body: some View {
         let list = filteredMembers
-        return NavigationStack {
-            ScrollViewReader { proxy in
-                List {
-                    Section {
-                        Button {
-                            showUnlinkConfirm = true
-                        } label: {
-                            HStack(spacing: DS.Spacing.sm) {
-                                Image(systemName: "person.crop.circle.badge.minus")
-                                    .font(DS.Font.icon(15, weight: .semibold))
-                                    .foregroundColor(DS.Color.warning)
-                                    .frame(width: 28, height: 28)
-                                    .background(DS.Color.warning.opacity(0.12))
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(L10n.t("بدون أب", "No Father"))
-                                        .font(DS.Font.caption1)
-                                        .foregroundColor(DS.Color.textTertiary)
-                                    Text(L10n.t("رأس شجرة", "Tree root"))
-                                        .font(DS.Font.callout)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(DS.Color.textPrimary)
-                                }
-
-                                Spacer()
-
-                                if selectedId == nil {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(DS.Font.icon(18))
-                                        .foregroundStyle(DS.Color.primary)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .id("top")
-                    } header: {
-                        sectionHeader(L10n.t("الخيار البديل", "Alternative"), icon: "link.badge.plus", color: DS.Color.warning)
-                    }
-
-                    Section {
-                        ForEach(list) { m in
-                            FatherPickerRow(
-                                member: m,
-                                isSelected: selectedId == m.id,
-                                onTap: { pendingSelection = m }
-                            )
-                        }
-                    } header: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "person.2.fill")
-                                .font(DS.Font.icon(11, weight: .bold))
-                                .foregroundColor(DS.Color.primary)
-                            Text(L10n.t("اختر الأب", "Choose Father"))
-                                .font(DS.Font.caption1)
-                                .fontWeight(.bold)
-                                .foregroundColor(DS.Color.textSecondary)
-                            Spacer()
-                            Text("\(list.count)")
-                                .font(DS.Font.caption1)
-                                .fontWeight(.bold)
-                                .foregroundColor(DS.Color.textTertiary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(DS.Color.surfaceElevated)
-                                .clipShape(Capsule())
-                        }
-                        .textCase(nil)
-                    }
-                }
-                .scrollContentBackground(.hidden)
-                .background(DS.Color.background)
-                .onChange(of: searchText) { newValue in
-                    debounceTask?.cancel()
-                    debounceTask = Task {
-                        try? await Task.sleep(nanoseconds: 150_000_000)
-                        if Task.isCancelled { return }
-                        await MainActor.run {
-                            debouncedSearch = newValue
-                            withAnimation(DS.Anim.snappy) {
-                                proxy.scrollTo("top", anchor: .top)
-                            }
-                        }
-                    }
-                }
-            }
-            .task {
-                rebuildPrepared()
-            }
-            .onChange(of: memberVM.allMembers) { _ in
-                rebuildPrepared()
-            }
-            .navigationTitle(L10n.t("اختر الأب", "Choose Father"))
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: L10n.t("ابحث عن اسم...", "Search name..."))
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إغلاق", "Close")) { dismiss() }
-                        .font(DS.Font.caption1)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-            }
-            .tint(DS.Color.primary)
-            .dsAlert(
-                L10n.t("تأكيد اختيار الأب", "Confirm Father Selection"),
-                isPresented: Binding(
-                    get: { pendingSelection != nil },
-                    set: { if !$0 { pendingSelection = nil } }
-                ),
-                presenting: pendingSelection
-            ) { member in
-                Button(L10n.t("تأكيد", "Confirm")) {
-                    selectedId = member.id
-                    pendingSelection = nil
-                    dismiss()
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
-                    pendingSelection = nil
-                }
-            } message: { member in
-                Text(L10n.t(
-                    "هل تريد ربط هذا العضو بـ \(member.fullName) كأب؟",
-                    "Link this member to \(member.fullName) as father?"
-                ))
-            }
-            .dsAlert(
-                L10n.t("إزالة ربط الأب", "Remove Father Link"),
-                isPresented: $showUnlinkConfirm
+        return ScrollViewReader { proxy in
+            DSComposer(
+                title: L10n.t("الأب في الشجرة", "Father in Tree"),
+                subtitle: L10n.t("اختر الاسم ثم اضغط «تأكيد»", "Pick a name, then tap Confirm"),
+                icon: "link",
+                tint: DS.Color.actionNavy,
+                actionTitle: L10n.t("تأكيد", "Confirm"),
+                actionIcon: "checkmark",
+                cancelTitle: L10n.t("إغلاق", "Close"),
+                canSubmit: hasChange,
+                onSubmit: confirmChoice,
+                onCancel: { dismiss() }
             ) {
-                Button(L10n.t("تأكيد", "Confirm")) {
-                    selectedId = nil
-                    dismiss()
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            } message: {
-                Text(L10n.t(
-                    "هل تريد جعل هذا العضو رأس شجرة بدون أب؟",
-                    "Make this member a tree root with no father?"
-                ))
+                searchField
+                    .id("top")
+                    .dsStaggerIn(0)
+                noFatherSection
+                membersSection(list)
             }
-            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .onChange(of: searchText) { newValue in
+                debounceTask?.cancel()
+                debounceTask = Task {
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    if Task.isCancelled { return }
+                    await MainActor.run {
+                        debouncedSearch = newValue
+                        withAnimation(DS.Anim.snappy) {
+                            proxy.scrollTo("top", anchor: .top)
+                        }
+                    }
+                }
+            }
+        }
+        .task {
+            rebuildPrepared()
+        }
+        .onChange(of: memberVM.allMembers) { _ in
+            rebuildPrepared()
+        }
+        .tint(chromeInk)
+        .dsAlert(
+            L10n.t("تأكيد اختيار الأب", "Confirm Father Selection"),
+            isPresented: Binding(
+                get: { pendingSelection != nil },
+                set: { if !$0 { pendingSelection = nil } }
+            ),
+            presenting: pendingSelection
+        ) { member in
+            Button(L10n.t("تأكيد", "Confirm")) {
+                selectedId = member.id
+                pendingSelection = nil
+                dismiss()
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
+                pendingSelection = nil
+            }
+        } message: { member in
+            Text(L10n.t(
+                "هل تريد ربط هذا العضو بـ \(member.fullName) كأب؟",
+                "Link this member to \(member.fullName) as father?"
+            ))
+        }
+        .dsAlert(
+            L10n.t("إزالة ربط الأب", "Remove Father Link"),
+            isPresented: $showUnlinkConfirm
+        ) {
+            Button(L10n.t("تأكيد", "Confirm")) {
+                selectedId = nil
+                dismiss()
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t(
+                "هل تريد جعل هذا العضو رأس شجرة بدون أب؟",
+                "Make this member a tree root with no father?"
+            ))
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: أجزاء المربّع
+
+    /// البحث — نفس حقل المربّعات بأيقونة العدسة
+    private var searchField: some View {
+        DSComposerField(icon: "magnifyingglass",
+                        label: L10n.t("بحث", "Search"),
+                        placeholder: L10n.t("ابحث عن اسم...", "Search name..."),
+                        text: $searchText)
+    }
+
+    /// «بدون أب» — يجعل العضو رأس شجرة (الخيار البديل)
+    private var noFatherSection: some View {
+        DSComposerSection(title: L10n.t("الخيار البديل", "Alternative"), icon: "link.badge.plus",
+                          tint: DS.Color.warning, index: 1) {
+            let checked = isChecked(nil)
+            Button { pick(.noFather) } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSFieldIcon(name: "person.crop.circle.badge.minus", tint: DS.Color.warning)
+                        .accessibilityHidden(true)   // زخرفة
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        Text(L10n.t("بدون أب", "No Father"))
+                            .dsFieldFont(.label)
+                            .foregroundColor(DS.Color.fieldLabel)
+                        Text(L10n.t("رأس شجرة", "Tree root"))
+                            .dsFieldFont(DSBox.fieldValueSize, weight: checked ? .bold : .regular)
+                            .foregroundColor(DS.Color.fieldValue)
+                    }
+                    Spacer(minLength: 0)
+                    if checked {
+                        // primary: كحلي في الفاتح وأزرق فاتح في الداكن — التدرّج الكحلي كان
+                        // قرصاً غامقاً لا يُرى على صف الداكن (مثل علامة «ربط الأب»)
+                        Image(systemName: "checkmark.circle.fill")
+                            .dsGlyph(DS.Glyph.xl, weight: .regular)
+                            .foregroundStyle(chromeInk)
+                            .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
+                            .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
+                    }
+                }
+                .fatherPickerRowBox(selected: checked, tint: chromeInk)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(checked ? .isSelected : [])
+        }
+    }
+
+    /// المرشّحون للأبوّة — صفوف كسولة لأن القائمة طويلة (مئات الأعضاء)
+    private func membersSection(_ list: [FamilyMember]) -> some View {
+        DSComposerSection(title: L10n.t("اختر الأب", "Choose Father"), icon: "person.2.fill",
+                          tint: DS.Color.primary, trailing: "\(list.count)", index: 2) {
+            LazyVStack(spacing: DS.Spacing.xsm) {
+                ForEach(list) { m in
+                    FatherPickerRow(
+                        member: m,
+                        isSelected: isChecked(m.id),
+                        onTap: { pick(.father(m)) }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1359,6 +1708,10 @@ private struct FatherPickerRow: View, Equatable {
     let member: FamilyMember
     let isSelected: Bool
     let onTap: () -> Void
+    /// «تقليل الحركة» (توصية أبل): علامة الاختيار تظهر بتلاشٍ فقط بلا تكبير
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dsSection) private var section
+    private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     static func == (lhs: FatherPickerRow, rhs: FatherPickerRow) -> Bool {
         lhs.member.id == rhs.member.id
@@ -1369,31 +1722,46 @@ private struct FatherPickerRow: View, Equatable {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: DS.Spacing.sm) {
-                ZStack {
-                    Circle()
-                        .fill(DS.Color.primary.opacity(0.10))
-                        .frame(width: 30, height: 30)
-                    Text(String(member.fullName.prefix(1)))
-                        .font(DS.Font.scaled(13, weight: .bold))
-                        .foregroundColor(DS.Color.primary)
-                }
+                // الحرف الأول في مربّع أيقونة الحقل — نفس صفوف المربّعات
+                Text(String(member.fullName.prefix(1)))
+                    .dsFont(.rowTitleCompact)
+                    .foregroundColor(chromeInk)
+                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
+                        .fill(chromeInk.opacity(DS.Opacity.tintFill)))
+                    .accessibilityHidden(true)   // الحرف الأول زخرفة — الاسم بجانبه
 
                 Text(member.displayFullName)
-                    .font(DS.Font.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
+                    .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
+                    .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
+                    .dsNameLines()
                     .truncationMode(.tail)
 
                 Spacer(minLength: DS.Spacing.xs)
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(DS.Font.icon(18))
-                        .foregroundStyle(DS.Color.primary)
+                        .dsGlyph(DS.Glyph.xl, weight: .regular)
+                        .foregroundStyle(chromeInk)
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
+                        .accessibilityHidden(true)   // الاختيار يُقرأ من حالة الزر
                 }
             }
+            .fatherPickerRowBox(selected: isSelected, tint: chromeInk)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+private extension View {
+    /// صف اختيار الأب: صندوق صفوف المربّعات + إطار بلون التطبيق للمختار (مثل الحقل النشط)
+    func fatherPickerRowBox(selected: Bool, tint: Color) -> some View {
+        dsRowBox()
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(tint.opacity(selected ? DS.Opacity.selectedStroke : 0), lineWidth: DS.Border.widthBold)
+            )
     }
 }

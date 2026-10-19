@@ -14,6 +14,8 @@ struct LoginView: View {
     @State private var otpTimeRemaining = 0
     @State private var logoScale: CGFloat = 0.94
     @State private var logoOpacity: CGFloat = 0
+    /// «شروط الاستخدام وسياسة الخصوصية» قبل الدخول (Guideline 5.1.1)
+    @State private var showLegal = false
 
 
 
@@ -52,6 +54,7 @@ struct LoginView: View {
 
     @State private var otpText: String = ""
     @Environment(\.verticalSizeClass) private var vSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// الوضع الأفقي — نلف المحتوى بـScrollView
     private var isLandscape: Bool { vSizeClass == .compact }
 
@@ -78,7 +81,13 @@ struct LoginView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
         .onAppear {
-            // ظهور هادئ قصير للشعار: تلاشٍ وتكبير خفيف
+            // «تقليل الحركة»: الشعار يظهر بتلاشٍ فقط بلا تكبير
+            guard !reduceMotion else {
+                logoScale = 1.0
+                withAnimation(DSMotion.fade) { logoOpacity = 1.0 }
+                return
+            }
+            // ظهور هادئ قصير للشعار: تلاشٍ وتكبير خفيف (الهوية)
             withAnimation(.easeOut(duration: 0.45).delay(0.1)) {
                 logoScale = 1.0
                 logoOpacity = 1.0
@@ -106,7 +115,7 @@ struct LoginView: View {
                         icon: "lock.shield.fill",
                         title: L10n.t("رمز التحقق", "Verification Code"),
                         subtitle: L10n.t("أدخل الرمز المرسل لجوالك", "Enter the code sent to your phone"),
-                        actionIcon: L10n.isArabic ? "arrow.right" : "arrow.left",
+                        actionIcon: DSBackButton.symbol,   // سهم الرجوع الموحّد
                         action: {
                             withAnimation(DS.Anim.smooth) {
                                 authVM.isOtpSent = false
@@ -130,11 +139,13 @@ struct LoginView: View {
                 }
 
                 // مؤشر التقدم — خطوة ١ / خطوة ٢
+                // بعد الشعار تدخل الأقسام بالترتيب: المؤشر ← بطاقة الإدخال ← الشروط (مرة عند الظهور)
                 HStack(spacing: DS.Spacing.sm) {
                     stepDot(filled: true)
                     stepDot(filled: authVM.isOtpSent)
                 }
                 .padding(.bottom, DS.Spacing.sm)
+                .dsStaggerIn(0)
 
                 // منطقة الإدخال
                 VStack(spacing: DS.Spacing.xl) {
@@ -152,11 +163,43 @@ struct LoginView: View {
                             ))
                     }
                 }
-                .frame(maxWidth: 380)
+                .frame(maxWidth: DSBox.formMaxWidth)
                 .padding(.horizontal, DS.Spacing.xl)
+                // الحاوية تدخل مرة واحدة — تبديل الرقم ↔ الرمز يبقى بانتقاله كما هو
+                .dsStaggerIn(1)
 
                 Spacer()
+
+                // الشروط والخصوصية متاحة قبل الدخول — تُقرأ داخل التطبيق
+                if !authVM.isOtpSent {
+                    legalFooter
+                        .padding(.bottom, DS.Spacing.sm)
+                        .dsStaggerIn(2)
+                }
             }
+            // الأقسام تبدأ بعد الشعار (نفس «بعد الرأس» في المربّعات)
+            .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
+    }
+
+    /// سطر صغير أسفل الشاشة يفتح «الخصوصية والشروط»
+    private var legalFooter: some View {
+        VStack(spacing: 0) {
+            Text(L10n.t("باستخدامك التطبيق فإنك توافق على", "By using the app you agree to the"))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+            Button { showLegal = true } label: {
+                Text(L10n.t("شروط الاستخدام وسياسة الخصوصية", "Terms of Use and Privacy Policy"))
+                    .dsFont(.badge)
+                    .foregroundColor(DS.Color.primary)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .frame(minHeight: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .dsTallBox(isPresented: $showLegal) { PrivacyPolicyView() }
     }
 
     /// مربّع رقم واحد من رمز التحقق — يبرز المربّع النشط
@@ -167,28 +210,28 @@ struct LoginView: View {
         let isFilled = !digit.isEmpty
 
         return Text(digit)
-            .font(DS.Font.plex(26, weight: .bold))
+            .dsFont(.codeDigit)
             .foregroundColor(DS.Color.textPrimary)
             .frame(maxWidth: .infinity)
-            .frame(height: 58)
+            .frame(height: DS.Icon.sizeLg)
             .background(DS.Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .strokeBorder(
                         isActive ? DS.Color.primary
-                        : isFilled ? DS.Color.primary.opacity(0.35)
+                        : isFilled ? DS.Color.primary.opacity(DS.Opacity.tintStroke)
                         : DS.Color.inactiveBorder,
-                        lineWidth: isActive ? 2 : 1
+                        lineWidth: isActive ? DS.Border.widthBold : DS.Border.width
                     )
             )
             .overlay(alignment: .center) {
                 // مؤشّر نبض في المربّع الفارغ النشط
                 if isActive && !isFilled {
-                    RoundedRectangle(cornerRadius: 1)
+                    Capsule()
                         .fill(DS.Color.primary)
-                        .frame(width: 2, height: 24)
-                        .opacity(0.8)
+                        .frame(width: DS.Border.widthBold, height: DS.Icon.section)
+                        .opacity(DS.Opacity.dimmed)
                 }
             }
             .animation(DS.Anim.quick, value: isActive)
@@ -201,6 +244,7 @@ struct LoginView: View {
             // خلفية صلبة (الهوية: بلا تدرّج)
             DS.Color.background
                 .ignoresSafeArea()
+            // بلا هالة ولا حلقة حول الشعار (طلب المالك ٢٠٢٦-١٠-١٧: «في إطار في تسجيل الدخول»)
         }
     }
 
@@ -211,11 +255,13 @@ struct LoginView: View {
     private var logoSection: some View {
         VStack(spacing: DS.Spacing.xl) {
             // الشعار المسطّح «المحمدعلي»: كحلي على الفاتح، كريمي في الداكن — بلا دائرة ولا ظل (الهوية)
-            Image("FamilyLogoNavy")
-                .renderingMode(.original)
+            // الشعار القديم (أيقونة التطبيق الدائرية) — طلب المالك ٢٠٢٦-١٠-١٧: يبقى حتى يتبدّل مع الأيقونة الجديدة
+            Image("AppIconImage")
                 .resizable()
-                .scaledToFit()
-                .frame(height: logoHeight)
+                .scaledToFill()
+                .frame(width: logoHeight * 1.25, height: logoHeight * 1.25)
+                .clipShape(Circle())
+                .dsSubtleShadow()
                 .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
 #if DEBUG
                 // ضغطة مطوّلة على الشعار تفتح شاشة تسجيل البيانات للمعاينة
@@ -239,41 +285,40 @@ struct LoginView: View {
                                 previewStep = 0
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 26))
+                                    .dsGlyph(DS.Glyph.xxl, weight: .regular)
                                     .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.white, .black.opacity(0.45))
+                                    .foregroundStyle(DS.Color.textOnPrimary, DS.Color.shadowHeavy)
                             }
 
                             Text(L10n.t("شاشة معاينة", "Preview"))
-                                .font(DS.Font.scaled(11, weight: .bold))
+                                .dsFont(.badge)
                                 .foregroundColor(DS.Color.textSecondary)
 
-                            Picker("", selection: $previewStep) {
-                                Text(L10n.t("البيانات", "Profile")).tag(0)
-                                Text(L10n.t("الانتظار", "Waiting")).tag(1)
-                            }
-                            .pickerStyle(.segmented)
-                            .frame(width: 170)
-                            .environment(\.layoutDirection, .rightToLeft)
+                            // نفس مبدّل الأقسام الموحّد بدل مبدّل النظام (مثل معاينة الرئيسية)
+                            DSSegmentedSwitch(options: [
+                                DSSegmentOption(id: 0, title: L10n.t("البيانات", "Profile"), icon: "person.text.rectangle"),
+                                DSSegmentOption(id: 1, title: L10n.t("الانتظار", "Waiting"), icon: "hourglass")
+                            ], selection: $previewStep, size: .regular)
+                            .frame(maxWidth: 240)
                         }
                         .padding(.horizontal, DS.Spacing.md)
                         .padding(.vertical, DS.Spacing.sm)
                         .dsGlass(Capsule())
-                        .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(0.20), lineWidth: 1))
-                        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-                        .padding(.top, 118)
+                        .overlay(Capsule().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
+                                                        lineWidth: DS.Border.width))
+                        .dsCardShadow()
+                        .padding(.top, DS.Spacing.xxxxl * 3)
                     }
                 }
 #endif
 
             VStack(spacing: DS.Spacing.sm) {
                 Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
-                    .font(DS.Font.title1)
-                    .fontWeight(.black)
+                    .dsFont(.heroTitle)
                     .foregroundColor(DS.Color.textPrimary)
 
                 Text(L10n.t("شجرة العائلة", "Family Tree"))
-                    .font(DS.Font.callout)
+                    .dsFont(.body)
                     .foregroundColor(DS.Color.textSecondary)
             }
         }
@@ -320,14 +365,8 @@ struct LoginView: View {
             statusMessage
                 .animation(DS.Anim.snappy, value: authVM.otpErrorMessage)
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1.5)
-        )
-        .dsGlowShadow()
+        // البطاقة الواحدة
+        .dsCard(padding: DS.Spacing.lg)
     }
 
     // MARK: - OTP Input — Compact Card
@@ -340,19 +379,19 @@ struct LoginView: View {
 
         VStack(spacing: DS.Spacing.xl) {
             VStack(spacing: DS.Spacing.sm) {
-                // أيقونة القفل — DSIcon
-                DSIcon("lock.shield", color: DS.Color.primary, size: DS.Icon.size, iconSize: 20)
+                // أيقونة القفل — قرص مجسّم
+                DSStateIcon("lock.shield.fill", tint: DS.Color.primary, size: DS.Icon.size)
 
                 Text(L10n.t("رمز التحقق", "Verification Code"))
-                    .font(DS.Font.headline)
+                    .dsFont(.headline)
                     .foregroundColor(DS.Color.textPrimary)
 
                 HStack(spacing: DS.Spacing.xs) {
                     Text(L10n.t("أرسلنا رمزاً إلى", "Code sent to"))
-                        .font(DS.Font.caption1)
+                        .dsFont(.subtitle)
                         .foregroundColor(DS.Color.textSecondary)
                     Text("\(authVM.dialingCode) \(authVM.phoneNumber)")
-                        .font(DS.Font.scaled(14, weight: .bold))
+                        .dsFont(.rowTitle)
                         .foregroundStyle(DS.Color.primary)
 
                     Button(action: {
@@ -365,7 +404,7 @@ struct LoginView: View {
                         }
                     }) {
                         Image(systemName: "pencil.circle.fill")
-                            .font(DS.Font.icon(16))
+                            .dsGlyph(DS.Glyph.lg, weight: .regular)
                             .foregroundColor(DS.Color.textSecondary)
                     }
                     .padding(.leading, DS.Spacing.xs)
@@ -375,21 +414,19 @@ struct LoginView: View {
                 if otpTimeRemaining > 0 {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "timer")
-                            .font(DS.Font.caption1)
+                            .dsGlyph(DS.Glyph.sm)
                             .foregroundStyle(otpTimeRemaining <= 60 ? DS.Color.error : DS.Color.primary)
                         Text(L10n.t(
                             "ينتهي الرمز خلال \(otpTimeRemaining / 60):\(String(format: "%02d", otpTimeRemaining % 60))",
                             "Code expires in \(otpTimeRemaining / 60):\(String(format: "%02d", otpTimeRemaining % 60))"
                         ))
-                            .font(DS.Font.caption1)
-                            .fontWeight(.semibold)
+                            .dsFont(.caption)
                             .foregroundStyle(otpTimeRemaining <= 60 ? DS.Color.error : DS.Color.primary)
                     }
                     .padding(.top, DS.Spacing.xs)
                 } else {
                     Text(L10n.t("انتهت صلاحية الرمز", "Code has expired"))
-                        .font(DS.Font.caption1)
-                        .fontWeight(.semibold)
+                        .dsFont(.caption)
                         .foregroundStyle(DS.Color.error)
                         .padding(.top, DS.Spacing.xs)
                 }
@@ -403,7 +440,7 @@ struct LoginView: View {
                     .focused($isFieldFocused)
                     // مخفي بصرياً لا وظيفياً — يبقى مستقبِلاً للوحة المفاتيح
                     .opacity(0.001)
-                    .frame(height: 60)
+                    .frame(height: DS.Icon.sizeLg)
                     .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
 
                 HStack(spacing: DS.Spacing.sm) {
@@ -456,8 +493,13 @@ struct LoginView: View {
             statusMessage
 
             // إعادة طلب الرمز — SMS (واتساب يظهر فقط إذا feature flag مفعّل)
+            // إعادة الإرسال — الشريحة الواحدة (رمادية أثناء الانتظار)
             HStack(spacing: DS.Spacing.md) {
-                Button(action: {
+                DSChipButton(timeRemaining > 0
+                             ? L10n.t("بعد \(timeRemaining)ث", "in \(timeRemaining)s")
+                             : L10n.t("إعادة عبر SMS", "Resend via SMS"),
+                             icon: "message.fill",
+                             tint: timeRemaining > 0 ? DS.Color.textTertiary : DS.Color.primary) {
                     authVM.otpCode = ""; otpText = ""
                     authVM.otpErrorMessage = nil
                     authVM.otpStatusMessage = ""
@@ -467,26 +509,13 @@ struct LoginView: View {
                         await authVM.sendOTP(channel: .sms)
                         if authVM.otpErrorMessage != nil { timeRemaining = 30 }
                     }
-                }) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "message.fill")
-                            .font(DS.Font.icon(13, weight: .semibold))
-                        Text(timeRemaining > 0
-                             ? L10n.t("بعد \(timeRemaining)ث", "in \(timeRemaining)s")
-                             : L10n.t("إعادة عبر SMS", "Resend via SMS"))
-                            .font(DS.Font.footnote)
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundStyle(timeRemaining > 0 ? DS.Color.textTertiary : DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, DS.Spacing.xs + 2)
-                    .background((timeRemaining > 0 ? DS.Color.textTertiary : DS.Color.primary).opacity(0.10))
-                    .clipShape(Capsule())
                 }
                 .disabled(authVM.isLoading || timeRemaining > 0)
 
                 if AuthViewModel.whatsappOTPEnabled {
-                    Button(action: {
+                    DSChipButton(L10n.t("إرسال عبر واتساب", "Send via WhatsApp"),
+                                 icon: "bubble.left.and.bubble.right.fill",
+                                 tint: authVM.isLoading ? DS.Color.textTertiary : DS.Color.sea) {
                         authVM.otpCode = ""; otpText = ""
                         authVM.otpErrorMessage = nil
                         authVM.otpStatusMessage = ""
@@ -496,66 +525,24 @@ struct LoginView: View {
                             await authVM.sendOTP(channel: .whatsapp)
                             if authVM.otpErrorMessage != nil { timeRemaining = 30 }
                         }
-                    }) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .font(DS.Font.icon(13, weight: .semibold))
-                            Text(L10n.t("إرسال عبر واتساب", "Send via WhatsApp"))
-                                .font(DS.Font.footnote)
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundStyle(authVM.isLoading ? DS.Color.textTertiary : DS.Color.sea)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.xs + 2)
-                        .background((authVM.isLoading ? DS.Color.textTertiary : DS.Color.sea).opacity(0.10))
-                        .clipShape(Capsule())
                     }
                     .disabled(authVM.isLoading)
                 }
             }
         }
-        .padding(DS.Spacing.lg)
-        .background(DS.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .stroke(DS.Color.primary.opacity(0.3), lineWidth: 1.5)
-        )
-        .dsGlowShadow()
+        // البطاقة الواحدة
+        .dsCard(padding: DS.Spacing.lg)
     }
 
     @ViewBuilder
     private var statusMessage: some View {
+        // الملاحظة الملوّنة الواحدة بلون معناها (خطأ / نجاح)
         if let error = authVM.otpErrorMessage {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(DS.Color.error)
-                    .font(DS.Font.icon(16, weight: .bold))
-                Text(error)
-                    .font(DS.Font.footnote)
-                    .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.error)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(DS.Color.error.opacity(0.12))
-            .clipShape(Capsule())
-            .transition(.scale.combined(with: .opacity))
+            DSNoteCard(error, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+                .transition(.scale.combined(with: .opacity))
         } else if !authVM.otpStatusMessage.isEmpty {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(DS.Color.success)
-                    .font(DS.Font.icon(16, weight: .bold))
-                Text(authVM.otpStatusMessage)
-                    .font(DS.Font.footnote)
-                    .fontWeight(.semibold)
-                    .foregroundColor(DS.Color.success)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(DS.Color.success.opacity(0.12))
-            .clipShape(Capsule())
-            .transition(.scale.combined(with: .opacity))
+            DSNoteCard(authVM.otpStatusMessage, icon: "checkmark.circle.fill", tint: DS.Color.success)
+                .transition(.scale.combined(with: .opacity))
         }
     }
 
@@ -563,12 +550,12 @@ struct LoginView: View {
     private func stepDot(filled: Bool) -> some View {
         ZStack {
             Circle()
-                .fill(filled ? DS.Color.primaryFill : DS.Color.textTertiary.opacity(0.25))
-                .frame(width: 10, height: 10)
+                .fill(filled ? DS.Color.primaryFill : DS.Color.textTertiary.opacity(DS.Opacity.tintStroke))
+                .frame(width: DS.Glyph.xs, height: DS.Glyph.xs)
             if filled {
                 Circle()
                     .fill(DS.Color.textOnPrimary)
-                    .frame(width: 4, height: 4)
+                    .frame(width: DS.Spacing.xs, height: DS.Spacing.xs)
             }
         }
         .animation(DS.Anim.smooth, value: filled)

@@ -16,44 +16,38 @@ struct HomeGreetingRow: View {
             HStack(alignment: .center, spacing: DS.Spacing.md) {
                 avatar
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     // التحية بلون الوقت — كبسولة صغيرة واضحة فوق الاسم
-                    HStack(spacing: 5) {
-                        Image(systemName: greetingSymbol)
-                            .font(.system(size: 12, weight: .semibold))
-                            .symbolRenderingMode(.hierarchical)
+                    HStack(spacing: DS.Spacing.xs) {
+                        // رمز الوقت المرسوم (شمس طالعة · شمس الظهر · شمس على البحر · هلال) يتحرّك بهدوء
+                        TrialGreetingGlyph(hour: hour, tint: timeAccent)
                         Text(timeBasedGreeting)
-                            .font(DS.Font.plex(13, weight: .semibold))
+                            .dsFont(.rowTitleCompact)
                     }
                     .foregroundStyle(timeAccent)
 
                     Text(greetingName)
-                        .font(DS.Font.plex(21, weight: .bold))
+                        .dsFont(.emptyTitle)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                 }
+                .layoutPriority(1)
 
+                // بطاقة بسيطة بلا منظر (طلب المالك ٢٠٢٦-١٠-٠٥ «شيل خله ابسط بكثير»):
+                // الصورة · رمز الوقت والتحية · الاسم · السهم
                 Spacer(minLength: DS.Spacing.sm)
 
                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .dsGlyph(DS.Glyph.sm)
                     .foregroundColor(DS.Color.textSecondary)
-                    .frame(width: 30, height: 30)
+                    .frame(width: DSBox.compactHeaderIcon, height: DSBox.compactHeaderIcon)
                     .background(Circle().fill(DS.Color.mutedBackground))
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm + 2)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .fill(DS.Color.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                    .strokeBorder(timeAccent.opacity(0.14), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 3)
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .padding(.horizontal, DS.Spacing.xs)
+            // البطاقة الواحدة (`.dsCard`) — نفس بطاقة الأخبار تحتها
+            .dsCard()
+            .contentShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(L10n.t("حسابي", "My profile"))
@@ -76,39 +70,37 @@ struct HomeGreetingRow: View {
                     initial(user)
                 }
             }
-            .frame(width: 50, height: 50)
+            .frame(width: DS.Icon.sizeLg - DS.Spacing.sm, height: DS.Icon.sizeLg - DS.Spacing.sm)
             .clipShape(Circle())
-            .overlay(Circle().strokeBorder(timeAccent.opacity(0.55), lineWidth: 2))
-            .padding(2)
+            .overlay(Circle().strokeBorder(timeAccent.opacity(DS.Opacity.selectedStroke), lineWidth: DS.Border.widthBold))
+            .padding(DS.Spacing.xxs)
         }
     }
 
     private func initial(_ user: FamilyMember) -> some View {
         ZStack {
-            Circle().fill(timeAccent.opacity(0.12))
+            Circle().fill(timeAccent.opacity(DS.Opacity.tintFill))
             Text(String(user.firstName.prefix(1)))
-                .font(DS.Font.plex(20, weight: .bold))
+                .dsFont(.emptyTitle)
                 .foregroundColor(timeAccent)
         }
     }
 
     private var hour: Int { Calendar.current.component(.hour, from: Date()) }
 
-    private var greetingSymbol: String {
-        if hour < 12 { return "sun.and.horizon.fill" }
-        else if hour < 17 { return "sun.max.fill" }
-        else { return "moon.stars.fill" }
-    }
+    /// الصباح من ٤ الفجر — بعد منتصف الليل يبقى «مساء الخير» بالهلال (كان «صباح الخير» بشمس طالعة)
+    private var isMorning: Bool { (4..<12).contains(hour) }
+    private var isAfternoon: Bool { (12..<17).contains(hour) }
 
     private var timeAccent: Color {
-        if hour < 12 { return DS.Color.secondary }
-        else if hour < 17 { return DS.Color.primary }
+        if isMorning { return DS.Color.secondary }
+        else if isAfternoon { return DS.Color.primary }
         else { return DS.Color.accent }
     }
 
     private var timeBasedGreeting: String {
-        if hour < 12 { return L10n.t("صباح الخير", "Good morning") }
-        else if hour < 17 { return L10n.t("مساء الخير", "Good afternoon") }
+        if isMorning { return L10n.t("صباح الخير", "Good morning") }
+        else if isAfternoon { return L10n.t("مساء الخير", "Good afternoon") }
         else { return L10n.t("مساء الخير", "Good evening") }
     }
 

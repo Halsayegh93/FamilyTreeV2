@@ -6,7 +6,7 @@ import CoreGraphics
 //
 // نسخة مطابقة لتعريفات الموقع: familytree-web/src/lib/occasions/templates.ts
 // أي تعديل على النصوص أو الألوان أو المقاسات لازم ينعكس في الثنين.
-// كل قالب له نسختين: مع صورة وبدون صورة (التهاني يختارها المستخدم؛ الوفاة قالبين؛ مشاركة العزاء بدون صورة).
+// كل قالب له نسختين: مع صورة وبدون صورة (التهاني و«إعلان عزاء» يختارها المستخدم؛ مشاركة العزاء بدون صورة).
 // ملاحظة: الألوان هنا ألوان «التصميم المعتمد» للبوست نفسه (مثل ملفات الصور)،
 // وليست ألوان واجهة — لذلك ما تمر على DS.Color.
 
@@ -231,6 +231,51 @@ enum OccasionDeathPalette {
     static let dua = Color(hex: "#C5CAD1")
 }
 
+/// ألوان «إعلان عزاء» و«مشاركة عزاء» (طلب المالك ٢٠٢٦-١٠-١٧): «فحمي وفضي» (الافتراضي) أو «الأصلية» (ألوان كل نموذج
+/// قبل الفضي) — في النماذج الثلاثة، والتخطيط نفسه ما يتغيّر. باقي القوالب ما لها اختيار ألوان
+enum OccasionPalette: String, CaseIterable, Identifiable {
+    case silver, original
+
+    var id: String { rawValue }
+
+    static let standard: OccasionPalette = .silver
+
+    var title: String {
+        switch self {
+        case .silver: return L10n.t("فحمي وفضي", "Charcoal & silver")
+        case .original: return L10n.t("الأصلية", "Original")
+        }
+    }
+}
+
+/// «فحمي وفضي» — نفس القيم في الموقع بالضبط (ثابتة). الأرضية الداكنة غرافيت متدرّج من فوق لتحت، والفضي بدل الذهبي،
+/// والنص على الغرافيت أبيض وثانويه فضي؛ الأرضية الفاتحة («مشاركة عزاء» نموذج ١ و٢، وبطاقة نموذج ٣) بألوان البطاقة الفاتحة.
+/// التباين: الفضي على أفتح الغرافيت ٥٫٩ والأبيض ٨٫٣؛ على البطاقة الفاتحة الفحمي ١٢ والثانوي ٥٫٨
+enum OccasionSilver {
+    static let groundTop = Color(hex: "#4A4F57")
+    static let groundBottom = Color(hex: "#2B2F35")
+    /// بدل الذهبي: الخطوط والزخارف والإطارات والفواصل والعناوين الصغيرة، والنص الثانوي على الغرافيت
+    static let silver = Color(hex: "#D5DAE0")
+    /// فضي أعمق: الخطوط الرفيعة والزخارف الثانوية
+    static let deep = Color(hex: "#9AA1AA")
+    /// الاسم والقرابة والنص الأساسي على الغرافيت
+    static let text = Color(hex: "#FFFFFF")
+    static let card = Color(hex: "#F3F4F6")
+    static let cardText = Color(hex: "#2B2F35")
+    static let cardText2 = Color(hex: "#5B616B")
+    static let cardAccent = Color(hex: "#9AA1AA")
+    /// لو ما نزل الملف الفضي بعد: الأصلي رمادي بلمسة باردة (مثل OccasionM3.Death.calliTint)
+    static let fallbackTint = Color(hex: "#F4F7FB")
+    /// الشعار الفضي — نفس ملف نموذج ٣
+    static let logo = "logo/flat-silver.png"
+
+    /// الملف الفضي لأي ملف ذهبي/كريمي: نفس المسار + «-silver» قبل الامتداد (frame/goldnight.png → frame/goldnight-silver.png)
+    static func path(_ original: String) -> String {
+        guard let dot = original.lastIndex(of: ".") else { return original + "-silver" }
+        return String(original[..<dot]) + "-silver" + String(original[dot...])
+    }
+}
+
 // MARK: المخطوطات (المقاس الطبيعي عند scale = 1)
 
 struct OccasionVerse {
@@ -305,11 +350,52 @@ struct OccasionTemplate: Identifiable {
     /// النماذج المتاحة لهذا القالب (لاختيار النموذج في الشاشة)
     var models: [OccasionModel] { OccasionModel.allCases.filter { $0 != .m1 || hasModel1 } }
 
-    /// المستخدم يختار «مع صورة / بدون صورة»؟ (التهاني فقط — الوفاة قالبين، ومشاركة العزاء بدون صورة)
-    var photoOptional: Bool { kind == .happy && noPhoto != nil }
+    /// المستخدم يختار «مع صورة / بدون صورة»؟ التهاني و«إعلان عزاء» (كان قالبين «إعلان وفاة — مع صورة / بدون صورة»
+    /// ودُمجا بطلب المالك ٢٠٢٦-١٠-١٧)؛ مشاركة العزاء بدون صورة
+    var photoOptional: Bool { (kind == .happy && noPhoto != nil) || kind == .death }
 
-    /// فيه صورة؟ withPhoto = اختيار المستخدم للتهاني (نفسه في النموذجين)
+    /// فيه صورة؟ withPhoto = اختيار المستخدم (نفسه في كل النماذج)
     func showsPhoto(_ withPhoto: Bool) -> Bool { photoOptional ? withPhoto : hasPhoto }
+
+    /// القالب اللي ينرسم فعلاً: «إعلان عزاء» قالب واحد في القائمة، ونسخته «بدون صورة» تنرسم بتصميم الإعلان
+    /// بدون صورة كما هو (kind = .deathText) — كل نسخة بتصميمها في النماذج الثلاثة، والنموذج (الحقول) واحد للنسختين
+    func layout(withPhoto: Bool) -> OccasionTemplate {
+        guard kind == .death, !withPhoto else { return self }
+        return OccasionTemplate(id: id, title: title, icon: icon, kind: .deathText, hasPhoto: false)
+    }
+
+    /// عنده اختيار «الألوان» («فحمي وفضي» / «الأصلية»)؟ «إعلان عزاء» بنسختيه و«مشاركة عزاء»
+    var hasPalette: Bool { kind == .death || kind == .deathText || kind == .solace }
+
+    /// ملفات أحسن لو توفّرت (الرسم له بديل بدونها): «فحمي وفضي» — الملفات الفضية/الفحمية من الموقع (نفس المسار + «-silver»)؛
+    /// قبل ما تنزل هناك تنرسم الملفات الأصلية رمادية (OccasionPostView.silverAsset). «الأصلية» ما تحتاج شي.
+    /// هذي بالضبط الملفات الموجودة في occasion-kit بالموقع (٢٠٢٦-١٠-١٧) — لا تضيف مسار ما له ملف هناك
+    func optionalAssetPaths(for size: OccasionSize = .post, model: OccasionModel = .m2, withPhoto: Bool = true,
+                            palette: OccasionPalette = .standard) -> [String] {
+        guard palette == .silver, hasPalette else { return [] }
+        let S = OccasionSilver.self
+        switch (effectiveModel(model), kind) {
+        case (.m3, .death), (.m3, .deathText):
+            let v = kind == .death ? OccasionM3.deathPhotoVerse : OccasionM3.deathNoPhotoVerse
+            return [OccasionM3.Death.silverVerse(v.lead.file), OccasionM3.Death.silverVerse(v.inna.file), S.logo]
+        case (.m3, _):
+            // مشاركة العزاء: آيات البطاقة بالفحمي (navytone-silver) والشعار الفضي تحتها
+            let v = OccasionM3.solaceVerse
+            return [v.lead.file, v.inna.file, v.echo.file].map { S.path("m3/verse/\($0).png") } + [S.logo]
+        case (.m1, .death):
+            return [S.path("m1/bg/death.jpg"), S.path("m1/frame/white.png"), S.logo]
+        case (.m1, .deathText):
+            return [S.path("m1/bg/death.jpg"), S.logo]
+        case (.m1, _):
+            return [S.path("m1/bg/solace.jpg"), S.path("verse/sabr.png"), S.path("logo/flat-navy.png")]
+        case (_, .death):
+            return [S.path("bg/death-\(size.rawValue).jpg"), S.path("frame/goldnight.png"), S.logo]
+        case (_, .deathText):
+            return [S.path("bg/death-\(size.rawValue).jpg"), S.logo]
+        default:
+            return [S.path("bg/solace-\(size.rawValue).jpg"), S.path("verse/sabr.png"), S.path("logo/flat-navy.png")]
+        }
+    }
 
     /// الملفات المطلوبة من occasion-kit لهذا القالب والمقاس والنموذج والنسخة
     func assetPaths(for size: OccasionSize, model: OccasionModel = .m2, withPhoto: Bool = true) -> [String] {
@@ -389,13 +475,19 @@ extension OccasionTemplate {
             OccasionTemplate(id: "graduation", title: L10n.t("تهنئة تخرج", "Graduation"), icon: "graduationcap.fill", kind: .happy,
                              theme: .navy, verse: .grad, verseScale: 0.86, hasPhoto: true, m1: .grad,
                              noPhoto: OccasionNoPhotoSpec(verse: .grad, m1Width: 637, m1Top: 50, m2Width: 623, m2Top: 30)),
-            OccasionTemplate(id: "death", title: L10n.t("إعلان وفاة — مع صورة", "Obituary — photo"), icon: "moon.stars.fill",
+            // «إعلان عزاء» (طلب المالك ٢٠٢٦-١٠-١٧): قالب واحد بنسختين «مع صورة / بدون صورة» (layout(withPhoto:))
+            OccasionTemplate(id: "death", title: L10n.t("إعلان عزاء", "Condolence notice"), icon: "moon.stars.fill",
                              kind: .death, hasPhoto: true),
-            OccasionTemplate(id: "deathText", title: L10n.t("إعلان وفاة — بدون صورة", "Obituary — details"), icon: "doc.text.fill",
-                             kind: .deathText, hasPhoto: false),
             OccasionTemplate(id: "solace", title: L10n.t("مشاركة عزاء", "Condolences"), icon: "hands.sparkles.fill",
                              kind: .solace, verse: .sabr, hasPhoto: false),
         ]
+    }
+
+    /// قالب من رقمه — يقبل الأرقام القديمة: «deathText» (إعلان وفاة بدون صورة) صار «إعلان عزاء» بنسخة «بدون صورة».
+    /// withPhoto = nil: النسخة على اختيار المستخدم. (التطبيق ما يحفظ مسودات اليوم — هذا لأي رقم محفوظ أو رابط قديم)
+    static func named(_ id: String) -> (template: OccasionTemplate, withPhoto: Bool?)? {
+        if id == "deathText", let death = all.first(where: { $0.id == "death" }) { return (death, false) }
+        return all.first { $0.id == id }.map { ($0, nil) }
     }
 }
 

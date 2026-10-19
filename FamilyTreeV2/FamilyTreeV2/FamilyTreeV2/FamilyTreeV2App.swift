@@ -29,20 +29,19 @@ struct FamilyTreeV2App: App {
         }
     }
 
+    /// تاب الإدارة ثم «طلبات المراجعة» — نفس «فتح» الطلب من الإشعار («مسار الموافقات»)
+    private static func openAdminReview() {
+        NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil,
+                                            userInfo: ["kind": NotificationKind.adminRequest.rawValue])
+        }
+    }
+
     /// يفرض النمط على UIWindow — يضمن تطبيقه على الشيتات والتنبيهات أيضاً
     private func applyWindowStyle() {
-        let style: UIUserInterfaceStyle
-        switch appearanceMode {
-        case "light": style = .light
-        case "dark":  style = .dark
-        default:      style = .unspecified
-        }
-        for scene in UIApplication.shared.connectedScenes {
-            guard let windowScene = scene as? UIWindowScene else { continue }
-            for window in windowScene.windows {
-                window.overrideUserInterfaceStyle = style
-            }
-        }
+        // المكان الواحد لتطبيق الوضع على كل النوافذ (`AppAppearance`)
+        AppAppearance.apply(appearanceMode, animated: false)
     }
 
     var body: some Scene {
@@ -59,11 +58,32 @@ struct FamilyTreeV2App: App {
                 .environment(\.locale, langManager.locale)
                 .environment(\.layoutDirection, langManager.layoutDirection)
                 .environment(\.multilineTextAlignment, langManager.selectedLanguage == "ar" ? .leading : .trailing)
+                // الخط الافتراضي لكل نص بلا خط محدّد (نصوص، حقول، أزرار) = خط الهوية بدور «نص»
+                // — خط واحد في التطبيق كله (طلب المالك ٢٠٢٦-١٠-٠٧)
+                .font(DS.Font.body)
                 .preferredColorScheme(preferredScheme)
                 // preferredColorScheme وحده لا يصل للشيتات والتنبيهات المقدَّمة من UIKit،
                 // فنفرض النمط على النافذة نفسها ليشمل كل ما يُعرض فوقها.
                 .onChange(of: appearanceMode) { _ in applyWindowStyle() }
-                .onAppear { applyWindowStyle() }
+                .onAppear {
+                    applyWindowStyle()
+                    // الضغط في أي مكان يُخفي لوحة المفاتيح (طلب المالك)
+                    KeyboardDismisser.shared.install()
+                    // لمسة إصبع من قرصة الشجرة على صورة شخص لا تُحسب ضغطة (طلب المالك ٢٠٢٦-١٠-٠٩)
+                    TreeTapGuard.install()
+                    // بلا اتصال: شاشة البداية فوق التطبيق حتى يرجع (طلب المالك ٢٠٢٦-١٠-٠٨)
+                    OfflineHold.shared.install(authVM: appState.authVM)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .networkRestoredAfterHold)) { _ in
+                    Task {
+                        await self.appState.authVM.checkUserProfile()
+                        guard self.appState.authVM.status == .fullyAuthenticated else { return }
+                        async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
+                        async let n: () = self.appState.newsVM.fetchNews(force: true)
+                        async let notif: () = self.appState.notificationVM.fetchNotifications(force: true)
+                        _ = await (m, n, notif)
+                    }
+                }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                     Task {
                         try? await UNUserNotificationCenter.current().setBadgeCount(0)
@@ -94,6 +114,14 @@ struct FamilyTreeV2App: App {
                           let requestId   = UUID(uuidString: idString),
                           let requestType = userInfo["request_type"] as? String else { return }
 
+                    // «مسار الموافقات» شغّال: لا قبول سريع من الإشعار لأنواع المسار (الانضمام كان يتجاوز
+                    // حارس السيرفر) — يُفتح الطلب في «طلبات المراجعة» ليمشي بخطوات دوره
+                    if self.appState.adminRequestVM.approvalsWorkflowOn,
+                       ApprovalWorkflow.specialistRole(for: requestType) != nil {
+                        Self.openAdminReview()
+                        return
+                    }
+
                     // طلبات الانضمام/الربط: ما نوافق مباشرة — نفتح شيت التطابقات
                     // عشان المدير يقرر: ربط بعضو موجود أو موافقة كعضو جديد.
                     let isJoinOrLink = requestType == "join_request" || requestType == "link_request"
@@ -108,9 +136,9 @@ struct FamilyTreeV2App: App {
                         return
                     }
 
-                    // باقي أنواع الطلبات: موافقة مباشرة كالسابق
+                    // باقي أنواع الطلبات: موافقة كاملة تطبّق التعديل (لا تغيير الحالة فقط)
                     Task {
-                        let ok = await self.appState.notificationVM.approveRequest(requestId: requestId, requestType: requestType)
+                        let ok = await self.appState.adminRequestVM.approveFromPush(requestId: requestId, requestType: requestType)
                         if ok {
                             async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
                             async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
@@ -118,34 +146,31 @@ struct FamilyTreeV2App: App {
                         }
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .didTapRejectRequestAction)) { note in
-                    guard let userInfo    = note.userInfo,
-                          let idString    = userInfo["request_id"]   as? String,
-                          let requestId   = UUID(uuidString: idString),
-                          let requestType = userInfo["request_type"] as? String else { return }
-                    Task {
-                        let ok = await self.appState.notificationVM.rejectRequest(requestId: requestId, requestType: requestType)
-                        if ok {
-                            async let n: () = self.appState.notificationVM.fetchNotifications(force: true)
-                            async let m: () = self.appState.memberVM.fetchAllMembers(force: true)
-                            _ = await (n, m)
-                        }
-                    }
-                }
+                // لا «رفض» من شاشة القفل (فحص الثغرات ب-١): كان يفصل الأبناء ثم يحذف بلا تحقق
+                // أن الطلب معلّق، وللمراقب والمشرف، بلا تأكيد، والأخطاء مخفية. الإشعار يفتح المراجعة.
                 .onReceive(NotificationCenter.default.publisher(for: .didTapOpenRequestAction)) { note in
                     // طلبات الانضمام/الربط: نفتح مركز الإشعارات + شيت التفاصيل (لرؤية التطابقات)
-                    // باقي الطلبات: نفتح تاب الإدارة كالسابق
+                    // باقي الطلبات: تاب الإدارة ثم «طلبات المراجعة» نفسها (القبول/الرفض بتأكيد من هناك)
                     let userInfo = note.userInfo ?? [:]
                     let requestType = userInfo["request_type"] as? String
                     let requestIdString = userInfo["request_id"] as? String
                     let isJoinOrLink = requestType == "join_request" || requestType == "link_request"
+                    // «مسار الموافقات» شغّال: الانضمام أيضاً يُفتح في «طلبات المراجعة» (لا ربط مباشر من الإشعار)
+                    let workflowOn = self.appState.adminRequestVM.approvalsWorkflowOn
 
-                    if isJoinOrLink, let rid = requestIdString.flatMap(UUID.init(uuidString:)) {
+                    if isJoinOrLink, !workflowOn, let rid = requestIdString.flatMap(UUID.init(uuidString:)) {
                         // خزّن الـ requestId عشان NotificationsCenterView يفتح الشيت تلقائياً
                         self.appState.notificationVM.pendingJoinDeepLinkRequestId = rid
                         NotificationCenter.default.post(name: .openHomeNotificationsCenter, object: nil)
                     } else {
                         NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+                        // بعد ظهور تاب الإدارة: ادفع شاشة «طلبات المراجعة» (نفس مهلة صلة القرابة)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            NotificationCenter.default.post(
+                                name: .openAdminReviewForKind, object: nil,
+                                userInfo: ["kind": NotificationKind.adminRequest.rawValue]
+                            )
+                        }
                     }
 
                     Task {
@@ -189,10 +214,10 @@ struct FamilyTreeV2App: App {
                     pathIds.append(currentUser.id)
                     pathIds.append(member.id)
 
-                    // مهلة قصيرة حتى تجهز الشجرة قبل إبراز المسار
+                    // مهلة قصيرة حتى تجهز الواجهة — ثم تاب الشجرة يفتح ويرسم المسار
                     try? await Task.sleep(nanoseconds: 500_000_000)
                     NotificationCenter.default.post(
-                        name: .showKinshipPath,
+                        name: .requestKinshipPath,
                         object: nil,
                         userInfo: [
                             "memberId": member.id,
