@@ -5,7 +5,9 @@ import PDFKit
 // MARK: - تقارير العائلة (PDF) — «رسمي بهوية العائلة» (طلب المالك ٢٠٢٦-١٠-٢٠)
 //
 // بيتها الواحد «العائلة ← ⋯ ← تصدير» (والصفّ نفسه في البحث الشامل) — للمالك والمدير (`isAdmin`) كما كان التصدير.
-// من الأعلى: رأس كحلي ← بطاقة «التقرير»: أربع بطاقات نوع (بلا تبويبات علوية) وتحتها سطر شرائح واحد قصير يخص النوع
+// من الأعلى: رأس كحلي ← بطاقة «التقرير»: صفّ واحد من أربع «صفحات» صغيرة (طلب المالك «ابسط و اصغر و شي مبدع»:
+// ورقة بطرف مطويّ وشريط كحلي بسدو ذهبي ورمز النوع، وتحتها اسم قصير — العنوان الكامل في سطر المعاينة؛ بلا تبويبات علوية)
+// وتحتها سطر شرائح واحد قصير يخص النوع
 // («نطوّر فلاتر التقارير بشكل مبسط»): سجل العائلة «كل الفروع ⌄» + الكل · أحياء · متوفون — الهواتف الكل · مسجّلون ·
 // بلا رقم هاتف — المتوفون الكل · التاريخ غير مكتمل — الملخّص بلا تصفية. الافتراضي تقرير مفيد بلا أي ضغطة.
 // ← «المعاينة»: سطر النطاق («سجل العائلة · كل الفروع · أحياء — 2,344 فرداً») وصور أول الصفحات (الضغط يفتح الملف
@@ -25,7 +27,9 @@ struct AdminReportsView: View {
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var accounts = AdminAccountsStore.shared
-    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// أقلّ عرض لخانة الصفحة — يكبر مع حجم النص حتى يتّسع الاسم تحتها
+    @ScaledMetric(relativeTo: .footnote) private var tileWidth: CGFloat = AdminReportsLayout.tileWidth
 
     /// nil = كل العائلة، وإلا ما صُدّر من صفحة الأعضاء
     private let scope: AdminReportScope?
@@ -141,7 +145,7 @@ struct AdminReportsView: View {
 
     private var pickerCard: some View {
         AdminSectionCard(title: L10n.t("التقرير", "Report"), spacing: DS.Spacing.md) {
-            typeGrid
+            typeRow
             if kind != .stats {
                 AdminRowDivider()
                 filterRow
@@ -155,24 +159,40 @@ struct AdminReportsView: View {
         }
     }
 
-    private var typeGrid: some View {
-        let cols = typeSize.isAccessibilitySize ? 1 : 2
-        let kinds = AdminReportKind.allCases
-        return VStack(spacing: DS.Spacing.sm) {
-            ForEach(Array(stride(from: 0, to: kinds.count, by: cols)), id: \.self) { start in
-                HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                    ForEach(kinds[start..<min(start + cols, kinds.count)]) { k in
-                        AdminReportTypeCard(kind: k, selected: k == kind) { select(k) }
-                    }
+    /// صفّ واحد دائماً: يملأ العرض إن اتّسع، وإلا (نص كبير جداً) يُمرَّر أفقياً ويظهر المختار
+    private var typeRow: some View {
+        ViewThatFits(in: .horizontal) {
+            typeTiles(fill: true)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    typeTiles(fill: false)
+                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.horizontal, DS.Spacing.md)
                 }
+                // حشوة التمرير تتّسع لظلّ المختار (ScrollView يقصّ ما خرج عنه) دون أن تكبر المسافات
+                .padding(.vertical, -DS.Spacing.md)
+                .padding(.horizontal, -DS.Spacing.md)
+                .onAppear { proxy.scrollTo(kind, anchor: .center) }
             }
         }
+    }
+
+    private func typeTiles(fill: Bool) -> some View {
+        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            ForEach(AdminReportKind.allCases) { k in
+                AdminReportTypeCard(kind: k, selected: k == kind) { select(k) }
+                    .frame(minWidth: tileWidth, maxWidth: fill ? .infinity : nil)
+                    .id(k)
+            }
+        }
+        // مكان لرفعة المختار
+        .padding(.vertical, DS.Spacing.xs)
     }
 
     private func select(_ k: AdminReportKind) {
         guard k != kind else { return }
         UISelectionFeedbackGenerator().selectionChanged()
-        withAnimation(DS.Anim.snappy) { kind = k }
+        withAnimation(reduceMotion ? nil : DS.Anim.snappy) { kind = k }
     }
 
     /// سطر واحد قصير يخص النوع — يُمرَّر أفقياً إن ضاق
@@ -388,14 +408,42 @@ struct AdminReportsView: View {
 enum AdminReportsLayout {
     /// عرض صورة الصفحة في المعاينة
     static let thumbWidth: CGFloat = 132
+
+    // «صفحة» نوع التقرير في الصفّ الواحد
+    /// أقلّ عرض لخانة النوع عند حجم النص الافتراضي (يكبر مع النص)
+    static let tileWidth: CGFloat = 64
+    /// الورقة الصغيرة (قريبة من نسبة A4)
+    static let pageSize = CGSize(width: 54, height: 70)
+    /// زوايا الورقة
+    static let pageRadius: CGFloat = 5
+    /// الطرف المطويّ (أعلى الطرف الآخر من بداية القراءة)
+    static let pageFold: CGFloat = 12
+    /// الشريط الكحلي أعلى الورقة (مثل شريط صفحات الملف)
+    static let pageBand: CGFloat = 13
+    /// رفعة المختار
+    static let liftScale: CGFloat = 1.05
 }
 
-// MARK: - بطاقة نوع التقرير
+// MARK: - «صفحة» نوع التقرير
 
+/// ورقة صغيرة بطرف مطويّ وشريط كحلي بسدو ذهبي ورمز النوع، وتحتها اسم قصير.
+/// المختارة ترتفع قليلاً بظلّ ناعم وإطار ذهبي و«تمتلئ» بلون النوع من الأسفل؛ غيرها هادئة مسطّحة.
+/// مع «تقليل الحركة»: بلا رفعة ولا نابض — يتبدّل اللون والإطار مباشرة.
 struct AdminReportTypeCard: View {
     let kind: AdminReportKind
     let selected: Bool
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// الاسم القصير تحت الورقة — العنوان الكامل في سطر المعاينة
+    static func shortTitle(_ kind: AdminReportKind) -> String {
+        switch kind {
+        case .register: return L10n.t("السجل", "Register")
+        case .stats: return L10n.t("الملخّص", "Summary")
+        case .memorial: return L10n.t("المتوفون", "Deceased")
+        case .phones: return L10n.t("الهواتف", "Phones")
+        }
+    }
 
     static func title(_ kind: AdminReportKind) -> String {
         switch kind {
@@ -435,42 +483,131 @@ struct AdminReportTypeCard: View {
     }
 
     var body: some View {
-        let tint = Self.tint(kind)
-        let shape = RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous)
-        return Button(action: action) {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                HStack(alignment: .top) {
-                    AdminIconSquare(symbol: Self.icon(kind), tint: tint, filled: selected, glyph: DS.Glyph.lg)
-                    Spacer(minLength: DS.Spacing.xs)
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .dsGlyph(DS.Glyph.xl, weight: .semibold)
-                        .foregroundColor(selected ? tint.dsReadableGlyph : DS.Color.textTertiary.opacity(DS.Opacity.tintStroke))
-                        .accessibilityHidden(true)
-                }
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(Self.title(kind))
-                        .dsFont(.headline)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(Self.blurb(kind))
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
+        Button(action: action) {
+            VStack(spacing: DS.Spacing.xsm) {
+                page
+                Text(Self.shortTitle(kind))
+                    .dsFont(.chipCompact)
+                    .foregroundColor(selected ? DS.Color.textPrimary : DS.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(DS.Spacing.md)
-            .frame(maxWidth: .infinity, minHeight: DS.Hub.tileMinHeight, alignment: .topLeading)
-            .background(shape.fill(selected ? tint.dsReadableGlyph.opacity(DS.Opacity.tintFill) : DS.Color.background))
-            .overlay(shape.strokeBorder(selected ? tint.dsReadableGlyph.opacity(DS.Opacity.selectedStroke)
-                                                 : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
-                                        lineWidth: selected ? DS.Border.widthBold : DS.Border.width))
-            .contentShape(shape)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSPressStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(Self.title(kind))، \(Self.blurb(kind))")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var page: some View {
+        let size = AdminReportsLayout.pageSize
+        let band = AdminReportsLayout.pageBand
+        let shape = AdminReportPageShape(fold: AdminReportsLayout.pageFold, radius: AdminReportsLayout.pageRadius)
+        let ink = Self.tint(kind).dsReadableGlyph
+        let lifted = selected && !reduceMotion
+        return ZStack {
+            // «تمتلئ» الورقة بلون النوع من الأسفل
+            shape.fill(DS.Color.surfaceElevated)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(ink.opacity(DS.Opacity.tintFillStrong))
+                        .frame(height: selected ? size.height - band : 0)
+                }
+                .clipShape(shape)
+            AdminReportPageArt()
+            shape.stroke(selected ? DS.Color.accentLight : DS.Color.textTertiary.opacity(DS.Opacity.tintStroke),
+                         lineWidth: selected ? DS.Border.widthBold : DS.Border.width)
+        }
+        .frame(width: size.width, height: size.height)
+        // الطرف المطويّ عند نهاية سطر القراءة (يسار في العربي)
+        .flipsForRightToLeftLayoutDirection(true)
+        .overlay(
+            Image(systemName: Self.icon(kind))
+                .dsGlyph(DS.Glyph.xl, weight: .semibold)
+                .foregroundColor(ink)
+                .padding(.top, band)
+        )
+        .shadow(color: selected ? DS.Shadow.glow.color : .clear,
+                radius: DS.Shadow.glow.radius, x: DS.Shadow.glow.x, y: DS.Shadow.glow.y)
+        .scaleEffect(lifted ? AdminReportsLayout.liftScale : 1)
+        .animation(reduceMotion ? nil : DS.Anim.bouncy, value: selected)
+    }
+}
+
+/// الورقة: مستطيل مدوّر زاويته العليا اليمنى (قبل قلب العربي) مقصوصة قطرياً للطرف المطويّ
+struct AdminReportPageShape: Shape {
+    let fold: CGFloat
+    let radius: CGFloat
+
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX + radius, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX - fold, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + fold))
+        p.addArc(tangent1End: CGPoint(x: r.maxX, y: r.maxY), tangent2End: CGPoint(x: r.minX, y: r.maxY), radius: radius)
+        p.addArc(tangent1End: CGPoint(x: r.minX, y: r.maxY), tangent2End: CGPoint(x: r.minX, y: r.minY), radius: radius)
+        p.addArc(tangent1End: CGPoint(x: r.minX, y: r.minY), tangent2End: CGPoint(x: r.maxX, y: r.minY), radius: radius)
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// رسم الورقة: الشريط الكحلي (كحلي العلامة — يبان في الداكن) وخطّه الذهبي وسدو صغير (خطّان وخمسة معيّنات، الأوسط أكبر — شكل سدو الملف نفسه)
+/// والطرف المطويّ فوقه. رسم ثابت بلا حركة، مخفي عن القارئ الصوتي.
+private struct AdminReportPageArt: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let fold = AdminReportsLayout.pageFold
+            let band = AdminReportsLayout.pageBand
+            let rect = CGRect(origin: .zero, size: size)
+            let page = AdminReportPageShape(fold: fold, radius: AdminReportsLayout.pageRadius).path(in: rect)
+            let gold = DS.Color.accentLight
+
+            var inside = ctx
+            inside.clip(to: page)
+            inside.fill(Path(CGRect(x: 0, y: 0, width: size.width, height: band)), with: .color(DS.Color.brandFill))
+            inside.fill(Path(CGRect(x: 0, y: band, width: size.width, height: 0.8)), with: .color(gold))
+
+            // السدو في وسط الجزء الظاهر من الشريط
+            let unit: CGFloat = 1.7
+            let diamonds: [CGFloat] = [unit, unit, unit * 1.5, unit, unit]
+            let gap = unit * 1.15
+            let width = diamonds.reduce(0, +) + gap * 4
+            let cx = (size.width - fold) / 2
+            let cy = band / 2
+            var x = cx - width / 2
+            for (i, d) in diamonds.enumerated() {
+                let c = CGPoint(x: x + d / 2, y: cy)
+                let r = d / 2 * 1.2
+                var dp = Path()
+                dp.move(to: CGPoint(x: c.x, y: c.y - r))
+                dp.addLine(to: CGPoint(x: c.x + r, y: c.y))
+                dp.addLine(to: CGPoint(x: c.x, y: c.y + r))
+                dp.addLine(to: CGPoint(x: c.x - r, y: c.y))
+                dp.closeSubpath()
+                inside.fill(dp, with: .color(gold.opacity(i == 2 ? 1 : 0.75)))
+                x += d + gap
+            }
+            let lineGap = unit * 1.6
+            let lineLength: CGFloat = 5
+            let line = Path(CGRect(x: cx - width / 2 - lineGap - lineLength, y: cy - 0.3, width: lineLength, height: 0.6))
+            inside.fill(line, with: .color(gold.opacity(0.6)))
+            inside.fill(Path(CGRect(x: cx + width / 2 + lineGap, y: cy - 0.3, width: lineLength, height: 0.6)),
+                        with: .color(gold.opacity(0.6)))
+
+            // الطرف المطويّ: مثلث بلون ظهر الورقة فوق زاوية الشريط
+            var flap = Path()
+            flap.move(to: CGPoint(x: size.width - fold, y: 0))
+            flap.addLine(to: CGPoint(x: size.width - fold, y: fold))
+            flap.addLine(to: CGPoint(x: size.width, y: fold))
+            flap.closeSubpath()
+            ctx.fill(flap, with: .color(DS.Color.cardBorder))
+            ctx.stroke(flap, with: .color(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke)), lineWidth: 0.6)
+        }
+        .accessibilityHidden(true)
     }
 }
 
