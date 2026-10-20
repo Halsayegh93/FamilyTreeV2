@@ -572,7 +572,7 @@ struct AdminOccasionsPublishedCard: View {
 /// «تصل الإشعارات إلى N جهازاً · P٪» ← الفريق والأمان ← «الأجهزة ووصول الإشعارات»، و«N متوفى تاريخ وفاته غير مكتمل» ← العائلة ←
 /// متوفون ← غير مكتمل. لا أوامر هنا — البيت هناك
 struct AdminOccasionsNumbersCard: View {
-    /// «تصلها الإشعارات» = رمز صالح ومحدَّث خلال ٣٠ يوماً — نفس رقم «الأجهزة ووصول الإشعارات» ورأس «الفريق والأمان»
+    /// «تصلها الإشعارات» = تسجيل صالح (الفاشل وحده لا تصله — الدفعة ١٤) — نفس رقم «الأجهزة ووصول الإشعارات» ورأس «الفريق والأمان»
     @ObservedObject private var devices = AdminDeviceReachStore.shared
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var memberVM: MemberViewModel

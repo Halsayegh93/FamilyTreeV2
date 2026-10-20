@@ -8,7 +8,8 @@ import Combine
 // (اليوم · أمس · التاريخ):
 //   • «يحتاج إجراء»: ما يُشتقّ من حالة حقيقية الآن (وفاة لم يُعلن عنها، مشكلات الشجرة للمراقب، خلل في إعداد قاعدة
 //     البيانات — `AdminNoticeStore` يغذّيه «اليوم») + إشعارات الطلبات التي ما زالت معلّقة؛ كلٌّ بزرّ صغير لبيته الوحيد
-//     (مراجعة ← الوارد على الطلب، إعلان ← المناسبات «القادم»، شحن الرصيد ← رسائل رمز الدخول).
+//     (مراجعة ← الوارد على الطلب، إعلان ← المناسبات «القادم»، شحن الرصيد ← رسائل رمز الدخول)، و«محاولات دخول مريبة»
+//     (`sms_suspicious` — الدفعة ١٤) بزرّ «راجع» ← «طلبات رمز الدخول».
 //   • «نشاط الفريق»: سجل التعديلات نفسه (من عدّل ماذا ومتى، قبل ← بعد في مربّع التفاصيل).
 //   • «النظام»: تنبيهات رصيد رسائل الدخول.
 // البحث الواحد هنا (كان في «سجل التعديلات»)، والسحب: «مقروء» و«حذف» (كل عضو يحذف نسخته)، و«تحديد» للقراءة والحذف معاً.
@@ -86,8 +87,16 @@ enum AdminNotices {
 
     static let teamKinds: Set<String> = memberKinds.union(womenKinds).union(contentKinds)
 
-    /// تنبيهات النظام (رصيد رسائل رمز الدخول من `kwtsms_low_balance_alert`)
-    static let systemKinds: Set<String> = ["sms_balance_low"]
+    /// «رصيد رسائل الدخول منخفض» (`kwtsms_low_balance_alert`) و«محاولات دخول مريبة» (`log_login_attempt`) — للمالك والمدير
+    static let smsBalanceLow = "sms_balance_low"
+    static let smsSuspicious = "sms_suspicious"
+    /// أنواع KWT SMS — نقر إشعارها يفتح صفحتها في لوحة الإدارة
+    static let smsKinds: Set<String> = [smsBalanceLow, smsSuspicious]
+
+    /// تنبيهات النظام (رصيد رسائل رمز الدخول)
+    static let systemKinds: Set<String> = [smsBalanceLow]
+    /// تنبيهات أمنية تحتاج مراجعة («يحتاج إجراء» بزرّ «راجع»)
+    static let securityKinds: Set<String> = [smsSuspicious]
 
     /// «مسار الموافقات» يرسل لصاحب الطلب بهذه العناوين (`approvals_v2`) — تخصّه هو فتبقى في مركز الإشعارات
     private static let requesterTitles = [
@@ -96,11 +105,13 @@ enum AdminNotices {
 
     /// تصنيف الإشعار للإدارة — nil = ليس إداريّاً (مكانه مركز الإشعارات). يُسأل للإدارة فقط (`canModerate`)
     static func category(of n: AppNotification, me: UUID?) -> Category? {
+        // تنبيهات KWT SMS إدارية دائماً (تصل المالك والمدير فقط) — قبل قاعدة «ما يخصّني»
+        if securityKinds.contains(n.kind) { return .action }
+        if systemKinds.contains(n.kind) { return .system }
         // ما يخصّني أنا (تعديل على بياناتي، طلب عنّي) يبقى في «الإشعارات» — كما كان
         if let me, n.subjectMemberId == me, n.createdBy != me { return nil }
         if requestKinds.contains(n.kind) { return .action }
         if teamKinds.contains(n.kind) { return .team }
-        if systemKinds.contains(n.kind) { return .system }
         if n.kind == NotificationKind.admin.rawValue, n.details?.type == "approval_workflow",
            !requesterTitles.contains(where: { n.title.hasPrefix($0) }) {
             return .action
@@ -123,6 +134,8 @@ enum AdminNoticeTarget: Equatable {
     case messages
     case occasions
     case sms
+    /// «طلبات رمز الدخول» كاملة (محاولات دخول مريبة)
+    case smsAttempts
     case treeProblems
 }
 
@@ -205,6 +218,7 @@ enum AdminNoticeRoutes {
         case .messages:        return AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox))
         case .occasions:       return AnyView(AdminOccasionsPage().adminArea(.occasions).adminBackTitle(back))
         case .sms:             return AnyView(AdminSmsView(backTitle: back).adminArea(.team))
+        case .smsAttempts:     return AnyView(SmsAttemptsListPage().adminBackTitle(back).adminArea(.team))
         case .treeProblems:    return AnyView(AdminMembersPage(chip: .problems).adminArea(.family))
         }
     }
@@ -217,6 +231,7 @@ enum AdminNoticeRoutes {
             return ("ellipsis.message.fill", DS.Color.warning)
         case .action:
             switch kind {
+            case AdminNotices.smsSuspicious:                   return ("exclamationmark.shield.fill", DS.Color.error)
             case "join_request", NotificationKind.linkRequest.rawValue, NotificationKind.childAdd.rawValue:
                 return ("person.badge.plus", DS.Color.info)
             case NotificationKind.treeEdit.rawValue:           return ("pencil.circle.fill", DS.Color.palm)
@@ -352,11 +367,12 @@ struct AdminNotificationsPage: View {
     private var allItems: [AdminNoticeItem] {
         let me = authVM.currentUser?.id
         let open = openRequestIds
-        let canTopUp = authVM.canViewSystemSettings && sms.needsTopUp
+        let canSms = authVM.canViewSystemSettings
+        let canTopUp = canSms && sms.needsTopUp
         var list = store.derived
         for n in notificationVM.notifications {
             guard let category = AdminNotices.category(of: n, me: me) else { continue }
-            list.append(Self.item(n, category: category, open: open, canTopUp: canTopUp))
+            list.append(Self.item(n, category: category, open: open, canTopUp: canTopUp, canSms: canSms))
         }
         return list.sorted { a, b in
             if a.pinned != b.pinned { return a.pinned }
@@ -365,12 +381,19 @@ struct AdminNotificationsPage: View {
     }
 
     private static func item(_ n: AppNotification, category: AdminNotices.Category, open: Set<UUID>,
-                             canTopUp: Bool) -> AdminNoticeItem {
+                             canTopUp: Bool, canSms: Bool) -> AdminNoticeItem {
         let style = AdminNoticeRoutes.style(n, category)
         var item = AdminNoticeItem(id: n.id.uuidString, category: category, date: n.createdDate,
                                    icon: style.icon, tint: style.tint, title: n.title, subtitle: n.body,
                                    isUnread: !n.read, notificationId: n.id)
         switch category {
+        case .action where n.kind == AdminNotices.smsSuspicious:
+            // محاولات دخول مريبة: تحتاج إجراء ما دامت غير مقروءة، و«راجع» يبقى ← «طلبات رمز الدخول»
+            item.needsAction = !n.read
+            if canSms {
+                item.button = L10n.t("راجع", "Review")
+                item.target = .smsAttempts
+            }
         case .action:
             // معرّف الطلب معروف: يحتاج إجراء ما دام معلّقاً؛ وإلا ما دام غير مقروء
             let rid = AdminNotices.requestId(of: n)
@@ -602,8 +625,9 @@ struct AdminNotificationsPage: View {
         let category = AdminNotices.category(of: n, me: authVM.currentUser?.id) ?? .system
         let style = AdminNoticeRoutes.style(n, category)
         let kind: Filter = category == .action ? .action : category == .team ? .team : .system
+        let actionTitle = AdminNotices.securityKinds.contains(n.kind) ? L10n.t("تنبيه أمني", "Security alert") : L10n.t("طلب", "Request")
         return AdminNoticeDetailBox(item: n, icon: style.icon, tint: style.tint,
-                                    categoryTitle: category == .action ? L10n.t("طلب", "Request") : kind.title,
+                                    categoryTitle: category == .action ? actionTitle : kind.title,
                                     categoryIcon: kind.icon)
             .environmentObject(memberVM)
     }

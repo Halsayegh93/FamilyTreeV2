@@ -12,6 +12,11 @@ import Combine
 // عضو» (انتقل من شروط التسجيل؛ المالك يعدّل) ← «الأدوات» (إرسال إشعار تجريبي · حذف التسجيلات غير الصالحة) ← رقم
 // «أعضاء مسجّلون لا تصلهم الإشعارات ↗» (شريحة العائلة) ← «الأجهزة حسب العضو» مطويّة بلا بحث — الضغط على عضو يفتح
 // ورقته، وفيها أجهزته وتسجيل خروجها (بيت الأمر الوحيد، `canManageDevices`). نفس النداءات والحذف والصلاحيات.
+//
+// الدفعة ١٤ (طلب المالك «تم غير»): «لا تصلها الإشعارات» = التسجيلات الفاشلة فقط — تنبيه «بلا إشعارات» في «حالة النظام» يعدّها
+// وحدها. ما يرفضه Apple/Google عند الإرسال (APNs 410، FCM UNREGISTERED) يحذفه `push-on-notification` فوراً، ولا يُحفظ
+// سجلّ لرفض الإرسال على السيرفر — فالفاشل الباقي الذي نعرفه يقيناً هو التسجيل الفارغ أو الناقص (لا يُرسل له شيء أصلاً).
+// «لم يُفتح التطبيق منذ 30 يوماً» معلومة في هذه الصفحة فقط، لا تنبيه: رمزها صالح والإشعارات تصلها.
 
 /// جهاز مسجّل للإشعارات (`device_tokens`) — صفّ واحد لكل جهاز
 struct AdminDeviceRow: Decodable, Identifiable, Equatable {
@@ -31,9 +36,9 @@ struct AdminDeviceRow: Decodable, Identifiable, Equatable {
     }
 
     var updatedDate: Date? { AdminDeviceReachStore.date(updatedAt) }
-    /// رمز تسجيل صالح (أطول من ٢٠ حرفاً — نفس تعريف «صحة الرموز» السابق)
-    var isValid: Bool { (token ?? "").count > 20 }
-    /// لم يُحدَّث منذ ٣٠ يوماً (أو بلا تاريخ)
+    /// رمز تسجيل صالح (أطول من ٢٠ حرفاً — نفس شرط `push-on-notification`؛ الأقصر لا يُرسل له شيء = تسجيل فاشل)
+    var isValid: Bool { (token ?? "").trimmingCharacters(in: .whitespacesAndNewlines).count > 20 }
+    /// لم يُفتح التطبيق عليه منذ ٣٠ يوماً (أو بلا تاريخ) — معلومة فقط، الإشعارات تصله ما دام رمزه صالحاً
     var isStale: Bool {
         guard let d = updatedDate else { return true }
         return d < Date().addingTimeInterval(-30 * 86400)
@@ -49,11 +54,11 @@ struct AdminDeviceRow: Decodable, Identifiable, Equatable {
 /// أرقام الصفحة المحسوبة من الأجهزة المحمّلة
 struct AdminDeviceReachStats {
     let total: Int
-    /// صالح ومحدَّث خلال ٣٠ يوماً
+    /// تسجيل صالح — تصله الإشعارات (ما رفضه Apple/Google يُحذف عند الإرسال فلا يبقى هنا)
     let reach: Int
-    /// صالح لكن لم يُحدَّث منذ ٣٠ يوماً — قد لا تصله
+    /// صالح لكن لم يُفتح التطبيق عليه منذ ٣٠ يوماً — معلومة فقط (ضمن `reach`)
     let stale: Int
-    /// رمز فارغ أو ناقص — لا تصله
+    /// تسجيل فاشل: رمز فارغ أو ناقص — لا يصله شيء. هذا وحده رقم «بلا إشعارات» في «حالة النظام»
     let invalid: Int
     let iphone: Int
     let android: Int
@@ -70,7 +75,7 @@ struct AdminDeviceReachStats {
         total = rows.count
         invalid = rows.filter { !$0.isValid }.count
         stale = rows.filter { $0.isValid && $0.isStale }.count
-        reach = total - invalid - stale
+        reach = total - invalid
         android = rows.filter(\.isAndroid).count
         iphone = total - android
         testBuild = rows.filter(\.isTestBuild).count
@@ -95,6 +100,8 @@ final class AdminDeviceReachStore: ObservableObject {
     @Published private(set) var loadedAt: Date?
 
     var stats: AdminDeviceReachStats? { rows.map(AdminDeviceReachStats.init) }
+    /// التسجيلات الفاشلة (لا تصلها الإشعارات) — قائمتها في الصفحة مع «حذف التسجيلات غير الصالحة»
+    var failingRows: [AdminDeviceRow] { (rows ?? []).filter { !$0.isValid } }
 
     /// جلب الأجهزة وآخر إشعار — مرة كل دقيقة على الأكثر ما لم يُطلب
     func refresh(force: Bool = false) async {
@@ -185,9 +192,9 @@ struct AdminPushHealthView: View {
                 AdminPageKPI(s.map { "\($0.total)" } ?? "—", L10n.t("الأجهزة المرتبطة", "Linked devices"), icon: "iphone"),
                 AdminPageKPI(s.map { "\($0.reach)" } ?? "—", L10n.t("تصلها الإشعارات", "Reached"),
                              icon: "bell.badge.fill", tint: DS.Hub.kpiMine),
-                AdminPageKPI(s.map { "\($0.stale)" } ?? "—", L10n.t("لم تُحدَّث منذ 30 يوماً", "Not updated in 30 days"),
-                             icon: "clock.badge.exclamationmark",
-                             tint: (s?.stale ?? 0) > 0 ? DS.Hub.kpiLate : DS.Color.textOnPrimary)
+                AdminPageKPI(s.map { "\($0.invalid)" } ?? "—", L10n.t("لا تصلها الإشعارات", "Not reached"),
+                             icon: "bell.slash.fill",
+                             tint: (s?.invalid ?? 0) > 0 ? DS.Hub.kpiLate : DS.Color.textOnPrimary)
             ])
     }
 
@@ -212,7 +219,9 @@ struct AdminPushHealthView: View {
                 AnyView(limitCard(nil))
             })
         }
+        let failing = store.failingRows
         return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing, alignment: .leading) {
+            if !failing.isEmpty { AnyView(failingCard(failing)) }
             AnyView(devicesCard(s))
             AnyView(limitCard(s))
             AnyView(toolsCard(s))
@@ -222,13 +231,12 @@ struct AdminPushHealthView: View {
         })
     }
 
-    /// «تسجيل الأجهزة للإشعارات»: الحلقة الموحّدة (الدفعة ١٠) — تصلها · لم تُحدَّث · غير مسجّلة بألوان المعنى والنسبة في وسطها،
-    /// ثم الصفوف الثلاثة بأعدادها
+    /// «تسجيل الأجهزة للإشعارات»: الحلقة الموحّدة (الدفعة ١٠) — تصلها · لا تصلها (تسجيل فاشل) بألوان المعنى والنسبة في وسطها،
+    /// ثم الصفّان بأعدادهما، و«لم يُفتح التطبيق منذ 30 يوماً» معلومة محايدة (الدفعة ١٤ — ليست تنبيهاً)
     private func registrationCard(_ s: AdminDeviceReachStats) -> some View {
-        let parts = DSGaugePart.counts([("reach", s.reach, DS.Color.success), ("stale", s.stale, DS.Color.warning),
-                                        ("invalid", s.invalid, DS.Color.error)])
-        let line = L10n.t("\(s.reach) من \(s.total) جهازاً — رمز صالح ومحدَّث خلال 30 يوماً",
-                          "\(s.reach) of \(s.total) devices — a valid token refreshed within 30 days")
+        let parts = DSGaugePart.counts([("reach", s.reach, DS.Color.success), ("invalid", s.invalid, DS.Color.error)])
+        let line = L10n.t("\(s.reach) من \(s.total) جهازاً — تسجيل صالح تصله الإشعارات",
+                          "\(s.reach) of \(s.total) devices — a valid registration that notifications reach")
         return AdminSectionCard(title: L10n.t("تسجيل الأجهزة للإشعارات", "Device registration for notifications")) {
             DSGaugeRow(gauge: DSRingGauge(parts: parts, size: DS.Ring.medium, track: DS.Ring.emptyTrack,
                                           center: .percent(s.total > 0 ? s.reachPercent : nil),
@@ -240,15 +248,80 @@ struct AdminPushHealthView: View {
                 AdminInfoRow(icon: "bell.badge.fill", tint: DS.Color.success,
                              title: L10n.t("تصلها الإشعارات", "Notifications reach them"),
                              trailing: AnyView(AdminRowValue(text: "\(s.reach)")))
-                AdminInfoRow(icon: "clock.badge.exclamationmark.fill", tint: DS.Color.warning,
-                             title: L10n.t("لم تُحدَّث منذ 30 يوماً", "Not updated in 30 days"),
-                             subtitle: L10n.t("قد لا تصلها — تُحدَّث عند فتح التطبيق", "May miss them — refreshed when the app opens"),
-                             trailing: AnyView(AdminRowValue(text: "\(s.stale)", tint: s.stale > 0 ? DS.Color.warning.dsReadableGlyph : DS.Color.textPrimary)))
                 AdminInfoRow(icon: "bell.slash.fill", tint: DS.Color.error,
-                             title: L10n.t("غير مسجّلة", "Not registered"),
-                             subtitle: L10n.t("تسجيل فارغ أو ناقص — لا تصلها", "Empty or truncated registration — not reached"),
+                             title: L10n.t("لا تصلها الإشعارات", "Not reached"),
+                             subtitle: L10n.t("تسجيل فاشل: رمز فارغ أو ناقص", "Failed registration: empty or truncated token"),
                              trailing: AnyView(AdminRowValue(text: "\(s.invalid)", tint: s.invalid > 0 ? DS.Color.error.dsReadableGlyph : DS.Color.textPrimary)))
+                AdminInfoRow(icon: "info.circle.fill", tint: DS.Color.info,
+                             title: L10n.t("لم يُفتح التطبيق منذ 30 يوماً", "App not opened in 30 days"),
+                             subtitle: L10n.t("للعلم فقط — الإشعارات تصلها ما دام تسجيلها صالحاً",
+                                              "For information only — notifications still reach them while the registration is valid"),
+                             trailing: AnyView(AdminRowValue(text: "\(s.stale)")))
             }
+        }
+    }
+
+    /// «أجهزة لا تصلها الإشعارات» (تظهر حين يوجد تسجيل فاشل فقط): جهاز لكل صفّ — العضو يفتح ورقته — ثم «حذف التسجيلات
+    /// غير الصالحة» (بيت الحذف حين توجد؛ وإلا يبقى في «الأدوات»)
+    private func failingCard(_ rows: [AdminDeviceRow]) -> some View {
+        let ids = groups.compactMap { $0.member?.id }
+        return AdminSectionCard(title: L10n.t("أجهزة لا تصلها الإشعارات", "Devices not reached"),
+                                badge: rows.count, badgeTint: DS.Color.error) {
+            AdminRowsCardBody {
+                ForEach(rows) { row in
+                    AnyView(failingRow(row, ids: ids))
+                }
+            }
+            cleanupButton(count: rows.count)
+            Text(L10n.t("تسجيل فارغ أو ناقص لا يُرسل له شيء — يعود صالحاً حين يفتح صاحبه التطبيق. ما ترفضه Apple أو Google عند الإرسال يُحذف تلقائياً.",
+                        "An empty or truncated registration gets nothing — it becomes valid again when its owner opens the app. Tokens Apple or Google reject at send time are removed automatically."))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func failingRow(_ row: AdminDeviceRow, ids: [UUID]) -> some View {
+        let member = memberVM.member(byId: row.memberId)
+        let name = member?.displayFullName ?? L10n.t("عضو غير معروف", "Unknown member")
+        let face = HStack(spacing: DS.Spacing.sm) {
+            DSMemberAvatar(name: name, avatarUrl: member?.avatarUrl, size: DS.Icon.row, roleColor: AppSection.admin.ink)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(name)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .dsNameLines()
+                Text(verbatim: "\(row.displayName) · \(relative(row.updatedDate))")
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: DS.Spacing.xs)
+            DSStatusChip(text: L10n.t("تسجيل فاشل", "Failed"), tint: DS.Color.error, size: .mini)
+            if member != nil { DSChevron() }
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+
+        return Group {
+            if let member, let start = ids.firstIndex(of: member.id) {
+                Button { sheet = AdminMemberSheetContext(ids: ids, start: start) } label: { face }
+                    .buttonStyle(.plain)
+            } else {
+                face
+            }
+        }
+    }
+
+    /// «حذف التسجيلات غير الصالحة» — زرّ واحد في الصفحة: في بطاقة الفاشلة حين توجد، وإلا في «الأدوات»
+    private func cleanupButton(count: Int) -> some View {
+        DSActionButton(title: count > 0
+                            ? L10n.t("حذف التسجيلات غير الصالحة (\(count))", "Delete invalid registrations (\(count))")
+                            : L10n.t("حذف التسجيلات غير الصالحة", "Delete invalid registrations"),
+                       icon: "trash.fill", tint: DS.Color.warning, isBusy: isCleaningUp) {
+            Task { await runCleanup() }
         }
     }
 
@@ -328,14 +401,13 @@ struct AdminPushHealthView: View {
                            isBusy: isSendingTest) {
                 Task { await sendTestPush() }
             }
-            DSActionButton(title: (s?.invalid ?? 0) > 0
-                                ? L10n.t("حذف التسجيلات غير الصالحة (\(s?.invalid ?? 0))", "Delete invalid registrations (\(s?.invalid ?? 0))")
-                                : L10n.t("حذف التسجيلات غير الصالحة", "Delete invalid registrations"),
-                           icon: "trash.fill", tint: DS.Color.warning, isBusy: isCleaningUp) {
-                Task { await runCleanup() }
-            }
-            Text(L10n.t("الإشعار التجريبي يصل جهازك أنت. الحذف للتسجيلات الفارغة أو الناقصة فقط — أجهزة من لم يفتح التطبيق منذ مدة تبقى حتى تصلهم الإشعارات.",
-                        "The test reaches your own device. Deleting removes empty or truncated registrations only — idle members' devices stay so they still get notifications."))
+            // حين توجد تسجيلات فاشلة يكون الحذف في بطاقتها (فوق) — زرّ واحد في الصفحة
+            let cleansHere = (s?.invalid ?? 0) == 0
+            if cleansHere { cleanupButton(count: 0) }
+            Text(cleansHere
+                 ? L10n.t("الإشعار التجريبي يصل جهازك أنت. الحذف للتسجيلات الفارغة أو الناقصة فقط — أجهزة من لم يفتح التطبيق منذ مدة تبقى حتى تصلهم الإشعارات.",
+                          "The test reaches your own device. Deleting removes empty or truncated registrations only — idle members' devices stay so they still get notifications.")
+                 : L10n.t("الإشعار التجريبي يصل جهازك أنت.", "The test reaches your own device."))
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -413,7 +485,7 @@ struct AdminPushHealthView: View {
                 DSStatusChip(text: L10n.t("اختبار", "Test"), icon: "hammer.fill", tint: DS.Color.warning, size: .mini)
             }
             if group.devices.contains(where: { !$0.isValid }) {
-                DSStatusChip(text: L10n.t("غير مسجّل", "Not registered"), tint: DS.Color.error, size: .mini)
+                DSStatusChip(text: L10n.t("تسجيل فاشل", "Failed"), tint: DS.Color.error, size: .mini)
             }
             AdminValueChip(text: "\(group.devices.count)", icon: "iphone", tint: group.devices.count > 1 ? DS.Color.warning : DS.Color.primary)
             if group.member != nil { DSChevron() }
@@ -478,7 +550,7 @@ struct AdminPushHealthView: View {
         await store.refresh(force: true)
     }
 
-    // MARK: - حذف التسجيلات غير الصالحة (فارغة أو أقصر من ٢٠ حرفاً — بصلاحية المالك/المدير على device_tokens، كما كان)
+    // MARK: - حذف التسجيلات غير الصالحة (فارغة أو ناقصة — نفس شرط `isValid`؛ بصلاحية المالك/المدير على device_tokens، كما كان)
 
     private func runCleanup() async {
         guard !isCleaningUp else { return }
@@ -489,7 +561,7 @@ struct AdminPushHealthView: View {
         do {
             let rows: [Row] = try await SupabaseConfig.client.from("device_tokens").select("id, token").execute().value
             let invalidIds = rows
-                .filter { ($0.token ?? "").trimmingCharacters(in: .whitespacesAndNewlines).count < 20 }
+                .filter { ($0.token ?? "").trimmingCharacters(in: .whitespacesAndNewlines).count <= 20 }
                 .map(\.id)
             if !invalidIds.isEmpty {
                 try await SupabaseConfig.client.from("device_tokens").delete().in("id", values: invalidIds).execute()

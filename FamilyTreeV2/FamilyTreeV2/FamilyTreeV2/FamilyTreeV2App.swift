@@ -38,6 +38,17 @@ struct FamilyTreeV2App: App {
         }
     }
 
+    /// نقر إشعار KWT SMS («رصيد رسائل الدخول منخفض»، «محاولات دخول مريبة») ← تاب الإدارة ثم صفحة الرسائل (ومحاولات الدخول
+    /// فوقها للمريبة). يصل المالك والمدير فقط، والتاب يتحقّق من الصلاحية
+    private static func routePushTap(_ object: Any?) {
+        guard let info = object as? [AnyHashable: Any], let kind = info["kind"] as? String,
+              AdminNotices.smsKinds.contains(kind) else { return }
+        NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil, userInfo: ["kind": kind])
+        }
+    }
+
     /// يفرض النمط على UIWindow — يضمن تطبيقه على الشيتات والتنبيهات أيضاً
     private func applyWindowStyle() {
         // المكان الواحد لتطبيق الوضع على كل النوافذ (`AppAppearance`)
@@ -100,7 +111,8 @@ struct FamilyTreeV2App: App {
                     guard let token = note.object as? String else { return }
                     Task { await self.appState.notificationVM.registerPushToken(token) }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .didReceivePushNotification).merge(with: NotificationCenter.default.publisher(for: .didTapPushNotification))) { _ in
+                .onReceive(NotificationCenter.default.publisher(for: .didReceivePushNotification).merge(with: NotificationCenter.default.publisher(for: .didTapPushNotification))) { note in
+                    if note.name == .didTapPushNotification { Self.routePushTap(note.object) }
                     Task {
                         // تحديث الإشعارات + الأعضاء معاً (قد يصل push بطلب انضمام جديد)
                         async let n: () = self.appState.notificationVM.fetchNotifications(force: true)

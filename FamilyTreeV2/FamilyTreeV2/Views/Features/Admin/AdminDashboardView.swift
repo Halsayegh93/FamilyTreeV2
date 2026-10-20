@@ -8,6 +8,8 @@ enum AdminReviewDestination: Hashable {
     case inboxItem(UUID)
     /// «رسائل الدخول · KWT SMS» (إشعار «رصيد الرسائل منخفض»)
     case sms
+    /// «طلبات رمز الدخول» كاملة فوق صفحة الرسائل (إشعار «محاولات دخول مريبة»)
+    case smsAttempts
     /// بيت إشارة من لوحة «حالة النظام» (تُدفع بعد أن تُغلق اللوحة — الرابط داخل النافذة المنبثقة لا يدفع في هذا المكدس)
     case status(AdminStatusPill.Home)
     /// صفحة قسم (مربّعات «اليوم» وشريط الأقسام) — العدّاد يجعل كل انتقال من الشريط قيمة جديدة فيُستبدل المسار
@@ -101,21 +103,24 @@ struct AdminDashboardView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onReceive(NotificationCenter.default.publisher(for: .openAdminReviewForKind)) { note in
             guard let kind = note.userInfo?["kind"] as? String else { return }
-            // من الإشعار: «الوارد» نفسه (على الطلب إن عُرف)، أو طلبات الشجرة، أو صفحة رسائل الدخول
+            // من الإشعار: «الوارد» نفسه (على الطلب إن عُرف)، أو طلبات الشجرة، أو صفحة رسائل الدخول (ومحاولات الدخول فوقها)
             let requestId = (note.userInfo?["request_id"] as? String).flatMap(UUID.init(uuidString:))
-            let destination: AdminReviewDestination
+            let destinations: [AdminReviewDestination]
             if kind == NotificationKind.treeEdit.rawValue {
-                destination = .treeEditRequests
-            } else if kind == "sms_balance_low" {
-                destination = .sms
+                destinations = [.treeEditRequests]
+            } else if kind == AdminNotices.smsSuspicious {
+                destinations = [.sms, .smsAttempts]
+            } else if kind == AdminNotices.smsBalanceLow {
+                destinations = [.sms]
             } else if let requestId {
-                destination = .inboxItem(requestId)
+                destinations = [.inboxItem(requestId)]
             } else {
-                destination = .allRequests
+                destinations = [.allRequests]
             }
             // قشّر الـ stack الحالي قبل الدفع لتجنب التراكم
-            navigationPath = NavigationPath()
-            navigationPath.append(destination)
+            var path = NavigationPath()
+            for destination in destinations { path.append(destination) }
+            navigationPath = path
         }
         .task {
             // شريط الأقسام في كل صفحة من هذا المكدس ينقل عبر هذا (في `.task` الموجودة — بلا مُعدِّل إضافي على الجذر)
@@ -140,6 +145,7 @@ struct AdminDashboardView: View {
         case .allRequests:       return AnyView(AdminAllRequestsView().adminArea(.inbox))
         case .inboxItem(let id): return AnyView(AdminAllRequestsView(focusId: id).adminArea(.inbox))
         case .sms:               return AnyView(AdminSmsView(backTitle: L10n.t("اليوم", "Today")).adminArea(.team))
+        case .smsAttempts:       return AnyView(SmsAttemptsListPage().adminArea(.team))
         case .status(let home):  return AdminSystemStatusLine.page(home)
         case .area(let area, _): return AnyView(AdminAreaView(area: area))
         }
@@ -568,19 +574,20 @@ struct AdminDashboardView: View {
                               spoken: later > 0
                                 ? L10n.t("إشعارات مجدولة لاحقاً: \(later)", "Notifications scheduled later: \(later)")
                                 : L10n.t("لا إشعارات مجدولة", "No scheduled notifications")))
-        // أجهزة لا تصلها الإشعارات (غير مسجّلة أو لم تُحدَّث منذ 30 يوماً) — نفس رقم صفحتها
+        // أجهزة لا تصلها الإشعارات = التسجيلات الفاشلة فقط (الدفعة ١٤ «تم غير») — نفس رقم صفحتها. «لم يُفتح منذ 30 يوماً»
+        // معلومة في صفحة الأجهزة لا تنبيه هنا
         if let reach = devices.stats {
-            let n = reach.total - reach.reach
+            let n = reach.invalid
             let devicesText = L10n.isArabic
                 ? (n == 0 ? "0" : AdminTodayText.arabicCount(n, one: "جهاز", two: "جهازان", few: "أجهزة", many: "جهازاً", single: "جهاز"))
                 : (n == 1 ? "1 device" : "\(n) devices")
             list.append(n == 0
                 ? AdminStatusPill(home: .devices, text: L10n.t("بلا إشعارات: 0", "Not reached: 0"),
-                                  detail: L10n.t("الإشعارات تصل كل الأجهزة", "Notifications reach every device"),
+                                  detail: L10n.t("كل التسجيلات سليمة", "Every registration is valid"),
                                   level: .ok, issue: "",
-                                  spoken: L10n.t("الإشعارات تصل كل الأجهزة", "Notifications reach every device"))
+                                  spoken: L10n.t("كل تسجيلات الأجهزة سليمة، الإشعارات تصلها", "Every device registration is valid, notifications reach them"))
                 : AdminStatusPill(home: .devices, text: L10n.t("بلا إشعارات: \(devicesText)", "Not reached: \(devicesText)"),
-                                  detail: L10n.t("غير مسجّلة أو لم تُحدَّث منذ 30 يوماً", "Not registered or not updated in 30 days"),
+                                  detail: L10n.t("تسجيل فاشل — لا يُرسل لها شيء", "Failed registration — nothing is sent to them"),
                                   level: .warn, issue: L10n.t("\(devicesText) بلا إشعارات", "\(devicesText) not reached"),
                                   spoken: L10n.t("أجهزة لا تصلها الإشعارات: \(n)", "Devices not reached by notifications: \(n)")))
         } else {
