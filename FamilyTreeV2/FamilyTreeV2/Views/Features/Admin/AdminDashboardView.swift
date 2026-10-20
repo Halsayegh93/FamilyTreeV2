@@ -496,13 +496,16 @@ struct AdminDashboardView: View {
         if authVM.canViewSystemSettings {
             let s = appSettingsVM.settings
             if s.updatedAt == nil {
-                list.append(AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة —", "Maintenance —"), level: .unknown,
+                list.append(AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة —", "Maintenance —"),
+                                            short: L10n.t("الصيانة —", "Maintenance —"), level: .unknown,
                                             spoken: L10n.t("وضع الصيانة: \(notLoaded)", "Maintenance mode: \(notLoaded)")))
             } else {
                 list.append(s.maintenanceMode
-                    ? AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة مفعّلة", "Maintenance on"), level: .urgent,
+                    ? AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة مفعّلة", "Maintenance on"),
+                                      short: L10n.t("الصيانة", "Maintenance"), level: .urgent,
                                       spoken: L10n.t("وضع الصيانة مفعّل", "Maintenance mode is on"))
-                    : AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة مطفأة", "Maintenance off"), level: .ok,
+                    : AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة مطفأة", "Maintenance off"),
+                                      short: L10n.t("الصيانة", "Maintenance"), level: .ok,
                                       spoken: L10n.t("وضع الصيانة مطفأ", "Maintenance mode is off")))
             }
             // تحت عتبة «منخفض» كهرماني وتحت «عاجل» أحمر (العتبات من السيرفر)
@@ -516,11 +519,13 @@ struct AdminDashboardView: View {
             }
             if let balance = sms.status?.balance {
                 let points = SmsBalanceText.points(balance)
-                list.append(AdminStatusPill(home: .sms, text: L10n.t("الرصيد \(points)", "Balance \(points)"), level: level,
+                let text = L10n.t("الرصيد \(points)", "Balance \(points)")
+                list.append(AdminStatusPill(home: .sms, text: text, short: text, level: level,
                                             spoken: L10n.t("رصيد رسائل رمز الدخول: \(points) نقطة\(state)",
                                                            "Sign-in SMS balance: \(points) points\(state)")))
             } else {
-                list.append(AdminStatusPill(home: .sms, text: L10n.t("الرصيد —", "Balance —"), level: level,
+                let text = L10n.t("الرصيد —", "Balance —")
+                list.append(AdminStatusPill(home: .sms, text: text, short: text, level: level,
                                             spoken: L10n.t("رصيد رسائل رمز الدخول: \(notLoaded)", "Sign-in SMS balance: \(notLoaded)")))
             }
         }
@@ -528,13 +533,15 @@ struct AdminDashboardView: View {
         let dates = notificationVM.scheduledNotifications.compactMap(\.scheduledDate)
         let today = dates.filter { Calendar.current.isDateInToday($0) }.count
         list.append(today > 0
-            ? AdminStatusPill(home: .scheduled, text: L10n.t("مجدول اليوم \(today)", "\(today) scheduled today"), level: .warn,
+            ? AdminStatusPill(home: .scheduled, text: L10n.t("مجدول اليوم \(today)", "\(today) scheduled today"),
+                              short: L10n.t("مجدول \(today)", "Scheduled \(today)"), level: .warn,
                               spoken: L10n.t("إشعارات مجدولة اليوم: \(today)", "Notifications scheduled today: \(today)"))
             : dates.isEmpty
-                ? AdminStatusPill(home: .scheduled, text: L10n.t("لا شيء مجدول", "Nothing scheduled"), level: .ok,
+                ? AdminStatusPill(home: .scheduled, text: L10n.t("لا شيء مجدول", "Nothing scheduled"),
+                                  short: L10n.t("مجدول 0", "Scheduled 0"), level: .ok,
                                   spoken: L10n.t("لا إشعارات مجدولة", "No scheduled notifications"))
                 : AdminStatusPill(home: .scheduled, text: L10n.t("مجدول لاحقاً \(dates.count)", "\(dates.count) scheduled later"),
-                                  level: .ok,
+                                  short: L10n.t("مجدول \(dates.count)", "Scheduled \(dates.count)"), level: .ok,
                                   spoken: L10n.t("إشعارات مجدولة لاحقاً: \(dates.count)", "Notifications scheduled later: \(dates.count)")))
         // أجهزة لا تصلها الإشعارات (غير مسجّلة أو لم تُحدَّث منذ 30 يوماً) — نفس رقم صفحتها
         if let reach = devices.stats {
@@ -543,12 +550,15 @@ struct AdminDashboardView: View {
                 ? AdminTodayText.arabicCount(n, one: "جهاز", two: "جهازان", few: "أجهزة", many: "جهازاً", single: "جهاز")
                 : (n == 1 ? "1 device" : "\(n) devices")
             list.append(n == 0
-                ? AdminStatusPill(home: .devices, text: L10n.t("الإشعارات تصل الجميع", "All devices reached"), level: .ok,
+                ? AdminStatusPill(home: .devices, text: L10n.t("الإشعارات تصل الجميع", "All devices reached"),
+                                  short: L10n.t("بلا إشعارات 0", "Not reached 0"), level: .ok,
                                   spoken: L10n.t("الإشعارات تصل كل الأجهزة", "Notifications reach every device"))
-                : AdminStatusPill(home: .devices, text: L10n.t("\(devicesText) بلا إشعارات", "\(devicesText) not reached"), level: .warn,
+                : AdminStatusPill(home: .devices, text: L10n.t("\(devicesText) بلا إشعارات", "\(devicesText) not reached"),
+                                  short: L10n.t("بلا إشعارات \(n)", "Not reached \(n)"), level: .warn,
                                   spoken: L10n.t("أجهزة لا تصلها الإشعارات: \(n)", "Devices not reached by notifications: \(n)")))
         } else {
-            list.append(AdminStatusPill(home: .devices, text: L10n.t("الأجهزة —", "Devices —"), level: .unknown,
+            list.append(AdminStatusPill(home: .devices, text: L10n.t("الأجهزة —", "Devices —"),
+                                        short: L10n.t("الأجهزة —", "Devices —"), level: .unknown,
                                         spoken: L10n.t("أجهزة لا تصلها الإشعارات: \(notLoaded)",
                                                        "Devices not reached by notifications: \(notLoaded)")))
         }
@@ -798,58 +808,44 @@ struct AdminTodayDoneRow: View {
 
 // MARK: - سطر الحالة في الرأس
 
-/// إشارات الحالة الأربع تحت أرقام «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ «صغّر المربعات وخلّهم نقط»): سطر واحد من أربع نقاط
-/// ملوّنة بعبارة قصيرة بخط صغير، بلا مربّعات وبمسافات متساوية. يصير سطرين (٢×٢) حين لا يتّسع السطر (الخط الأكبر)،
-/// وإشارة في كل سطر من أحجام إمكانية الوصول. كل إشارة تفتح بيتها الوحيد، ومنطقة لمسها ٤٤ نقطة بلا إطار مرئي
+/// إشارات الحالة الأربع تحت أرقام «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ «صغّر المربعات وخلّهم نقط»): نقاط ملوّنة بعبارة قصيرة
+/// بخط صغير، بلا مربّعات وبمسافات متساوية. **سطر واحد دائماً بكل أحجام الخط** (طلب المالك ٢٠٢٦-١٠-٢٠ «ليش تحت بعض؟»):
+/// العبارات كاملة (تصغر حتى ٨٠٪ إن ضاق السطر) ← العبارات الأقصر («الصيانة»، «مجدول 1»…) ← سطر يُمرَّر أفقياً بالعبارات
+/// كاملة يبدأ من أول السطر. كل إشارة تفتح بيتها الوحيد، ومنطقة لمسها ٤٤ نقطة بلا إطار مرئي، والقارئ الصوتي يقرأ الحالة كاملة
 struct AdminTodayStatusRow: View {
     let pills: [AdminStatusPill]
-    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .caption) private var dotScale: CGFloat = 1
 
     var body: some View {
-        if typeSize.isAccessibilitySize {
-            AnyView(column)
-        } else {
-            AnyView(ViewThatFits(in: .horizontal) {
-                line
-                grid
-            })
-        }
+        AnyView(ViewThatFits(in: .horizontal) {
+            line(short: false)
+            line(short: true)
+            scroller
+        })
     }
 
     /// سطر واحد: الأولى على الطرف والأخيرة على الطرف الآخر، والمسافات بينها متساوية
-    private var line: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(pills.enumerated()), id: \.element.id) { i, pill in
-                if i > 0 { Spacer(minLength: DS.Spacing.md) }
-                link(pill, wraps: false)
+    private func line(short: Bool) -> some View {
+        AdminStatusLineLayout(minGap: DS.Spacing.md, minScale: DS.Hub.statusLineMinScale,
+                              fixed: AdminBaselineDot.side(DS.Hub.statusDot, scale: dotScale) + DS.Spacing.xsm) {
+            ForEach(pills) { link($0, short: short, scales: true) }
+        }
+    }
+
+    /// آخر خيار (أحجام إمكانية الوصول): السطر نفسه بالعبارات كاملة يُمرَّر أفقياً من طرف الشاشة إلى طرفها
+    private var scroller: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.lg) {
+                ForEach(pills) { link($0, short: false, scales: false) }
             }
+            .padding(.horizontal, DS.Hub.headerSide)
         }
+        .padding(.horizontal, -DS.Hub.headerSide)
     }
 
-    /// سطران (٢×٢) بعمودين متساويين
-    private var grid: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(stride(from: 0, to: pills.count, by: 2)), id: \.self) { start in
-                HStack(spacing: DS.Spacing.md) {
-                    ForEach(pills[start..<min(start + 2, pills.count)]) { pill in
-                        link(pill, wraps: true)
-                    }
-                    if start + 1 >= pills.count { Spacer(minLength: 0).frame(maxWidth: .infinity) }
-                }
-            }
-        }
-    }
-
-    /// إشارة في كل سطر (أحجام إمكانية الوصول)
-    private var column: some View {
-        VStack(spacing: 0) {
-            ForEach(pills) { link($0, wraps: true) }
-        }
-    }
-
-    private func link(_ pill: AdminStatusPill, wraps: Bool) -> some View {
+    private func link(_ pill: AdminStatusPill, short: Bool, scales: Bool) -> some View {
         NavigationLink { AdminLazyPage { Self.page(pill.home) } } label: {
-            AdminStatusPillView(pill: pill, wraps: wraps)
+            AdminStatusPillView(pill: pill, short: short, scales: scales)
         }
         .buttonStyle(DSPressStyle())
     }
@@ -867,12 +863,57 @@ struct AdminTodayStatusRow: View {
     }
 }
 
+/// سطر الإشارات: الأولى على الطرف والأخيرة على الطرف الآخر والمسافات بينها متساوية (لا تقلّ عن `minGap`). إن ضاق السطر
+/// صغُر خط العبارات معاً حتى `minScale` والنقاط بحجمها (`fixed` = النقطة والمسافة بعدها في كل إشارة)؛ فالمقاس المثالي
+/// الذي يقيسه `ViewThatFits` هو أصغر عرض مقبول، وإن لم يتّسع انتقل للخيار التالي
+struct AdminStatusLineLayout: Layout {
+    var minGap: CGFloat
+    var minScale: CGFloat
+    var fixed: CGFloat
+
+    private func measure(_ subviews: Subviews) -> (widths: [CGFloat], height: CGFloat, gaps: CGFloat) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        return (sizes.map(\.width), sizes.map(\.height).max() ?? 0, minGap * CGFloat(max(subviews.count - 1, 0)))
+    }
+
+    /// عرض الإشارة حين تصغر عبارتها بنسبة `k`
+    private func width(_ natural: CGFloat, k: CGFloat) -> CGFloat {
+        min(natural, fixed + max(natural - fixed, 0) * k)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let m = measure(subviews)
+        let least = m.widths.reduce(m.gaps) { $0 + width($1, k: minScale) }
+        guard let proposed = proposal.width, proposed.isFinite else { return CGSize(width: least, height: m.height) }
+        return CGSize(width: max(proposed, least), height: m.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let m = measure(subviews)
+        guard !subviews.isEmpty else { return }
+        let texts = m.widths.reduce(0) { $0 + max($1 - fixed, 0) }
+        let fixedAll = m.widths.reduce(0) { $0 + min($1, fixed) }
+        let k = texts > 0 ? min(1, max(minScale, (bounds.width - m.gaps - fixedAll) / texts)) : 1
+        let widths = m.widths.map { width($0, k: k) }
+        let spare = subviews.count > 1
+            ? max(minGap, (bounds.width - widths.reduce(0, +)) / CGFloat(subviews.count - 1)) : 0
+        var x = bounds.minX
+        for (i, sub) in subviews.enumerated() {
+            sub.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading,
+                      proposal: ProposedViewSize(width: widths[i], height: bounds.height))
+            x += widths[i] + spare
+        }
+    }
+}
+
 /// إشارة واحدة: نقطة اللون ثم العبارة القصيرة بأبيض الرأس الخافت (العاجل بالأحمر الفاتح). بلا مربّع — منطقة اللمس
 /// ٤٤ نقطة من الإطار نفسه، والقارئ الصوتي يقرأ الحالة كاملة
 struct AdminStatusPillView: View {
     let pill: AdminStatusPill
-    /// في السطرين/العمود: العبارة تلتفّ بدل أن تُقصّ، وتأخذ عرض خانتها
-    var wraps = false
+    /// العبارة الأقصر (حين لا يتّسع السطر بالكاملة)
+    var short = false
+    /// في السطر: تصغر العبارة إن ضاق (حتى `statusTextMinScale`)؛ في التمرير: بحجمها الكامل
+    var scales = true
 
     private var dot: Color {
         switch pill.level {
@@ -886,15 +927,15 @@ struct AdminStatusPillView: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
             AdminBaselineDot(color: dot)
-            Text(verbatim: pill.text)
+            Text(verbatim: short ? pill.short : pill.text)
                 .dsFont(.caption)
                 .monospacedDigit()
                 .foregroundColor(pill.level == .urgent ? DS.Hub.kpiHot : DS.Hub.onBandMuted)
-                .lineLimit(wraps ? 3 : 1)
-                .fixedSize(horizontal: !wraps, vertical: true)
-                .multilineTextAlignment(.leading)
+                .lineLimit(1)
+                .minimumScaleFactor(scales ? DS.Hub.statusTextMinScale : 1)
+                .fixedSize(horizontal: !scales, vertical: true)
         }
-        .frame(maxWidth: wraps ? .infinity : nil, minHeight: DS.Icon.tapTarget, alignment: .leading)
+        .frame(minHeight: DS.Icon.tapTarget)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(pill.spoken)
@@ -907,8 +948,13 @@ struct AdminBaselineDot: View {
     var size: CGFloat = DS.Hub.statusDot
     @ScaledMetric(relativeTo: .caption) private var scale: CGFloat = 1
 
+    /// قطر النقطة بخط الجهاز (`scale` من `@ScaledMetric(relativeTo: .caption)`) — يقرؤه سطر الحالة ليعرف ما لا يصغر
+    static func side(_ size: CGFloat, scale: CGFloat) -> CGFloat {
+        size * min(max(scale, 1), 1.6)
+    }
+
     var body: some View {
-        let side = size * min(max(scale, 1), 1.6)
+        let side = Self.side(size, scale: scale)
         Circle()
             .fill(color)
             .frame(width: side, height: side)

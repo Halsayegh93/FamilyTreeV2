@@ -69,7 +69,7 @@ struct AdminTodayCounts: Equatable {
 }
 
 /// إشارة في سطر الحالة برأس «اليوم» (كانت بطاقة «تنبيهات»): الصيانة · الرصيد · المجدول · بلا إشعارات — نقطة ملوّنة
-/// (أخضر سليم، كهرماني تنبيه، أحمر عاجل) وعبارة قصيرة، والضغط يفتح بيتها الوحيد
+/// (أخضر سليم، كهرماني تنبيه، أحمر عاجل) وعبارة قصيرة (وأقصر منها حين يضيق السطر)، والضغط يفتح بيتها الوحيد
 struct AdminStatusPill: Identifiable, Equatable {
     enum Level { case ok, warn, urgent, unknown }
     enum Home: Hashable { case maintenance, sms, scheduled, devices }
@@ -77,6 +77,8 @@ struct AdminStatusPill: Identifiable, Equatable {
     let home: Home
     /// العبارة القصيرة في السطر («الصيانة مفعّلة»، «الرصيد 17»، «3 أجهزة بلا إشعارات»)
     let text: String
+    /// الأقصر حين لا يتّسع السطر بالخط الأكبر («الصيانة»، «الرصيد 17»، «مجدول 1»، «بلا إشعارات 3») — النقطة تحمل الحالة
+    let short: String
     let level: Level
     /// ما يقرؤه القارئ الصوتي: الحالة كاملة («وضع الصيانة مفعّل»، «رصيد رسائل رمز الدخول: 17 نقطة، منخفض»)
     let spoken: String

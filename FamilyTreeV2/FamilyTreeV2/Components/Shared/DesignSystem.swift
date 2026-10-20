@@ -2248,6 +2248,10 @@ extension DS {
         /// سطر الحالة تحت أرقام «اليوم»: نقطة اللون، وزاوية الإشارة
         static let statusDot: CGFloat = 7
         static let statusRadius: CGFloat = DS.Radius.md
+        /// سطر الحالة سطر واحد دائماً (طلب المالك ٢٠٢٦-١٠-٢٠ «ليش تحت بعض؟»): يصغّر عباراته حتى ٨٠٪ قبل أن ينتقل للأقصر
+        /// ثم للتمرير؛ وحدّ النص نفسه أدنى بقليل كي لا يُقصّ بفرق التقريب
+        static let statusLineMinScale: CGFloat = 0.8
+        static let statusTextMinScale: CGFloat = 0.75
         /// مربّع الأيقونة الملوّن في صفوف البطاقات، ومربّع الأقسام، ومربّع نوع الطلب
         static let iconSquare: CGFloat = 36
         static let iconSquareRadius: CGFloat = 11
