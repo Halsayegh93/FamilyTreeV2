@@ -64,7 +64,6 @@ struct AdminOccasionsPage: View {
 
     /// المعلن عنهم — nil قبل الجلب أو إن تعذّر (فلا تظهر «وفاة لم يُعلن عنها» خطأً)
     @State private var announced: Set<UUID>? = nil
-    @State private var reach: AdminAnnounceFetch.Reach? = nil
 
     var body: some View {
         let feed = AdminUpcomingFeed(members: memberVM.allMembers,
@@ -81,7 +80,7 @@ struct AdminOccasionsPage: View {
             if authVM.isAdmin {
                 AnyView(AdminOccasionsPublishedCard())
             }
-            AnyView(AdminOccasionsNumbersCard(reach: reach))
+            AnyView(AdminOccasionsNumbersCard())
         }
         .task { await load() }
         .refreshable { await load(force: true) }
@@ -98,7 +97,8 @@ struct AdminOccasionsPage: View {
             group.addTask { @MainActor in if let ids = await AdminTodayFetch.announcedDeathIds() { announced = ids } }
             group.addTask { @MainActor in if newsVM.allNews.isEmpty || force { await newsVM.fetchNews(force: force) } }
             group.addTask { @MainActor in await notificationVM.fetchNotifications(force: force) }
-            group.addTask { @MainActor in if let r = await AdminAnnounceFetch.pushReach() { reach = r } }
+            // نفس مخزن «الأجهزة ووصول الإشعارات» (الفريق والأمان) — رقم واحد بتعريف واحد في المكانين
+            group.addTask { @MainActor in await AdminDeviceReachStore.shared.refresh(force: force) }
         }
     }
 
@@ -407,10 +407,11 @@ struct AdminOccasionsPublishedCard: View {
 
 // MARK: - أرقام فقط تفتح بيوتها
 
-/// «تصل الإشعارات إلى N جهازاً · P٪» ← الفريق والأمان (وصول الإشعارات)، و«N متوفى تاريخ وفاته غير مكتمل» ← العائلة ←
+/// «تصل الإشعارات إلى N جهازاً · P٪» ← الفريق والأمان ← «الأجهزة ووصول الإشعارات»، و«N متوفى تاريخ وفاته غير مكتمل» ← العائلة ←
 /// متوفون ← غير مكتمل. لا أوامر هنا — البيت هناك
 struct AdminOccasionsNumbersCard: View {
-    let reach: AdminAnnounceFetch.Reach?
+    /// «تصلها الإشعارات» = رمز صالح ومحدَّث خلال ٣٠ يوماً — نفس رقم «الأجهزة ووصول الإشعارات» ورأس «الفريق والأمان»
+    @ObservedObject private var devices = AdminDeviceReachStore.shared
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var memberVM: MemberViewModel
 
@@ -418,6 +419,7 @@ struct AdminOccasionsNumbersCard: View {
 
     var body: some View {
         let showsReach = authVM.canSendNotifications
+        let reach = devices.stats.flatMap { $0.total > 0 ? $0 : nil }
         let showsDates = authVM.canEditMembers && incomplete > 0
         if showsReach || showsDates {
             VStack(alignment: .leading, spacing: 0) {
@@ -426,12 +428,13 @@ struct AdminOccasionsNumbersCard: View {
                         AdminLazyPage { AnyView(AdminPushHealthView().adminBackTitle(AdminArea.occasions.title).adminArea(.team)) }
                     } label: {
                         AdminListRow(icon: "bell.and.waves.left.and.right.fill", tint: DS.Color.info,
-                                     title: reach.map { L10n.t("تصل الإشعارات إلى \($0.devices) جهازاً", "Notifications reach \($0.devices) devices") }
+                                     title: reach.map { L10n.t("تصل الإشعارات إلى \($0.reach) جهازاً", "Notifications reach \($0.reach) devices") }
                                         ?? L10n.t("وصول الإشعارات", "Notification reach"),
                                      subtitle: AdminArea.team.title) {
                             if let reach {
-                                AdminValueChip(text: L10n.t("\(reach.percent)٪", "\(reach.percent)%"),
-                                               tint: AdminAnnounceFetch.healthTint(reach.percent))
+                                AdminValueChip(text: L10n.t("\(reach.reachPercent)٪", "\(reach.reachPercent)%"),
+                                               tint: reach.reachPercent >= 90 ? DS.Color.success
+                                                   : (reach.reachPercent >= 70 ? DS.Color.warning : DS.Color.error))
                             }
                         }
                     }

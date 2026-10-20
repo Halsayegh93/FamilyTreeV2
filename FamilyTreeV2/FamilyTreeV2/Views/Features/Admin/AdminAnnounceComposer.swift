@@ -17,35 +17,6 @@ import Supabase
 // نفسه (المستلمون «الكل») — لا إشعاران لأحد. الصلاحية `canSendNotifications` (المالك والمدير — نشرهما مباشر)، وحارس السيرفر
 // يبقى الحَكَم.
 
-/// قراءة خفيفة لسطر «وصول الإشعارات» في «المناسبات والإعلانات» (لا شيء جديد على السيرفر)
-enum AdminAnnounceFetch {
-    struct Reach: Equatable {
-        /// الأجهزة المسجّلة للإشعارات
-        let devices: Int
-        /// «معدل الصحة» نفسه في «وصول الإشعارات»: الرموز السليمة (أطول من ٢٠ حرفاً)
-        let percent: Int
-    }
-
-    /// nil إن تعذّر الجلب أو لا أجهزة
-    static func pushReach() async -> Reach? {
-        struct Row: Decodable { let token: String? }
-        do {
-            let rows: [Row] = try await SupabaseConfig.client
-                .from("device_tokens").select("token").execute().value
-            guard !rows.isEmpty else { return nil }
-            let valid = rows.filter { ($0.token ?? "").count > 20 }.count
-            return Reach(devices: rows.count, percent: Int(Double(valid) / Double(rows.count) * 100))
-        } catch {
-            return nil
-        }
-    }
-
-    /// لون نسبة الصحة — نفس عتبات «وصول الإشعارات» (٩٠ / ٧٠)
-    nonisolated static func healthTint(_ rate: Int) -> Color {
-        rate >= 90 ? DS.Color.success : (rate >= 70 ? DS.Color.warning : DS.Color.error)
-    }
-}
-
 /// زرّ مكبّر الصوت الزجاجي في رأس «اليوم» (لمن يرسل للأعضاء فقط — يقرّر من يضعه): المنشئ الواحد على «إعلان»
 struct AdminAnnounceLauncher: View {
     @EnvironmentObject private var authVM: AuthViewModel
