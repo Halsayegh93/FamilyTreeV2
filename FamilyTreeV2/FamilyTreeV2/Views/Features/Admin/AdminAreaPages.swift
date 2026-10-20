@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - صفحات الأقسام الستة (إعادة تصميم لوحة الإدارة — طلب المالك ٢٠٢٦-١٠-٢٠، «٦ أقسام»)
 //
 // كل قسم = رأس كحلي («‹ اليوم»، شريط الأقسام، العنوان، الوصف) + بطاقات صفوف تفتح الصفحات الموجودة كما هي (لا منطق
-// جديد). «المناسبات والإعلانات» تجمع بطاقة «المناسبات» وبطاقة «الإعلانات» المختصرة (`AdminAnnouncementsCard`)، و«الفريق
+// جديد). «المناسبات والإعلانات» صفحتها الخاصة (`AdminOccasionsPage`: إنشاء · القادم · المنشور)، و«الفريق
 // والأمان» تجمع «الفريق» و«من يدخل وكيف».
 // فهرس الأدوات `AdminToolCatalog` هو المصدر الواحد: الأقسام والبحث الشامل وجدول الانتقال (REACHABILITY.md)
 // يقرؤون منه — كل ميزة لها صفّ واحد في قسم واحد، والصلاحيات كما كانت تماماً.
@@ -37,33 +37,27 @@ enum AdminToolCatalog {
         let role = authVM.currentUser?.role
         func page(_ make: @escaping () -> some View) -> AdminTool.Kind { .page { AnyView(make()) } }
 
-        // ١ الوارد
+        // ١ الوارد — صفحة القسم هي «الطلبات» (`AdminAllRequestsView`)؛ هذه الصفوف للبحث الشامل: الطلبات · الرسائل · ⚙︎
+        // («تقرير الموافقات» بيته «المؤشرات»، و«مشكلات الشجرة» شريحة في «العائلة» — الدفعة ب ٢٠٢٦-١٠-٢٠)
         t.append(AdminTool(id: "inbox.requests", area: .inbox, group: L10n.t("الوارد", "Inbox"),
                            title: L10n.t("الطلبات", "Requests"),
                            subtitle: L10n.t("كل ما ينتظر قراراً — بالنوع والمهلة", "Everything awaiting a decision"),
                            icon: "tray.full.fill", tint: DS.Color.primary,
-                           keywords: ["طلبات", "مراجعة", "انضمام", "موافقة"],
+                           keywords: ["طلبات", "مراجعة", "انضمام", "موافقة", "بانتظار قرارك", "عاجل", "متأخر"],
                            kind: page { AdminAllRequestsView() }))
         t.append(AdminTool(id: "inbox.messages", area: .inbox, group: L10n.t("الوارد", "Inbox"),
-                           title: L10n.t("رسائل الأعضاء", "Member messages"),
-                           subtitle: L10n.t("رسائل «تواصل مع الإدارة»", "“Contact admin” messages"),
+                           title: L10n.t("الرسائل", "Messages"),
+                           subtitle: L10n.t("رسائل الأعضاء من «تواصل مع الإدارة»", "Members' “Contact admin” messages"),
                            icon: "bubble.left.and.bubble.right.fill", tint: DS.Color.sea,
-                           keywords: ["رسائل", "تواصل"],
+                           keywords: ["رسائل", "تواصل", "رسائل الأعضاء"],
                            kind: page { AdminAllRequestsView(startsWithMessages: true) }))
-        if adminRequestVM.approvalsWorkflowOn && (isAdmin || role == .monitor) {
-            t.append(AdminTool(id: "inbox.report", area: .inbox, group: L10n.t("الوارد", "Inbox"),
-                               title: L10n.t("تقرير الموافقات", "Approvals report"),
-                               subtitle: L10n.t("المراحل والأداء والتصعيدات", "Stages, performance, escalations"),
-                               icon: "chart.bar.xaxis", tint: DS.Color.warning,
-                               kind: page { ApprovalsReportView() }))
-        }
         if authVM.canViewSystemSettings {
             t.append(AdminTool(id: "inbox.settings", area: .inbox, group: L10n.t("الوارد", "Inbox"),
-                               title: L10n.t("إعدادات المسار", "Approval path settings"),
-                               subtitle: L10n.t("مسار الموافقات، المهلة، المسار السريع، الردود الجاهزة",
-                                                "Approvals path, SLA, fast track, ready replies"),
+                               title: L10n.t("إعدادات مسار الموافقات", "Approval path settings"),
+                               subtitle: L10n.t("مسار الموافقات، المهلة، الاعتماد المباشر، نماذج الردود",
+                                                "Approvals path, SLA, direct approval, reply templates"),
                                icon: "gearshape.fill", tint: DS.Color.slate,
-                               keywords: ["مسار", "مهلة", "ردود"],
+                               keywords: ["مسار", "مهلة", "ردود", "نماذج", "اعتماد مباشر", "المسار السريع"],
                                kind: page { AdminAppSettingsView(scope: .approvals) }))
         }
 
@@ -116,58 +110,48 @@ enum AdminToolCatalog {
                                }))
         }
 
-        // ٣ المناسبات
-        let occasions = L10n.t("المناسبات", "Occasions")
-        if isAdmin {
-            t.append(AdminTool(id: "occasions.deaths", area: .occasions, group: occasions,
-                               title: L10n.t("الوفيات والإعلان", "Deaths & obituaries"),
-                               subtitle: L10n.t("وفيات آخر 30 يوماً — أعلن بنص جاهز", "Last 30 days — announce with ready text"),
-                               icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.slate,
-                               keywords: ["وفاة", "إعلان", "عزاء"],
-                               kind: page { DeathAnnouncementsPage() }))
+        // ٣ المناسبات والإعلانات — صفحة القسم (`AdminOccasionsPage`): «إنشاء» · «القادم» · «المنشور» (الدفعة ب ٢٠٢٦-١٠-٢٠)؛
+        // هذه الصفوف للبحث الشامل وتفتح الصفحة نفسها (الكلمات القديمة تجد بيتها الجديد)
+        if authVM.canModerate || authVM.canSendNotifications {
+            let occasions = AdminArea.occasions.title
+            t.append(AdminTool(id: "occasions.create", area: .occasions, group: occasions,
+                               title: L10n.t("إنشاء", "Create"),
+                               subtitle: authVM.canSendNotifications
+                                ? L10n.t("إعلان · إعلان وفاة · بطاقة تهنئة أو تعزية · إعلان تحديث التطبيق",
+                                         "Announcement · obituary · greeting or condolence card · app update notice")
+                                : L10n.t("بطاقة تهنئة أو تعزية", "Greeting or condolence card"),
+                               icon: "plus.circle.fill", tint: DS.Color.sadu,
+                               keywords: ["إعلان", "إعلانات", "إشعار", "إرسال", "وفاة", "عزاء", "تهنئة", "تعزية", "بطاقة",
+                                          "منشور", "مناسبة", "تحديث", "إصدار", "مستجدات"],
+                               kind: page { AdminOccasionsPage() }))
+            t.append(AdminTool(id: "occasions.upcoming", area: .occasions, group: occasions,
+                               title: L10n.t("القادم", "Upcoming"),
+                               subtitle: authVM.isAdmin
+                                ? L10n.t("ذكرى الراحلين، الإشعارات المجدولة، ووفيات لم يُعلن عنها",
+                                         "Memorials, scheduled pushes and unannounced deaths")
+                                : L10n.t("ذكرى الراحلين خلال ٣٠ يوماً", "Memorials in the next 30 days"),
+                               icon: "calendar.badge.clock", tint: DS.Color.sadu,
+                               keywords: ["ذكرى", "راحلين", "مجدول", "مجدولة", "وفيات"],
+                               kind: page { AdminOccasionsPage() }))
+            if authVM.isAdmin {
+                t.append(AdminTool(id: "occasions.published", area: .occasions, group: occasions,
+                                   title: L10n.t("المنشور", "Published"),
+                                   subtitle: L10n.t("الإعلانات وإعلانات الوفاة والتحديث والإشعارات المرسلة",
+                                                    "Announcements, obituaries, updates and sent pushes"),
+                                   icon: "checkmark.seal.fill", tint: DS.Color.sadu,
+                                   keywords: ["منشور", "أُعلن", "مرسلة"],
+                                   kind: page { AdminOccasionsPage() }))
+            }
         }
-        if authVM.canModerate {
-            t.append(AdminTool(id: "occasions.memorial", area: .occasions, group: occasions,
-                               title: L10n.t("ذكرى الراحلين", "Memorials"),
-                               subtitle: L10n.t("الذكرى القريبة وتكميل التاريخ", "Upcoming anniversaries and dates"),
-                               icon: "moon.stars.fill", tint: DS.Color.sadu,
-                               keywords: ["ذكرى", "راحلين"],
-                               kind: page { DeceasedMemorialView() }))
-            t.append(AdminTool(id: "occasions.posts", area: .occasions, group: occasions,
-                               title: L10n.t("منشورات المناسبات", "Occasion posts"),
-                               subtitle: L10n.t("تهنئة، إعلان عزاء، مشاركة عزاء", "Congrats and condolences"),
-                               icon: "photo.on.rectangle.angled", tint: DS.Color.accent,
-                               keywords: ["منشور", "تهنئة", "مناسبة"],
-                               kind: page { OccasionComposerView() }))
-        }
-
-        // ٣ب الإعلانات (داخل «المناسبات والإعلانات» — صفحتها تعرضها في بطاقة «الإعلانات» المختصرة، والبحث يقرؤها من هنا)
+        // «وصول الإشعارات» انتقل من «المناسبات والإعلانات» إلى «الفريق والأمان» (بيته «الأجهزة ووصول الإشعارات» —
+        // الدفعة ج تدمجه في صفحة الأجهزة)؛ في «المناسبات» سطر رقم فقط يفتحه
         if authVM.canSendNotifications {
-            let send = L10n.t("إرسال للأعضاء", "Send to members")
-            t.append(AdminTool(id: "ann.notify", area: .occasions, group: send,
-                               title: L10n.t("إشعار للأعضاء", "Notify members"),
-                               subtitle: L10n.t("للجميع أو لدولة أو لأعضاء — الآن أو بجدولة", "Everyone, a country or people — now or later"),
-                               icon: "bell.badge.fill", tint: DS.Color.sea,
-                               keywords: ["إشعار", "إرسال", "إعلان", "إعلانات"],
-                               kind: page { AdminMessagingHubView() }))
-            t.append(AdminTool(id: "ann.update", area: .occasions, group: send,
-                               title: L10n.t("رسالة تحديث التطبيق", "App update message"),
-                               subtitle: L10n.t("ما الجديد في «المستجدات» + إشعار", "What's new in Updates + a notification"),
-                               icon: "megaphone.fill", tint: DS.Color.sea,
-                               keywords: ["تحديث", "إصدار"],
-                               kind: page { AdminMessagingHubView(startsWithUpdate: true) }))
-            t.append(AdminTool(id: "ann.scheduled", area: .occasions, group: send,
-                               title: L10n.t("المجدولة", "Scheduled"),
-                               subtitle: L10n.t("الإشعارات التي تنتظر وقتها — من شريطها في «إشعار للأعضاء»",
-                                                "Waiting notifications — from their bar in Notify"),
-                               icon: "clock.badge.checkmark.fill", tint: DS.Color.sea,
-                               keywords: ["مجدول"],
-                               kind: page { AdminMessagingHubView() }))
-            t.append(AdminTool(id: "ann.push", area: .occasions, group: L10n.t("هل يصلهم؟", "Does it reach them?"),
+            t.append(AdminTool(id: "ann.push", area: .team, group: L10n.t("من يدخل وكيف", "Who signs in and how"),
                                title: L10n.t("وصول الإشعارات", "Notification reach"),
-                               subtitle: L10n.t("رموز الأجهزة، التجربة، والتنظيف", "Device tokens, test and cleanup"),
+                               subtitle: L10n.t("تسجيل الأجهزة للإشعارات، الإشعار التجريبي، وحذف القديمة",
+                                                "Device registration, test push and cleanup"),
                                icon: "bell.and.waves.left.and.right.fill", tint: DS.Color.info,
-                               keywords: ["رموز", "أجهزة", "تجربة"],
+                               keywords: ["رموز", "أجهزة", "تجربة", "إشعارات"],
                                kind: page { AdminPushHealthView() }))
         }
 
@@ -350,7 +334,7 @@ struct AdminAreaView: View {
         case .metrics:   return AnyView(AdminMetricsAreaView())
         case .team:      return AnyView(AdminToolsAreaView(area: .team, readOnlyBadge: true))
         case .app:       return AnyView(AdminToolsAreaView(area: .app, readOnlyBadge: true))
-        case .occasions: return AnyView(AdminToolsAreaView(area: .occasions))
+        case .occasions: return AnyView(AdminOccasionsPage())
         }
     }
 }
@@ -430,9 +414,8 @@ struct AdminToolsAreaView: View {
     @ObservedObject private var sms = SmsBalanceStore.shared
 
     var body: some View {
-        // صفوف «الإعلانات» تُعرض في بطاقتها المختصرة (أعلى القسم) لا كبطاقات أدوات
         let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM)
-            .filter { $0.area == area && !AdminAnnouncementsCard.toolIds.contains($0.id) }
+            .filter { $0.area == area }
         let announces = area == .occasions && authVM.canSendNotifications
         AdminHubPage {
             AdminBandHeader(title: area.title, subtitle: area.subtitle,
@@ -440,7 +423,6 @@ struct AdminToolsAreaView: View {
                                 ? L10n.t("للقراءة — يعدّلها المالك", "Read-only — the owner edits") : nil,
                             isAreaRoot: true)
         } content: {
-            AdminAreaTop(area: area)
             if tools.isEmpty && !announces {
                 DSEmptyView(L10n.t("لا أدوات لدورك هنا", "No tools for your role here"), style: .card)
             } else if !tools.isEmpty {
@@ -600,147 +582,7 @@ struct GenderRingPanel: View {
     }
 }
 
-// MARK: - أعلى الأقسام: ما انتقل من «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ «الأقسام فوق + قائمة وحدة»)
-//
-// «اليوم» صار: الرأس ← أعداد الأعضاء ← الأقسام ← تنبيهات ← «يحتاج قرارك». فما كان تحتها انتقل لأعلى قسمه بلا
-// ضياع: كل إجراء سريع أعلى قسمه، «اليوم في العائلة» أعلى «المناسبات»، و«نبض العائلة» أعلى «المؤشرات».
-// الصلاحيات كما كانت على «اليوم» حرفياً.
-
-/// ما يسبق بطاقات الأدوات في الأقسام العامة: الإجراءات السريعة، ثم في «المناسبات والإعلانات» بطاقة «الإعلانات»
-/// المختصرة (لمن يرسل للأعضاء) و«اليوم في العائلة»
-struct AdminAreaTop: View {
-    let area: AdminArea
-    @EnvironmentObject var authVM: AuthViewModel
-
-    var body: some View {
-        AdminAreaQuickActions(area: area)
-        if area == .occasions {
-            if authVM.canSendNotifications {
-                AnyView(AdminAnnouncementsCard())
-            }
-            AdminFamilyTodayCard()
-        }
-    }
-}
-
-/// الإجراءات السريعة لقسم: أزرار كبسولة بعرض الصفحة — منشور مناسبة وإعلان وفاة ← المناسبات والإعلانات («إعلان جديد»
-/// في بطاقة «الإعلانات» تحتها). «العائلة» بلا كبسولات: «تسجيل عضو جديد» زرّ رأسها، والبحث حقلها الواحد
-struct AdminAreaQuickActions: View {
-    let area: AdminArea
-    @EnvironmentObject var authVM: AuthViewModel
-
-    private struct Action: Identifiable {
-        let id: String
-        let icon: String
-        let title: String
-        let page: () -> AnyView
-    }
-
-    private var actions: [Action] {
-        var list: [Action] = []
-        switch area {
-        case .occasions:
-            list.append(Action(id: "occasion", icon: "photo.on.rectangle", title: L10n.t("منشور مناسبة", "Occasion post")) {
-                AnyView(OccasionComposerView())
-            })
-            if authVM.isAdmin {
-                list.append(Action(id: "death", icon: NewsTypeHelper.icon(for: "وفاة"),
-                                   title: L10n.t("إعلان وفاة", "Obituary")) {
-                    AnyView(DeathAnnouncementsPage())
-                })
-            }
-        default:
-            break
-        }
-        return list
-    }
-
-    var body: some View {
-        let list = actions
-        if !list.isEmpty {
-            HStack(spacing: DS.Spacing.sm) {
-                ForEach(list) { action in
-                    NavigationLink { AdminLazyPage(make: action.page).adminArea(area) } label: {
-                        AdminPillLabel(title: action.title, icon: action.icon, style: .navy,
-                                       height: DS.Hub.pillHeightCard, fullWidth: true)
-                    }
-                    .buttonStyle(DSPressStyle())
-                    .accessibilityLabel(action.title)
-                }
-            }
-        }
-    }
-}
-
-/// «اليوم في العائلة» (كانت في «اليوم»): الذكرى القريبة، ووفيات آخر ٣٠ يوماً ومن أُضيف هذا الأسبوع (المالك والمدير
-/// والمراقب). لا تُرسم بلا صفوف
-struct AdminFamilyTodayCard: View {
-    @EnvironmentObject var authVM: AuthViewModel
-    @EnvironmentObject var memberVM: MemberViewModel
-
-    private var rows: [AdminFamilyTodayRow] {
-        let all = memberVM.allMembers
-        guard !all.isEmpty else { return [] }
-        var rows: [AdminFamilyTodayRow] = []
-        if let next = DeceasedMemorialBoard(all).upcoming.first {
-            rows.append(AdminFamilyTodayRow(
-                id: "memorial", icon: "moon.stars.fill", tint: DS.Color.sadu,
-                title: L10n.t("ذكرى \(next.member.shortFullName)", "\(next.member.shortFullName)'s anniversary"),
-                value: DeceasedMemorial.whenLabel(next.anniversary.daysUntil, arabic: L10n.isArabic),
-                target: .memorial))
-        }
-        guard authVM.isAdmin || authVM.currentUser?.role == .monitor else { return rows }
-        let deaths = all.filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate) }.count
-        if deaths > 0 {
-            rows.append(AdminFamilyTodayRow(
-                id: "deaths", icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.slate,
-                title: L10n.t("وفيات آخر 30 يوماً", "Deaths in the last 30 days"),
-                value: "\(deaths)", target: authVM.isAdmin ? .deaths : .memorial))
-        }
-        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        let joined = all.filter { m in
-            m.isDeceased != true && m.isCountable && (ApprovalWorkflow.date(m.createdAt).map { $0 >= weekAgo } ?? false)
-        }.count
-        if joined > 0 {
-            rows.append(AdminFamilyTodayRow(
-                id: "joined", icon: "person.crop.circle.badge.plus", tint: DS.Color.palm,
-                title: L10n.t("قُيّدوا هذا الأسبوع", "Added this week"),
-                value: "\(joined)", target: .directory))
-        }
-        return rows
-    }
-
-    var body: some View {
-        let rows = self.rows
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                AdminCardHeader(title: L10n.t("اليوم في العائلة", "Today in the family"))
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    if index > 0 { AdminRowDivider() }
-                    NavigationLink { AdminLazyPage { Self.page(row.target) }.adminArea(.occasions) } label: {
-                        AdminListRow(icon: row.icon, tint: row.tint, title: row.title) {
-                            Text(verbatim: row.value)
-                                .dsFont(.chip)
-                                .monospacedDigit()
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .adminCard()
-        }
-    }
-
-    private static func page(_ target: AdminFamilyTodayRow.Target) -> AnyView {
-        switch target {
-        case .memorial:  return AnyView(DeceasedMemorialView())
-        case .deaths:    return AnyView(DeathAnnouncementsPage())
-        case .directory: return AnyView(AdminMembersPage(sub: .newThisWeek).adminArea(.family).adminBackTitle(AdminArea.occasions.title))
-        }
-    }
-}
+// MARK: - «نبض العائلة» (انتقل من «اليوم» إلى أعلى «المؤشرات» — طلب المالك ٢٠٢٦-١٠-٢٠ «الأقسام فوق + قائمة وحدة»)
 
 /// مربّع في «نبض العائلة»
 struct AdminPulseTile: Identifiable {

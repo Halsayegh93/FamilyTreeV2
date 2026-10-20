@@ -128,8 +128,6 @@ struct NotificationsCenterView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
-    /// نشر تحديث تطبيق من تبويب «المستجدات» (للإدارة)
-    @State private var showingAppUpdateComposer = false
     /// العضو المختار لفتح تفاصيله من داخل الإشعار (مثل الشجرة).
     @State private var selectedMember: FamilyMember? = nil
     /// طلب admin_requests المرتبط بالإشعار الحالي — يُحمَّل عند فتح الشيت (للمرحلة ٣)
@@ -264,10 +262,6 @@ struct NotificationsCenterView: View {
                      onBackgroundTap: { selectedNotification = nil }) { notification in
             notificationDetailSheet(notification)
         }
-        // المربّع الطويل الموحّد من الأسفل بدل ورقة النظام
-        .dsTallBox(isPresented: $showingAppUpdateComposer) {
-            NavigationStack { AdminAppUpdateView() }
-        }
         .dsAlert(
             {
                 if case .failure = adminRequestVM.mergeResult {
@@ -304,23 +298,14 @@ struct NotificationsCenterView: View {
 
     private var actionBar: some View {
         let unreadCount = filteredNotifications.filter { !$0.read }.count
-        let canPublish = selectedTab == .activity && authVM.canSendNotifications && !isSelecting
         let showSelect = !isSelecting && !filteredNotifications.isEmpty
         let showReadAll = !isSelecting && unreadCount > 0
-        let hasButtons = isSelecting || canPublish || showSelect || showReadAll
+        // «نشر تحديث» كان هنا — بيته الوحيد صار «المناسبات والإعلانات» ← «إنشاء» ← «إعلان تحديث التطبيق» (٢٠٢٦-١٠-٢٠)
+        let hasButtons = isSelecting || showSelect || showReadAll
 
         return Group {
             if hasButtons {
                 HStack(spacing: DS.Spacing.sm) {
-                    // «المستجدات» هي قناة تحديثات التطبيق — والإدارة تنشر منها مباشرة
-                    if canPublish {
-                        barButton(icon: "megaphone.fill", label: L10n.t("نشر تحديث", "Publish Update"),
-                                  style: .filled) {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            showingAppUpdateComposer = true
-                        }
-                    }
-
                     if isSelecting {
                         // ── وضع التحديد ──
                         barButton(icon: "xmark", label: L10n.t("إلغاء", "Cancel"),

@@ -57,7 +57,7 @@ struct AdminAppSettingsView: View {
         case .systemInfo:       return L10n.t("معلومات النظام", "System Info")
         case .reset:            return L10n.t("إعادة التعيين", "Reset")
         case .registration:     return L10n.t("قواعد التسجيل", "Sign-up Rules")
-        case .approvals:        return L10n.t("إعدادات المسار", "Approval Path Settings")
+        case .approvals:        return L10n.t("إعدادات مسار الموافقات", "Approval Path Settings")
         }
     }
 
@@ -258,9 +258,8 @@ struct AdminAppSettingsView: View {
             // المربّع نفسه يمنع التعديل)
             return [languageCard, featuresCard, contentCard, categoriesCard, branchNamesCard]
         case .members:
-            // التسجيل والأجهزة، عداد التعديل، مسار الموافقات (طلب المالك ٢٠٢٦-١٠-١٥ — التعطيل لغير المالك داخل
-            // البطاقة، «الردود الجاهزة» تُتصفّح)
-            return [registrationCard, cooldownCard, AnyView(approvalsSection)]
+            // التسجيل والأجهزة، عداد التعديل («مسار الموافقات» خرج من هنا — بيته الوحيد ⚙︎ «الوارد»، الدفعة ب ٢٠٢٦-١٠-٢٠)
+            return [registrationCard, cooldownCard]
         case .system:
             // الصيانة، معلومات النظام، إعادة التعيين (تبقى مرئية ومعطّلة لغير المالك)
             return [securityCard, systemInfoCard, resetCard]
@@ -273,13 +272,14 @@ struct AdminAppSettingsView: View {
     /// كلٌّ يظهر إذا كان عموده/جدوله على السيرفر
     private var approvalsSection: some View {
         let s = appSettingsVM.settings
-        return AdminSectionCard(title: L10n.t("طلبات الوارد", "Inbox requests")) {
+        // بلا عنوان بطاقة — الصفحة نفسها «إعدادات مسار الموافقات» (بيتها الوحيد ⚙︎ «الوارد»)
+        return AdminSectionCard {
             AdminRowsCardBody {
                 settingToggle(
                     icon: "point.topleft.down.to.point.bottomright.curvepath.fill",
                     color: DS.Color.success,
                     title: L10n.t("مسار الموافقات", "Approvals path"),
-                    subtitle: L10n.t("المختص يراجع ويرفع، المدير يعتمد، والمختص ينفّذ — إطفاؤه يرجّع الطريقة القديمة فوراً",
+                    subtitle: L10n.t("المراجِع المختص يراجع ويرفع، المدير يعتمد، والمراجِع المختص ينفّذ — إطفاؤه يرجّع الطريقة القديمة فوراً",
                                      "The specialist reviews, the manager approves, the specialist carries out — off returns the old way instantly"),
                     isOn: s.approvalsWorkflow ?? false,
                     key: "approvals_workflow"
@@ -296,7 +296,7 @@ struct AdminAppSettingsView: View {
                     }
                     if adminRequestVM.approvalTemplatesAvailable == true {
                         AdminTapRow(icon: "text.badge.plus", tint: DS.Color.composerDiwaniya,
-                                    title: L10n.t("الردود الجاهزة", "Ready replies"),
+                                    title: L10n.t("نماذج الردود", "Reply templates"),
                                     subtitle: L10n.t("ردود قصيرة تظهر فوق ملاحظة القرار", "Short replies above the decision note"),
                                     value: adminRequestVM.approvalTemplates.isEmpty ? nil : "\(adminRequestVM.approvalTemplates.count)",
                                     tap: .action { templatesOpen = true })
@@ -333,8 +333,8 @@ struct AdminAppSettingsView: View {
     /// «المسار السريع»: شرائح الأنواع (اختيار متعدد) — المختار يبدأ عند المدير مباشرة
     private func fastTrackBlock(_ selected: [String]) -> some View {
         approvalsBlock(icon: "bolt.fill", tint: DS.Color.info,
-                       title: L10n.t("المسار السريع", "Fast track"),
-                       subtitle: L10n.t("هذه الأنواع تروح للمدير مباشرة بلا مراجعة المختص",
+                       title: L10n.t("الاعتماد المباشر", "Direct approval"),
+                       subtitle: L10n.t("هذه الأنواع تروح للمدير مباشرة بلا مراجعة المراجِع المختص",
                                         "These types go straight to the manager, skipping the specialist")) {
             ChangedWordsFlow(spacing: DS.Spacing.xs) {
                 ForEach(ApprovalTypeTitle.workflowTypes, id: \.self) { type in
@@ -374,7 +374,7 @@ struct AdminAppSettingsView: View {
                 (L10n.t("تذكير بعد", "Remind after"), sla, 6...max(6, esc - 6), 6, "approvals_sla_hours"),
                 (L10n.t("تصعيد بعد", "Escalate after"), esc, min(336, sla + 6)...336, 6, "approvals_escalate_hours")
             ])
-            slaGroup(L10n.t("المستعجل", "Urgent"), icon: "flame.fill", tint: DS.Color.error, rows: [
+            slaGroup(L10n.t("العاجل", "Urgent"), icon: "flame.fill", tint: DS.Color.error, rows: [
                 (L10n.t("تذكير بعد", "Remind after"), uSla, 1...max(1, uEsc - 1), 1, "approvals_urgent_sla_hours"),
                 (L10n.t("تصعيد بعد", "Escalate after"), uEsc, min(72, uSla + 1)...72, 1, "approvals_urgent_escalate_hours")
             ])
@@ -814,18 +814,18 @@ extension AdminAppSettingsView {
                          L10n.t("المسار", "Path"), icon: "point.topleft.down.to.point.bottomright.curvepath.fill",
                          tint: running ? DS.Hub.kpiMine : DS.Hub.kpiLate),
             AdminPageKPI(running ? s.approvalsFastTypes.map { "\($0.count)" } ?? "—" : "—",
-                         L10n.t("مسار سريع", "Fast track"), icon: "bolt.fill"),
+                         L10n.t("اعتماد مباشر", "Direct approval"), icon: "bolt.fill"),
             AdminPageKPI(running ? s.approvalsSlaHours.map { L10n.t("\(Int($0)) س", "\(Int($0))h") } ?? "—" : "—",
                          L10n.t("تذكير بعد", "Remind after"), icon: "timer")
         ]
         if running && templatesKnown {
-            kpis.append(AdminPageKPI("\(adminRequestVM.approvalTemplates.count)", L10n.t("ردود جاهزة", "Replies"),
+            kpis.append(AdminPageKPI("\(adminRequestVM.approvalTemplates.count)", L10n.t("نماذج الردود", "Templates"),
                                      icon: "text.badge.plus", tap: .action { templatesOpen = true }))
         }
         return AdminPageHeader(
-            title: L10n.t("إعدادات المسار", "Approval Path Settings"),
-            subtitle: L10n.t("مسار الموافقات، المهلة، المسار السريع، الردود الجاهزة",
-                             "Approvals path, SLA, fast track, ready replies"),
+            title: L10n.t("إعدادات مسار الموافقات", "Approval Path Settings"),
+            subtitle: L10n.t("مسار الموافقات، المهلة، الاعتماد المباشر، نماذج الردود",
+                             "Approvals path, SLA, direct approval, reply templates"),
             glyph: "gearshape.fill",
             readOnly: !canEdit,
             kpis: kpis)

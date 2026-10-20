@@ -6,14 +6,21 @@ import Supabase
 ///
 /// بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بلون بلاطة «الرسائل» في لوحة
 /// الإدارة وأرقامها الحيّة ← بحث + فلترا الحالة بعددهما ← صفوف `.dsRowBox()` (صورة المرسل · الاسم
-/// والوقت · مقتطف الرسالة · التصنيف والحالة). السحب («حذف» / «تم التعامل»)، التحديد المتعدد والحذف
+/// والوقت · مقتطف الرسالة · التصنيف والحالة). السحب («حذف» / «تمّت المعالجة»)، التحديد المتعدد والحذف
 /// وتأكيداتهما، السحب للتحديث، ومربّع التفاصيل كما كانت تماماً.
 struct AdminInboxView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     /// داخل «الوارد» (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠): بلا رأس خاص — رأس «الوارد» فوقها، و«تحديد» شريحة أعلى المحتوى
     var embedded: Bool = false
+    /// بحث «الوارد» الواحد (الدفعة ب ٢٠٢٦-١٠-٢٠): نفس النص يبحث في الطلبات والرسائل — nil = بحث الصفحة الخاص
+    var sharedSearch: Binding<String>? = nil
 
-    @State private var searchText: String = ""
+    /// تلميح حقل البحث الواحد في «الوارد» (الطلبات والرسائل)
+    static let searchPlaceholder = L10n.t("بحث في الطلبات والرسائل بالاسم أو الرقم", "Search requests and messages by name or number")
+
+    @State private var ownSearch: String = ""
+    private var searchBinding: Binding<String> { sharedSearch ?? $ownSearch }
+    private var searchText: String { searchBinding.wrappedValue }
     @State private var isLoading = false
     @State private var selectedMessage: AdminRequest? = nil
     @State private var filter: InboxFilter = .pending
@@ -39,8 +46,8 @@ struct AdminInboxView: View {
         case pending, handled
         var title: String {
             switch self {
-            case .pending: return L10n.t("لم يتم التعامل", "Pending")
-            case .handled: return L10n.t("تم التعامل", "Handled")
+            case .pending: return L10n.t("لم تُعالَج بعد", "Pending")
+            case .handled: return L10n.t("تمّت المعالجة", "Handled")
             }
         }
         var icon: String {
@@ -66,12 +73,16 @@ struct AdminInboxView: View {
         case .handled: byStatus = all.filter { $0.status == ApprovalStatus.approved.rawValue }
         }
         let sorted = byStatus.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
-        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return sorted }
+        // نفس مطابقة بحث الطلبات: الاسم أو النص بلا تشكيل/همزات، أو الرقم (٣ أرقام فأكثر)
+        let needle = ArabicTextNormalizer.normalizeForSearch(q)
+        let digits = AdminMemberFacts.asciiDigits(q)
         return sorted.filter { msg in
-            let name = msg.member?.fullName.lowercased() ?? ""
-            let preview = ContactParser.message(from: msg).lowercased()
-            return name.contains(q) || preview.contains(q)
+            let name = ArabicTextNormalizer.normalizeForSearch(msg.member?.fullName ?? "")
+            let preview = ArabicTextNormalizer.normalizeForSearch(ContactParser.message(from: msg))
+            if name.contains(needle) || preview.contains(needle) { return true }
+            return digits.count >= 3 && (msg.member?.phoneNumber ?? "").filter(\.isNumber).contains(digits)
         }
     }
 
@@ -115,13 +126,18 @@ struct AdminInboxView: View {
 
     // MARK: - Body
 
+    // حارس المكدس (الدفعة ب ٢٠٢٦-١٠-٢٠): الصفحة ثم التأكيدات والمربّع طبقتان خلف `AnyView`
     var body: some View {
+        AnyView(dialogsLayer(AnyView(pageLayer)))
+    }
+
+    private var pageLayer: some View {
         let messages = filteredMessages
         let counts = statusCounts
 
         // صفّ الأرقام ← البحث والفلاتر ← الرسائل: تتمرّر معاً (والسحب للتحديث يعمل حتى والقائمة فارغة)
         return ScrollView(showsIndicators: false) {
-            pageContent(messages: messages, counts: counts)
+            AnyView(pageContent(messages: messages, counts: counts))
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xxxl)
@@ -138,6 +154,11 @@ struct AdminInboxView: View {
         // الرأس الملوّن الموحّد — «تحديد» (كان في شريط النظام) زرّ الرأس؛ داخل «الوارد» بلا رأس
         .modifier(InboxHeader(embedded: embedded, hasMessages: !messages.isEmpty, isSelectMode: isSelectMode,
                               toggleSelect: toggleSelectMode))
+    }
+
+    /// تأكيدا الحذف، والتحميل الأول، ومربّع تفاصيل الرسالة
+    private func dialogsLayer(_ content: AnyView) -> some View {
+        content
         .dsAlert(L10n.t("حذف الرسائل", "Delete Messages"), isPresented: $showDeleteConfirm) {
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 Task { await deleteSelected() }
@@ -213,8 +234,8 @@ struct AdminInboxView: View {
                     .padding(.top, DS.Spacing.xs)
                     .dsStaggerIn(1)
             } else {
-                DSSearchField(text: $searchText,
-                              placeholder: L10n.t("ابحث…", "Search…"),
+                DSSearchField(text: searchBinding,
+                              placeholder: sharedSearch == nil ? L10n.t("ابحث…", "Search…") : Self.searchPlaceholder,
                               tint: pageTint)
                     .dsStaggerIn(1)
 
@@ -320,7 +341,7 @@ struct AdminInboxView: View {
             }
         ]
         if msg.status == ApprovalStatus.pending.rawValue {
-            actions.append(DSSwipeAction(icon: "checkmark.circle.fill", title: L10n.t("تم التعامل", "Handled"),
+            actions.append(DSSwipeAction(icon: "checkmark.circle.fill", title: L10n.t("تمّت المعالجة", "Handled"),
                                          color: DS.Color.successFill) {
                 adminRequestVM.markContactMessageRead(msg.id)
                 Task { await adminRequestVM.markContactMessageHandled(msg) }
@@ -380,7 +401,7 @@ struct AdminInboxView: View {
             let showOther: (() -> Void)? = otherCount > 0 ? { showFilter(other) } : nil
             DSEmptyView(L10n.t("ما فيه رسائل", "No messages"),
                         message: filter == .pending
-                            ? L10n.t("كل الرسائل تم التعامل معها", "All messages handled")
+                            ? L10n.t("تمّت معالجة كل الرسائل", "All messages handled")
                             : L10n.t("لا توجد رسائل متعامل معها بعد", "No handled messages yet"),
                         tint: filter == .pending ? DS.Color.success : nil,
                         actionTitle: otherCount > 0
@@ -577,7 +598,7 @@ private struct MessageDetailSheet: View {
             subtitle: message.member?.displayFullName ?? L10n.t("عضو", "Member"),
             icon: "envelope.open.fill",
             tint: DS.Color.actionNavy,
-            actionTitle: isMarking ? L10n.t("جارٍ…", "Working…") : L10n.t("تم التعامل", "Mark as Handled"),
+            actionTitle: isMarking ? L10n.t("جارٍ…", "Working…") : L10n.t("تمّت المعالجة", "Mark as Handled"),
             actionIcon: "checkmark.circle.fill",
             showsAction: isPending,
             cancelTitle: L10n.t("إغلاق", "Close"),
@@ -669,7 +690,7 @@ private struct MessageDetailSheet: View {
                 HStack(spacing: DS.Spacing.sm) {
                     DSFieldIcon(name: "checkmark.seal.fill", tint: DS.Color.success)
                         .accessibilityHidden(true)
-                    Text(L10n.t("تم التعامل مع هذه الرسالة", "This message was handled"))
+                    Text(L10n.t("تمّت معالجة هذه الرسالة", "This message was handled"))
                         .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.success)
                     Spacer(minLength: 0)

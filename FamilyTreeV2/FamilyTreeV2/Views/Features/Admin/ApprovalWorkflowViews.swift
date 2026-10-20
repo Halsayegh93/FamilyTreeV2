@@ -113,7 +113,7 @@ extension AdminRequestStep {
         case "executed": return L10n.t("نفّذ الطلب وبلّغ العضو", "carried it out and told the member")
         case "rejected": return L10n.t("رفض الطلب", "rejected the request")
         // «مسار الموافقات ٢» (طلب المالك ٢٠٢٦-١٠-١٦)
-        case "claim": return L10n.t("استلم الطلب", "took the request")
+        case "claim": return L10n.t("تولّى الطلب", "took the request")
         case "release": return L10n.t("ترك الطلب", "released the request")
         case "priority": return L10n.t("غيّر الأولوية", "changed the priority")
         case "escalated": return L10n.t("تصعّد للمدير لتأخره", "escalated to the manager for being late")
@@ -128,7 +128,7 @@ extension AdminRequestStep {
         guard let subject, !subject.isEmpty else { return actionTitle }
         switch action {
         case "claim": return L10n.t("أخذ الطلب من \(subject)", "took the request over from \(subject)")
-        case "release": return L10n.t("سحب الاستلام من \(subject)", "released \(subject)'s hold")
+        case "release": return L10n.t("رفع تولّي \(subject) للطلب", "released \(subject)'s hold")
         case "reminded": return L10n.t("تذكير بالتأخير لـ\(subject)", "late reminder to \(subject)")
         case "escalated": return L10n.t("تصعّد للمدير لتأخره عند \(subject)", "escalated to the manager — late with \(subject)")
         default: return actionTitle
@@ -156,10 +156,10 @@ struct ApprovalStageChips: View {
     @ViewBuilder private var chips: some View {
         // «مستعجل» بلون المعنى الأحمر — للعضو أيضاً (طلبه مستعجل)
         if snapshot.isUrgent {
-            DSStatusChip(text: L10n.t("مستعجل", "Urgent"), icon: "flame.fill", tint: DS.Color.error, size: .mini)
+            DSStatusChip(text: L10n.t("عاجل", "Urgent"), icon: "flame.fill", tint: DS.Color.error, size: .mini)
         }
         if waitingForMe {
-            DSStatusChip(text: L10n.t("بانتظارك", "Waiting for you"), icon: "bell.badge.fill",
+            DSStatusChip(text: L10n.t("بانتظار قرارك", "Waiting for you"), icon: "bell.badge.fill",
                          tint: DS.Color.accent, size: .mini)
         }
         if audience == .member {
@@ -723,7 +723,7 @@ struct ApprovalRequestBox<Details: View>: View {
         if f.hasV2 && (canClaim || canRelease || heldByOther || canPriority) {
             ChangedWordsFlow(spacing: DS.Spacing.xs) {
                 if canClaim {
-                    DSChipButton(L10n.t("استلام", "Take it"), icon: "hand.raised.fill", size: .small,
+                    DSChipButton(L10n.t("تولّي الطلب", "Take it"), icon: "hand.raised.fill", size: .small,
                                  isLoading: housekeeping == .claim) { runHousekeeping(.claim) }
                         .accessibilityHint(L10n.t("تستلم الطلب فلا يتصرف فيه غيرك", "You hold the request so no one else acts on it"))
                 }
@@ -742,7 +742,7 @@ struct ApprovalRequestBox<Details: View>: View {
                     }
                 }
                 if canPriority {
-                    DSChipButton(L10n.t("مستعجل", "Urgent"), icon: "flame.fill", tint: DS.Color.error,
+                    DSChipButton(L10n.t("عاجل", "Urgent"), icon: "flame.fill", tint: DS.Color.error,
                                  isSelected: f.isUrgent, size: .small,
                                  isLoading: housekeeping == .markUrgent || housekeeping == .markNormal) {
                         runHousekeeping(f.isUrgent ? .markNormal : .markUrgent)
