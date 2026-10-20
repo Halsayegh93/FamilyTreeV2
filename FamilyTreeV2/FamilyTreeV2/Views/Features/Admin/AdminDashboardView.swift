@@ -12,11 +12,13 @@ enum AdminReviewDestination: Hashable {
 
 // MARK: - لوحة الإدارة ← «اليوم» (إعادة التصميم الكاملة — طلب المالك ٢٠٢٦-١٠-٢٠)
 //
-// الاتجاه «أ» (مركز القيادة) أساساً + لمستان من «ب»: «مهام اليوم» بدوائر الإنجاز، وسحب «الوارد» مثل البريد.
-// من الأعلى: الرأس الكحلي (التحية، الدور، التاريخ، وأربعة أرقام: بانتظارك · مستعجل · متأخر · رسائل — «اللوحة العلوي
-// ب أ ممتازه») ← «تنبيهات» (تظهر عند المشكلة فقط) ← «يحتاج قرارك» (أول ٣ بأولوية المهلة) ← «مهام اليوم» ← «اليوم في
-// العائلة» ← إجراءات سريعة ← «نبض العائلة» ← «الأقسام» الثمانية بتلميح حيّ. كل دور يرى مجاله فقط والقسم الفارغ
-// لا يُرسم (IA.md). الصلاحيات والوجهات والروابط العميقة كما كانت، والصفحات القديمة تُفتح كما هي.
+// الاتجاه «أ» (مركز القيادة) أساساً + لمستان من «ب»: دوائر الإنجاز للمهام، وسحب «الوارد» مثل البريد.
+// «في اردحام بلوحة الادارة بالبداية» → «الأقسام فوق + قائمة وحدة» (اختيار المالك ٢٠٢٦-١٠-٢٠). من الأعلى:
+// الرأس الكحلي (التحية، الدور، التاريخ، وأربعة أرقام: بانتظارك · مستعجل · متأخر · رسائل) ← «أعداد الأعضاء» (المالك
+// والمدير والمراقب — «ابى اعداد الاعضاء بالتطبيق») ← «الأقسام» الثمانية بتلميح حيّ ← «تنبيهات» (عند المشكلة فقط) ←
+// «يحتاج قرارك» قائمة واحدة (القرارات والمهام معاً، أول ٣ و«عرض الكل»). «اليوم في العائلة» انتقل لأعلى «المناسبات»،
+// و«نبض العائلة» لأعلى «المؤشرات»، وكل إجراء سريع لأعلى قسمه. كل دور يرى مجاله فقط والقسم الفارغ لا يُرسم (IA.md).
+// الصلاحيات والوجهات والروابط العميقة كما كانت، والصفحات القديمة تُفتح كما هي.
 
 struct AdminDashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -42,14 +44,12 @@ struct AdminDashboardView: View {
     @State private var inboxTotal = 0
     @State private var memorial = DeceasedMemorialBoard.empty
     @State private var recentDeaths: [FamilyMember] = []
-    @State private var joinedThisWeek = 0
     /// المعلن عنهم — nil = تعذّر الجلب (لا تنبيه «لم يُعلن» خطأً)
     @State private var announcedIds: Set<UUID>? = nil
     @State private var activeNow: Int? = nil
     @State private var staleTokens: Int? = nil
-    @State private var weekly: (executed: Int, rejected: Int)? = nil
-    /// «عرض المنجز» في «مهام اليوم»
-    @State private var showDoneTasks = false
+    /// «أعداد الأعضاء» — تبدأ من آخر ما حُمّل وتتحدّث مع التحميل
+    @State private var memberCounts = AdminMemberCounts.seeded(members: [])
 
     @Environment(\.dsLandscape) private var landscape
 
@@ -108,7 +108,7 @@ struct AdminDashboardView: View {
         .onChange(of: memberVM.membersVersion) { _ in recalculate() }
         .onChange(of: pendingRequestsSum) { _ in recalculate() }
         .onChange(of: pendingArchiveCount) { _ in recalculate() }
-        .onChange(of: taskSignature) { _ in syncTasks() }
+        .onChange(of: todaySnapshot) { _ in syncTasks() }
     }
 
     // MARK: - التحميل
@@ -136,7 +136,7 @@ struct AdminDashboardView: View {
 
         let isAdmin = authVM.isAdmin
         let isSystem = authVM.canViewSystemSettings
-        let seesReport = isAdmin || authVM.currentUser?.role == .monitor
+        let seesCounts = seesMemberCounts
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
             group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
@@ -165,11 +165,10 @@ struct AdminDashboardView: View {
                 group.addTask { @MainActor in activeNow = await AdminTodayFetch.activeNowCount() }
                 group.addTask { @MainActor in staleTokens = await AdminTodayFetch.staleTokenCount() }
             }
-            if seesReport {
+            if seesCounts {
+                // «النساء» في «أعداد الأعضاء» — فشل الجلب يُبقي آخر قيمة (كاش شجرة النساء)
                 group.addTask { @MainActor in
-                    if adminRequestVM.approvalsWorkflowOn {
-                        weekly = await AdminTodayFetch.weeklyDone()
-                    }
+                    if let rows = try? await WomenStore.fetch() { memberCounts.setWomen(rows) }
                 }
             }
         }
@@ -181,14 +180,13 @@ struct AdminDashboardView: View {
     /// الأرقام المحسوبة من الأعضاء والطلبات — مرور واحد على الأعضاء
     private func recalculate() {
         let all = memberVM.allMembers
-        var moderator = 0, issues = 0, treeIssues = 0, joined = 0
+        var moderator = 0, issues = 0, treeIssues = 0
         let moderatorRoles: Set<FamilyMember.UserRole> = [.owner, .admin, .monitor, .supervisor]
         var activeIds = Set<UUID>(), fatherIds = Set<UUID>()
         for m in all where m.role != .pending && m.status != .frozen {
             activeIds.insert(m.id)
             if let fid = m.fatherId { fatherIds.insert(fid) }
         }
-        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
         for m in all {
             if m.role == .pending { continue }
             if moderatorRoles.contains(m.role) && m.isDeceased != true && m.status != .frozen { moderator += 1 }
@@ -198,7 +196,6 @@ struct AdminDashboardView: View {
                 let noGender = (m.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 let notActivated = m.status == nil || m.status == .pending
                 if notActivated || noPhone || noBirth || m.fatherId == nil || noGender { issues += 1 }
-                if m.isCountable, let created = ApprovalWorkflow.date(m.createdAt), created >= weekAgo { joined += 1 }
             }
             if m.status != .frozen {
                 let isOrphan = m.fatherId == nil && !fatherIds.contains(m.id)
@@ -214,14 +211,19 @@ struct AdminDashboardView: View {
             scope: AdminAllRequestsView.reviewScope(for: authVM))
         let deaths = all.filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate) }
             .sorted { ($0.deathDate ?? "") > ($1.deathDate ?? "") }
+        var countsNow = memberCounts
+        countsNow.setMen(from: all)
+        countsNow.setUsage(usageStats)
+        // شجرة النساء فتحت في تبويب آخر قبل أن يصل جلبنا — خذ كاشها
+        if countsNow.women == nil { countsNow.setWomen(WomenStore.cache) }
         withAnimation(DS.Anim.smooth) {
             moderatorCount = moderator
             issueMembersCount = issues
             treeIssuesCount = treeIssues
-            joinedThisWeek = joined
             inboxTotal = total
             recentDeaths = deaths
             memorial = DeceasedMemorialBoard(all)
+            if countsNow != memberCounts { memberCounts = countsNow }
         }
     }
 
@@ -242,18 +244,40 @@ struct AdminDashboardView: View {
         return recentDeaths.filter { !announcedIds.contains($0.id) }
     }
 
-    private var openTasks: [AdminTodayTask] {
-        AdminTodayFeed.tasks(authVM: authVM, adminRequestVM: adminRequestVM, items: decisionItems,
+    private func openTasks(_ items: [AdminDecisionItem]) -> [AdminTodayTask] {
+        AdminTodayFeed.tasks(authVM: authVM, adminRequestVM: adminRequestVM, items: items,
                              sms: sms, unannounced: unannounced)
     }
 
-    /// يتغيّر مع المهام المفتوحة — لمزامنة «المنجز»
-    private var taskSignature: [String] { isInitialLoading ? [] : openTasks.map(\.id) }
+    private func todayEntries(_ items: [AdminDecisionItem]) -> [AdminTodayEntry] {
+        AdminTodayFeed.entries(items: items, tasks: openTasks(items))
+    }
+
+    /// ما يتغيّر في القائمة والمهام — لمزامنة «المنجز» وصفحة «عرض الكل»
+    private struct TodaySnapshot: Equatable {
+        var tasks: [String] = []
+        var entries: [AdminTodayEntry] = []
+        var inbox = 0
+    }
+
+    private var todaySnapshot: TodaySnapshot {
+        guard !isInitialLoading else { return TodaySnapshot() }
+        let items = decisionItems
+        let tasks = openTasks(items)
+        return TodaySnapshot(tasks: tasks.map(\.id), entries: AdminTodayFeed.entries(items: items, tasks: tasks),
+                             inbox: inboxTotal)
+    }
 
     private func syncTasks() {
         guard !isInitialLoading else { return }
-        taskStore.sync(open: openTasks, user: authVM.currentUser?.id, role: authVM.currentUser?.role.rawValue ?? "")
+        let items = decisionItems
+        let tasks = openTasks(items)
+        taskStore.sync(open: tasks, user: authVM.currentUser?.id, role: authVM.currentUser?.role.rawValue ?? "")
+        taskStore.publish(entries: AdminTodayFeed.entries(items: items, tasks: tasks), inboxTotal: inboxTotal)
     }
+
+    /// «أعداد الأعضاء» لمن يرى الإحصائيات (كبطاقة «أفراد العائلة» القديمة): المالك والمدير والمراقب
+    private var seesMemberCounts: Bool { authVM.isAdmin || authVM.currentUser?.role == .monitor }
 
     private var roleGuide: RoleGuide? {
         authVM.currentUser.flatMap { RoleGuide.forRole($0.role) }
@@ -386,19 +410,19 @@ struct AdminDashboardView: View {
     private var todayContent: AnyView { AnyView(todayContentStack) }
 
     private var todayContentStack: some View {
-        let items = decisionItems
-        let tasks = openTasks
+        let entries = todayEntries(decisionItems)
+        let alerts = todayAlerts
+        let seesCounts = seesMemberCounts
         return VStack(spacing: DS.Hub.stackSpacing) {
-            let alerts = todayAlerts
+            if seesCounts {
+                AnyView(AdminMemberCountsCard(counts: memberCounts))
+            }
+            // بلا «أعداد الأعضاء» (المشرف) تصعد المربّعات نفسها فوق الرأس — عنوان «الأقسام» لا يقع على الكحلي
+            AnyView(areasSection(labeled: seesCounts))
             if !alerts.isEmpty {
                 AnyView(alertsCard(alerts))
             }
-            AnyView(decisionCard(items))
-            AnyView(tasksCard(tasks))
-            AnyView(familyTodayCard)
-            AnyView(quickActions)
-            AnyView(pulseSection)
-            AnyView(areasSection)
+            AnyView(decisionCard(entries))
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.bottom, DS.Spacing.xxxl)
@@ -560,454 +584,45 @@ struct AdminDashboardView: View {
         }
     }
 
-    // MARK: يحتاج قرارك
+    // MARK: يحتاج قرارك — قائمة واحدة (القرارات والمهام معاً)
 
-    private func decisionCard(_ items: [AdminDecisionItem]) -> some View {
+    private static let visibleEntryLimit = 3
+
+    private func decisionCard(_ entries: [AdminTodayEntry]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            AdminCardHeader(title: L10n.t("يحتاج قرارك", "Needs your decision")) {
-                NavigationLink { AdminAllRequestsView() } label: {
-                    AdminCardLinkLabel(title: isInitialLoading ? L10n.t("الوارد", "Inbox")
-                                                                : L10n.t("الوارد \(inboxTotal)", "Inbox \(inboxTotal)"))
+            AdminCardHeader(title: L10n.t("يحتاج قرارك", "Needs your decision"),
+                            badge: isInitialLoading ? nil : entries.count) {
+                if !isInitialLoading {
+                    NavigationLink { AdminTodayListView(store: taskStore) } label: {
+                        AdminCardLinkLabel(title: L10n.t("عرض الكل", "View all"))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             if isInitialLoading {
                 DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.sm)
-            } else if items.isEmpty {
-                HStack(spacing: DS.Spacing.md) {
-                    AdminIconSquare(symbol: "checkmark.seal.fill", tint: DS.Color.success)
-                    Text(L10n.t("كل شيء متابَع — لا شيء ينتظر قرارك", "All caught up — nothing awaits your decision"))
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, DS.Spacing.sm)
+            } else if entries.isEmpty {
+                AdminTodayCaughtUpRow()
             } else {
-                ForEach(Array(items.prefix(3).enumerated()), id: \.element.id) { index, item in
+                ForEach(Array(entries.prefix(Self.visibleEntryLimit).enumerated()), id: \.element.id) { index, entry in
                     if index > 0 { AdminRowDivider() }
-                    NavigationLink { AdminAllRequestsView(focusId: item.id) } label: {
-                        decisionRow(item)
-                    }
-                    .buttonStyle(.plain)
+                    AdminTodayEntryLink(entry: entry)
                 }
             }
         }
         .adminCard()
-    }
-
-    private func decisionRow(_ item: AdminDecisionItem) -> some View {
-        HStack(spacing: DS.Spacing.md) {
-            AdminIconSquare(symbol: item.icon, tint: item.tint)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                // نصّ عادي (لا مفتاح ترجمة): مفتاح بمتغيّرين فقط يعزل كلاً منهما فيقلب ترتيبهما في العربية
-                Text(verbatim: item.typeTitle + " · " + item.name)
-                    .dsFont(.hubRow)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .dsNameLines()
-                Text(item.subtitle)
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: DS.Spacing.xs)
-            if item.isUrgent {
-                DSStatusChip(text: L10n.t("مستعجل", "Urgent"), icon: "flame.fill", tint: DS.Color.warning)
-            } else if item.isLate {
-                DSStatusChip(text: AdminTodayText.late(item.snapshot), icon: "clock", tint: DS.Color.error)
-            } else if let since = AdminTodayText.since(item.date) {
-                DSStatusChip(text: since, tint: DS.Color.textTertiary)
-            }
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: مهام اليوم (لمسة «ب»)
-
-    private static let visibleTaskLimit = 6
-
-    private func tasksCard(_ tasks: [AdminTodayTask]) -> some View {
-        let done = taskStore.done
-        return VStack(alignment: .leading, spacing: 0) {
-            AdminCardHeader(title: L10n.t("مهام اليوم", "Today's tasks"), badge: isInitialLoading ? nil : tasks.count) {
-                if !done.isEmpty {
-                    Button {
-                        withAnimation(DS.Anim.snappy) { showDoneTasks.toggle() }
-                    } label: {
-                        AdminCardLinkLabel(title: showDoneTasks ? L10n.t("إخفاء المنجز", "Hide done")
-                                                                : L10n.t("عرض المنجز (\(done.count))", "Show done (\(done.count))"),
-                                           showsChevron: false)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            if isInitialLoading {
-                DSPageLoader(nil, fillsSpace: false)
-                    .frame(maxWidth: .infinity)
-            } else if tasks.isEmpty && (done.isEmpty || !showDoneTasks) {
-                Text(L10n.t("لا مهام مفتوحة اليوم — كل شيء متابَع", "No open tasks today — all caught up"))
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .padding(.vertical, DS.Spacing.sm)
-            }
-            if !isInitialLoading {
-                let shown = Array(tasks.prefix(Self.visibleTaskLimit))
-                ForEach(Array(shown.enumerated()), id: \.element.id) { index, task in
-                    if index > 0 { AdminRowDivider() }
-                    NavigationLink { taskDestination(task.target) } label: { taskRow(task) }
-                        .buttonStyle(.plain)
-                }
-                if tasks.count > Self.visibleTaskLimit {
-                    AdminRowDivider()
-                    NavigationLink { AdminAllRequestsView(initialFilter: .waiting) } label: {
-                        AdminCardLinkLabel(title: L10n.t("+\(tasks.count - Self.visibleTaskLimit) مهام أخرى في الوارد",
-                                                         "+\(tasks.count - Self.visibleTaskLimit) more in the inbox"))
-                    }
-                    .buttonStyle(.plain)
-                }
-                if showDoneTasks {
-                    ForEach(done) { record in
-                        AdminRowDivider()
-                        doneRow(record)
-                    }
-                }
-            }
-        }
-        .adminCard()
-    }
-
-    private func taskRow(_ task: AdminTodayTask) -> some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
-            Circle()
-                .strokeBorder(DS.Color.textTertiary, lineWidth: DS.Border.widthBold)
-                .frame(width: DS.Hub.taskRing, height: DS.Hub.taskRing)
-                .padding(.top, DS.Spacing.xxs)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                (Text(task.marks > 0 ? String(repeating: "!", count: task.marks) + " " : "")
-                    .foregroundColor(task.marks >= 3 ? DS.Color.error : DS.Color.warning)
-                 + Text(task.title).foregroundColor(DS.Color.textPrimary))
-                    .dsFont(.hubRow)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let detail = task.detail, !detail.isEmpty {
-                    Text(detail)
-                        .dsFont(.footnote)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(2)
-                }
-                HStack(spacing: DS.Spacing.md) {
-                    if let flag = task.flag {
-                        Label { Text(flag) } icon: { Image(systemName: task.flagIcon).dsGlyph(DS.Glyph.xs) }
-                            .foregroundColor(task.flagTint.dsReadableGlyph)
-                    }
-                    Label { Text(task.source) } icon: { Image(dsSymbol: task.sourceIcon).dsGlyph(DS.Glyph.xs) }
-                        .foregroundColor(DS.Color.accent)
-                }
-                .dsFont(.caption)
-                .labelStyle(AdminTightLabelStyle())
-                .padding(.top, DS.Spacing.xxs)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-
-    private func doneRow(_ record: AdminTodayTaskStore.Record) -> some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
-            Image(systemName: "checkmark")
-                .dsGlyph(DS.Glyph.sm, weight: .heavy)
-                .foregroundColor(DS.Color.textOnPrimary)
-                .frame(width: DS.Hub.taskRing, height: DS.Hub.taskRing)
-                .background(Circle().fill(DS.Color.accentLight))
-                .padding(.top, DS.Spacing.xxs)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(record.title)
-                    .dsFont(.hubRow)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .strikethrough(true, color: DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text([L10n.t("تمّ", "Done"), record.doneAt.map(timeText)].compactMap { $0 }.joined(separator: " · ")
-                     + " · " + record.source)
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-        .opacity(DS.Opacity.disabled + 0.1)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(L10n.t("منجزة: \(record.title)", "Done: \(record.title)"))
-    }
-
-    private func timeText(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.isArabic ? "ar_KW@numbers=latn" : "en_US")
-        f.dateFormat = "h:mm a"
-        return f.string(from: date)
-    }
-
-    @ViewBuilder
-    private func taskDestination(_ target: AdminTodayTask.Target) -> some View {
-        switch target {
-        case .inbox(let id):  AdminAllRequestsView(focusId: id)
-        case .sms:            AdminSmsView(backTitle: L10n.t("اليوم", "Today"))
-        case .deaths:         DeathAnnouncementsPage()
-        case .announce:       DeathAnnouncementsPage()
-        case .messages:       AdminAllRequestsView(startsWithMessages: true)
-        }
-    }
-
-    // MARK: اليوم في العائلة
-
-    private var familyRows: [AdminFamilyTodayRow] {
-        var rows: [AdminFamilyTodayRow] = []
-        let arabic = L10n.isArabic
-        if let next = memorial.upcoming.first {
-            rows.append(AdminFamilyTodayRow(
-                id: "memorial", icon: "moon.stars.fill", tint: DS.Color.sadu,
-                title: L10n.t("ذكرى \(next.member.shortFullName)", "\(next.member.shortFullName)'s anniversary"),
-                value: DeceasedMemorial.whenLabel(next.anniversary.daysUntil, arabic: arabic),
-                target: .memorial))
-        }
-        let seesNumbers = authVM.isAdmin || authVM.currentUser?.role == .monitor
-        if seesNumbers && !recentDeaths.isEmpty {
-            rows.append(AdminFamilyTodayRow(
-                id: "deaths", icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.slate,
-                title: L10n.t("وفيات آخر 30 يوماً", "Deaths in the last 30 days"),
-                value: "\(recentDeaths.count)", target: authVM.isAdmin ? .deaths : .memorial))
-        }
-        if seesNumbers && joinedThisWeek > 0 {
-            rows.append(AdminFamilyTodayRow(
-                id: "joined", icon: "person.crop.circle.badge.plus", tint: DS.Color.palm,
-                title: L10n.t("أُضيفوا للشجرة هذا الأسبوع", "Added to the tree this week"),
-                value: "\(joinedThisWeek)", target: .directory))
-        }
-        return rows
-    }
-
-    @ViewBuilder
-    private var familyTodayCard: some View {
-        let rows = familyRows
-        if !isInitialLoading && !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                AdminCardHeader(title: L10n.t("اليوم في العائلة", "Today in the family"))
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    if index > 0 { AdminRowDivider() }
-                    NavigationLink { familyDestination(row.target) } label: {
-                        AdminListRow(icon: row.icon, tint: row.tint, title: row.title) {
-                            Text(row.value)
-                                .dsFont(.chip)
-                                .monospacedDigit()
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .adminCard()
-        }
-    }
-
-    @ViewBuilder
-    private func familyDestination(_ target: AdminFamilyTodayRow.Target) -> some View {
-        switch target {
-        case .memorial:  DeceasedMemorialView()
-        case .deaths:    DeathAnnouncementsPage()
-        case .directory: AdminLazyPage { AnyView(AdminMembersManagementView(initialTab: .directory)) }
-        }
-    }
-
-    // MARK: إجراءات سريعة
-
-    private struct QuickAction: Identifiable {
-        let id: String
-        let icon: String
-        let title: String
-        let page: () -> AnyView
-    }
-
-    private var quickActionItems: [QuickAction] {
-        var list: [QuickAction] = []
-        if authVM.canSendNotifications {
-            list.append(QuickAction(id: "notify", icon: "megaphone", title: L10n.t("إشعار", "Notify")) {
-                AnyView(AdminMessagingHubView())
-            })
-        }
-        list.append(QuickAction(id: "occasion", icon: "photo.on.rectangle", title: L10n.t("مناسبة", "Occasion")) {
-            AnyView(OccasionComposerView())
-        })
-        if authVM.canRegisterMembers {
-            list.append(QuickAction(id: "register", icon: "person.badge.plus", title: L10n.t("تسجيل عضو", "Register")) {
-                AnyView(AdminRegisterMemberView())
-            })
-        }
-        if authVM.isAdmin {
-            list.append(QuickAction(id: "death", icon: NewsTypeHelper.icon(for: "وفاة"), title: L10n.t("إعلان وفاة", "Obituary")) {
-                AnyView(DeathAnnouncementsPage())
-            })
-        }
-        if authVM.canEditMembers {
-            list.append(QuickAction(id: "find", icon: "magnifyingglass", title: L10n.t("بحث عضو", "Find member")) {
-                AnyView(AdminMembersManagementView(initialTab: .directory))
-            })
-        }
-        return list
-    }
-
-    private var quickActions: some View {
-        HStack(alignment: .top, spacing: 0) {
-            ForEach(quickActionItems) { action in
-                NavigationLink { AdminLazyPage(make: action.page) } label: {
-                    VStack(spacing: DS.Spacing.xsm) {
-                        Image(dsSymbol: action.icon)
-                            .dsGlyph(DS.Glyph.xxl, weight: .medium)
-                            .foregroundColor(DS.Color.primary)
-                            .frame(width: DS.Hub.quickCircle, height: DS.Hub.quickCircle)
-                            .background(Circle().fill(DS.Color.surface))
-                            .overlay(Circle().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke),
-                                                           lineWidth: DS.Border.width))
-                            .dsSubtleShadow()
-                        Text(action.title)
-                            .dsFont(.caption)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.8)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(DSScaleButtonStyle())
-                .accessibilityLabel(action.title)
-            }
-        }
-        .padding(.vertical, DS.Spacing.xxs)
-    }
-
-    // MARK: نبض العائلة
-
-    private struct PulseTile: Identifiable {
-        let id: String
-        let icon: String
-        let label: String
-        let value: String
-        var unit: String? = nil
-        var valueTint: Color = DS.Color.textPrimary
-        let note: String
-        var meter: Double? = nil
-        var meterTint: Color = DS.Color.primaryFill
-        let page: () -> AnyView
-    }
-
-    private var pulseTiles: [PulseTile] {
-        var tiles: [PulseTile] = []
-        if authVM.isAdmin, let now = activeNow {
-            tiles.append(PulseTile(id: "active", icon: "bolt.fill", label: L10n.t("النشطون الآن", "Active now"),
-                                   value: "\(now)", note: L10n.t("يستخدمون التطبيق الآن", "Using the app now")) {
-                AnyView(AdminActiveMembersView())
-            })
-        }
-        if authVM.isAdmin || authVM.currentUser?.role == .monitor, let u = usageStats {
-            let living = u.active + u.idle + u.loginNoDevice + u.neverLogged + u.noPhone
-            let activeAccounts = u.active + u.idle
-            let share = living > 0 ? Double(activeAccounts) / Double(living) : 0
-            tiles.append(PulseTile(id: "accounts", icon: "iphone", label: L10n.t("حسابات فعّالة", "Active accounts"),
-                                   value: "\(Int((share * 100).rounded()))%",
-                                   note: L10n.t("\(activeAccounts) من \(living) حيّاً", "\(activeAccounts) of \(living) living"),
-                                   meter: share) {
-                AnyView(AppUsageMembersView(category: .active))
-            })
-        }
-        if authVM.canViewSystemSettings, let balance = sms.status?.balance {
-            let level = sms.level
-            tiles.append(PulseTile(id: "sms", icon: "ellipsis.message", label: L10n.t("رسائل الدخول", "Sign-in SMS"),
-                                   value: SmsBalanceText.points(balance), unit: L10n.t("نقطة", "pts"),
-                                   valueTint: level == .good ? DS.Color.textPrimary : level.tint,
-                                   note: SmsBalanceText.enough(balance)) {
-                AnyView(AdminSmsView(backTitle: L10n.t("اليوم", "Today")))
-            })
-        }
-        if let w = weekly {
-            tiles.append(PulseTile(id: "done", icon: "checkmark.circle", label: L10n.t("منجز هذا الأسبوع", "Done this week"),
-                                   value: "\(w.executed + w.rejected)",
-                                   note: L10n.t("نُفّذ \(w.executed) · رُفض \(w.rejected)", "\(w.executed) done · \(w.rejected) rejected")) {
-                AnyView(ApprovalsReportView())
-            })
-        }
-        return tiles
-    }
-
-    @ViewBuilder
-    private var pulseSection: some View {
-        let tiles = pulseTiles
-        if !tiles.isEmpty {
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                AdminSectionLabel(title: L10n.t("نبض العائلة", "Family pulse"))
-                LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm + 2) {
-                    ForEach(tiles) { tile in
-                        NavigationLink { AdminLazyPage(make: tile.page) } label: { pulseTile(tile) }
-                            .buttonStyle(DSPressStyle())
-                    }
-                }
-            }
-        }
-    }
-
-    private func pulseTile(_ tile: PulseTile) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(dsSymbol: tile.icon).dsGlyph(DS.Glyph.sm)
-                Text(tile.label).lineLimit(1).minimumScaleFactor(0.8)
-            }
-            .dsFont(.caption)
-            .foregroundColor(DS.Color.textTertiary)
-            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
-                Text(tile.value)
-                    .dsFont(.hubPulse)
-                    .monospacedDigit()
-                    .foregroundColor(tile.valueTint.dsReadableGlyph)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                if let unit = tile.unit {
-                    Text(unit)
-                        .dsFont(.caption)
-                        .foregroundColor(tile.valueTint.dsReadableGlyph)
-                }
-            }
-            Text(tile.note)
-                .dsFont(.caption)
-                .foregroundColor(DS.Color.textTertiary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            if let meter = tile.meter {
-                AdminMeter(progress: meter, tint: tile.meterTint)
-                    .padding(.top, DS.Spacing.xs)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: DS.Hub.tileMinHeight, alignment: .topLeading)
-        .dsCard(padding: DS.Spacing.md, radius: DS.Hub.tileRadius)
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: الأقسام
 
-    private var gridColumns: [GridItem] {
-        landscape
-            ? [GridItem(.adaptive(minimum: DS.Landscape.tileMinWidth), spacing: DS.Spacing.sm + 2)]
-            : [GridItem(.flexible(), spacing: DS.Spacing.sm + 2), GridItem(.flexible(), spacing: DS.Spacing.sm + 2)]
-    }
-
-    private var areasSection: some View {
+    private func areasSection(labeled: Bool) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
-            LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm + 2) {
+            if labeled {
+                AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
+            }
+            LazyVGrid(columns: AdminGrid.columns(landscape: landscape), spacing: AdminGrid.spacing) {
                 ForEach(visibleAreas) { area in
                     NavigationLink { AdminLazyPage { AnyView(AdminAreaView(area: area)) } } label: {
                         areaTile(area)
@@ -1079,18 +694,321 @@ struct AdminDashboardView: View {
     }
 }
 
-/// رمز ونص متقاربان (مصدر المهمة وشارتها)
-struct AdminTightLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: DS.Spacing.xxs + 1) {
-            configuration.icon
-            configuration.title
-        }
-    }
-}
-
 /// يبني الصفحة عند ظهورها فقط (لا عند بناء اللوحة) — كانت كلها تُنسخ في مكدّس اللوحة فينغلق التطبيق (٢٠٢٦-١٠-٠٥)
 struct AdminLazyPage: View {
     let make: () -> AnyView
     var body: some View { make() }
+}
+
+// MARK: - «يحتاج قرارك»: الصفّ، والرابط، و«عرض الكل»
+
+/// صفّ في «يحتاج قرارك»: دائرة الإنجاز لما عليك أنت (لمسة «ب» — تصير ✓ في «المنجز» حين يُحلّ ما خلفها)، أو مربّع
+/// النوع لما في مجالك عند غيرك؛ ثم العنوان وسطر الحالة وشارة المهلة
+struct AdminTodayEntryRow: View {
+    let entry: AdminTodayEntry
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.md) {
+            if entry.isTask {
+                Circle()
+                    .strokeBorder(DS.Color.textTertiary, lineWidth: DS.Border.widthBold)
+                    .frame(width: DS.Hub.taskRing, height: DS.Hub.taskRing)
+                    .frame(width: DS.Hub.iconSquare)
+                    .accessibilityHidden(true)
+            } else {
+                AdminIconSquare(symbol: entry.icon, tint: entry.tint)
+            }
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                // نصّ عادي (لا مفتاح ترجمة): مفتاح بمتغيّرين يعزل كلاً منهما فيقلب ترتيبهما في العربية
+                Text(verbatim: entry.title)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .dsNameLines()
+                if !entry.subtitle.isEmpty {
+                    Text(verbatim: entry.subtitle)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: DS.Spacing.xs)
+            if let chip = entry.chip {
+                DSStatusChip(text: chip.text, icon: chip.icon, tint: chip.tint)
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm + 2)
+        .frame(minHeight: DS.Icon.tapTarget)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(entry.isTask ? L10n.t("عليك", "Yours to do") : L10n.t("بانتظار غيرك", "With someone else"))
+    }
+}
+
+/// الصفّ رابطاً: الطلب يفتح «الوارد» على مربّع تفاصيله، والرسالة تفتح «رسائل الأعضاء»
+struct AdminTodayEntryLink: View {
+    let entry: AdminTodayEntry
+
+    var body: some View {
+        NavigationLink { AdminLazyPage { Self.page(entry.target) } } label: {
+            AdminTodayEntryRow(entry: entry)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static func page(_ target: AdminTodayEntry.Target) -> AnyView {
+        switch target {
+        case .inbox(let id): return AnyView(AdminAllRequestsView(focusId: id))
+        case .messages:      return AnyView(AdminAllRequestsView(startsWithMessages: true))
+        }
+    }
+}
+
+/// «كل شيء متابَع» — حين لا شيء ينتظر
+struct AdminTodayCaughtUpRow: View {
+    var body: some View {
+        HStack(spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: "checkmark.seal.fill", tint: DS.Color.success)
+            Text(L10n.t("كل شيء متابَع — لا شيء ينتظر قرارك", "All caught up — nothing awaits your decision"))
+                .dsFont(.subtitle)
+                .foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, DS.Spacing.sm)
+    }
+}
+
+/// مهمة أُنجزت اليوم (في «عرض المنجز»)
+struct AdminTodayDoneRow: View {
+    let record: AdminTodayTaskStore.Record
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DS.Spacing.md) {
+            Image(systemName: "checkmark")
+                .dsGlyph(DS.Glyph.sm, weight: .heavy)
+                .foregroundColor(DS.Color.textOnPrimary)
+                .frame(width: DS.Hub.taskRing, height: DS.Hub.taskRing)
+                .background(Circle().fill(DS.Color.accentLight))
+                .frame(width: DS.Hub.iconSquare)
+                .padding(.top, DS.Spacing.xxs)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(verbatim: record.title)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .strikethrough(true, color: DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: [L10n.t("تمّ", "Done"), record.doneAt.map(Self.time)].compactMap { $0 }
+                        .joined(separator: " · ") + " · " + record.source)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, DS.Spacing.sm + 2)
+        .opacity(DS.Opacity.disabled + 0.1)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(L10n.t("منجزة: \(record.title)", "Done: \(record.title)"))
+    }
+
+    private static func time(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: L10n.isArabic ? "ar_KW@numbers=latn" : "en_US")
+        f.dateFormat = "h:mm a"
+        return f.string(from: date)
+    }
+}
+
+/// «عرض الكل»: القائمة الموحّدة كاملة + «عرض المنجز» + «الوارد». تقرأ من ذاكرة «اليوم» فتتحدّث وهي مفتوحة
+struct AdminTodayListView: View {
+    @ObservedObject var store: AdminTodayTaskStore
+    @State private var showDone = false
+
+    var body: some View {
+        AdminHubPage {
+            AdminBandHeader(title: L10n.t("يحتاج قرارك", "Needs your decision"),
+                            subtitle: L10n.t("الطلبات ورسائل الأعضاء — ما عليك بدائرة، وما عند غيرك بنوعه",
+                                             "Requests and member messages — yours with a circle, others' by type"))
+        } content: {
+            AnyView(listCard)
+            AnyView(inboxCard)
+        }
+    }
+
+    private var listCard: some View {
+        let entries = store.entries
+        let done = store.done
+        return VStack(alignment: .leading, spacing: 0) {
+            AdminCardHeader(title: L10n.t("المفتوحة", "Open"), badge: store.loaded ? entries.count : nil) {
+                if !done.isEmpty {
+                    Button {
+                        withAnimation(DS.Anim.snappy) { showDone.toggle() }
+                    } label: {
+                        AdminCardLinkLabel(title: showDone ? L10n.t("إخفاء المنجز", "Hide done")
+                                                           : L10n.t("عرض المنجز (\(done.count))", "Show done (\(done.count))"),
+                                           showsChevron: false)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if !store.loaded {
+                DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.sm)
+            } else if entries.isEmpty {
+                AdminTodayCaughtUpRow()
+            }
+            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                if index > 0 { AdminRowDivider() }
+                AdminTodayEntryLink(entry: entry)
+            }
+            if showDone {
+                ForEach(done) { record in
+                    AdminRowDivider()
+                    AdminTodayDoneRow(record: record)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
+    }
+
+    private var inboxCard: some View {
+        NavigationLink { AdminLazyPage { AnyView(AdminAllRequestsView()) } } label: {
+            AdminListRow(icon: AdminArea.inbox.icon, tint: DS.Color.primary, title: AdminArea.inbox.title,
+                         subtitle: L10n.t("كل الطلبات بالنوع والمهلة، ورسائل الأعضاء", "Every request by type and SLA, and messages")) {
+                if store.loaded {
+                    Text(verbatim: "\(store.inboxTotal)")
+                        .dsFont(.chip)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
+    }
+}
+
+// MARK: - «أعداد الأعضاء»
+
+/// بطاقة «أ» مدمجة تحت الرأس: الأفراد · الرجال · النساء · الحسابات المفعّلة — كل رقم يفتح قائمته الموجودة
+/// (نظرة الأعضاء، السجل، شجرة النساء، «فعّال» في استخدام التطبيق). أربعة أعمدة، ومربّعان×مربّعين مع النص الكبير.
+struct AdminMemberCountsCard: View {
+    let counts: AdminMemberCounts
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.dsLandscape) private var landscape
+
+    fileprivate enum Target { case overview, directory, women, accounts }
+
+    fileprivate struct Cell: Identifiable {
+        let id: String
+        let label: String
+        let value: Int?
+        let note: String?
+        let tint: Color
+        let target: Target
+    }
+
+    private var cells: [Cell] {
+        func alive(_ n: Int?) -> String? { n.map { L10n.t("\($0) أحياء", "\($0) alive") } }
+        return [
+            Cell(id: "total", label: L10n.t("الأفراد", "Members"), value: counts.total,
+                 note: alive(counts.totalAlive), tint: DS.Color.textPrimary, target: .overview),
+            Cell(id: "men", label: L10n.t("الرجال", "Men"), value: counts.men,
+                 note: alive(counts.menAlive), tint: DS.Color.male, target: .directory),
+            Cell(id: "women", label: L10n.t("النساء", "Women"), value: counts.women,
+                 note: alive(counts.womenAlive), tint: DS.Color.female, target: .women),
+            Cell(id: "accounts", label: L10n.t("الحسابات المفعّلة", "Active accounts"), value: counts.accounts,
+                 note: counts.living.map { L10n.t("من \($0) حيّاً", "of \($0) living") },
+                 tint: DS.Color.success, target: .accounts)
+        ]
+    }
+
+    /// صفّ واحد بأربعة أعمدة، أو صفّان بعمودين مع النص الكبير (عمودياً)
+    private var rows: [[Cell]] {
+        let all = cells
+        guard typeSize >= .xxLarge && !landscape else { return [all] }
+        return [Array(all.prefix(2)), Array(all.suffix(2))]
+    }
+
+    var body: some View {
+        let rows = self.rows
+        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            AdminCardHeader(title: L10n.t("أعداد الأعضاء", "Member counts"))
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { r, row in
+                    if r > 0 { AdminRowDivider() }
+                    HStack(spacing: 0) {
+                        ForEach(Array(row.enumerated()), id: \.element.id) { i, cell in
+                            if i > 0 { AdminColumnDivider() }
+                            link(cell)
+                                .padding(.leading, i == 0 ? 0 : DS.Spacing.sm)
+                                .padding(.trailing, i == row.count - 1 ? 0 : DS.Spacing.sm)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
+    }
+
+    @ViewBuilder
+    private func link(_ cell: Cell) -> some View {
+        switch cell.target {
+        case .women:
+            // شجرة النساء تُدار من تبويب الشجرة (كصفّ «شجرة النساء» في «العائلة»)
+            Button {
+                TreeTabContainer.openWomenOnAppear = true
+                NotificationCenter.default.post(name: .openWomenTree, object: nil)
+            } label: { cellView(cell) }
+            .buttonStyle(DSPressStyle())
+        default:
+            NavigationLink { AdminLazyPage { Self.page(cell.target) } } label: { cellView(cell) }
+                .buttonStyle(DSPressStyle())
+        }
+    }
+
+    private func cellView(_ cell: Cell) -> some View {
+        let value = cell.value.map { "\($0)" } ?? "—"
+        return VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            Text(verbatim: value)
+                .dsFont(.hubPulse)
+                .monospacedDigit()
+                .foregroundColor(cell.tint.dsReadableGlyph)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .contentTransition(.numericText())
+            Text(cell.label)
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if let note = cell.note {
+                Text(verbatim: note)
+                    .dsFont(.caption)
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([cell.label + ": " + value, cell.note].compactMap { $0 }.joined(separator: "، "))
+    }
+
+    private static func page(_ target: Target) -> AnyView {
+        switch target {
+        case .overview:  return AnyView(AdminMembersManagementView(initialTab: .overview))
+        case .directory: return AnyView(AdminMembersManagementView(initialTab: .directory))
+        case .accounts:  return AnyView(AppUsageMembersView(category: .active))
+        case .women:     return AnyView(EmptyView())
+        }
+    }
 }

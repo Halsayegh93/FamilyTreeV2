@@ -110,6 +110,87 @@ struct AdminTodayTask: Identifiable, Equatable {
     }
 }
 
+/// صفّ في القائمة الموحّدة «يحتاج قرارك» (طلب المالك ٢٠٢٦-١٠-٢٠: «الأقسام فوق + قائمة وحدة») — تجمع قرارات اليوم
+/// و«مهام اليوم» في صفّ واحد لكل طلب: ما عليك أنت = دائرة إنجاز (لمسة «ب»)، وما في مجالك عند غيرك = مربّع نوعه.
+/// ما تعرضه «تنبيهات» (رصيد الرسائل، وفاة لم يُعلن عنها) لا يتكرّر هنا.
+struct AdminTodayEntry: Identifiable, Equatable {
+    enum Target: Equatable { case inbox(UUID), messages }
+
+    struct Chip: Equatable {
+        let text: String
+        var icon: String? = nil
+        let tint: Color
+    }
+
+    let id: String
+    /// مهمة عليك (تصير «منجزة» حين يُحلّ ما خلفها) — وإلا طلب في مجالك بانتظار غيرك
+    let isTask: Bool
+    let icon: String
+    let tint: Color
+    let title: String
+    let subtitle: String
+    var chip: Chip? = nil
+    let target: Target
+}
+
+/// «أعداد الأعضاء» أعلى «اليوم» — نفس تعريفات بطاقة «أفراد العائلة» القديمة (قبل إعادة التصميم):
+/// الرجال = شجرة العائلة بلا المعلّقين، النساء = إناث شجرة النساء (جدولها يضمّ مرايا الرجال)، الأفراد = مجموعهما؛
+/// والحسابات المفعّلة = «فعّال» في «استخدام التطبيق» (رقم وجهاز — فعّال + خامل، تعريف المالك). nil = لم يُعرف بعد.
+struct AdminMemberCounts: Equatable {
+    var men: Int? = nil
+    var menAlive: Int? = nil
+    var women: Int? = nil
+    var womenAlive: Int? = nil
+    var accounts: Int? = nil
+    /// كل الأحياء في «استخدام التطبيق» (مقام نسبة الحسابات)
+    var living: Int? = nil
+
+    var total: Int? {
+        guard let men, let women else { return nil }
+        return men + women
+    }
+
+    var totalAlive: Int? {
+        guard let menAlive, let womenAlive else { return nil }
+        return menAlive + womenAlive
+    }
+
+    /// الرجال من أعضاء الشجرة المحمّلة
+    mutating func setMen(from all: [FamilyMember]) {
+        guard !all.isEmpty else { return }
+        var total = 0, alive = 0
+        for m in all where m.role != .pending {
+            total += 1
+            if m.isDeceased != true { alive += 1 }
+        }
+        men = total
+        menAlive = alive
+    }
+
+    mutating func setWomen(_ rows: [FamilyMember]) {
+        guard !rows.isEmpty else { return }
+        let females = rows.filter(\.isFemale)
+        women = females.count
+        womenAlive = females.filter { $0.isDeceased != true }.count
+    }
+
+    mutating func setUsage(_ u: AppUsageStats?) {
+        guard let u else { return }
+        accounts = u.active + u.idle
+        living = u.active + u.idle + u.loginNoDevice + u.neverLogged + u.noPhone
+    }
+
+    /// أعداد البداية من آخر ما حُمّل (الشجرة، كاش شجرة النساء، آخر «استخدام التطبيق») — بلا طلب جديد
+    @MainActor
+    static func seeded(members: [FamilyMember]) -> AdminMemberCounts {
+        var c = AdminMemberCounts()
+        c.setMen(from: members)
+        c.setWomen(WomenStore.cache)
+        c.setUsage(AppUsageStats.cached)
+        return c
+    }
+}
+
 /// صفّ «اليوم في العائلة»
 struct AdminFamilyTodayRow: Identifiable {
     enum Target { case memorial, deaths, directory }
@@ -367,12 +448,51 @@ enum AdminTodayFeed {
         }
         return tasks
     }
+
+    // MARK: القائمة الموحّدة «يحتاج قرارك»
+
+    /// يدمج القرارات والمهام: صفّ واحد لكل طلب (المهمة «راجع انضمام · فلان» بدل تكرارها تحت القرار)، ثم رسائل
+    /// الأعضاء. رصيد الرسائل والوفيات غير المعلنة تبقى في «تنبيهات» فقط (لها زرّها هناك). الترتيب: المستعجل ←
+    /// المتأخر ← ما عليك ← ما عند غيرك، ثم بترتيب الوصول.
+    static func entries(items: [AdminDecisionItem], tasks: [AdminTodayTask]) -> [AdminTodayEntry] {
+        var taskById: [String: AdminTodayTask] = [:]
+        for task in tasks { taskById[task.id] = task }
+        var ranked: [(rank: Int, entry: AdminTodayEntry)] = []
+
+        for item in items {
+            let task = taskById["req-\(item.id.uuidString)"]
+            let chip: AdminTodayEntry.Chip?
+            if item.isUrgent {
+                chip = .init(text: L10n.t("مستعجل", "Urgent"), icon: "flame.fill", tint: DS.Color.warning)
+            } else if item.isLate {
+                chip = .init(text: AdminTodayText.late(item.snapshot), icon: "clock", tint: DS.Color.error)
+            } else if item.snapshot != nil {
+                chip = AdminTodayText.since(item.date).map { .init(text: $0, tint: DS.Color.textTertiary) }
+            } else {
+                chip = nil // بلا مسار: سطر الحالة نفسه «منذ…» — لا تكرار
+            }
+            let rank = item.isUrgent ? 0 : item.isLate ? 1 : task != nil ? 2 : 3
+            ranked.append((rank, AdminTodayEntry(
+                id: "req-\(item.id.uuidString)", isTask: task != nil, icon: item.icon, tint: item.tint,
+                title: task?.title ?? (item.typeTitle + " · " + item.name),
+                subtitle: item.subtitle, chip: chip, target: .inbox(item.id))))
+        }
+        for task in tasks where task.target == .messages {
+            ranked.append((2, AdminTodayEntry(
+                id: task.id, isTask: true, icon: task.sourceIcon, tint: DS.Color.sea,
+                title: task.title, subtitle: task.detail ?? "", target: .messages)))
+        }
+        return ranked.enumerated()
+            .sorted { $0.element.rank != $1.element.rank ? $0.element.rank < $1.element.rank : $0.offset < $1.offset }
+            .map(\.element.entry)
+    }
 }
 
 // MARK: - ذاكرة مهام اليوم
 
 /// ما ظهر من مهام اليوم — المهمة التي ظهرت اليوم ثم اختفى ما خلفها (حُلّ الطلب، شُحن الرصيد، أُعلنت الوفاة)
 /// تُعرض «منجزة». لا تأشير يدوي: الدائرة حالة فقط. تُنسى مع بداية يوم جديد (مفتاح باليوم والمستخدم).
+/// ويحمل آخر صفوف «يحتاج قرارك» لصفحة «عرض الكل» (تتحدّث معها وهي مفتوحة).
 @MainActor
 final class AdminTodayTaskStore: ObservableObject {
     struct Record: Codable, Identifiable, Equatable {
@@ -384,8 +504,18 @@ final class AdminTodayTaskStore: ObservableObject {
     }
 
     @Published private(set) var done: [Record] = []
+    /// صفوف القائمة الموحّدة كاملة، وعدّاد «الوارد» — من «اليوم» بعد اكتمال التحميل
+    @Published private(set) var entries: [AdminTodayEntry] = []
+    @Published private(set) var inboxTotal = 0
+    @Published private(set) var loaded = false
     private var records: [String: Record] = [:]
     private var key = ""
+
+    func publish(entries list: [AdminTodayEntry], inboxTotal total: Int) {
+        if list != entries { entries = list }
+        if total != inboxTotal { inboxTotal = total }
+        if !loaded { loaded = true }
+    }
 
     private static func dayKey(user: UUID?, role: String) -> String {
         let f = DateFormatter()

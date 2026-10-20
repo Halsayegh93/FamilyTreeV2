@@ -447,6 +447,27 @@ struct AdminRowDivider: View {
     }
 }
 
+/// فاصل عمودي رفيع بين أرقام البطاقة («أعداد الأعضاء»)
+struct AdminColumnDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke * 2))
+            .frame(width: DS.Border.width / 2)
+            .accessibilityHidden(true)
+    }
+}
+
+/// شبكة المربّعات (الأقسام، «نبض العائلة»): عمودان عمودياً، وأعمدة متكيّفة أفقياً
+enum AdminGrid {
+    static let spacing: CGFloat = DS.Spacing.sm + 2
+
+    static func columns(landscape: Bool) -> [GridItem] {
+        landscape
+            ? [GridItem(.adaptive(minimum: DS.Landscape.tileMinWidth), spacing: spacing)]
+            : [GridItem(.flexible(), spacing: spacing), GridItem(.flexible(), spacing: spacing)]
+    }
+}
+
 /// عنوان قسم خارج البطاقات («نبض العائلة»، «الأقسام»)
 struct AdminSectionLabel: View {
     let title: String

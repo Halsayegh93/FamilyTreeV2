@@ -426,6 +426,7 @@ struct AdminToolsAreaView: View {
                             badge: readOnlyBadge && !authVM.canManageSettings
                                 ? L10n.t("للقراءة — يعدّلها المالك", "Read-only — the owner edits") : nil)
         } content: {
+            AdminAreaTop(area: area)
             if tools.isEmpty {
                 DSEmptyView(L10n.t("لا أدوات لدورك هنا", "No tools for your role here"), style: .card)
             } else {
@@ -435,6 +436,7 @@ struct AdminToolsAreaView: View {
         .task {
             if area == .access { await sms.refresh() }
             if area == .announcements { await notificationVM.fetchScheduledNotifications() }
+            if area == .occasions && memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
         }
     }
 
@@ -495,6 +497,7 @@ struct AdminFamilyAreaView: View {
                 .padding(.top, DS.Spacing.md)
             }
         } content: {
+            AdminAreaQuickActions(area: .family)
             AdminToolCards(tools: tools)
             if let usage { usageCard(usage) }
         }
@@ -564,24 +567,30 @@ struct AdminMetricsAreaView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
-    @State private var women: (total: Int, alive: Int, deceased: Int)? = nil
+    /// إناث شجرة النساء — تبدأ من كاشها إن فُتحت قبلاً
+    @State private var women: (total: Int, alive: Int, deceased: Int)? = Self.womenCounts(WomenStore.cache)
 
     var body: some View {
         let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM).filter { $0.area == .metrics }
         AdminHubPage {
             AdminBandHeader(title: AdminArea.metrics.title, subtitle: AdminArea.metrics.subtitle)
         } content: {
-            familyPulseCard
+            // «نبض العائلة» انتقل من «اليوم» إلى هنا (طلب المالك ٢٠٢٦-١٠-٢٠ «الأقسام فوق + قائمة وحدة»)
+            AdminPulseTiles()
+            familyMembersCard
             AdminToolCards(tools: tools, hints: hints)
         }
         .task {
             if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
-            if let rows = try? await WomenStore.fetch() {
-                let females = rows.filter { $0.isFemale }
-                let deceased = females.filter { $0.isDeceased == true }.count
-                women = (females.count, females.count - deceased, deceased)
-            }
+            if let rows = try? await WomenStore.fetch(), let counts = Self.womenCounts(rows) { women = counts }
         }
+    }
+
+    private static func womenCounts(_ rows: [FamilyMember]) -> (total: Int, alive: Int, deceased: Int)? {
+        guard !rows.isEmpty else { return nil }
+        let females = rows.filter { $0.isFemale }
+        let deceased = females.filter { $0.isDeceased == true }.count
+        return (females.count, females.count - deceased, deceased)
     }
 
     private var hints: [String: String] {
@@ -589,15 +598,15 @@ struct AdminMetricsAreaView: View {
         return unread > 0 ? ["metrics.activity": L10n.t("\(unread) جديد", "\(unread) new")] : [:]
     }
 
-    /// «نبض العائلة» (كان «أفراد العائلة» أعلى اللوحة): الرجال والنساء — الأحياء والمتوفون
-    private var familyPulseCard: some View {
+    /// «أفراد العائلة» (بطاقة اللوحة القديمة): الرجال والنساء — الأحياء والمتوفون. أعدادها المختصرة في «اليوم»
+    private var familyMembersCard: some View {
         var total = 0, alive = 0, deceased = 0
         for m in memberVM.allMembers where m.role != .pending {
             total += 1
             if m.isDeceased == true { deceased += 1 } else { alive += 1 }
         }
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminCardHeader(title: L10n.t("نبض العائلة", "Family pulse"))
+            AdminCardHeader(title: L10n.t("أفراد العائلة", "Family members"))
             HStack(spacing: DS.Spacing.sm) {
                 GenderRingPanel(title: L10n.t("الرجال", "Men"), dot: DS.Color.male,
                                 total: total, alive: alive, deceased: deceased, loading: memberVM.allMembers.isEmpty)
@@ -611,7 +620,7 @@ struct AdminMetricsAreaView: View {
     }
 }
 
-/// حلقة جنس في «نبض العائلة»: نسبة الأحياء حلقةً بلون المعنى (`DSRing`) والعدد في وسطها
+/// حلقة جنس في «أفراد العائلة»: نسبة الأحياء حلقةً بلون المعنى (`DSRing`) والعدد في وسطها
 struct GenderRingPanel: View {
     let title: String
     let dot: Color
@@ -662,6 +671,300 @@ struct GenderRingPanel: View {
         }
         .lineLimit(1)
         .minimumScaleFactor(0.75)
+    }
+}
+
+// MARK: - أعلى الأقسام: ما انتقل من «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ «الأقسام فوق + قائمة وحدة»)
+//
+// «اليوم» صار: الرأس ← أعداد الأعضاء ← الأقسام ← تنبيهات ← «يحتاج قرارك». فما كان تحتها انتقل لأعلى قسمه بلا
+// ضياع: كل إجراء سريع أعلى قسمه، «اليوم في العائلة» أعلى «المناسبات»، و«نبض العائلة» أعلى «المؤشرات».
+// الصلاحيات كما كانت على «اليوم» حرفياً.
+
+/// ما يسبق بطاقات الأدوات في الأقسام العامة (المناسبات، الإعلانات…)
+struct AdminAreaTop: View {
+    let area: AdminArea
+
+    var body: some View {
+        AdminAreaQuickActions(area: area)
+        if area == .occasions {
+            AdminFamilyTodayCard()
+        }
+    }
+}
+
+/// الإجراءات السريعة لقسم: أزرار كبسولة بعرض الصفحة — إشعار للأعضاء ← الإعلانات؛ منشور مناسبة وإعلان وفاة ←
+/// المناسبات؛ تسجيل عضو وبحث عضو ← العائلة
+struct AdminAreaQuickActions: View {
+    let area: AdminArea
+    @EnvironmentObject var authVM: AuthViewModel
+
+    private struct Action: Identifiable {
+        let id: String
+        let icon: String
+        let title: String
+        let page: () -> AnyView
+    }
+
+    private var actions: [Action] {
+        var list: [Action] = []
+        switch area {
+        case .announcements:
+            if authVM.canSendNotifications {
+                list.append(Action(id: "notify", icon: "megaphone", title: L10n.t("إشعار للأعضاء", "Notify members")) {
+                    AnyView(AdminMessagingHubView())
+                })
+            }
+        case .occasions:
+            list.append(Action(id: "occasion", icon: "photo.on.rectangle", title: L10n.t("منشور مناسبة", "Occasion post")) {
+                AnyView(OccasionComposerView())
+            })
+            if authVM.isAdmin {
+                list.append(Action(id: "death", icon: NewsTypeHelper.icon(for: "وفاة"),
+                                   title: L10n.t("إعلان وفاة", "Obituary")) {
+                    AnyView(DeathAnnouncementsPage())
+                })
+            }
+        case .family:
+            if authVM.canRegisterMembers {
+                list.append(Action(id: "register", icon: "person.badge.plus", title: L10n.t("تسجيل عضو", "Register")) {
+                    AnyView(AdminRegisterMemberView())
+                })
+            }
+            if authVM.canEditMembers {
+                list.append(Action(id: "find", icon: "magnifyingglass", title: L10n.t("بحث عضو", "Find member")) {
+                    AnyView(AdminMembersManagementView(initialTab: .directory))
+                })
+            }
+        default:
+            break
+        }
+        return list
+    }
+
+    var body: some View {
+        let list = actions
+        if !list.isEmpty {
+            HStack(spacing: DS.Spacing.sm) {
+                ForEach(list) { action in
+                    NavigationLink { AdminLazyPage(make: action.page) } label: {
+                        AdminPillLabel(title: action.title, icon: action.icon, style: .navy,
+                                       height: DS.Hub.pillHeightCard, fullWidth: true)
+                    }
+                    .buttonStyle(DSPressStyle())
+                    .accessibilityLabel(action.title)
+                }
+            }
+        }
+    }
+}
+
+/// «اليوم في العائلة» (كانت في «اليوم»): الذكرى القريبة، ووفيات آخر ٣٠ يوماً ومن أُضيف هذا الأسبوع (المالك والمدير
+/// والمراقب). لا تُرسم بلا صفوف
+struct AdminFamilyTodayCard: View {
+    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+
+    private var rows: [AdminFamilyTodayRow] {
+        let all = memberVM.allMembers
+        guard !all.isEmpty else { return [] }
+        var rows: [AdminFamilyTodayRow] = []
+        if let next = DeceasedMemorialBoard(all).upcoming.first {
+            rows.append(AdminFamilyTodayRow(
+                id: "memorial", icon: "moon.stars.fill", tint: DS.Color.sadu,
+                title: L10n.t("ذكرى \(next.member.shortFullName)", "\(next.member.shortFullName)'s anniversary"),
+                value: DeceasedMemorial.whenLabel(next.anniversary.daysUntil, arabic: L10n.isArabic),
+                target: .memorial))
+        }
+        guard authVM.isAdmin || authVM.currentUser?.role == .monitor else { return rows }
+        let deaths = all.filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate) }.count
+        if deaths > 0 {
+            rows.append(AdminFamilyTodayRow(
+                id: "deaths", icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.slate,
+                title: L10n.t("وفيات آخر 30 يوماً", "Deaths in the last 30 days"),
+                value: "\(deaths)", target: authVM.isAdmin ? .deaths : .memorial))
+        }
+        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let joined = all.filter { m in
+            m.isDeceased != true && m.isCountable && (ApprovalWorkflow.date(m.createdAt).map { $0 >= weekAgo } ?? false)
+        }.count
+        if joined > 0 {
+            rows.append(AdminFamilyTodayRow(
+                id: "joined", icon: "person.crop.circle.badge.plus", tint: DS.Color.palm,
+                title: L10n.t("أُضيفوا للشجرة هذا الأسبوع", "Added to the tree this week"),
+                value: "\(joined)", target: .directory))
+        }
+        return rows
+    }
+
+    var body: some View {
+        let rows = self.rows
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                AdminCardHeader(title: L10n.t("اليوم في العائلة", "Today in the family"))
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 { AdminRowDivider() }
+                    NavigationLink { AdminLazyPage { Self.page(row.target) } } label: {
+                        AdminListRow(icon: row.icon, tint: row.tint, title: row.title) {
+                            Text(verbatim: row.value)
+                                .dsFont(.chip)
+                                .monospacedDigit()
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adminCard()
+        }
+    }
+
+    private static func page(_ target: AdminFamilyTodayRow.Target) -> AnyView {
+        switch target {
+        case .memorial:  return AnyView(DeceasedMemorialView())
+        case .deaths:    return AnyView(DeathAnnouncementsPage())
+        case .directory: return AnyView(AdminMembersManagementView(initialTab: .directory))
+        }
+    }
+}
+
+/// مربّع في «نبض العائلة»
+struct AdminPulseTile: Identifiable {
+    let id: String
+    let icon: String
+    let label: String
+    let value: String
+    var unit: String? = nil
+    var valueTint: Color = DS.Color.textPrimary
+    let note: String
+    var meter: Double? = nil
+    var meterTint: Color = DS.Color.primaryFill
+    let page: () -> AnyView
+}
+
+/// «نبض العائلة» (كانت في «اليوم»): النشطون الآن (المالك والمدير)، الحسابات الفعّالة، رصيد رسائل الدخول (المالك
+/// والمدير)، والمنجز هذا الأسبوع (مع مسار الموافقات) — كل مربّع يفتح صفحته. يجلب أرقامه عند فتح «المؤشرات»
+struct AdminPulseTiles: View {
+    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @ObservedObject private var sms = SmsBalanceStore.shared
+    @Environment(\.dsLandscape) private var landscape
+    @State private var activeNow: Int? = nil
+    @State private var usage: AppUsageStats? = AppUsageStats.cached
+    @State private var weekly: (executed: Int, rejected: Int)? = nil
+
+    private var tiles: [AdminPulseTile] {
+        var tiles: [AdminPulseTile] = []
+        if authVM.isAdmin, let now = activeNow {
+            tiles.append(AdminPulseTile(id: "active", icon: "bolt.fill", label: L10n.t("النشطون الآن", "Active now"),
+                                        value: "\(now)", note: L10n.t("يستخدمون التطبيق الآن", "Using the app now")) {
+                AnyView(AdminActiveMembersView())
+            })
+        }
+        if authVM.isAdmin || authVM.currentUser?.role == .monitor, let u = usage {
+            let living = u.active + u.idle + u.loginNoDevice + u.neverLogged + u.noPhone
+            let activeAccounts = u.active + u.idle
+            let share = living > 0 ? Double(activeAccounts) / Double(living) : 0
+            tiles.append(AdminPulseTile(id: "accounts", icon: "iphone", label: L10n.t("حسابات فعّالة", "Active accounts"),
+                                        value: "\(Int((share * 100).rounded()))%",
+                                        note: L10n.t("\(activeAccounts) من \(living) حيّاً", "\(activeAccounts) of \(living) living"),
+                                        meter: share) {
+                AnyView(AppUsageMembersView(category: .active))
+            })
+        }
+        if authVM.canViewSystemSettings, let balance = sms.status?.balance {
+            let level = sms.level
+            tiles.append(AdminPulseTile(id: "sms", icon: "ellipsis.message", label: L10n.t("رسائل الدخول", "Sign-in SMS"),
+                                        value: SmsBalanceText.points(balance), unit: L10n.t("نقطة", "pts"),
+                                        valueTint: level == .good ? DS.Color.textPrimary : level.tint,
+                                        note: SmsBalanceText.enough(balance)) {
+                AnyView(AdminSmsView(backTitle: AdminArea.metrics.title))
+            })
+        }
+        if let w = weekly {
+            tiles.append(AdminPulseTile(id: "done", icon: "checkmark.circle", label: L10n.t("منجز هذا الأسبوع", "Done this week"),
+                                        value: "\(w.executed + w.rejected)",
+                                        note: L10n.t("نُفّذ \(w.executed) · رُفض \(w.rejected)",
+                                                     "\(w.executed) done · \(w.rejected) rejected")) {
+                AnyView(ApprovalsReportView())
+            })
+        }
+        return tiles
+    }
+
+    var body: some View {
+        let tiles = self.tiles
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            if !tiles.isEmpty {
+                AdminSectionLabel(title: L10n.t("نبض العائلة", "Family pulse"))
+                LazyVGrid(columns: AdminGrid.columns(landscape: landscape), spacing: AdminGrid.spacing) {
+                    ForEach(tiles) { tile in
+                        NavigationLink { AdminLazyPage(make: tile.page) } label: { AdminPulseTileView(tile: tile) }
+                            .buttonStyle(DSPressStyle())
+                    }
+                }
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        let isAdmin = authVM.isAdmin
+        let isSystem = authVM.canViewSystemSettings
+        let flowOn = adminRequestVM.approvalsWorkflowOn
+        await withTaskGroup(of: Void.self) { group in
+            if isAdmin {
+                group.addTask { @MainActor in activeNow = await AdminTodayFetch.activeNowCount() }
+            }
+            // فشل الجلب يُبقي آخر قيمة محفوظة
+            group.addTask { @MainActor in if let u = await AppUsageStats.fetch() { usage = u } }
+            if isSystem {
+                group.addTask { @MainActor in await SmsBalanceStore.shared.refresh() }
+            }
+            if flowOn {
+                group.addTask { @MainActor in weekly = await AdminTodayFetch.weeklyDone() }
+            }
+        }
+    }
+}
+
+struct AdminPulseTileView: View {
+    let tile: AdminPulseTile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(dsSymbol: tile.icon).dsGlyph(DS.Glyph.sm)
+                Text(tile.label).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .dsFont(.caption)
+            .foregroundColor(DS.Color.textTertiary)
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+                Text(verbatim: tile.value)
+                    .dsFont(.hubPulse)
+                    .monospacedDigit()
+                    .foregroundColor(tile.valueTint.dsReadableGlyph)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                if let unit = tile.unit {
+                    Text(unit)
+                        .dsFont(.caption)
+                        .foregroundColor(tile.valueTint.dsReadableGlyph)
+                }
+            }
+            Text(tile.note)
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textTertiary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if let meter = tile.meter {
+                AdminMeter(progress: meter, tint: tile.meterTint)
+                    .padding(.top, DS.Spacing.xs)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: DS.Hub.tileMinHeight, alignment: .topLeading)
+        .dsCard(padding: DS.Spacing.md, radius: DS.Hub.tileRadius)
+        .accessibilityElement(children: .combine)
     }
 }
 
