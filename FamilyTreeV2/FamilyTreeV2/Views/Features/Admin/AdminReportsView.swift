@@ -8,10 +8,12 @@ import PDFKit
 // من الأعلى: رأس كحلي ← بطاقة «التقرير»: صفّ واحد من أربع «صفحات» صغيرة (طلب المالك «ابسط و اصغر و شي مبدع»:
 // ورقة بطرف مطويّ وشريط كحلي بسدو ذهبي ورمز النوع، وتحتها اسم قصير — العنوان الكامل في سطر المعاينة؛ بلا تبويبات علوية)
 // وتحتها سطر شرائح واحد قصير يخص النوع
-// («نطوّر فلاتر التقارير بشكل مبسط»): سجل العائلة «كل الفروع ⌄» + الكل · أحياء · متوفون — الهواتف الكل · مسجّلون ·
-// بلا رقم هاتف — المتوفون الكل · التاريخ غير مكتمل — الملخّص بلا تصفية. الافتراضي تقرير مفيد بلا أي ضغطة.
-// ← «المعاينة»: سطر النطاق («سجل العائلة · كل الفروع · أحياء — 2,344 فرداً») وصور أول الصفحات (الضغط يفتح الملف
-// كاملاً) ← شريط سفلي ثابت «مشاركة / حفظ» (ورقة المشاركة).
+// («نطوّر فلاتر التقارير بشكل مبسط»): سجل العائلة «كل الفروع ⌄» + «كل الأعمار ⌄» (قائمة الفئات — «اذا بس بالاعمار؟»)
+// + الكل · أحياء · متوفون — الهواتف الكل · مسجّلون · بلا رقم هاتف — المتوفون الكل · التاريخ غير مكتمل — الملخّص بلا
+// تصفية. الافتراضي تقرير مفيد بلا أي ضغطة.
+// ← «المعاينة»: سطر النطاق («سجل العائلة · كل الفروع · أحياء — 2,344 فرداً») وصورة الغلاف وحدها بشارة «14 صفحة»
+// (الضغط يفتح الملف كاملاً — طلب المالك «خل بس وحدة وانا ادش عليها») ← زرّ «مشاركة / حفظ» عائم مثبّت فوق شريط
+// التبويبات (ورقة المشاركة) — بلا شريط زجاجي عريض ولا عدد صفحات بجانبه.
 // الملف يُنشأ تلقائياً عند تغيّر النوع أو التصفية (بعد مهلة قصيرة، والإنشاء السابق يُلغى) خارج الخيط الرئيسي —
 // البناء والرسم في `AdminReportsModel.swift` / `AdminReportsPDF.swift`.
 // «⋯ ← تصدير» من صفحة الأعضاء بالشريحة والبحث الحاليين = سجل العائلة بنفس الأعضاء (شريحة تُزال بـ ✕).
@@ -243,9 +245,41 @@ struct AdminReportsView: View {
             .padding(.horizontal, -DS.Spacing.sm)
             .accessibilityLabel(L10n.t("كل الفروع", "All branches"))
         }
+        ageChip
         choice(L10n.t("الكل", "All"), filter.life == .all) { filter.life = .all }
         choice(L10n.t("أحياء", "Living"), filter.life == .living) { filter.life = .living }
         choice(L10n.t("متوفون", "Deceased"), filter.life == .deceased) { filter.life = .deceased }
+    }
+
+    /// «كل الأعمار ⌄» — قائمة أصلية بالفئات (والمختارة بعلامة)، بشكل شريحة الفرع نفسه
+    private var ageChip: some View {
+        Menu {
+            Picker(selection: Binding(get: { filter.age }, set: { value in
+                guard value != filter.age else { return }
+                UISelectionFeedbackGenerator().selectionChanged()
+                filter.age = value
+            })) {
+                ForEach(AdminReportFilter.Age.allCases, id: \.self) { age in
+                    Text(Self.ageTitle(age)).tag(age)
+                }
+            } label: { EmptyView() }
+            .pickerStyle(.inline)
+        } label: {
+            AdminReportMenuChip(title: Self.ageTitle(filter.age), tint: DS.Color.palm, selected: filter.age != .all)
+        }
+        .accessibilityLabel(L10n.t("العمر: \(Self.ageTitle(filter.age))", "Age: \(Self.ageTitle(filter.age))"))
+    }
+
+    static func ageTitle(_ age: AdminReportFilter.Age) -> String {
+        switch age {
+        case .all: return L10n.t("كل الأعمار", "All ages")
+        case .under18: return L10n.t("أقل من 18", "Under 18")
+        case .from18to30: return "18–30"
+        case .from31to50: return "31–50"
+        case .from51to70: return "51–70"
+        case .over70: return L10n.t("فوق 70", "Over 70")
+        case .unknown: return L10n.t("غير معروف", "Unknown")
+        }
     }
 
     private var branchChipTitle: String {
@@ -268,8 +302,7 @@ struct AdminReportsView: View {
     // MARK: - المعاينة
 
     private var previewCard: some View {
-        AdminSectionCard(title: L10n.t("المعاينة", "Preview"),
-                         tag: result.map { L10n.t("\(AdminReportText.pages($0.pages)) · A4", "\($0.pages) pages · A4") }) {
+        AdminSectionCard(title: L10n.t("المعاينة", "Preview"), tag: result == nil ? nil : "PDF · A4") {
             if let result, result.kind == kind {
                 AnyView(previewBody(result))
             } else if failed {
@@ -305,19 +338,18 @@ struct AdminReportsView: View {
             }
             .opacity(generating ? 0.55 : 1)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: DS.Spacing.md) {
-                    ForEach(Array(r.thumbnails.enumerated()), id: \.offset) { i, image in
-                        thumbnail(image, page: i + 1, total: r.pages, url: r.url)
-                    }
-                }
-                .padding(.vertical, DS.Spacing.xs)
-                .padding(.horizontal, DS.Border.width)
+            // صفحة واحدة: الغلاف وعليه عدد الصفحات — الضغط يفتح الملف كاملاً
+            if let cover = r.thumbnails.first {
+                thumbnail(cover, pages: r.pages, url: r.url)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.xs)
             }
 
-            Text(L10n.t("اضغط على صفحة لعرض الملف كاملاً", "Tap a page to view the whole file"))
+            Text(L10n.t("اضغط على الصفحة لعرض الملف كاملاً", "Tap the page to view the whole file"))
                 .dsFont(.caption)
                 .foregroundColor(DS.Color.textTertiary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .sheet(item: $viewerURL) { item in
@@ -325,57 +357,57 @@ struct AdminReportsView: View {
         }
     }
 
-    private func thumbnail(_ image: UIImage, page: Int, total: Int, url: URL) -> some View {
-        Button {
+    private func thumbnail(_ image: UIImage, pages: Int, url: URL) -> some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+        return Button {
             viewerURL = AdminReportViewerItem(url: url, title: AdminReportTypeCard.title(kind))
         } label: {
-            VStack(spacing: DS.Spacing.xs) {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: AdminReportsLayout.thumbWidth)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                        .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
-                    .dsSubtleShadow()
-                Text(L10n.t("صفحة \(page) من \(total)", "Page \(page) of \(total)"))
-                    .dsFont(.caption)
-                    .monospacedDigit()
-                    .foregroundColor(DS.Color.textSecondary)
-            }
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: AdminReportsLayout.thumbWidth)
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
+                // شارة عدد الصفحات في الزاوية العليا عند نهاية سطر القراءة (فوق بياض الغلاف، بعيداً عن الشعار والختم)
+                .overlay(alignment: .topTrailing) {
+                    Text(L10n.t(AdminReportText.pages(pages), pages == 1 ? "1 page" : "\(pages) pages"))
+                        .dsFont(.badge)
+                        .monospacedDigit()
+                        .foregroundColor(.white)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(Capsule().fill(DS.Color.brandFill))
+                        .padding(DS.Spacing.sm)
+                }
+                .dsSubtleShadow()
         }
         .buttonStyle(DSPressStyle())
-        .accessibilityLabel(L10n.t("صفحة \(page) من \(total) — عرض الملف", "Page \(page) of \(total) — view file"))
+        .accessibilityLabel(L10n.t("\(AdminReportText.pages(pages)) — عرض الملف", "\(pages) pages — view file"))
     }
 
     // MARK: - المشاركة
 
+    /// زرّ واحد عائم فوق شريط التبويبات وبعرضه تقريباً — بلا شريط زجاجي عريض (كان يبدو شريطاً ثانياً فوق
+    /// شريط التبويبات بفجوة بينهما، وبجانبه «ملف PDF · 4 صفحات» مكرّراً). تدرّج قصير من لون الصفحة خلفه.
     private var shareBar: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSActionButton(title: L10n.t("مشاركة / حفظ", "Share / Save"),
-                           icon: "square.and.arrow.up",
-                           isBusy: generating && result?.kind != kind,
-                           enabled: result?.kind == kind && !generating) {
-                share()
-            }
-            if let r = result, r.kind == kind {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(L10n.t("ملف PDF", "PDF file"))
-                        .dsFont(.micro)
-                        .foregroundColor(DS.Color.fieldValue)
-                    Text(L10n.t(AdminReportText.pages(r.pages), "\(r.pages) pages"))
-                        .dsFont(.headline)
-                        .foregroundColor(DS.Color.fieldLabel)
-                        .monospacedDigit()
-                }
-                .fixedSize()
-                .accessibilityElement(children: .combine)
-            }
+        DSActionButton(title: L10n.t("مشاركة / حفظ", "Share / Save"),
+                       icon: "square.and.arrow.up",
+                       isBusy: generating && result?.kind != kind,
+                       enabled: result?.kind == kind && !generating) {
+            share()
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
-        .dsGlass(Rectangle())
-        .overlay(Divider(), alignment: .top)
+        .dsSubtleShadow()
+        .padding(.horizontal, DS.Spacing.xl)
+        .padding(.top, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.sm)
+        .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(colors: [DS.Hub.background.opacity(0), DS.Hub.background],
+                           startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45))
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(false)
+        )
     }
 
     private func share() {
@@ -406,8 +438,8 @@ struct AdminReportsView: View {
 // MARK: - مقاسات الصفحة (مكان واحد)
 
 enum AdminReportsLayout {
-    /// عرض صورة الصفحة في المعاينة
-    static let thumbWidth: CGFloat = 132
+    /// عرض صورة الغلاف في المعاينة
+    static let thumbWidth: CGFloat = 150
 
     // «صفحة» نوع التقرير في الصفّ الواحد
     /// أقلّ عرض لخانة النوع عند حجم النص الافتراضي (يكبر مع النص)
@@ -422,6 +454,40 @@ enum AdminReportsLayout {
     static let pageBand: CGFloat = 13
     /// رفعة المختار
     static let liftScale: CGFloat = 1.05
+}
+
+// MARK: - شريحة قائمة (Menu) بشكل `DSChipButton`
+
+/// تسمية `Menu` بنفس شكل الشريحة (زرّ داخل تسمية القائمة يبتلع الضغطة) — المختار ممتلئ بلونه ونصّه أبيض
+private struct AdminReportMenuChip: View {
+    let title: String
+    let tint: Color
+    let selected: Bool
+    @Environment(\.dsSection) private var section
+
+    var body: some View {
+        let ink = tint.dsChrome(in: section).dsReadableGlyph
+        HStack(spacing: DS.Spacing.xsm) {
+            Image(dsSymbol: "chevron.down").dsGlyph(DS.Glyph.sm)
+            Text(title)
+                .dsFont(.chip)
+                .lineLimit(1)
+                .monospacedDigit()
+        }
+        .foregroundColor(selected ? .white : ink)
+        .padding(.horizontal, DSBox.chipPadding)
+        .frame(minHeight: DSBox.chipHeight)
+        .background {
+            if selected {
+                Capsule().fill(tint.dsChromeFill(in: section).dsSolidFill)
+            } else {
+                Capsule().fill(ink.opacity(DS.Opacity.tintFill))
+            }
+        }
+        .overlay(Capsule().strokeBorder(selected ? Color.clear : ink.opacity(DS.Opacity.tintStroke),
+                                        lineWidth: DS.Border.width))
+        .dsTapArea(width: DS.Icon.tapTarget, height: DSBox.chipHeight)
+    }
 }
 
 // MARK: - «صفحة» نوع التقرير

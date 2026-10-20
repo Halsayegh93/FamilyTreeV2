@@ -46,6 +46,47 @@ nonisolated struct AdminReportFilter: Equatable, Sendable {
     enum Life: String, CaseIterable, Sendable { case all, living, deceased }
     enum Phones: String, CaseIterable, Sendable { case all, registered, noPhone }
     enum Memorial: String, CaseIterable, Sendable { case all, incomplete }
+    /// فئة العمر (سجل العائلة) — نفس فئات «الفئات العمرية» في الملخّص. العمر = اليوم للحي، وعند الوفاة للمتوفى؛
+    /// تاريخ الميلاد المخفي أو الناقص = «غير معروف» (لا يُستنتج عمر من أخفى ميلاده)
+    enum Age: String, CaseIterable, Sendable {
+        case all, under18, from18to30, from31to50, from51to70, over70, unknown
+
+        /// الفئات المحسوبة (بلا «الكل» و«غير معروف»)
+        static let bands: [Age] = [.under18, .from18to30, .from31to50, .from51to70, .over70]
+
+        static func band(_ years: Int?) -> Age {
+            guard let years else { return .unknown }
+            switch years {
+            case ..<18: return .under18
+            case 18...30: return .from18to30
+            case 31...50: return .from31to50
+            case 51...70: return .from51to70
+            default: return .over70
+            }
+        }
+
+        /// اسم الفئة في الملف (عربي دائماً): «أقل من 18» · «18–30» … · «غير معروف»
+        var label: String {
+            switch self {
+            case .all: return "كل الأعمار"
+            case .under18: return "أقل من 18"
+            case .from18to30: return "18–30"
+            case .from31to50: return "31–50"
+            case .from51to70: return "51–70"
+            case .over70: return "فوق 70"
+            case .unknown: return "غير معروف"
+            }
+        }
+
+        /// في سطر النطاق: «18–30 سنة» · «العمر غير معروف»
+        var scopeLabel: String {
+            switch self {
+            case .all: return ""
+            case .unknown: return "العمر غير معروف"
+            default: return "\(label) سنة"
+            }
+        }
+    }
 
     /// ما جاء من صفحة الأعضاء («⋯ ← تصدير» بالشريحة والبحث) — لسجل العائلة فقط
     struct Scope: Equatable, Sendable {
@@ -58,6 +99,8 @@ nonisolated struct AdminReportFilter: Equatable, Sendable {
     var life: Life = .all
     var phones: Phones = .all
     var memorial: Memorial = .all
+    /// سجل العائلة
+    var age: Age = .all
     var scope: Scope? = nil
 }
 
@@ -362,6 +405,31 @@ nonisolated enum AdminReportText {
         return f.string(from: date)
     }
 
+    /// العمر بالسنوات: اليوم للحي، وعند الوفاة للمتوفى (السنة وحدها تُحسب بالسنوات) — nil إن تعذّر
+    /// (لا تاريخ، هجري، وفاة بلا تاريخ، أو خارج 0…129)
+    static func age(birth: String?, deceased: Bool, death: String?, deathUnknown: Bool, today: Date,
+                    calendar cal: Calendar) -> Int? {
+        let born = DeceasedMemorial.classify(birth)
+        let end: DeceasedMemorial.DateKind
+        if deceased {
+            guard !deathUnknown else { return nil }
+            end = DeceasedMemorial.classify(death)
+        } else {
+            let c = cal.dateComponents([.year, .month, .day], from: today)
+            end = .exact(year: c.year ?? 0, month: c.month ?? 1, day: c.day ?? 1)
+        }
+        let years: Int
+        switch (born, end) {
+        case let (.exact(by, bm, bd), .exact(ey, em, ed)):
+            years = ey - by - ((em, ed) < (bm, bd) ? 1 : 0)
+        case let (.exact(by, _, _), .yearOnly(ey)), let (.yearOnly(by), .exact(ey, _, _)), let (.yearOnly(by), .yearOnly(ey)):
+            years = ey - by
+        default:
+            return nil
+        }
+        return (0..<130).contains(years) ? years : nil
+    }
+
     static let familyName = "عائلة المحمدعلي"
     static let confidential = "سرّي — لعائلة المحمدعلي فقط"
     static let registered = "عضو مسجّل"
@@ -540,6 +608,20 @@ nonisolated enum AdminReportBuilder {
             pool = pool.filter(\.deceased)
             scopeParts.append("متوفون")
         }
+        // العمر (مرة واحدة لكل فرد) — المخفي ميلاده بلا عمر
+        let cal = AdminReportText.kuwait
+        var ages: [UUID: Int] = [:]
+        ages.reserveCapacity(pool.count)
+        for p in pool where !p.birthHidden {
+            if let a = AdminReportText.age(birth: p.birth, deceased: p.deceased, death: p.death,
+                                           deathUnknown: p.deathUnknown, today: input.date, calendar: cal) {
+                ages[p.id] = a
+            }
+        }
+        if filter.age != .all {
+            pool = pool.filter { AdminReportFilter.Age.band(ages[$0.id]) == filter.age }
+            scopeParts.append(filter.age.scopeLabel)
+        }
 
         let groups = tree.groups(pool, names: input.branchNames)
         let living = pool.filter { !$0.deceased }.count
@@ -581,10 +663,12 @@ nonisolated enum AdminReportBuilder {
             if let head = g.head { sub = "رأس الفرع: \(head.name) — " + sub }
             blocks.append(.heading(g.title, subtitle: sub, panel: false))
             var table = AdminReportTable(columns: [
-                .init(title: "م", weight: 0.07, centered: true),
-                .init(title: "الاسم الكامل", weight: 0.495, wraps: true),
-                .init(title: "الجيل", weight: 0.07, centered: true),
-                .init(title: "الميلاد", weight: 0.17),
+                // «م» يتّسع لأربعة أرقام (عائلة بالآلاف)
+                .init(title: "م", weight: 0.08, centered: true),
+                .init(title: "الاسم الكامل", weight: 0.425, wraps: true),
+                .init(title: "الجيل", weight: 0.065, centered: true),
+                .init(title: "الميلاد", weight: 0.165),
+                .init(title: "العمر", weight: 0.07, centered: true),
                 .init(title: "الحالة", weight: 0.195, wraps: true)
             ], rows: [])
             table.rows.reserveCapacity(g.members.count)
@@ -599,14 +683,15 @@ nonisolated enum AdminReportBuilder {
                     status = "حي"
                 }
                 table.rows.append(.init(cells: ["\(seq)", p.name, tree.generation[p.id].map { "\($0)" } ?? "—",
-                                                birth, status],
-                                        tones: p.deceased ? [4: .muted] : [:]))
+                                                birth, ages[p.id].map { "\($0)" } ?? "—", status],
+                                        tones: p.deceased ? [4: .muted, 5: .muted] : [:]))
             }
             blocks.append(.table(table))
         }
 
         let intro = "يضمّ هذا السجل أفراد شجرة العائلة مرتّبين بالفروع — كل فرع تحت عنوانه ورأسه، والأفراد بترتيب الشجرة"
-            + " (الأب ثم أبناؤه)، مع سنة الميلاد أو تاريخه والحالة وتاريخ الوفاة إن وُجد. يبدأ بملخّص أعداد كل فرع."
+            + " (الأب ثم أبناؤه)، مع سنة الميلاد أو تاريخه والعمر (وللمتوفى عمره عند الوفاة) والحالة وتاريخ الوفاة إن وُجد."
+            + " يبدأ بملخّص أعداد كل فرع."
         return AdminReportDoc(kind: .register, scope: scopeParts.joined(separator: " · "), count: pool.count,
                               intro: intro, blocks: blocks, generatedBy: input.generatedBy, date: input.date)
     }
@@ -656,38 +741,22 @@ nonisolated enum AdminReportBuilder {
             }, axis: "الجيل"))
         }
 
-        // الفئات العمرية (الأحياء)
-        let today = input.date
+        // الفئات العمرية (الأحياء) — نفس فئات تصفية السجل؛ المخفي ميلاده يدخل هذا العدّ المجمّع فقط
         let cal = AdminReportText.kuwait
-        func age(_ raw: String?) -> Int? {
-            guard case let .exact(y, m, d) = DeceasedMemorial.classify(raw),
-                  let born = cal.date(from: DateComponents(year: y, month: m, day: d)) else {
-                if case let .yearOnly(y) = DeceasedMemorial.classify(raw) {
-                    return max(0, cal.component(.year, from: today) - y)
-                }
-                return nil
-            }
-            return cal.dateComponents([.year], from: born, to: today).year
-        }
-        var bands = [0, 0, 0, 0, 0]
+        var perBand: [AdminReportFilter.Age: Int] = [:]
         var noAge = 0
         var livingCount = 0
         let livingBirths = men.filter { !$0.deceased }.map(\.birth) + (women ?? []).filter { !$0.deceased }.map(\.birth)
         for b in livingBirths {
             livingCount += 1
-            guard let a = age(b), a >= 0, a < 130 else { noAge += 1; continue }
-            switch a {
-            case ..<18: bands[0] += 1
-            case 18..<30: bands[1] += 1
-            case 30..<50: bands[2] += 1
-            case 50..<70: bands[3] += 1
-            default: bands[4] += 1
-            }
+            let band = AdminReportFilter.Age.band(AdminReportText.age(birth: b, deceased: false, death: nil, deathUnknown: false,
+                                                                      today: input.date, calendar: cal))
+            if band == .unknown { noAge += 1 } else { perBand[band, default: 0] += 1 }
         }
-        let bandLabels = ["أقل من 18", "18 إلى 29", "30 إلى 49", "50 إلى 69", "70 فأكثر"]
-        var ageBars = zip(bandLabels, bands).map { label, n in
-            AdminReportBar(label: label, first: n,
-                           caption: "\(AdminReportText.num(n)) · \(AdminReportText.percent(n, of: livingCount))")
+        var ageBars = AdminReportFilter.Age.bands.map { band in
+            let n = perBand[band] ?? 0
+            return AdminReportBar(label: band.label, first: n,
+                                  caption: "\(AdminReportText.num(n)) · \(AdminReportText.percent(n, of: livingCount))")
         }
         if noAge > 0 {
             ageBars.append(AdminReportBar(label: "بلا تاريخ ميلاد", first: 0, second: noAge,

@@ -2,10 +2,13 @@ import UIKit
 
 // MARK: - رسم تقارير العائلة الرسمية (PDF) — «رسمي بهوية العائلة» (طلب المالك ٢٠٢٦-١٠-٢٠)
 //
-// A4 عمودي. الصفحة الأولى غلاف: كتلة كحلية بشعار التطبيق (`AppIconImage`) واسم العائلة وعنوان التقرير ونطاقه، ثم
-// بيانات التقرير (التاريخ الميلادي بتوقيت الكويت، الوقت، من أعدّه، النطاق، المحتوى)، وفقرة ما يحويه، وختم
-// «سرّي — لعائلة المحمدعلي فقط». كل صفحة بعدها: شريط كحلي رفيع (عنوان التقرير + اسم العائلة)، وتذييل
-// «صفحة X من Y» + الختم + وقت الإنشاء — والغلاف يُعدّ الصفحة الأولى.
+// تصميم أبيض (طلب المالك «ابي تصميم ابيض اكثر» و«ابيض بدال الكريمي»): ورق أبيض خالص بلا كريمي ولا رملي.
+// A4 عمودي. الصفحة الأولى غلاف أبيض: شعار العائلة الحديث (`FamilyLogoNavy` — خط «المحمدعلي» الكحلي، من أصله
+// المتّجه بدقّة ×٤) في الوسط، ثم عنوان التقرير ونطاقه بالكحلي، وسدو ذهبي رفيع تحته، وبيانات صغيرة رمادية (التاريخ بتوقيت الكويت،
+// من أعدّه، النطاق، العدد)، وفقرة ما يحويه، وشارة محدّدة صغيرة «سرّي — لعائلة المحمدعلي فقط». كل صفحة بعدها:
+// رأس رفيع (عنوان التقرير بالكحلي + الشعار صغيراً + خطّ كحلي شعري)، وتذييل سطر واحد: الختم رمادياً صغيراً يميناً و«صفحة
+// X من Y» يساراً — والغلاف يُعدّ الصفحة الأولى (بلا تذييل).
+// ملاحظة: الشعار داخل التطبيق ما زال `AppIconImage` (مؤجّل عمداً) — الملف وحده يحمل الشعار الحديث.
 // الخط خط التطبيق نفسه (IBM Plex Sans Arabic، مسجّل في `UIAppFonts` — نفس أسماء `DS.Font.Plex`) والنص عربي من
 // اليمين، والتشكيل (وصل الحروف) من CoreText. الجداول بصفوف متناوبة وعنوان يتكرّر أعلى كل صفحة، والأسماء الطويلة
 // تلتفّ (لا قصّ). الورقة فاتحة دائماً فلا تتبع الوضع الداكن — ألوانها هنا (ألوان طباعة، مثل رسم الـ Canvas).
@@ -24,10 +27,15 @@ nonisolated enum AdminReportPDF {
 
     static let pageSize = CGSize(width: 595.28, height: 841.89)
     private static let margin: CGFloat = 36
-    private static let bandHeight: CGFloat = 30
-    private static let contentTop: CGFloat = bandHeight + 20
-    private static let footerLine: CGFloat = pageSize.height - 38
-    private static let contentBottom: CGFloat = footerLine - 14
+    /// رأس الصفحات الداخلية: سطر (العنوان + الشعار) ثم خطّ كحلي شعري
+    private static let headerTop: CGFloat = 20
+    /// نقطة PDF = 1/72 بوصة: 19 هنا ≈ 6.7 مم مطبوعة — أكبر فعلياً من حدّ الشعار في الشاشة (32pt ≈ 5 مم)، وحوله
+    /// ربع ارتفاعه فراغاً على الأقل (قاعدة الشعار في CLAUDE.md)
+    private static let headerLogoHeight: CGFloat = 19
+    private static let headerRule: CGFloat = headerTop + headerLogoHeight + 7
+    private static let contentTop: CGFloat = headerRule + 14
+    private static let footerLine: CGFloat = pageSize.height - 34
+    private static let contentBottom: CGFloat = footerLine - 12
     private static var contentWidth: CGFloat { pageSize.width - margin * 2 }
     private static var right: CGFloat { pageSize.width - margin }
 
@@ -37,24 +45,24 @@ nonisolated enum AdminReportPDF {
         UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
                 blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
     }
-    /// كحلي لوحة الإدارة (رأس «اليوم»)
+    /// كحلي العائلة (لون الشعار نفسه)
     private static let navy = rgb(0x172536)
     private static let navyLight = rgb(0x2A3E5C)
     /// الكحلي الأساسي (الرجال، الأعمدة)
     private static let brand = rgb(0x1F4E79)
     private static let gold = rgb(0xB89A5A)
-    private static let goldLight = rgb(0xE7D3A6)
-    private static let cream = rgb(0xF2EBDD)
-    private static let creamSoft = rgb(0xF8F4EC)
-    private static let zebra = rgb(0xFAF7F1)
-    private static let line = rgb(0xE3D9C6)
+    /// صفوف متناوبة: رمادي يكاد يكون أبيض (لا كريمي)
+    private static let zebra = rgb(0xF6F7F9)
+    /// إطارات خفيفة (المربّعات، التذييل)
+    private static let line = rgb(0xE4E7EC)
+    /// فاصل الصفوف
+    private static let rowLine = rgb(0xEDEFF2)
     private static let ink = rgb(0x172536)
     private static let muted = rgb(0x5F6B78)
     private static let faint = rgb(0x8A94A0)
-    private static let track = rgb(0xECE7DD)
+    private static let track = rgb(0xE9ECF0)
     private static let deceased = rgb(0xB5BAC1)
     private static let warning = rgb(0x9A6A0A)
-    private static let warningFill = rgb(0xFFF5DC)
     private static let success = rgb(0x157F3C)
     private static let slate = rgb(0x7A8794)
     private static let female = rgb(0xC85A80)
@@ -85,20 +93,18 @@ nonisolated enum AdminReportPDF {
     private static let fSmall = plex("Regular", 8.5)
     private static let fSmallBold = plex("Medium", 8.5)
     private static let fFooter = plex("Regular", 8)
-    private static let fFooterBold = plex("SemiBold", 8)
-    private static let fBand = plex("SemiBold", 10.5)
-    private static let fBandSide = plex("Medium", 9)
+    private static let fFooterBold = plex("Medium", 8)
+    private static let fHeader = plex("SemiBold", 10.5)
     private static let fSection = plex("Bold", 13.5)
     private static let fPanel = plex("SemiBold", 11.5)
     private static let fTileValue = plex("Bold", 17)
     private static let fRingValue = plex("Bold", 15)
-    private static let fCoverTitle = plex("Bold", 30)
-    private static let fCoverFamily = plex("SemiBold", 13)
-    private static let fCoverScope = plex("Regular", 12)
-    private static let fCoverLabel = plex("Regular", 10)
-    private static let fCoverValue = plex("SemiBold", 10.5)
-    private static let fCoverIntro = plex("Regular", 10)
-    private static let fStamp = plex("Bold", 12.5)
+    private static let fCoverTitle = plex("Bold", 28)
+    private static let fCoverScope = plex("Regular", 13)
+    private static let fCoverLabel = plex("Regular", 9)
+    private static let fCoverValue = plex("Medium", 9.5)
+    private static let fCoverIntro = plex("Regular", 9)
+    private static let fSecret = plex("SemiBold", 9)
 
     private static func lineH(_ font: UIFont) -> CGFloat { ceil(font.lineHeight) }
 
@@ -135,7 +141,9 @@ nonisolated enum AdminReportPDF {
     static func render(_ doc: AdminReportDoc, isCancelled: () -> Bool = { false }) throws -> Output {
         let laid = try layout(doc.blocks, isCancelled: isCancelled)
         let total = laid.count + 1
-        let logo = coverLogo()
+        let vector = familyLogo()
+        let logo = vector.flatMap { raster($0, height: coverLogoWidth * $0.size.height / max($0.size.width, 1)) }
+        let smallLogo = vector.flatMap { raster($0, height: headerLogoHeight) }
         let format = UIGraphicsPDFRendererFormat()
         format.documentInfo = [
             kCGPDFContextTitle as String: doc.title,
@@ -148,13 +156,12 @@ nonisolated enum AdminReportPDF {
         let data = renderer.pdfData { ctx in
             ctx.beginPage()
             drawCover(doc, total: total, logo: logo)
-            drawFooter(page: 1, total: total, date: doc.date)
             for (i, items) in laid.enumerated() {
                 if isCancelled() { cancelled = true; return }
                 ctx.beginPage()
-                drawBand(doc.title)
+                drawHeader(doc.title, logo: smallLogo)
                 for item in items { drawItem(item) }
-                drawFooter(page: i + 2, total: total, date: doc.date)
+                drawFooter(page: i + 2, total: total)
             }
         }
         if cancelled { throw Cancelled() }
@@ -331,12 +338,10 @@ nonisolated enum AdminReportPDF {
     // MARK: الجدول
 
     private static func drawTableHeader(_ l: TableLayout, y: CGFloat) {
+        // أبيض: نص كحلي وخطّ كحلي تحته
         let rect = CGRect(x: margin, y: y, width: contentWidth, height: l.headerH)
-        cream.setFill()
-        UIBezierPath(roundedRect: rect, byRoundingCorners: [.topLeft, .topRight],
-                     cornerRadii: CGSize(width: 5, height: 5)).fill()
-        gold.setFill()
-        UIRectFill(CGRect(x: margin, y: rect.maxY - 0.8, width: contentWidth, height: 0.8))
+        navy.setFill()
+        UIRectFill(CGRect(x: margin, y: rect.maxY - 0.9, width: contentWidth, height: 0.9))
         for (i, c) in l.table.columns.enumerated() {
             let f = l.frames[i]
             let h = textHeight(c.title, width: f.w - TableLayout.padX * 2, font: fHead)
@@ -350,16 +355,16 @@ nonisolated enum AdminReportPDF {
                                 font: UIFont, total: Bool = false) {
         let rect = CGRect(x: margin, y: y, width: contentWidth, height: h)
         if total {
-            creamSoft.setFill()
-            UIRectFill(rect)
             navy.setFill()
             UIRectFill(CGRect(x: margin, y: y, width: contentWidth, height: 0.8))
         } else if index % 2 == 1 {
             zebra.setFill()
             UIRectFill(rect)
         }
-        line.setFill()
-        UIRectFill(CGRect(x: margin, y: rect.maxY - 0.5, width: contentWidth, height: 0.5))
+        if !total {
+            rowLine.setFill()
+            UIRectFill(CGRect(x: margin, y: rect.maxY - 0.4, width: contentWidth, height: 0.4))
+        }
         let single = lineH(font)
         for (i, c) in l.table.columns.enumerated() where i < row.cells.count {
             let text = row.cells[i]
@@ -388,11 +393,9 @@ nonisolated enum AdminReportPDF {
         for (i, t) in tiles.enumerated() {
             let x = right - CGFloat(i + 1) * w - CGFloat(i) * gap
             let rect = CGRect(x: x, y: y, width: w, height: tileHeight)
-            let path = UIBezierPath(roundedRect: rect, cornerRadius: 8)
-            creamSoft.setFill()
-            path.fill()
+            let path = UIBezierPath(roundedRect: rect.insetBy(dx: 0.4, dy: 0.4), cornerRadius: 8)
             line.setStroke()
-            path.lineWidth = 0.7
+            path.lineWidth = 0.8
             path.stroke()
             draw(t.value, in: CGRect(x: x + 4, y: y + 6, width: w - 8, height: lineH(fTileValue)),
                  font: fTileValue, color: navy, align: .center)
@@ -420,9 +423,16 @@ nonisolated enum AdminReportPDF {
 
     private static func drawNote(_ text: String, tone: AdminReportTone, y: CGFloat, h: CGFloat) {
         let rect = CGRect(x: margin, y: y, width: contentWidth, height: h)
-        let path = UIBezierPath(roundedRect: rect, cornerRadius: 6)
-        (tone == .warning ? warningFill : creamSoft).setFill()
-        path.fill()
+        let path = UIBezierPath(roundedRect: rect.insetBy(dx: 0.4, dy: 0.4), cornerRadius: 6)
+        if tone == .warning {
+            // تنبيه: إطار كهرماني على الأبيض
+            warning.withAlphaComponent(0.55).setStroke()
+            path.lineWidth = 0.8
+            path.stroke()
+        } else {
+            zebra.setFill()
+            path.fill()
+        }
         draw(text, in: rect.insetBy(dx: 10, dy: 6), font: fBody, color: color(tone), wrap: true)
     }
 
@@ -602,14 +612,16 @@ nonisolated enum AdminReportPDF {
         let fw: CGFloat = 250
         let fh: CGFloat = 44
         let founder = CGRect(x: (pageSize.width - fw) / 2, y: y + 4, width: fw, height: fh)
-        navy.setFill()
-        UIBezierPath(roundedRect: founder, cornerRadius: 10).fill()
+        let fp = UIBezierPath(roundedRect: founder.insetBy(dx: 0.6, dy: 0.6), cornerRadius: 10)
+        navy.setStroke()
+        fp.lineWidth = 1.2
+        fp.stroke()
         let t1 = lineH(fBodyBold), t2 = lineH(fSmall)
         draw(tree.founder, in: CGRect(x: founder.minX + 8, y: founder.minY + (fh - t1 - t2) / 2, width: fw - 16, height: t1),
-             font: fBodyBold, color: .white, align: .center)
+             font: fBodyBold, color: navy, align: .center)
         draw(tree.founderCaption, in: CGRect(x: founder.minX + 8, y: founder.minY + (fh - t1 - t2) / 2 + t1, width: fw - 16,
                                              height: t2),
-             font: fSmall, color: goldLight, align: .center)
+             font: fSmall, color: muted, align: .center)
 
         // الخطوط
         let gap: CGFloat = 6
@@ -632,9 +644,7 @@ nonisolated enum AdminReportPDF {
         let titleFont = n > 6 ? fSmallBold : fBodyBold
         for (i, node) in tree.nodes.enumerated() {
             let rect = CGRect(x: centers[i] - nodeW / 2, y: nodeY, width: nodeW, height: nodeH)
-            let path = UIBezierPath(roundedRect: rect, cornerRadius: 8)
-            (node.isRest ? UIColor.white : creamSoft).setFill()
-            path.fill()
+            let path = UIBezierPath(roundedRect: rect.insetBy(dx: 0.4, dy: 0.4), cornerRadius: 8)
             path.lineWidth = 0.8
             if node.isRest { path.setLineDash([3, 2], count: 2, phase: 0) }
             (node.isRest ? faint : line).setStroke()
@@ -667,56 +677,61 @@ nonisolated enum AdminReportPDF {
         }
     }
 
-    // MARK: الشريط والتذييل
+    // MARK: الرأس والتذييل
 
-    private static func drawBand(_ title: String) {
+    /// عنوان التقرير بالكحلي يميناً، والشعار صغيراً يساراً، وخطّ كحلي شعري تحتهما
+    private static func drawHeader(_ title: String, logo: UIImage?) {
+        let h = lineH(fHeader)
+        let midY = headerTop + headerLogoHeight / 2
+        draw(title, in: CGRect(x: margin + contentWidth * 0.3, y: midY - h / 2, width: contentWidth * 0.7, height: h),
+             font: fHeader, color: navy)
+        if let logo {
+            let w = headerLogoHeight * logo.size.width / max(logo.size.height, 1)
+            logo.draw(in: CGRect(x: margin, y: headerTop, width: w, height: headerLogoHeight))
+        }
         navy.setFill()
-        UIRectFill(CGRect(x: 0, y: 0, width: pageSize.width, height: bandHeight))
-        gold.setFill()
-        UIRectFill(CGRect(x: 0, y: bandHeight, width: pageSize.width, height: 1.2))
-        let h = lineH(fBand)
-        let side = contentWidth * 0.36
-        draw(title, in: CGRect(x: right - side, y: (bandHeight - h) / 2, width: side, height: h),
-             font: fBand, color: .white)
-        let sh = lineH(fBandSide)
-        draw(AdminReportText.familyName, in: CGRect(x: margin, y: (bandHeight - sh) / 2, width: side, height: sh),
-             font: fBandSide, color: goldLight, align: .left)
-        // سدو رفيع في وسط الشريط
-        drawSadu(centerX: pageSize.width / 2, y: bandHeight / 2, lineLength: 26, unit: 2.4, alpha: 0.85)
+        UIRectFill(CGRect(x: margin, y: headerRule, width: contentWidth, height: 0.6))
     }
 
-    private static func drawFooter(page: Int, total: Int, date: Date) {
-        gold.setFill()
-        UIRectFill(CGRect(x: margin, y: footerLine, width: contentWidth, height: 0.6))
+    /// سطر واحد: «سرّي — لعائلة المحمدعلي فقط» رمادياً صغيراً يميناً، و«صفحة X من Y» يساراً
+    private static func drawFooter(page: Int, total: Int) {
+        line.setFill()
+        UIRectFill(CGRect(x: margin, y: footerLine, width: contentWidth, height: 0.5))
         let y = footerLine + 7
         let h = lineH(fFooterBold)
-        let third = contentWidth / 3
-        draw("صفحة \(page) من \(total)", in: CGRect(x: right - third, y: y, width: third, height: h),
-             font: fFooterBold, color: navy)
-        draw(AdminReportText.confidential, in: CGRect(x: margin + third, y: y, width: third, height: h),
-             font: fFooterBold, color: secret, align: .center)
-        draw("أُنشئ في \(AdminReportText.date(date, calendar: AdminReportText.kuwait))، \(AdminReportText.time(date))",
-             in: CGRect(x: margin, y: y, width: third, height: h), font: fFooter, color: muted, align: .left)
+        let half = contentWidth / 2
+        draw(AdminReportText.confidential, in: CGRect(x: right - half, y: y, width: half, height: h),
+             font: fFooter, color: faint)
+        draw("صفحة \(page) من \(total)", in: CGRect(x: margin, y: y, width: half, height: h),
+             font: fFooterBold, color: muted, align: .left)
     }
 
     // MARK: الغلاف
 
-    /// الشعار مصغّراً (الأصل ١٠٢٤ بكسل يضيف ~٧٠٠ ك.ب لكل ملف) — ٣× مقاس رسمه
-    private static func coverLogo() -> UIImage? {
-        guard let source = UIImage(named: "AppIconImage") else { return nil }
-        let size = CGSize(width: coverLogoSide * 3, height: coverLogoSide * 3)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
-            source.draw(in: CGRect(origin: .zero, size: size))
-        }
-        return image.jpegData(compressionQuality: 0.85).flatMap(UIImage.init(data:)) ?? image
+    /// شعار العائلة الحديث (`FamilyLogoNavy` — رسم متّجه SVG في الأصول). النسخة الفاتحة دائماً (الكحلية) — الورقة
+    /// بيضاء مهما كان وضع الجهاز.
+    private static func familyLogo() -> UIImage? {
+        UIImage(named: "FamilyLogoNavy", in: .main, compatibleWith: UITraitCollection(userInterfaceStyle: .light))
     }
 
-    private static let coverLogoSide: CGFloat = 92
+    /// الشعار صورةً بمقاس رسمه ×٤ (~٣٠٠ نقطة/بوصة عند الطباعة) على أبيض معتم: رسم SVG في سياق PDF يصير صورة بدقّة
+    /// الشاشة على أي حال — هنا الدقّة ثابتة، وبلا قناع شفافية، وصورة الرأس واحدة يعيد الملف استعمالها في كل صفحة
+    private static func raster(_ logo: UIImage, height: CGFloat) -> UIImage? {
+        guard logo.size.height > 0 else { return nil }
+        let size = CGSize(width: (height * logo.size.width / logo.size.height).rounded(.up), height: height.rounded(.up))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 4
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+            logo.draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
 
-    /// السدو الكويتي (الشكل الثابت القديم: خطّان ومعيّنات خمسة، الأوسط أكبر) — ذهبي على الكحلي
+    private static let coverLogoWidth: CGFloat = 176
+
+    /// السدو الكويتي (الشكل الثابت القديم: خطّان ومعيّنات خمسة، الأوسط أكبر) — ذهبي رفيع تحت عنوان الغلاف
     private static func drawSadu(centerX: CGFloat, y: CGFloat, lineLength: CGFloat, unit: CGFloat, alpha: CGFloat) {
         let small = unit, big = unit * 1.5, gap = unit * 1.25
         let diamonds: [CGFloat] = [small, small, big, small, small]
@@ -742,98 +757,81 @@ nonisolated enum AdminReportPDF {
     }
 
     private static func drawCover(_ doc: AdminReportDoc, total: Int, logo: UIImage?) {
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        let blockH: CGFloat = 330
-        // الكتلة الكحلية (تدرّج رأس «اليوم»)
-        ctx.saveGState()
-        if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                              colors: [navy.cgColor, navyLight.cgColor] as CFArray, locations: [0, 1]) {
-            ctx.addRect(CGRect(x: 0, y: 0, width: pageSize.width, height: blockH))
-            ctx.clip()
-            ctx.drawLinearGradient(g, start: .zero, end: CGPoint(x: 0, y: blockH), options: [])
-        }
-        ctx.restoreGState()
-        gold.setFill()
-        UIRectFill(CGRect(x: 0, y: blockH, width: pageSize.width, height: 2))
+        let cx = pageSize.width / 2
+        var y: CGFloat = 150
 
-        // الشعار
-        let side = coverLogoSide
-        let logoRect = CGRect(x: (pageSize.width - side) / 2, y: 54, width: side, height: side)
+        // الشعار في الوسط
         if let logo {
-            ctx.saveGState()
-            UIBezierPath(roundedRect: logoRect, cornerRadius: side * 0.225).addClip()
-            logo.draw(in: logoRect)
-            ctx.restoreGState()
-            let ring = UIBezierPath(roundedRect: logoRect.insetBy(dx: -3, dy: -3), cornerRadius: side * 0.225 + 3)
-            ring.lineWidth = 1
-            goldLight.withAlphaComponent(0.6).setStroke()
-            ring.stroke()
+            let w = coverLogoWidth
+            let h = w * logo.size.height / max(logo.size.width, 1)
+            logo.draw(in: CGRect(x: cx - w / 2, y: y, width: w, height: h))
+            y += h + 44
+        } else {
+            draw(AdminReportText.familyName, in: CGRect(x: margin, y: y, width: contentWidth, height: lineH(fCoverTitle)),
+                 font: fCoverTitle, color: navy, align: .center)
+            y += lineH(fCoverTitle) + 40
         }
-        var y = logoRect.maxY + 18
-        draw(AdminReportText.familyName, in: CGRect(x: margin, y: y, width: contentWidth, height: lineH(fCoverFamily)),
-             font: fCoverFamily, color: goldLight, align: .center)
-        y += lineH(fCoverFamily) + 10
-        drawSadu(centerX: pageSize.width / 2, y: y, lineLength: 104, unit: 5, alpha: 1)
-        y += 12
+
+        // العنوان والنطاق بالكحلي
         let th = textHeight(doc.title, width: contentWidth, font: fCoverTitle)
         draw(doc.title, in: CGRect(x: margin, y: y, width: contentWidth, height: th + 1),
-             font: fCoverTitle, color: .white, align: .center, wrap: true)
-        y += th + 6
+             font: fCoverTitle, color: navy, align: .center, wrap: true)
+        y += th + 4
         if !doc.scope.isEmpty {
-            let sh = textHeight(doc.scope, width: contentWidth - 40, font: fCoverScope)
-            draw(doc.scope, in: CGRect(x: margin + 20, y: y, width: contentWidth - 40, height: sh + 1),
-                 font: fCoverScope, color: UIColor.white.withAlphaComponent(0.78), align: .center, wrap: true)
+            let sh = textHeight(doc.scope, width: contentWidth - 60, font: fCoverScope)
+            draw(doc.scope, in: CGRect(x: margin + 30, y: y, width: contentWidth - 60, height: sh + 1),
+                 font: fCoverScope, color: navyLight, align: .center, wrap: true)
+            y += sh
         }
 
-        // بيانات التقرير
+        // سدو ذهبي رفيع
+        y += 20
+        drawSadu(centerX: cx, y: y, lineLength: 64, unit: 3.4, alpha: 1)
+        y += 26
+
+        // بيانات صغيرة رمادية
         let rows: [(String, String)] = [
-            ("تاريخ التقرير", AdminReportText.longDate(doc.date)),
-            ("وقت الإنشاء", "\(AdminReportText.time(doc.date)) (توقيت الكويت)"),
+            ("التاريخ", "\(AdminReportText.longDate(doc.date)) · \(AdminReportText.time(doc.date)) (توقيت الكويت)"),
             ("أعدّه", doc.generatedBy.isEmpty ? "—" : doc.generatedBy),
             ("النطاق", doc.scope.isEmpty ? "العائلة كاملة" : doc.scope),
-            ("المحتوى", "\(AdminReportText.people(doc.count)) · \(AdminReportText.pages(total))")
+            ("العدد", "\(AdminReportText.people(doc.count)) · \(AdminReportText.pages(total))")
         ]
-        var ry = blockH + 34
-        let labelW: CGFloat = 110
-        for (i, r) in rows.enumerated() {
-            let vh = textHeight(r.1, width: contentWidth - labelW - 20, font: fCoverValue)
-            let rh = max(vh, lineH(fCoverLabel)) + 14
-            if i % 2 == 0 {
-                creamSoft.setFill()
-                UIRectFill(CGRect(x: margin, y: ry, width: contentWidth, height: rh))
-            }
-            draw(r.0, in: CGRect(x: right - labelW, y: ry + 7, width: labelW - 10, height: lineH(fCoverLabel)),
-                 font: fCoverLabel, color: muted)
-            draw(r.1, in: CGRect(x: margin + 10, y: ry + 7, width: contentWidth - labelW - 20, height: vh + 1),
-                 font: fCoverValue, color: ink, wrap: true)
-            ry += rh
-        }
+        let blockW: CGFloat = 340
+        let labelW: CGFloat = 64
+        let bx = cx - blockW / 2
+        let valueW = blockW - labelW - 8
         line.setFill()
-        UIRectFill(CGRect(x: margin, y: ry, width: contentWidth, height: 0.6))
+        UIRectFill(CGRect(x: bx, y: y, width: blockW, height: 0.5))
+        for r in rows {
+            let vh = textHeight(r.1, width: valueW, font: fCoverValue)
+            let rh = max(vh, lineH(fCoverLabel)) + 12
+            draw(r.0, in: CGRect(x: bx + blockW - labelW, y: y + 6, width: labelW, height: lineH(fCoverLabel)),
+                 font: fCoverLabel, color: faint)
+            draw(r.1, in: CGRect(x: bx, y: y + 6, width: valueW, height: vh + 1),
+                 font: fCoverValue, color: muted, wrap: true)
+            y += rh
+            line.setFill()
+            UIRectFill(CGRect(x: bx, y: y, width: blockW, height: 0.5))
+        }
 
         // ما يحويه التقرير
-        ry += 22
-        let ih = textHeight(doc.intro, width: contentWidth, font: fCoverIntro) + 4
-        draw(doc.intro, in: CGRect(x: margin, y: ry, width: contentWidth, height: ih),
-             font: fCoverIntro, color: muted, wrap: true)
-        ry += ih + 26
+        y += 20
+        let introW = blockW
+        let ih = textHeight(doc.intro, width: introW, font: fCoverIntro) + 4
+        draw(doc.intro, in: CGRect(x: cx - introW / 2, y: y, width: introW, height: ih),
+             font: fCoverIntro, color: faint, align: .center, wrap: true)
 
-        // الختم
-        let stampW: CGFloat = 270
-        let stampH: CGFloat = 40
-        let stamp = CGRect(x: (pageSize.width - stampW) / 2, y: max(ry, footerLine - 120), width: stampW, height: stampH)
-        let sp = UIBezierPath(roundedRect: stamp, cornerRadius: 8)
-        secret.withAlphaComponent(0.06).setFill()
-        sp.fill()
-        sp.lineWidth = 1.4
+        // «سرّي» — شارة محدّدة صغيرة أسفل الغلاف
+        let a = attrs(fSecret, secret, align: .center, ltr: false, wrap: false)
+        let tw = ceil((AdminReportText.confidential as NSString).size(withAttributes: a).width)
+        let lh = lineH(fSecret)
+        let pill = CGRect(x: cx - (tw + 28) / 2, y: pageSize.height - 88, width: tw + 28, height: lh + 10)
+        let pp = UIBezierPath(roundedRect: pill.insetBy(dx: 0.4, dy: 0.4), cornerRadius: pill.height / 2)
+        pp.lineWidth = 0.8
         secret.setStroke()
-        sp.stroke()
-        let inner = UIBezierPath(roundedRect: stamp.insetBy(dx: 3, dy: 3), cornerRadius: 6)
-        inner.lineWidth = 0.5
-        inner.stroke()
-        draw(AdminReportText.confidential, in: CGRect(x: stamp.minX, y: stamp.midY - lineH(fStamp) / 2,
-                                                      width: stampW, height: lineH(fStamp)),
-             font: fStamp, color: secret, align: .center)
+        pp.stroke()
+        draw(AdminReportText.confidential, in: CGRect(x: pill.minX, y: pill.minY + 5, width: pill.width, height: lh),
+             font: fSecret, color: secret, align: .center)
     }
 }
 
@@ -863,7 +861,7 @@ nonisolated struct AdminReportResult: @unchecked Sendable {
     let pages: Int
     let count: Int
     let summary: String
-    /// أول الصفحات (الغلاف وما بعده) للمعاينة
+    /// صورة الغلاف للمعاينة (`AdminReportJob.thumbnailPages`)
     let thumbnails: [UIImage]
     /// مدة البناء والرسم (ث)
     let seconds: Double
@@ -871,7 +869,8 @@ nonisolated struct AdminReportResult: @unchecked Sendable {
 
 nonisolated enum AdminReportJob {
     static let thumbnailWidth: CGFloat = 220
-    static let thumbnailPages = 3
+    /// المعاينة صفحة واحدة (الغلاف) وعليها عدد الصفحات — الضغط يفتح الملف كاملاً
+    static let thumbnailPages = 1
 
     static func run(_ kind: AdminReportKind, input: AdminReportInput, filter: AdminReportFilter,
                     flag: AdminReportCancelFlag) throws -> AdminReportResult {
