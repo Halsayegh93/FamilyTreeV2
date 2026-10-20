@@ -5,7 +5,7 @@ import Combine
 //
 // المالك والمدير فقط (نفس صلاحية `sms_admin_overview()` على السيرفر — غيرهما 42501). البيانات الحية منذ ٢٠٢٦-١٠-٢٠
 // (`AdminSmsData.swift`): الرأس (الرصيد وحالته، يكفي كم رمز وكم يوم، تحديث حي، الشحن) ← الإرسال (اليوم/٧/٣٠،
-// القبول، النقاط، عدّاد الساعة) ← آخر ٣٠ يوماً ← آخر الإرسالات (فحص الحالة) ← أدوات (اختبار المالك، فحص رقم،
+// القبول، النقاط، عدّاد الساعة) ← محاولات الدخول (`AdminSmsAttempts.swift`) ← آخر ٣٠ يوماً ← آخر الإرسالات (فحص الحالة) ← أدوات (اختبار المالك، فحص رقم،
 // المرسلون، التغطية) ← التنبيهات (المالك يعدّل) ← الحدود ← الإعداد.
 // حارس المكدس (تعطّل «اليوم» على الجوال ٢٠٢٦-١٠-٢٠): كل بطاقة نوع مستقل خلف `AnyView` — لا جسم واحد ضخم.
 
@@ -105,7 +105,11 @@ struct AdminSmsView: View {
         } content: {
             AnyView(SmsPageContent(store: store, actions: actions))
         }
-        .refreshable { await store.refresh(force: true) }
+        .refreshable {
+            async let overview: Void = store.refresh(force: true)
+            async let attempts: Void = SmsLoginAttemptsStore.shared.refresh(force: true)
+            _ = await (overview, attempts)
+        }
         .task { await store.refresh() }
         .modifier(SmsPagePresentations(actions: actions))
     }
@@ -153,8 +157,6 @@ private struct SmsPageContent: View {
             VStack(spacing: DS.Hub.stackSpacing) {
                 if let overview = store.overview {
                     AnyView(SmsNumbersCard(overview: overview))
-                    AnyView(SmsTrendCard(overview: overview))
-                    AnyView(SmsRecentCard(overview: overview, actions: actions))
                 } else if store.state == .loading {
                     DSPageLoader(L10n.t("جاري جلب أرقام الرسائل…", "Loading message stats…"),
                                  size: DS.Icon.loaderArtInline, fillsSpace: false)
@@ -162,6 +164,12 @@ private struct SmsPageContent: View {
                     DSNoteCard(L10n.t("تعذّر جلب أرقام الرسائل الآن — اسحب للتحديث.",
                                       "Couldn't load message stats — pull to refresh."),
                                icon: "wifi.exclamationmark", tint: DS.Color.warning)
+                }
+                // «محاولات الدخول» — دالتها مستقلة عن النظرة، فتظهر ولو تعذّرت (AdminSmsAttempts.swift)
+                AnyView(SmsAttemptsCard())
+                if let overview = store.overview {
+                    AnyView(SmsTrendCard(overview: overview))
+                    AnyView(SmsRecentCard(overview: overview, actions: actions))
                 }
                 AnyView(SmsToolsCard(actions: actions, isOwner: authVM.isOwner))
                 AnyView(SmsAlertsCard(alerts: store.overview?.alerts))
@@ -186,6 +194,7 @@ private struct SmsHeroHeader: View {
                         bottomPadding: DS.Spacing.xl) {
             AdminGlassButton(symbol: "arrow.clockwise", label: L10n.t("تحديث الصفحة", "Refresh page")) {
                 Task { await store.refresh(force: true) }
+                Task { await SmsLoginAttemptsStore.shared.refresh(force: true) }
             }
         } accessory: {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
