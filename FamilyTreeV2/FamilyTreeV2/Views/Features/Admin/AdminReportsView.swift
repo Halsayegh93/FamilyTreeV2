@@ -11,6 +11,10 @@ import PDFKit
 // («نطوّر فلاتر التقارير بشكل مبسط»): سجل العائلة «كل الفروع ⌄» + «كل الأعمار ⌄» (قائمة الفئات — «اذا بس بالاعمار؟»)
 // + الكل · أحياء · متوفون — الهواتف الكل · مسجّلون · بلا رقم هاتف — المتوفون الكل · التاريخ غير مكتمل — الملخّص بلا
 // تصفية. الافتراضي تقرير مفيد بلا أي ضغطة.
+// وتحته سطر «البيانات:» (طلب المالك «اضيف البيانات او اشيل البيانات بشكل بسيط و مرتب بدون اي تعقيد»): شرائح صغيرة
+// بما يُطبع — أعمدة الجداول، أو أقسام الملخّص — الممتلئة ✓ تُطبع والمحدّدة + لا، والضغط يبدّلها؛ الاسم (والرقم في
+// الهواتف) مقفل. الافتراضي = أعمدة التقرير السابقة، والاختيار يُحفظ لكل نوع ولكل مستخدم (`AdminReportFieldsStore`)،
+// و«الافتراضي» آخر السطر متى تغيّر. الملف يتكيّف (`AdminReportPDF.plan`): الأعمدة المختارة فقط والاسم يأخذ ما بقي.
 // ← «المعاينة»: سطر النطاق («سجل العائلة · كل الفروع · أحياء — 2,344 فرداً») وصورة الغلاف وحدها بشارة «14 صفحة»
 // (الضغط يفتح الملف كاملاً — طلب المالك «خل بس وحدة وانا ادش عليها») ← زرّ «مشاركة / حفظ» عائم مثبّت فوق شريط
 // التبويبات (ورقة المشاركة) — بلا شريط زجاجي عريض ولا عدد صفحات بجانبه.
@@ -22,6 +26,23 @@ import PDFKit
 struct AdminReportScope {
     let ids: Set<UUID>
     let title: String
+}
+
+/// اختيار «البيانات:» محفوظاً في سلسلة `@AppStorage` واحدة لكل المستخدمين والأنواع:
+/// `{"<معرّف المستخدم>|register": "name,birth,age"}` — لا مفتاح = الافتراضي
+enum AdminReportFieldsStore {
+    static let key = "adminReports.fields"
+
+    static func decode(_ raw: String) -> [String: String] {
+        guard !raw.isEmpty, let data = raw.data(using: .utf8),
+              let dict = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return dict
+    }
+
+    static func encode(_ dict: [String: String]) -> String {
+        guard !dict.isEmpty, let data = try? JSONEncoder().encode(dict) else { return "" }
+        return String(decoding: data, as: UTF8.self)
+    }
 }
 
 struct AdminReportsView: View {
@@ -46,6 +67,8 @@ struct AdminReportsView: View {
     @State private var showShare = false
     @State private var shareItems: [Any] = []
     @State private var viewerURL: AdminReportViewerItem?
+    /// «البيانات:» لكل نوع ولكل مستخدم (`AdminReportFieldsStore`)
+    @AppStorage(AdminReportFieldsStore.key) private var fieldsRaw = ""
 
     /// `kind`: التقرير المفتوح أولاً (الافتراضي سجل العائلة)
     init(scope: AdminReportScope? = nil, kind: AdminReportKind = .register) {
@@ -100,12 +123,13 @@ struct AdminReportsView: View {
         let women: Int?
         let names: [String: String]?
         let allowed: Bool
+        let fields: Set<AdminReportField>
     }
 
     private var genKey: GenKey {
         GenKey(kind: kind, filter: filter, members: memberVM.allMembers.count, version: memberVM.membersVersion,
                accounts: accounts.accounts.count, accountsLoaded: accounts.loaded, women: women?.count,
-               names: appSettingsVM.settings.branchNames, allowed: authVM.isAdmin)
+               names: appSettingsVM.settings.branchNames, allowed: authVM.isAdmin, fields: fields)
     }
 
     private func regenerate() async {
@@ -128,9 +152,10 @@ struct AdminReportsView: View {
         var current = self.filter
         if jobKind != .register { current.scope = nil }
         let jobFilter = current
+        let jobFields = fields
         let flag = AdminReportCancelFlag()
         let job = Task.detached(priority: .userInitiated) {
-            try? AdminReportJob.run(jobKind, input: input, filter: jobFilter, flag: flag)
+            try? AdminReportJob.run(jobKind, input: input, filter: jobFilter, fields: jobFields, flag: flag)
         }
         let out = await withTaskCancellationHandler { await job.value } onCancel: { flag.cancel() }
         guard !Task.isCancelled else { return }
@@ -143,15 +168,14 @@ struct AdminReportsView: View {
         }
     }
 
-    // MARK: - بطاقة «التقرير»: النوع + سطر التصفية
+    // MARK: - بطاقة «التقرير»: النوع + سطر التصفية + «البيانات:»
 
     private var pickerCard: some View {
         AdminSectionCard(title: L10n.t("التقرير", "Report"), spacing: DS.Spacing.md) {
             typeRow
-            if kind != .stats {
-                AdminRowDivider()
-                filterRow
-            }
+            AdminRowDivider()
+            if kind != .stats { filterRow }
+            fieldsRow
         }
         .dsTallBox(isPresented: $branchPickerOpen) {
             BranchPickerSheet(allMembers: memberVM.allMembers, selectedId: filter.branch, onSelect: { id in
@@ -298,6 +322,108 @@ struct AdminReportsView: View {
     }
 
     private var kindTint: Color { AdminReportTypeCard.tint(kind) }
+
+    // MARK: - «البيانات:» ما يُطبع في التقرير
+
+    /// مفتاح الحفظ: المستخدم + النوع
+    private var fieldsKey: String {
+        "\(authVM.currentUser?.id.uuidString.lowercased() ?? "-")|\(kind.rawValue)"
+    }
+
+    /// المحفوظ لهذا النوع — nil = الافتراضي
+    private var savedFields: Set<AdminReportField>? {
+        AdminReportFieldsStore.decode(fieldsRaw)[fieldsKey].map { raw in
+            Set(raw.split(separator: ",").compactMap { AdminReportField(rawValue: String($0)) })
+        }
+    }
+
+    /// ما يُطبع الآن (المقفل دائماً)
+    private var fields: Set<AdminReportField> { kind.resolvedFields(savedFields) }
+
+    /// يحفظ الاختيار — الافتراضي (أو nil) يُمسح فيرجع الحفظ كما كان
+    private func saveFields(_ chosen: Set<AdminReportField>?) {
+        var all = AdminReportFieldsStore.decode(fieldsRaw)
+        let resolved = kind.resolvedFields(chosen)
+        if chosen != nil, resolved != kind.resolvedFields(nil) {
+            all[fieldsKey] = kind.fields.filter(resolved.contains).map(\.rawValue).joined(separator: ",")
+        } else {
+            all[fieldsKey] = nil
+        }
+        fieldsRaw = AdminReportFieldsStore.encode(all)
+    }
+
+    /// سطر واحد: «البيانات:» ثم شريحة لكل بيان (✓ يُطبع · + لا يُطبع · قفل دائماً) تُمرَّر أفقياً إن ضاق،
+    /// و«الافتراضي» ثابت آخر السطر متى تغيّر شيء (لا يختفي خلف التمرير)
+    private var fieldsRow: some View {
+        let current = fields
+        let changed = current != kind.resolvedFields(nil)
+        return HStack(spacing: DS.Spacing.md) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.xsm) {
+                    Text(L10n.t("البيانات:", "Data:"))
+                        .dsFont(.chipCompact)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .fixedSize()
+                    ForEach(kind.fields) { f in
+                        fieldChip(f, on: current.contains(f), locked: kind.lockedFields.contains(f), current: current)
+                    }
+                }
+                .padding(.vertical, DS.Spacing.xxs)
+            }
+            if changed {
+                Button {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(reduceMotion ? nil : DS.Anim.snappy) { saveFields(nil) }
+                } label: {
+                    Text(L10n.t("الافتراضي", "Default"))
+                        .dsFont(.chipCompact)
+                        .foregroundColor(DS.Color.primary)
+                        .fixedSize()
+                        .frame(minHeight: DSBox.chipHeightSmall)
+                        .dsTapArea(width: DS.Icon.tapTarget, height: DSBox.chipHeightSmall)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.t("إرجاع البيانات الافتراضية", "Restore the default data"))
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func fieldChip(_ f: AdminReportField, on: Bool, locked: Bool, current: Set<AdminReportField>) -> some View {
+        let title = Self.fieldTitle(f, kind: kind)
+        return DSChipButton(title, icon: locked ? "lock.fill" : on ? "checkmark" : "plus", tint: kindTint,
+                            isSelected: on, size: .small) {
+            guard !locked else { return }
+            UISelectionFeedbackGenerator().selectionChanged()
+            var next = current
+            if on { next.remove(f) } else { next.insert(f) }
+            withAnimation(reduceMotion ? nil : DS.Anim.snappy) { saveFields(next) }
+        }
+        .accessibilityLabel(title)
+        .accessibilityValue(on ? L10n.t("في التقرير", "In the report") : L10n.t("ليس في التقرير", "Not in the report"))
+        .accessibilityHint(locked ? L10n.t("دائماً في التقرير", "Always in the report")
+                           : on ? L10n.t("يزيله من التقرير", "Removes it from the report")
+                           : L10n.t("يضيفه للتقرير", "Adds it to the report"))
+    }
+
+    static func fieldTitle(_ f: AdminReportField, kind: AdminReportKind) -> String {
+        switch f {
+        case .name: return kind == .register ? L10n.t("الاسم الكامل", "Full name") : L10n.t("الاسم", "Name")
+        case .branch: return L10n.t("الفرع", "Branch")
+        case .birth: return L10n.t("الميلاد", "Birth")
+        case .age: return L10n.t("العمر", "Age")
+        case .status: return L10n.t("الحالة", "Status")
+        case .death: return L10n.t("تاريخ الوفاة", "Death date")
+        case .phone: return L10n.t("الهاتف", "Phone")
+        case .registration: return L10n.t("التسجيل في التطبيق", "App registration")
+        case .anniversary: return L10n.t("الذكرى القادمة", "Next anniversary")
+        case .ageAtDeath: return L10n.t("العمر عند الوفاة", "Age at death")
+        case .people: return L10n.t("إحصاء الأفراد", "Head count")
+        case .ages: return L10n.t("الأعمار", "Ages")
+        case .branches: return L10n.t("الفروع", "Branches")
+        case .registered: return L10n.t("المسجّلون", "Registered")
+        }
+    }
 
     // MARK: - المعاينة
 

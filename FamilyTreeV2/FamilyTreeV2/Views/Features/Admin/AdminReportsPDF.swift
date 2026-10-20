@@ -11,7 +11,7 @@ import UIKit
 // ملاحظة: الشعار داخل التطبيق ما زال `AppIconImage` (مؤجّل عمداً) — الملف وحده يحمل الشعار الحديث.
 // الخط خط التطبيق نفسه (IBM Plex Sans Arabic، مسجّل في `UIAppFonts` — نفس أسماء `DS.Font.Plex`) والنص عربي من
 // اليمين، والتشكيل (وصل الحروف) من CoreText. الجداول بصفوف متناوبة وعنوان يتكرّر أعلى كل صفحة، والأسماء الطويلة
-// تلتفّ (لا قصّ). الورقة فاتحة دائماً فلا تتبع الوضع الداكن — ألوانها هنا (ألوان طباعة، مثل رسم الـ Canvas).
+// تلتفّ (لا قصّ). الأعمدة ما اختاره المالك في «البيانات:»: كل عمود بعرض أطول محتواه والاسم يأخذ ما بقي (`plan`). الورقة فاتحة دائماً فلا تتبع الوضع الداكن — ألوانها هنا (ألوان طباعة، مثل رسم الـ Canvas).
 // يعمل خارج الخيط الرئيسي: قياس ثم توزيع على الصفحات (فيُعرف العدد الكلي قبل الرسم)، ثم الرسم، مع فحص الإلغاء.
 
 nonisolated enum AdminReportPDF {
@@ -90,6 +90,10 @@ nonisolated enum AdminReportPDF {
     private static let fBody = plex("Regular", 9.5)
     private static let fBodyBold = plex("SemiBold", 9.5)
     private static let fHead = plex("SemiBold", 9)
+    /// جدول بأعمدة كثيرة لا تتّسع بالخط العادي (`plan`)
+    private static let fBodyCompact = plex("Regular", 8.5)
+    private static let fBodyBoldCompact = plex("SemiBold", 8.5)
+    private static let fHeadCompact = plex("SemiBold", 8)
     private static let fSmall = plex("Regular", 8.5)
     private static let fSmallBold = plex("Medium", 8.5)
     private static let fFooter = plex("Regular", 8)
@@ -170,31 +174,57 @@ nonisolated enum AdminReportPDF {
 
     // MARK: التوزيع على الصفحات
 
+    /// خطوط الجدول ومسافته الأفقية — العادي، أو المضغوط إن كثرت الأعمدة (`plan`)
+    private struct TableStyle {
+        let body: UIFont
+        let bold: UIFont
+        let head: UIFont
+        let padX: CGFloat
+
+        static let regular = TableStyle(body: fBody, bold: fBodyBold, head: fHead, padX: 6)
+        static let compact = TableStyle(body: fBodyCompact, bold: fBodyBoldCompact, head: fHeadCompact, padX: 4)
+    }
+
+    /// مقاسات أعمدة جدول (بترتيب الأعمدة) وخطّه
+    private struct ColumnPlan {
+        let widths: [CGFloat]
+        let style: TableStyle
+    }
+
     private final class TableLayout {
         let table: AdminReportTable
         /// موضع كل عمود (من اليمين: الأول في اليمين)
         let frames: [(x: CGFloat, w: CGFloat)]
+        let style: TableStyle
         let headerH: CGFloat
         var rowH: [CGFloat] = []
         var footerH: CGFloat = 0
 
-        static let padX: CGFloat = 6
         static let padY: CGFloat = 4.5
 
-        init(_ table: AdminReportTable) {
+        /// `plan`: مقاسات من المحتوى (جدول بعمود `fill`) — nil = نِسَب `weight`
+        init(_ table: AdminReportTable, plan: ColumnPlan?) {
             self.table = table
-            let sum = table.columns.reduce(0) { $0 + $1.weight }
+            style = plan?.style ?? .regular
+            let widths: [CGFloat]
+            if let plan {
+                widths = plan.widths
+            } else {
+                let sum = table.columns.reduce(0) { $0 + $1.weight }
+                widths = table.columns.map {
+                    (AdminReportPDF.contentWidth * CGFloat($0.weight / max(sum, 0.0001))).rounded(.down)
+                }
+            }
             var x = AdminReportPDF.right
             var frames: [(x: CGFloat, w: CGFloat)] = []
-            for c in table.columns {
-                let w = (AdminReportPDF.contentWidth * CGFloat(c.weight / max(sum, 0.0001))).rounded(.down)
+            for w in widths {
                 x -= w
                 frames.append((x: x, w: w))
             }
             self.frames = frames
             var h: CGFloat = 0
             for (i, c) in table.columns.enumerated() {
-                h = max(h, AdminReportPDF.textHeight(c.title, width: frames[i].w - Self.padX * 2, font: AdminReportPDF.fHead))
+                h = max(h, AdminReportPDF.textHeight(c.title, width: frames[i].w - style.padX * 2, font: style.head))
             }
             headerH = h + Self.padY * 2 + 2
         }
@@ -202,10 +232,113 @@ nonisolated enum AdminReportPDF {
         func measure(_ row: AdminReportTable.Row, font: UIFont) -> CGFloat {
             var h = AdminReportPDF.lineH(font)
             for (i, c) in table.columns.enumerated() where c.wraps && i < row.cells.count {
-                h = max(h, AdminReportPDF.textHeight(row.cells[i], width: frames[i].w - Self.padX * 2, font: font))
+                h = max(h, AdminReportPDF.textHeight(row.cells[i], width: frames[i].w - style.padX * 2, font: font))
             }
             return h + Self.padY * 2
         }
+    }
+
+    // MARK: مقاسات الأعمدة من المحتوى (الأعمدة المختارة في «البيانات:»)
+
+    /// أقلّ عرض للاسم (نسبة من عرض الصفحة) — بالخط العادي ثم المضغوط
+    private static let fillMinRegular: CGFloat = 0.30
+    private static let fillMinCompact: CGFloat = 0.22
+    /// ما دام الاسم بهذا العرض أو أكثر تتّسع الأعمدة الأخرى (العنوان سطر واحد، النص بلا التفاف)
+    private static let fillComfort: CGFloat = 0.42
+    /// عمود يلتفّ (الفرع، الحالة، الملاحظة) لا يزيد مبدئياً عن هذا قبل أن يلتفّ
+    private static let wrapCap: CGFloat = 0.22
+
+    private static func signature(_ t: AdminReportTable) -> String { t.columns.map(\.title).joined(separator: "|") }
+
+    /// جداول بعمود `fill` (الاسم): كل عمود بعرض أطول محتواه (والعنوان على سطرين إن لزم)، والاسم يأخذ ما بقي.
+    /// إن ضاقت الصفحة: تلتفّ الأعمدة القابلة للالتفاف حتى أطول كلمة، ثم الخط المضغوط، ثم (آخر حلّ) تصغر الأعمدة بالنسبة.
+    /// تُحسب مرة لكل مجموعة جداول بالأعمدة نفسها — جداول الفروع كلها بمقاس واحد.
+    private static func plan(_ tables: [AdminReportTable]) -> ColumnPlan? {
+        guard let columns = tables.first?.columns, let fill = columns.firstIndex(where: \.fill) else { return nil }
+        return plan(tables, columns: columns, fill: fill, compact: false)
+            ?? plan(tables, columns: columns, fill: fill, compact: true)
+    }
+
+    private static func plan(_ tables: [AdminReportTable], columns: [AdminReportTable.Column], fill: Int,
+                             compact: Bool) -> ColumnPlan? {
+        let style = compact ? TableStyle.compact : .regular
+        var cache: [String: CGFloat] = [:]
+        // مفتاح الذاكرة بالخط (نفس النص بخط آخر عرضه آخر)
+        func width(_ s: String, _ font: UIFont) -> CGFloat {
+            let key = "\(font.fontName)\(font.pointSize)|\(s)"
+            if let w = cache[key] { return w }
+            let w = ceil((s as NSString).size(withAttributes: [.font: font]).width)
+            cache[key] = w
+            return w
+        }
+        func longestWord(_ s: String, _ font: UIFont) -> CGFloat {
+            s.split(separator: " ").map { width(String($0), font) }.max() ?? width(s, font)
+        }
+        /// العنوان على سطرين بأفضل قسمة
+        func twoLines(_ s: String, _ font: UIFont) -> CGFloat {
+            let words = s.split(separator: " ").map(String.init)
+            guard words.count > 1 else { return width(s, font) }
+            return (1..<words.count).map { k in
+                max(width(words[..<k].joined(separator: " "), font), width(words[k...].joined(separator: " "), font))
+            }.min() ?? width(s, font)
+        }
+
+        let pad = style.padX * 2 + 1
+        let others = columns.indices.filter { $0 != fill }
+        var nat = [CGFloat](repeating: 0, count: columns.count)
+        var low = nat
+        var full = nat
+        for i in others {
+            let c = columns[i]
+            var cellNat: CGFloat = 0
+            var cellWord: CGFloat = 0
+            for t in tables {
+                for row in t.rows where i < row.cells.count && !row.cells[i].isEmpty {
+                    cellNat = max(cellNat, width(row.cells[i], style.body))
+                    if c.wraps { cellWord = max(cellWord, longestWord(row.cells[i], style.body)) }
+                }
+                if let f = t.footer, i < f.cells.count, !f.cells[i].isEmpty {
+                    cellNat = max(cellNat, width(f.cells[i], style.bold))
+                    if c.wraps { cellWord = max(cellWord, longestWord(f.cells[i], style.bold)) }
+                }
+            }
+            let cellLow = c.wraps ? cellWord : cellNat
+            let headTwo = twoLines(c.title, style.head)
+            nat[i] = max(c.wraps ? min(cellNat, contentWidth * wrapCap) : cellNat, cellLow, headTwo) + pad
+            low[i] = max(cellLow, longestWord(c.title, style.head)) + pad
+            full[i] = max(nat[i], cellNat + pad, width(c.title, style.head) + pad)
+        }
+
+        let minFill = contentWidth * (compact ? fillMinCompact : fillMinRegular)
+        var w = nat
+        var total = others.reduce(0) { $0 + w[$1] }
+        if total + minFill > contentWidth {
+            let deficit = total + minFill - contentWidth
+            let slack = others.reduce(0) { $0 + (nat[$1] - low[$1]) }
+            if slack >= deficit, slack > 0 {
+                for i in others { w[i] -= (nat[i] - low[i]) * deficit / slack }
+            } else if !compact {
+                return nil
+            } else {
+                // آخر حلّ: الأعمدة كلها بالنسبة (قد يُختصر نص بنقاط)
+                let lowSum = others.reduce(0) { $0 + low[$1] }
+                let k = min(1, (contentWidth - minFill) / max(lowSum, 1))
+                for i in others { w[i] = (low[i] * k).rounded(.down) }
+            }
+        } else {
+            // سعة: يتّسع كل عمود لنصّه كاملاً (والعنوان سطراً واحداً) ما دام الاسم مرتاحاً
+            for i in others where full[i] > w[i] {
+                let room = contentWidth - total - contentWidth * fillComfort
+                guard room > 0 else { break }
+                let grow = min(full[i] - w[i], room)
+                w[i] += grow
+                total += grow
+            }
+        }
+        for i in others { w[i] = ceil(w[i]) }
+        total = others.reduce(0) { $0 + w[$1] }
+        w[fill] = (contentWidth - total).rounded(.down)
+        return ColumnPlan(widths: w, style: style)
     }
 
     private enum Item {
@@ -226,13 +359,24 @@ nonisolated enum AdminReportPDF {
         }
         func fits(_ h: CGFloat) -> Bool { y + h <= contentBottom }
 
+        // مقاسات الأعمدة من المحتوى — مرة لكل مجموعة جداول بالأعمدة نفسها
+        var groups: [String: [AdminReportTable]] = [:]
+        for b in blocks {
+            if case let .table(t) = b, t.columns.contains(where: \.fill) { groups[signature(t), default: []].append(t) }
+        }
+        var plans: [String: ColumnPlan] = [:]
+        for (key, list) in groups {
+            plans[key] = plan(list)
+            if isCancelled() { throw Cancelled() }
+        }
+
         // جداول مقاسة مسبقاً (للإبقاء على العنوان مع أول صفّين)
         var tables: [Int: TableLayout] = [:]
         for (i, b) in blocks.enumerated() {
             guard case let .table(t) = b else { continue }
-            let l = TableLayout(t)
-            l.rowH = t.rows.map { l.measure($0, font: fBody) }
-            if let f = t.footer { l.footerH = l.measure(f, font: fBodyBold) }
+            let l = TableLayout(t, plan: plans[signature(t)])
+            l.rowH = t.rows.map { l.measure($0, font: l.style.body) }
+            if let f = t.footer { l.footerH = l.measure(f, font: l.style.bold) }
             tables[i] = l
             if isCancelled() { throw Cancelled() }
         }
@@ -283,7 +427,6 @@ nonisolated enum AdminReportPDF {
 
     private static let tileHeight: CGFloat = 52
     private static let ringsHeight: CGFloat = 150
-    private static let columnsHeight: CGFloat = 150
     private static let barRow: CGFloat = 20
     private static let barLabelWidth: CGFloat = 130
     private static let barValueWidth: CGFloat = 100
@@ -301,7 +444,6 @@ nonisolated enum AdminReportPDF {
         case .table: return 0
         case let .note(text, _): return textHeight(text, width: contentWidth - 20, font: fBody) + 12
         case .rings: return ringsHeight
-        case .columns: return columnsHeight
         case let .bars(rows, _, _, _): return 18 + CGFloat(rows.count) * barRow
         case .split: return splitHeight
         case .miniTree: return miniTreeHeight
@@ -314,9 +456,9 @@ nonisolated enum AdminReportPDF {
         switch item {
         case let .block(b, y, h): drawBlock(b, y: y, h: h)
         case let .header(l, y): drawTableHeader(l, y: y)
-        case let .row(l, r, y): drawRow(l, l.table.rows[r], index: r, y: y, h: l.rowH[r], font: fBody)
+        case let .row(l, r, y): drawRow(l, l.table.rows[r], index: r, y: y, h: l.rowH[r], font: l.style.body)
         case let .footer(l, y):
-            if let f = l.table.footer { drawRow(l, f, index: -1, y: y, h: l.footerH, font: fBodyBold, total: true) }
+            if let f = l.table.footer { drawRow(l, f, index: -1, y: y, h: l.footerH, font: l.style.bold, total: true) }
         }
     }
 
@@ -326,7 +468,6 @@ nonisolated enum AdminReportPDF {
         case let .heading(title, subtitle, panel): drawHeading(title, subtitle: subtitle, panel: panel, y: y)
         case let .note(text, tone): drawNote(text, tone: tone, y: y, h: h)
         case let .rings(rings): drawRings(rings, y: y)
-        case let .columns(bars, axis): drawColumns(bars, axis: axis, y: y)
         case let .bars(rows, firstLabel, secondLabel, tone):
             drawBars(rows, firstLabel: firstLabel, secondLabel: secondLabel, tone: tone, y: y)
         case let .split(split): drawSplit(split, y: y)
@@ -344,10 +485,10 @@ nonisolated enum AdminReportPDF {
         UIRectFill(CGRect(x: margin, y: rect.maxY - 0.9, width: contentWidth, height: 0.9))
         for (i, c) in l.table.columns.enumerated() {
             let f = l.frames[i]
-            let h = textHeight(c.title, width: f.w - TableLayout.padX * 2, font: fHead)
-            draw(c.title, in: CGRect(x: f.x + TableLayout.padX, y: y + (l.headerH - h) / 2,
-                                     width: f.w - TableLayout.padX * 2, height: h + 1),
-                 font: fHead, color: navy, align: c.centered ? .center : .right, wrap: true)
+            let pad = l.style.padX
+            let h = textHeight(c.title, width: f.w - pad * 2, font: l.style.head)
+            draw(c.title, in: CGRect(x: f.x + pad, y: y + (l.headerH - h) / 2, width: f.w - pad * 2, height: h + 1),
+                 font: l.style.head, color: navy, align: c.centered ? .center : .right, wrap: true)
         }
     }
 
@@ -370,15 +511,16 @@ nonisolated enum AdminReportPDF {
             let text = row.cells[i]
             guard !text.isEmpty else { continue }
             let f = l.frames[i]
-            let w = f.w - TableLayout.padX * 2
+            let pad = l.style.padX
+            let w = f.w - pad * 2
             let tint = row.tones[i].map { AdminReportPDF.color($0) } ?? ink
             let align: NSTextAlignment = c.centered ? .center : .right
             if c.wraps {
                 let th = h > single + TableLayout.padY * 2 + 1 ? textHeight(text, width: w, font: font) : single
-                draw(text, in: CGRect(x: f.x + TableLayout.padX, y: y + (h - th) / 2, width: w, height: th + 1),
+                draw(text, in: CGRect(x: f.x + pad, y: y + (h - th) / 2, width: w, height: th + 1),
                      font: font, color: tint, align: align, wrap: true)
             } else {
-                draw(text, in: CGRect(x: f.x + TableLayout.padX, y: y + (h - single) / 2, width: w, height: single + 1),
+                draw(text, in: CGRect(x: f.x + pad, y: y + (h - single) / 2, width: w, height: single + 1),
                      font: font, color: tint, align: align, ltr: c.ltr)
             }
         }
@@ -507,33 +649,6 @@ nonisolated enum AdminReportPDF {
         }
     }
 
-    private static func drawColumns(_ bars: [AdminReportBar], axis: String, y: CGFloat) {
-        guard !bars.isEmpty else { return }
-        let chartTop = y + 14
-        let chartH: CGFloat = 96
-        let baseY = chartTop + chartH
-        let axisW: CGFloat = 40
-        let area = contentWidth - axisW
-        let slot = area / CGFloat(bars.count)
-        let barW = min(30, slot * 0.6)
-        let maxV = max(1, bars.map(\.first).max() ?? 1)
-        line.setFill()
-        UIRectFill(CGRect(x: margin, y: baseY, width: area, height: 0.7))
-        draw(axis, in: CGRect(x: right - axisW + 4, y: baseY + 4, width: axisW - 4, height: lineH(fSmall)),
-             font: fSmallBold, color: muted)
-        for (i, bar) in bars.enumerated() {
-            let cx = right - axisW - slot * (CGFloat(i) + 0.5)
-            let h = max(bar.first > 0 ? 2 : 0, chartH * CGFloat(bar.first) / CGFloat(maxV))
-            brand.setFill()
-            UIBezierPath(roundedRect: CGRect(x: cx - barW / 2, y: baseY - h, width: barW, height: h),
-                         byRoundingCorners: [.topLeft, .topRight], cornerRadii: CGSize(width: 3, height: 3)).fill()
-            draw(bar.caption, in: CGRect(x: cx - slot / 2, y: baseY - h - lineH(fSmall) - 1, width: slot, height: lineH(fSmall)),
-                 font: fSmallBold, color: navy, align: .center)
-            draw(bar.label, in: CGRect(x: cx - slot / 2, y: baseY + 4, width: slot, height: lineH(fSmall)),
-                 font: fSmall, color: muted, align: .center)
-        }
-    }
-
     private static func drawBars(_ rows: [AdminReportBar], firstLabel: String, secondLabel: String?,
                                  tone: AdminReportTone, y: CGFloat) {
         var keys: [(String, UIColor)] = [(firstLabel, color(tone))]
@@ -650,18 +765,18 @@ nonisolated enum AdminReportPDF {
             (node.isRest ? faint : line).setStroke()
             path.stroke()
             let inner = rect.insetBy(dx: 5, dy: 6)
+            // العدد والشريط أسفل العقدة — العنوان والسطر الصغير فوقهما بلا تداخل (اسم فرع طويل: يُترك السطر الصغير)
+            let barY = inner.maxY - 5
+            let countY = barY - 4 - lineH(fSmallBold)
             var ty = inner.minY
-            let th = min(textHeight(node.title, width: inner.width, font: titleFont), lineH(titleFont) * 2)
+            let th = min(textHeight(node.title, width: inner.width, font: titleFont), lineH(titleFont) * 2, countY - ty)
             draw(node.title, in: CGRect(x: inner.minX, y: ty, width: inner.width, height: th + 1),
                  font: titleFont, color: navy, align: .center, wrap: true)
             ty += th
-            if let caption = node.caption {
+            if let caption = node.caption, ty + lineH(fFooter) <= countY {
                 draw(caption, in: CGRect(x: inner.minX, y: ty, width: inner.width, height: lineH(fFooter)),
                      font: fFooter, color: muted, align: .center)
             }
-            // العدد والشريط أسفل العقدة
-            let barY = inner.maxY - 5
-            let countY = barY - 4 - lineH(fSmallBold)
             draw(AdminReportText.people(node.count), in: CGRect(x: inner.minX, y: countY, width: inner.width,
                                                                 height: lineH(fSmallBold)),
                  font: fSmallBold, color: ink, align: .center)
@@ -872,10 +987,11 @@ nonisolated enum AdminReportJob {
     /// المعاينة صفحة واحدة (الغلاف) وعليها عدد الصفحات — الضغط يفتح الملف كاملاً
     static let thumbnailPages = 1
 
+    /// `fields`: ما اختير في «البيانات:» — nil = الافتراضي
     static func run(_ kind: AdminReportKind, input: AdminReportInput, filter: AdminReportFilter,
-                    flag: AdminReportCancelFlag) throws -> AdminReportResult {
+                    fields: Set<AdminReportField>? = nil, flag: AdminReportCancelFlag) throws -> AdminReportResult {
         let start = CFAbsoluteTimeGetCurrent()
-        let doc = AdminReportBuilder.build(kind, input: input, filter: filter)
+        let doc = AdminReportBuilder.build(kind, input: input, filter: filter, fields: fields)
         if flag.isCancelled { throw AdminReportPDF.Cancelled() }
         let out = try AdminReportPDF.render(doc, isCancelled: { flag.isCancelled })
         let seconds = CFAbsoluteTimeGetCurrent() - start
