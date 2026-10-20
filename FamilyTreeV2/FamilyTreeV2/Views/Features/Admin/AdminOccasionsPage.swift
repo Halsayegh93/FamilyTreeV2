@@ -6,8 +6,9 @@ import SwiftUI
 // الوفيات والإعلان وذكرى الراحلين ومنشورات المناسبات، صفحة «إشعار للأعضاء» وصفحة «رسالة تحديث التطبيق»): صفحة واحدة
 // تتمرّر بعناوين صغيرة — بلا تبويبات ولا مبدّلات (طلب المالك):
 //   الرأس: ‹ اليوم · العنوان قائمة الأقسام · ثلاثة أرقام (المالك والمدير) · «＋ إنشاء» ← المربّع الواحد (`AdminCreateWindow`).
-//   «القادم» — بالأيام: وفيات لم يُعلن عنها («إعلان» ← المنشئ على «إعلان وفاة» جاهزاً)، الإشعارات المجدولة («إلغاء»)،
-//     وذكرى الراحلين خلال ٣٠ يوماً (المراقب والمشرف: الذكرى فقط).
+//   «القادم» — بالأيام (اليوم · بكرة · هذا الأسبوع · لاحقاً): وفيات لم يُعلن عنها («إعلان» ← المنشئ على «إعلان وفاة»
+//     جاهزاً)، الإشعارات المجدولة (الدفعة ١١: الوقت كبيراً + النص سطرين + لمن، و«تعديل» يفتح المنشئ نفسه بمسودّته و«إلغاء»
+//     بتأكيد؛ وبلا مجدول: «ما في إشعارات مجدولة»)، وذكرى الراحلين خلال ٣٠ يوماً (المراقب والمشرف: الذكرى فقط).
 //   «المنشور» (المالك والمدير) — الإعلانات وإعلانات الوفاة في الأخبار، إعلانات التحديث، والإشعارات المرسلة.
 //   أرقام فقط تفتح بيوتها: «تصل الإشعارات إلى N جهازاً» ← الفريق والأمان، و«N متوفى تاريخ وفاته غير مكتمل» ← العائلة.
 // لا قراءة جديدة على السيرفر: الأعضاء المحمّلون، `death_announcements`، `scheduled_notifications`، الأخبار، وإشعاراتك.
@@ -154,19 +155,31 @@ struct AdminUpcomingFeed {
     }
 
     enum Bucket: Int, CaseIterable, Identifiable {
-        case today, week, later
+        case today, tomorrow, week, later
         var id: Int { rawValue }
 
         var title: String {
             switch self {
-            case .today: return L10n.t("اليوم · \(AdminOccasionsText.dayTitle(Date()))", "Today · \(AdminOccasionsText.dayTitle(Date()))")
+            case .today:
+                return L10n.t("اليوم · \(AdminOccasionsText.dayTitle(Date()))", "Today · \(AdminOccasionsText.dayTitle(Date()))")
+            case .tomorrow:
+                let day = AdminOccasionsText.dayTitle(Date().addingTimeInterval(86400))
+                return L10n.t("بكرة · \(day)", "Tomorrow · \(day)")
             case .week:  return L10n.t("هذا الأسبوع", "This week")
             case .later: return L10n.t("لاحقاً", "Later")
             }
         }
 
+        /// اليوم واضح من عنوان المجموعة في «اليوم» و«بكرة» — في غيرهما يُكتب اليوم فوق الوقت
+        var showsDay: Bool { self == .week || self == .later }
+
         static func of(days: Int) -> Bucket {
-            days <= 0 ? .today : (days < DeceasedMemorial.weekDays ? .week : .later)
+            switch days {
+            case ...0: return .today
+            case 1:    return .tomorrow
+            case 2..<DeceasedMemorial.weekDays: return .week
+            default:   return .later
+            }
         }
     }
 
@@ -181,10 +194,13 @@ struct AdminUpcomingFeed {
     let groups: [DayGroup]
     /// ذكرى خلال ٧ أيام (رقم الرأس)
     let memorialWeek: Int
+    /// عدد الإشعارات المجدولة في القائمة (للحالة الفارغة «ما في إشعارات مجدولة»)
+    let scheduledCount: Int
 
     init(members: [FamilyMember], scheduled: [NotificationViewModel.ScheduledNotification], announced: Set<UUID>?) {
         let board = DeceasedMemorialBoard(members)
         memorialWeek = board.withinWeek
+        scheduledCount = scheduled.count
         if let announced {
             deaths = members
                 .filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate)
@@ -226,6 +242,7 @@ struct AdminOccasionsUpcomingCard: View {
     @EnvironmentObject private var notificationVM: NotificationViewModel
     @State private var cancelTarget: NotificationViewModel.ScheduledNotification? = nil
     @State private var cancellingId: UUID? = nil
+    @State private var cancelFailed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -234,11 +251,16 @@ struct AdminOccasionsUpcomingCard: View {
             if loading {
                 AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…")))
             } else if feed.isEmpty {
-                AdminPageStateCard(.empty(L10n.t("لا شيء قادم", "Nothing upcoming"),
+                AdminPageStateCard(.empty(authVM.isAdmin ? L10n.t("ما في إشعارات مجدولة", "No scheduled pushes")
+                                                          : L10n.t("لا شيء قادم", "Nothing upcoming"),
                                           message: authVM.isAdmin
-                                            ? L10n.t("لا ذكرى ولا إشعار مجدول خلال ٣٠ يوماً", "No memorial or scheduled push in 30 days")
+                                            ? L10n.t("ولا ذكرى خلال ٣٠ يوماً — جدول إشعاراً من «إنشاء»", "And no memorial in 30 days — schedule one from Create")
                                             : L10n.t("لا ذكرى خلال ٣٠ يوماً", "No memorial in the next 30 days")))
             } else {
+                // بلا مجدول: سطر هادئ أول «القادم» (ظاهر بلا تمرير)
+                if authVM.isAdmin && feed.scheduledCount == 0 {
+                    AnyView(noScheduledLine)
+                }
                 ForEach(feed.groups) { group in
                     AnyView(groupCard(group.bucket, group.items))
                 }
@@ -253,14 +275,37 @@ struct AdminOccasionsUpcomingCard: View {
                 cancelTarget = nil
                 Task {
                     cancellingId = n.id
-                    await notificationVM.cancelScheduledNotification(n.id)
+                    let ok = await notificationVM.cancelScheduledNotification(n.id)
                     cancellingId = nil
+                    if !ok { cancelFailed = true }
                 }
             }
             Button(L10n.t("تراجع", "Keep it"), role: .cancel) { cancelTarget = nil }
         } message: {
-            Text(L10n.t("«\(cancelTarget?.title ?? "")» لن يُرسل.", "“\(cancelTarget?.title ?? "")” won't be sent."))
+            Text(L10n.t("«\(cancelTarget.map(Self.previewText) ?? "")» ما راح يوصل.", "“\(cancelTarget.map(Self.previewText) ?? "")” won't be sent."))
         }
+        .dsAlert(L10n.t("تعذّر الإلغاء", "Couldn't cancel"), isPresented: $cancelFailed) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("حاول مرة أخرى.", "Try again."))
+        }
+    }
+
+    /// أول النص (للتأكيد)
+    nonisolated static func previewText(_ n: NotificationViewModel.ScheduledNotification) -> String {
+        let text = n.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let line = text.isEmpty ? n.title : text
+        return line.count > 40 ? String(line.prefix(40)) + "…" : line
+    }
+
+    /// بلا مجدول (والقائمة فيها غيره): سطر هادئ واحد
+    private var noScheduledLine: some View {
+        AdminListRow(icon: "bell.slash", tint: DS.Color.textTertiary,
+                     title: L10n.t("ما في إشعارات مجدولة", "No scheduled pushes"),
+                     subtitle: L10n.t("«إنشاء» ← متى؟ ← بكرة الصبح أو اختر وقت", "Create → When? → tomorrow morning or pick a time"),
+                     showsChevron: false)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adminCard()
     }
 
     private func groupCard(_ bucket: AdminUpcomingFeed.Bucket, _ items: [AdminUpcomingFeed.Item]) -> some View {
@@ -272,7 +317,7 @@ struct AdminOccasionsUpcomingCard: View {
                 .accessibilityAddTraits(.isHeader)
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { AdminRowDivider() }
-                AnyView(row(item))
+                AnyView(row(item, showsDay: bucket.showsDay))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -280,7 +325,7 @@ struct AdminOccasionsUpcomingCard: View {
     }
 
     @ViewBuilder
-    private func row(_ item: AdminUpcomingFeed.Item) -> some View {
+    private func row(_ item: AdminUpcomingFeed.Item, showsDay: Bool) -> some View {
         switch item {
         case .death(let m):
             AdminListRow(icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.error,
@@ -291,15 +336,10 @@ struct AdminOccasionsUpcomingCard: View {
             }
             .accessibilityAction(named: L10n.t("إعلان", "Announce")) { announce(m) }
         case .scheduled(let n, let date):
-            AdminListRow(icon: "bell.badge.fill", tint: DS.Color.sea,
-                         title: scheduledTitle(date), subtitle: scheduledSubtitle(n), showsChevron: false) {
-                if cancellingId == n.id {
-                    ProgressView()
-                } else {
-                    AdminPillButton(title: L10n.t("إلغاء", "Cancel"), style: .soft) { cancelTarget = n }
-                }
-            }
-            .accessibilityAction(named: L10n.t("إلغاء الإشعار المجدول", "Cancel the scheduled push")) { cancelTarget = n }
+            AdminScheduledPushRow(item: n, date: date, showsDay: showsDay,
+                                  audience: AdminAnnounceKit.audienceLabel(ids: n.targetMemberIds, members: memberVM.allMembers),
+                                  isBusy: cancellingId == n.id,
+                                  onEdit: { edit(n) }, onCancel: { cancelTarget = n })
         case .memorial(let u):
             AdminListRow(icon: "moon.stars.fill", tint: DS.Color.sadu,
                          title: L10n.t("ذكرى \(AdminOccasionsText.late(u.member)) \(u.member.fullName)",
@@ -319,18 +359,140 @@ struct AdminOccasionsUpcomingCard: View {
                                authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
     }
 
-    private func scheduledTitle(_ date: Date?) -> String {
-        guard let date else { return L10n.t("إشعار مجدول", "Scheduled push") }
-        if Calendar.current.isDateInToday(date) {
-            return L10n.t("إشعار مجدول · \(AdminOccasionsText.time(date))", "Scheduled push · \(AdminOccasionsText.time(date))")
-        }
-        let when = "\(AdminOccasionsText.dayTitle(date)) · \(AdminOccasionsText.time(date))"
-        return L10n.t("إشعار مجدول · \(when)", "Scheduled push · \(when)")
+    /// «تعديل» = المنشئ نفسه بمسودّة الإشعار المجدول (النص، المستلمون، الموعد) — الحفظ يعدّل الصف نفسه
+    private func edit(_ n: NotificationViewModel.ScheduledNotification) {
+        AdminCreateWindow.open(.announcement, announce: AdminAnnounceDraft(editing: n, members: memberVM.allMembers),
+                               authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
+    }
+}
+
+/// إشعار مجدول في «القادم» (الدفعة ١١): الوقت كبيراً في الطرف («الخميس» فوقه في «هذا الأسبوع» و«لاحقاً»)، النص سطرين،
+/// لمن، ثم «تعديل» و«إلغاء» صغيران — ومن أحجام إمكانية الوصول الوقت فوق النص
+struct AdminScheduledPushRow: View {
+    let item: NotificationViewModel.ScheduledNotification
+    let date: Date?
+    let showsDay: Bool
+    /// «الكل» · «الكويت (210)» · «32 عضو»
+    let audience: String
+    let isBusy: Bool
+    let onEdit: () -> Void
+    let onCancel: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private static let timeColumn: CGFloat = 76
+
+    /// النص الذي كتبه المرسل — وعنوانه إن لم يكن الافتراضي
+    private var text: String {
+        let body = item.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return body.isEmpty ? item.title : body
+    }
+    private var customTitle: String? {
+        let t = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty || t == AdminAnnounceKit.defaultTitle || t == text ? nil : t
     }
 
-    private func scheduledSubtitle(_ n: NotificationViewModel.ScheduledNotification) -> String {
-        let to = n.isBroadcast ? L10n.t("للجميع", "Everyone") : L10n.t("لـ \(n.targetCount) عضو", "\(n.targetCount) members")
-        return "\(n.title) · \(to)"
+    var body: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    timeBlock(alignment: .leading)
+                    details
+                }
+            } else {
+                HStack(alignment: .top, spacing: DS.Spacing.md) {
+                    timeBlock(alignment: .center)
+                        .frame(width: Self.timeColumn)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(RoundedRectangle(cornerRadius: DS.Hub.iconSquareRadius, style: .continuous)
+                            .fill(DS.Color.sea.dsReadableGlyph.opacity(DS.Opacity.tintFill)))
+                    details
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm + 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(spoken)
+        .accessibilityAction(named: L10n.t("تعديل", "Edit"), onEdit)
+        .accessibilityAction(named: L10n.t("إلغاء الإشعار المجدول", "Cancel the scheduled push"), onCancel)
+    }
+
+    /// «9:00» كبيرة و«ص» صغيرة بجانبها، واليوم فوقها حين لا يقوله عنوان المجموعة
+    private func timeBlock(alignment: HorizontalAlignment) -> some View {
+        let parts = Self.timeParts(date)
+        let ink = DS.Color.sea.dsReadableGlyph
+        return VStack(alignment: alignment, spacing: 0) {
+            if showsDay, let date {
+                Text(AdminAnnounceKit.dayWord(date))
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+                Text(verbatim: parts.clock)
+                    .dsFont(.hubPulse)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if !parts.period.isEmpty {
+                    Text(verbatim: parts.period)
+                        .dsFont(.hubButton)
+                }
+            }
+            .foregroundColor(ink)
+        }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            if let customTitle {
+                Text(customTitle)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+            }
+            Text(text)
+                .dsFont(.hubRow)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: DS.Spacing.xxs) {
+                Image(systemName: item.isBroadcast ? "person.3.fill" : "person.2.fill")
+                    .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                Text(verbatim: L10n.isArabic ? "← \(audience)" : "→ \(audience)")
+                    .dsFont(.footnote)
+                    .lineLimit(1)
+            }
+            .foregroundColor(DS.Color.textTertiary)
+            HStack(spacing: DS.Spacing.sm) {
+                if isBusy {
+                    ProgressView()
+                } else {
+                    AdminPillButton(title: L10n.t("تعديل", "Edit"), icon: "pencil", style: .soft, action: onEdit)
+                    AdminPillButton(title: L10n.t("إلغاء", "Cancel"), icon: "xmark", style: .reject, action: onCancel)
+                }
+            }
+            .padding(.top, DS.Spacing.xxs)
+        }
+    }
+
+    /// «9:00» و«ص» (أو «AM»)
+    static func timeParts(_ date: Date?) -> (clock: String, period: String) {
+        guard let date else { return ("—", "") }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: L10n.isArabic ? "ar_KW@numbers=latn" : "en_US")
+        f.dateFormat = "h:mm"
+        let clock = f.string(from: date)
+        f.dateFormat = "a"
+        return (clock, f.string(from: date))
+    }
+
+    private var spoken: String {
+        let when = date.map { AdminAnnounceKit.when($0) } ?? ""
+        return L10n.t("إشعار مجدول \(when): \(text). المستلمون: \(audience)", "Scheduled push \(when): \(text). To: \(audience)")
     }
 }
 

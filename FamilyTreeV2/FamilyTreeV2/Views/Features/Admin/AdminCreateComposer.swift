@@ -3,8 +3,9 @@ import SwiftUI
 // MARK: - «إنشاء» — المنشئ الواحد في «المناسبات والإعلانات» (الدفعة ب من «نفّذ كل المقترح»، ٢٠٢٦-١٠-٢٠)
 //
 // مربّع واحد «ماذا تنشئ؟» بأربعة أنواع بدل أربعة منشئات متفرّقة (D7 · D8 · D9 · D10 في AUDIT.md):
-//   • إعلان — المنشئ المختصر نفسه (`AdminAnnounceComposer`: ☑ نشر في الأخبار ☑ إشعار للأعضاء، «خيارات أكثر»:
-//     المستلمون والجدولة، والعناوين الجاهزة) — كان أيضاً صفحة «إشعار للأعضاء» الكاملة.
+//   • إعلان — المنشئ المختصر نفسه (`AdminAnnounceComposer`، الدفعة ١١ «ثلاث أسئلة بس»: شنو تبي تقول؟ · لمن؟ · متى؟
+//     و☑ «ينشر بعد في الأخبار» مع «الكل»، وزرّ واحد يقول ما سيحدث) — كان أيضاً صفحة «إشعار للأعضاء» الكاملة. ويفتحه
+//     «تعديل» في «القادم» بمسودّة الإشعار المجدول (`AdminAnnounceDraft(editing:)`) بلا مربّع الأنواع.
 //   • إعلان وفاة — اختيار المتوفى (وفيات آخر ٣٠ يوماً لم يُعلن عنها) ثم مربّع `DeathAnnouncementBox` نفسه (`announce_death`).
 //   • بطاقة تهنئة أو تعزية — مصمّم البطاقات نفسه (`OccasionComposerView`) يُفتح فوق المربّع.
 //   • إعلان تحديث التطبيق — ما الجديد في الإصدار (`sendNotification(kind: app_update)` كما كانت صفحته).
@@ -30,7 +31,7 @@ enum AdminCreateKind: String, CaseIterable, Identifiable {
 
     var note: String {
         switch self {
-        case .announcement: return L10n.t("في الأخبار و/أو إشعار للأعضاء", "In News and/or a push")
+        case .announcement: return L10n.t("إشعار للأعضاء — الحين أو بموعد", "A push — now or scheduled")
         case .death:        return L10n.t("نص معتمد + موعد الدفن", "Standard text + burial time")
         case .card:         return L10n.t("صورة للحفظ والمشاركة", "An image to save and share")
         case .appUpdate:    return L10n.t("ما الجديد في الإصدار", "What's new in the release")
@@ -75,8 +76,10 @@ enum AdminCreateWindow {
     private static var window: UIWindow?
     private static weak var previousKey: UIWindow?
 
-    /// `start` النوع المفتوح أولاً (إن كان متاحاً للدور)، و`death` متوفى جاهز لـ«إعلان وفاة» (من «القادم»)
+    /// `start` النوع المفتوح أولاً (إن كان متاحاً للدور)، و`death` متوفى جاهز لـ«إعلان وفاة» (من «القادم»)،
+    /// و`announce` مسودّة «إعلان» (تعديل إشعار مجدول من «القادم» — المربّع وحده بلا «ماذا تنشئ؟»)
     static func open(_ start: AdminCreateKind = .announcement, death: DeathAnnouncementTarget? = nil,
+                     announce: AdminAnnounceDraft? = nil,
                      authVM: AuthViewModel, newsVM: NewsViewModel, notificationVM: NotificationViewModel,
                      memberVM: MemberViewModel) {
         let allowed = AdminCreateKind.allowed(for: authVM)
@@ -87,7 +90,7 @@ enum AdminCreateWindow {
         else { return }
         previousKey = scene.windows.first(where: \.isKeyWindow)
         let root = AdminCreateRoot(allowed: allowed, start: allowed.contains(start) ? start : allowed[0],
-                                   death: death, onClose: { close() })
+                                   death: death, announce: announce, onClose: { close() })
             .environmentObject(authVM)
             .environmentObject(newsVM)
             .environmentObject(notificationVM)
@@ -123,6 +126,8 @@ enum AdminCreateWindow {
 struct AdminCreateRoot: View {
     let allowed: [AdminCreateKind]
     let death: DeathAnnouncementTarget?
+    /// مسودّة «إعلان» (تعديل إشعار مجدول) — nil = جديد
+    let announce: AdminAnnounceDraft?
     let onClose: () -> Void
 
     @EnvironmentObject private var authVM: AuthViewModel
@@ -130,9 +135,11 @@ struct AdminCreateRoot: View {
     @State private var kind: AdminCreateKind
     @State private var cardOpen = false
 
-    init(allowed: [AdminCreateKind], start: AdminCreateKind, death: DeathAnnouncementTarget?, onClose: @escaping () -> Void) {
+    init(allowed: [AdminCreateKind], start: AdminCreateKind, death: DeathAnnouncementTarget?,
+         announce: AdminAnnounceDraft? = nil, onClose: @escaping () -> Void) {
         self.allowed = allowed
         self.death = death
+        self.announce = announce
         self.onClose = onClose
         _kind = State(initialValue: start)
     }
@@ -161,7 +168,11 @@ struct AdminCreateRoot: View {
         let chooser = AnyView(AdminCreateTypePicker(kinds: allowed, selection: $kind))
         switch kind {
         case .announcement:
-            return AnyView(AdminAnnounceComposer(chooser: chooser, onClose: onClose))
+            // تعديل إشعار مجدول: المربّع وحده (لا تبديل نوع أثناء التعديل)
+            if let announce, announce.editingId != nil {
+                return AnyView(AdminAnnounceComposer(draft: announce, onClose: onClose))
+            }
+            return AnyView(AdminAnnounceComposer(chooser: chooser, draft: announce ?? AdminAnnounceDraft(), onClose: onClose))
         case .death:
             return AnyView(AdminCreateDeathForm(chooser: chooser, preset: death, onClose: onClose))
         case .card:

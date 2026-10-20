@@ -34,6 +34,12 @@ struct DSMemberPickerBox: View {
     var onAddByName: ((String) -> Void)? = nil
     /// المختار حالياً — علامة ✓ بدل السهم
     var selectedId: UUID? = nil
+    /// اختيار متعدّد (مستلمو الإعلان، الدفعة ١١): المحدّدون بعلامة ✓ والباقون بدائرة فارغة، والضغط يبدّل
+    /// (`onPick` يضيف/يزيل). nil = اختيار واحد كما كان
+    var selectedIds: Set<UUID>? = nil
+    /// زرّ الإجراء في الشريط (مع الاختيار المتعدّد: «تم (N)») — nil = «إلغاء» وحده كما كان
+    var doneTitle: String? = nil
+    var onDone: (() -> Void)? = nil
     /// تلميح القارئ الصوتي لصفّ المرشّح (مثل «ربطها زوجةً لك»)
     var rowHint: String? = nil
     /// حبر الصورة البديلة — nil = حبر القسم
@@ -72,11 +78,12 @@ struct DSMemberPickerBox: View {
             subtitle: subtitle,
             icon: icon,
             tint: DS.Color.actionNavy,
-            actionTitle: "",
-            showsAction: false,
-            canSubmit: false,
+            actionTitle: doneTitle ?? "",
+            actionIcon: "checkmark",
+            showsAction: onDone != nil,
+            canSubmit: onDone != nil,
             extraActions: extras,
-            onSubmit: {},
+            onSubmit: { onDone?() },
             onCancel: onCancel
         ) {
             DSComposerSection(title: L10n.t("البحث", "Search"), icon: "magnifyingglass",
@@ -122,7 +129,8 @@ struct DSMemberPickerBox: View {
 
     private func row(_ m: FamilyMember) -> some View {
         let shownName = m.fullName.isEmpty ? m.firstName : m.displayFullName
-        let selected = m.id == selectedId
+        let multi = selectedIds != nil
+        let selected = selectedIds?.contains(m.id) ?? (m.id == selectedId)
         return Button { onPick(m) } label: {
             HStack(spacing: DS.Spacing.sm) {
                 avatar(m)
@@ -136,6 +144,12 @@ struct DSMemberPickerBox: View {
                         .dsGlyph(DS.Glyph.xl, weight: .regular)
                         .foregroundColor(ink)
                         .accessibilityHidden(true)   // الاختيار يُقرأ من سمة «مُختار»
+                } else if multi {
+                    // الاختيار المتعدّد: دائرة فارغة بدل السهم (يُحدَّد ولا ينتقل)
+                    Image(systemName: "circle")
+                        .dsGlyph(DS.Glyph.xl, weight: .regular)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .accessibilityHidden(true)
                 } else {
                     DSChevron()
                 }

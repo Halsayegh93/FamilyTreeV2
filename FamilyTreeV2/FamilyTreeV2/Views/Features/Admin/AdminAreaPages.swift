@@ -134,7 +134,7 @@ enum AdminToolCatalog {
                                          "Announcement · obituary · greeting or condolence card · app update notice")
                                 : L10n.t("بطاقة تهنئة أو تعزية", "Greeting or condolence card"),
                                icon: "plus.circle.fill", tint: DS.Color.sadu,
-                               keywords: ["إعلان", "إعلانات", "إشعار", "إرسال", "وفاة", "عزاء", "تهنئة", "تعزية", "بطاقة",
+                               keywords: ["إعلان", "إعلانات", "إشعار", "إرسال", "جدولة", "وفاة", "عزاء", "تهنئة", "تعزية", "بطاقة",
                                           "منشور", "مناسبة", "تحديث", "إصدار", "مستجدات"],
                                kind: page { AdminOccasionsPage() }))
             t.append(AdminTool(id: "occasions.upcoming", area: .occasions, group: occasions,
@@ -144,7 +144,7 @@ enum AdminToolCatalog {
                                          "Memorials, scheduled pushes and unannounced deaths")
                                 : L10n.t("ذكرى الراحلين خلال ٣٠ يوماً", "Memorials in the next 30 days"),
                                icon: "calendar.badge.clock", tint: DS.Color.sadu,
-                               keywords: ["ذكرى", "راحلين", "مجدول", "مجدولة", "وفيات"],
+                               keywords: ["ذكرى", "راحلين", "مجدول", "مجدولة", "جدولة", "تعديل الإشعار", "إلغاء الإشعار", "وفيات"],
                                kind: page { AdminOccasionsPage() }))
             if authVM.isAdmin {
                 t.append(AdminTool(id: "occasions.published", area: .occasions, group: occasions,
