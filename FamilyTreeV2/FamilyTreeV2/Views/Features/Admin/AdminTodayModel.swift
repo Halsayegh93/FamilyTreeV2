@@ -394,7 +394,7 @@ enum AdminTodayFeed {
                 detail: L10n.t("بقي \(SmsBalanceText.points(balance)) نقطة · \(SmsBalanceText.enough(balance))",
                                "\(SmsBalanceText.points(balance)) points left · \(SmsBalanceText.enough(balance))"),
                 marks: urgent ? 3 : 2,
-                source: AdminArea.access.title, sourceIcon: "lock.shield.fill",
+                source: AdminArea.team.title, sourceIcon: "lock.shield.fill",
                 target: .sms))
         }
 

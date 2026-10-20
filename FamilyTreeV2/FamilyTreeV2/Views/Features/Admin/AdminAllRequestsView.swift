@@ -447,7 +447,7 @@ struct AdminAllRequestsView: View {
             recalculateCounts()
         }
         .navigationDestination(isPresented: $showApprovalsReport) {
-            ApprovalsReportView()
+            ApprovalsReportView().adminArea(.inbox)
         }
         // (كان على شريط التابات) إذا التاب الحالي صار فارغ، انقل لأول تاب غير فارغ (لو فيه)
         .onChange(of: totalCount) { _ in
@@ -751,14 +751,14 @@ struct AdminAllRequestsView: View {
     private var inboxHeader: some View {
         VStack(spacing: 0) {
             AdminBandHeader(title: L10n.t("الوارد", "Inbox"),
-                            subtitle: authVM.isAdmin ? nil : heroSubtitle) {
+                            subtitle: authVM.isAdmin ? nil : heroSubtitle, isAreaRoot: true) {
                 if segment == .requests && !isSelectMode && canSeeApprovalsReport {
                     AdminGlassButton(symbol: "chart.xyaxis.line", label: L10n.t("تقرير الموافقات", "Approvals report")) {
                         showApprovalsReport = true
                     }
                 }
                 if authVM.canViewSystemSettings {
-                    NavigationLink { AdminLazyPage { AnyView(AdminAppSettingsView(scope: .approvals)) } } label: {
+                    NavigationLink { AdminLazyPage { AnyView(AdminAppSettingsView(scope: .approvals).adminArea(.inbox)) } } label: {
                         AdminGlassCircle(symbol: "gearshape")
                     }
                     .buttonStyle(DSScaleButtonStyle())

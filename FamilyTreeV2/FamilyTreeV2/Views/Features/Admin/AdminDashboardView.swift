@@ -8,16 +8,21 @@ enum AdminReviewDestination: Hashable {
     case inboxItem(UUID)
     /// «رسائل الدخول · KWT SMS» (إشعار «رصيد الرسائل منخفض»)
     case sms
+    /// صفحة قسم (مربّعات «اليوم» وشريط الأقسام) — العدّاد يجعل كل انتقال من الشريط قيمة جديدة فيُستبدل المسار
+    /// كله (حتى العودة لصفحة القسم الحالي من صفحة داخلية)
+    case area(AdminArea, Int)
 }
 
 // MARK: - لوحة الإدارة ← «اليوم» (إعادة التصميم الكاملة — طلب المالك ٢٠٢٦-١٠-٢٠)
 //
 // الاتجاه «أ» (مركز القيادة) أساساً + لمستان من «ب»: دوائر الإنجاز للمهام، وسحب «الوارد» مثل البريد.
 // «في اردحام بلوحة الادارة بالبداية» → «الأقسام فوق + قائمة وحدة» (اختيار المالك ٢٠٢٦-١٠-٢٠). من الأعلى:
-// الرأس الكحلي (التحية، الدور، التاريخ، وأربعة أرقام: بانتظارك · مستعجل · متأخر · رسائل) ← «أعداد الأعضاء» (المالك
-// والمدير والمراقب — «ابى اعداد الاعضاء بالتطبيق») ← «الأقسام» الثمانية بتلميح حيّ ← «تنبيهات» (عند المشكلة فقط) ←
+// الرأس الكحلي (التحية، الدور، التاريخ، وأربعة أرقام: بانتظارك · مستعجل · متأخر · رسائل؛ ومكبّر صوت «إعلان جديد» بجانب
+// البحث والجرس لمن يرسل للأعضاء) ← «أعداد الأعضاء» (المالك والمدير والمراقب — «ابى اعداد الاعضاء بالتطبيق») ← «الأقسام»
+// الستة ٣×٢ بتلميح حيّ (اختيار المالك «٦ أقسام») ← «تنبيهات» (عند المشكلة فقط) ←
 // «يحتاج قرارك» قائمة واحدة (القرارات والمهام معاً، أول ٣ و«عرض الكل»). «اليوم في العائلة» انتقل لأعلى «المناسبات»،
 // و«نبض العائلة» لأعلى «المؤشرات»، وكل إجراء سريع لأعلى قسمه. كل دور يرى مجاله فقط والقسم الفارغ لا يُرسم (IA.md).
+// صفحات الأقسام تُفتح بقيمة في المسار (`.area`) ليستبدلها شريط الأقسام (`AdminAreaRouter`) بلا تراكم.
 // الصلاحيات والوجهات والروابط العميقة كما كانت، والصفحات القديمة تُفتح كما هي.
 
 struct AdminDashboardView: View {
@@ -33,6 +38,8 @@ struct AdminDashboardView: View {
     @ObservedObject private var sms = SmsBalanceStore.shared
     @Binding var selectedTab: Int
     @State private var navigationPath = NavigationPath()
+    /// عدّاد انتقالات شريط الأقسام (قيمة جديدة في المسار كل مرة)
+    @State private var areaHops = 0
 
     // أرقام محسوبة من البيانات المحمّلة
     @State private var isInitialLoading = true
@@ -52,6 +59,7 @@ struct AdminDashboardView: View {
     @State private var memberCounts = AdminMemberCounts.seeded(members: [])
 
     @Environment(\.dsLandscape) private var landscape
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -76,12 +84,7 @@ struct AdminDashboardView: View {
             // منطقة شريط الحالة كحلية دائماً (الرأس يتمرّر، ونص الساعة أبيض)
             .adminStatusBarCover()
             .navigationDestination(for: AdminReviewDestination.self) { destination in
-                switch destination {
-                case .treeEditRequests: AdminTreeEditRequestsView()
-                case .allRequests:      AdminAllRequestsView()
-                case .inboxItem(let id): AdminAllRequestsView(focusId: id)
-                case .sms:              AdminSmsView(backTitle: L10n.t("اليوم", "Today"))
-                }
+                AdminLazyPage { Self.page(for: destination) }
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -104,11 +107,36 @@ struct AdminDashboardView: View {
             navigationPath = NavigationPath()
             navigationPath.append(destination)
         }
-        .task { await loadAllAdminData() }
+        .task {
+            // شريط الأقسام في كل صفحة من هذا المكدس ينقل عبر هذا (في `.task` الموجودة — بلا مُعدِّل إضافي على الجذر)
+            AdminAreaRouter.navigate = openArea
+            await loadAllAdminData()
+        }
         .onChange(of: memberVM.membersVersion) { _ in recalculate() }
         .onChange(of: pendingRequestsSum) { _ in recalculate() }
         .onChange(of: pendingArchiveCount) { _ in recalculate() }
         .onChange(of: todaySnapshot) { _ in syncTasks() }
+    }
+
+    // MARK: - المسار
+
+    /// وجهات المسار — كل وجهة بقسمها في شريط الأقسام
+    static func page(for destination: AdminReviewDestination) -> AnyView {
+        switch destination {
+        case .treeEditRequests:  return AnyView(AdminTreeEditRequestsView().adminArea(.inbox))
+        case .allRequests:       return AnyView(AdminAllRequestsView().adminArea(.inbox))
+        case .inboxItem(let id): return AnyView(AdminAllRequestsView(focusId: id).adminArea(.inbox))
+        case .sms:               return AnyView(AdminSmsView(backTitle: L10n.t("اليوم", "Today")).adminArea(.team))
+        case .area(let area, _): return AnyView(AdminAreaView(area: area))
+        }
+    }
+
+    /// شريط الأقسام: المسار كله يصير صفحة القسم المطلوب (لا تكدّس صفحات فوق بعض)
+    private func openArea(_ area: AdminArea) {
+        areaHops += 1
+        var path = NavigationPath()
+        path.append(AdminReviewDestination.area(area, areaHops))
+        navigationPath = path
     }
 
     // MARK: - التحميل
@@ -286,7 +314,7 @@ struct AdminDashboardView: View {
     /// مجال المراقب والمشرف (سطر «نطاقي» في الرأس)
     private var scopeGuide: RoleGuide? { authVM.isAdmin ? nil : roleGuide }
 
-    private var visibleAreas: [AdminArea] { AdminArea.allCases.filter { $0.isVisible(for: authVM) } }
+    private var visibleAreas: [AdminArea] { AdminArea.visible(for: authVM) }
 
     // MARK: - الرأس
 
@@ -312,6 +340,10 @@ struct AdminDashboardView: View {
                 .foregroundColor(DS.Color.accentLight)
                 .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: DS.Spacing.sm)
+                // «إعلان جديد» السريع (طلب المالك ٢٠٢٦-١٠-٢٠ «زر سريع و خارجي») — نوع مستقل خلف `AnyView` (حارس المكدس)
+                if authVM.canSendNotifications {
+                    AnyView(AdminAnnounceLauncher())
+                }
                 NavigationLink { AdminLazyPage { AnyView(AdminSearchView()) } } label: {
                     AdminGlassCircle(symbol: "magnifyingglass")
                 }
@@ -377,7 +409,7 @@ struct AdminDashboardView: View {
                                      icon: "flame", tint: DS.Hub.kpiHot), filter: .urgent)
                 kpiLink(AdminKPITile(value: value(c.late), label: L10n.t("متأخر", "Late"),
                                      icon: "clock", tint: DS.Hub.kpiLate), filter: .late)
-                NavigationLink { AdminAllRequestsView(startsWithMessages: true) } label: {
+                NavigationLink { AdminLazyPage { AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox)) } } label: {
                     AdminKPITile(value: value(c.unreadMessages), label: L10n.t("رسائل", "Messages"),
                                  icon: "bubble.left")
                 }
@@ -395,7 +427,7 @@ struct AdminDashboardView: View {
     }
 
     private func kpiLink(_ tile: AdminKPITile, filter: ApprovalListFilter) -> some View {
-        NavigationLink { AdminAllRequestsView(initialFilter: filter) } label: { tile }
+        NavigationLink { AdminLazyPage { AnyView(AdminAllRequestsView(initialFilter: filter).adminArea(.inbox)) } } label: { tile }
             .buttonStyle(DSPressStyle())
     }
 
@@ -571,16 +603,20 @@ struct AdminDashboardView: View {
         }
     }
 
-    @ViewBuilder
+    /// وجهة زرّ التنبيه — بقسمها في شريط الأقسام
     private func alertDestination(_ action: AdminTodayAlert.Action) -> some View {
+        AdminLazyPage { Self.alertPage(action) }
+    }
+
+    private static func alertPage(_ action: AdminTodayAlert.Action) -> AnyView {
         switch action {
-        case .sms:           AdminSmsView(backTitle: L10n.t("اليوم", "Today"))
-        case .deaths:        DeathAnnouncementsPage()
-        case .announce:      DeathAnnouncementsPage()
-        case .pushHealth:    AdminLazyPage { AnyView(AdminPushHealthView()) }
-        case .maintenance:   AdminLazyPage { AnyView(AdminAppSettingsView(scope: .maintenance)) }
-        case .scheduled:     AdminLazyPage { AnyView(AdminMessagingHubView()) }
-        case .treeHealth:    AdminLazyPage { AnyView(AdminTreeHealthView()) }
+        case .sms:         return AnyView(AdminSmsView(backTitle: L10n.t("اليوم", "Today")).adminArea(.team))
+        case .deaths:      return AnyView(DeathAnnouncementsPage().adminArea(.occasions))
+        case .announce:    return AnyView(DeathAnnouncementsPage().adminArea(.occasions))
+        case .pushHealth:  return AnyView(AdminPushHealthView().adminArea(.occasions))
+        case .maintenance: return AnyView(AdminAppSettingsView(scope: .maintenance).adminArea(.app))
+        case .scheduled:   return AnyView(AdminMessagingHubView().adminArea(.occasions))
+        case .treeHealth:  return AnyView(AdminTreeHealthView().adminArea(.family))
         }
     }
 
@@ -617,14 +653,21 @@ struct AdminDashboardView: View {
 
     // MARK: الأقسام
 
+    /// الأقسام الستة: ٣ أعمدة × صفّان — وعمودان مع الخط الكبير جداً، أو حين يرى الدور قسمين أو أربعة (المشرف ٢،
+    /// المراقب ٤: صفوف كاملة بلا خانة فارغة). كل مربّع يحجز سطري الاسم وسطري التلميح فتتساوى المربّعات بلا قياس إضافي
+    /// (حارس المكدس). كل مربّع يفتح صفحة القسم بقيمة في المسار، فيستبدلها شريط الأقسام بلا تراكم
     private func areasSection(labeled: Bool) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        let shown = visibleAreas.count
+        let narrow = (typeSize >= .xxxLarge && !landscape) || shown <= 2 || shown == 4
+        let count = narrow ? DS.Hub.areaColumnsLargeText : DS.Hub.areaColumns
+        let columns = Array(repeating: GridItem(.flexible(), spacing: AdminGrid.spacing), count: count)
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             if labeled {
                 AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
             }
-            LazyVGrid(columns: AdminGrid.columns(landscape: landscape), spacing: AdminGrid.spacing) {
+            LazyVGrid(columns: columns, spacing: AdminGrid.spacing) {
                 ForEach(visibleAreas) { area in
-                    NavigationLink { AdminLazyPage { AnyView(AdminAreaView(area: area)) } } label: {
+                    NavigationLink(value: AdminReviewDestination.area(area, 0)) {
                         areaTile(area)
                     }
                     .buttonStyle(DSPressStyle())
@@ -642,14 +685,12 @@ struct AdminDashboardView: View {
             Text(area.title)
                 .dsFont(.hubRow)
                 .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
                 .minimumScaleFactor(0.85)
-                .fixedSize(horizontal: false, vertical: true)
             Text(hint.text)
                 .dsFont(.caption)
                 .foregroundColor(hint.warn ? DS.Color.warning : DS.Color.textTertiary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(2, reservesSpace: true)
         }
         .frame(maxWidth: .infinity, minHeight: DS.Hub.tileMinHeight, alignment: .topLeading)
         .dsCard(padding: DS.Spacing.md, radius: DS.Hub.tileRadius)
@@ -668,24 +709,21 @@ struct AdminDashboardView: View {
             let gaps = issueMembersCount + treeIssuesCount
             return gaps > 0 ? (L10n.t("\(gaps) بيانات ناقصة", "\(gaps) data gaps"), false) : (area.subtitle, false)
         case .occasions:
-            return (memorial.dashboardCaption, false)
-        case .announcements:
-            let n = notificationVM.scheduledNotifications.count
-            return n > 0 ? (L10n.t("\(n) إشعار مجدول", "\(n) scheduled"), false)
-                         : (L10n.t("إشعار أو تحديث للأعضاء", "Notify members or announce"), false)
+            // إشعار مجدول (للمرسلين) أولاً، وإلا الذكرى القريبة
+            let n = authVM.canSendNotifications ? notificationVM.scheduledNotifications.count : 0
+            return n > 0 ? (L10n.t("\(n) إشعار مجدول", "\(n) scheduled"), false) : (memorial.dashboardCaption, false)
         case .metrics:
             if let now = activeNow { return (L10n.t("\(now) نشطون الآن", "\(now) active now"), false) }
             let unread = notificationVM.unreadActivityLogCount
             return unread > 0 ? (L10n.t("سجل النشاط · \(unread) جديد", "Activity · \(unread) new"), false)
                               : (area.subtitle, false)
         case .team:
-            return (L10n.t("\(moderatorCount) في الفريق", "\(moderatorCount) on the team"), false)
-        case .access:
-            if let balance = sms.status?.balance {
+            // رصيد رسائل الدخول حين يحتاج شحناً (تحذير)، وإلا عدد الفريق
+            if authVM.canViewSystemSettings, sms.needsTopUp, let balance = sms.status?.balance {
                 return (L10n.t("رصيد الرسائل \(SmsBalanceText.points(balance))", "SMS balance \(SmsBalanceText.points(balance))"),
-                        sms.needsTopUp)
+                        true)
             }
-            return (area.subtitle, false)
+            return (L10n.t("\(moderatorCount) في الفريق", "\(moderatorCount) on the team"), false)
         case .app:
             return appSettingsVM.settings.maintenanceMode
                 ? (L10n.t("الصيانة مفعّلة", "Maintenance on"), true)
@@ -757,8 +795,8 @@ struct AdminTodayEntryLink: View {
 
     private static func page(_ target: AdminTodayEntry.Target) -> AnyView {
         switch target {
-        case .inbox(let id): return AnyView(AdminAllRequestsView(focusId: id))
-        case .messages:      return AnyView(AdminAllRequestsView(startsWithMessages: true))
+        case .inbox(let id): return AnyView(AdminAllRequestsView(focusId: id).adminArea(.inbox))
+        case .messages:      return AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox))
         }
     }
 }
@@ -874,7 +912,7 @@ struct AdminTodayListView: View {
     }
 
     private var inboxCard: some View {
-        NavigationLink { AdminLazyPage { AnyView(AdminAllRequestsView()) } } label: {
+        NavigationLink { AdminLazyPage { AnyView(AdminAllRequestsView().adminArea(.inbox)) } } label: {
             AdminListRow(icon: AdminArea.inbox.icon, tint: DS.Color.primary, title: AdminArea.inbox.title,
                          subtitle: L10n.t("كل الطلبات بالنوع والمهلة، ورسائل الأعضاء", "Every request by type and SLA, and messages")) {
                 if store.loaded {
@@ -1005,9 +1043,9 @@ struct AdminMemberCountsCard: View {
 
     private static func page(_ target: Target) -> AnyView {
         switch target {
-        case .overview:  return AnyView(AdminMembersManagementView(initialTab: .overview))
-        case .directory: return AnyView(AdminMembersManagementView(initialTab: .directory))
-        case .accounts:  return AnyView(AppUsageMembersView(category: .active))
+        case .overview:  return AnyView(AdminMembersManagementView(initialTab: .overview).adminArea(.family))
+        case .directory: return AnyView(AdminMembersManagementView(initialTab: .directory).adminArea(.family))
+        case .accounts:  return AnyView(AppUsageMembersView(category: .active).adminArea(.family))
         case .women:     return AnyView(EmptyView())
         }
     }

@@ -1,8 +1,10 @@
 import SwiftUI
 
-// MARK: - صفحات الأقسام الثمانية (إعادة تصميم لوحة الإدارة — طلب المالك ٢٠٢٦-١٠-٢٠)
+// MARK: - صفحات الأقسام الستة (إعادة تصميم لوحة الإدارة — طلب المالك ٢٠٢٦-١٠-٢٠، «٦ أقسام»)
 //
-// كل قسم = رأس كحلي («‹ اليوم»، العنوان، الوصف) + بطاقات صفوف تفتح الصفحات الموجودة كما هي (لا منطق جديد).
+// كل قسم = رأس كحلي («‹ اليوم»، شريط الأقسام، العنوان، الوصف) + بطاقات صفوف تفتح الصفحات الموجودة كما هي (لا منطق
+// جديد). «المناسبات والإعلانات» تجمع بطاقة «المناسبات» وبطاقة «الإعلانات» المختصرة (`AdminAnnouncementsCard`)، و«الفريق
+// والأمان» تجمع «الفريق» و«من يدخل وكيف».
 // فهرس الأدوات `AdminToolCatalog` هو المصدر الواحد: الأقسام والبحث الشامل وجدول الانتقال (REACHABILITY.md)
 // يقرؤون منه — كل ميزة لها صفّ واحد في قسم واحد، والصلاحيات كما كانت تماماً.
 
@@ -143,29 +145,29 @@ enum AdminToolCatalog {
                                kind: page { OccasionComposerView() }))
         }
 
-        // ٤ الإعلانات
+        // ٣ب الإعلانات (داخل «المناسبات والإعلانات» — صفحتها تعرضها في بطاقة «الإعلانات» المختصرة، والبحث يقرؤها من هنا)
         if authVM.canSendNotifications {
             let send = L10n.t("إرسال للأعضاء", "Send to members")
-            t.append(AdminTool(id: "ann.notify", area: .announcements, group: send,
+            t.append(AdminTool(id: "ann.notify", area: .occasions, group: send,
                                title: L10n.t("إشعار للأعضاء", "Notify members"),
                                subtitle: L10n.t("للجميع أو لدولة أو لأعضاء — الآن أو بجدولة", "Everyone, a country or people — now or later"),
                                icon: "bell.badge.fill", tint: DS.Color.sea,
-                               keywords: ["إشعار", "إرسال"],
+                               keywords: ["إشعار", "إرسال", "إعلان", "إعلانات"],
                                kind: page { AdminMessagingHubView() }))
-            t.append(AdminTool(id: "ann.update", area: .announcements, group: send,
+            t.append(AdminTool(id: "ann.update", area: .occasions, group: send,
                                title: L10n.t("رسالة تحديث التطبيق", "App update message"),
                                subtitle: L10n.t("ما الجديد في «المستجدات» + إشعار", "What's new in Updates + a notification"),
                                icon: "megaphone.fill", tint: DS.Color.sea,
                                keywords: ["تحديث", "إصدار"],
                                kind: page { AdminMessagingHubView(startsWithUpdate: true) }))
-            t.append(AdminTool(id: "ann.scheduled", area: .announcements, group: send,
+            t.append(AdminTool(id: "ann.scheduled", area: .occasions, group: send,
                                title: L10n.t("المجدولة", "Scheduled"),
                                subtitle: L10n.t("الإشعارات التي تنتظر وقتها — من شريطها في «إشعار للأعضاء»",
                                                 "Waiting notifications — from their bar in Notify"),
                                icon: "clock.badge.checkmark.fill", tint: DS.Color.sea,
                                keywords: ["مجدول"],
                                kind: page { AdminMessagingHubView() }))
-            t.append(AdminTool(id: "ann.push", area: .announcements, group: L10n.t("هل يصلهم؟", "Does it reach them?"),
+            t.append(AdminTool(id: "ann.push", area: .occasions, group: L10n.t("هل يصلهم؟", "Does it reach them?"),
                                title: L10n.t("وصول الإشعارات", "Notification reach"),
                                subtitle: L10n.t("رموز الأجهزة، التجربة، والتنظيف", "Device tokens, test and cleanup"),
                                icon: "bell.and.waves.left.and.right.fill", tint: DS.Color.info,
@@ -173,7 +175,7 @@ enum AdminToolCatalog {
                                kind: page { AdminPushHealthView() }))
         }
 
-        // ٥ المؤشرات
+        // ٤ المؤشرات
         let numbers = L10n.t("أرقام وسجل", "Numbers & history")
         if isAdmin {
             t.append(AdminTool(id: "metrics.analytics", area: .metrics, group: numbers,
@@ -213,7 +215,7 @@ enum AdminToolCatalog {
                                kind: page { AdminReportsView() }))
         }
 
-        // ٦ الفريق
+        // ٥ الفريق والأمان — «الفريق»
         if isAdmin {
             let team = L10n.t("الفريق", "Team")
             t.append(AdminTool(id: "team.members", area: .team, group: team,
@@ -238,29 +240,29 @@ enum AdminToolCatalog {
             }
         }
 
-        // ٧ الدخول والأمان
+        // ٥ب الفريق والأمان — «من يدخل وكيف» (كان قسم «الدخول والأمان»)
         if authVM.canViewSystemSettings {
             let access = L10n.t("من يدخل وكيف", "Who signs in and how")
-            t.append(AdminTool(id: "access.sms", area: .access, group: access,
+            t.append(AdminTool(id: "access.sms", area: .team, group: access,
                                title: L10n.t("رسائل الدخول · KWT SMS", "Sign-in messages · KWT SMS"),
                                subtitle: L10n.t("الرصيد، المرسل، الحدود والتنبيهات", "Balance, sender, limits, alerts"),
                                icon: "ellipsis.message.fill", tint: DS.Hub.securityFill,
                                keywords: ["رسائل", "sms", "رصيد", "kwt"],
                                kind: page { AdminSmsView() }))
-            t.append(AdminTool(id: "access.devices", area: .access, group: access,
+            t.append(AdminTool(id: "access.devices", area: .team, group: access,
                                title: L10n.t("الأجهزة", "Devices"),
                                subtitle: authVM.canManageDevices ? L10n.t("أجهزة كل عضو وفصلها", "Each member's devices and sign-out")
                                                                  : L10n.t("عرض — الفصل للمالك", "View — the owner signs out"),
                                icon: "iphone.gen3", tint: DS.Color.primary,
                                keywords: ["أجهزة", "فصل"],
                                kind: page { AdminDevicesView() }))
-            t.append(AdminTool(id: "access.banned", area: .access, group: access,
+            t.append(AdminTool(id: "access.banned", area: .team, group: access,
                                title: L10n.t("الأرقام المحظورة", "Banned numbers"),
                                subtitle: L10n.t("منع التسجيل برقم", "Block sign-up by number"),
                                icon: "phone.down.fill", tint: DS.Color.error,
                                keywords: ["حظر", "محظور"],
                                kind: page { AdminBannedPhonesView() }))
-            t.append(AdminTool(id: "access.registration", area: .access, group: access,
+            t.append(AdminTool(id: "access.registration", area: .team, group: access,
                                title: L10n.t("قواعد التسجيل", "Sign-up rules"),
                                subtitle: L10n.t("السماح بالتسجيل وحدّ الأجهزة", "Allow sign-ups and device limit"),
                                icon: "person.crop.circle.badge.checkmark", tint: DS.Color.palm,
@@ -268,7 +270,7 @@ enum AdminToolCatalog {
                                kind: page { AdminAppSettingsView(scope: .registration) }))
         }
 
-        // ٨ التطبيق
+        // ٦ التطبيق
         if authVM.canViewSystemSettings {
             let content = L10n.t("المحتوى والميزات", "Content & features")
             let ops = L10n.t("التشغيل", "Operations")
@@ -330,18 +332,22 @@ enum AdminToolCatalog {
 
 // MARK: - التوجيه
 
-/// صفحة القسم — «الوارد» صفحة الطلبات نفسها، والباقي بطاقات أدواته
+/// صفحة القسم — «الوارد» صفحة الطلبات نفسها، والباقي بطاقات أدواته. كل ما يُفتح منها يتبع القسم (`adminArea`)
 struct AdminAreaView: View {
     let area: AdminArea
 
     var body: some View {
+        page.adminArea(area)
+    }
+
+    private var page: AnyView {
         switch area {
-        case .inbox:         AdminAllRequestsView()
-        case .family:        AdminFamilyAreaView()
-        case .metrics:       AdminMetricsAreaView()
-        case .access:        AdminToolsAreaView(area: .access, readOnlyBadge: true)
-        case .app:           AdminToolsAreaView(area: .app, readOnlyBadge: true)
-        default:             AdminToolsAreaView(area: area)
+        case .inbox:     return AnyView(AdminAllRequestsView())
+        case .family:    return AnyView(AdminFamilyAreaView())
+        case .metrics:   return AnyView(AdminMetricsAreaView())
+        case .team:      return AnyView(AdminToolsAreaView(area: .team, readOnlyBadge: true))
+        case .app:       return AnyView(AdminToolsAreaView(area: .app, readOnlyBadge: true))
+        case .occasions: return AnyView(AdminToolsAreaView(area: .occasions))
         }
     }
 }
@@ -387,8 +393,8 @@ struct AdminToolRow: View {
     var body: some View {
         switch tool.kind {
         case .page(let make):
-            // اسم القسم على زر «رجوع» الصفحة الداخلية (AdminPageKit)
-            NavigationLink { AdminLazyPage(make: make).adminBackTitle(tool.area.title) } label: { label }
+            // اسم القسم على زر «رجوع» الصفحة الداخلية (AdminPageKit)، وقسمها في شريط الأقسام (من البحث أيضاً)
+            NavigationLink { AdminLazyPage(make: make).adminBackTitle(tool.area.title).adminArea(tool.area) } label: { label }
                 .buttonStyle(.plain)
         case .action(let run):
             Button(action: run) { label }
@@ -421,22 +427,26 @@ struct AdminToolsAreaView: View {
     @ObservedObject private var sms = SmsBalanceStore.shared
 
     var body: some View {
-        let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM).filter { $0.area == area }
+        // صفوف «الإعلانات» تُعرض في بطاقتها المختصرة (أعلى القسم) لا كبطاقات أدوات
+        let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM)
+            .filter { $0.area == area && !AdminAnnouncementsCard.toolIds.contains($0.id) }
+        let announces = area == .occasions && authVM.canSendNotifications
         AdminHubPage {
             AdminBandHeader(title: area.title, subtitle: area.subtitle,
                             badge: readOnlyBadge && !authVM.canManageSettings
-                                ? L10n.t("للقراءة — يعدّلها المالك", "Read-only — the owner edits") : nil)
+                                ? L10n.t("للقراءة — يعدّلها المالك", "Read-only — the owner edits") : nil,
+                            isAreaRoot: true)
         } content: {
             AdminAreaTop(area: area)
-            if tools.isEmpty {
+            if tools.isEmpty && !announces {
                 DSEmptyView(L10n.t("لا أدوات لدورك هنا", "No tools for your role here"), style: .card)
-            } else {
+            } else if !tools.isEmpty {
                 AdminToolCards(tools: tools, hints: hints, warnings: warnings)
             }
         }
         .task {
-            if area == .access { await sms.refresh() }
-            if area == .announcements { await notificationVM.fetchScheduledNotifications() }
+            if area == .team && authVM.canViewSystemSettings { await sms.refresh() }
+            if announces { await notificationVM.fetchScheduledNotifications() }
             if area == .occasions && memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
         }
     }
@@ -485,7 +495,7 @@ struct AdminFamilyAreaView: View {
         let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM).filter { $0.area == .family }
         let stats = memberStats
         AdminHubPage {
-            AdminBandHeader(title: AdminArea.family.title, subtitle: AdminArea.family.subtitle) {
+            AdminBandHeader(title: AdminArea.family.title, subtitle: AdminArea.family.subtitle, isAreaRoot: true) {
                 EmptyView()
             } accessory: {
                 HStack(spacing: DS.Spacing.sm) {
@@ -536,7 +546,7 @@ struct AdminFamilyAreaView: View {
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     if index > 0 { AdminRowDivider() }
-                    NavigationLink { AdminLazyPage { AnyView(AppUsageMembersView(category: row.0)) } } label: {
+                    NavigationLink { AdminLazyPage { AnyView(AppUsageMembersView(category: row.0).adminArea(.family)) } } label: {
                         HStack(spacing: DS.Spacing.sm) {
                             Circle().fill(row.3).frame(width: DS.Icon.legendDot, height: DS.Icon.legendDot)
                             Text(row.1)
@@ -574,7 +584,7 @@ struct AdminMetricsAreaView: View {
     var body: some View {
         let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM).filter { $0.area == .metrics }
         AdminHubPage {
-            AdminBandHeader(title: AdminArea.metrics.title, subtitle: AdminArea.metrics.subtitle)
+            AdminBandHeader(title: AdminArea.metrics.title, subtitle: AdminArea.metrics.subtitle, isAreaRoot: true)
         } content: {
             // «نبض العائلة» انتقل من «اليوم» إلى هنا (طلب المالك ٢٠٢٦-١٠-٢٠ «الأقسام فوق + قائمة وحدة»)
             AdminPulseTiles()
@@ -681,20 +691,25 @@ struct GenderRingPanel: View {
 // ضياع: كل إجراء سريع أعلى قسمه، «اليوم في العائلة» أعلى «المناسبات»، و«نبض العائلة» أعلى «المؤشرات».
 // الصلاحيات كما كانت على «اليوم» حرفياً.
 
-/// ما يسبق بطاقات الأدوات في الأقسام العامة (المناسبات، الإعلانات…)
+/// ما يسبق بطاقات الأدوات في الأقسام العامة: الإجراءات السريعة، ثم في «المناسبات والإعلانات» بطاقة «الإعلانات»
+/// المختصرة (لمن يرسل للأعضاء) و«اليوم في العائلة»
 struct AdminAreaTop: View {
     let area: AdminArea
+    @EnvironmentObject var authVM: AuthViewModel
 
     var body: some View {
         AdminAreaQuickActions(area: area)
         if area == .occasions {
+            if authVM.canSendNotifications {
+                AnyView(AdminAnnouncementsCard())
+            }
             AdminFamilyTodayCard()
         }
     }
 }
 
-/// الإجراءات السريعة لقسم: أزرار كبسولة بعرض الصفحة — إشعار للأعضاء ← الإعلانات؛ منشور مناسبة وإعلان وفاة ←
-/// المناسبات؛ تسجيل عضو وبحث عضو ← العائلة
+/// الإجراءات السريعة لقسم: أزرار كبسولة بعرض الصفحة — منشور مناسبة وإعلان وفاة ← المناسبات والإعلانات («إعلان جديد»
+/// في بطاقة «الإعلانات» تحتها)؛ تسجيل عضو وبحث عضو ← العائلة
 struct AdminAreaQuickActions: View {
     let area: AdminArea
     @EnvironmentObject var authVM: AuthViewModel
@@ -709,12 +724,6 @@ struct AdminAreaQuickActions: View {
     private var actions: [Action] {
         var list: [Action] = []
         switch area {
-        case .announcements:
-            if authVM.canSendNotifications {
-                list.append(Action(id: "notify", icon: "megaphone", title: L10n.t("إشعار للأعضاء", "Notify members")) {
-                    AnyView(AdminMessagingHubView())
-                })
-            }
         case .occasions:
             list.append(Action(id: "occasion", icon: "photo.on.rectangle", title: L10n.t("منشور مناسبة", "Occasion post")) {
                 AnyView(OccasionComposerView())
@@ -747,7 +756,7 @@ struct AdminAreaQuickActions: View {
         if !list.isEmpty {
             HStack(spacing: DS.Spacing.sm) {
                 ForEach(list) { action in
-                    NavigationLink { AdminLazyPage(make: action.page) } label: {
+                    NavigationLink { AdminLazyPage(make: action.page).adminArea(area) } label: {
                         AdminPillLabel(title: action.title, icon: action.icon, style: .navy,
                                        height: DS.Hub.pillHeightCard, fullWidth: true)
                     }
@@ -804,7 +813,7 @@ struct AdminFamilyTodayCard: View {
                 AdminCardHeader(title: L10n.t("اليوم في العائلة", "Today in the family"))
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                     if index > 0 { AdminRowDivider() }
-                    NavigationLink { AdminLazyPage { Self.page(row.target) } } label: {
+                    NavigationLink { AdminLazyPage { Self.page(row.target) }.adminArea(.occasions) } label: {
                         AdminListRow(icon: row.icon, tint: row.tint, title: row.title) {
                             Text(verbatim: row.value)
                                 .dsFont(.chip)
@@ -900,7 +909,7 @@ struct AdminPulseTiles: View {
                 AdminSectionLabel(title: L10n.t("نبض العائلة", "Family pulse"))
                 LazyVGrid(columns: AdminGrid.columns(landscape: landscape), spacing: AdminGrid.spacing) {
                     ForEach(tiles) { tile in
-                        NavigationLink { AdminLazyPage(make: tile.page) } label: { AdminPulseTileView(tile: tile) }
+                        NavigationLink { AdminLazyPage(make: tile.page).adminArea(.metrics) } label: { AdminPulseTileView(tile: tile) }
                             .buttonStyle(DSPressStyle())
                     }
                 }
@@ -1097,7 +1106,7 @@ struct AdminSearchView: View {
             } else {
                 if adminRequestVM.approvalsWorkflowOn || authVM.canModerate {
                     VStack(alignment: .leading, spacing: 0) {
-                        NavigationLink { AdminLazyPage { AnyView(AdminAllRequestsView(initialSearch: q)) } } label: {
+                        NavigationLink { AdminLazyPage { AnyView(AdminAllRequestsView(initialSearch: q).adminArea(.inbox)) } } label: {
                             AdminListRow(icon: "tray.full.fill", tint: DS.Color.primary,
                                          title: L10n.t("ابحث في الوارد عن «\(q)»", "Search the inbox for “\(q)”"))
                         }

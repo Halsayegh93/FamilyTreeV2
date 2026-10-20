@@ -889,8 +889,8 @@ private struct ScheduleComposerSheet: View {
 // MARK: - مربّع الإشعارات المجدولة (عرض/إلغاء)
 
 /// مربّع عرض بنفس تصميم المربّعات: رأس متدرّج، المجدولة صفوفاً في قسم واحد،
-/// و«إغلاق» أسفل المربّع. «إلغاء الجدولة» داخل كل صف كما كان.
-private struct ScheduledNotificationsSheet: View {
+/// و«إغلاق» أسفل المربّع. «إلغاء الجدولة» داخل كل صف كما كان. يفتحه أيضاً «المجدولة» في بطاقة «الإعلانات».
+struct ScheduledNotificationsSheet: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var cancellingId: UUID? = nil

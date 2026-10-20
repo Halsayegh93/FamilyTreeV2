@@ -2,85 +2,193 @@ import SwiftUI
 
 // MARK: - عُدّة لوحة الإدارة «مركز القيادة» (طلب المالك ٢٠٢٦-١٠-٢٠ — الاتجاه «أ»)
 //
-// قطع مشتركة لصفحة «اليوم» وصفحات الأقسام الثمانية و«الوارد»: الرأس الكحلي بحلقته الذهبية الساكنة، الأزرار
+// قطع مشتركة لصفحة «اليوم» وصفحات الأقسام الستة و«الوارد»: الرأس الكحلي بحلقته الذهبية الساكنة، الأزرار
 // الزجاجية، مربّعات الأرقام، البطاقة البيضاء بعنوانها، مربّع الأيقونة الملوّن، أزرار الكبسولة، صفّ القسم، شريط
 // مراحل الطلب. كل المقاسات والألوان من `DS.Hub` (DesignSystem.swift) — لا أرقام هنا.
 
 // MARK: الأقسام
 
-/// أقسام اللوحة بعد «اليوم» — الاسم والرمز ولون مربّعه وظهوره حسب الدور (IA.md)
+/// أقسام اللوحة بعد «اليوم» — الاسم والرمز ولون مربّعه وظهوره حسب الدور (IA.md). ستة منذ ٢٠٢٦-١٠-٢٠ (اختيار
+/// المالك «٦ أقسام»): «المناسبات والإعلانات» = المناسبات + الإعلانات، و«الفريق والأمان» = الفريق + الدخول والأمان.
+/// ظهور القسم المدموج = اتحاد شرطي القسمين (كل صفّ داخله بصلاحيته كما كانت — لا يرى دورٌ أكثر مما رأى).
 enum AdminArea: String, CaseIterable, Identifiable, Hashable {
-    case inbox, family, occasions, announcements, metrics, team, access, app
+    case inbox, family, occasions, metrics, team, app
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .inbox:         return L10n.t("الوارد", "Inbox")
-        case .family:        return L10n.t("العائلة", "Family")
-        case .occasions:     return L10n.t("المناسبات", "Occasions")
-        case .announcements: return L10n.t("الإعلانات", "Announcements")
-        case .metrics:       return L10n.t("المؤشرات", "Insights")
-        case .team:          return L10n.t("الفريق", "Team")
-        case .access:        return L10n.t("الدخول والأمان", "Sign-in & Security")
-        case .app:           return L10n.t("التطبيق", "App")
+        case .inbox:     return L10n.t("الوارد", "Inbox")
+        case .family:    return L10n.t("العائلة", "Family")
+        case .occasions: return L10n.t("المناسبات والإعلانات", "Occasions & announcements")
+        case .metrics:   return L10n.t("المؤشرات", "Insights")
+        case .team:      return L10n.t("الفريق والأمان", "Team & security")
+        case .app:       return L10n.t("التطبيق", "App")
+        }
+    }
+
+    /// الاسم المختصر في شريط التنقّل بين الأقسام (الاسم الكامل للقارئ الصوتي)
+    var shortTitle: String {
+        switch self {
+        case .occasions: return L10n.t("المناسبات", "Occasions")
+        case .team:      return L10n.t("الفريق", "Team")
+        default:         return title
         }
     }
 
     var subtitle: String {
         switch self {
-        case .inbox:         return L10n.t("الطلبات ورسائل الأعضاء", "Requests and member messages")
-        case .family:        return L10n.t("السجل والحسابات وجودة البيانات", "Registry, accounts and data quality")
-        case .occasions:     return L10n.t("الوفيات والذكرى والمنشورات", "Deaths, memorials and posts")
-        case .announcements: return L10n.t("إرسال للأعضاء وهل يصلهم", "Send to members and reach")
-        case .metrics:       return L10n.t("أرقام وتاريخ — للقراءة", "Numbers and history — read only")
-        case .team:          return L10n.t("من يدير وما يقدر عليه", "Who manages and what they can do")
-        case .access:        return L10n.t("من يقدر يدخل التطبيق وكيف", "Who can sign in and how")
-        case .app:           return L10n.t("إعدادات التطبيق والتشغيل", "App settings and operations")
+        case .inbox:     return L10n.t("الطلبات ورسائل الأعضاء", "Requests and member messages")
+        case .family:    return L10n.t("السجل والحسابات وجودة البيانات", "Registry, accounts and data quality")
+        case .occasions: return L10n.t("الوفيات والذكرى والمنشورات، والإعلان للأعضاء",
+                                       "Deaths, memorials and posts, and announcing to members")
+        case .metrics:   return L10n.t("أرقام وتاريخ — للقراءة", "Numbers and history — read only")
+        case .team:      return L10n.t("من يدير، ومن يدخل التطبيق وكيف", "Who manages, who signs in and how")
+        case .app:       return L10n.t("إعدادات التطبيق والتشغيل", "App settings and operations")
         }
     }
 
     var icon: String {
         switch self {
-        case .inbox:         return "tray.full.fill"
-        case .family:        return "person.3.fill"
-        case .occasions:     return "calendar.badge.clock"
-        case .announcements: return "megaphone.fill"
-        case .metrics:       return "chart.xyaxis.line"
-        case .team:          return "person.badge.shield.checkmark.fill"
-        case .access:        return "lock.shield.fill"
-        case .app:           return "gearshape.2.fill"
+        case .inbox:     return "tray.full.fill"
+        case .family:    return "person.3.fill"
+        case .occasions: return "calendar.badge.clock"
+        case .metrics:   return "chart.xyaxis.line"
+        case .team:      return "person.badge.shield.checkmark.fill"
+        case .app:       return "gearshape.2.fill"
         }
     }
 
     /// لون مربّع القسم (تعبئة ثابتة بنص أبيض — عائلة الكحلي والذهبي)
     var fill: Color {
         switch self {
-        case .inbox:         return DS.Color.primaryFill
-        case .family:        return DS.Color.palmFill
-        case .occasions:     return DS.Color.saduFill
-        case .announcements: return DS.Color.seaFill
-        case .metrics:       return DS.Color.goldFill
-        case .team:          return DS.Color.navyFill
-        case .access:        return DS.Hub.securityFill
-        case .app:           return DS.Color.slateFill
+        case .inbox:     return DS.Color.primaryFill
+        case .family:    return DS.Color.palmFill
+        case .occasions: return DS.Color.saduFill
+        case .metrics:   return DS.Color.goldFill
+        case .team:      return DS.Color.navyFill
+        case .app:       return DS.Color.slateFill
         }
     }
 
-    /// يظهر هذا القسم لدور المشاهد — القسم الفارغ لدورك لا يُرسم (المبدأ ٥ في IA.md)
+    /// يظهر هذا القسم لدور المشاهد — القسم الفارغ لدورك لا يُرسم (المبدأ ٥ في IA.md).
+    /// المدموجان: المناسبات (`canModerate`) ∪ الإعلانات (`canSendNotifications` ⊂ الإدارة)، والفريق (`isAdmin`) ∪
+    /// الدخول والأمان (`canViewSystemSettings`)
     @MainActor
     func isVisible(for authVM: AuthViewModel) -> Bool {
         let role = authVM.currentUser?.role
         switch self {
-        case .inbox:         return authVM.canModerate
-        case .family:        return authVM.canEditMembers
-        case .occasions:     return authVM.canModerate
-        case .announcements: return authVM.canSendNotifications
-        case .metrics:       return authVM.isAdmin || role == .monitor
-        case .team:          return authVM.isAdmin
-        case .access:        return authVM.canViewSystemSettings
-        case .app:           return authVM.canViewSystemSettings
+        case .inbox:     return authVM.canModerate
+        case .family:    return authVM.canEditMembers
+        case .occasions: return authVM.canModerate || authVM.canSendNotifications
+        case .metrics:   return authVM.isAdmin || role == .monitor
+        case .team:      return authVM.isAdmin || authVM.canViewSystemSettings
+        case .app:       return authVM.canViewSystemSettings
         }
+    }
+
+    /// الأقسام الظاهرة لهذا الدور بترتيبها
+    @MainActor
+    static func visible(for authVM: AuthViewModel) -> [AdminArea] {
+        allCases.filter { $0.isVisible(for: authVM) }
+    }
+}
+
+// MARK: التنقّل بين الأقسام (طلب المالك ٢٠٢٦-١٠-٢٠ «شريط تنقّل بين الأقسام»)
+//
+// «اليوم» يسجّل في `AdminAreaRouter` ناقلاً يستبدل مسار مكدسه بصفحة القسم المطلوب (لا تراكم). وقسم الصفحة في البيئة
+// (`adminArea`) يضعه من يفتحها — الصفحة المدفوعة في `NavigationStack` لا ترث بيئة موضع الرابط، فكل من يدفع صفحة
+// يمرّر قسمه صراحةً (مثل `adminBackTitle`): صفوف الأقسام، `AdminTapWrap`، دافع صفحات `.list`، وروابط «اليوم».
+// الشريط في رأس كل صفحة قسم وكل صفحة داخلية: بلا ناقل (قبل فتح تبويب الإدارة) أو بلا قسم لا يُرسم.
+
+/// ناقل مكدس «اليوم» إلى صفحة قسم — يضبطه `AdminDashboardView` عند ظهوره (nil قبله)
+@MainActor
+enum AdminAreaRouter {
+    static var navigate: ((AdminArea) -> Void)?
+}
+
+private struct AdminAreaKey: EnvironmentKey { static let defaultValue: AdminArea? = nil }
+
+extension EnvironmentValues {
+    /// القسم الذي تنتمي له الصفحة الحالية — يضعه من يفتحها، ويمرّره لما تدفعه هي
+    var adminArea: AdminArea? {
+        get { self[AdminAreaKey.self] }
+        set { self[AdminAreaKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// الصفحة تتبع هذا القسم في شريط التنقّل
+    func adminArea(_ area: AdminArea?) -> some View {
+        environment(\.adminArea, area)
+    }
+}
+
+/// شريط الأقسام أعلى الرأس الكحلي: سطر واحد يتمرّر أفقياً، رمز + اسم مختصر لكل قسم ظاهر لدورك، والحالي ذهبي.
+/// الضغط على قسم آخر ينقل إليه مباشرة (المسار يُستبدل)، وعلى القسم الحالي من صفحة داخلية يرجع لصفحته.
+struct AdminAreaNavBar: View {
+    /// الشريط في صفحة القسم نفسها (لا داخلية) — الضغط على القسم الحالي لا يفعل شيئاً
+    var isAreaRoot: Bool = false
+    @EnvironmentObject private var authVM: AuthViewModel
+    @Environment(\.adminArea) private var current
+
+    var body: some View {
+        if let navigate = AdminAreaRouter.navigate, let current {
+            strip(navigate: navigate, current: current)
+        }
+    }
+
+    private func strip(navigate: @escaping (AdminArea) -> Void, current: AdminArea) -> some View {
+        let areas = AdminArea.visible(for: authVM)
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Hub.navSpacing) {
+                    ForEach(areas) { area in
+                        AdminAreaNavChip(area: area, selected: area == current) {
+                            guard !(area == current && isAreaRoot) else { return }
+                            UISelectionFeedbackGenerator().selectionChanged()
+                            navigate(area)
+                        }
+                        .id(area)
+                    }
+                }
+                .padding(DS.Hub.navInset)
+            }
+            .background(Capsule().fill(DS.Hub.glass))
+            .overlay(Capsule().strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
+            .clipShape(Capsule())
+            .onAppear { proxy.scrollTo(current, anchor: .center) }
+        }
+        .padding(.top, DS.Spacing.sm)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L10n.t("أقسام اللوحة", "Dashboard sections"))
+    }
+}
+
+/// شريحة قسم في الشريط: الحالي ذهبي ممتلئ، والباقي نص فاتح بلا خلفية (فوق مسار الشريط الزجاجي)
+struct AdminAreaNavChip: View {
+    let area: AdminArea
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(dsSymbol: area.icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
+                Text(area.shortTitle)
+                    .dsFont(.sectionTitle)
+                    .lineLimit(1)
+            }
+            .foregroundColor(selected ? DS.Hub.onGold : DS.Hub.onBandMuted)
+            .padding(.horizontal, DS.Hub.navChipPadding)
+            .frame(minHeight: DS.Hub.navChipHeight)
+            .background(Capsule().fill(selected ? DS.Color.accentLight : Color.clear))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityLabel(area.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityHint(selected ? "" : L10n.t("ينتقل إلى القسم", "Goes to this section"))
     }
 }
 
@@ -213,6 +321,8 @@ struct AdminBandHeader<Buttons: View, Accessory: View>: View {
     var subtitle: String? = nil
     var badge: String? = nil
     var bottomPadding: CGFloat = DS.Hub.headerBottomCompact
+    /// صفحة القسم نفسها (لا داخلية) — في شريط الأقسام لا يفعل القسم الحالي شيئاً
+    var isAreaRoot: Bool = false
     @ViewBuilder var buttons: () -> Buttons
     @ViewBuilder var accessory: () -> Accessory
     @Environment(\.dismiss) private var dismiss
@@ -228,6 +338,9 @@ struct AdminBandHeader<Buttons: View, Accessory: View>: View {
                 HStack(spacing: DS.Spacing.sm) { buttons() }
             }
             .frame(minHeight: DS.Hub.glassButton)
+
+            // شريط الأقسام (خلف `AnyView` — حارس المكدس)
+            AnyView(AdminAreaNavBar(isAreaRoot: isAreaRoot))
 
             HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
                 Text(title)
@@ -266,18 +379,19 @@ struct AdminBandHeader<Buttons: View, Accessory: View>: View {
 
 extension AdminBandHeader where Accessory == EmptyView {
     init(backTitle: String? = L10n.t("اليوم", "Today"), title: String, subtitle: String? = nil,
-         badge: String? = nil, bottomPadding: CGFloat = DS.Hub.headerBottomCompact,
+         badge: String? = nil, bottomPadding: CGFloat = DS.Hub.headerBottomCompact, isAreaRoot: Bool = false,
          @ViewBuilder buttons: @escaping () -> Buttons) {
         self.init(backTitle: backTitle, title: title, subtitle: subtitle, badge: badge,
-                  bottomPadding: bottomPadding, buttons: buttons, accessory: { EmptyView() })
+                  bottomPadding: bottomPadding, isAreaRoot: isAreaRoot, buttons: buttons, accessory: { EmptyView() })
     }
 }
 
 extension AdminBandHeader where Buttons == EmptyView, Accessory == EmptyView {
     init(backTitle: String? = L10n.t("اليوم", "Today"), title: String, subtitle: String? = nil,
-         badge: String? = nil, bottomPadding: CGFloat = DS.Hub.headerBottomCompact) {
+         badge: String? = nil, bottomPadding: CGFloat = DS.Hub.headerBottomCompact, isAreaRoot: Bool = false) {
         self.init(backTitle: backTitle, title: title, subtitle: subtitle, badge: badge,
-                  bottomPadding: bottomPadding, buttons: { EmptyView() }, accessory: { EmptyView() })
+                  bottomPadding: bottomPadding, isAreaRoot: isAreaRoot, buttons: { EmptyView() },
+                  accessory: { EmptyView() })
     }
 }
 

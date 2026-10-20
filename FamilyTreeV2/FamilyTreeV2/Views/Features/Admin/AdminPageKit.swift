@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - عُدّة الصفحات الداخلية للوحة الإدارة (طلب المالك ٢٠٢٦-١٠-٢٠: «كل الصفحات بنفس شكل «اليوم»»)
 //
 // كل صفحة تُفتح من صفّ في قسم (سجل الأعضاء، صحة الشجرة، الأجهزة…) تأخذ شكل «اليوم» و«الوارد»: رأس كحلي (رجوع
-// زجاجي + اسم القسم بالذهبي، عنوان كبير، سطر وصف، رمز الصفحة، حتى ٤ أرقام، أزرار دائرية، شرائح فلتر) ثم بطاقات
+// زجاجي + اسم القسم بالذهبي، شريط الأقسام، عنوان كبير، سطر وصف، رمز الصفحة، حتى ٤ أرقام، أزرار دائرية، شرائح فلتر) ثم بطاقات
 // بيضاء على الأرضية الرملية — وأولها يصعد فوق الرأس قليلاً. القطع الصغيرة من `AdminHubKit.swift`، والمقاسات من `DS.Hub`.
 //
 // الاستعمال (للأقسام الباقية):
@@ -16,7 +16,7 @@ import SwiftUI
 //             content: AnyView(cards))
 //   • البطاقات: `AdminSectionCard(title:tag:link:)`، الصفوف `AdminTapRow(icon:title:subtitle:value:tap:)`، الحالات
 //     `AdminPageStateCard(.loading/.empty/.error)`، الحلقة `AdminScoreRow`، الأزرار `DSButton` (عرض السطر) و`AdminPillButton`.
-//   • (المرحلة ٢أ) بطاقة تُطوى `AdminSectionCard(…, isOpen: $open)`، صفّ معلومة بلا ضغطة `AdminInfoRow(…, trailing:)` مع
+//   • (المرحلة ٢أ) بطاقة تُطوى `AdminSectionCard(…, isOpen: $open, summary: "سطر وهي مطويّة")`، صفّ معلومة بلا ضغطة `AdminInfoRow(…, trailing:)` مع
 //     رقمه `AdminRowValue`، وقائمة طويلة كسولة بفواصل `AdminLazyRows(items:) { AnyView(row($0)) }`. صناديق `.dsRowBox()`
 //     لا توضع داخل البطاقة البيضاء — الصفوف تُفصل بخط. مربّعات الكتابة (`DSComposerSection`) تبقى كما هي تحت الرأس.
 //   • (المرحلة ٢ب) صفّ إعداد بأداة تحكّم (مفتاح، عدّاد، شريحة «حفظ») `AdminControlRow(…, control: AnyView(Toggle…))` —
@@ -53,6 +53,8 @@ struct AdminTapWrap: View {
     var accessibilityLabel: String? = nil
     @Environment(\.adminPageTitle) private var pageTitle
     @Environment(\.adminPagePusher) private var pusher
+    /// قسم هذه الصفحة — يُمرَّر للصفحة المدفوعة (لا ترث بيئة موضع الرابط)
+    @Environment(\.adminArea) private var area
 
     var body: some View {
         switch tap {
@@ -65,7 +67,7 @@ struct AdminTapWrap: View {
                 // داخل صفحة `.list`: زرّ يدفع عبر وجهة الصفحة
                 styled(Button { pusher.push(make, pageTitle) } label: { label })
             } else {
-                styled(NavigationLink { AdminLazyPage(make: make).adminBackTitle(pageTitle) } label: { label })
+                styled(NavigationLink { AdminLazyPage(make: make).adminBackTitle(pageTitle).adminArea(area) } label: { label })
             }
         }
     }
@@ -180,13 +182,16 @@ struct AdminPageHeader {
     var chips: [AdminPageChip] = []
     /// ملحق حرّ آخر الرأس (حقل بحث فوق الكحلي…)
     var accessory: AnyView? = nil
+    /// شريط التنقّل بين الأقسام تحت سطر الرجوع (يظهر داخل تبويب الإدارة متى عُرف قسم الصفحة) — false يخفيه
+    var showsAreaNav: Bool = true
 
     static let readOnlyText = L10n.t("للقراءة — يعدّلها المالك", "Read-only — the owner edits")
 }
 
 // MARK: - الرأس الكحلي
 
-/// الرأس: (رجوع زجاجي + اسم الصفحة السابقة) · أزرار ← رمز + عنوان (+ شارة) ← وصف ← أرقام ← شرائح ← ملحق
+/// الرأس: (رجوع زجاجي + اسم الصفحة السابقة) · أزرار ← شريط الأقسام ← رمز + عنوان (+ شارة) ← وصف ← أرقام ← شرائح ←
+/// ملحق
 struct AdminPageBand: View {
     let header: AdminPageHeader
     /// الاسم بجانب زرّ الرجوع (محلول مسبقاً)
@@ -202,6 +207,10 @@ struct AdminPageBand: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             topRow
+            if header.showsAreaNav {
+                // الخانة الثابتة لشريط الأقسام في كل صفحة داخلية (يقرأ قسم الصفحة وملاحِ «اليوم» من البيئة)
+                AnyView(AdminAreaNavBar())
+            }
             titleRow
             if let subtitle = header.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
@@ -336,6 +345,7 @@ struct AdminPage: View {
     var layout: Layout = .scroll
     let content: AnyView
     @Environment(\.adminBackTitle) private var outerBack
+    @Environment(\.adminArea) private var area
     @Environment(\.dsLandscape) private var landscape
     /// رجوع الصفحة نفسها (خارج `List`) — يُمرَّر للرأس
     @Environment(\.dismiss) private var dismiss
@@ -366,6 +376,7 @@ struct AdminPage: View {
         guard let pushed else { return AnyView(EmptyView()) }
         return AnyView(AdminLazyPage(make: pushed.make)
             .adminBackTitle(pushed.backTitle)
+            .adminArea(area)
             .environment(\.adminPagePusher, nil))
     }
 
@@ -497,6 +508,8 @@ struct AdminSectionCard<Content: View>: View {
     var link: AdminPageLink? = nil
     var spacing: CGFloat = DS.Spacing.sm
     var isOpen: Binding<Bool>? = nil
+    /// سطر ملخّص تحت عنوان البطاقة المطويّة (يختفي عند الفتح)
+    var summary: String? = nil
     @ViewBuilder var content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -530,6 +543,13 @@ struct AdminSectionCard<Content: View>: View {
             }
             if isOpen?.wrappedValue ?? true {
                 content()
+                    .transition(.opacity)
+            } else if let summary {
+                Text(summary)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                     .transition(.opacity)
             }
         }

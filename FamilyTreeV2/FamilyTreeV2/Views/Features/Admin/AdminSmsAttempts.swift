@@ -183,6 +183,8 @@ enum SmsAttemptsText {
 /// «محاولات الدخول»: مبدّل الفترة، المجاميع، أول ٨ أرقام و«الكل»، وسطر الحفظ
 struct SmsAttemptsCard: View {
     @ObservedObject private var store = SmsLoginAttemptsStore.shared
+    /// قسم صفحة الرسائل — يُمرَّر لصفحة «الكل»
+    @Environment(\.adminArea) private var area
     /// الصفوف الظاهرة قبل «الكل»
     private static let collapsedCount = 8
 
@@ -192,7 +194,7 @@ struct SmsAttemptsCard: View {
             AdminCardHeader(title: L10n.t("محاولات الدخول", "Sign-in attempts"),
                             badge: result?.totals.suspicious, badgeTint: DS.Color.warning) {
                 if let result, !result.items.isEmpty {
-                    NavigationLink { AdminLazyPage { AnyView(SmsAttemptsListPage()) } } label: {
+                    NavigationLink { AdminLazyPage { AnyView(SmsAttemptsListPage().adminArea(area)) } } label: {
                         AdminCardLinkLabel(title: L10n.t("الكل (\(result.items.count))", "All (\(result.items.count))"))
                     }
                     .buttonStyle(.plain)

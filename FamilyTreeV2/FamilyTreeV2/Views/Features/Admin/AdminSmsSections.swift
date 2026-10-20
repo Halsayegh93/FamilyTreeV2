@@ -350,6 +350,147 @@ struct SmsSetupCard: View {
     }
 }
 
+// MARK: - كيف تشتغل رسائل الدخول
+
+/// «كيف تشتغل رسائل الدخول» — بطاقة مطويّة آخر الصفحة (سطر ملخّص وهي مطويّة): المسار، ما يُحفظ، ما لا يُحفظ أبداً، من
+/// يرى ماذا، الحدود والتنبيهات (أرقامها من النظرة الحيّة `limits`/`alerts`، وإلا القيم الافتراضية)، معنى «دخل ✓» و«مريب»،
+/// ورابط الشحن الوحيد. النص نفسه سيُنقل للأندرويد
+struct SmsHowItWorksCard: View {
+    let overview: SmsOverview?
+    @EnvironmentObject private var notificationVM: NotificationViewModel
+    @ObservedObject private var attempts = SmsLoginAttemptsStore.shared
+    @Environment(\.openURL) private var openURL
+    @State private var open = false
+
+    private var limits: SmsOverview.Limits { overview?.limits ?? SmsOverview.Limits() }
+    private var alerts: SmsOverview.Alerts { overview?.alerts ?? SmsOverview.Alerts() }
+
+    /// آخر تنبيه «رصيد الرسائل منخفض» وصل هذا المستخدم — nil إن لم يُحمَّل شيء
+    private var lastAlert: Date? {
+        notificationVM.notifications.filter { $0.kind == "sms_balance_low" }.map(\.createdDate).max()
+    }
+
+    var body: some View {
+        AdminSectionCard(title: L10n.t("كيف تشتغل رسائل الدخول", "How sign-in messages work"),
+                         isOpen: $open,
+                         summary: L10n.t("المسار · ما يُحفظ وما لا يُحفظ · الحدود والتنبيهات",
+                                         "The path · what's kept and what never is · limits and alerts")) {
+            AdminRowsCardBody {
+                SmsHowRow(icon: "paperplane.fill", tint: DS.Color.sea,
+                          title: L10n.t("المسار", "The path"),
+                          text: L10n.t("العضو يطلب الرمز ← يصله \(SmsText.isolate("SMS")) من المرسل «\(SmsText.isolate("KWT-SMS"))» (مرسل مشترك: أبطأ وقد لا يصل لأرقام حجب الإعلانات) ← كل رسالة = نقطة واحدة (الرسالة 53 حرفاً).",
+                                       "A member asks for a code → it arrives by SMS from the sender “KWT-SMS” (a shared sender: slower, and may miss numbers that block promotions) → each message = 1 point (53 characters)."))
+                SmsHowRow(icon: "tray.full.fill", tint: DS.Color.primary,
+                          title: L10n.t("ما يُحفظ", "What's kept"),
+                          text: keptText)
+                SmsHowRow(icon: "lock.shield.fill", tint: DS.Color.success,
+                          title: L10n.t("ما لا يُحفظ أبداً", "What's never kept"),
+                          text: L10n.t("رمز الدخول — لا في جداولنا ولا في سجلات الخدمة؛ \(SmsText.isolate("Supabase")) يحفظه مشفّراً تشفيراً لا ينفك لدقائق فقط للمقارنة.",
+                                       "The sign-in code — not in our tables, not in the service logs; Supabase keeps it one-way hashed for a few minutes only, to compare."),
+                          warning: L10n.t("تنبيه: لوحة حساب \(SmsText.isolate("KWT SMS")) قد تعرض نص الرسائل المرسلة — احمِ كلمة سر حساب \(SmsText.isolate("KWT")) وفعّل التحقق بخطوتين إن وُجد.",
+                                          "Heads-up: the KWT SMS account dashboard may show sent message text — protect the KWT password and turn on two-step verification if offered."))
+                SmsHowRow(icon: "eye.fill", tint: DS.Color.info,
+                          title: L10n.t("من يرى ماذا", "Who sees what"),
+                          text: L10n.t("المالك يرى أرقام «محاولات الدخول» كاملة، والمدير يراها مخفية جزئياً، وغيرهما لا يرى الصفحة.",
+                                       "The owner sees full numbers in “Sign-in attempts”, admins see them partly masked, and no one else sees this page."))
+                SmsHowRow(icon: "speedometer", tint: DS.Color.warning,
+                          title: L10n.t("الحدود", "Limits"),
+                          text: limitsText)
+                SmsHowRow(icon: "bell.badge.fill", tint: DS.Color.warning,
+                          title: L10n.t("التنبيهات", "Alerts"),
+                          text: alertsText,
+                          note: lastAlert.flatMap { AdminTodayText.since($0) }.map { L10n.t("آخر تنبيه: \($0)", "Last alert: \($0)") })
+                SmsHowRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
+                          title: L10n.t("«دخل» و«مريب»", "“Signed in” and “Suspicious”"),
+                          text: L10n.t("شارة «دخل» (بعلامة صح) تعني أن الرقم سجّل دخولاً بعد أول محاولة في الفترة؛ «مريب» = 5 محاولات أو أكثر في ساعة.",
+                                       "The “Signed in” chip (with a tick) means the number signed in after its first attempt in the period; “Suspicious” = 5 or more attempts in an hour."))
+                Button { openURL(SmsBalanceStore.rechargeURL) } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        SmsHowRow(icon: "creditcard.fill", tint: DS.Color.accent,
+                                  title: L10n.t("شحن الرصيد", "Top up"),
+                                  text: SmsText.isolate("kwtsms.com/cportal/buy"))
+                        Image(systemName: "arrow.up.forward.square")
+                            .dsGlyph(DS.Glyph.md, weight: .semibold)
+                            .foregroundColor(DS.Color.accent)
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(L10n.t("يفتح صفحة شراء الرصيد في KWT SMS", "Opens the KWT SMS top-up page"))
+            }
+        }
+    }
+
+    private var keptText: String {
+        let recent = SmsText.days(overview?.retentionDays ?? 2)
+        let tries = SmsText.days(attempts.current?.retentionDays ?? 30)
+        return L10n.t("السجل اليومي دائم (عدد الرسائل والمقبولة والفاشلة والنقاط والرصيد). تفاصيل آخر الإرسالات \(recent) فقط (النتيجة، سبب الفشل، رقم الرسالة عند \(SmsText.isolate("KWT"))، الرصيد بعدها — الرقم مخفي). «محاولات الدخول» \(tries) (الرقم والنتيجة وهل دخل).",
+                      "The daily log is permanent (messages, accepted, failed, points, balance). Recent-send details are kept \(recent) only (result, failure reason, KWT message id, balance after — number hidden). “Sign-in attempts” are kept \(tries) (number, result, signed in or not).")
+    }
+
+    private var limitsText: String {
+        let gap = limits.phoneCooldownSeconds == 60 ? L10n.t("دقيقة", "A minute")
+                                                    : L10n.t("\(limits.phoneCooldownSeconds) ثانية", "\(limits.phoneCooldownSeconds) seconds")
+        return L10n.t("\(gap) بين رمزين لنفس الرقم (وخدمة الدخول \(SmsText.isolate("Supabase")) نفسها تمنع التكرار خلال 60 ثانية ولا تُحسب تلك الطلبات)، \(limits.phonePerHour) بالساعة لكل رقم، \(limits.allPerHour) بالساعة للجميع، \(limits.allPerSecond) بالثانية.",
+                      "\(gap) between two codes to one number (Supabase itself blocks repeats within 60 seconds, and those aren't counted), \(limits.phonePerHour) per hour per number, \(limits.allPerHour) per hour for everyone, \(limits.allPerSecond) per second.")
+    }
+
+    private var alertsText: String {
+        guard alerts.lowThreshold > 0 else {
+            return L10n.t("تنبيه الرصيد مطفأ (العتبة صفر) — يُضبط من بطاقة «التنبيهات» أعلاه.",
+                          "Balance alerts are off (threshold 0) — set it in the “Alerts” card above.")
+        }
+        return L10n.t("الرصيد تحت \(alerts.lowThreshold) نقطة: تنبيه مرة كل \(alerts.lowRepeatHours) ساعة، وتحت \(alerts.urgentThreshold) يصير «عاجلاً» كل \(alerts.urgentRepeatHours) ساعة — للمالك والمدراء.",
+                      "Balance under \(alerts.lowThreshold) points: an alert every \(alerts.lowRepeatHours) hours; under \(alerts.urgentThreshold): “Urgent” every \(alerts.urgentRepeatHours) hours — to the owner and admins.")
+    }
+}
+
+/// صفّ شرح: رمز ملوّن + عنوان عريض + نص (+ تحذير كهرماني، + سطر صغير)
+private struct SmsHowRow: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    let text: String
+    var warning: String? = nil
+    var note: String? = nil
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: icon, tint: tint, side: DS.Hub.miniIcon, radius: DS.Hub.miniIconRadius,
+                            glyph: DS.Glyph.md)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(title)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(verbatim: text)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let warning {
+                    Label {
+                        Text(verbatim: warning).fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").dsGlyph(DS.Glyph.sm)
+                    }
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.warning.dsReadableGlyph)
+                    .padding(.top, DS.Spacing.xxs)
+                }
+                if let note {
+                    Text(verbatim: note)
+                        .dsFont(.caption)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // MARK: - مربّعات الأدوات
 
 struct SmsToolBoxView: View {

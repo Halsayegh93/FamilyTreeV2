@@ -94,8 +94,8 @@ final class SmsPageActions: ObservableObject {
 // MARK: - الصفحة
 
 struct AdminSmsView: View {
-    /// نص الرجوع: «الدخول والأمان» من صفّها، و«اليوم» من تنبيهه أو نبضه
-    var backTitle: String = AdminArea.access.title
+    /// نص الرجوع: «الفريق والأمان» من صفّها، و«اليوم» من تنبيهه أو نبضه
+    var backTitle: String = AdminArea.team.title
     @ObservedObject private var store = SmsBalanceStore.shared
     @StateObject private var actions = SmsPageActions()
 
@@ -175,6 +175,8 @@ private struct SmsPageContent: View {
                 AnyView(SmsAlertsCard(alerts: store.overview?.alerts))
                 AnyView(SmsLimitsCard(limits: store.overview?.limits ?? SmsOverview.Limits()))
                 AnyView(SmsSetupCard())
+                // «كيف تشتغل رسائل الدخول» مطويّة (طلب المالك ٢٠٢٦-١٠-٢٠ «سجل التفاصيل الجديدة في القسم بالتطبيق كاملة»)
+                AnyView(SmsHowItWorksCard(overview: store.overview))
             }
         }
     }
