@@ -287,8 +287,13 @@ struct AdminKPITile: View {
     let label: String
     let icon: String
     var tint: Color = DS.Color.textOnPrimary
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        // خط الجهاز أكبر من الافتراضي: التسمية على سطرين بدل قصّها («نشطون هذا الأسبوع»، «تصلهم الإشعارات») —
+        // كل مربّع يحجز السطرين فتبقى المربّعات بطول واحد (بلا `fixedSize` على الصفّ: يعمّق مكدس «اليوم» ~٣٥ ك.ب).
+        // الحجم الافتراضي كما كان تماماً.
+        let wraps = typeSize > .large
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(value)
                 .dsFont(.hubKPI)
@@ -297,11 +302,11 @@ struct AdminKPITile: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .contentTransition(.numericText())
-            HStack(spacing: DS.Spacing.xs) {
+            HStack(alignment: wraps ? .firstTextBaseline : .center, spacing: DS.Spacing.xs) {
                 Image(dsSymbol: icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
                 Text(label)
                     .dsFont(.caption)
-                    .lineLimit(1)
+                    .lineLimit(wraps ? 2 : 1, reservesSpace: wraps)
                     .minimumScaleFactor(0.75)
             }
             .foregroundColor(DS.Hub.onBandMuted)

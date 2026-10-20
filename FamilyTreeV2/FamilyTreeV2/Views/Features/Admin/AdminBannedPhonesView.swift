@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// الأرقام المحظورة — بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧):
-/// بطاقة رأس حمراء (لون بلاطة «الأرقام المحظورة» في إعدادات النظام) بأرقام حيّة ← حقل بحث ←
-/// بطاقة فيها الأرقام صفوفاً `.dsRowBox()` (الرقم من اليسار · السبب · تاريخ الحظر · «إلغاء»).
+/// الأرقام المحظورة — بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بأرقام حيّة وزرّ «حظر رقم»
+/// للمالك (وشارة «للقراءة» لغيره) ← البحث يصعد فوقه ← بطاقة بيضاء فيها الأرقام صفوفاً مفصولة بخط
+/// (الرقم من اليسار · السبب · تاريخ الحظر · «إلغاء»).
 /// الحظر وإلغاؤه للمالك فقط (`canManageBannedPhones`) وبنفس التأكيد والمربّع كما كانا تماماً.
 struct AdminBannedPhonesView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -17,9 +17,6 @@ struct AdminBannedPhonesView: View {
     /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل «لا توجد أرقام محظورة» المضلِّلة
     /// (تبقى حتى جلب ناجح عبر «إعادة المحاولة»)
     @State private var lastFetchOffline = false
-    /// دخول صفوف الأرقام (نمط الأخبار والديوانيات) — مرة واحدة، بعد بطاقتها
-    @State private var appeared = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// لون بلاطة «الأرقام المحظورة» في إعدادات النظام — رأس الصفحة يطابق البلاطة التي ضُغطت
     private let pageTint = DS.Color.error
@@ -57,103 +54,46 @@ struct AdminBannedPhonesView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: DS.Spacing.md) {
-                hero
-
-                content
+        AdminPage(header: header, lead: leadCard, content: phonesContent)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .dsCenterBox(isPresented: $showAddSheet) {
+                AddBanSheet(authVM: authVM)
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xxxl)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        // الرأس الملوّن الموحّد — زرّ الإضافة (كان في شريط النظام) للمالك فقط، المدير يتصفّح بدون تعديل
-        .dsSubPageHeader(t("الأرقام المحظورة", "Banned Numbers"),
-                         subtitle: authVM.canManageBannedPhones
-                            ? t("أرقام ممنوعة من التسجيل واستخدام التطبيق", "Numbers blocked from signing up and using the app")
-                            : t("تتصفّح للقراءة — الحظر للمالك", "Read-only — the owner manages bans")) {
-            if authVM.canManageBannedPhones {
-                DSHeaderButton(symbol: "plus", label: t("حظر رقم هاتف", "Ban Phone Number")) { showAddSheet = true }
-            }
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .dsCenterBox(isPresented: $showAddSheet) {
-            AddBanSheet(authVM: authVM)
-        }
-        .dsAlert(
-            t("إلغاء الحظر", "Remove Ban"),
-            isPresented: Binding(
-                get: { phoneToUnban != nil },
-                set: { if !$0 { phoneToUnban = nil } }
-            )
-        ) {
-            Button(t("إلغاء", "Cancel"), role: .cancel) { phoneToUnban = nil }
-            Button(t("إلغاء الحظر", "Remove Ban"), role: .destructive) {
-                guard let phone = phoneToUnban else { return }
-                Task {
-                    isProcessing = true
-                    _ = await authVM.unbanPhone(phone.id)
-                    isProcessing = false
-                    phoneToUnban = nil
+            .dsAlert(
+                t("إلغاء الحظر", "Remove Ban"),
+                isPresented: Binding(
+                    get: { phoneToUnban != nil },
+                    set: { if !$0 { phoneToUnban = nil } }
+                )
+            ) {
+                Button(t("إلغاء", "Cancel"), role: .cancel) { phoneToUnban = nil }
+                Button(t("إلغاء الحظر", "Remove Ban"), role: .destructive) {
+                    guard let phone = phoneToUnban else { return }
+                    Task {
+                        isProcessing = true
+                        _ = await authVM.unbanPhone(phone.id)
+                        isProcessing = false
+                        phoneToUnban = nil
+                    }
+                }
+            } message: {
+                if let phone = phoneToUnban {
+                    Text(t(
+                        "هل تريد إلغاء حظر الرقم \(phone.phoneNumber)؟",
+                        "Remove ban for \(phone.phoneNumber)?"
+                    ))
                 }
             }
-        } message: {
-            if let phone = phoneToUnban {
-                Text(t(
-                    "هل تريد إلغاء حظر الرقم \(phone.phoneNumber)؟",
-                    "Remove ban for \(phone.phoneNumber)?"
-                ))
+            .task {
+                await loadBans()
             }
-        }
-        .task {
-            await loadBans()
-        }
     }
 
-    // MARK: - المحتوى
-
-    @ViewBuilder
-    private var content: some View {
-        if isInitialLoading {
-            DSPageLoader(t("جارٍ تحميل الأرقام المحظورة…", "Loading banned numbers…"), fillsSpace: false)
-                .padding(.top, DS.Spacing.xl)
-                .dsStaggerIn(1)
-        } else if loadFailed {
-            DSStateCard(icon: "wifi.exclamationmark",
-                         title: t("تعذّر تحميل الأرقام المحظورة", "Couldn't load banned numbers"),
-                         hint: t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                         tint: DS.Color.error,
-                         actionTitle: t("إعادة المحاولة", "Retry"),
-                         action: { Task { await loadBans() } })
-                .padding(.top, DS.Spacing.xs)
-                .dsStaggerIn(1)
-        } else if authVM.bannedPhones.isEmpty {
-            emptyState
-                .padding(.top, DS.Spacing.xl)
-                .dsStaggerIn(1)
-        } else {
-            DSSearchField(text: $searchText,
-                          placeholder: t("بحث عن رقم...", "Search number..."),
-                          tint: pageTint)
-                .dsStaggerIn(1)
-
-            let phones = filteredPhones
-            if phones.isEmpty {
-                DSEmptyView(t("لا توجد نتائج مطابقة", "No matching results"),
-                            message: t("جرّب رقماً آخر أو كلمة من سبب الحظر", "Try another number or a word from the reason"),
-                            style: .compact)
-            } else {
-                phonesSection(phones)
-            }
-        }
-    }
-
-    // MARK: - بطاقة الرأس
+    // MARK: - الرأس الكحلي
 
     /// ٣ أرقام حيّة من القائمة المحمّلة أصلاً (بلا طلبات جديدة للسيرفر): كل المحظورة، وما أُضيف
-    /// هذا الشهر وهذا الأسبوع — «—» قبل اكتمال أول تحميل.
-    private var hero: some View {
+    /// هذا الشهر وهذا الأسبوع — «—» قبل اكتمال أول تحميل. زرّ «حظر رقم» للمالك فقط (المدير يتصفّح للقراءة)
+    private var header: AdminPageHeader {
         let pending = isInitialLoading || loadFailed
         let phones = authVM.bannedPhones
         let calendar = Calendar.current
@@ -161,69 +101,84 @@ struct AdminBannedPhonesView: View {
         let dates = phones.compactMap { Self.parseDate($0.createdAt) }
         let thisMonth = dates.filter { calendar.isDate($0, equalTo: now, toGranularity: .month) }.count
         let thisWeek = dates.filter { calendar.isDate($0, equalTo: now, toGranularity: .weekOfYear) }.count
-
-        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
-        return DSStatsRow([
-                DSHeroStat(value: pending ? "—" : "\(phones.count)",
-                           label: t("محظور", "Banned"), icon: "phone.down.fill"),
-                DSHeroStat(value: pending ? "—" : "\(thisMonth)",
-                           label: t("هذا الشهر", "This month"), icon: "calendar"),
-                DSHeroStat(value: pending ? "—" : "\(thisWeek)",
-                           label: t("هذا الأسبوع", "This week"), icon: "clock.fill")
-        ], tint: pageTint)
+        let canBan = authVM.canManageBannedPhones
+        return AdminPageHeader(
+            title: t("الأرقام المحظورة", "Banned Numbers"),
+            subtitle: t("أرقام ممنوعة من التسجيل واستخدام التطبيق", "Numbers blocked from signing up and using the app"),
+            glyph: "phone.down.fill",
+            readOnly: !canBan,
+            kpis: [
+                AdminPageKPI(pending ? "—" : "\(phones.count)", t("محظور", "Banned"), icon: "phone.down.fill",
+                             tint: !pending && !phones.isEmpty ? DS.Hub.kpiLate : DS.Color.textOnPrimary),
+                AdminPageKPI(pending ? "—" : "\(thisMonth)", t("هذا الشهر", "This month"), icon: "calendar"),
+                AdminPageKPI(pending ? "—" : "\(thisWeek)", t("هذا الأسبوع", "This week"), icon: "clock.fill")
+            ],
+            actions: canBan ? [AdminPageAction(symbol: "plus", label: t("حظر رقم هاتف", "Ban Phone Number"),
+                                               tap: .action { showAddSheet = true })] : [])
     }
 
-    // MARK: - القائمة
+    // MARK: - المحتوى
 
-    /// بطاقة الأرقام — عنوانها وعدد ما يظهر منها (مع البحث)؛ الوضع الأفقي على عمودين كما كان
-    private func phonesSection(_ phones: [BannedPhone]) -> some View {
-        DSComposerSection(title: t("الأرقام المحظورة", "Banned Numbers"),
-                          icon: "phone.down.fill",
-                          tint: pageTint,
-                          trailing: t("\(phones.count) رقم", phones.count == 1 ? "1 number" : "\(phones.count) numbers"),
-                          index: 2) {
-            AdaptiveLazyStack(spacing: DS.Spacing.sm) {
-                ForEach(Array(phones.enumerated()), id: \.element.id) { index, banned in
-                    bannedPhoneRow(banned)
-                        // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
-                        .dsCardCascade(index, appeared: appeared)
-                }
-            }
-            .onAppear(perform: startRowsCascade)
+    /// أول بطاقة (تصعد فوق الرأس): التحميل، أو تعذّره، أو «لا توجد أرقام محظورة»، أو البحث
+    private var leadCard: AnyView {
+        if isInitialLoading {
+            return AnyView(AdminPageStateCard(.loading(t("جارٍ تحميل الأرقام المحظورة…", "Loading banned numbers…"))))
         }
+        if loadFailed {
+            return AnyView(AdminPageStateCard(.error(t("تعذّر تحميل الأرقام المحظورة", "Couldn't load banned numbers"),
+                                                     message: t("تحقّق من اتصالك وحاول مرة أخرى",
+                                                                "Check your connection and try again"),
+                                                     retry: { Task { await loadBans() } })))
+        }
+        if authVM.bannedPhones.isEmpty {
+            return AnyView(AdminPageStateCard(.empty(t("لا توجد أرقام محظورة", "No Banned Numbers"),
+                                                     message: authVM.canManageBannedPhones
+                                                        ? t("يمكنك حظر أرقام هواتف من زر + في الأعلى",
+                                                            "You can ban phone numbers using the + button above")
+                                                        : nil,
+                                                     tint: DS.Color.success)))
+        }
+        return AnyView(DSSearchField(text: $searchText,
+                                     placeholder: t("بحث عن رقم...", "Search number..."),
+                                     tint: pageTint)
+            .adminCard(padding: DS.Spacing.md))
     }
 
-    /// الصفوف تدخل بعد بطاقتها (٢) — فيبقى التسلسل: الرأس ← البحث ← البطاقة ← صفوفها.
-    /// مرة واحدة؛ «تقليل الحركة»: تلاشٍ فوري بلا انتظار.
-    private func startRowsCascade() {
-        guard !appeared else { return }
-        guard !reduceMotion else { appeared = true; return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.staggerDelay(3, base: DSMotion.sectionsOnPage)) {
-            appeared = true
+    /// بطاقة الأرقام — عنوانها وعدد ما يظهر منها (مع البحث)، والصفوف مفصولة بخط
+    private var phonesContent: AnyView {
+        guard !isInitialLoading, !loadFailed, !authVM.bannedPhones.isEmpty else { return AnyView(EmptyView()) }
+        let phones = filteredPhones
+        if phones.isEmpty {
+            return AnyView(AdminPageStateCard(.empty(t("لا توجد نتائج مطابقة", "No matching results"),
+                                                     message: t("جرّب رقماً آخر أو كلمة من سبب الحظر",
+                                                                "Try another number or a word from the reason"))))
         }
+        return AnyView(AdminSectionCard(title: t("الأرقام المحظورة", "Banned Numbers"),
+                                        tag: t("\(phones.count) رقم", phones.count == 1 ? "1 number" : "\(phones.count) numbers"),
+                                        spacing: 0) {
+            AdminLazyRows(items: phones) { AnyView(bannedPhoneRow($0)) }
+        })
     }
 
     // MARK: - Row
 
-    /// صف بإطار صفوف المربّعات: أيقونة الحظر + الرقم (من اليسار، Plex 13.5 عريض) + السبب (Plex 12)
-    /// + تاريخ الحظر، و«إلغاء» في الطرف للمالك فقط
+    /// صفّ: مربّع الحظر + الرقم (من اليسار) + السبب + تاريخ الحظر، و«إلغاء» في الطرف للمالك فقط
     private func bannedPhoneRow(_ banned: BannedPhone) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: "phone.down.fill", tint: pageTint)
-                .accessibilityHidden(true)
+        HStack(spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: "phone.down.fill", tint: pageTint)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(Self.isolatedLTR(formatPhoneDisplay(banned.phoneNumber)))
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
 
                 if let reason = banned.reason, !reason.isEmpty {
                     Text(reason)
-                        .dsFieldFont(.subtitle)
-                        .foregroundColor(DS.Color.fieldValue)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -233,7 +188,7 @@ struct AdminBannedPhonesView: View {
                         .dsGlyph(DS.Glyph.micro, weight: .semibold)
                         .accessibilityHidden(true)
                     Text(formatDate(banned.createdAt))
-                        .dsFont(.footnote)
+                        .dsFont(.caption)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                 }
@@ -248,7 +203,8 @@ struct AdminBannedPhonesView: View {
                 unbanButton(banned)
             }
         }
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm + 2)
+        .frame(minHeight: DS.Icon.tapTarget)
     }
 
     /// «إلغاء» — الشريحة الواحدة بالأحمر (مساحة ضغط ٤٤)
@@ -258,17 +214,6 @@ struct AdminBannedPhonesView: View {
             phoneToUnban = banned
         }
         .accessibilityLabel(t("إلغاء حظر \(number)", "Unban \(number)"))
-    }
-
-    // MARK: - Empty State
-    private var emptyState: some View {
-        DSEmptyView(
-            t("لا توجد أرقام محظورة", "No Banned Numbers"),
-            message: authVM.canManageBannedPhones
-                ? t("يمكنك حظر أرقام هواتف من زر + في الأعلى",
-                    "You can ban phone numbers using the + button above")
-                : nil,
-            tint: DS.Color.success, style: .compact)
     }
 
     // MARK: - Helpers

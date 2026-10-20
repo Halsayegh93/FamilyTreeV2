@@ -971,32 +971,36 @@ struct AdminPulseTileView: View {
 
 // MARK: - الفريق: الأدوار ونطاقي
 
-/// «ما يقدر عليه كل دور» — من `RoleGuides` (المصدر الواحد لنصوص الأدوار)
+/// «ما يقدر عليه كل دور» — من `RoleGuides` (المصدر الواحد لنصوص الأدوار)، بشكل «اليوم» (`AdminPageKit`):
+/// رأس كحلي ثم بطاقة لكل دور، أولها تصعد فوق الرأس
 struct AdminRolesGuideView: View {
     var body: some View {
-        AdminHubPage {
-            AdminBandHeader(backTitle: AdminArea.team.title,
-                            title: L10n.t("ما يقدر عليه كل دور", "What each role can do"),
-                            subtitle: L10n.t("الدور = مجال عمل، لا درجة صلاحية", "A role is a domain, not a rank"))
-        } content: {
-            ForEach(RoleGuide.all) { guide in
-                AdminRoleGuideCard(guide: guide)
-            }
-        }
+        let guides = RoleGuide.all
+        AdminPage(header: AdminPageHeader(title: L10n.t("ما يقدر عليه كل دور", "What each role can do"),
+                                          subtitle: L10n.t("الدور = مجال عمل، لا درجة صلاحية", "A role is a domain, not a rank"),
+                                          glyph: "list.bullet.rectangle.portrait.fill"),
+                  lead: guides.first.map { AnyView(AdminRoleGuideCard(guide: $0)) },
+                  content: AnyView(VStack(spacing: DS.Hub.stackSpacing) {
+                      ForEach(guides.dropFirst()) { guide in
+                          AdminRoleGuideCard(guide: guide)
+                      }
+                  }))
     }
 }
 
-/// «نطاقي» — ما يقدر عليه دورك وما لا يقدر
+/// «نطاقي» — ما يقدر عليه دورك وما لا يقدر (البطاقة تصعد فوق الرأس). تُفتح من «الفريق» (يسمّي الرجوع) ومن سطر
+/// «نطاقي» في «اليوم» — بلا اسم من فتحها فالرجوع «اليوم» كما كان
 struct AdminMyScopeView: View {
     let guide: RoleGuide
+    @Environment(\.adminBackTitle) private var opener
 
     var body: some View {
-        AdminHubPage {
-            AdminBandHeader(title: L10n.t("نطاقي · \(guide.title)", "My scope · \(guide.title)"),
-                            subtitle: guide.mandate)
-        } content: {
-            AdminRoleGuideCard(guide: guide, showsTitle: false)
-        }
+        AdminPage(header: AdminPageHeader(back: opener ?? L10n.t("اليوم", "Today"),
+                                          title: L10n.t("نطاقي · \(guide.title)", "My scope · \(guide.title)"),
+                                          subtitle: guide.mandate,
+                                          glyph: guide.icon),
+                  lead: AnyView(AdminRoleGuideCard(guide: guide, showsTitle: false)),
+                  content: AnyView(EmptyView()))
     }
 }
 

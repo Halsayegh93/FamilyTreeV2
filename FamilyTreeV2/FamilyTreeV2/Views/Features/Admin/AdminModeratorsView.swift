@@ -1,17 +1,15 @@
 import SwiftUI
 
-// MARK: - فريق الإدارة (تصميم صفحات الإدارة الموحّد — طلب المالك ٢٠٢٦-٠٩-٢٧)
+// MARK: - فريق الإدارة — بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ «كل الصفحات بنفس شكل «اليوم»»، `AdminPageKit`)
 //
-// من الأعلى: بطاقة رأس بعدد كل دور ← بطاقة لكل دور (أيقونة الدور بلونه + اسمه + العدد) فيها
-// أعضاؤه صفوفاً `.dsRowBox()` (الصورة · الاسم · مجال الدور · الرقم · شارة الدور) ← بطاقة
-// «الأدوار وما يقدر عليه كل دور». بقيت `List` لأجل السحب «إزالة» على صف المسؤول، فبطاقة الدور
-// تُرسم مقطّعةً خلف صفوفها (`TeamCardSegment`). الضغط على العضو يفتح «تغيير الدور» للمالك فقط،
+// رأس كحلي بعدد كل دور وزرّ «إضافة» للمالك (وشارة «للقراءة» لغيره) ← لكل دور عنوان بعدده ثم أعضاؤه، كل عضو بطاقة
+// بيضاء (الصورة · الاسم · مجال الدور · الرقم · شارة الدور) ← بطاقة «الأدوار وما يقدر عليه كل دور». بقيت `List`
+// (`AdminPage(layout: .list)`) لأجل السحب «إزالة» على صفّ المسؤول. الضغط على العضو يفتح «تغيير الدور» للمالك فقط،
 // والمالك ونفسك لا يُغيَّران — كل الحراسات والمربّعات والتأكيدات كما كانت تماماً.
 
 struct AdminModeratorsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
-    @State private var appeared = false
     @State private var showAddSheet = false
     @State private var memberToChange: FamilyMember?
     @State private var showRoleConfirm = false
@@ -30,13 +28,6 @@ struct AdminModeratorsView: View {
     /// دخول صفوف الأعضاء (نمط الأخبار والديوانيات) — مرة واحدة، بعد عنوان بطاقتها وخلفيتها
     @State private var rowsAppeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// لون بلاطة «فريق الإدارة» في إعدادات النظام — رأس الصفحة يطابق البلاطة التي ضُغطت
-    private let pageTint = DS.Color.actionNavy
-    /// بطاقة الدور خلف صفوف القائمة — نفس مقاسات `DSComposerSection`: حشوة ١٢ ومسافة ١٠ بين الصفوف
-    private let cardGap: CGFloat = DS.Spacing.md
-    private let cardInset: CGFloat = DS.Spacing.lg + DS.Spacing.md
-    private let rowHalfGap: CGFloat = (DS.Spacing.sm + 2) / 2
 
     private var isOwner: Bool {
         authVM.isOwner
@@ -58,29 +49,13 @@ struct AdminModeratorsView: View {
     var body: some View {
         let team = moderators
 
-        // صفّ الأرقام ← بطاقات الأدوار ← دليل الأدوار: قائمة واحدة تتمرّر معاً
-        // (بقيت `List` لأجل السحب «إزالة» على صف المسؤول)
-        return List {
-            hero(team)
-                .teamListRow(top: DS.Spacing.sm, bottom: DS.Spacing.xs)
-
-            teamContent(team)
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .environment(\.defaultMinListRowHeight, 0)
+        // الرأس ← بطاقات الأعضاء بأدوارهم ← دليل الأدوار: قائمة واحدة تتمرّر معاً
+        // (بقيت `List` لأجل السحب «إزالة» على صفّ المسؤول)
+        return AdminPage(header: header(team), lead: leadCard(team), layout: .list,
+                         content: AnyView(teamContent(team)))
         // تفاصيل الدور — مربّع عرض بمنتصف الشاشة (يُغلق أيضاً بالضغط خارجه)
         .dsCenterBox(item: $selectedRoleGuide, onBackgroundTap: { selectedRoleGuide = nil }) { guide in
             roleDetailBox(guide)
-        }
-        // الرأس الملوّن الموحّد — «إضافة» (كانت في شريط النظام) زرّ الرأس، للمالك فقط كما كانت
-        .dsSubPageHeader(L10n.t("فريق الإدارة", "Admin Team"),
-                         subtitle: isOwner
-                            ? L10n.t("اضغط على أي عضو لتغيير دوره", "Tap a member to change their role")
-                            : L10n.t("تتصفّح للقراءة — تغيير الأدوار للمالك", "Read-only — the owner assigns roles")) {
-            if isOwner {
-                DSHeaderButton(symbol: "plus", label: L10n.t("إضافة", "Add")) { showAddSheet = true }
-            }
         }
         .dsTallBox(isPresented: $showAddSheet, onDismiss: {   // قائمة أعضاء طويلة (توصية أبل)
             Task { await memberVM.fetchAllMembers(force: true) }
@@ -141,10 +116,6 @@ struct AdminModeratorsView: View {
         .task { usageStats = await AppUsageStats.fetch() }
         .onAppear {
             Task { await loadTeam() }
-            // «تقليل الحركة»: تلاشٍ هادئ فقط
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : DS.Anim.smooth.delay(0.15)) {
-                appeared = true
-            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -169,62 +140,69 @@ struct AdminModeratorsView: View {
         team.isEmpty && hasLoaded && !isFetching && memberVM.membersLoadFailed
     }
 
-    // MARK: - محتوى القائمة
-
-    @ViewBuilder
-    private func teamContent(_ team: [FamilyMember]) -> some View {
-        if isInitialLoading(team) {
-            DSPageLoader(L10n.t("جارٍ تحميل فريق الإدارة…", "Loading the admin team…"), fillsSpace: false)
-                .dsStaggerIn(1)
-                .teamListRow(top: DS.Spacing.md, bottom: DS.Spacing.xxxl)
-        } else if loadFailed(team) {
-            DSStateCard(icon: "wifi.exclamationmark",
-                         title: L10n.t("تعذّر تحميل فريق الإدارة", "Couldn't load the admin team"),
-                         hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                         tint: DS.Color.error,
-                         actionTitle: L10n.t("إعادة المحاولة", "Retry"),
-                         action: { Task { await loadTeam() } })
-                .dsStaggerIn(1)
-                .teamListRow(top: DS.Spacing.md, bottom: DS.Spacing.xxxl)
-        } else if team.isEmpty {
-            emptyState
-                .dsStaggerIn(1)
-                .teamListRow(top: DS.Spacing.md, bottom: DS.Spacing.xxxl)
-        } else {
-            let groups = roleGroups(team)
-            ForEach(Array(groups.enumerated()), id: \.element.id) { offset, group in
-                // رقم أول صف في البطاقة — الصفوف تتوالى عبر البطاقات بالترتيب الظاهر
-                groupRows(group, index: offset + 1,
-                          firstRow: groups.prefix(offset).reduce(0) { $0 + $1.members.count })
-            }
-
-            // قسم الصلاحيات
-            rolesGuideSection(index: groups.count + 1)
-                .teamListRow(top: cardGap, bottom: DS.Spacing.xxxl)
-        }
-    }
-
-    // MARK: - بطاقة الرأس
+    // MARK: - الرأس الكحلي
 
     /// ٣ أرقام حيّة من الأعضاء المحمّلين أصلاً (بلا طلبات جديدة للسيرفر): عدد كل دور —
-    /// المالك ضمن «المدراء» كما في بطاقتهم. «—» قبل اكتمال أول تحميل.
-    private func hero(_ team: [FamilyMember]) -> some View {
+    /// المالك ضمن «المدراء» كما في بطاقتهم. «—» قبل اكتمال أول تحميل. «إضافة» للمالك فقط كما كانت.
+    private func header(_ team: [FamilyMember]) -> AdminPageHeader {
         let pending = isInitialLoading(team) || loadFailed(team)
         func value(_ roles: Set<FamilyMember.UserRole>) -> String {
             pending ? "—" : "\(team.filter { roles.contains($0.role) }.count)"
         }
-        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
-        return DSStatsRow([
-            DSHeroStat(value: value([.owner, .admin]),
-                       label: L10n.t("المدراء", "Admins"),
-                       icon: RoleGuide.forRole(.admin)?.icon),
-            DSHeroStat(value: value([.monitor]),
-                       label: L10n.t("المراقبين", "Monitors"),
-                       icon: RoleGuide.forRole(.monitor)?.icon),
-            DSHeroStat(value: value([.supervisor]),
-                       label: L10n.t("المشرفين", "Supervisors"),
-                       icon: RoleGuide.forRole(.supervisor)?.icon)
-        ], tint: pageTint)
+        return AdminPageHeader(
+            title: L10n.t("فريق الإدارة", "Admin Team"),
+            subtitle: isOwner
+                ? L10n.t("اضغط على أي عضو لتغيير دوره", "Tap a member to change their role")
+                : L10n.t("تغيير الأدوار للمالك", "The owner assigns roles"),
+            glyph: "person.3.fill",
+            readOnly: !isOwner,
+            kpis: [
+                AdminPageKPI(value([.owner, .admin]), L10n.t("المدراء", "Admins"),
+                             icon: RoleGuide.forRole(.admin)?.icon ?? "person.fill"),
+                AdminPageKPI(value([.monitor]), L10n.t("المراقبين", "Monitors"),
+                             icon: RoleGuide.forRole(.monitor)?.icon ?? "person.fill", tint: DS.Hub.kpiMine),
+                AdminPageKPI(value([.supervisor]), L10n.t("المشرفين", "Supervisors"),
+                             icon: RoleGuide.forRole(.supervisor)?.icon ?? "person.fill", tint: DS.Hub.kpiMine)
+            ],
+            actions: isOwner ? [AdminPageAction(symbol: "plus", label: L10n.t("إضافة", "Add"),
+                                                tap: .action { showAddSheet = true })] : [])
+    }
+
+    // MARK: - محتوى القائمة
+
+    /// أول بطاقة (تصعد فوق الرأس): التحميل، أو تعذّره، أو «لا يوجد أعضاء» — والفريق المحمّل بلا بطاقة فوق الرأس
+    private func leadCard(_ team: [FamilyMember]) -> AnyView? {
+        if isInitialLoading(team) {
+            return AnyView(AdminPageStateCard(.loading(L10n.t("جارٍ تحميل فريق الإدارة…", "Loading the admin team…"))))
+        }
+        if loadFailed(team) {
+            return AnyView(AdminPageStateCard(.error(L10n.t("تعذّر تحميل فريق الإدارة", "Couldn't load the admin team"),
+                                                     message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى",
+                                                                     "Check your connection and try again"),
+                                                     retry: { Task { await loadTeam() } })))
+        }
+        if team.isEmpty {
+            return AnyView(emptyState
+                .padding(.vertical, DS.Spacing.sm)
+                .frame(maxWidth: .infinity)
+                .adminCard())
+        }
+        return nil
+    }
+
+    @ViewBuilder
+    private func teamContent(_ team: [FamilyMember]) -> some View {
+        if !team.isEmpty {
+            let groups = roleGroups(team)
+            ForEach(Array(groups.enumerated()), id: \.element.id) { offset, group in
+                // رقم أول صف في البطاقة — الصفوف تتوالى عبر البطاقات بالترتيب الظاهر
+                groupRows(group, firstRow: groups.prefix(offset).reduce(0) { $0 + $1.members.count })
+            }
+
+            // قسم الصلاحيات
+            rolesGuideSection
+                .adminPageRow(top: DS.Hub.stackSpacing, bottom: DS.Spacing.xs)
+        }
     }
 
     // MARK: - بطاقات الأدوار
@@ -259,43 +237,20 @@ struct AdminModeratorsView: View {
         .filter { !$0.members.isEmpty }
     }
 
-    /// بطاقة دور واحدة كصفوف في القائمة: رأس البطاقة ثم أعضاؤها — كل صف يرسم جزءه من البطاقة
-    /// (أعلى / وسط / أسفل) حتى يبقى السحب على صف العضو نفسه كما كان
+    /// دور واحد: عنوانه بعدده ثم أعضاؤه — كل عضو بطاقة بيضاء (السحب على صفّه نفسه كما كان)
     @ViewBuilder
-    private func groupRows(_ group: RoleGroup, index: Int, firstRow: Int) -> some View {
-        DSSectionTitle(title: group.title,
-                        icon: group.icon,
-                        tint: group.tint,
-                        trailing: membersCountText(group.members.count))
-            .dsStaggerIn(index)
+    private func groupRows(_ group: RoleGroup, firstRow: Int) -> some View {
+        AdminSectionLabel(title: group.title, trailing: membersCountText(group.members.count))
             // العنوان يظهر مع الصفوف (بعد التحميل) — فتبدأ الصفوف بعده
             .onAppear(perform: startRowsCascade)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: cardGap + DS.Spacing.md, leading: cardInset,
-                                      bottom: rowHalfGap, trailing: cardInset))
-            .listRowBackground(cardSegment(.top, index: index))
+            .adminPageRow(top: DS.Hub.stackSpacing, bottom: 0)
 
         ForEach(Array(group.members.enumerated()), id: \.element.id) { i, member in
-            let isLast = member.id == group.members.last?.id
             moderatorRow(member: member)
-                // نمط الأخبار والديوانيات: أول ٧ صفوف تصعد تباعاً (عبر البطاقات)، والباقي مع السابع
+                // نمط الأخبار والديوانيات: أول ٧ صفوف تصعد تباعاً (عبر الأدوار)، والباقي مع السابع
                 .dsCardCascade(firstRow + i, appeared: rowsAppeared)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: rowHalfGap, leading: cardInset,
-                                          bottom: isLast ? DS.Spacing.md : rowHalfGap, trailing: cardInset))
-                .listRowBackground(cardSegment(isLast ? .bottom : .middle, index: index))
+                .adminPageRow()
         }
-    }
-
-    /// جزء البطاقة خلف الصف — يظهر مع محتواه بتلاشٍ فقط (مناسب لـ«تقليل الحركة» أيضاً)
-    private func cardSegment(_ part: TeamCardSegment.Part, index: Int) -> some View {
-        TeamCardSegment(part: part)
-            .padding(.top, part == .top ? cardGap : 0)
-            .padding(.horizontal, DS.Spacing.lg)
-            .opacity(appeared ? 1 : 0)
-            .animation(reduceMotion ? .easeInOut(duration: 0.2)
-                                    : .easeOut(duration: 0.35).delay(0.1 + Double(index) * 0.06),
-                       value: appeared)
     }
 
     private func membersCountText(_ n: Int) -> String {
@@ -314,8 +269,8 @@ struct AdminModeratorsView: View {
 
     // MARK: - Moderator Row
 
-    /// صف المسؤول بإطار صفوف المربّعات: الصورة (بلون دوره) + الاسم (Plex 13.5 عريض) + مجال الدور
-    /// (Plex 12) + الرقم من اليسار، وشارة الدور (و«أنت») في الطرف، وسهم لمن يقدر المالك تغيير دوره
+    /// بطاقة المسؤول: الصورة (بلون دوره) + الاسم + مجال الدور + الرقم من اليسار، وشارة الدور (و«أنت») في الطرف،
+    /// وسهم لمن يقدر المالك تغيير دوره
     private func moderatorRow(member: FamilyMember) -> some View {
         // المالك يظهر بنفس اسم المدير ولونه ومجاله — لا يتميّز عنه بصرياً (كما كان)
         let shownRole: FamilyMember.UserRole = member.role == .owner ? .admin : member.role
@@ -323,21 +278,21 @@ struct AdminModeratorsView: View {
         let isSelf = member.id == authVM.currentUser?.id
         let canChange = isOwner && !isSelf && member.role != .owner
 
-        return HStack(spacing: DS.Spacing.sm) {
+        return HStack(spacing: DS.Spacing.md) {
             DSMemberAvatar(name: member.firstName, avatarUrl: member.avatarUrl, size: DS.Icon.avatar, roleColor: roleColor)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 // الاسم والمجال يلتفّان والصفّ يطول مع «حجم النص» في الجهاز (كانا يُقصّان «…» بالخط الكبير)
                 Text(member.displayFullName)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let scope = RoleGuide.forRole(shownRole)?.mandate {
                     Text(scope)
-                        .dsFieldFont(.subtitle)
-                        .foregroundColor(DS.Color.fieldValue)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -368,7 +323,10 @@ struct AdminModeratorsView: View {
                 DSChevron()
             }
         }
-        .dsRowBox()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, DS.Hub.cardPadding)
+        .padding(.vertical, DS.Spacing.md)
+        .adminCard(padding: nil)
         .contentShape(Rectangle())
         .onTapGesture {
             // تغيير الدور: اختيار مجال من ورقة واحدة — بدل ترقية/تنزيل بالسحب
@@ -419,11 +377,8 @@ struct AdminModeratorsView: View {
     // بدل جدول ✓/✕ طويل: لكل دور صف فيه رمزه ولونه ومجاله وعدد من يحملونه، والضغط يفتح
     // «يقدر» و«ما يقدر» بكلام واضح — ليعرف المالك ما الذي يمنحه بالضبط.
 
-    private func rolesGuideSection(index: Int) -> some View {
-        DSComposerSection(title: L10n.t("الأدوار وما يقدر عليه كل دور", "Roles and what each can do"),
-                          icon: "person.badge.key.fill",
-                          tint: pageTint,
-                          index: index) {
+    private var rolesGuideSection: some View {
+        AdminSectionCard(title: L10n.t("الأدوار وما يقدر عليه كل دور", "Roles and what each can do")) {
             // ١) خريطة المجالات
             HStack(spacing: DS.Spacing.xs) {
                 ForEach(Array(RoleDomain.all.enumerated()), id: \.offset) { _, domain in
@@ -432,7 +387,7 @@ struct AdminModeratorsView: View {
             }
 
             // ٢) صف لكل دور — الضغط يفتح تفاصيله
-            VStack(spacing: DS.Spacing.xsm) {
+            AdminRowsCardBody {
                 ForEach(Array(RoleGuide.all.enumerated()), id: \.offset) { _, guide in
                     Button { selectedRoleGuide = guide } label: {
                         roleCompactRow(guide)
@@ -471,17 +426,16 @@ struct AdminModeratorsView: View {
     /// صف الدور بإطار صفوف المربّعات: رمزه بلونه + اسمه + مجاله + عدد من يحملونه + سهم
     private func roleCompactRow(_ guide: RoleGuide) -> some View {
         let count = holdersCount(for: guide.title)
-        return HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: guide.icon, tint: guide.color)
-                .accessibilityHidden(true)
+        return HStack(spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: guide.icon, tint: guide.color)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(guide.title)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                 Text(guide.mandate)
-                    .dsFieldFont(.subtitle)
-                    .foregroundColor(DS.Color.fieldValue)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 // العضو: عدد الأحياء في الشجرة لا يعني أنهم يستخدمون التطبيق
                 if guide.title == L10n.t("العضو", "Member"), let usage = usageStats {
@@ -495,13 +449,14 @@ struct AdminModeratorsView: View {
             Spacer(minLength: 0)
 
             if let count, count > 0 {
-                DSStatusChip(text: "\(count)", tint: guide.color)
+                AdminValueChip(text: "\(count)", tint: guide.color)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(membersCountText(count))
             }
             DSChevron()
         }
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm + 2)
+        .frame(minHeight: DS.Icon.tapTarget)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -569,44 +524,6 @@ struct AdminModeratorsView: View {
                     actionTitle: isOwner ? L10n.t("إضافة", "Add") : nil,
                     actionIcon: "plus",
                     style: .compact, action: isOwner ? { showAddSheet = true } : nil)
-    }
-}
-
-// MARK: - بطاقة الدور مقطّعة على صفوف القائمة (خاصة بهذا الملف)
-
-/// نفس البطاقة الواحدة (`DS.Card`: سطح + حافة خفيفة + زواياها) لكن مقسومة على صفوف `List`:
-/// كل صف يرسم جزءه — الأعلى بزاويتيه، الأوسط بحافتيه، الأسفل بزاويتيه — وما ليس له يُقصّ.
-/// بهذا يبقى السحب («إزالة») على صف العضو نفسه كما كان، والبطاقة تبدو قطعة واحدة.
-private struct TeamCardSegment: View {
-    enum Part { case top, middle, bottom }
-    let part: Part
-
-    var body: some View {
-        GeometryReader { geo in
-            let overflow = DS.Card.radius * 2
-            let above: CGFloat = part == .top ? 0 : overflow
-            let below: CGFloat = part == .bottom ? 0 : overflow
-            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
-                .fill(DS.Color.surface)
-                .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke), lineWidth: DS.Card.strokeWidth))
-                .frame(width: geo.size.width, height: geo.size.height + above + below)
-                .offset(y: -above)
-        }
-        .clipped()
-        .accessibilityHidden(true)
-    }
-}
-
-// MARK: - صف القائمة الشفاف (نمط صفحات الإدارة)
-
-private extension View {
-    /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
-    func teamListRow(top: CGFloat = DS.Spacing.xs, bottom: CGFloat = DS.Spacing.xs) -> some View {
-        self
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: top, leading: DS.Spacing.lg, bottom: bottom, trailing: DS.Spacing.lg))
     }
 }
 

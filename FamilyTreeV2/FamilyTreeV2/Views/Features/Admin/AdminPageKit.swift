@@ -19,6 +19,8 @@ import SwiftUI
 //   • (المرحلة ٢أ) بطاقة تُطوى `AdminSectionCard(…, isOpen: $open)`، صفّ معلومة بلا ضغطة `AdminInfoRow(…, trailing:)` مع
 //     رقمه `AdminRowValue`، وقائمة طويلة كسولة بفواصل `AdminLazyRows(items:) { AnyView(row($0)) }`. صناديق `.dsRowBox()`
 //     لا توضع داخل البطاقة البيضاء — الصفوف تُفصل بخط. مربّعات الكتابة (`DSComposerSection`) تبقى كما هي تحت الرأس.
+//   • (المرحلة ٢ب) صفّ إعداد بأداة تحكّم (مفتاح، عدّاد، شريحة «حفظ») `AdminControlRow(…, control: AnyView(Toggle…))` —
+//     الأداة تبقى عنصراً مستقلاً للقارئ الصوتي. صفحات الإعدادات: المالك يعدّل، والمدير `readOnly: true` والبطاقات `.disabled`.
 //   • الضغطة `AdminPageTap`: `.action { }` أو `.page { AnyView(صفحة) }` — الصفحة المدفوعة تعرف عنوان هذه الصفحة.
 //   • «رجوع + اسم القسم»: من يفتح الصفحة يسمّيه بـ `.adminBackTitle(_:)` (الضغطات `AdminPageTap` تفعل ذلك تلقائياً)،
 //     وإلا «رجوع». صفوف الأقسام (`AdminToolRow` في AdminAreaPages) تحتاج سطراً واحداً: `.adminBackTitle(tool.area.title)`.
@@ -191,6 +193,9 @@ struct AdminPageBand: View {
     let backTitle: String
     /// تصعد بطاقة فوقه — حشوة سفلية أكبر
     var overlapped: Bool = false
+    /// الرجوع من خارج الرأس — صفحة `.list` ترسم الرأس داخل خلية `List`، و`dismiss` من داخل الخلية لا يرجع
+    /// (لا يُخرج الصفحة من المكدس)، فتمرّر الصفحة رجوعها هي
+    var onBack: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dsLandscape) private var landscape
 
@@ -227,7 +232,9 @@ struct AdminPageBand: View {
     private var topRow: AnyView {
         AnyView(HStack(spacing: DS.Spacing.sm) {
             if header.showsBack {
-                AdminPageBackButton(title: backTitle) { dismiss() }
+                AdminPageBackButton(title: backTitle) {
+                    if let onBack { onBack() } else { dismiss() }
+                }
             }
             Spacer(minLength: DS.Spacing.sm)
             ForEach(header.actions) { action in
@@ -330,6 +337,8 @@ struct AdminPage: View {
     let content: AnyView
     @Environment(\.adminBackTitle) private var outerBack
     @Environment(\.dsLandscape) private var landscape
+    /// رجوع الصفحة نفسها (خارج `List`) — يُمرَّر للرأس
+    @Environment(\.dismiss) private var dismiss
     /// صفحة مدفوعة من صفحة `.list` (عبر `AdminPagePusher`)
     @State private var pushed: AdminPushedPage?
     @State private var isPushed = false
@@ -375,7 +384,9 @@ struct AdminPage: View {
     }
 
     private var band: AnyView {
-        AnyView(AdminPageBand(header: header, backTitle: resolvedBack, overlapped: lead != nil))
+        let dismiss = dismiss
+        return AnyView(AdminPageBand(header: header, backTitle: resolvedBack, overlapped: lead != nil,
+                                     onBack: { dismiss() }))
     }
 
     /// المحتوى يعرف عنوان هذه الصفحة (لـ«رجوع» ما يُدفع منه)
@@ -554,6 +565,39 @@ struct AdminInfoRow: View {
         AdminListRow(icon: icon, tint: tint, title: title, subtitle: subtitle, showsChevron: false) {
             trailing ?? AnyView(EmptyView())
         }
+    }
+}
+
+/// صفّ إعداد في بطاقة: مربّع أيقونة + عنوان + وصف + أداة تحكّم (مفتاح، عدّاد…) — مثل `AdminInfoRow` لكن الأداة
+/// لا تُدمج مع النص للقارئ الصوتي (يبقى العدّاد قابلاً للزيادة والنقص، والمفتاح بتسميته)
+struct AdminControlRow: View {
+    let icon: String
+    var tint: Color = DS.Color.primary
+    let title: String
+    var subtitle: String? = nil
+    let control: AnyView
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: icon, tint: tint)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(title)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: DS.Spacing.xs)
+            control
+        }
+        .padding(.vertical, DS.Spacing.sm + 2)
+        .frame(minHeight: DS.Icon.tapTarget)
     }
 }
 
