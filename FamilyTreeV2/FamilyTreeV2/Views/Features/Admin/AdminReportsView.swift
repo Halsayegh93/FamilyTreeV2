@@ -1,15 +1,23 @@
 import SwiftUI
 import UIKit
+import PDFKit
 
-// MARK: - مركز التقارير (تصميم صفحات الإدارة الموحّد — طلب المالك ٢٠٢٦-٠٩-٢٧)
+// MARK: - تقارير العائلة (PDF) — «رسمي بهوية العائلة» (طلب المالك ٢٠٢٦-١٠-٢٠)
 //
-// من الأعلى: بطاقة رأس بلون بلاطة «تقارير PDF» في لوحة الإدارة وأرقامها الحيّة ← «النطاق» (بلا بحث منذ الدفعة ج)
-// وفلاتر الحالة بعددها (+ نطاق العمر عند اختيار حقل «العمر») ← «معلومات التقرير» (العنوان والفرع)
-// ← «الحقول» ← «نتائج التقرير» (تحديد الأعضاء) ← شريط سفلي ثابت: النطاق + «إنشاء تقرير PDF» بالكحلي.
-// كل الحسابات والتصفية والتحديد وإنشاء الـ PDF ومشاركته (`ActivityView`) كما كانت تماماً.
-// (اختيار «نوع التقرير» لم يكن معروضاً في الصفحة، فالتقرير يبقى «الأسماء» كما كان.)
-// بشكل «اليوم» (٢٠٢٦-١٠-٢٠، `AdminPageKit`): الأرقام وشرائح الحالة في الرأس الكحلي، والأقسام بطاقات بيضاء،
-// والتحديد علامة ✓ في طرف كل صفّ (الصفوف مفصولة بخط).
+// بيتها الواحد «العائلة ← ⋯ ← تصدير» (والصفّ نفسه في البحث الشامل) — للمالك والمدير (`isAdmin`) كما كان التصدير.
+// من الأعلى: رأس كحلي ← بطاقة «التقرير»: صفّ واحد من أربع «صفحات» صغيرة (طلب المالك «ابسط و اصغر و شي مبدع»:
+// ورقة بطرف مطويّ وشريط كحلي بسدو ذهبي ورمز النوع، وتحتها اسم قصير — العنوان الكامل في سطر المعاينة؛ بلا تبويبات علوية)
+// وتحتها سطر شرائح واحد قصير يخص النوع
+// («نطوّر فلاتر التقارير بشكل مبسط»): سجل العائلة «كل الفروع ⌄» + «كل الأعمار ⌄» (قائمة الفئات — «اذا بس بالاعمار؟»)
+// + الكل · أحياء · متوفون — الهواتف الكل · مسجّلون · بلا رقم هاتف — المتوفون الكل · التاريخ غير مكتمل — الملخّص بلا
+// تصفية. الافتراضي تقرير مفيد بلا أي ضغطة.
+// ← «المعاينة»: سطر النطاق («سجل العائلة · كل الفروع · أحياء — 2,344 فرداً») وصورة الغلاف وحدها بشارة «14 صفحة»
+// (الضغط يفتح الملف كاملاً — طلب المالك «خل بس وحدة وانا ادش عليها») ← زرّ «مشاركة / حفظ» عائم مثبّت فوق شريط
+// التبويبات (ورقة المشاركة) — بلا شريط زجاجي عريض ولا عدد صفحات بجانبه.
+// الملف يُنشأ تلقائياً عند تغيّر النوع أو التصفية (بعد مهلة قصيرة، والإنشاء السابق يُلغى) خارج الخيط الرئيسي —
+// البناء والرسم في `AdminReportsModel.swift` / `AdminReportsPDF.swift`.
+// «⋯ ← تصدير» من صفحة الأعضاء بالشريحة والبحث الحاليين = سجل العائلة بنفس الأعضاء (شريحة تُزال بـ ✕).
+
 /// ما يُصدَّر من صفحة الأعضاء: أعضاء الشريحة المختارة (والبحث) وعنوانها — «⋯ ← تصدير» بالفلتر الحالي
 struct AdminReportScope {
     let ids: Set<UUID>
@@ -18,445 +26,398 @@ struct AdminReportScope {
 
 struct AdminReportsView: View {
     @EnvironmentObject private var memberVM: MemberViewModel
-    /// nil = كل أعضاء العائلة (البحث الشامل)، وإلا ما صُدّر من صفحة الأعضاء
+    @EnvironmentObject private var authVM: AuthViewModel
+    @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
+    @ObservedObject private var accounts = AdminAccountsStore.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// أقلّ عرض لخانة الصفحة — يكبر مع حجم النص حتى يتّسع الاسم تحتها
+    @ScaledMetric(relativeTo: .footnote) private var tileWidth: CGFloat = AdminReportsLayout.tileWidth
+
+    /// nil = كل العائلة، وإلا ما صُدّر من صفحة الأعضاء
     private let scope: AdminReportScope?
 
-    init(scope: AdminReportScope? = nil) {
-        self.scope = scope
-    }
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    enum ReportType: String, CaseIterable {
-        case family
-        case age
-        case phone
-        case missingPhone
-
-        var label: String {
-            switch self {
-            case .family: return "الأسماء"
-            case .age: return "الأعمار"
-            case .phone: return "الهواتف"
-            case .missingPhone: return "بدون هاتف"
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .family: return "person.text.rectangle.fill"
-            case .age: return "calendar"
-            case .phone: return "phone.fill"
-            case .missingPhone: return "phone.down.fill"
-            }
-        }
-
-        var tint: Color {
-            switch self {
-            case .family: return DS.Color.accent
-            case .age: return DS.Color.secondary
-            case .phone: return AppSection.admin.ink
-            case .missingPhone: return DS.Color.sea
-            }
-        }
-
-        var exportBaseName: String {
-            switch self {
-            case .family: return "family_report"
-            case .age: return "age_report"
-            case .phone: return "phone_report"
-            case .missingPhone: return "missing_phone_report"
-            }
-        }
-    }
-
-    enum StatusFilter: CaseIterable {
-        case all
-        case alive
-        case deceased
-        case withPhone
-        case withoutPhone
-
-        var label: String {
-            switch self {
-            case .all: return L10n.t("الكل", "All")
-            case .alive: return L10n.t("أحياء", "Alive")
-            case .deceased: return L10n.t("متوفون", "Deceased")
-            case .withPhone: return L10n.t("بهاتف", "With phone")
-            case .withoutPhone: return L10n.t("بلا رقم هاتف", "No phone")
-            }
-        }
-
-        /// أيقونة الخيار في شريط فلاتر الحالة
-        var icon: String {
-            switch self {
-            case .all: return "person.3.fill"
-            case .alive: return "heart.fill"
-            case .deceased: return "leaf.fill"
-            case .withPhone: return "phone.fill"
-            case .withoutPhone: return "phone.down.fill"
-            }
-        }
-    }
-
-    /// الحقول الديناميكية المتاحة للتقرير
-    enum ReportField: String, CaseIterable, Identifiable {
-        case fullName, firstName, phone, age, birthDate, deathDate, role, status, gender, married
-
-        var id: String { rawValue }
-
-        var label: String {
-            switch self {
-            case .fullName: return "الاسم الكامل"
-            case .firstName: return "الاسم الأول"
-            case .phone: return "رقم الهاتف"
-            case .age: return "العمر"
-            case .birthDate: return "تاريخ الميلاد"
-            case .deathDate: return "تاريخ الوفاة"
-            case .role: return "الدور"
-            case .status: return "الحالة"
-            case .gender: return "الجنس"
-            case .married: return "متزوج"
-            }
-        }
-
-        /// عنوان الحقل في الواجهة — `label` يبقى للـ PDF (عناوين أعمدته عربية دائماً)
-        var title: String {
-            switch self {
-            case .fullName: return L10n.t("الاسم الكامل", "Full name")
-            case .firstName: return L10n.t("الاسم الأول", "First name")
-            case .phone: return L10n.t("رقم الهاتف", "Phone")
-            case .age: return L10n.t("العمر", "Age")
-            case .birthDate: return L10n.t("تاريخ الميلاد", "Birth date")
-            case .deathDate: return L10n.t("تاريخ الوفاة", "Death date")
-            case .role: return L10n.t("الدور", "Role")
-            case .status: return L10n.t("الحالة", "Status")
-            case .gender: return L10n.t("الجنس", "Gender")
-            case .married: return L10n.t("متزوج", "Married")
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .fullName: return "person.fill"
-            case .firstName: return "tag.fill"
-            case .phone: return "phone.fill"
-            case .age: return "calendar"
-            case .birthDate: return "calendar.badge.plus"
-            case .deathDate: return "leaf.fill"
-            case .role: return "star.fill"
-            case .status: return "circle.lefthalf.filled"
-            case .gender: return "person.2.fill"
-            case .married: return "heart.fill"
-            }
-        }
-
-        /// نسبة العرض النسبية في PDF
-        var ratio: CGFloat {
-            switch self {
-            case .fullName: return 0.40
-            case .firstName: return 0.18
-            case .phone: return 0.20
-            case .age: return 0.10
-            case .birthDate: return 0.16
-            case .deathDate: return 0.16
-            case .role: return 0.12
-            case .status: return 0.14
-            case .gender: return 0.10
-            case .married: return 0.10
-            }
-        }
-    }
-
-    @State private var selectedReport: ReportType = .family
-    @State private var minAgeText = ""
-    @State private var maxAgeText = ""
-    @State private var statusFilter: StatusFilter = .all
-    @State private var selectedMemberIds: Set<UUID> = []
-    @State private var displayLimit = 20
-    @State private var isGenerating = false
-    @State private var shareItems: [Any] = []
-    @State private var showShareSheet = false
-    @State private var showErrorAlert = false
-    @State private var errorMessage = ""
-    @State private var branchRootId: UUID? = nil
+    @State private var kind: AdminReportKind = .register
+    @State private var filter: AdminReportFilter
+    @State private var result: AdminReportResult?
+    @State private var generating = false
+    @State private var failed = false
+    @State private var women: [FamilyMember]? = WomenStore.cache.isEmpty ? nil : WomenStore.cache
     @State private var branchPickerOpen = false
-    @State private var customTitle: String = "تقرير عائلة المحمدعلي"
-    @State private var selectedFields: Set<ReportField> = [.fullName, .phone, .age]
+    @State private var showShare = false
+    @State private var shareItems: [Any] = []
+    @State private var viewerURL: AdminReportViewerItem?
 
-    /// لون بلاطة «تقارير PDF» في لوحة الإدارة — رأس الصفحة يطابق البلاطة التي ضُغطت
-    private let pageTint = DS.Color.composerLibrary
-
-    /// حقلا نطاق العمر — الضغط حول الحقل (مساحة ٤٤ نقطة) يفتح الكتابة فيه
-    private enum AgeBound: Hashable { case min, max }
-    @FocusState private var focusedAge: AgeBound?
-
-    private var ageRangeInvalid: Bool {
-        let minVal = Int(minAgeText) ?? 0
-        let maxVal = Int(maxAgeText) ?? 0
-        return minVal > 0 && maxVal > 0 && minVal > maxVal
-    }
-
-    private var activeMembers: [FamilyMember] {
-        memberVM.allMembers.filter {
-            $0.role != .pending &&
-            !$0.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            (scope?.ids.contains($0.id) ?? true)
-        }
-    }
-
-    private var childrenByFather: [UUID: [FamilyMember]] {
-        var map: [UUID: [FamilyMember]] = [:]
-        for m in memberVM.allMembers {
-            if let f = m.fatherId {
-                map[f, default: []].append(m)
-            }
-        }
-        return map
-    }
-
-    private func descendantIds(of rootId: UUID) -> Set<UUID> {
-        var ids: Set<UUID> = [rootId]
-        var stack = [rootId]
-        let kidsMap = childrenByFather
-        while let cur = stack.popLast() {
-            for c in kidsMap[cur] ?? [] {
-                if !ids.contains(c.id) {
-                    ids.insert(c.id)
-                    stack.append(c.id)
-                }
-            }
-        }
-        return ids
-    }
-
-    private var branchRootMember: FamilyMember? {
-        guard let id = branchRootId else { return nil }
-        return memberVM.allMembers.first { $0.id == id }
-    }
-
-    private var filteredMembers: [FamilyMember] {
-        var members = activeMembers
-
-        if let rootId = branchRootId {
-            let ids = descendantIds(of: rootId)
-            members = members.filter { ids.contains($0.id) }
-        }
-
-        switch statusFilter {
-        case .all:
-            break
-        case .alive:
-            members = members.filter { $0.isDeceased != true }
-        case .deceased:
-            members = members.filter { $0.isDeceased == true }
-        case .withPhone:
-            members = members.filter { !normalizedPhone(for: $0).isEmpty && $0.isDeceased != true }
-        case .withoutPhone:
-            members = members.filter { normalizedPhone(for: $0).isEmpty && $0.isDeceased != true }
-        }
-
-        if needsAgeFilter {
-            let minAgeVal = Int(minAgeText) ?? 0
-            let maxAgeVal = Int(maxAgeText) ?? 0
-            if minAgeVal > 0 || maxAgeVal > 0 {
-                members = members.filter { member in
-                    guard let age = ageForMember(member) else { return false }
-                    if minAgeVal > 0 && age < minAgeVal { return false }
-                    if maxAgeVal > 0 && age > maxAgeVal { return false }
-                    return true
-                }
-            }
-        }
-
-        switch selectedReport {
-        case .family:
-            members.sort { $0.fullName < $1.fullName }
-
-        case .age:
-            members = members.filter { member in
-                guard member.isDeceased != true else { return false }
-                guard !normalizedBirth(for: member).isEmpty else { return false }
-                guard let age = ageForMember(member) else { return false }
-                return age > 0
-            }
-            members.sort { (ageForMember($0) ?? 0) > (ageForMember($1) ?? 0) }
-
-        case .phone:
-            members = members.filter { !normalizedPhone(for: $0).isEmpty }
-            members.sort { $0.fullName < $1.fullName }
-
-        case .missingPhone:
-            members = members.filter { normalizedPhone(for: $0).isEmpty }
-            members.sort { $0.fullName < $1.fullName }
-        }
-
-        return members
-    }
-
-    /// أول `displayLimit` من النتائج — `members` هي `filteredMembers` محسوبة مرة واحدة في `body`
-    private func visibleMembers(of members: [FamilyMember]) -> [FamilyMember] {
-        Array(members.prefix(displayLimit))
-    }
-
-    private var activeFilterCount: Int {
-        var count = 0
-        if statusFilter != .all { count += 1 }
-        if needsAgeFilter &&
-            ((Int(minAgeText) ?? 0) > 0 || (Int(maxAgeText) ?? 0) > 0) {
-            count += 1
-        }
-        if branchRootId != nil { count += 1 }
-        return count
-    }
-
-    /// النطاق: المحدّدون من النتائج، أو كل النتائج إن لم يُحدَّد أحد — `members` = `filteredMembers`
-    private func selectedCount(in members: [FamilyMember]) -> Int {
-        selectedMemberIds.isEmpty ? members.count : members.filter { selectedMemberIds.contains($0.id) }.count
-    }
-
-    /// عدد أعضاء التقرير لكل خيار حالة (لشريط الفلاتر) — نفس شروط `filteredMembers` تماماً
-    /// (الفرع، البحث، نطاق العمر ونوع التقرير) بلا فرز، وبمرور واحد على الأعضاء.
-    private func statusCounts() -> [StatusFilter: Int] {
-        var pool = activeMembers
-
-        if let rootId = branchRootId {
-            let ids = descendantIds(of: rootId)
-            pool = pool.filter { ids.contains($0.id) }
-        }
-
-        let minAgeVal = Int(minAgeText) ?? 0
-        let maxAgeVal = Int(maxAgeText) ?? 0
-        let usesAgeRange = needsAgeFilter && (minAgeVal > 0 || maxAgeVal > 0)
-
-        var counts: [StatusFilter: Int] = [:]
-        for member in pool {
-            let noPhone = normalizedPhone(for: member).isEmpty
-            let deceased = member.isDeceased == true
-
-            // نطاق العمر — يطبَّق متى ظهر حقلاه (حقل «العمر» مختار) لا لنوع تقرير مخفي
-            if usesAgeRange {
-                guard let age = ageForMember(member) else { continue }
-                if minAgeVal > 0 && age < minAgeVal { continue }
-                if maxAgeVal > 0 && age > maxAgeVal { continue }
-            }
-
-            // شروط نوع التقرير
-            switch selectedReport {
-            case .family:
-                break
-            case .age:
-                guard !deceased, !normalizedBirth(for: member).isEmpty,
-                      let age = ageForMember(member), age > 0 else { continue }
-            case .phone:
-                if noPhone { continue }
-            case .missingPhone:
-                if !noPhone { continue }
-            }
-
-            counts[.all, default: 0] += 1
-            if deceased {
-                counts[.deceased, default: 0] += 1
-            } else {
-                counts[.alive, default: 0] += 1
-                counts[noPhone ? .withoutPhone : .withPhone, default: 0] += 1
-            }
-        }
-        return counts
+    /// `kind`: التقرير المفتوح أولاً (الافتراضي سجل العائلة)
+    init(scope: AdminReportScope? = nil, kind: AdminReportKind = .register) {
+        self.scope = scope
+        _kind = State(initialValue: scope == nil ? kind : .register)
+        var f = AdminReportFilter()
+        if let scope { f.scope = .init(ids: scope.ids, title: scope.title) }
+        _filter = State(initialValue: f)
     }
 
     // MARK: - Body
 
     var body: some View {
-        // نتائج التقرير تُحسب مرة واحدة لكل رسم (كانت تُعاد مع كل استخدام) — نفس `filteredMembers`
-        let members = filteredMembers
         let loaded = !memberVM.allMembers.isEmpty
-
-        // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام وشرائح الحالة ← «تصفية»
-        // تصعد فوقه ← معلومات التقرير ← الحقول ← النتائج (عمودان أفقياً) ← شريط التصدير مثبّت في الأسفل
-        return AdminPage(header: header(members: members, loaded: loaded),
-                         lead: AnyView(loaded ? AnyView(filtersCard) : AnyView(membersStateCard)),
-                         content: AnyView(pageContent(members: members, loaded: loaded)
-                            // ⚠️ مهم: نعلّق مربّع الفرع على المحتوى الداخلي عشان لا يتزاحم
-                            // مع sheet المشاركة المعلّق على الصفحة. SwiftUI لا يدعم
-                            // sheet متعدد على نفس الـView — يتم تجاهل الـsheet الثاني.
-                            .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
-                                BranchPickerSheet(
-                                    allMembers: memberVM.allMembers,
-                                    selectedId: branchRootId,
-                                    onSelect: { id in
-                                        branchRootId = id
-                                        branchPickerOpen = false
-                                        displayLimit = 20
-                                    }
-                                )
-                            }))
-        // التصدير مثبّت أسفل الصفحة (مثل شريط أزرار المربّعات) — النطاق يتحدّث مع التصفية والتحديد
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if loaded {
-                exportBar(members: members)
+        let allowed = authVM.isAdmin
+        return AdminPage(header: header,
+                         lead: AnyView(!allowed ? AnyView(notAllowedCard)
+                                       : loaded ? AnyView(pickerCard) : AnyView(membersStateCard)),
+                         content: AnyView(allowed && loaded ? AnyView(previewCard) : AnyView(Color.clear.frame(height: 0))))
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if allowed && loaded { shareBar }
             }
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task {
-            if memberVM.allMembers.isEmpty {
-                await memberVM.fetchAllMembers()
+            .task(id: genKey) { await regenerate() }
+            .task {
+                if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
+                await accounts.refresh()
+                if women == nil, let fetched = try? await WomenStore.fetch() { women = fetched }
             }
-        }
-        .sheet(isPresented: $showShareSheet, onDismiss: { cleanupShareState() }) {
-            ActivityView(items: shareItems) {
-                cleanupShareState()
+            .sheet(isPresented: $showShare, onDismiss: { shareItems.removeAll() }) {
+                AdminReportShareSheet(items: shareItems) { showShare = false }
             }
-        }
-        .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
-            Button(L10n.t("موافق", "OK"), role: .cancel) {}
-        } message: {
-            Text(errorMessage)
-        }
     }
 
-    // MARK: - هيكل الصفحة
-
-    @ViewBuilder
-    private func pageContent(members: [FamilyMember], loaded: Bool) -> some View {
-        if loaded {
-            // الوضع الأفقي: الأقسام على عمودين
-            AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
-                AnyView(infoSection)
-                AnyView(fieldsSection)
-                if members.isEmpty {
-                    AnyView(noResultsCard)
-                } else {
-                    AnyView(resultsSection(members: members))
-                }
-            }
-        } else {
-            Color.clear.frame(height: 0)
-        }
-    }
-
-    // MARK: - الرأس الكحلي
-
-    /// ٣ أرقام حيّة من بيانات الصفحة نفسها (بلا طلبات جديدة): الأعضاء المتاحون للتقارير، ومن سيدخل
-    /// الملف الآن (النطاق)، وعدد الحقول المختارة — «—» قبل تحميل الأعضاء. وشرائح الحالة بعددها.
-    private func header(members: [FamilyMember], loaded: Bool) -> AdminPageHeader {
+    private var header: AdminPageHeader {
         AdminPageHeader(
             title: L10n.t("تصدير قائمة الأعضاء (PDF)", "Export member list (PDF)"),
-            subtitle: L10n.t("اختر الحقول (والأعضاء إن شئت)، ثم صدّر ملف PDF للطباعة أو المشاركة",
-                             "Pick fields (and members if you like), then export a PDF to print or share"),
-            glyph: "doc.text.fill",
-            kpis: [
-                AdminPageKPI(loaded ? "\(activeMembers.count)" : "—", L10n.t("الأعضاء", "Members"),
-                             icon: "person.3.fill"),
-                AdminPageKPI(loaded ? "\(selectedCount(in: members))" : "—", L10n.t("في التقرير", "In report"),
-                             icon: "doc.richtext.fill", tint: DS.Hub.kpiMine),
-                AdminPageKPI("\(selectedFields.count)", L10n.t("الحقول", "Fields"), icon: "list.bullet.rectangle.fill")
-            ],
-            chips: loaded ? statusChips : [])
+            subtitle: L10n.t("أربعة تقارير رسمية بهوية العائلة — اختر التقرير ثم شاركه أو احفظه",
+                             "Four official family reports — pick one, then share or save it"),
+            glyph: "doc.text.fill")
     }
 
-    // MARK: - حالة الأعضاء (قبل التحميل)
+    // MARK: - إنشاء الملف
 
-    /// لا أعضاء محمّلين بعد: فشل التحميل (مع إعادة نفس الجلب) · جارٍ التحميل
+    /// ما يُعاد الإنشاء عند تغيّره: النوع والتصفية والبيانات (الأعضاء، الحسابات، شجرة النساء، أسماء الفروع)
+    private struct GenKey: Equatable {
+        let kind: AdminReportKind
+        let filter: AdminReportFilter
+        let members: Int
+        let version: Int
+        let accounts: Int
+        let accountsLoaded: Bool
+        let women: Int?
+        let names: [String: String]?
+        let allowed: Bool
+    }
+
+    private var genKey: GenKey {
+        GenKey(kind: kind, filter: filter, members: memberVM.allMembers.count, version: memberVM.membersVersion,
+               accounts: accounts.accounts.count, accountsLoaded: accounts.loaded, women: women?.count,
+               names: appSettingsVM.settings.branchNames, allowed: authVM.isAdmin)
+    }
+
+    private func regenerate() async {
+        guard authVM.isAdmin, !memberVM.allMembers.isEmpty else { return }
+        // مهلة قصيرة: ضغطات متتالية على الشرائح تُنشئ ملفاً واحداً
+        if result != nil {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+        }
+        generating = true
+        failed = false
+        let names = appSettingsVM
+        let input = AdminReportInput.make(
+            members: memberVM.allMembers,
+            women: women ?? (WomenStore.cache.isEmpty ? nil : WomenStore.cache),
+            registered: accounts.loaded ? Set(accounts.accounts.keys) : nil,
+            branchName: { names.branchName(for: $0) },
+            generatedBy: authVM.currentUser?.displayFullName ?? "")
+        let jobKind = self.kind
+        var current = self.filter
+        if jobKind != .register { current.scope = nil }
+        let jobFilter = current
+        let flag = AdminReportCancelFlag()
+        let job = Task.detached(priority: .userInitiated) {
+            try? AdminReportJob.run(jobKind, input: input, filter: jobFilter, flag: flag)
+        }
+        let out = await withTaskCancellationHandler { await job.value } onCancel: { flag.cancel() }
+        guard !Task.isCancelled else { return }
+        generating = false
+        if let out {
+            if let old = result?.url, old != out.url { try? FileManager.default.removeItem(at: old) }
+            result = out
+        } else {
+            failed = true
+        }
+    }
+
+    // MARK: - بطاقة «التقرير»: النوع + سطر التصفية
+
+    private var pickerCard: some View {
+        AdminSectionCard(title: L10n.t("التقرير", "Report"), spacing: DS.Spacing.md) {
+            typeRow
+            if kind != .stats {
+                AdminRowDivider()
+                filterRow
+            }
+        }
+        .dsTallBox(isPresented: $branchPickerOpen) {
+            BranchPickerSheet(allMembers: memberVM.allMembers, selectedId: filter.branch, onSelect: { id in
+                filter.branch = id
+                branchPickerOpen = false
+            })
+        }
+    }
+
+    /// صفّ واحد دائماً: يملأ العرض إن اتّسع، وإلا (نص كبير جداً) يُمرَّر أفقياً ويظهر المختار
+    private var typeRow: some View {
+        ViewThatFits(in: .horizontal) {
+            typeTiles(fill: true)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    typeTiles(fill: false)
+                        .padding(.vertical, DS.Spacing.md)
+                        .padding(.horizontal, DS.Spacing.md)
+                }
+                // حشوة التمرير تتّسع لظلّ المختار (ScrollView يقصّ ما خرج عنه) دون أن تكبر المسافات
+                .padding(.vertical, -DS.Spacing.md)
+                .padding(.horizontal, -DS.Spacing.md)
+                .onAppear { proxy.scrollTo(kind, anchor: .center) }
+            }
+        }
+    }
+
+    private func typeTiles(fill: Bool) -> some View {
+        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            ForEach(AdminReportKind.allCases) { k in
+                AdminReportTypeCard(kind: k, selected: k == kind) { select(k) }
+                    .frame(minWidth: tileWidth, maxWidth: fill ? .infinity : nil)
+                    .id(k)
+            }
+        }
+        // مكان لرفعة المختار
+        .padding(.vertical, DS.Spacing.xs)
+    }
+
+    private func select(_ k: AdminReportKind) {
+        guard k != kind else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(reduceMotion ? nil : DS.Anim.snappy) { kind = k }
+    }
+
+    /// سطر واحد قصير يخص النوع — يُمرَّر أفقياً إن ضاق
+    private var filterRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.xsm) {
+                switch kind {
+                case .register: registerChips
+                case .phones:
+                    choice(L10n.t("الكل", "All"), filter.phones == .all) { filter.phones = .all }
+                    choice(L10n.t("مسجّلون", "Registered"), filter.phones == .registered) { filter.phones = .registered }
+                    choice(L10n.t("بلا رقم هاتف", "No phone"), filter.phones == .noPhone) { filter.phones = .noPhone }
+                case .memorial:
+                    choice(L10n.t("الكل", "All"), filter.memorial == .all) { filter.memorial = .all }
+                    choice(L10n.t("التاريخ غير مكتمل", "Incomplete date"), filter.memorial == .incomplete) {
+                        filter.memorial = .incomplete
+                    }
+                case .stats: EmptyView()
+                }
+            }
+            .padding(.vertical, DS.Spacing.xxs)
+        }
+    }
+
+    @ViewBuilder
+    private var registerChips: some View {
+        if let s = filter.scope {
+            // من صفحة الأعضاء — ✕ يرجع لكل العائلة
+            DSChipButton(s.title, icon: "xmark.circle.fill", tint: DS.Color.palm, isSelected: true) {
+                filter.scope = nil
+            }
+            .accessibilityHint(L10n.t("يزيل تصفية صفحة الأعضاء", "Removes the members-page filter"))
+        }
+        DSChipButton(branchChipTitle, icon: "chevron.down", tint: DS.Color.palm, isSelected: filter.branch != nil) {
+            branchPickerOpen = true
+        }
+        if filter.branch != nil {
+            Button {
+                filter.branch = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .dsGlyph(DS.Glyph.lg, weight: .semibold)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, -DS.Spacing.sm)
+            .accessibilityLabel(L10n.t("كل الفروع", "All branches"))
+        }
+        ageChip
+        choice(L10n.t("الكل", "All"), filter.life == .all) { filter.life = .all }
+        choice(L10n.t("أحياء", "Living"), filter.life == .living) { filter.life = .living }
+        choice(L10n.t("متوفون", "Deceased"), filter.life == .deceased) { filter.life = .deceased }
+    }
+
+    /// «كل الأعمار ⌄» — قائمة أصلية بالفئات (والمختارة بعلامة)، بشكل شريحة الفرع نفسه
+    private var ageChip: some View {
+        Menu {
+            Picker(selection: Binding(get: { filter.age }, set: { value in
+                guard value != filter.age else { return }
+                UISelectionFeedbackGenerator().selectionChanged()
+                filter.age = value
+            })) {
+                ForEach(AdminReportFilter.Age.allCases, id: \.self) { age in
+                    Text(Self.ageTitle(age)).tag(age)
+                }
+            } label: { EmptyView() }
+            .pickerStyle(.inline)
+        } label: {
+            AdminReportMenuChip(title: Self.ageTitle(filter.age), tint: DS.Color.palm, selected: filter.age != .all)
+        }
+        .accessibilityLabel(L10n.t("العمر: \(Self.ageTitle(filter.age))", "Age: \(Self.ageTitle(filter.age))"))
+    }
+
+    static func ageTitle(_ age: AdminReportFilter.Age) -> String {
+        switch age {
+        case .all: return L10n.t("كل الأعمار", "All ages")
+        case .under18: return L10n.t("أقل من 18", "Under 18")
+        case .from18to30: return "18–30"
+        case .from31to50: return "31–50"
+        case .from51to70: return "51–70"
+        case .over70: return L10n.t("فوق 70", "Over 70")
+        case .unknown: return L10n.t("غير معروف", "Unknown")
+        }
+    }
+
+    private var branchChipTitle: String {
+        guard let id = filter.branch else { return L10n.t("كل الفروع", "All branches") }
+        if let name = appSettingsVM.branchName(for: id) { return name }
+        let first = memberVM.allMembers.first { $0.id == id }?.firstName ?? ""
+        return L10n.t("فرع \(first)", "\(first) branch")
+    }
+
+    private func choice(_ title: String, _ selected: Bool, _ action: @escaping () -> Void) -> some View {
+        DSChipButton(title, tint: kindTint, isSelected: selected) {
+            guard !selected else { return }
+            UISelectionFeedbackGenerator().selectionChanged()
+            action()
+        }
+    }
+
+    private var kindTint: Color { AdminReportTypeCard.tint(kind) }
+
+    // MARK: - المعاينة
+
+    private var previewCard: some View {
+        AdminSectionCard(title: L10n.t("المعاينة", "Preview"), tag: result == nil ? nil : "PDF · A4") {
+            if let result, result.kind == kind {
+                AnyView(previewBody(result))
+            } else if failed {
+                AnyView(DSEmptyView(L10n.t("تعذّر إنشاء التقرير", "Couldn't create the report"),
+                                    message: L10n.t("حاول مرة أخرى", "Try again"),
+                                    actionTitle: L10n.t("إعادة المحاولة", "Retry"), actionIcon: "arrow.clockwise",
+                                    style: .compact, action: { Task { await regenerate() } }))
+            } else {
+                AnyView(DSPageLoader(L10n.t("جارٍ إعداد التقرير…", "Preparing the report…"),
+                                     size: DS.Icon.loaderArtInline, fillsSpace: false)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.lg))
+            }
+        }
+    }
+
+    private func previewBody(_ r: AdminReportResult) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+                Image(systemName: "doc.richtext.fill")
+                    .dsGlyph(DS.Glyph.md, weight: .semibold)
+                    .foregroundColor(kindTint)
+                    .accessibilityHidden(true)
+                Text(r.summary)
+                    .dsFont(.rowTitle)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .monospacedDigit()
+                Spacer(minLength: 0)
+                if generating {
+                    ProgressView().scaleEffect(DS.Spinner.chipScale)
+                }
+            }
+            .opacity(generating ? 0.55 : 1)
+
+            // صفحة واحدة: الغلاف وعليه عدد الصفحات — الضغط يفتح الملف كاملاً
+            if let cover = r.thumbnails.first {
+                thumbnail(cover, pages: r.pages, url: r.url)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.xs)
+            }
+
+            Text(L10n.t("اضغط على الصفحة لعرض الملف كاملاً", "Tap the page to view the whole file"))
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textTertiary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .sheet(item: $viewerURL) { item in
+            AdminReportViewer(item: item)
+        }
+    }
+
+    private func thumbnail(_ image: UIImage, pages: Int, url: URL) -> some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+        return Button {
+            viewerURL = AdminReportViewerItem(url: url, title: AdminReportTypeCard.title(kind))
+        } label: {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: AdminReportsLayout.thumbWidth)
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
+                // شارة عدد الصفحات في الزاوية العليا عند نهاية سطر القراءة (فوق بياض الغلاف، بعيداً عن الشعار والختم)
+                .overlay(alignment: .topTrailing) {
+                    Text(L10n.t(AdminReportText.pages(pages), pages == 1 ? "1 page" : "\(pages) pages"))
+                        .dsFont(.badge)
+                        .monospacedDigit()
+                        .foregroundColor(.white)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(Capsule().fill(DS.Color.brandFill))
+                        .padding(DS.Spacing.sm)
+                }
+                .dsSubtleShadow()
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityLabel(L10n.t("\(AdminReportText.pages(pages)) — عرض الملف", "\(pages) pages — view file"))
+    }
+
+    // MARK: - المشاركة
+
+    /// زرّ واحد عائم فوق شريط التبويبات وبعرضه تقريباً — بلا شريط زجاجي عريض (كان يبدو شريطاً ثانياً فوق
+    /// شريط التبويبات بفجوة بينهما، وبجانبه «ملف PDF · 4 صفحات» مكرّراً). تدرّج قصير من لون الصفحة خلفه.
+    private var shareBar: some View {
+        DSActionButton(title: L10n.t("مشاركة / حفظ", "Share / Save"),
+                       icon: "square.and.arrow.up",
+                       isBusy: generating && result?.kind != kind,
+                       enabled: result?.kind == kind && !generating) {
+            share()
+        }
+        .dsSubtleShadow()
+        .padding(.horizontal, DS.Spacing.xl)
+        .padding(.top, DS.Spacing.md)
+        .padding(.bottom, DS.Spacing.sm)
+        .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(colors: [DS.Hub.background.opacity(0), DS.Hub.background],
+                           startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45))
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(false)
+        )
+    }
+
+    private func share() {
+        guard let url = result?.url else { return }
+        shareItems = [url]
+        showShare = true
+    }
+
+    // MARK: - الحالات
+
     @ViewBuilder
     private var membersStateCard: some View {
         if memberVM.membersLoadFailed {
@@ -468,1077 +429,315 @@ struct AdminReportsView: View {
         }
     }
 
-    // MARK: - التصفية
-
-    /// النطاق: ما جاء من صفحة الأعضاء (الشريحة المختارة) أو كل العائلة (+ نطاق العمر) — والحالة شرائح في الرأس.
-    /// بلا حقل بحث (الدفعة ج): البحث عن عضو بعينه في صفحة الأعضاء ثم «⋯ ← تصدير»
-    private var filtersCard: some View {
-        AdminSectionCard(title: L10n.t("النطاق", "Scope"),
-                         tag: activeFilterCount > 0
-                            ? L10n.t("\(activeFilterCount) تصفية", "\(activeFilterCount) filters")
-                            : nil) {
-            AdminInfoRow(icon: scope == nil ? "person.3.fill" : "line.3.horizontal.decrease.circle.fill", tint: pageTint,
-                         title: scope?.title ?? L10n.t("كل أعضاء العائلة", "Every family member"),
-                         subtitle: scope == nil
-                            ? L10n.t("لتصدير شريحة: اخترها في صفحة الأعضاء ثم «⋯ ← تصدير»",
-                                     "To export a filter: pick it on the members page, then “⋯ → Export”")
-                            : L10n.t("من صفحة الأعضاء — بالشريحة المختارة", "From the members page — with the chosen filter"),
-                         trailing: AnyView(AdminRowValue(text: "\(activeMembers.count)")))
-
-            if needsAgeFilter {
-                ageRangeRow
-            }
-        }
+    private var notAllowedCard: some View {
+        AdminPageStateCard(.empty(L10n.t("التقارير للمالك والمدير", "Reports are for the owner and admins"),
+                                  message: L10n.t("تحتوي أرقام هواتف وبيانات الأعضاء", "They include members' phones and data")))
     }
+}
 
-    /// فلتر الحالة (كان شريطاً مقسّماً) — العدد = من سيدخل التقرير بهذا الخيار، ويظهر إن كان أكبر من صفر
-    private var statusChips: [AdminPageChip] {
-        let counts = statusCounts()
-        return StatusFilter.allCases.map { status in
-            let n = counts[status] ?? 0
-            return AdminPageChip(id: "\(status)", title: status.label, count: n > 0 ? n : nil, icon: status.icon,
-                                 selected: statusFilter == status) {
-                statusFilter = status
-                displayLimit = 20
-            }
-        }
-    }
+// MARK: - مقاسات الصفحة (مكان واحد)
 
-    /// نطاق العمر (من → إلى) بإطار حقل البحث — يحمرّ مع «غلط» إن كان «من» أكبر من «إلى»
-    private var ageRangeRow: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: "calendar", tint: DS.Color.palm)
-                .accessibilityHidden(true)
-            Text(L10n.t("العمر", "Age"))
-                .dsFieldFont(.rowTitle)
-                .foregroundColor(DS.Color.fieldLabel)
-                .lineLimit(1)
-            Spacer(minLength: DS.Spacing.xs)
-            ageField(.min)
-                .onChange(of: minAgeText) { _ in displayLimit = 20 }
-            Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-                .dsGlyph(DS.Glyph.xs)
-                .foregroundColor(DS.Color.textTertiary)
-                .accessibilityHidden(true)
-            ageField(.max)
-                .onChange(of: maxAgeText) { _ in displayLimit = 20 }
-            if ageRangeInvalid {
-                DSStatusChip(text: L10n.t("غلط", "Invalid"),
-                              icon: "exclamationmark.triangle.fill",
-                              tint: DS.Color.error)
-                    .fixedSize()
-            }
-        }
-        .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
-        .frame(minHeight: DS.Icon.tapTarget + DS.Spacing.sm)
-        .dsFocusFieldBox(focused: false, invalid: ageRangeInvalid, fill: DS.Color.surface)
-    }
+enum AdminReportsLayout {
+    /// عرض صورة الغلاف في المعاينة
+    static let thumbWidth: CGFloat = 150
 
-    private func ageField(_ bound: AgeBound) -> some View {
-        let isMin = bound == .min
-        let focused = focusedAge == bound
-        return TextField(isMin ? L10n.t("من", "From") : L10n.t("إلى", "To"),
-                         text: isMin ? $minAgeText : $maxAgeText)
-            .keyboardType(.numberPad)
-            .multilineTextAlignment(.center)
-            .dsFieldFont(.headlineCompact)
-            .foregroundColor(DS.Color.textPrimary)
-            .monospacedDigit()
-            .focused($focusedAge, equals: bound)
-            .frame(width: DS.Icon.sizeLg, height: DSBox.fieldMinHeight)
-            .dsFocusFieldBox(focused: focused, tint: pageTint, invalid: ageRangeInvalid, radius: DS.Radius.sm)
-            .padding(.vertical, DS.Spacing.xs)   // مساحة ضغط ٤٤ نقطة
-            .contentShape(Rectangle())
-            .onTapGesture { focusedAge = bound }
-            .accessibilityLabel(isMin ? L10n.t("العمر من", "Minimum age") : L10n.t("العمر إلى", "Maximum age"))
-    }
+    // «صفحة» نوع التقرير في الصفّ الواحد
+    /// أقلّ عرض لخانة النوع عند حجم النص الافتراضي (يكبر مع النص)
+    static let tileWidth: CGFloat = 64
+    /// الورقة الصغيرة (قريبة من نسبة A4)
+    static let pageSize = CGSize(width: 54, height: 70)
+    /// زوايا الورقة
+    static let pageRadius: CGFloat = 5
+    /// الطرف المطويّ (أعلى الطرف الآخر من بداية القراءة)
+    static let pageFold: CGFloat = 12
+    /// الشريط الكحلي أعلى الورقة (مثل شريط صفحات الملف)
+    static let pageBand: CGFloat = 13
+    /// رفعة المختار
+    static let liftScale: CGFloat = 1.05
+}
 
-    // MARK: - معلومات التقرير
+// MARK: - شريحة قائمة (Menu) بشكل `DSChipButton`
 
-    private var infoSection: some View {
-        AdminSectionCard(title: L10n.t("معلومات التقرير", "Report info")) {
-            // الفارغ يُنشأ بالعنوان الافتراضي — فيظهر هو كنص إرشادي
-            DSComposerField(icon: "textformat",
-                            label: L10n.t("عنوان التقرير", "Report title"),
-                            placeholder: "تقرير عائلة المحمدعلي",
-                            text: $customTitle,
-                            tint: pageTint)
+/// تسمية `Menu` بنفس شكل الشريحة (زرّ داخل تسمية القائمة يبتلع الضغطة) — المختار ممتلئ بلونه ونصّه أبيض
+private struct AdminReportMenuChip: View {
+    let title: String
+    let tint: Color
+    let selected: Bool
+    @Environment(\.dsSection) private var section
 
-            branchFilterRow
-        }
-    }
-
-    /// حصر التقرير على فرع: صف يفتح مربّع الفروع، وبعد الاختيار اسم الفرع وعدده + «تغيير» و«إزالة»
-    private var branchFilterRow: some View {
-        Group {
-            if let m = branchRootMember {
-                let count = descendantIds(of: m.id).count
-                DSRow(icon: "tree.fill", tint: pageTint,
-                       title: L10n.t("فرع: \(m.displayFullName)", "Branch: \(m.displayFullName)"),
-                       subtitle: L10n.t("\(count) عضو في الفرع", "\(count) members in branch")) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        toolButton(title: L10n.t("تغيير", "Change"), icon: nil, tint: pageTint) {
-                            branchPickerOpen = true
-                        }
-                        Button {
-                            branchRootId = nil
-                            displayLimit = 20
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .dsGlyph(DS.Glyph.xl, weight: .semibold)
-                                .foregroundColor(DS.Color.error)
-                                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.vertical, -DS.Spacing.xsm)
-                        .accessibilityLabel(L10n.t("إزالة الفرع", "Remove branch"))
-                    }
-                }
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(pageTint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
-            } else {
-                Button {
-                    branchPickerOpen = true
-                } label: {
-                    DSRow(icon: "tree", tint: DS.Color.textSecondary,
-                           title: L10n.t("حصر على فرع معيّن", "Filter by branch"),
-                           subtitle: L10n.t("كل الفروع", "All branches")) {
-                        DSChevron()
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(DSScaleButtonStyle())
-            }
-        }
-    }
-
-    // MARK: - الحقول
-
-    private var fieldsSection: some View {
-        AdminSectionCard(title: L10n.t("الحقول", "Fields"),
-                         tag: L10n.t("\(selectedFields.count) مختارة", "\(selectedFields.count) selected")) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: DS.Spacing.sm)],
-                      alignment: .leading,
-                      spacing: DS.Spacing.xs) {
-                ForEach(ReportField.allCases) { field in
-                    fieldChip(field)
-                }
-            }
-        }
-    }
-
-    /// حقل يُضاف للتقرير أو يُزال (يبقى حقل واحد على الأقل) — المختار بلون الصفحة وعلامة ✓
-    private func fieldChip(_ field: ReportField) -> some View {
-        let active = selectedFields.contains(field)
-        return Button {
-            withAnimation(reduceMotion ? nil : DS.Anim.quick) {
-                if active {
-                    if selectedFields.count > 1 {
-                        selectedFields.remove(field)
-                    }
-                } else {
-                    selectedFields.insert(field)
-                }
-            }
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: active ? "checkmark.circle.fill" : field.icon)
-                    .dsGlyph(DS.Glyph.smCompact)
-                    .foregroundColor(active ? pageTint : DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-                Text(field.title)
-                    .dsFieldFont(.chip)
-                    .foregroundColor(active ? DS.Color.fieldLabel : DS.Color.fieldValue)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .frame(maxWidth: .infinity, minHeight: DS.Icon.avatar)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(active ? pageTint.opacity(DS.Opacity.tintFill) : DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(active ? pageTint.opacity(DS.Opacity.selectedStroke) : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
-                              lineWidth: active ? DS.Border.widthBold : DS.Border.width))
-            .padding(.vertical, DS.Spacing.xxs)   // مساحة ضغط ٤٤ نقطة
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(field.title)
-        .accessibilityAddTraits(active ? .isSelected : [])
-    }
-
-    // MARK: - نتائج التقرير
-
-    private func resultsSection(members: [FamilyMember]) -> some View {
-        AdminSectionCard(title: L10n.t("نتائج التقرير", "Report results"),
-                         tag: resultsTrailing(members: members)) {
-            resultsTools(members: members)
-
-            AdminLazyRows(items: visibleMembers(of: members)) { AnyView(memberRow($0)) }
-
-            if displayLimit < members.count {
-                loadMoreButton(remaining: members.count - displayLimit)
-            }
-        }
-    }
-
-    /// «٢٥ عضو» — ومع التحديد «٣ محدّد · ٢٥ عضو»
-    private func resultsTrailing(members: [FamilyMember]) -> String {
-        let total = members.count
-        guard !selectedMemberIds.isEmpty else { return L10n.t("\(total) عضو", "\(total) members") }
-        let picked = selectedCount(in: members)
-        return L10n.t("\(picked) محدّد · \(total) عضو", "\(picked) selected · \(total) members")
-    }
-
-    /// تحديد الكل · إلغاء التحديد · إعادة ضبط (مع تصفية مفعّلة) — نفس الأزرار السابقة
-    private func resultsTools(members: [FamilyMember]) -> some View {
+    var body: some View {
+        let ink = tint.dsChrome(in: section).dsReadableGlyph
         HStack(spacing: DS.Spacing.xsm) {
-            toolButton(title: L10n.t("تحديد الكل", "Select all"), icon: "checkmark.circle.fill",
-                       tint: AppSection.admin.ink) {
-                selectedMemberIds = Set(members.map(\.id))
+            Image(dsSymbol: "chevron.down").dsGlyph(DS.Glyph.sm)
+            Text(title)
+                .dsFont(.chip)
+                .lineLimit(1)
+                .monospacedDigit()
+        }
+        .foregroundColor(selected ? .white : ink)
+        .padding(.horizontal, DSBox.chipPadding)
+        .frame(minHeight: DSBox.chipHeight)
+        .background {
+            if selected {
+                Capsule().fill(tint.dsChromeFill(in: section).dsSolidFill)
+            } else {
+                Capsule().fill(ink.opacity(DS.Opacity.tintFill))
             }
+        }
+        .overlay(Capsule().strokeBorder(selected ? Color.clear : ink.opacity(DS.Opacity.tintStroke),
+                                        lineWidth: DS.Border.width))
+        .dsTapArea(width: DS.Icon.tapTarget, height: DSBox.chipHeight)
+    }
+}
 
-            toolButton(title: L10n.t("إلغاء التحديد", "Clear selection"), icon: "xmark.circle.fill",
-                       tint: DS.Color.error) {
-                selectedMemberIds.removeAll()
-            }
+// MARK: - «صفحة» نوع التقرير
 
-            if activeFilterCount > 0 {
-                toolButton(title: L10n.t("إعادة ضبط", "Reset"), icon: "arrow.counterclockwise",
-                           tint: pageTint) {
-                    resetFilters()
-                }
-            }
+/// ورقة صغيرة بطرف مطويّ وشريط كحلي بسدو ذهبي ورمز النوع، وتحتها اسم قصير.
+/// المختارة ترتفع قليلاً بظلّ ناعم وإطار ذهبي و«تمتلئ» بلون النوع من الأسفل؛ غيرها هادئة مسطّحة.
+/// مع «تقليل الحركة»: بلا رفعة ولا نابض — يتبدّل اللون والإطار مباشرة.
+struct AdminReportTypeCard: View {
+    let kind: AdminReportKind
+    let selected: Bool
+    let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-            Spacer(minLength: 0)
+    /// الاسم القصير تحت الورقة — العنوان الكامل في سطر المعاينة
+    static func shortTitle(_ kind: AdminReportKind) -> String {
+        switch kind {
+        case .register: return L10n.t("السجل", "Register")
+        case .stats: return L10n.t("الملخّص", "Summary")
+        case .memorial: return L10n.t("المتوفون", "Deceased")
+        case .phones: return L10n.t("الهواتف", "Phones")
         }
     }
 
-    /// الشريحة الواحدة (`DSChipButton`) — مساحة ضغط ٤٤ بلا تكبير الصف
-    private func toolButton(title: String, icon: String?, tint: Color,
-                            action: @escaping () -> Void) -> some View {
-        DSChipButton(title, icon: icon, tint: tint, action: action)
+    static func title(_ kind: AdminReportKind) -> String {
+        switch kind {
+        case .register: return L10n.t("سجل العائلة بالفروع", "Family register by branch")
+        case .stats: return L10n.t("ملخّص إحصائي للعائلة", "Family statistics")
+        case .memorial: return L10n.t("المتوفون وذكراهم", "The deceased & anniversaries")
+        case .phones: return L10n.t("دليل الهواتف", "Phone directory")
+        }
     }
 
-    /// صف عضو بإطار صفوف المربّعات: الصورة + الاسم (وورقة للمتوفى) + العمر/الهاتف كما كانت
-    /// + دائرة التحديد. الضغط يحدّده للتقرير أو يلغيه — والمحدّد بإطار كحلي أوضح.
-    private func memberRow(_ member: FamilyMember) -> some View {
-        let selected = selectedMemberIds.contains(member.id)
-        let phone = normalizedPhone(for: member)
-        let deceased = member.isDeceased == true
-        let age: Int? = needsAgeFilter
-            ? ageForMember(member).flatMap { $0 > 0 ? $0 : nil }
-            : nil
-        let missingPhone = phone.isEmpty && selectedReport == .missingPhone
+    static func blurb(_ kind: AdminReportKind) -> String {
+        switch kind {
+        case .register: return L10n.t("كل فرع برأسه وأفراده بترتيب الشجرة", "Each branch with its members in tree order")
+        case .stats: return L10n.t("أعداد ورسوم في صفحة أو صفحتين", "Counts and charts on a page or two")
+        case .memorial: return L10n.t("تواريخ الوفاة وموعد الذكرى القادمة", "Death dates and the next anniversary")
+        case .phones: return L10n.t("أرقام الأحياء بالفروع — المخفي لا يُطبع", "Living members' numbers — hidden ones aren't printed")
+        }
+    }
 
-        return Button {
-            toggleSelection(member.id)
-        } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                DSMemberAvatar(name: member.fullName,
-                               avatarUrl: member.avatarUrl,
-                               size: DS.Icon.avatarRow,
-                               roleColor: deceased ? DS.Color.textTertiary : member.roleColor)
+    static func icon(_ kind: AdminReportKind) -> String {
+        switch kind {
+        case .register: return "list.bullet.indent"
+        case .stats: return "chart.pie.fill"
+        case .memorial: return "leaf.fill"
+        case .phones: return "phone.fill"
+        }
+    }
 
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Text(member.displayFullName)
-                            .dsFont(.hubRow)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .dsNameLines()
-                        if deceased {
-                            Image(systemName: "leaf.fill")
-                                .dsGlyph(DS.Glyph.micro, weight: .semibold)
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                    }
+    /// ألوان المعنى في اللوحة: الشجرة والأعضاء أخضر، الإحصاء ذهبي، المتوفون رصاصي، التواصل بترولي
+    static func tint(_ kind: AdminReportKind) -> Color {
+        switch kind {
+        case .register: return DS.Color.palm
+        case .stats: return DS.Color.accent
+        case .memorial: return DS.Color.deceased
+        case .phones: return DS.Color.sea
+        }
+    }
 
-                    if age != nil || !phone.isEmpty || missingPhone {
-                        HStack(spacing: DS.Spacing.sm) {
-                            if let age {
-                                detailText(icon: "calendar", text: L10n.t("\(age) سنة", "\(age) yrs"))
-                            }
-                            if !phone.isEmpty {
-                                detailText(icon: "phone.fill", text: KuwaitPhone.display(phone))
-                            } else if missingPhone {
-                                DSStatusChip(text: L10n.t("رقم ناقص", "Missing number"),
-                                              icon: "exclamationmark.triangle.fill",
-                                              tint: DS.Color.warning)
-                            }
-                        }
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .dsGlyph(DS.Glyph.xxlCompact, weight: .semibold)
-                    .foregroundColor(selected ? AppSection.admin.ink : DS.Color.textTertiary)
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: DS.Spacing.xsm) {
+                page
+                Text(Self.shortTitle(kind))
+                    .dsFont(.chipCompact)
+                    .foregroundColor(selected ? DS.Color.textPrimary : DS.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(minHeight: DSBox.fieldMinHeight)
-            .padding(.vertical, DS.Spacing.sm)
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(rowAccessibilityLabel(member, phone: phone, age: age, missingPhone: missingPhone))
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .buttonStyle(DSPressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(Self.title(kind))، \(Self.blurb(kind))")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
-    private func detailText(icon: String, text: String) -> some View {
-        HStack(spacing: DS.Spacing.xxs) {
-            Image(dsSymbol: icon)
-                .dsGlyph(DS.Glyph.micro, weight: .semibold)
-            Text(text)
-                .dsFont(.subtitle)
-                .monospacedDigit()
-                .lineLimit(1)
-        }
-        .foregroundColor(DS.Color.textTertiary)
-    }
-
-    private func rowAccessibilityLabel(_ member: FamilyMember, phone: String, age: Int?,
-                                       missingPhone: Bool) -> String {
-        var parts = [member.displayFullName]
-        if member.isDeceased == true { parts.append(L10n.t("متوفى", "Deceased")) }
-        if let age { parts.append(L10n.t("\(age) سنة", "\(age) years")) }
-        if !phone.isEmpty {
-            parts.append(KuwaitPhone.display(phone))
-        } else if missingPhone {
-            parts.append(L10n.t("رقم ناقص", "Missing number"))
-        }
-        return parts.joined(separator: "، ")
-    }
-
-    /// الشريحة الواحدة بلون الصفحة (مساحة ضغط ٤٤)
-    private func loadMoreButton(remaining: Int) -> some View {
-        DSChipButton(L10n.t("عرض المزيد (\(remaining) متبقي)", "Show more (\(remaining) remaining)"),
-                     icon: "arrow.down.circle.fill", tint: pageTint) {
-            displayLimit += 20
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    /// لا أحد يطابق — ومع تصفية مفعّلة «إعادة ضبط» (نفس زر أدوات النتائج)
-    private var noResultsCard: some View {
-        let filtered = activeFilterCount > 0
-        let reset: (() -> Void)? = filtered ? { resetFilters() } : nil
-        return DSEmptyView(L10n.t("لا يوجد أعضاء", "No members"),
-                           message: filtered
-                               ? L10n.t("لا أحد يطابق التصفية الحالية", "No one matches the current filters")
-                               : nil,
-                           actionTitle: filtered ? L10n.t("إعادة ضبط", "Reset") : nil,
-                           actionIcon: "arrow.counterclockwise",
-                           style: .compact,
-                           action: reset)
-            .padding(.vertical, DS.Spacing.sm)
-            .frame(maxWidth: .infinity)
-            .adminCard()
-    }
-
-    // MARK: - التصدير
-
-    /// شريط سفلي ثابت: «إنشاء تقرير PDF» بالكحلي الموحّد (يمين) + النطاق (يسار) — نفس شرط التعطيل
-    private func exportBar(members: [FamilyMember]) -> some View {
-        let scope = selectedCount(in: members)
-        return HStack(spacing: DS.Spacing.md) {
-            DSActionButton(title: L10n.t("إنشاء تقرير PDF", "Generate PDF Report"),
-                            icon: "doc.richtext.fill",
-                            isBusy: isGenerating,
-                            enabled: !(isGenerating || members.isEmpty || ageRangeInvalid)) {
-                Task { await generatePDF() }
-            }
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text(selectedMemberIds.isEmpty
-                     ? L10n.t("النطاق: الكل", "Scope: all")
-                     : L10n.t("النطاق: المحدّدون", "Scope: selected"))
-                    .dsFont(.micro)
-                    .foregroundColor(DS.Color.fieldValue)
-                Text(L10n.t("\(scope) عضو", "\(scope) members"))
-                    .dsFont(.headline)
-                    .foregroundColor(DS.Color.fieldLabel)
-                    .monospacedDigit()
-            }
-            .fixedSize()
-            .accessibilityElement(children: .combine)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
-        .dsGlass(Rectangle())
-        .overlay(Divider(), alignment: .top)
-    }
-
-    // متى نظهر نطاق العمر — ومتى نطبّقه (كان يظهر مع حقل «العمر» ولا يصفّي شيئاً: نوع التقرير ثابت «الأسماء»)
-    private var needsAgeFilter: Bool {
-        selectedReport == .age || selectedReport == .phone || selectedFields.contains(.age)
-    }
-
-    private func toggleSelection(_ id: UUID) {
-        if selectedMemberIds.contains(id) {
-            selectedMemberIds.remove(id)
-        } else {
-            selectedMemberIds.insert(id)
-        }
-    }
-
-    private func resetFilters() {
-        minAgeText = ""
-        maxAgeText = ""
-        statusFilter = .all
-        displayLimit = 20
-        selectedMemberIds.removeAll()
-        branchRootId = nil
-    }
-
-    private func cleanupShareState() {
-        showShareSheet = false
-        shareItems.removeAll()
-    }
-
-    private func normalizedPhone(for member: FamilyMember) -> String {
-        (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func normalizedBirth(for member: FamilyMember) -> String {
-        (member.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func ageForMember(_ member: FamilyMember) -> Int? {
-        guard let birthDate = parsedBirthDate(member.birthDate) else { return nil }
-        // للمتوفّى مع تاريخ وفاة → عمر الوفاة (من الميلاد إلى الوفاة)
-        // للحيّ أو متوفى بدون تاريخ وفاة → للحين
-        let endDate: Date
-        if member.isDeceased == true,
-           let deathStr = member.deathDate,
-           let parsedDeath = parsedBirthDate(deathStr) {
-            endDate = parsedDeath
-        } else if member.isDeceased == true {
-            // متوفى بدون تاريخ وفاة → ما نقدر نحسب
-            return nil
-        } else {
-            endDate = Date()
-        }
-        guard let years = Calendar.current.dateComponents([.year], from: birthDate, to: endDate).year else {
-            return nil
-        }
-        return years >= 0 ? years : nil
-    }
-
-    /// استخراج قيمة حقل لعضو — يستخدم في الـ PDF
-    static func formatField(
-        _ field: ReportField,
-        for member: FamilyMember,
-        ageResolver: (FamilyMember) -> Int?
-    ) -> String {
-        switch field {
-        case .fullName:
-            return member.fullName
-        case .firstName:
-            return member.firstName
-        case .phone:
-            let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return phone.isEmpty ? "—" : KuwaitPhone.display(phone)
-        case .age:
-            return ageResolver(member).map { "\($0)" } ?? "—"
-        case .birthDate:
-            return (member.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "—" : (member.birthDate ?? "—")
-        case .deathDate:
-            return (member.deathDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "—" : (member.deathDate ?? "—")
-        case .role:
-            return member.roleName
-        case .status:
-            if member.isDeceased == true { return "متوفى" }
-            if member.status == .frozen { return "حساب موقوف" }
-            let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if phone.isEmpty { return "بلا رقم هاتف" }
-            return "له رقم هاتف"
-        case .gender:
-            switch member.gender {
-            case "male": return "ذكر"
-            case "female": return "أنثى"
-            default: return "—"
-            }
-        case .married:
-            switch member.isMarried {
-            case true: return "نعم"
-            case false: return "لا"
-            default: return "—"
-            }
-        }
-    }
-
-    private func parsedBirthDate(_ raw: String?) -> Date? {
-        guard let raw, !raw.isEmpty else { return nil }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        if let date = formatter.date(from: raw) { return date }
-        let iso = ISO8601DateFormatter()
-        return iso.date(from: raw)
-    }
-
-    private func generatePDF() async {
-        await MainActor.run { isGenerating = true }
-
-        let sourceMembers = selectedMemberIds.isEmpty
-            ? filteredMembers
-            : filteredMembers.filter { selectedMemberIds.contains($0.id) }
-
-        guard !sourceMembers.isEmpty else {
-            await MainActor.run {
-                isGenerating = false
-                errorMessage = L10n.t("لا يوجد أعضاء لإنشاء التقرير.", "No members to include in the report.")
-                showErrorAlert = true
-            }
-            return
-        }
-
-        var filters: [String] = []
-        let minAgeVal = Int(minAgeText) ?? 0
-        let maxAgeVal = Int(maxAgeText) ?? 0
-        if needsAgeFilter {
-            if minAgeVal > 0 && maxAgeVal > 0 {
-                filters.append("العمر: \(minAgeVal) - \(maxAgeVal)")
-            } else if minAgeVal > 0 {
-                filters.append("العمر: من \(minAgeVal)")
-            } else if maxAgeVal > 0 {
-                filters.append("العمر: إلى \(maxAgeVal)")
-            }
-        }
-        if statusFilter == .alive { filters.append("أحياء فقط") }
-        if statusFilter == .deceased { filters.append("متوفون فقط") }
-        if let scope {
-            filters.append(scope.title)
-        }
-        if let m = branchRootMember {
-            filters.append("فرع: \(m.fullName)")
-        }
-
-        // ابنِ أعمدة ديناميكية من الحقول المختارة (مرتبة حسب الـ enum)
-        let orderedFields = ReportField.allCases.filter { selectedFields.contains($0) }
-
-        do {
-            let reportData = try MembersPDFBuilder.makeCustomReport(
-                members: sourceMembers,
-                filters: filters,
-                title: customTitle.isEmpty ? "تقرير عائلة المحمدعلي" : customTitle,
-                accent: selectedReport.tint,
-                fields: orderedFields,
-                ageResolver: { ageForMember($0) },
-                branchName: branchRootMember?.fullName,
-                filterLabel: statusFilter.label
-            )
-
-            // اسم الملف يشمل الفرع لو محدّد
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyyMMdd_HHmmss"
-            var nameParts: [String] = [
-                customTitle.isEmpty ? "report" : customTitle.replacingOccurrences(of: " ", with: "_")
-            ]
-            if let m = branchRootMember {
-                // الاسم الأول وحدة واحدة («زين العابدين») — المسافة ← «_» مثل العنوان
-                let firstWord = (m.nameUnits.first ?? "").replacingOccurrences(of: " ", with: "_")
-                if !firstWord.isEmpty { nameParts.append("فرع-\(firstWord)") }
-            }
-            nameParts.append(formatter.string(from: Date()))
-            let fileName = "\(nameParts.joined(separator: "-")).pdf"
-            let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try reportData.write(to: fileURL, options: .atomic)
-
-            await MainActor.run {
-                shareItems = [fileURL]
-                showShareSheet = true
-                isGenerating = false
-            }
-        } catch {
-            await MainActor.run {
-                isGenerating = false
-                errorMessage = L10n.t("فشل إنشاء التقرير.", "Couldn't create the report.")
-                showErrorAlert = true
-            }
-        }
-    }
-}
-
-private enum MembersPDFBuilder {
-    private static let pageWidth: CGFloat = 595
-    private static let pageHeight: CGFloat = 842
-    private static let margin: CGFloat = 36
-    private static let rowHeight: CGFloat = 24
-    private static let pageBodyTop: CGFloat = 150     // الصفحة الأولى: تحت الهيدر مباشرة (مقرّب)
-    private static let pageBodyTopOther: CGFloat = 50 // الصفحات الباقية: قريب من الأعلى
-
-    // MARK: ألوان الهوية — ثابتة: الورقة فاتحة دائماً فلا تتبع الوضع الداكن للجهاز
-    private static func rgb(_ hex: UInt32) -> UIColor {
-        UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255,
-                green: CGFloat((hex >> 8) & 0xFF) / 255,
-                blue: CGFloat(hex & 0xFF) / 255,
-                alpha: 1)
-    }
-    /// navy — العناوين ونص الجدول (ink)
-    private static let navy = rgb(0x172536)
-    /// gold — الخطوط الفاصلة
-    private static let gold = rgb(0xB89A5A)
-    /// cream — لوحة رأس الجدول
-    private static let cream = rgb(0xF2EBDD)
-    /// sand — الصفوف المتبادلة
-    private static let sand = rgb(0xFCF7EC)
-    /// line — حدود الصفوف
-    private static let line = rgb(0xDCCFB4)
-    private static let textPrimary = navy            // ink
-    private static let textMuted = rgb(0x4A5560)     // ink-muted
-
-    // MARK: خط الهوية — IBM Plex Sans Arabic (نفس أسماء DS.Font.Plex)، وخط النظام احتياطاً
-    private static func plex(_ name: String, _ size: CGFloat, fallback weight: UIFont.Weight) -> UIFont {
-        UIFont(name: name, size: size) ?? UIFont.systemFont(ofSize: size, weight: weight)
-    }
-    private static let titleFont = plex(DS.Font.Plex.bold, 26, fallback: .bold)
-    private static let brandFont = plex(DS.Font.Plex.semibold, 9, fallback: .semibold)
-    private static let bodyFont = plex(DS.Font.Plex.regular, 10, fallback: .regular)
-    private static let bodyBoldFont = plex(DS.Font.Plex.semibold, 10, fallback: .semibold)
-    private static let metaFont = plex(DS.Font.Plex.regular, 9, fallback: .regular)
-    private static let metaBoldFont = plex(DS.Font.Plex.bold, 9, fallback: .bold)
-    private static let smallFont = plex(DS.Font.Plex.medium, 8.5, fallback: .medium)
-    private static let branchFont = plex(DS.Font.Plex.bold, 11, fallback: .bold)
-
-    /// ارتفاع سطر واحد للخط — Plex أطول سطراً من خط النظام، فالمستطيلات تُحسب منه حتى لا يُقصّ النص
-    private static func lineBox(_ font: UIFont) -> CGFloat { ceil(font.lineHeight) + 2 }
-
-    /// يصغّر الخط حتى يتسع النص في سطر واحد (بحد أدنى) — للعنوان المخصّص الطويل
-    private static func fitted(_ text: String, font: UIFont, maxWidth: CGFloat, minSize: CGFloat) -> UIFont {
-        var result = font
-        while result.pointSize > minSize,
-              (text as NSString).size(withAttributes: [.font: result]).width > maxWidth {
-            result = result.withSize(result.pointSize - 1)
-        }
-        return result
-    }
-
-    /// الشعار المسطّح الكحلي — نسخة الوضع الفاتح دائماً (الورقة بيضاء)
-    private static var logoImage: UIImage? {
-        UIImage(named: "FamilyLogoNavy", in: nil, compatibleWith: UITraitCollection(userInterfaceStyle: .light))
-    }
-
-    private struct ReportColumn {
-        let title: String
-        let ratio: CGFloat
-        let value: (FamilyMember, Int) -> String
-    }
-
-    private struct PDFTheme {
-        let accent: UIColor
-        let title: String
-    }
-
-    /// تقرير ديناميكي بالحقول المختارة من قبل المستخدم
-    static func makeCustomReport(
-        members: [FamilyMember],
-        filters: [String],
-        title: String,
-        accent: Color,
-        fields: [AdminReportsView.ReportField],
-        ageResolver: @escaping (FamilyMember) -> Int?,
-        branchName: String? = nil,
-        filterLabel: String? = nil
-    ) throws -> Data {
-        // ألوان الوثيقة من الهوية (كحلي وذهبي وكريمي) — لون نوع التقرير يبقى في الواجهة فقط
-        let uiAccent = navy
-
-        var columns: [ReportColumn] = [
-            ReportColumn(title: "م", ratio: 0.06) { _, index in "\(index)" }
-        ]
-        let fieldsTotalRatio = fields.reduce(0.0) { $0 + $1.ratio }
-        let availableRatio: CGFloat = 0.94
-        let normalizer: CGFloat = fieldsTotalRatio > 0 ? availableRatio / fieldsTotalRatio : 1.0
-        for field in fields {
-            let normalizedRatio = field.ratio * normalizer
-            columns.append(ReportColumn(title: field.label, ratio: normalizedRatio) { member, _ in
-                AdminReportsView.formatField(field, for: member, ageResolver: ageResolver)
-            })
-        }
-
-        let fieldLabels = fields.map { $0.label }.joined(separator: " · ")
-
-        return try makeMembersTableReport(
-            members: members,
-            filters: filters,
-            theme: PDFTheme(accent: uiAccent, title: title),
-            columns: columns,
-            branchName: branchName,
-            fieldLabels: fieldLabels,
-            filterLabel: filterLabel
-        )
-    }
-
-    static func makePhoneReport(members: [FamilyMember], filters: [String], ageResolver: @escaping (FamilyMember) -> Int?) throws -> Data {
-        try makeMembersTableReport(
-            members: members,
-            filters: filters,
-            theme: PDFTheme(accent: navy, title: "تقرير الهواتف"),
-            columns: [
-                ReportColumn(title: "م", ratio: 0.10) { _, index in "\(index)" },
-                ReportColumn(title: "الاسم الكامل", ratio: 0.42) { member, _ in member.fullName },
-                ReportColumn(title: "العمر", ratio: 0.12) { member, _ in ageResolver(member).map { "\($0) سنة" } ?? "—" },
-                ReportColumn(title: "رقم الهاتف", ratio: 0.36) { member, _ in standardizedPhone(member.phoneNumber) }
-            ]
-        )
-    }
-
-    static func makeAgeReport(members: [FamilyMember], filters: [String], ageResolver: @escaping (FamilyMember) -> Int?) throws -> Data {
-        try makeMembersTableReport(
-            members: members,
-            filters: filters,
-            theme: PDFTheme(accent: navy, title: "تقرير الأعمار"),
-            columns: [
-                ReportColumn(title: "م", ratio: 0.08) { _, index in "\(index)" },
-                ReportColumn(title: "الاسم الكامل", ratio: 0.56) { member, _ in member.fullName },
-                ReportColumn(title: "العمر", ratio: 0.14) { member, _ in ageResolver(member).map { "\($0) سنة" } ?? "—" },
-                ReportColumn(title: "الهاتف", ratio: 0.22) { member, _ in standardizedPhone(member.phoneNumber) }
-            ]
-        )
-    }
-
-    static func makeFamilyReport(members: [FamilyMember], filters: [String]) throws -> Data {
-        try makeMembersTableReport(
-            members: members,
-            filters: filters,
-            theme: PDFTheme(accent: navy, title: "تقرير الأسماء"),
-            columns: [
-                ReportColumn(title: "م", ratio: 0.10) { _, index in "\(index)" },
-                ReportColumn(title: "الاسم الكامل", ratio: 0.90) { member, _ in member.fullName }
-            ]
-        )
-    }
-
-    static func makeMissingPhoneReport(members: [FamilyMember], filters: [String]) throws -> Data {
-        try makeMembersTableReport(
-            members: members,
-            filters: filters,
-            theme: PDFTheme(accent: navy, title: "تقرير الأعضاء بدون هاتف"),
-            columns: [
-                ReportColumn(title: "م", ratio: 0.10) { _, index in "\(index)" },
-                ReportColumn(title: "الاسم الكامل", ratio: 0.90) { member, _ in member.fullName }
-            ]
-        )
-    }
-
-    private struct ReportContext {
-        let title: String
-        let count: Int
-        let filters: [String]
-        let accent: UIColor
-        let branchName: String?      // اسم الفرع لو محدد
-        let fieldLabels: String?     // أسماء الحقول مفصولة بـ ·
-        let filterLabel: String?     // فلتر الأعضاء (أحياء/متوفون...)
-        let reportNumber: String     // رقم تقرير قصير
-    }
-
-    private static func makeMembersTableReport(
-        members: [FamilyMember],
-        filters: [String],
-        theme: PDFTheme,
-        columns: [ReportColumn],
-        branchName: String? = nil,
-        fieldLabels: String? = nil,
-        filterLabel: String? = nil
-    ) throws -> Data {
-        let renderer = makeRenderer(title: theme.title)
-        let reportNumber = String(Int.random(in: 100000...999999))
-        let context = ReportContext(
-            title: theme.title,
-            count: members.count,
-            filters: filters,
-            accent: theme.accent,
-            branchName: branchName,
-            fieldLabels: fieldLabels,
-            filterLabel: filterLabel,
-            reportNumber: reportNumber
-        )
-
-        return renderer.pdfData { pdf in
-            var pageNumber = 1
-            var rowIndex = 1
-            var y = beginPage(pdf, pageNumber: pageNumber, context: context)
-            drawTableHeader(y: y, columns: columns, accent: theme.accent)
-            y += rowHeight + 10
-
-            for member in members {
-                if y + rowHeight > pageHeight - 70 {
-                    drawFooter(pageNumber: pageNumber)
-                    pageNumber += 1
-                    y = beginPage(pdf, pageNumber: pageNumber, context: context)
-                    drawTableHeader(y: y, columns: columns, accent: theme.accent)
-                    y += rowHeight + 10
+    private var page: some View {
+        let size = AdminReportsLayout.pageSize
+        let band = AdminReportsLayout.pageBand
+        let shape = AdminReportPageShape(fold: AdminReportsLayout.pageFold, radius: AdminReportsLayout.pageRadius)
+        let ink = Self.tint(kind).dsReadableGlyph
+        let lifted = selected && !reduceMotion
+        return ZStack {
+            // «تمتلئ» الورقة بلون النوع من الأسفل
+            shape.fill(DS.Color.surfaceElevated)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(ink.opacity(DS.Opacity.tintFillStrong))
+                        .frame(height: selected ? size.height - band : 0)
                 }
-
-                drawTableRow(y: y, index: rowIndex, member: member, columns: columns, isEven: rowIndex.isMultiple(of: 2))
-                y += rowHeight + 4
-                rowIndex += 1
-            }
-
-            drawFooter(pageNumber: pageNumber)
+                .clipShape(shape)
+            AdminReportPageArt()
+            shape.stroke(selected ? DS.Color.accentLight : DS.Color.textTertiary.opacity(DS.Opacity.tintStroke),
+                         lineWidth: selected ? DS.Border.widthBold : DS.Border.width)
         }
-    }
-
-    private static func makeRenderer(title: String) -> UIGraphicsPDFRenderer {
-        let format = UIGraphicsPDFRendererFormat()
-        format.documentInfo = [
-            kCGPDFContextTitle as String: title,
-            kCGPDFContextAuthor as String: "Al-Mohammad Ali family"
-        ]
-        return UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight), format: format)
-    }
-
-    private static func beginPage(_ pdf: UIGraphicsPDFRendererContext, pageNumber: Int, context: ReportContext) -> CGFloat {
-        pdf.beginPage()
-        UIColor.white.setFill()
-        UIBezierPath(rect: CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)).fill()
-        // الهيدر فقط في الصفحة الأولى
-        if pageNumber == 1 {
-            let headerBottom = drawHeaderCard(context: context)
-            return max(pageBodyTop, headerBottom + 14)
-        } else {
-            return pageBodyTopOther
-        }
-    }
-
-    /// رأس الصفحة الأولى — يرجع أسفل آخر سطر رُسم
-    private static func drawHeaderCard(context: ReportContext) -> CGFloat {
-        let leftEdge = margin
-        let rightEdge = pageWidth - margin
-        let topY: CGFloat = 32
-
-        // (1) الشعار المسطّح الكحلي — يمين أعلى الصفحة (بداية القراءة)، بلا إطار ولا ظل،
-        // ومسافة آمنة ربع ارتفاعه بينه وبين النص
-        let logoHeight: CGFloat = 46
-        let logoWidth = logoHeight * 710.061 / 529.415
-        let clearSpace = logoHeight / 4
-        var textRight = rightEdge
-        if let logo = logoImage {
-            logo.draw(in: CGRect(x: rightEdge - logoWidth, y: topY, width: logoWidth, height: logoHeight))
-            textRight = rightEdge - logoWidth - clearSpace
-        }
-        let dateColumnWidth: CGFloat = 170
-        let textLeft = leftEdge + dateColumnWidth
-        let textWidth = max(textRight - textLeft, 120)
-
-        // (2) اسم العائلة بالحروف اللاتينية — فوق العنوان
-        let brandH = lineBox(brandFont)
-        drawRTLText(
-            "Al-Mohammad Ali family",
-            in: CGRect(x: textLeft, y: topY, width: textWidth, height: brandH),
-            font: brandFont,
-            color: textMuted,
-            alignment: .right
+        .frame(width: size.width, height: size.height)
+        // الطرف المطويّ عند نهاية سطر القراءة (يسار في العربي)
+        .flipsForRightToLeftLayoutDirection(true)
+        .overlay(
+            Image(systemName: Self.icon(kind))
+                .dsGlyph(DS.Glyph.xl, weight: .semibold)
+                .foregroundColor(ink)
+                .padding(.top, band)
         )
-
-        // (3) التاريخ + رقم التقرير — يسار أعلى الصفحة
-        let dateH = lineBox(metaBoldFont)
-        drawRTLText(
-            formattedFullDate(),
-            in: CGRect(x: leftEdge, y: topY, width: dateColumnWidth, height: dateH),
-            font: metaBoldFont,
-            color: textPrimary,
-            alignment: .left
-        )
-        drawRTLText(
-            "تقرير #\(context.reportNumber)",
-            in: CGRect(x: leftEdge, y: topY + dateH, width: dateColumnWidth, height: lineBox(metaFont)),
-            font: metaFont,
-            color: textMuted,
-            alignment: .left
-        )
-
-        // (4) عنوان التقرير الرئيسي — كحلي عريض، يصغر قليلاً إذا طال العنوان المخصّص
-        let titleY = topY + brandH - 2
-        let fittedTitleFont = fitted(context.title, font: titleFont, maxWidth: textWidth, minSize: 16)
-        let titleH = lineBox(fittedTitleFont)
-        drawRTLText(
-            context.title,
-            in: CGRect(x: textLeft, y: titleY, width: textWidth, height: titleH),
-            font: fittedTitleFont,
-            color: navy,
-            alignment: .right
-        )
-
-        // (5) اسم الفرع (لو موجود) — كحلي، تحت العنوان
-        var textBottom = titleY + titleH
-        if let branch = context.branchName, !branch.isEmpty {
-            let branchH = lineBox(branchFont)
-            drawRTLText(
-                "فرع \(branch)",
-                in: CGRect(x: textLeft, y: textBottom - 2, width: textWidth, height: branchH),
-                font: branchFont,
-                color: navy,
-                alignment: .right
-            )
-            textBottom += branchH
-        }
-
-        // (6) خط فاصل ذهبي — تحت الشعار والعنوان
-        let separatorY = max(textBottom, topY + logoHeight + clearSpace) + 2
-        let separator = UIBezierPath()
-        separator.move(to: CGPoint(x: leftEdge, y: separatorY))
-        separator.addLine(to: CGPoint(x: rightEdge, y: separatorY))
-        separator.lineWidth = 0.8
-        gold.setStroke()
-        separator.stroke()
-
-        // (7) سطر التفاصيل: العدد + الفلتر + الحقول
-        let metaY = separatorY + 6
-        var metaParts: [String] = []
-        metaParts.append("العدد: \(context.count) عضو")
-        if let f = context.filterLabel, !f.isEmpty {
-            metaParts.append("الفلتر: \(f)")
-        }
-        if let fields = context.fieldLabels, !fields.isEmpty {
-            metaParts.append("الحقول: \(fields)")
-        }
-        let metaH = lineBox(metaFont)
-        drawRTLText(
-            metaParts.joined(separator: "    "),
-            in: CGRect(x: leftEdge, y: metaY, width: rightEdge - leftEdge, height: metaH),
-            font: metaFont,
-            color: textMuted,
-            alignment: .right
-        )
-        return metaY + metaH
-    }
-
-    private static func formattedFullDate() -> String {
-        let f = DateFormatter()
-        // أسماء الأيام والأشهر بالعربي، والأرقام لاتينية (الهوية)
-        f.locale = Locale(identifier: "ar@numbers=latn")
-        f.dateFormat = "EEEE، d MMMM، yyyy"
-        return f.string(from: Date())
-    }
-
-    private static func drawTableHeader(y: CGFloat, columns: [ReportColumn], accent: UIColor) {
-        let rect = CGRect(x: margin, y: y, width: pageWidth - margin * 2, height: rowHeight)
-        // لوحة كريمية بحد line ونص كحلي
-        fillRoundedRect(rect, color: cream)
-        strokeRoundedRect(rect, color: line, lineWidth: 0.8)
-        drawColumns(columns.map(\.title), columns: columns, y: y, textColor: navy, font: bodyBoldFont)
-    }
-
-    private static func drawTableRow(y: CGFloat, index: Int, member: FamilyMember, columns: [ReportColumn], isEven: Bool) {
-        let rect = CGRect(x: margin, y: y, width: pageWidth - margin * 2, height: rowHeight)
-        fillRoundedRect(rect, color: isEven ? sand : UIColor.white)
-        strokeRoundedRect(rect, color: line.withAlphaComponent(0.7), lineWidth: 0.8)
-        let texts = columns.map { $0.value(member, index) }
-        drawColumns(texts, columns: columns, y: y, textColor: textPrimary, font: bodyFont)
-    }
-
-    private static func drawColumns(_ texts: [String], columns: [ReportColumn], y: CGFloat, textColor: UIColor, font: UIFont) {
-        let totalWidth = pageWidth - margin * 2 - 16
-        var cursor = pageWidth - margin - 8
-        // سطر واحد في وسط الصف بارتفاع سطر الخط كاملاً
-        let textH = lineBox(font)
-        let textY = y + (rowHeight - textH) / 2
-
-        for (index, column) in columns.enumerated() {
-            let width = totalWidth * column.ratio
-            let rect = CGRect(x: cursor - width, y: textY, width: width - 8, height: textH)
-            drawRTFText(texts[index], in: rect, font: font, color: textColor)
-            cursor -= width
-        }
-    }
-
-    private static func drawFooter(pageNumber: Int, drawNow: Bool = true) {
-        guard drawNow || UIGraphicsGetCurrentContext() != nil else { return }
-        let lineY = pageHeight - 38
-        gold.setStroke()
-        let path = UIBezierPath()
-        path.move(to: CGPoint(x: margin, y: lineY))
-        path.addLine(to: CGPoint(x: pageWidth - margin, y: lineY))
-        path.lineWidth = 0.6
-        path.stroke()
-
-        let footerH = lineBox(smallFont)
-        drawRTLText("Al-Mohammad Ali family", in: CGRect(x: margin, y: lineY + 6, width: 200, height: footerH), font: smallFont, color: textMuted, alignment: .left)
-        drawRTFText("صفحة \(pageNumber)", in: CGRect(x: pageWidth - margin - 100, y: lineY + 6, width: 100, height: footerH), font: smallFont, color: textMuted)
-    }
-
-    private static func formattedNow() -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ar_KW")
-        formatter.dateFormat = "yyyy/MM/dd - h:mm a"
-        return formatter.string(from: Date())
-    }
-
-    private static func fillRoundedRect(_ rect: CGRect, color: UIColor) {
-        color.setFill()
-        UIBezierPath(roundedRect: rect, cornerRadius: 12).fill()
-    }
-
-    private static func strokeRoundedRect(_ rect: CGRect, color: UIColor, lineWidth: CGFloat) {
-        color.setStroke()
-        let path = UIBezierPath(roundedRect: rect, cornerRadius: 12)
-        path.lineWidth = lineWidth
-        path.stroke()
-    }
-
-    private static func drawRTFText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor) {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .right
-        paragraph.baseWritingDirection = .rightToLeft
-        paragraph.lineBreakMode = .byTruncatingTail
-        (text as NSString).draw(
-            in: rect,
-            withAttributes: [
-                .font: font,
-                .foregroundColor: color,
-                .paragraphStyle: paragraph
-            ]
-        )
-    }
-
-    /// رسم نص سطر واحد بمحاذاة يسار/يمين/وسط مع دعم RTL (بلا تباعد حرفي — الهوية لا تباعد العربي)
-    private static func drawRTLText(
-        _ text: String,
-        in rect: CGRect,
-        font: UIFont,
-        color: UIColor,
-        alignment: NSTextAlignment = .right
-    ) {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = alignment
-        paragraph.baseWritingDirection = .rightToLeft
-        paragraph.lineBreakMode = .byTruncatingTail
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: color,
-            .paragraphStyle: paragraph
-        ]
-        (text as NSString).draw(in: rect, withAttributes: attrs)
-    }
-
-    private static func standardizedPhone(_ phone: String?) -> String {
-        let digits = (phone ?? "").filter(\.isNumber)
-        guard !digits.isEmpty else { return "—" }
-        if digits.hasPrefix("965"), digits.count >= 11 {
-            return "+\(digits)"
-        }
-        if digits.count == 8 {
-            return "+965\(digits)"
-        }
-        return "+\(digits)"
+        .shadow(color: selected ? DS.Shadow.glow.color : .clear,
+                radius: DS.Shadow.glow.radius, x: DS.Shadow.glow.x, y: DS.Shadow.glow.y)
+        .scaleEffect(lifted ? AdminReportsLayout.liftScale : 1)
+        .animation(reduceMotion ? nil : DS.Anim.bouncy, value: selected)
     }
 }
 
-private struct ActivityView: UIViewControllerRepresentable {
+/// الورقة: مستطيل مدوّر زاويته العليا اليمنى (قبل قلب العربي) مقصوصة قطرياً للطرف المطويّ
+struct AdminReportPageShape: Shape {
+    let fold: CGFloat
+    let radius: CGFloat
+
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX + radius, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX - fold, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + fold))
+        p.addArc(tangent1End: CGPoint(x: r.maxX, y: r.maxY), tangent2End: CGPoint(x: r.minX, y: r.maxY), radius: radius)
+        p.addArc(tangent1End: CGPoint(x: r.minX, y: r.maxY), tangent2End: CGPoint(x: r.minX, y: r.minY), radius: radius)
+        p.addArc(tangent1End: CGPoint(x: r.minX, y: r.minY), tangent2End: CGPoint(x: r.maxX, y: r.minY), radius: radius)
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// رسم الورقة: الشريط الكحلي (كحلي العلامة — يبان في الداكن) وخطّه الذهبي وسدو صغير (خطّان وخمسة معيّنات، الأوسط أكبر — شكل سدو الملف نفسه)
+/// والطرف المطويّ فوقه. رسم ثابت بلا حركة، مخفي عن القارئ الصوتي.
+private struct AdminReportPageArt: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let fold = AdminReportsLayout.pageFold
+            let band = AdminReportsLayout.pageBand
+            let rect = CGRect(origin: .zero, size: size)
+            let page = AdminReportPageShape(fold: fold, radius: AdminReportsLayout.pageRadius).path(in: rect)
+            let gold = DS.Color.accentLight
+
+            var inside = ctx
+            inside.clip(to: page)
+            inside.fill(Path(CGRect(x: 0, y: 0, width: size.width, height: band)), with: .color(DS.Color.brandFill))
+            inside.fill(Path(CGRect(x: 0, y: band, width: size.width, height: 0.8)), with: .color(gold))
+
+            // السدو في وسط الجزء الظاهر من الشريط
+            let unit: CGFloat = 1.7
+            let diamonds: [CGFloat] = [unit, unit, unit * 1.5, unit, unit]
+            let gap = unit * 1.15
+            let width = diamonds.reduce(0, +) + gap * 4
+            let cx = (size.width - fold) / 2
+            let cy = band / 2
+            var x = cx - width / 2
+            for (i, d) in diamonds.enumerated() {
+                let c = CGPoint(x: x + d / 2, y: cy)
+                let r = d / 2 * 1.2
+                var dp = Path()
+                dp.move(to: CGPoint(x: c.x, y: c.y - r))
+                dp.addLine(to: CGPoint(x: c.x + r, y: c.y))
+                dp.addLine(to: CGPoint(x: c.x, y: c.y + r))
+                dp.addLine(to: CGPoint(x: c.x - r, y: c.y))
+                dp.closeSubpath()
+                inside.fill(dp, with: .color(gold.opacity(i == 2 ? 1 : 0.75)))
+                x += d + gap
+            }
+            let lineGap = unit * 1.6
+            let lineLength: CGFloat = 5
+            let line = Path(CGRect(x: cx - width / 2 - lineGap - lineLength, y: cy - 0.3, width: lineLength, height: 0.6))
+            inside.fill(line, with: .color(gold.opacity(0.6)))
+            inside.fill(Path(CGRect(x: cx + width / 2 + lineGap, y: cy - 0.3, width: lineLength, height: 0.6)),
+                        with: .color(gold.opacity(0.6)))
+
+            // الطرف المطويّ: مثلث بلون ظهر الورقة فوق زاوية الشريط
+            var flap = Path()
+            flap.move(to: CGPoint(x: size.width - fold, y: 0))
+            flap.addLine(to: CGPoint(x: size.width - fold, y: fold))
+            flap.addLine(to: CGPoint(x: size.width, y: fold))
+            flap.closeSubpath()
+            ctx.fill(flap, with: .color(DS.Color.cardBorder))
+            ctx.stroke(flap, with: .color(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke)), lineWidth: 0.6)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - عرض الملف كاملاً (PDFKit)
+
+struct AdminReportViewerItem: Identifiable {
+    let url: URL
+    let title: String
+    var id: URL { url }
+}
+
+struct AdminReportViewer: View {
+    let item: AdminReportViewerItem
+    @State private var showShare = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DSSubPageHeader(title: item.title, subtitle: L10n.t("معاينة الملف", "File preview"),
+                            section: .admin, nav: .close)
+            AdminReportPDFView(url: item.url)
+                .ignoresSafeArea(edges: .bottom)
+            HStack {
+                DSActionButton(title: L10n.t("مشاركة / حفظ", "Share / Save"), icon: "square.and.arrow.up") {
+                    showShare = true
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.sm)
+            .dsGlass(Rectangle())
+        }
+        .background(DS.Color.background.ignoresSafeArea())
+        .sheet(isPresented: $showShare) {
+            AdminReportShareSheet(items: [item.url]) { showShare = false }
+        }
+    }
+}
+
+private struct AdminReportPDFView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> PDFView {
+        let view = PDFView()
+        view.autoScales = true
+        view.displayMode = .singlePageContinuous
+        view.displayDirection = .vertical
+        view.backgroundColor = UIColor.secondarySystemBackground
+        view.document = PDFDocument(url: url)
+        return view
+    }
+
+    func updateUIView(_ view: PDFView, context: Context) {
+        if view.document?.documentURL != url { view.document = PDFDocument(url: url) }
+    }
+}
+
+// MARK: - ورقة المشاركة
+
+private struct AdminReportShareSheet: UIViewControllerRepresentable {
     let items: [Any]
     let onComplete: () -> Void
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        controller.completionWithItemsHandler = { _, _, _, _ in
-            onComplete()
-        }
+        controller.completionWithItemsHandler = { _, _, _, _ in onComplete() }
         return controller
     }
 
