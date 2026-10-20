@@ -390,11 +390,21 @@ struct DSLifeDatesBox: View {
 
 struct DSGenderPicker: View {
     @Binding var selection: String
+    /// نجمة «مطلوب» الحمراء بجانب العنوان (مثل حقول التسجيل) — الاختيار الفارغ «» = لا شيء محدّد
+    var required: Bool = false
     @Environment(\.dsInCenterBox) private var inBox
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
-            DSFieldLabel(text: L10n.t("الجنس", "Gender"))
+            HStack(spacing: DS.Spacing.xxs) {
+                DSFieldLabel(text: L10n.t("الجنس", "Gender"))
+                if required {
+                    Text(verbatim: "*")
+                        .dsFieldFont(.label)
+                        .foregroundColor(DS.Color.error)
+                        .accessibilityLabel(L10n.t("مطلوب", "Required"))
+                }
+            }
             HStack(spacing: DS.Spacing.sm) {
                 option("male", title: L10n.t("ذكر", "Male"),
                        icon: "figure.stand", tint: DS.Color.male)

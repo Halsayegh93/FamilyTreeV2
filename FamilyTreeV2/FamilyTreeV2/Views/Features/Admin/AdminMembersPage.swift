@@ -23,6 +23,8 @@ struct AdminMembersPage: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var accounts = AdminAccountsStore.shared
+    /// «حي ✓» المحلية لهذا المستخدم
+    @ObservedObject private var verified = AdminLivingVerifiedStore.shared
     @Environment(\.dynamicTypeSize) private var typeSize
 
     @State private var chip: AdminMemberChip
@@ -37,6 +39,10 @@ struct AdminMembersPage: View {
     @State private var showExport = false
     /// «⋯ ← تصدير» بالفلتر الحالي (الدفعة ج): الشريحة والبحث المختاران — nil = كل العائلة
     @State private var exportScope: AdminReportScope?
+    /// «متوفى» من «تحقق من الأحياء» — مربّع تسجيل الوفاة الموجود (`AdminMemberDetailSheet(deathOnly:)`)
+    @State private var deathTarget: FamilyMember?
+    /// «عرض المزيد» لكل جيل في «تحقق من الأحياء»
+    @State private var generationLimits: [Int: Int] = [:]
 
     static let pageSize = 30
     static let branchPreview = 8
@@ -59,12 +65,14 @@ struct AdminMembersPage: View {
         .dsTallBox(item: $sheet) { context in
             AdminMemberSheet(ids: context.ids, start: context.start)
         }
+        .modifier(AdminLivingDeathBox(member: $deathTarget))
         .navigationDestination(isPresented: $showExport) {
             AdminLazyPage { [exportScope] in
                 AnyView(AdminReportsView(scope: exportScope).adminBackTitle(AdminArea.family.title).adminArea(.family))
             }
         }
         .task {
+            verified.activate(user: authVM.currentUser?.id)
             if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
             rebuild()
             await accounts.refresh()
@@ -141,8 +149,10 @@ struct AdminMembersPage: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DS.Spacing.xsm) {
-                    ForEach(AdminMemberChip.allCases) { c in
-                        AdminBandFilterChip(title: c.title, count: index.shownCount(c), selected: c == chip) {
+                    ForEach(visibleChips) { c in
+                        AdminBandFilterChip(title: c.title, count: c == .verifyLiving ? (index.built ? verifyCount : nil)
+                                                                                      : index.shownCount(c),
+                                            selected: c == chip) {
                             select(c)
                         }
                         .id(c)
@@ -157,6 +167,18 @@ struct AdminMembersPage: View {
             }
         }
     }
+
+    /// «تحقق من الأحياء» تختفي حين تفرغ قائمتها (وتبقى ما دامت مختارة — حتى لا تقفز الصفحة بعد آخر مراجعة)
+    private var visibleChips: [AdminMemberChip] {
+        AdminMemberChip.allCases.filter { $0 != .verifyLiving || chip == .verifyLiving || verifyCount > 0 }
+    }
+
+    /// مرشّحو «تحقق من الأحياء» بلا من راجعه هذا المستخدم («حي ✓»)
+    private var verifyRows: [Int] {
+        index.rows(.verifyLiving, .all).filter { !verified.ids.contains(index.entries[$0].id) }
+    }
+
+    private var verifyCount: Int { verifyRows.count }
 
     private func select(_ c: AdminMemberChip) {
         guard c != chip else { return }
@@ -201,7 +223,9 @@ struct AdminMembersPage: View {
                     AnyView(subChips)
                 }
                 AnyView(AdminMembersSummary(chip: chip, sub: sub, index: index, accountsReady: accounts.loaded,
-                                            start: { startWalk() }))
+                                            start: { startWalk() },
+                                            verifiedCount: chip == .verifyLiving ? index.count(.verifyLiving) - verifyCount : 0,
+                                            resetVerified: { withAnimation(DS.Anim.snappy) { verified.reset() } }))
                 AnyView(listSection)
             }
         }
@@ -260,7 +284,7 @@ struct AdminMembersPage: View {
 
     /// الصفوف المعروضة الآن: الشريحة (والفرعية)، ثم البحث
     private var currentRows: [Int] {
-        let base = index.rows(chip, sub)
+        let base = chip == .verifyLiving ? verifyRows : index.rows(chip, sub)
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return base }
         let needle = ArabicTextNormalizer.normalizeForSearch(q)
@@ -282,6 +306,14 @@ struct AdminMembersPage: View {
             }
         } else if rows.isEmpty {
             AdminPageStateCard(emptyState)
+        } else if chip == .verifyLiving {
+            if searching {
+                AdminSectionLabel(title: L10n.t("النتائج", "Results"), trailing: "\(rows.count)")
+            }
+            ForEach(Self.generationGroups(rows, index: index)) { group in
+                AdminSectionLabel(title: "\(AdminLivingCheck.generationTitle(group.generation)) · \(group.positions.count)")
+                AnyView(livingCard(group, rows: rows))
+            }
         } else {
             if searching {
                 AdminSectionLabel(title: L10n.t("النتائج", "Results"), trailing: "\(rows.count)")
@@ -298,6 +330,9 @@ struct AdminMembersPage: View {
         case .gaps:     return .empty(L10n.t("البيانات مكتملة", "Data is complete"), tint: DS.Color.success)
         case .problems: return .empty(L10n.t("الشجرة سليمة", "The tree is healthy"),
                                       message: L10n.t("لا مشكلات الآن", "No problems right now"), tint: DS.Color.success)
+        case .verifyLiving: return .empty(L10n.t("تمت المراجعة", "All reviewed"),
+                                          message: L10n.t("لا أسماء من الأجيال القديمة بانتظار المراجعة", "No older-generation names left to review"),
+                                          tint: DS.Color.success)
         default:        return .empty(L10n.t("لا أحد هنا الآن", "Nobody here right now"))
         }
     }
@@ -378,6 +413,68 @@ struct AdminMembersPage: View {
 
     private static func key(_ branch: AdminMembersIndex.Branch) -> String { branch.id?.uuidString ?? "outside" }
 
+    // MARK: «تحقق من الأحياء» — جيلاً جيلاً، الأقدم أولاً
+
+    struct GenerationGroup: Identifiable {
+        let generation: Int
+        /// مواضع الصفوف في القائمة الحالية (السابق/التالي في الورقة يمشي فيها كلها)
+        let positions: [Int]
+        var id: Int { generation }
+    }
+
+    /// صفّ في بطاقة الجيل — هويته العضو نفسه (لا موضعه: «حي ✓» يزيح المواضع)
+    struct LivingSlot: Identifiable {
+        let pos: Int
+        let id: UUID
+    }
+
+    static func generationGroups(_ rows: [Int], index: AdminMembersIndex) -> [GenerationGroup] {
+        var groups: [(Int, [Int])] = []
+        for (pos, i) in rows.enumerated() {
+            let g = index.entries[i].living?.generation ?? 0
+            if groups.last?.0 == g { groups[groups.count - 1].1.append(pos) } else { groups.append((g, [pos])) }
+        }
+        return groups.map { GenerationGroup(generation: $0.0, positions: $0.1) }
+    }
+
+    private func livingCard(_ group: GenerationGroup, rows: [Int]) -> some View {
+        let limit = generationLimits[group.generation] ?? Self.branchPreview
+        let ids = rows.map { index.entries[$0].id }
+        return VStack(alignment: .leading, spacing: 0) {
+            LazyVStack(spacing: 0) {
+                ForEach(group.positions.prefix(limit).map { LivingSlot(pos: $0, id: ids[$0]) }) { slot in
+                    if slot.pos != group.positions.first { AdminRowDivider() }
+                    livingRow(rows[slot.pos], ids: ids, position: slot.pos)
+                }
+            }
+            if group.positions.count > limit {
+                AdminPillButton(title: L10n.t("عرض المزيد (\(group.positions.count - limit))",
+                                              "Show more (\(group.positions.count - limit))"),
+                                icon: "chevron.down", style: .soft, height: DS.Hub.pillHeightCard) {
+                    generationLimits[group.generation] = limit + Self.pageSize
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, DS.Spacing.sm)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
+    }
+
+    private func livingRow(_ i: Int, ids: [UUID], position: Int) -> some View {
+        let entry = index.entries[i]
+        let canEdit = authVM.canEditMembers
+        return AdminLivingCheckRow(entry: entry,
+                                   branchTitle: entry.branch.flatMap { b in index.branches.first { $0.id == b }?.title },
+                                   canEdit: canEdit,
+                                   open: { sheet = AdminMemberSheetContext(ids: ids, start: position) },
+                                   deceased: { deathTarget = entry.member },
+                                   alive: {
+                                       UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                       withAnimation(DS.Anim.snappy) { verified.markAlive(entry.id) }
+                                   })
+    }
+
     private func rowButton(_ i: Int, ids: [UUID], position: Int) -> some View {
         let entry = index.entries[i]
         return Button {
@@ -405,9 +502,13 @@ struct AdminMembersSummary: View {
     let index: AdminMembersIndex
     let accountsReady: Bool
     let start: () -> Void
+    /// «تحقق من الأحياء»: من راجعهم المستخدم «حي ✓» على جهازه، وإعادة إظهارهم
+    var verifiedCount: Int = 0
+    var resetVerified: () -> Void = {}
 
     var body: some View {
         switch chip {
+        case .verifyLiving: AnyView(livingCard)
         case .gaps:       AnyView(gapsCard)
         case .problems:   AnyView(problemsCard)
         case .registered: AnyView(registeredCard)
@@ -426,6 +527,35 @@ struct AdminMembersSummary: View {
         case .all:
             AnyView(EmptyView())
         }
+    }
+
+    /// شرح «تحقق من الأحياء» + «إعادة إظهار من راجعتهم» (المراجعة محلية على هذا الجهاز)
+    private var livingCard: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                AdminIconSquare(symbol: "person.fill.questionmark", tint: DS.Color.info)
+                Text(L10n.t("أسماء من الأجيال القديمة بلا وفاة مسجّلة — الأقدم أولاً. «متوفى» يسجّل الوفاة (التاريخ اختياري)، و«حي» يخفي الاسم من هذه القائمة على جهازك فقط.",
+                            "Older-generation names with no recorded death — oldest first. “Deceased” records the death (date optional); “Alive” hides the name from this list on this device only."))
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            if verifiedCount > 0 {
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("راجعتَ \(verifiedCount) كأحياء", "You marked \(verifiedCount) as alive"))
+                        .dsFont(.caption)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Color.textTertiary)
+                    Spacer(minLength: DS.Spacing.xs)
+                    AdminPillButton(title: L10n.t("إعادة إظهارهم", "Show them again"), icon: "arrow.uturn.backward",
+                                    style: .soft, height: DS.Hub.pillHeightCard, action: resetVerified)
+                        .fixedSize()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
     }
 
     private func note(_ text: String, icon: String) -> some View {
@@ -631,6 +761,100 @@ struct AdminMemberListRow: View {
                 }
             }
             .fixedSize()
+        }
+    }
+}
+
+// MARK: - صفّ «تحقق من الأحياء»
+
+/// الصورة · الاسم · «الفرع · مواليد 1935 · 91 سنة» (أو «بلا تاريخ ميلاد») ثم «متوفى» و«حي ✓» (الرمز SF بعد النص —
+/// علامة ✓ النصية تُرسم بخط Plex كأنها «٧»). الضغط على الاسم يفتح ورقة العضو.
+/// من أحجام الخط الكبيرة الزرّان تحت الاسم
+struct AdminLivingCheckRow: View {
+    let entry: AdminMembersIndex.Entry
+    let branchTitle: String?
+    let canEdit: Bool
+    let open: () -> Void
+    let deceased: () -> Void
+    let alive: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var member: FamilyMember { entry.member }
+
+    private var subline: String {
+        let birth: String
+        if let y = entry.living?.birthYear {
+            let age = Calendar(identifier: .gregorian).component(.year, from: Date()) - y
+            birth = L10n.t("مواليد \(y) · \(age) سنة", "Born \(y) · \(age) yrs")
+        } else {
+            birth = L10n.t("بلا تاريخ ميلاد", "No birth date")
+        }
+        return [branchTitle, birth].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    var body: some View {
+        let stacked = typeSize >= .xxxLarge
+        let name = member.shortFullName.isEmpty ? L10n.t("بلا اسم", "No name") : member.shortFullName
+        let person = Button(action: open) {
+            HStack(spacing: DS.Spacing.md) {
+                DSMemberAvatar(name: member.fullName, avatarUrl: member.avatarUrl, size: DS.Icon.avatar, roleColor: DS.Color.slate)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(name)
+                        .dsFont(.hubRow)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .dsNameLines()
+                    Text(verbatim: subline)
+                        .dsFont(.footnote)
+                        .monospacedDigit()
+                        .foregroundColor(entry.living?.birthYear.map { $0 < AdminLivingCheck.oldBirthYear } == true
+                                         ? DS.Color.warning.dsReadableGlyph : DS.Color.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !stacked { Spacer(minLength: 0) }
+            }
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(L10n.t("يفتح بيانات العضو", "Opens the member details"))
+
+        let buttons = HStack(spacing: DS.Spacing.sm) {
+            AdminPillButton(title: L10n.t("متوفى", "Deceased"), style: .soft, height: DS.Hub.pillHeightCard, action: deceased)
+                .accessibilityLabel(L10n.t("تسجيل وفاة \(name)", "Record \(name)'s death"))
+            AdminPillButton(title: L10n.t("حي", "Alive"), icon: "checkmark", style: .navy, height: DS.Hub.pillHeightCard,
+                            iconTrailing: true, action: alive)
+                .accessibilityLabel(L10n.t("\(name) حي — تمت المراجعة", "\(name) is alive — reviewed"))
+        }
+        .fixedSize()
+
+        return Group {
+            if stacked {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    person
+                    if canEdit { buttons }
+                }
+            } else {
+                HStack(spacing: DS.Spacing.sm) {
+                    person
+                    if canEdit { buttons }
+                }
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// مربّع «تسجيل الوفاة» — نفس `AdminMemberDetailSheet` (حفظه ونداءاته وإعلان الوفاة) مفتوحاً على التواريخ فقط
+/// (في نوعه المستقل — حارس المكدس)
+private struct AdminLivingDeathBox: ViewModifier {
+    @Binding var member: FamilyMember?
+
+    func body(content: Content) -> some View {
+        content.dsCenterBox(item: $member) { m in
+            AdminMemberDetailSheet(member: m, showsAccount: false, deathOnly: true)
         }
     }
 }

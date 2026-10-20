@@ -19,6 +19,11 @@ struct AdminMemberDetailSheet: View {
     let member: FamilyMember
     /// false = من «بيانات العضو» في لوحة الإدارة: بطاقة الحساب والحذف هناك (بيت واحد لكل أمر)
     let showsAccount: Bool
+    /// «متوفى» من «تحقق من الأحياء» (الدفعة ١٢): نفس السجل وحفظه (`saveAction` — التحديث، سجل الإدارة، إشعار التعديل،
+    /// مربّع إعلان الوفاة) مفتوحاً على «التواريخ والحالة» وحدها و«متوفّى» مفعّل؛ تاريخ الوفاة اختياري («بدون تاريخ»)
+    let deathOnly: Bool
+    /// حالة الوفاة التي فُتح عليها المربّع («إلغاء» بلا تعديل لا يسأل — مثل مربّع الوفاة في شجرة النساء)
+    private let startDeceased: Bool
 
     // MARK: - States
     @State private var selectedPhoneCountry: KuwaitPhone.Country
@@ -99,7 +104,7 @@ struct AdminMemberDetailSheet: View {
         let original = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         if selectedPhoneCountry.id != original.country.id || phoneNumber != original.localDigits { return true }
         if selectedFatherId != member.fatherId || selectedGender != (member.gender ?? "male") { return true }
-        if isDeceased != (member.isDeceased ?? false) { return true }
+        if isDeceased != startDeceased { return true }
         let birthKey = hasBirthDate ? Self.dayFormatter.string(from: birthDate) : nil
         let deathKey = hasDeathDate ? Self.dayFormatter.string(from: deathDate) : nil
         if birthKey != startBirthKey || deathKey != startDeathKey { return true }
@@ -126,9 +131,11 @@ struct AdminMemberDetailSheet: View {
 
     private var isMonitorOnly: Bool { authVM.currentUser?.role == .monitor }
 
-    init(member: FamilyMember, showsAccount: Bool = true) {
+    init(member: FamilyMember, showsAccount: Bool = true, deathOnly: Bool = false) {
         self.member = member
         self.showsAccount = showsAccount
+        self.deathOnly = deathOnly
+        self.startDeceased = deathOnly || (member.isDeceased ?? false)
         self._currentAvatarURL = State(initialValue: member.avatarUrl)
         self._accountStatus = State(initialValue: member.status)
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
@@ -164,7 +171,7 @@ struct AdminMemberDetailSheet: View {
 
         self._bioStations = State(initialValue: member.bio ?? [])
         self._selectedGender = State(initialValue: member.gender ?? "male")
-        self._isDeceased = State(initialValue: member.isDeceased ?? false)
+        self._isDeceased = State(initialValue: deathOnly || (member.isDeceased ?? false))
         if let dDateStr = member.deathDate, !dDateStr.isEmpty, let date = formatter.date(from: dDateStr) {
             self._deathDate = State(initialValue: date)
             self._hasDeathDate = State(initialValue: true)
@@ -181,25 +188,29 @@ struct AdminMemberDetailSheet: View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك): رأس متدرّج، أقسام تدخل
         // تباعاً، و«حفظ» / «إلغاء» أسفل المربّع
         DSComposer(
-            title: L10n.t("بيانات العضو", "Member details"),
+            title: deathOnly ? L10n.t("تسجيل الوفاة", "Record death") : L10n.t("بيانات العضو", "Member details"),
             subtitle: member.fullName,
-            icon: "person.badge.shield.checkmark.fill",
-            tint: member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
+            icon: deathOnly ? "heart.text.square.fill" : "person.badge.shield.checkmark.fill",
+            tint: deathOnly || member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
             actionTitle: L10n.t("حفظ", "Save"),
             actionIcon: "checkmark",
-            canSubmit: isPhoneValid && isFirstNameValid,
+            canSubmit: deathOnly || (isPhoneValid && isFirstNameValid),
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
             onSubmit: saveAction,
             onCancel: { dismiss() }
         ) {
-            heroSection.dsStaggerIn(0)
-            basicsCard.dsStaggerIn(1)
-            datesCard.dsStaggerIn(2)
-            if !isMonitorOnly { lineageCard.dsStaggerIn(3) }
-            bioCard.dsStaggerIn(4)
-            if showsAccount && showsAccountCard { accountCard.dsStaggerIn(5) }
-            if showsAccount, !isMonitorOnly, canDeleteMember { deleteButton.dsStaggerIn(6) }
+            if deathOnly {
+                datesCard.dsStaggerIn(0)
+            } else {
+                heroSection.dsStaggerIn(0)
+                basicsCard.dsStaggerIn(1)
+                datesCard.dsStaggerIn(2)
+                if !isMonitorOnly { lineageCard.dsStaggerIn(3) }
+                bioCard.dsStaggerIn(4)
+                if showsAccount && showsAccountCard { accountCard.dsStaggerIn(5) }
+                if showsAccount, !isMonitorOnly, canDeleteMember { deleteButton.dsStaggerIn(6) }
+            }
         }
             // كل نوافذ التعديل المباشر ألواح بمنتصف الشاشة (طلب المالك)
             // قائمة أعضاء طويلة — مربّع طويل من الأسفل يُغلق بالسحب (توصية أبل)
@@ -1064,7 +1075,8 @@ struct AdminMemberDetailSheet: View {
             showOfflineAlert = true
             return
         }
-        guard isPhoneValid else { return }
+        // «تسجيل الوفاة» لا يعرض الاسم ولا الرقم ولا يحفظهما (التواريخ فقط)
+        guard deathOnly || isPhoneValid else { return }
         isSaving = true
 
         let capturedMemberId = member.id
@@ -1102,21 +1114,23 @@ struct AdminMemberDetailSheet: View {
         }
         let capturedFullName = finalFullName
 
-        guard !capturedFullName.isEmpty else {
+        guard deathOnly || !capturedFullName.isEmpty else {
             isSaving = false
             showEmptyNameAlert = true
             return
         }
         // الاسم الكامل لازم يبدأ بالاسم الأول (التنبيه ظاهر تحت الحقل)
-        guard PersonName.startsWithFirstName(capturedFullName, firstName) else {
+        guard deathOnly || PersonName.startsWithFirstName(capturedFullName, firstName) else {
             isSaving = false
             return
         }
 
         // الاسم الأول = الحقل (القاعدة ١) — يتغيّر بروحه أيضاً (تصحيح «زين» ← «زين العابدين»)
         let capturedFirstName = PersonName.clean(firstName)
-        let nameChanged = capturedFullName != member.fullName || capturedFirstName != PersonName.clean(member.firstName)
+        let nameChanged = !deathOnly
+            && (capturedFullName != member.fullName || capturedFirstName != PersonName.clean(member.firstName))
         let phoneChanged: Bool = {
+            guard !deathOnly else { return false }
             let original = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
             return capturedPhoneCountry.id != original.country.id || capturedPhone != original.localDigits
         }()
@@ -1124,7 +1138,7 @@ struct AdminMemberDetailSheet: View {
             let originalDigits = KuwaitPhone.detectCountryAndLocal(member.phoneNumber).localDigits
             return phoneChanged && capturedPhone.isEmpty && !originalDigits.isEmpty
         }()
-        let fatherChanged = capturedFatherId != member.fatherId
+        let fatherChanged = !deathOnly && capturedFatherId != member.fatherId
         let datesChanged: Bool = {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
@@ -1141,8 +1155,9 @@ struct AdminMemberDetailSheet: View {
                formatter.string(from: cd) != formatter.string(from: od) { return true }
             return false
         }()
-        let genderChanged = capturedGender != (member.gender ?? "male")
+        let genderChanged = !deathOnly && capturedGender != (member.gender ?? "male")
         let bioChanged: Bool = {
+            guard !deathOnly else { return false }
             let oldKey = (member.bio ?? []).map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
             let newKey = capturedBioStations.map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
             return oldKey != newKey
@@ -1150,6 +1165,7 @@ struct AdminMemberDetailSheet: View {
         let deceasedJustMarked = capturedIsDeceased && !(member.isDeceased ?? false)
         let auditMemberName = member.fullName
         let childrenOrderChanged: Bool = {
+            guard !deathOnly else { return false }
             let originalChildren = memberVM.allMembers
                 .filter { $0.fatherId == capturedMemberId && $0.isCountable }
                 .sortedForDisplay()

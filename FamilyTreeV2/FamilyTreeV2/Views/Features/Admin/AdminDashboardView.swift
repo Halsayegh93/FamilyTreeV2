@@ -120,6 +120,8 @@ struct AdminDashboardView: View {
         .task {
             // شريط الأقسام في كل صفحة من هذا المكدس ينقل عبر هذا (في `.task` الموجودة — بلا مُعدِّل إضافي على الجذر)
             AdminAreaRouter.navigate = openArea
+            // «حي ✓» المحلية لهذا المستخدم — «أحياء (تقديري)» في «إحصاء الأفراد»
+            AdminLivingVerifiedStore.shared.activate(user: authVM.currentUser?.id)
             appeared = true
             await loadAllAdminData()
         }
@@ -1208,12 +1210,22 @@ struct AdminBaselineDot: View {
 /// المسجّلون ← شريحة «مسجّلون». مع XXXL تصغر الحلقات قليلاً وتلتفّ الأسماء؛ من أحجام إمكانية الوصول كل حلقة كتلة (حلقة
 /// صغيرة بجانب الاسم والعدد، ثم الأحياء والمتوفون صفّين بلمس ٤٤). الحلقات من المكوّن الموحّد (`DSRingGauge`، الدفعة ١٠ — مرجع كل مؤشرات اللوحة)، بلا Charts.
 /// نفس التعريفات: الرجال = الشجرة بلا طلبات الانضمام، النساء = إناث شجرة النساء، المسجّلون = لهم حساب دخول.
+/// «أحياء (تقديري)» (الدفعة ١٢): ما دام في الأجيال القديمة من بلا وفاة مسجّلة ولم يُراجَع («تحقق من الأحياء» ناقص «حي ✓»
+/// المحلية) فأحياء الرجال والإجمالي «≈» وفي رأس البطاقة شارة «أحياء (تقديري)» تشرح العدد وتفتح الشريحة؛ و«≈ أحياء» نفسها
+/// تفتح الشريحة. المقاس والتخطيط كما هما (الشارة في سطر العنوان).
 struct AdminMemberCountsCard: View {
     let counts: AdminMemberCounts
+    @ObservedObject private var verified = AdminLivingVerifiedStore.shared
+    @State private var showEstimate = false
+    @State private var openVerify = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dsLandscape) private var landscape
 
-    fileprivate enum Target { case overview, directory, deceased, women, accounts }
+    fileprivate enum Target { case overview, directory, deceased, women, accounts, verify }
+
+    /// مرشّحو «تحقق من الأحياء» الذين لم يراجعهم المستخدم بعد
+    private var unverified: Int { counts.oldLiving.map { $0.subtracting(verified.ids).count } ?? 0 }
+    private var estimated: Bool { unverified > 0 }
 
     fileprivate struct Gauge: Identifiable {
         let id: String
@@ -1226,17 +1238,21 @@ struct AdminMemberCountsCard: View {
         let main: Target
         /// «N متوفى»
         let deceasedTarget: Target
+        /// الأحياء تقديريون (الرجال والإجمالي ما دام في «تحقق من الأحياء» من لم يُراجَع)
+        var estimated = false
         var split: Bool { deceasedTarget != main }
+        /// «≈ N حياً» تفتح «تحقق من الأحياء»
+        var aliveTarget: Target { estimated ? .verify : main }
     }
 
     private var gauges: [Gauge] {
         [
             Gauge(id: "total", title: L10n.t("الإجمالي", "Total"), tint: DS.Color.accent,
                   total: counts.total, alive: counts.totalAlive, deceased: counts.totalDeceased,
-                  main: .overview, deceasedTarget: .overview),
+                  main: .overview, deceasedTarget: .overview, estimated: estimated),
             Gauge(id: "men", title: L10n.t("الرجال", "Men"), tint: DS.Color.male,
                   total: counts.men, alive: counts.menAlive, deceased: counts.menDeceased,
-                  main: .directory, deceasedTarget: .deceased),
+                  main: .directory, deceasedTarget: .deceased, estimated: estimated),
             Gauge(id: "women", title: L10n.t("النساء", "Women"), tint: DS.Color.female,
                   total: counts.women, alive: counts.womenAlive, deceased: counts.womenDeceased,
                   main: .women, deceasedTarget: .women)
@@ -1251,7 +1267,9 @@ struct AdminMemberCountsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminCardHeader(title: L10n.t("إحصاء الأفراد", "Family census"))
+            AdminCardHeader(title: L10n.t("إحصاء الأفراد", "Family census")) {
+                if estimated { estimatePill }
+            }
             if stacked {
                 AnyView(VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     ForEach(gauges) { block($0) }
@@ -1270,6 +1288,38 @@ struct AdminMemberCountsCard: View {
         // الصفحة الثانية من «المربّع اللي ينسحب» (الدفعة ١٠) — البطاقة البيضاء من المربّع نفسه
         .padding(DS.Hub.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(AdminEstimateInfo(unverified: unverified, show: $showEstimate, open: $openVerify))
+    }
+
+    // MARK: «أحياء (تقديري)»
+
+    /// شارة صغيرة في سطر العنوان (بلا تغيير في ارتفاعه — منطقة اللمس ٤٤ بلا إزاحة)
+    private var estimatePill: some View {
+        Button { showEstimate = true } label: {
+            HStack(spacing: DS.Spacing.xxs + 1) {
+                Image(systemName: "info.circle")
+                    .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                    .accessibilityHidden(true)
+                Text(L10n.t("أحياء (تقديري)", "Living (estimate)"))
+                    .dsFont(.badge)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .foregroundColor(DS.Color.warning.dsReadableGlyph)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xxs + 1)
+            .background(Capsule().fill(DS.Color.warning.opacity(DS.Opacity.tintFill)))
+            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.section)
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityLabel(L10n.t("أحياء (تقديري)", "Living (estimate)"))
+        .accessibilityHint(Self.estimateText(unverified))
+    }
+
+    /// «يشمل N من الأجيال القديمة بدون تاريخ وفاة — راجعهم من «تحقق من الأحياء»»
+    static func estimateText(_ n: Int) -> String {
+        L10n.t("يشمل \(n) من الأجيال القديمة بدون تاريخ وفاة — راجعهم من «تحقق من الأحياء»",
+               "Includes \(n) from older generations with no death date — review them in “Check the living”")
     }
 
     // MARK: الحلقات
@@ -1298,7 +1348,7 @@ struct AdminMemberCountsCard: View {
     /// «54 حياً · 14 متوفى» في سطر، وسطرين إن ضاق العمود. الأحياء رابط الحلقة نفسها، و«متوفى» الرجال رابط شريحة «متوفون».
     /// القارئ الصوتي قرأ السطر مع الحلقة — يبقى منه «متوفى» الرجال وحده (وجهته مختلفة)
     private func legend(_ g: Gauge) -> some View {
-        let alive = link(g.main, face: AnyView(legendText(Self.aliveText(g.alive), color: g.tint)))
+        let alive = link(g.aliveTarget, face: AnyView(legendText(Self.aliveText(g.alive, estimated: g.estimated), color: g.tint)))
             .accessibilityHidden(true)
         let dead = link(g.deceasedTarget, face: AnyView(
             legendText(Self.deceasedText(g.deceased), color: DS.Color.textSecondary)
@@ -1345,7 +1395,7 @@ struct AdminMemberCountsCard: View {
                 .contentShape(Rectangle())
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(g.title): \(total)")))
-            link(g.main, face: AnyView(blockLine(Self.aliveText(g.alive), color: g.tint, title: g.title)))
+            link(g.aliveTarget, face: AnyView(blockLine(Self.aliveText(g.alive, estimated: g.estimated), color: g.tint, title: g.title)))
             link(g.deceasedTarget, face: AnyView(blockLine(Self.deceasedText(g.deceased), color: DS.Color.textSecondary,
                                                            title: g.title)))
         }
@@ -1431,6 +1481,7 @@ struct AdminMemberCountsCard: View {
         case .directory: return AnyView(AdminMembersPage().adminArea(.family))
         case .deceased:  return AnyView(AdminMembersPage(chip: .deceased).adminArea(.family))
         case .accounts:  return AnyView(AdminMembersPage(chip: .registered).adminArea(.family))
+        case .verify:    return AnyView(AdminMembersPage(chip: .verifyLiving).adminArea(.family))
         case .women:     return AnyView(EmptyView())
         }
     }
@@ -1442,14 +1493,17 @@ struct AdminMemberCountsCard: View {
     /// «الرجال: 56، 44 حياً، 12 متوفى»
     private static func spoken(_ g: Gauge) -> String {
         [L10n.t("\(g.title): \(number(g.total))", "\(g.title): \(number(g.total))"),
-         aliveText(g.alive), deceasedText(g.deceased)].joined(separator: L10n.t("، ", ", "))
+         aliveText(g.alive) + (g.estimated ? L10n.t(" (تقديري)", " (estimate)") : ""),
+         deceasedText(g.deceased)].joined(separator: L10n.t("، ", ", "))
     }
 
     /// «54 حياً» (المعدود بالعربية الصحيحة: حيّ واحد، حيّان، 3 أحياء، 54 حياً)
-    private static func aliveText(_ n: Int?) -> String {
+    /// `estimated`: «≈ 54 حياً» (أحياء تقديريون — «تحقق من الأحياء»)
+    private static func aliveText(_ n: Int?, estimated: Bool = false) -> String {
         guard let n else { return L10n.t("— أحياء", "— living") }
-        return L10n.isArabic ? AdminTodayText.arabicCount(n, one: "حيّ واحد", two: "حيّان", few: "أحياء", many: "حياً", single: "حيّ")
-                             : "\(n) living"
+        let text = L10n.isArabic ? AdminTodayText.arabicCount(n, one: "حيّ واحد", two: "حيّان", few: "أحياء", many: "حياً", single: "حيّ")
+                                 : "\(n) living"
+        return estimated ? "≈ " + text : text
     }
 
     /// «14 متوفى» (متوفى واحد، متوفيان، 3 متوفين، 14 متوفى)
@@ -1457,5 +1511,25 @@ struct AdminMemberCountsCard: View {
         guard let n else { return L10n.t("— متوفون", "— deceased") }
         return L10n.isArabic ? AdminTodayText.arabicCount(n, one: "متوفى واحد", two: "متوفيان", few: "متوفين", many: "متوفى", single: "متوفى")
                              : "\(n) deceased"
+    }
+}
+
+/// «أحياء (تقديري)»: شرح العدد ثم «تحقق من الأحياء» تفتح صفحة الأعضاء على الشريحة (في نوعه المستقل — حارس المكدس)
+private struct AdminEstimateInfo: ViewModifier {
+    let unverified: Int
+    @Binding var show: Bool
+    @Binding var open: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .dsAlert(L10n.t("أحياء (تقديري)", "Living (estimate)"), isPresented: $show) {
+                Button(L10n.t("تحقق من الأحياء", "Check the living")) { open = true }
+                Button(L10n.t("إغلاق", "Close"), role: .cancel) {}
+            } message: {
+                Text(AdminMemberCountsCard.estimateText(unverified))
+            }
+            .navigationDestination(isPresented: $open) {
+                AdminLazyPage { AnyView(AdminMembersPage(chip: .verifyLiving).adminArea(.family)) }
+            }
     }
 }
