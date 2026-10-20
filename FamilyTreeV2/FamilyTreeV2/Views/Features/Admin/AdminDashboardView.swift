@@ -435,7 +435,7 @@ struct AdminDashboardView: View {
             let pills = statusPills
             if !pills.isEmpty {
                 AnyView(AdminTodayStatusRow(pills: pills))
-                    .padding(.top, DS.Spacing.sm)
+                    .padding(.top, DS.Spacing.xs)
             }
         }
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth - 2 * DS.Spacing.lg)
@@ -487,56 +487,70 @@ struct AdminDashboardView: View {
 
     // MARK: سطر الحالة (كان بطاقة «تنبيهات»)
 
-    /// الصيانة · الرصيد · المجدول · بلا إشعارات — للمالك والمدير (نفس ظهور التنبيهات السابقة؛ المراقب والمشرف لا يرونها)
+    /// الصيانة · الرصيد · المجدول · بلا إشعارات — للمالك والمدير (نفس ظهور التنبيهات السابقة؛ المراقب والمشرف لا يرونها).
+    /// العبارة قصيرة في السطر، والقارئ الصوتي يقرأ الحالة كاملة
     private var statusPills: [AdminStatusPill] {
         guard authVM.isAdmin else { return [] }
+        let notLoaded = L10n.t("لم يُحمَّل بعد", "not loaded yet")
         var list: [AdminStatusPill] = []
         if authVM.canViewSystemSettings {
             let s = appSettingsVM.settings
             if s.updatedAt == nil {
-                list.append(AdminStatusPill(home: .maintenance, label: L10n.t("الصيانة", "Maintenance"), value: "—", level: .unknown))
+                list.append(AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة —", "Maintenance —"), level: .unknown,
+                                            spoken: L10n.t("وضع الصيانة: \(notLoaded)", "Maintenance mode: \(notLoaded)")))
             } else {
                 list.append(s.maintenanceMode
-                    ? AdminStatusPill(home: .maintenance, label: L10n.t("الصيانة", "Maintenance"),
-                                      value: L10n.t("شغّالة", "On"), level: .urgent)
-                    : AdminStatusPill(home: .maintenance, label: L10n.t("الصيانة", "Maintenance"),
-                                      value: L10n.t("مطفأة", "Off"), level: .ok))
+                    ? AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة مفعّلة", "Maintenance on"), level: .urgent,
+                                      spoken: L10n.t("وضع الصيانة مفعّل", "Maintenance mode is on"))
+                    : AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة مطفأة", "Maintenance off"), level: .ok,
+                                      spoken: L10n.t("وضع الصيانة مطفأ", "Maintenance mode is off")))
             }
             // تحت عتبة «منخفض» كهرماني وتحت «عاجل» أحمر (العتبات من السيرفر)
             let level: AdminStatusPill.Level
+            let state: String
             switch sms.level {
-            case .good:    level = .ok
-            case .low:     level = .warn
-            case .urgent:  level = .urgent
-            case .unknown: level = .unknown
+            case .good:    level = .ok;      state = ""
+            case .low:     level = .warn;    state = L10n.t("، منخفض", ", low")
+            case .urgent:  level = .urgent;  state = L10n.t("، منخفض جداً", ", very low")
+            case .unknown: level = .unknown; state = ""
             }
-            list.append(AdminStatusPill(home: .sms, label: L10n.t("الرصيد", "Balance"),
-                                        value: sms.status?.balance.map { L10n.t("\(SmsBalanceText.points($0)) نقطة",
-                                                                                "\(SmsBalanceText.points($0)) pts") } ?? "—",
-                                        level: level))
+            if let balance = sms.status?.balance {
+                let points = SmsBalanceText.points(balance)
+                list.append(AdminStatusPill(home: .sms, text: L10n.t("الرصيد \(points)", "Balance \(points)"), level: level,
+                                            spoken: L10n.t("رصيد رسائل رمز الدخول: \(points) نقطة\(state)",
+                                                           "Sign-in SMS balance: \(points) points\(state)")))
+            } else {
+                list.append(AdminStatusPill(home: .sms, text: L10n.t("الرصيد —", "Balance —"), level: level,
+                                            spoken: L10n.t("رصيد رسائل رمز الدخول: \(notLoaded)", "Sign-in SMS balance: \(notLoaded)")))
+            }
         }
         // الإشعارات المجدولة: اليوم كهرماني، ولاحقاً أو لا شيء أخضر
         let dates = notificationVM.scheduledNotifications.compactMap(\.scheduledDate)
         let today = dates.filter { Calendar.current.isDateInToday($0) }.count
         list.append(today > 0
-            ? AdminStatusPill(home: .scheduled, label: L10n.t("مجدول", "Scheduled"),
-                              value: L10n.t("\(today) اليوم", "\(today) today"), level: .warn)
+            ? AdminStatusPill(home: .scheduled, text: L10n.t("مجدول اليوم \(today)", "\(today) scheduled today"), level: .warn,
+                              spoken: L10n.t("إشعارات مجدولة اليوم: \(today)", "Notifications scheduled today: \(today)"))
             : dates.isEmpty
-                ? AdminStatusPill(home: .scheduled, label: L10n.t("مجدول", "Scheduled"),
-                                  value: L10n.t("لا شيء", "None"), level: .ok,
-                                  spoken: L10n.t("لا شيء مجدول", "Nothing scheduled"))
-                : AdminStatusPill(home: .scheduled, label: L10n.t("مجدول", "Scheduled"),
-                                  value: L10n.t("\(dates.count) لاحقاً", "\(dates.count) later"), level: .ok))
+                ? AdminStatusPill(home: .scheduled, text: L10n.t("لا شيء مجدول", "Nothing scheduled"), level: .ok,
+                                  spoken: L10n.t("لا إشعارات مجدولة", "No scheduled notifications"))
+                : AdminStatusPill(home: .scheduled, text: L10n.t("مجدول لاحقاً \(dates.count)", "\(dates.count) scheduled later"),
+                                  level: .ok,
+                                  spoken: L10n.t("إشعارات مجدولة لاحقاً: \(dates.count)", "Notifications scheduled later: \(dates.count)")))
         // أجهزة لا تصلها الإشعارات (غير مسجّلة أو لم تُحدَّث منذ 30 يوماً) — نفس رقم صفحتها
         if let reach = devices.stats {
             let n = reach.total - reach.reach
-            list.append(AdminStatusPill(home: .devices, label: L10n.t("بلا إشعارات", "Not reached"),
-                                        value: n == 0 ? L10n.t("لا يوجد", "None")
-                                                      : n == 1 ? L10n.t("جهاز واحد", "1 device")
-                                                               : L10n.t("\(n) أجهزة", "\(n) devices"),
-                                        level: n > 0 ? .warn : .ok))
+            let devicesText = L10n.isArabic
+                ? AdminTodayText.arabicCount(n, one: "جهاز", two: "جهازان", few: "أجهزة", many: "جهازاً", single: "جهاز")
+                : (n == 1 ? "1 device" : "\(n) devices")
+            list.append(n == 0
+                ? AdminStatusPill(home: .devices, text: L10n.t("الإشعارات تصل الجميع", "All devices reached"), level: .ok,
+                                  spoken: L10n.t("الإشعارات تصل كل الأجهزة", "Notifications reach every device"))
+                : AdminStatusPill(home: .devices, text: L10n.t("\(devicesText) بلا إشعارات", "\(devicesText) not reached"), level: .warn,
+                                  spoken: L10n.t("أجهزة لا تصلها الإشعارات: \(n)", "Devices not reached by notifications: \(n)")))
         } else {
-            list.append(AdminStatusPill(home: .devices, label: L10n.t("بلا إشعارات", "Not reached"), value: "—", level: .unknown))
+            list.append(AdminStatusPill(home: .devices, text: L10n.t("الأجهزة —", "Devices —"), level: .unknown,
+                                        spoken: L10n.t("أجهزة لا تصلها الإشعارات: \(notLoaded)",
+                                                       "Devices not reached by notifications: \(notLoaded)")))
         }
         return list
     }
@@ -784,31 +798,60 @@ struct AdminTodayDoneRow: View {
 
 // MARK: - سطر الحالة في الرأس
 
-/// إشارات الحالة الأربع تحت أرقام «اليوم» (كانت بطاقة «تنبيهات»): صفّ واحد بأربع إشارات زجاجية متساوية، وصفّان
-/// (٢×٢) حين يكبر خط الجهاز — كل إشارة تفتح بيتها الوحيد
+/// إشارات الحالة الأربع تحت أرقام «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ «صغّر المربعات وخلّهم نقط»): سطر واحد من أربع نقاط
+/// ملوّنة بعبارة قصيرة بخط صغير، بلا مربّعات وبمسافات متساوية. يصير سطرين (٢×٢) حين لا يتّسع السطر (الخط الأكبر)،
+/// وإشارة في كل سطر من أحجام إمكانية الوصول. كل إشارة تفتح بيتها الوحيد، ومنطقة لمسها ٤٤ نقطة بلا إطار مرئي
 struct AdminTodayStatusRow: View {
     let pills: [AdminStatusPill]
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.dsLandscape) private var landscape
-
-    private var rows: [[AdminStatusPill]] {
-        guard typeSize > .large && !landscape && pills.count > 2 else { return [pills] }
-        return stride(from: 0, to: pills.count, by: 2).map { Array(pills[$0..<min($0 + 2, pills.count)]) }
-    }
 
     var body: some View {
-        VStack(spacing: DS.Spacing.xsm) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: DS.Spacing.xsm) {
-                    ForEach(row) { pill in
-                        NavigationLink { AdminLazyPage { Self.page(pill.home) } } label: {
-                            AdminStatusPillView(pill: pill)
-                        }
-                        .buttonStyle(DSPressStyle())
+        if typeSize.isAccessibilitySize {
+            AnyView(column)
+        } else {
+            AnyView(ViewThatFits(in: .horizontal) {
+                line
+                grid
+            })
+        }
+    }
+
+    /// سطر واحد: الأولى على الطرف والأخيرة على الطرف الآخر، والمسافات بينها متساوية
+    private var line: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(pills.enumerated()), id: \.element.id) { i, pill in
+                if i > 0 { Spacer(minLength: DS.Spacing.md) }
+                link(pill, wraps: false)
+            }
+        }
+    }
+
+    /// سطران (٢×٢) بعمودين متساويين
+    private var grid: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(stride(from: 0, to: pills.count, by: 2)), id: \.self) { start in
+                HStack(spacing: DS.Spacing.md) {
+                    ForEach(pills[start..<min(start + 2, pills.count)]) { pill in
+                        link(pill, wraps: true)
                     }
+                    if start + 1 >= pills.count { Spacer(minLength: 0).frame(maxWidth: .infinity) }
                 }
             }
         }
+    }
+
+    /// إشارة في كل سطر (أحجام إمكانية الوصول)
+    private var column: some View {
+        VStack(spacing: 0) {
+            ForEach(pills) { link($0, wraps: true) }
+        }
+    }
+
+    private func link(_ pill: AdminStatusPill, wraps: Bool) -> some View {
+        NavigationLink { AdminLazyPage { Self.page(pill.home) } } label: {
+            AdminStatusPillView(pill: pill, wraps: wraps)
+        }
+        .buttonStyle(DSPressStyle())
     }
 
     /// بيت كل إشارة: الصيانة ← «التطبيق»، الرصيد ← «رسائل رمز الدخول»، المجدول ← «المناسبات» (القادم)، الأجهزة ←
@@ -824,9 +867,12 @@ struct AdminTodayStatusRow: View {
     }
 }
 
-/// إشارة واحدة: العنوان صغيراً، ثم نقطة اللون والقيمة
+/// إشارة واحدة: نقطة اللون ثم العبارة القصيرة بأبيض الرأس الخافت (العاجل بالأحمر الفاتح). بلا مربّع — منطقة اللمس
+/// ٤٤ نقطة من الإطار نفسه، والقارئ الصوتي يقرأ الحالة كاملة
 struct AdminStatusPillView: View {
     let pill: AdminStatusPill
+    /// في السطرين/العمود: العبارة تلتفّ بدل أن تُقصّ، وتأخذ عرض خانتها
+    var wraps = false
 
     private var dot: Color {
         switch pill.level {
@@ -838,46 +884,52 @@ struct AdminStatusPillView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            Text(pill.label)
-                .dsFont(.micro)
-                .foregroundColor(DS.Hub.onBandMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            HStack(spacing: DS.Spacing.xs) {
-                Circle()
-                    .fill(dot)
-                    .frame(width: DS.Hub.statusDot, height: DS.Hub.statusDot)
-                Text(verbatim: pill.value)
-                    .dsFont(.caption)
-                    .monospacedDigit()
-                    .foregroundColor(pill.level == .urgent ? DS.Hub.kpiHot : DS.Color.textOnPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
+            AdminBaselineDot(color: dot)
+            Text(verbatim: pill.text)
+                .dsFont(.caption)
+                .monospacedDigit()
+                .foregroundColor(pill.level == .urgent ? DS.Hub.kpiHot : DS.Hub.onBandMuted)
+                .lineLimit(wraps ? 3 : 1)
+                .fixedSize(horizontal: !wraps, vertical: true)
+                .multilineTextAlignment(.leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xsm)
-        .background(RoundedRectangle(cornerRadius: DS.Hub.statusRadius, style: .continuous).fill(DS.Hub.glass))
-        .overlay(RoundedRectangle(cornerRadius: DS.Hub.statusRadius, style: .continuous)
-            .strokeBorder(pill.level == .urgent ? DS.Hub.bellDot.opacity(DS.Opacity.selectedStroke) : DS.Hub.glassLine,
-                          lineWidth: DS.Border.width))
+        .frame(maxWidth: wraps ? .infinity : nil, minHeight: DS.Icon.tapTarget, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(pill.spoken ?? "\(pill.label): \(pill.value)")
+        .accessibilityLabel(pill.spoken)
+    }
+}
+
+/// نقطة لون على وسط السطر الأول من النص بجانبها (في `HStack` بمحاذاة `.firstTextBaseline`) — تكبر قليلاً مع خط الجهاز
+struct AdminBaselineDot: View {
+    let color: Color
+    var size: CGFloat = DS.Hub.statusDot
+    @ScaledMetric(relativeTo: .caption) private var scale: CGFloat = 1
+
+    var body: some View {
+        let side = size * min(max(scale, 1), 1.6)
+        Circle()
+            .fill(color)
+            .frame(width: side, height: side)
+            // مركزها فوق خطّ الكتابة بنصف ارتفاع الحروف تقريباً (٣٫٥ نقطة بالخط الافتراضي)
+            .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] + 3.5 * scale }
+            .accessibilityHidden(true)
     }
 }
 
 // MARK: - «أعداد الأعضاء»
 
-/// جدول صغير (طلب المالك ٢٠٢٦-١٠-٢٠): الرجال · النساء · الإجمالي × العدد الكلي · الأحياء · المتوفون، وتحته
-/// «الأعضاء المسجّلون: N». كل رقم يفتح صفحته: الرجال ← صفحة الأعضاء (والمتوفون ← شريحة «متوفون»)، النساء ← شجرة النساء،
-/// الإجمالي ← «المؤشرات ← العائلة»، والمسجّلون ← شريحة «مسجّلون». نفس التعريفات: الرجال = الشجرة بلا طلبات الانضمام،
-/// النساء = إناث شجرة النساء، المسجّلون = لهم حساب دخول. مع الخط الكبير جداً يتحوّل كل صفّ إلى كتلة (العنوان ثم الأرقام).
+/// بطاقة الأعداد (طلب المالك ٢٠٢٦-١٠-٢٠ «عطني المربع بتصميم أفضل»): الإجمالي كبيراً («68 فرداً» و«54 حياً · 14 متوفى»)،
+/// ثم الرجال والنساء — لكلٍّ عنوانه وعدده وشريط نسبة بلونين (الأحياء بلون الجنس، والمتوفون رمادي المتوفين الخافت لا
+/// الأحمر) ومفتاح «أحياء N · متوفون N» — ثم شريحة «الأعضاء المسجّلون N». الصفّان متجاوران أفقياً، وكتل عمودية من أحجام
+/// إمكانية الوصول. كل رقم يفتح صفحته كما كان: الرجال ← صفحة الأعضاء (ومتوفوهم ← شريحة «متوفون»)، النساء ← شجرة النساء،
+/// الإجمالي ← «المؤشرات ← العائلة»، المسجّلون ← شريحة «مسجّلون». نفس التعريفات: الرجال = الشجرة بلا طلبات الانضمام،
+/// النساء = إناث شجرة النساء، المسجّلون = لهم حساب دخول.
 struct AdminMemberCountsCard: View {
     let counts: AdminMemberCounts
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.dsLandscape) private var landscape
 
     fileprivate enum Target { case overview, directory, deceased, women, accounts }
 
@@ -885,131 +937,249 @@ struct AdminMemberCountsCard: View {
         let id: String
         let title: String
         let tint: Color
-        let values: [Int?]
-        let targets: [Target]
+        let total: Int?
+        let alive: Int?
+        let deceased: Int?
+        /// العنوان والعدد والأحياء والشريط
+        let main: Target
+        /// «متوفون N»
+        let deceasedTarget: Target
     }
 
-    private static var columns: [String] {
-        [L10n.t("العدد الكلي", "Total"), L10n.t("الأحياء", "Living"), L10n.t("المتوفون", "Deceased")]
-    }
+    /// أي جزء من صفّ يُرسم: الكل، أو الكل بلا «متوفون» (تحته رابطه الخاص بنفس التخطيط)، أو «متوفون» وحده
+    fileprivate enum Part { case all, main, deceased }
 
     private var lines: [Line] {
         [
             Line(id: "men", title: L10n.t("الرجال", "Men"), tint: DS.Color.male,
-                 values: [counts.men, counts.menAlive, counts.menDeceased], targets: [.directory, .directory, .deceased]),
+                 total: counts.men, alive: counts.menAlive, deceased: counts.menDeceased,
+                 main: .directory, deceasedTarget: .deceased),
             Line(id: "women", title: L10n.t("النساء", "Women"), tint: DS.Color.female,
-                 values: [counts.women, counts.womenAlive, counts.womenDeceased], targets: [.women, .women, .women]),
-            Line(id: "total", title: L10n.t("الإجمالي", "Total"), tint: DS.Color.textPrimary,
-                 values: [counts.total, counts.totalAlive, counts.totalDeceased], targets: [.overview, .overview, .overview])
+                 total: counts.women, alive: counts.womenAlive, deceased: counts.womenDeceased,
+                 main: .women, deceasedTarget: .women)
         ]
     }
 
-    /// الكتل بدل الجدول من أحجام إمكانية الوصول
+    /// كتل عمودية من أحجام إمكانية الوصول
     private var stacked: Bool { typeSize.isAccessibilitySize }
 
+    /// رمادي المتوفين الخافت (لون معنى، لا أحمر)
+    private static var deceasedTint: Color { DS.Color.deceased.opacity(0.5) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminCardHeader(title: L10n.t("أعداد الأعضاء", "Member counts"))
-            if stacked { AnyView(blocks) } else { AnyView(table) }
-            AdminRowDivider()
-            registeredLine
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                AdminCardHeader(title: L10n.t("أعداد الأعضاء", "Member counts"))
+                totalLine
+            }
+            if stacked {
+                AnyView(VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    ForEach(lines) { block($0) }
+                })
+            } else if landscape {
+                AnyView(HStack(alignment: .top, spacing: DS.Spacing.xxl) {
+                    ForEach(lines) { row($0) }
+                })
+            } else {
+                AnyView(VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    ForEach(lines) { row($0) }
+                })
+            }
+            registeredChip
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .adminCard()
     }
 
-    private var table: some View {
-        Grid(alignment: .leading, horizontalSpacing: DS.Spacing.sm, verticalSpacing: DS.Spacing.sm) {
-            GridRow {
-                Color.clear.frame(width: 0, height: 0).gridCellUnsizedAxes([.horizontal, .vertical])
-                ForEach(Self.columns, id: \.self) { title in
-                    Text(title)
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            ForEach(lines) { line in
-                if line.id == "total" {
-                    AdminRowDivider()
-                }
-                GridRow(alignment: .firstTextBaseline) {
-                    Text(line.title)
-                        .dsFont(.hubRow)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                        .fixedSize()
-                    ForEach(0..<3, id: \.self) { i in
-                        cell(line, i, labelled: false)
-                    }
-                }
-            }
-        }
-    }
+    // MARK: الإجمالي
 
-    private var blocks: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            ForEach(lines) { line in
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(line.title)
-                        .dsFont(.hubRow)
-                        .foregroundColor(DS.Color.textPrimary)
-                    ForEach(0..<3, id: \.self) { i in
-                        cell(line, i, labelled: true)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func cell(_ line: Line, _ i: Int, labelled: Bool) -> some View {
-        let value = line.values[i].map { "\($0)" } ?? "—"
-        let label = Self.columns[i]
-        let face = HStack(spacing: DS.Spacing.xs) {
-            if labelled {
-                Text(label)
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer(minLength: DS.Spacing.sm)
-            }
-            Text(verbatim: value)
-                .dsFont(.statValue)
+    private var totalLine: some View {
+        let total = counts.total.map { "\($0)" } ?? "—"
+        let unit = counts.total.map { Self.people($0) } ?? ""
+        let summary = Self.summary(alive: counts.totalAlive, deceased: counts.totalDeceased)
+        let big = HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+            Text(verbatim: total)
+                .dsFont(.hubPulse)
                 .monospacedDigit()
-                .foregroundColor(line.tint.dsReadableGlyph)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .foregroundColor(DS.Color.textPrimary)
                 .contentTransition(.numericText())
+            Text(verbatim: unit)
+                .dsFont(.subtitle)
+                .foregroundColor(DS.Color.textSecondary)
         }
-        .frame(maxWidth: .infinity, minHeight: labelled ? DS.Icon.tapTarget : nil, alignment: .leading)
+        let small = Text(verbatim: summary)
+            .dsFont(.footnote)
+            .monospacedDigit()
+            .foregroundColor(DS.Color.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        let face = ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+                big
+                Spacer(minLength: DS.Spacing.sm)
+                small.lineLimit(1)
+            }
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                big
+                small
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(line.title)، \(label): \(value)")
-        link(line.targets[i], face: AnyView(face))
+        .accessibilityLabel(L10n.t("الإجمالي: \(total) \(unit)، \(summary)", "Total: \(total) \(unit), \(summary)"))
+        return link(.overview, face: AnyView(face))
     }
 
-    private var registeredLine: some View {
+    // MARK: الرجال والنساء
+
+    /// صفّ: «الرجال 56 … ● أحياء 44 ● متوفون 12» ثم شريط النسبة تحته. «متوفون» برابط آخر (الرجال) يُرسم فوق مكانه
+    /// بنفس التخطيط، فيبقى باقي الصفّ كلّه رابطاً واحداً
+    @ViewBuilder
+    private func row(_ line: Line) -> some View {
+        let split = line.deceasedTarget != line.main
+        let base = face(line, split ? .main : .all)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Self.spoken(line, deceased: !split))
+        if split {
+            link(line.main, face: AnyView(base))
+                .overlay { face(line, .deceased) }
+        } else {
+            link(line.main, face: AnyView(base))
+        }
+    }
+
+    private func face(_ line: Line, _ part: Part) -> some View {
+        let total = line.total.map { "\($0)" } ?? "—"
+        let ink = line.tint.dsReadableGlyph
+        let hideMain = part == .deceased
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+                Group {
+                    Text(line.title)
+                        .dsFont(.hubRow)
+                        .foregroundColor(ink)
+                        .lineLimit(1)
+                    Text(verbatim: total)
+                        .dsFont(.statValue)
+                        .monospacedDigit()
+                        .foregroundColor(ink)
+                        .lineLimit(1)
+                        .contentTransition(.numericText())
+                    Spacer(minLength: DS.Spacing.sm)
+                    legend(ink, L10n.t("أحياء", "Living"), line.alive)
+                }
+                .opacity(hideMain ? 0 : 1)
+                .allowsHitTesting(!hideMain)
+                .accessibilityHidden(hideMain)
+                if part == .deceased {
+                    link(line.deceasedTarget, face: AnyView(
+                        legend(Self.deceasedTint, L10n.t("متوفون", "Deceased"), line.deceased)
+                            .contentShape(Rectangle())
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(L10n.t("\(line.title)، المتوفون: \(line.deceased.map { "\($0)" } ?? "—")",
+                                                       "\(line.title), deceased: \(line.deceased.map { "\($0)" } ?? "—")"))))
+                } else {
+                    legend(Self.deceasedTint, L10n.t("متوفون", "Deceased"), line.deceased)
+                        .opacity(part == .main ? 0 : 1)
+                }
+            }
+            bar(line)
+                .opacity(hideMain ? 0 : 1)
+                .allowsHitTesting(!hideMain)
+        }
+        .padding(.vertical, DS.Spacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// كتلة (أحجام إمكانية الوصول): العنوان والعدد، الشريط، ثم «أحياء» و«متوفون» صفّين بمنطقة لمس كاملة
+    private func block(_ line: Line) -> some View {
+        let total = line.total.map { "\($0)" } ?? "—"
+        let ink = line.tint.dsReadableGlyph
+        return VStack(alignment: .leading, spacing: 0) {
+            link(line.main, face: AnyView(
+                VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+                        Text(line.title).dsFont(.hubRow).foregroundColor(ink)
+                        Spacer(minLength: DS.Spacing.sm)
+                        Text(verbatim: total).dsFont(.statValue).monospacedDigit().foregroundColor(ink)
+                    }
+                    bar(line)
+                }
+                .padding(.vertical, DS.Spacing.xs)
+                .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
+                .contentShape(Rectangle())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(line.title): \(total)")))
+            link(line.main, face: AnyView(blockLegend(ink, L10n.t("أحياء", "Living"), line.alive, title: line.title)))
+            link(line.deceasedTarget, face: AnyView(blockLegend(Self.deceasedTint, L10n.t("متوفون", "Deceased"),
+                                                                line.deceased, title: line.title)))
+        }
+    }
+
+    private func blockLegend(_ tint: Color, _ label: String, _ value: Int?, title: String) -> some View {
+        legend(tint, label, value)
+            .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(title)، \(label): \(value.map { "\($0)" } ?? "—")")
+    }
+
+    /// «● أحياء 44»
+    private func legend(_ tint: Color, _ label: String, _ value: Int?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+            AdminBaselineDot(color: tint, size: DS.Icon.legendDotCompact)
+            Text(verbatim: "\(label) \(value.map { "\($0)" } ?? "—")")
+                .dsFont(.caption)
+                .monospacedDigit()
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(stacked ? nil : 1)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// شريط النسبة: الأحياء بلون الصفّ، والمتوفون رمادي خافت؛ مسار فارغ قبل وصول الأعداد
+    private func bar(_ line: Line) -> some View {
+        DSDistributionBar(segments: [
+            .init(id: "alive", value: line.alive ?? 0, tint: line.tint.dsReadableGlyph),
+            .init(id: "deceased", value: line.deceased ?? 0, tint: Self.deceasedTint)
+        ], height: DS.Hub.meterHeight)
+    }
+
+    // MARK: المسجّلون
+
+    private var registeredChip: some View {
         let value = counts.accounts.map { "\($0)" } ?? "—"
+        let shape = RoundedRectangle(cornerRadius: DS.Hub.pillHeightCard / 2, style: .continuous)
         return link(.accounts, face: AnyView(
-            HStack(spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.xsm) {
                 Image(systemName: "checkmark.seal.fill")
                     .dsGlyph(DS.Glyph.sm)
                     .foregroundColor(DS.Color.success.dsReadableGlyph)
                     .accessibilityHidden(true)
-                Text(verbatim: L10n.t("الأعضاء المسجّلون: \(value)", "Registered members: \(value)"))
-                    .dsFont(.subtitle)
-                    .monospacedDigit()
+                Text(L10n.t("الأعضاء المسجّلون", "Registered members"))
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: DS.Spacing.sm)
-                DSChevron()
+                Text(verbatim: value)
+                    .dsFont(.hubButton)
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.success.dsReadableGlyph)
+                    .contentTransition(.numericText())
+                DSChevron(size: DS.Glyph.xs)
             }
-            .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.xsm)
+            .frame(minHeight: DS.Hub.pillHeight)
+            .background(shape.fill(DS.Color.success.opacity(DS.Opacity.tintFillSoft)))
+            .overlay(shape.strokeBorder(DS.Color.success.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
+            .frame(minHeight: DS.Icon.tapTarget)
             .contentShape(Rectangle())
-            .accessibilityElement(children: .combine)))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.t("الأعضاء المسجّلون: \(value)", "Registered members: \(value)"))))
     }
+
+    // MARK: الروابط
 
     @ViewBuilder
     private func link(_ target: Target, face: AnyView) -> some View {
@@ -1035,6 +1205,35 @@ struct AdminMemberCountsCard: View {
         case .deceased:  return AnyView(AdminMembersPage(chip: .deceased).adminArea(.family))
         case .accounts:  return AnyView(AdminMembersPage(chip: .registered).adminArea(.family))
         case .women:     return AnyView(EmptyView())
+        }
+    }
+
+    // MARK: النصوص
+
+    private static func spoken(_ line: Line, deceased: Bool) -> String {
+        let n: (Int?) -> String = { $0.map { "\($0)" } ?? "—" }
+        var parts = ["\(line.title): \(n(line.total))", L10n.t("الأحياء \(n(line.alive))", "living \(n(line.alive))")]
+        if deceased { parts.append(L10n.t("المتوفون \(n(line.deceased))", "deceased \(n(line.deceased))")) }
+        return parts.joined(separator: L10n.t("، ", ", "))
+    }
+
+    /// «54 حياً · 14 متوفى»
+    private static func summary(alive: Int?, deceased: Int?) -> String {
+        guard let alive, let deceased else { return "—" }
+        let a = L10n.isArabic ? AdminTodayText.arabicCount(alive, one: "حيّ واحد", two: "حيّان", few: "أحياء", many: "حياً", single: "حيّ")
+                              : "\(alive) living"
+        let d = L10n.isArabic ? AdminTodayText.arabicCount(deceased, one: "متوفى واحد", two: "متوفيان", few: "متوفين", many: "متوفى", single: "متوفى")
+                              : "\(deceased) deceased"
+        return "\(a) · \(d)"
+    }
+
+    /// المعدود بعد الرقم الكبير («فرداً») — الرقم يُرسم وحده بخط أكبر
+    private static func people(_ n: Int) -> String {
+        guard L10n.isArabic else { return n == 1 ? "person" : "people" }
+        switch n % 100 {
+        case 3...10:  return "أفراد"
+        case 11...99: return "فرداً"
+        default:      return "فرد"
         }
     }
 }

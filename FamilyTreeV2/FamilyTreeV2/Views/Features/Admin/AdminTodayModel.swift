@@ -69,17 +69,17 @@ struct AdminTodayCounts: Equatable {
 }
 
 /// إشارة في سطر الحالة برأس «اليوم» (كانت بطاقة «تنبيهات»): الصيانة · الرصيد · المجدول · بلا إشعارات — نقطة ملوّنة
-/// (أخضر سليم، كهرماني تنبيه، أحمر عاجل) وقيمة قصيرة، والضغط يفتح بيتها الوحيد
+/// (أخضر سليم، كهرماني تنبيه، أحمر عاجل) وعبارة قصيرة، والضغط يفتح بيتها الوحيد
 struct AdminStatusPill: Identifiable, Equatable {
     enum Level { case ok, warn, urgent, unknown }
     enum Home: Hashable { case maintenance, sms, scheduled, devices }
 
     let home: Home
-    let label: String
-    let value: String
+    /// العبارة القصيرة في السطر («الصيانة مفعّلة»، «الرصيد 17»، «3 أجهزة بلا إشعارات»)
+    let text: String
     let level: Level
-    /// ما يقرؤه القارئ الصوتي بدل «العنوان: القيمة» (مثل «لا شيء مجدول»)
-    var spoken: String? = nil
+    /// ما يقرؤه القارئ الصوتي: الحالة كاملة («وضع الصيانة مفعّل»، «رصيد رسائل رمز الدخول: 17 نقطة، منخفض»)
+    let spoken: String
 
     var id: Home { home }
 }
@@ -229,6 +229,17 @@ enum AdminTodayText {
         case 2:      return L10n.t("يومين", "2 days")
         case 3...10: return L10n.t("\(n) أيام", "\(n) days")
         default:     return L10n.t("\(n) يوماً", "\(n) days")
+        }
+    }
+
+    /// العدد ومعدوده بالعربية: ١ و٢ بلا رقم («جهاز»، «جهازان»)، ٣–١٠ جمع، ١١–٩٩ مفرد منصوب، وغيرها مفرد
+    static func arabicCount(_ n: Int, one: String, two: String, few: String, many: String, single: String) -> String {
+        if n == 1 { return one }
+        if n == 2 { return two }
+        switch n % 100 {
+        case 3...10:  return "\(n) \(few)"
+        case 11...99: return "\(n) \(many)"
+        default:      return "\(n) \(single)"
         }
     }
 
