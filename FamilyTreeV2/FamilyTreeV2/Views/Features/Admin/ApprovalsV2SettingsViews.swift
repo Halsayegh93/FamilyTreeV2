@@ -56,7 +56,7 @@ struct ApprovalTemplatesBox: View {
 
     var body: some View {
         DSComposer(
-            title: L10n.t("الردود الجاهزة", "Ready replies"),
+            title: L10n.t("نماذج الردود", "Reply templates"),
             subtitle: L10n.t("تظهر فوق ملاحظة القرار بحسب نوعه", "Shown above the decision note, by kind"),
             icon: "text.badge.plus",
             tint: DS.Color.actionNavy,

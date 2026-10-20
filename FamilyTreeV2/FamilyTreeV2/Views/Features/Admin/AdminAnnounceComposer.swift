@@ -1,31 +1,40 @@
 import SwiftUI
 import Supabase
 
-// MARK: - «إعلان جديد» السريع (طلب المالك ٢٠٢٦-١٠-٢٠: «الاعلانات ابى زر سريع و خارجي… مختصر»، «قسّم الإعلانات يكون
-// مختصر و ملموم»، «اربط قسم الاعلانات مع ارسال الاشعارات يكون في خيار» ← اختار «الاثنين مع بعض»)
+// MARK: - «إعلان» — أول أنواع المنشئ الواحد «إنشاء» (`AdminCreateComposer.swift`)
 //
-// زرّ مكبّر الصوت في رأس «اليوم» و«إعلان جديد» في بطاقة «الإعلانات» يفتحان مربّعاً واحداً مختصراً: العنوان، النص، وخياران
-// (☑ نشر كإعلان في الأخبار · ☑ إرسال إشعار للأعضاء — واحد على الأقل)، و«خيارات أكثر» مطويّة (الجمهور: الكل / دولة /
-// أعضاء، والجدولة)، ثم «إرسال» بتأكيد قصير. لا منطق جديد:
+// طلب المالك ٢٠٢٦-١٠-٢٠: «الاعلانات ابى زر سريع و خارجي… مختصر»، «اربط قسم الاعلانات مع ارسال الاشعارات يكون في خيار»
+// ← اختار «الاثنين مع بعض». منذ الدفعة ب («نفّذ كل المقترح») المربّع جزء من «ماذا تنشئ؟»: يفتحه «إنشاء» في رأس
+// «المناسبات والإعلانات» (بيته) ومكبّر الصوت في رأس «اليوم» (طلب المالك) — وصفحة «إشعار للأعضاء» الكاملة حُذفت
+// (العناوين الجاهزة انتقلت هنا، والمستلمون والجدولة في «خيارات أكثر»). المربّع: العنوان، النص، وخياران (☑ نشر كإعلان
+// في الأخبار · ☑ إرسال إشعار للأعضاء — واحد على الأقل)، و«خيارات أكثر» مطويّة (المستلمون: الكل / دولة / أعضاء،
+// والجدولة)، ثم «إرسال» بتأكيد قصير. لا منطق جديد:
 //   • الخبر = `NewsViewModel.postNews(type: «إعلان»)` نفسه (مسار «خبر جديد»)، باسم «إدارة العائلة».
-//   • الإشعار = `NotificationViewModel.sendNotification` / `scheduleNotification` بنوع `admin_broadcast` (صفحة «إشعار
-//     للأعضاء» نفسها) — والدفع من مشغّل جدول الإشعارات على السيرفر كما هو.
+//   • الإشعار = `NotificationViewModel.sendNotification` / `scheduleNotification` بنوع `admin_broadcast` — والدفع من
+//     مشغّل جدول الإشعارات على السيرفر كما هو.
 // الإشعار المزدوج: نشر الخبر لا يُشعر الأعضاء (لا مشغّل على `news` غير `trg_content_force_pending`، ولا دالة طرفية)؛
 // يُشعر الإدارة فقط بـ«منشور جديد». فمع الخيارين يصل الأعضاءَ إشعار واحد (الإعلان)، ويُترك تنبيه الإدارة حين يصلها الإعلان
-// نفسه (الجمهور «الكل») — لا إشعاران لأحد. الصلاحية `canSendNotifications` (المالك والمدير — نشرهما مباشر)، وحارس السيرفر
+// نفسه (المستلمون «الكل») — لا إشعاران لأحد. الصلاحية `canSendNotifications` (المالك والمدير — نشرهما مباشر)، وحارس السيرفر
 // يبقى الحَكَم.
 
-/// قراءة خفيفة لبطاقة «الإعلانات» (لا شيء جديد على السيرفر)
+/// قراءة خفيفة لسطر «وصول الإشعارات» في «المناسبات والإعلانات» (لا شيء جديد على السيرفر)
 enum AdminAnnounceFetch {
-    /// «معدل الصحة» نفسه في «وصول الإشعارات»: الرموز السليمة (أطول من ٢٠ حرفاً) من كل الأجهزة — nil إن تعذّر
-    static func pushHealthPercent() async -> Int? {
+    struct Reach: Equatable {
+        /// الأجهزة المسجّلة للإشعارات
+        let devices: Int
+        /// «معدل الصحة» نفسه في «وصول الإشعارات»: الرموز السليمة (أطول من ٢٠ حرفاً)
+        let percent: Int
+    }
+
+    /// nil إن تعذّر الجلب أو لا أجهزة
+    static func pushReach() async -> Reach? {
         struct Row: Decodable { let token: String? }
         do {
             let rows: [Row] = try await SupabaseConfig.client
                 .from("device_tokens").select("token").execute().value
             guard !rows.isEmpty else { return nil }
             let valid = rows.filter { ($0.token ?? "").count > 20 }.count
-            return Int(Double(valid) / Double(rows.count) * 100)
+            return Reach(devices: rows.count, percent: Int(Double(valid) / Double(rows.count) * 100))
         } catch {
             return nil
         }
@@ -37,57 +46,7 @@ enum AdminAnnounceFetch {
     }
 }
 
-// MARK: - العرض: نافذة مستقلة (حارس المكدس)
-
-/// يعرض المربّع في نافذة فوق كل شيء (مثل `DeathAnnouncementPresenter`) — فلا يحمل رأس «اليوم» ولا البطاقة أي مُعدِّل
-/// عرض (`fullScreenCover`/تنبيه): «اليوم» على سقف مكدس الجوال، وكل مُعدِّل فيه يعمّقه
-@MainActor
-enum AdminAnnounceWindow {
-    private static var window: UIWindow?
-    private static weak var previousKey: UIWindow?
-
-    static func open(authVM: AuthViewModel, newsVM: NewsViewModel, notificationVM: NotificationViewModel,
-                     memberVM: MemberViewModel) {
-        guard window == nil, let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive })
-            ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
-        else { return }
-        previousKey = scene.windows.first(where: \.isKeyWindow)
-        let root = DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-            AdminAnnounceComposer(onClose: { close() })
-                .environmentObject(authVM)
-                .environmentObject(newsVM)
-                .environmentObject(notificationVM)
-                .environmentObject(memberVM)
-        }
-        .environment(\.locale, LanguageManager.shared.locale)
-        // نافذة مستقلّة لا تصلها بيئة التطبيق — لون القسم المختار (أزرار الإجراء)
-        .dsSection(AppSection.current)
-        let host = UIHostingController(rootView: root)
-        host.view.backgroundColor = .clear
-        let w = UIWindow(windowScene: scene)
-        // تحت نافذة التنبيهات (.alert + 1) فيظهر التأكيد فوقه
-        w.windowLevel = .alert
-        w.backgroundColor = .clear
-        w.overrideUserInterfaceStyle = DSPopupPresenter.appInterfaceStyle(in: scene)
-        w.rootViewController = host
-        w.makeKeyAndVisible()
-        window = w
-    }
-
-    static func close() {
-        guard let w = window else { return }
-        window = nil
-        UIView.animate(withDuration: 0.2, animations: { w.alpha = 0 }, completion: { _ in
-            w.isHidden = true
-            w.rootViewController = nil
-            previousKey?.makeKey()
-        })
-    }
-}
-
-/// زرّ مكبّر الصوت الزجاجي في رأس «اليوم» (لمن يرسل للأعضاء فقط — يقرّر من يضعه)
+/// زرّ مكبّر الصوت الزجاجي في رأس «اليوم» (لمن يرسل للأعضاء فقط — يقرّر من يضعه): المنشئ الواحد على «إعلان»
 struct AdminAnnounceLauncher: View {
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var newsVM: NewsViewModel
@@ -96,7 +55,8 @@ struct AdminAnnounceLauncher: View {
 
     var body: some View {
         Button {
-            AdminAnnounceWindow.open(authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
+            AdminCreateWindow.open(.announcement, authVM: authVM, newsVM: newsVM, notificationVM: notificationVM,
+                                   memberVM: memberVM)
         } label: {
             AdminGlassCircle(symbol: "megaphone")
         }
@@ -106,144 +66,11 @@ struct AdminAnnounceLauncher: View {
     }
 }
 
-// MARK: - بطاقة «الإعلانات» المختصرة (داخل «المناسبات والإعلانات»)
-
-/// بطاقة واحدة: «إعلان جديد» ثم أربع خلايا (٢×٢ بخطوط رفيعة): المجدولة · رسالة تحديث التطبيق · وصول الإشعارات ·
-/// الخيارات الكاملة (صفحة «إشعار للأعضاء» القديمة كما هي). تحلّ محلّ بطاقتي «إرسال للأعضاء» و«هل يصلهم؟»
-struct AdminAnnouncementsCard: View {
-    /// صفوف الفهرس التي تعرضها هذه البطاقة (لا تتكرّر كبطاقات أدوات في القسم — والبحث يبقى يجدها)
-    static let toolIds: Set<String> = ["ann.notify", "ann.update", "ann.scheduled", "ann.push"]
-
-    @EnvironmentObject private var authVM: AuthViewModel
-    @EnvironmentObject private var newsVM: NewsViewModel
-    @EnvironmentObject private var notificationVM: NotificationViewModel
-    @EnvironmentObject private var memberVM: MemberViewModel
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var showScheduled = false
-    @State private var health: Int? = nil
-
-    private enum Target { case scheduled, update, reach, full }
-
-    private struct Cell: Identifiable {
-        let id: Target
-        let icon: String
-        let tint: Color
-        let title: String
-        let note: String
-        var noteTint: Color = DS.Color.textTertiary
-    }
-
-    private var cells: [Cell] {
-        let scheduled = notificationVM.scheduledNotifications.count
-        return [
-            Cell(id: .scheduled, icon: "clock.badge.checkmark.fill", tint: DS.Color.sea,
-                 title: L10n.t("المجدولة", "Scheduled"),
-                 note: scheduled > 0 ? L10n.t("\(scheduled) بانتظار وقتها", "\(scheduled) waiting")
-                                     : L10n.t("لا شيء مجدول", "Nothing scheduled"),
-                 noteTint: scheduled > 0 ? DS.Color.warning : DS.Color.textTertiary),
-            Cell(id: .update, icon: "sparkles", tint: DS.Color.sea,
-                 title: L10n.t("رسالة تحديث التطبيق", "App update message"),
-                 note: L10n.t("المستجدات + إشعار", "Updates + a push")),
-            Cell(id: .reach, icon: "bell.and.waves.left.and.right.fill", tint: DS.Color.info,
-                 title: L10n.t("وصول الإشعارات", "Notification reach"),
-                 note: health.map { L10n.t("\($0)٪ سليمة", "\($0)% healthy") } ?? "—",
-                 noteTint: health.map(AdminAnnounceFetch.healthTint) ?? DS.Color.textTertiary),
-            Cell(id: .full, icon: "slider.horizontal.3", tint: DS.Color.slate,
-                 title: L10n.t("الخيارات الكاملة", "All options"),
-                 note: L10n.t("صفحة «إشعار للأعضاء»", "The “Notify members” page"))
-        ]
-    }
-
-    /// عمودان، وعمود واحد مع الخط الكبير جداً
-    private var columns: Int { typeSize >= .xxxLarge ? 1 : 2 }
-
-    var body: some View {
-        let all = cells
-        let rows = stride(from: 0, to: all.count, by: columns).map { Array(all[$0..<min($0 + columns, all.count)]) }
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminCardHeader(title: L10n.t("الإعلانات", "Announcements"))
-            Button {
-                AdminAnnounceWindow.open(authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
-            } label: {
-                AdminPillLabel(title: L10n.t("إعلان جديد", "New announcement"), icon: "megaphone.fill",
-                               style: .navy, height: DS.Hub.pillHeightCard, fullWidth: true)
-            }
-            .buttonStyle(DSPressStyle())
-            .accessibilityHint(L10n.t("نشر في الأخبار وإشعار للأعضاء", "Post to News and notify members"))
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { r, row in
-                    if r > 0 { AdminRowDivider() }
-                    HStack(spacing: 0) {
-                        ForEach(Array(row.enumerated()), id: \.element.id) { i, cell in
-                            if i > 0 { AdminColumnDivider() }
-                            link(cell)
-                        }
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
-        .dsCenterBox(isPresented: $showScheduled) {
-            ScheduledNotificationsSheet()
-                .environmentObject(notificationVM)
-                .environmentObject(memberVM)
-        }
-        .task { health = await AdminAnnounceFetch.pushHealthPercent() ?? health }
-    }
-
-    /// خلف `AnyView` — كل خلية نوع صغير (حارس المكدس)
-    private func link(_ cell: Cell) -> AnyView {
-        switch cell.id {
-        case .scheduled:
-            return AnyView(Button { showScheduled = true } label: { cellView(cell) }
-                .buttonStyle(DSPressStyle()))
-        default:
-            return AnyView(NavigationLink {
-                AdminLazyPage { Self.page(cell.id) }.adminBackTitle(AdminArea.occasions.title).adminArea(.occasions)
-            } label: { cellView(cell) }
-            .buttonStyle(DSPressStyle()))
-        }
-    }
-
-    private func cellView(_ cell: Cell) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            AdminIconSquare(symbol: cell.icon, tint: cell.tint, side: DS.Hub.miniIcon,
-                            radius: DS.Hub.miniIconRadius, glyph: DS.Glyph.md)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(cell.title)
-                    .dsFont(.hubButton)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(verbatim: cell.note)
-                    .dsFont(.caption)
-                    .monospacedDigit()
-                    .foregroundColor(cell.noteTint.dsReadableGlyph)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(DS.Hub.miniCellPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-
-    private static func page(_ target: Target) -> AnyView {
-        switch target {
-        case .update:    return AnyView(AdminMessagingHubView(startsWithUpdate: true))
-        case .reach:     return AnyView(AdminPushHealthView())
-        case .full, .scheduled: return AnyView(AdminMessagingHubView())
-        }
-    }
-}
-
 // MARK: - المربّع المختصر
 
 struct AdminAnnounceComposer: View {
+    /// «ماذا تنشئ؟» — مربّعات الأنواع أعلى المربّع (من `AdminCreateRoot`)؛ nil = المربّع وحده
+    var chooser: AnyView? = nil
     /// إغلاق المربّع (الإلغاء، أو «حسناً» بعد «تم الإرسال»)
     let onClose: () -> Void
 
@@ -274,8 +101,16 @@ struct AdminAnnounceComposer: View {
     /// ملخّص ما أُرسل — «تم الإرسال» ثم يُغلق المربّع
     @State private var sent: String? = nil
 
-    /// العنوان الجاهز الأول في «إشعار للأعضاء» — العنوان حين يُترك فارغاً
-    private static let defaultTitle = AdminNotificationsView.presetTitles.first ?? "عائلة المحمدعلي"
+    /// العناوين الجاهزة (انتقلت من صفحة «إشعار للأعضاء» المحذوفة) — أولها العنوان حين يُترك فارغاً
+    static let presetTitles = [
+        "عائلة المحمدعلي",
+        "إعلان من الإدارة",
+        "تذكير",
+        "دعوة",
+        "تهنئة",
+        "تنبيه مهم"
+    ]
+    private static let defaultTitle = presetTitles.first ?? "عائلة المحمدعلي"
     private static let memberRowsLimit = 6
 
     private let tint = DS.Color.brandFill
@@ -365,8 +200,9 @@ struct AdminAnnounceComposer: View {
 
     var body: some View {
         DSComposer(
-            title: L10n.t("إعلان جديد", "New announcement"),
-            subtitle: L10n.t("في الأخبار وإشعار للأعضاء — بخطوة واحدة", "To News and a push — in one step"),
+            title: chooser == nil ? L10n.t("إعلان جديد", "New announcement") : L10n.t("ماذا تنشئ؟", "What to create?"),
+            subtitle: chooser == nil ? L10n.t("في الأخبار وإشعار للأعضاء — بخطوة واحدة", "To News and a push — in one step")
+                                     : L10n.t("منشئ واحد لكل ما يُرسل أو يُنشر للأعضاء", "One composer for all you send or post"),
             icon: "megaphone.fill",
             tint: tint,
             actionTitle: L10n.t("إرسال", "Send"),
@@ -378,6 +214,7 @@ struct AdminAnnounceComposer: View {
             onSubmit: { confirm = true },
             onCancel: { onClose() }
         ) {
+            if let chooser { chooser }
             messageSection
             channelsSection
             if sendNotice {
@@ -452,10 +289,26 @@ struct AdminAnnounceComposer: View {
         DSComposerSection(title: L10n.t("الإعلان", "Announcement"), icon: "megaphone.fill", tint: tint, index: 0) {
             DSComposerField(icon: "character.cursor.ibeam", label: L10n.t("العنوان", "Title"),
                             placeholder: Self.defaultTitle, text: $title, tint: tint, limit: 100)
+            presetTitlesRow
             DSComposerField(icon: "text.alignright", label: L10n.t("النص", "Text"),
                             placeholder: L10n.t("اكتب الإعلان…", "Write the announcement…"),
                             text: $text, tint: tint, multiline: true, limit: 500)
         }
+    }
+
+    /// العناوين الجاهزة — ضغطة تضعها في «العنوان» (والمختار مميّز)
+    private var presetTitlesRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Spacing.xs) {
+                ForEach(Self.presetTitles, id: \.self) { preset in
+                    DSChipButton(preset, isSelected: trimmed(title) == preset, size: .small) {
+                        withAnimation(DS.Anim.quick) { title = trimmed(title) == preset ? "" : preset }
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Border.width)
+        }
+        .accessibilityLabel(L10n.t("عناوين جاهزة", "Ready titles"))
     }
 
     private var channelsSection: some View {
@@ -530,20 +383,20 @@ struct AdminAnnounceComposer: View {
         return DSComposerSection(title: L10n.t("خيارات أكثر", "More options"), icon: "slider.horizontal.3",
                                  tint: tint, trailing: summary, index: 2, isOpen: $moreOpen) {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                DSFieldLabel(text: L10n.t("الجمهور", "Audience"))
-                DSSegmentedSwitch(options: [
-                    DSSegmentOption(id: Audience.all, title: L10n.t("الكل", "All"), icon: "person.3.fill"),
-                    DSSegmentOption(id: Audience.country, title: L10n.t("دولة", "Country"), icon: "globe"),
-                    DSSegmentOption(id: Audience.members, title: L10n.t("أعضاء", "Members"), icon: "person.crop.circle.badge.checkmark")
-                ], selection: $audience, size: .regular)
+                DSFieldLabel(text: L10n.t("المستلمون", "Recipients"))
+                DSFilterChips(options: [
+                    DSFilterOption(id: Audience.all, title: L10n.t("الكل", "All"), icon: "person.3.fill"),
+                    DSFilterOption(id: Audience.country, title: L10n.t("دولة", "Country"), icon: "globe"),
+                    DSFilterOption(id: Audience.members, title: L10n.t("أعضاء", "Members"), icon: "person.crop.circle.badge.checkmark")
+                ], selection: $audience, tint: tint)
                 switch audience {
                 case .all:     EmptyView()
                 case .country: AnyView(countryPicker)
                 case .members: AnyView(memberPicker)
                 }
                 if publishNews {
-                    Text(L10n.t("الجمهور للإشعار فقط — الإعلان في الأخبار يراه الجميع",
-                                "Audience is for the push only — everyone sees the News post"))
+                    Text(L10n.t("المستلمون للإشعار فقط — الإعلان في الأخبار يراه الجميع",
+                                "Recipients are for the push only — everyone sees the News post"))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)

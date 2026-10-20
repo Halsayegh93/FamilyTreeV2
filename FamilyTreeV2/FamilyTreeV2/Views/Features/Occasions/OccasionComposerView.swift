@@ -64,7 +64,7 @@ struct OccasionComposerView: View {
             }
         }
         // الرأس الموحّد: العنوان، وفي الطرف حفظ الصورة (الأساسي) والمشاركة
-        .dsSubPageHeader(L10n.t("منشورات المناسبات", "Occasion Posts"), icon: "") {
+        .dsSubPageHeader(L10n.t("بطاقات التهنئة والتعزية", "Greeting & condolence cards"), icon: "") {
             if authVM.canModerate { headerActions }
         }
         .task(id: vm.assetKey) { await vm.prepareAssets() }

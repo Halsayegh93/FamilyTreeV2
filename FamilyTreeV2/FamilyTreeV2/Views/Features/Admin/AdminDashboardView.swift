@@ -399,9 +399,9 @@ struct AdminDashboardView: View {
             }
 
             HStack(spacing: DS.Spacing.sm) {
-                kpiLink(AdminKPITile(value: value(c.waiting), label: L10n.t("بانتظارك", "For you"),
+                kpiLink(AdminKPITile(value: value(c.waiting), label: L10n.t("بانتظار قرارك", "Awaiting you"),
                                      icon: "tray", tint: DS.Hub.kpiMine), filter: .waiting)
-                kpiLink(AdminKPITile(value: value(c.urgent), label: L10n.t("مستعجل", "Urgent"),
+                kpiLink(AdminKPITile(value: value(c.urgent), label: L10n.t("عاجل", "Urgent"),
                                      icon: "flame", tint: DS.Hub.kpiHot), filter: .urgent)
                 kpiLink(AdminKPITile(value: value(c.late), label: L10n.t("متأخر", "Late"),
                                      icon: "clock", tint: DS.Hub.kpiLate), filter: .late)
@@ -509,7 +509,7 @@ struct AdminDashboardView: View {
                 title: one ? L10n.t("وفاة لم يُعلن عنها", "Death not announced")
                            : L10n.t("\(waiting.count) وفيات لم يُعلن عنها", "\(waiting.count) deaths not announced"),
                 subtitle: one ? first.shortFullName : waiting.prefix(2).map(\.shortFullName).joined(separator: "، "),
-                buttonTitle: L10n.t("أعلن", "Announce"),
+                buttonTitle: L10n.t("إعلان", "Announce"),
                 action: one ? .announce(DeathAnnouncementTarget(id: first.id, name: first.fullName,
                                                                  isFemale: first.gender == "female",
                                                                  deathDate: first.deathDate))
@@ -588,15 +588,11 @@ struct AdminDashboardView: View {
 
     @ViewBuilder
     private func alertButton(_ title: String, style: AdminPillStyle, action: AdminTodayAlert.Action) -> some View {
-        switch action {
-        case .announce(let target):
-            AdminPillButton(title: title, style: style) { DeathAnnouncementPresenter.open(target) }
-        default:
-            NavigationLink { alertDestination(action) } label: {
-                AdminPillLabel(title: title, style: style)
-            }
-            .buttonStyle(DSPressStyle())
+        // كل زرّ رقم↗ يفتح بيته («وفاة لم يُعلن» و«مجدول اليوم» ← «المناسبات والإعلانات» ← القادم)
+        NavigationLink { alertDestination(action) } label: {
+            AdminPillLabel(title: title, style: style)
         }
+        .buttonStyle(DSPressStyle())
     }
 
     /// وجهة زرّ التنبيه — بقسمها في شريط الأقسام
@@ -607,11 +603,10 @@ struct AdminDashboardView: View {
     private static func alertPage(_ action: AdminTodayAlert.Action) -> AnyView {
         switch action {
         case .sms:         return AnyView(AdminSmsView(backTitle: L10n.t("اليوم", "Today")).adminArea(.team))
-        case .deaths:      return AnyView(DeathAnnouncementsPage().adminArea(.occasions))
-        case .announce:    return AnyView(DeathAnnouncementsPage().adminArea(.occasions))
+        case .deaths, .announce: return AnyView(AdminOccasionsPage().adminArea(.occasions).adminBackTitle(L10n.t("اليوم", "Today")))
         case .pushHealth:  return AnyView(AdminPushHealthView().adminArea(.occasions))
         case .maintenance: return AnyView(AdminAppSettingsView(scope: .maintenance).adminArea(.app))
-        case .scheduled:   return AnyView(AdminMessagingHubView().adminArea(.occasions))
+        case .scheduled:   return AnyView(AdminOccasionsPage().adminArea(.occasions).adminBackTitle(L10n.t("اليوم", "Today")))
         case .treeHealth:  return AnyView(AdminMembersPage(chip: .problems).adminArea(.family))
         }
     }
@@ -622,10 +617,13 @@ struct AdminDashboardView: View {
 
     private func decisionCard(_ entries: [AdminTodayEntry]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            AdminCardHeader(title: L10n.t("يحتاج قرارك", "Needs your decision"),
+            AdminCardHeader(title: L10n.t("بانتظار قرارك", "Awaiting your decision"),
                             badge: isInitialLoading ? nil : entries.count) {
                 if !isInitialLoading {
-                    NavigationLink { AdminTodayListView(store: taskStore) } label: {
+                    // «عرض الكل» = «الوارد» على «بانتظار قرارك» (صفحة «عرض الكل» حُذفت — D21؛ «المنجز اليوم» آخر الوارد)
+                    NavigationLink {
+                        AdminLazyPage { AnyView(AdminAllRequestsView(initialFilter: .waiting).adminArea(.inbox)) }
+                    } label: {
                         AdminCardLinkLabel(title: L10n.t("عرض الكل", "View all"))
                     }
                     .buttonStyle(.plain)
@@ -737,7 +735,7 @@ struct AdminLazyPage: View {
     var body: some View { make() }
 }
 
-// MARK: - «يحتاج قرارك»: الصفّ، والرابط، و«عرض الكل»
+// MARK: - «بانتظار قرارك»: الصفّ، والرابط، و«المنجز اليوم»
 
 /// صفّ في «يحتاج قرارك»: دائرة الإنجاز لما عليك أنت (لمسة «ب» — تصير ✓ في «المنجز» حين يُحلّ ما خلفها)، أو مربّع
 /// النوع لما في مجالك عند غيرك؛ ثم العنوان وسطر الحالة وشارة المهلة
@@ -805,7 +803,7 @@ struct AdminTodayCaughtUpRow: View {
     var body: some View {
         HStack(spacing: DS.Spacing.md) {
             AdminIconSquare(symbol: "checkmark.seal.fill", tint: DS.Color.success)
-            Text(L10n.t("كل شيء متابَع — لا شيء ينتظر قرارك", "All caught up — nothing awaits your decision"))
+            Text(L10n.t("لا توجد طلبات بانتظار قرارك", "Nothing awaits your decision"))
                 .dsFont(.subtitle)
                 .foregroundColor(DS.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -815,7 +813,7 @@ struct AdminTodayCaughtUpRow: View {
     }
 }
 
-/// مهمة أُنجزت اليوم (في «عرض المنجز»)
+/// مهمة أُنجزت اليوم (سطر «المنجز اليوم» آخر «الوارد»)
 struct AdminTodayDoneRow: View {
     let record: AdminTodayTaskStore.Record
 
@@ -853,78 +851,6 @@ struct AdminTodayDoneRow: View {
         f.locale = Locale(identifier: L10n.isArabic ? "ar_KW@numbers=latn" : "en_US")
         f.dateFormat = "h:mm a"
         return f.string(from: date)
-    }
-}
-
-/// «عرض الكل»: القائمة الموحّدة كاملة + «عرض المنجز» + «الوارد». تقرأ من ذاكرة «اليوم» فتتحدّث وهي مفتوحة
-struct AdminTodayListView: View {
-    @ObservedObject var store: AdminTodayTaskStore
-    @State private var showDone = false
-
-    var body: some View {
-        AdminHubPage {
-            AdminBandHeader(title: L10n.t("يحتاج قرارك", "Needs your decision"),
-                            subtitle: L10n.t("الطلبات ورسائل الأعضاء — ما عليك بدائرة، وما عند غيرك بنوعه",
-                                             "Requests and member messages — yours with a circle, others' by type"))
-        } content: {
-            AnyView(listCard)
-            AnyView(inboxCard)
-        }
-    }
-
-    private var listCard: some View {
-        let entries = store.entries
-        let done = store.done
-        return VStack(alignment: .leading, spacing: 0) {
-            AdminCardHeader(title: L10n.t("المفتوحة", "Open"), badge: store.loaded ? entries.count : nil) {
-                if !done.isEmpty {
-                    Button {
-                        withAnimation(DS.Anim.snappy) { showDone.toggle() }
-                    } label: {
-                        AdminCardLinkLabel(title: showDone ? L10n.t("إخفاء المنجز", "Hide done")
-                                                           : L10n.t("عرض المنجز (\(done.count))", "Show done (\(done.count))"),
-                                           showsChevron: false)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            if !store.loaded {
-                DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.sm)
-            } else if entries.isEmpty {
-                AdminTodayCaughtUpRow()
-            }
-            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                if index > 0 { AdminRowDivider() }
-                AdminTodayEntryLink(entry: entry)
-            }
-            if showDone {
-                ForEach(done) { record in
-                    AdminRowDivider()
-                    AdminTodayDoneRow(record: record)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
-    }
-
-    private var inboxCard: some View {
-        NavigationLink { AdminLazyPage { AnyView(AdminAllRequestsView().adminArea(.inbox)) } } label: {
-            AdminListRow(icon: AdminArea.inbox.icon, tint: DS.Color.primary, title: AdminArea.inbox.title,
-                         subtitle: L10n.t("كل الطلبات بالنوع والمهلة، ورسائل الأعضاء", "Every request by type and SLA, and messages")) {
-                if store.loaded {
-                    Text(verbatim: "\(store.inboxTotal)")
-                        .dsFont(.chip)
-                        .monospacedDigit()
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
     }
 }
 
