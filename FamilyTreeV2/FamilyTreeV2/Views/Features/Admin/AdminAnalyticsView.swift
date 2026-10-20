@@ -120,7 +120,7 @@ struct AdminAnalyticsView: View {
             AnyView(womenSection)
             AnyView(maritalSection)
             AnyView(ageGroupsSection)
-            // نظرة على الشجرة (أجيال، متوسط الأبناء، أكبر عائلة)
+            // نظرة على الشجرة (متوسط الأبناء، أكبر عائلة)
             AnyView(treeInsightsSection)
             // إحصائيات الوفيات (متوسط العمر عند الوفاة)
             if deceasedMembers.count > 0 {
@@ -390,7 +390,6 @@ struct AdminAnalyticsView: View {
     private var treeInsightsSection: some View {
         // بنية الشجرة محسوبة على كل الأعضاء للحفاظ على سلاسل النسب كاملة.
         let all = memberVM.allMembers
-        let ids = Set(all.map(\.id))
 
         // الأبناء حسب الأب.
         var childrenByFather: [UUID: Int] = [:]
@@ -405,15 +404,10 @@ struct AdminAnalyticsView: View {
         // أعضاء بلا أبناء (countable فقط — أوراق فعلية في العائلة).
         let leaves = countableMembers.filter { childrenByFather[$0.id] == nil }.count
 
-        // عدد الأجيال = أقصى عمق من الجذور للأسفل (memoized).
-        let generations = treeDepth(all: all, ids: ids, childIndex: buildChildIndex(all))
-
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             AdminSectionLabel(title: L10n.t("نظرة على الشجرة", "Tree Insights"))
 
             LazyVGrid(columns: tileColumns(3), spacing: DS.Spacing.sm) {
-                DSStatTile(value: generations.formatted(), label: L10n.t("عدد الأجيال", "Generations"),
-                           icon: "square.stack.3d.up.fill", tint: DS.Color.accent)
                 DSStatTile(value: parentsCount.formatted(), label: L10n.t("لديهم أبناء", "Parents"),
                            icon: "person.2.fill", tint: DS.Color.info)
                 DSStatTile(value: String(format: "%.1f", avgChildren), label: L10n.t("متوسط الأبناء", "Avg. children"),
@@ -426,38 +420,6 @@ struct AdminAnalyticsView: View {
                            icon: "arrow.triangle.branch", tint: AppSection.admin.ink)
             }
         }
-    }
-
-    /// فهرس الأبناء (أب → معرّفات أبنائه) لحساب العمق.
-    private func buildChildIndex(_ all: [FamilyMember]) -> [UUID: [UUID]] {
-        var index: [UUID: [UUID]] = [:]
-        for m in all {
-            if let f = m.fatherId { index[f, default: []].append(m.id) }
-        }
-        return index
-    }
-
-    /// أقصى عمق للشجرة بدءاً من الجذور (عضو بلا أب أو أبوه خارج المجموعة).
-    private func treeDepth(all: [FamilyMember], ids: Set<UUID>, childIndex: [UUID: [UUID]]) -> Int {
-        var memo: [UUID: Int] = [:]
-        var visiting: Set<UUID> = []
-
-        func depth(_ id: UUID) -> Int {
-            if let d = memo[id] { return d }
-            if visiting.contains(id) { return 1 } // حماية ضد الدوائر
-            visiting.insert(id)
-            let kids = childIndex[id] ?? []
-            let d = kids.isEmpty ? 1 : 1 + (kids.map(depth).max() ?? 0)
-            visiting.remove(id)
-            memo[id] = d
-            return d
-        }
-
-        let roots = all.filter { m in
-            guard let f = m.fatherId else { return true }
-            return !ids.contains(f)
-        }
-        return roots.map { depth($0.id) }.max() ?? 0
     }
 
     // MARK: - Deceased Insights — إحصائيات الوفيات

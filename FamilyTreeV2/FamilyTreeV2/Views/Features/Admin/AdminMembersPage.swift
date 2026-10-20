@@ -41,8 +41,8 @@ struct AdminMembersPage: View {
     @State private var exportScope: AdminReportScope?
     /// «متوفى» من «تحقق من الأحياء» — مربّع تسجيل الوفاة الموجود (`AdminMemberDetailSheet(deathOnly:)`)
     @State private var deathTarget: FamilyMember?
-    /// «عرض المزيد» لكل جيل في «تحقق من الأحياء»
-    @State private var generationLimits: [Int: Int] = [:]
+    /// «عرض المزيد» لكل قسم في «تحقق من الأحياء»
+    @State private var groupLimits: [AdminLivingCheck.Group: Int] = [:]
 
     static let pageSize = 30
     static let branchPreview = 8
@@ -300,8 +300,8 @@ struct AdminMembersPage: View {
             if searching {
                 AdminSectionLabel(title: L10n.t("النتائج", "Results"), trailing: "\(rows.count)")
             }
-            ForEach(Self.generationGroups(rows, index: index)) { group in
-                AdminSectionLabel(title: "\(AdminLivingCheck.generationTitle(group.generation)) · \(group.positions.count)")
+            ForEach(Self.livingGroups(rows, index: index)) { group in
+                AdminSectionLabel(title: "\(group.group.title) · \(group.positions.count)")
                 AnyView(livingCard(group, rows: rows))
             }
         } else {
@@ -321,7 +321,7 @@ struct AdminMembersPage: View {
         case .problems: return .empty(L10n.t("الشجرة سليمة", "The tree is healthy"),
                                       message: L10n.t("لا مشكلات الآن", "No problems right now"), tint: DS.Color.success)
         case .verifyLiving: return .empty(L10n.t("تمت المراجعة", "All reviewed"),
-                                          message: L10n.t("لا أسماء من الأجيال القديمة بانتظار المراجعة", "No older-generation names left to review"),
+                                          message: L10n.t("لا أسماء من كبار السن بانتظار المراجعة", "No elderly names left to review"),
                                           tint: DS.Color.success)
         default:        return .empty(L10n.t("لا أحد هنا الآن", "Nobody here right now"))
         }
@@ -403,32 +403,33 @@ struct AdminMembersPage: View {
 
     private static func key(_ branch: AdminMembersIndex.Branch) -> String { branch.id?.uuidString ?? "outside" }
 
-    // MARK: «تحقق من الأحياء» — جيلاً جيلاً، الأقدم أولاً
+    // MARK: «تحقق من الأحياء» — بأقسام الميلاد («بلا تاريخ ميلاد» ← «قبل 1940» ← الباقون)، الأقدم أولاً
 
-    struct GenerationGroup: Identifiable {
-        let generation: Int
+    struct LivingGroup: Identifiable {
+        let group: AdminLivingCheck.Group
         /// مواضع الصفوف في القائمة الحالية (السابق/التالي في الورقة يمشي فيها كلها)
         let positions: [Int]
-        var id: Int { generation }
+        var id: Int { group.rawValue }
     }
 
-    /// صفّ في بطاقة الجيل — هويته العضو نفسه (لا موضعه: «حي ✓» يزيح المواضع)
+    /// صفّ في بطاقة القسم — هويته العضو نفسه (لا موضعه: «حي ✓» يزيح المواضع)
     struct LivingSlot: Identifiable {
         let pos: Int
         let id: UUID
     }
 
-    static func generationGroups(_ rows: [Int], index: AdminMembersIndex) -> [GenerationGroup] {
-        var groups: [(Int, [Int])] = []
+    /// القائمة مرتّبة بالقسم (`AdminLivingCheck.ordered`) — تُقسم حيث يتغيّر القسم (البحث يبقي الترتيب نفسه)
+    static func livingGroups(_ rows: [Int], index: AdminMembersIndex) -> [LivingGroup] {
+        var groups: [(AdminLivingCheck.Group, [Int])] = []
         for (pos, i) in rows.enumerated() {
-            let g = index.entries[i].living?.generation ?? 0
+            let g = index.entries[i].living?.group ?? .rest
             if groups.last?.0 == g { groups[groups.count - 1].1.append(pos) } else { groups.append((g, [pos])) }
         }
-        return groups.map { GenerationGroup(generation: $0.0, positions: $0.1) }
+        return groups.map { LivingGroup(group: $0.0, positions: $0.1) }
     }
 
-    private func livingCard(_ group: GenerationGroup, rows: [Int]) -> some View {
-        let limit = generationLimits[group.generation] ?? Self.branchPreview
+    private func livingCard(_ group: LivingGroup, rows: [Int]) -> some View {
+        let limit = groupLimits[group.group] ?? Self.branchPreview
         let ids = rows.map { index.entries[$0].id }
         return VStack(alignment: .leading, spacing: 0) {
             LazyVStack(spacing: 0) {
@@ -441,7 +442,7 @@ struct AdminMembersPage: View {
                 AdminPillButton(title: L10n.t("عرض المزيد (\(group.positions.count - limit))",
                                               "Show more (\(group.positions.count - limit))"),
                                 icon: "chevron.down", style: .soft, height: DS.Hub.pillHeightCard) {
-                    generationLimits[group.generation] = limit + Self.pageSize
+                    groupLimits[group.group] = limit + Self.pageSize
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, DS.Spacing.sm)
@@ -524,8 +525,8 @@ struct AdminMembersSummary: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(alignment: .top, spacing: DS.Spacing.md) {
                 AdminIconSquare(symbol: "person.fill.questionmark", tint: DS.Color.info)
-                Text(L10n.t("أسماء من الأجيال القديمة بلا وفاة مسجّلة — الأقدم أولاً. «متوفى» يسجّل الوفاة (التاريخ اختياري)، و«حي» يخفي الاسم من هذه القائمة على جهازك فقط.",
-                            "Older-generation names with no recorded death — oldest first. “Deceased” records the death (date optional); “Alive” hides the name from this list on this device only."))
+                Text(L10n.t("كبار السن بلا وفاة مسجّلة: بلا تاريخ ميلاد، ثم مواليد قبل \(AdminLivingCheck.oldBirthYear)، ثم الباقون — الأقدم أولاً. «متوفى» يسجّل الوفاة (التاريخ اختياري)، و«حي» يخفي الاسم من هذه القائمة على جهازك فقط.",
+                            "Elderly members with no recorded death: no birth date, then born before \(AdminLivingCheck.oldBirthYear), then the rest — oldest first. “Deceased” records the death (date optional); “Alive” hides the name from this list on this device only."))
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

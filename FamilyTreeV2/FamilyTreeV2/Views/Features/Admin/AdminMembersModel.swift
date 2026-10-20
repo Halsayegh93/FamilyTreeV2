@@ -150,7 +150,7 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
         }
     }
 
-    /// الشرائح الفرعية (الأولى «الكل») — «تحقق من الأحياء» بلا فرعية (القائمة بالأجيال)
+    /// الشرائح الفرعية (الأولى «الكل») — «تحقق من الأحياء» بلا فرعية (القائمة بأقسام الميلاد)
     var subs: [AdminMemberSub] {
         switch self {
         case .all:          return [.all, .newThisWeek]
@@ -166,25 +166,44 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
 
 // MARK: - «تحقق من الأحياء» (طلب المالك ٢٠٢٦-١٠-٢٠ — الدفعة ١٢)
 //
-// «حيّ» في التطبيق يعني فقط «لا وفاة مسجّلة»: في الأجيال القديمة أسماء كثيرة بلا تاريخ وفاة (البيانات الحية ٢٠٢٦-١٠-٢٠: الجيل
-// الخامس ٢ · السادس ٩٥ · السابع ٤٩٠، أغلبهم بلا تاريخ ميلاد) فعدد الأحياء مبالغ فيه. المرشّحون للمراجعة = غير المتوفين في
-// «الأجيال القديمة»: الجيل = العمق من رأس الشجرة بسلسلة الآباء (الرأس = ١، نفس ترقيم «الأجيال» في التقارير)، والجيل قديم
-// إذا كان وسيط سنوات الميلاد المعروفة فيه (أحياءً ومتوفين، ٣ على الأقل) قبل ١٩٦٠ — وكل جيل فوقه قديم أيضاً. الأولوية لمن
-// بلا تاريخ ميلاد أو ميلاده قبل ١٩٤٠. يُستثنى الواضح أنه حيّ: أعضاء الإدارة، الحساب الموقوف، ومن له حساب دخول (حين تصل
-// قوائمه). «حي ✓» مراجعة محلية فقط (`AdminLivingVerifiedStore`) — لا عمود على السيرفر.
+// «حيّ» في التطبيق يعني فقط «لا وفاة مسجّلة»: عند كبار السن أسماء كثيرة بلا تاريخ وفاة (أغلبهم بلا تاريخ ميلاد) فعدد الأحياء
+// مبالغ فيه. الاختيار (داخلي فقط): العمق من رأس الشجرة بسلسلة الآباء (الرأس = ١)، والعمق «قديم» إذا كان وسيط سنوات الميلاد
+// المعروفة فيه (أحياءً ومتوفين، ٣ على الأقل) قبل ١٩٦٠ — وكل ما فوقه قديم أيضاً؛ المرشّحون = غير المتوفين فيه. يُستثنى الواضح
+// أنه حيّ: أعضاء الإدارة، الحساب الموقوف، ومن له حساب دخول (حين تصل قوائمه). «حي ✓» مراجعة محلية فقط
+// (`AdminLivingVerifiedStore`) — لا عمود على السيرفر.
+// لا مفهوم «الجيل» في واجهة الإدارة (طلب المالك ٢٠٢٦-١٠-٢٠ «الجيل ما ابي نهائيا»): القائمة بأقسام الميلاد — «بلا تاريخ ميلاد»
+// ثم «مواليد قبل 1940» ثم الباقون، كلٌّ الأقدم أولاً؛ العمق مفتاح ترتيب خفي فقط (لا يُعرض ولا يُقرأ).
 
 enum AdminLivingCheck {
-    /// قبل هذه السنة = أولوية (عمره فوق ٨٥)
+    /// قبل هذه السنة = قسم «مواليد قبل 1940» (عمره فوق ٨٥)
     static let oldBirthYear = 1940
-    /// الجيل قديم إذا وسيط مواليده قبل هذه السنة
-    static let oldGenerationMedian = 1960
+    /// العمق قديم إذا وسيط مواليده قبل هذه السنة
+    static let oldDepthMedian = 1960
     static let minKnownBirths = 3
 
+    /// أقسام القائمة بالترتيب
+    enum Group: Int, CaseIterable, Comparable {
+        case noBirth, beforeOld, rest
+
+        static func < (a: Group, b: Group) -> Bool { a.rawValue < b.rawValue }
+
+        var title: String {
+            switch self {
+            case .noBirth:   return L10n.t("بلا تاريخ ميلاد", "No birth date")
+            case .beforeOld: return L10n.t("مواليد قبل \(AdminLivingCheck.oldBirthYear)", "Born before \(AdminLivingCheck.oldBirthYear)")
+            case .rest:      return L10n.t("مواليد \(AdminLivingCheck.oldBirthYear) وما بعدها", "Born \(AdminLivingCheck.oldBirthYear) or later")
+            }
+        }
+    }
+
     struct Info: Equatable {
-        let generation: Int
+        /// العمق من رأس الشجرة — مفتاح ترتيب خفي (الأقدم أولاً في «بلا تاريخ ميلاد») لا يُعرض
+        let depth: Int
         let birthYear: Int?
-        /// بلا تاريخ ميلاد أو ميلاده قبل ١٩٤٠
-        var priority: Bool { birthYear.map { $0 < AdminLivingCheck.oldBirthYear } ?? true }
+        var group: Group {
+            guard let birthYear else { return .noBirth }
+            return birthYear < AdminLivingCheck.oldBirthYear ? .beforeOld : .rest
+        }
     }
 
     /// سنة الميلاد من «yyyy-MM-dd» (أو سنة فقط)
@@ -194,9 +213,9 @@ enum AdminLivingCheck {
         return y
     }
 
-    /// جيل كل عضو متصل برأس الشجرة (الرأس = ١) — صعود بسلسلة الآباء مع حفظ النتائج.
+    /// عمق كل عضو متصل برأس الشجرة (الرأس = ١) — صعود بسلسلة الآباء مع حفظ النتائج.
     /// الرأس بلا طلبات الانضمام (المنضم المعلّق بلا أب أيضاً فلا يُؤخذ رأساً)
-    static func generations(_ all: [FamilyMember]) -> [UUID: Int] {
+    static func depths(_ all: [FamilyMember]) -> [UUID: Int] {
         guard let root = BranchPickerSheet.familyRoot(in: all.filter { $0.role != .pending }) else { return [:] }
         var father: [UUID: UUID] = [:]
         for m in all { if let f = m.fatherId { father[m.id] = f } }
@@ -224,54 +243,43 @@ enum AdminLivingCheck {
         return out
     }
 
-    /// أعمق جيل «قديم» (وسيط مواليده المعروفة قبل ١٩٦٠) — nil = لا جيل قديم بعد
-    static func oldestCutoff(_ all: [FamilyMember], generations gens: [UUID: Int]) -> Int? {
+    /// أعمق عمق «قديم» (وسيط مواليده المعروفة قبل ١٩٦٠) — nil = لا كبار سن بعد
+    static func oldestCutoff(_ all: [FamilyMember], depths: [UUID: Int]) -> Int? {
         var years: [Int: [Int]] = [:]
         for m in all where m.role != .pending {
-            guard let g = gens[m.id], let y = birthYear(m.birthDate) else { continue }
-            years[g, default: []].append(y)
+            guard let d = depths[m.id], let y = birthYear(m.birthDate) else { continue }
+            years[d, default: []].append(y)
         }
         var cutoff: Int? = nil
-        for (g, list) in years where list.count >= minKnownBirths {
+        for (d, list) in years where list.count >= minKnownBirths {
             let sorted = list.sorted()
             let median = sorted[(sorted.count - 1) / 2]
-            if median < oldGenerationMedian { cutoff = max(cutoff ?? 0, g) }
+            if median < oldDepthMedian { cutoff = max(cutoff ?? 0, d) }
         }
         return cutoff
     }
 
     /// المرشّحون للمراجعة (قبل استبعاد ما راجعه المستخدم على جهازه) — `hasLogin` nil = قوائم الحسابات لم تصل
     static func candidates(_ all: [FamilyMember], hasLogin: ((UUID) -> Bool)? = nil) -> [UUID: Info] {
-        let gens = generations(all)
-        guard let cutoff = oldestCutoff(all, generations: gens) else { return [:] }
+        let depth = depths(all)
+        guard let cutoff = oldestCutoff(all, depths: depth) else { return [:] }
         let staff: Set<FamilyMember.UserRole> = [.owner, .admin, .monitor, .supervisor]
         var out: [UUID: Info] = [:]
         for m in all where m.role != .pending && m.isDeceased != true && m.status != .frozen && !staff.contains(m.role) {
-            guard let g = gens[m.id], g <= cutoff else { continue }
+            guard let d = depth[m.id], d <= cutoff else { continue }
             if let hasLogin, hasLogin(m.id) { continue }
-            out[m.id] = Info(generation: g, birthYear: birthYear(m.birthDate))
+            out[m.id] = Info(depth: d, birthYear: birthYear(m.birthDate))
         }
         return out
     }
 
-    /// ترتيب القائمة: الأجيال الأقدم أولاً، ثم الأولوية (الأقدم ميلاداً، ثم بلا تاريخ)، ثم الباقي بالميلاد
+    /// ترتيب القائمة: القسم («بلا تاريخ ميلاد» ← «قبل 1940» ← الباقون)، ثم الأقدم أولاً (سنة الميلاد، أو العمق الخفي لمن
+    /// بلا تاريخ) — nil = متساويان (يبقى ترتيب الاسم)
     static func ordered(_ a: Info, _ b: Info) -> Bool? {
-        if a.generation != b.generation { return a.generation < b.generation }
-        if a.priority != b.priority { return a.priority }
-        switch (a.birthYear, b.birthYear) {
-        case let (x?, y?) where x != y: return x < y
-        case (.some, nil): return true
-        case (nil, .some): return false
-        default: return nil
-        }
-    }
-
-    /// «الجيل السادس» (ترتيبي حتى الثاني عشر، ثم بالرقم)
-    static func generationTitle(_ g: Int) -> String {
-        let ar = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر",
-                  "الحادي عشر", "الثاني عشر"]
-        let arabic = (1...ar.count).contains(g) ? "الجيل \(ar[g - 1])" : "الجيل \(g)"
-        return L10n.t(arabic, "Generation \(g)")
+        if a.group != b.group { return a.group < b.group }
+        if let x = a.birthYear, let y = b.birthYear, x != y { return x < y }
+        if a.depth != b.depth { return a.depth < b.depth }
+        return nil
     }
 }
 
@@ -501,7 +509,7 @@ struct AdminMembersIndex {
         let problems: [AdminMemberProblem]
         /// رأس الفرع (ابن مباشر لرأس الشجرة) — nil = خارج الفروع
         let branch: UUID?
-        /// مرشّح «تحقق من الأحياء» (جيله وسنة ميلاده) — nil = ليس منهم
+        /// مرشّح «تحقق من الأحياء» (قسمه وسنة ميلاده) — nil = ليس منهم
         let living: AdminLivingCheck.Info?
         /// الاسم مُطبَّعاً للبحث، وأرقام الهاتف
         let needle: String
@@ -639,7 +647,7 @@ struct AdminMembersIndex {
                 }
             }
         }
-        // «تحقق من الأحياء»: الأجيال الأقدم أولاً، ثم الأولوية (ترتيب الاسم يبقى عند التساوي — `pool` مرتّب بالاسم)
+        // «تحقق من الأحياء»: بأقسام الميلاد، الأقدم أولاً في كلٍّ (ترتيب الاسم يبقى عند التساوي — `pool` مرتّب بالاسم)
         if let rows = lists[Key(chip: .verifyLiving, sub: .all)] {
             lists[Key(chip: .verifyLiving, sub: .all)] = rows.enumerated().sorted { a, b in
                 guard let x = entries[a.element].living, let y = entries[b.element].living,

@@ -839,6 +839,8 @@ struct AdminTodayDoneRow: View {
 /// على البطاقة البيضاء): العنوان، ثم الأرقام الأربعة بأيقوناتها وأسمائها (بخطوط رفيعة بينها، تعدّ من الصفر): بانتظار قرارك ·
 /// عاجل · متأخر ← «الوارد» بفلتره، ورسائل ← رسائل الأعضاء؛ ثم سطر «حالة النظام» (المالك والمدير فقط) بتعبئة خفيفة من لونه
 /// يفتح لوحة الإشارات الأربع. الصفحة تملأ ارتفاع المربّع (الأرقام في الوسط). من أحجام إمكانية الوصول الأرقام ٢×٢.
+/// الدفعة ١٣ («الى داخله نكبر»): الأرقام بخط رقم الرأس `hubKPI` وأسماؤها `hubLabel`، وسطر الحالة `hubRow`، وفراغات أضيق؛
+/// الحشوة للجانبين والأعلى فقط (المربّع يضيف الأسفل وشريط النقاط).
 /// القارئ الصوتي: حاوية «يحتاج انتباهك» فيها كل رقم زرّاً ثم سطر الحالة
 struct AdminAttentionPanel: View {
     let counts: AdminTodayCounts
@@ -872,7 +874,7 @@ struct AdminAttentionPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Hub.swipeGap) {
             AdminCardHeader(title: L10n.t("يحتاج انتباهك", "Needs your attention"))
             Spacer(minLength: 0)
             numbers
@@ -882,7 +884,8 @@ struct AdminAttentionPanel: View {
                     .clipShape(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous))
             }
         }
-        .padding(DS.Hub.cardPadding)
+        .padding(.horizontal, DS.Hub.swipePadding)
+        .padding(.top, DS.Hub.swipePadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("يحتاج انتباهك", "Needs your attention"))
@@ -920,7 +923,7 @@ struct AdminAttentionPanel: View {
         .buttonStyle(DSPressStyle())
         .overlay(alignment: .leading) {
             if divided {
-                hairline(horizontal: false).padding(.vertical, DS.Spacing.md)
+                hairline(horizontal: false).padding(.vertical, DS.Spacing.sm)
             }
         }
     }
@@ -935,7 +938,8 @@ struct AdminAttentionPanel: View {
 
 /// رقم في «يحتاج انتباهك»: الرقم بلون معناه على البطاقة (ذهبي، أحمر، كهرماني، أساسي) وتحته الأيقونة والاسم بالثانوي،
 /// في وسط عموده. الرقم يعدّ من الصفر حين يصل (`DSCountText`، الدفعة ١٠ «الأرقام تعدّ»). خط الجهاز أكبر من الافتراضي: الاسم
-/// على سطرين محجوزين فتبقى الأعمدة بطول واحد (بلا `fixedSize`)
+/// على سطرين محجوزين فتبقى الأعمدة بطول واحد (بلا `fixedSize`). الدفعة ١٣: الرقم `hubKPI` (كان `hubPulse`) والاسم
+/// `hubLabel` (كان `caption`)
 struct AdminAttentionNumber: View {
     /// nil = لم يُحمَّل («—»)
     let value: Int?
@@ -948,7 +952,7 @@ struct AdminAttentionNumber: View {
         let wraps = typeSize > .large
         VStack(spacing: DS.Spacing.xxs) {
             DSCountText(value: value)
-                .dsFont(.hubPulse)
+                .dsFont(.hubKPI)
                 .monospacedDigit()
                 .foregroundColor(tint)
                 .lineLimit(1)
@@ -956,15 +960,15 @@ struct AdminAttentionNumber: View {
             HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
                 Image(dsSymbol: icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
                 Text(label)
-                    .dsFont(.caption)
+                    .dsFont(.hubLabel)
                     .lineLimit(wraps ? 2 : 1, reservesSpace: wraps)
                     .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
             }
             .foregroundColor(DS.Color.textSecondary)
         }
-        .padding(.horizontal, DS.Spacing.xs)
-        .padding(.vertical, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.xxs)
+        .padding(.vertical, DS.Spacing.xs)
         .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
@@ -1028,16 +1032,17 @@ struct AdminSystemStatusLineLabel: View {
         let tone = status.tone
         HStack(spacing: DS.Spacing.xsm) {
             if let icon = Self.icon(tone) {
-                Image(systemName: icon).dsGlyph(DS.Glyph.sm, weight: .bold)
+                Image(systemName: icon).dsGlyph(DS.Glyph.md, weight: .bold)
                     // «نبضة للعاجل» (الدفعة ١٠): هالة حمراء هادئة على الساعة المشتركة — تقف خارج الشاشة ومع «تقليل الحركة»
                     .dsUrgentPulse(DS.Color.error, active: tone == .urgent)
             }
+            // الدفعة ١٣: درجة أكبر (كان `hubButton` Footnote ١٣)
             Text(verbatim: status.title)
-                .dsFont(.hubButton)
+                .dsFont(.hubRow)
                 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: DS.Spacing.sm)
-            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.xs, weight: .bold)
+            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.sm, weight: .bold)
         }
         .foregroundColor(Self.ink(tone))
         .padding(.horizontal, DS.Spacing.md)
@@ -1207,10 +1212,11 @@ struct AdminBaselineDot: View {
 /// `female`)، والمتوفون رمادي المتوفين الخافت `DS.Color.deceased` (لا أحمر). تحت الحلقة اسمها و«54 حياً · 14 متوفى»
 /// (`AdminTodayText.arabicCount`؛ سطران إن ضاق). ثم شريحة «✓ الأعضاء المسجّلون N ›». كل رقم يفتح صفحته كما كان:
 /// الإجمالي ← «المؤشرات ← العائلة»، الرجال ← صفحة الأعضاء (و«متوفى» الرجال ← شريحة «متوفون»)، النساء ← شجرة النساء،
-/// المسجّلون ← شريحة «مسجّلون». مع XXXL تصغر الحلقات قليلاً وتلتفّ الأسماء؛ من أحجام إمكانية الوصول كل حلقة كتلة (حلقة
+/// المسجّلون ← شريحة «مسجّلون». الحلقات `DS.Ring.census` (الدفعة ١٣: درجة فوق المتوسطة والرقم `hubKPI`، والسطر `hubLabel`،
+/// والشريحة بارتفاعها المرئي ولمس ٤٤ بلا إزاحة). مع XXXL تصغر الحلقات قليلاً وتلتفّ الأسماء؛ من أحجام إمكانية الوصول كل حلقة كتلة (حلقة
 /// صغيرة بجانب الاسم والعدد، ثم الأحياء والمتوفون صفّين بلمس ٤٤). الحلقات من المكوّن الموحّد (`DSRingGauge`، الدفعة ١٠ — مرجع كل مؤشرات اللوحة)، بلا Charts.
 /// نفس التعريفات: الرجال = الشجرة بلا طلبات الانضمام، النساء = إناث شجرة النساء، المسجّلون = لهم حساب دخول.
-/// «أحياء (تقديري)» (الدفعة ١٢): ما دام في الأجيال القديمة من بلا وفاة مسجّلة ولم يُراجَع («تحقق من الأحياء» ناقص «حي ✓»
+/// «أحياء (تقديري)» (الدفعة ١٢): ما دام في كبار السن من بلا وفاة مسجّلة ولم يُراجَع («تحقق من الأحياء» ناقص «حي ✓»
 /// المحلية) فأحياء الرجال والإجمالي «≈» وفي رأس البطاقة شارة «أحياء (تقديري)» تشرح العدد وتفتح الشريحة؛ و«≈ أحياء» نفسها
 /// تفتح الشريحة. المقاس والتخطيط كما هما (الشارة في سطر العنوان).
 struct AdminMemberCountsCard: View {
@@ -1262,11 +1268,11 @@ struct AdminMemberCountsCard: View {
     /// كتل عمودية من أحجام إمكانية الوصول
     private var stacked: Bool { typeSize.isAccessibilitySize }
 
-    /// مقاس الحلقة الموحّدة: المتوسطة، وأصغر قليلاً مع XXXL (الأسماء والأعداد أكبر)
-    private var ringSize: DS.Ring.Size { typeSize >= .xxxLarge ? DS.Ring.mediumCompact : DS.Ring.medium }
+    /// مقاس الحلقة: حلقة «إحصاء الأفراد»، وأصغر قليلاً مع XXXL (الأسماء والأعداد أكبر)
+    private var ringSize: DS.Ring.Size { typeSize >= .xxxLarge ? DS.Ring.censusCompact : DS.Ring.census }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Hub.swipeGap) {
             AdminCardHeader(title: L10n.t("إحصاء الأفراد", "Family census")) {
                 if estimated { estimatePill }
             }
@@ -1285,8 +1291,9 @@ struct AdminMemberCountsCard: View {
             registeredChip
                 .frame(maxWidth: .infinity, alignment: stacked ? .leading : .center)
         }
-        // الصفحة الثانية من «المربّع اللي ينسحب» (الدفعة ١٠) — البطاقة البيضاء من المربّع نفسه
-        .padding(DS.Hub.cardPadding)
+        // الصفحة الثانية من «المربّع اللي ينسحب» (الدفعة ١٠) — البطاقة البيضاء من المربّع نفسه، والأسفل منه (شريط النقاط)
+        .padding(.horizontal, DS.Hub.swipePadding)
+        .padding(.top, DS.Hub.swipePadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(AdminEstimateInfo(unverified: unverified, show: $showEstimate, open: $openVerify))
     }
@@ -1316,17 +1323,17 @@ struct AdminMemberCountsCard: View {
         .accessibilityHint(Self.estimateText(unverified))
     }
 
-    /// «يشمل N من الأجيال القديمة بدون تاريخ وفاة — راجعهم من «تحقق من الأحياء»»
+    /// «يشمل N من كبار السن بدون تاريخ وفاة — راجعهم من «تحقق من الأحياء»»
     static func estimateText(_ n: Int) -> String {
-        L10n.t("يشمل \(n) من الأجيال القديمة بدون تاريخ وفاة — راجعهم من «تحقق من الأحياء»",
-               "Includes \(n) from older generations with no death date — review them in “Check the living”")
+        L10n.t("يشمل \(n) من كبار السن بدون تاريخ وفاة — راجعهم من «تحقق من الأحياء»",
+               "Includes \(n) elderly members with no death date — review them in “Check the living”")
     }
 
     // MARK: الحلقات
 
     /// عمود: الحلقة وعددها في الوسط، ثم الاسم بلونها (رابط واحد)، ثم «54 حياً · 14 متوفى»
     private func column(_ g: Gauge) -> some View {
-        let face = VStack(spacing: DS.Spacing.xsm) {
+        let face = VStack(spacing: DS.Spacing.xs) {
             ring(g, size: ringSize)
             Text(g.title)
                 .dsFont(.hubRow)
@@ -1357,7 +1364,7 @@ struct AdminMemberCountsCard: View {
                                            "\(g.title), deceased: \(Self.number(g.deceased))"))))
             .accessibilityHidden(!g.split)
         let dot = Text(verbatim: "·")
-            .dsFont(.caption)
+            .dsFont(.hubLabel)
             .foregroundColor(DS.Color.textTertiary)
             .accessibilityHidden(true)
         return ViewThatFits(in: .horizontal) {
@@ -1368,7 +1375,7 @@ struct AdminMemberCountsCard: View {
 
     private func legendText(_ text: String, color: Color) -> some View {
         Text(verbatim: text)
-            .dsFont(.caption)
+            .dsFont(.hubLabel)
             .monospacedDigit()
             .foregroundColor(color)
             .multilineTextAlignment(.center)
@@ -1403,7 +1410,7 @@ struct AdminMemberCountsCard: View {
 
     private func blockLine(_ text: String, color: Color, title: String) -> some View {
         Text(verbatim: text)
-            .dsFont(.caption)
+            .dsFont(.hubLabel)
             .monospacedDigit()
             .foregroundColor(color)
             .fixedSize(horizontal: false, vertical: true)
@@ -1450,8 +1457,8 @@ struct AdminMemberCountsCard: View {
             .frame(minHeight: DS.Hub.pillHeight)
             .background(shape.fill(DS.Color.success.opacity(DS.Opacity.tintFillSoft)))
             .overlay(shape.strokeBorder(DS.Color.success.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
+            // لمس ٤٤ بلا فراغ في التخطيط (الدفعة ١٣ — المربّع أقصر)
+            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Hub.pillHeight)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(L10n.t("الأعضاء المسجّلون: \(value)", "Registered members: \(value)"))))
     }

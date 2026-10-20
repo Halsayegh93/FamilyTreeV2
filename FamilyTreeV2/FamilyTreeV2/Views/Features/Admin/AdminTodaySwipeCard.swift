@@ -8,6 +8,9 @@ import SwiftUI
 // صفحة لكل مستخدم (`@AppStorage`). الحلقات تمتلئ وأرقامها تعدّ حين تظهر الصفحة الثانية أول مرة (`dsGaugeHold`). القارئ
 // الصوتي: الصفحة الظاهرة فقط، والنقاط عنصر قابل للتعديل (أعلى/أسفل) بإجراءين «التالي/السابق». الصفحتان بارتفاع واحد (الأطول)
 // فلا يقفز ما تحته. صفحة واحدة (المشرف بلا «إحصاء الأفراد») = المربّع بلا نقاط ولا سحب.
+// الدفعة ١٣ (المالك: «نصغره شوي و الى داخله نكبر» + «النقطتين… خلهم داخل المربع»): حشوة أضيق (`DS.Hub.swipePadding`)،
+// والنقطتان داخل المربّع في شريط أسفله (`DS.Hub.pageDotsHeight`) بدل صفّ تحته — الصفحتان تحشوان الجانبين والأعلى فقط
+// والمربّع يضيف الأسفل (شريط النقاط، أو الحشوة نفسها لصفحة واحدة).
 // مقسِّم خفيف بلا `TabView` (ارتفاع الصفحات يتبع المحتوى، والاتجاه العربي مضبوط): `AdminPagerLayout` + سحب أفقي. من iOS 18
 // السحب إيماءة UIKit أفقية فقط (`AdminHorizontalPan`) تُلغي لمس ما تحتها حين تبدأ — فالسحب لا يفتح الرقم الذي بدأ عليه،
 // والعمودي يبقى للتمرير؛ قبل iOS 18 `DragGesture` متزامن مع التمرير.
@@ -37,28 +40,30 @@ struct AdminTodaySwipeCard: View {
     private static let titles = [L10n.t("يحتاج انتباهك", "Needs your attention"), L10n.t("إحصاء الأفراد", "Family census")]
 
     var body: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            // من أحجام إمكانية الوصول «إحصاء الأفراد» كتل طويلة — المربّع بطول الصفحة الظاهرة (لا فراغ كبير في الأولى)
-            AdminPagerLayout(page: page, drag: dragX, rtl: rtl, matchesHeights: !typeSize.isAccessibilitySize) {
-                attention
+        // من أحجام إمكانية الوصول «إحصاء الأفراد» كتل طويلة — المربّع بطول الصفحة الظاهرة (لا فراغ كبير في الأولى)
+        AdminPagerLayout(page: page, drag: dragX, rtl: rtl, matchesHeights: !typeSize.isAccessibilitySize) {
+            attention
+                .environment(\.layoutDirection, direction)
+                .accessibilityHidden(page != 0)
+            if let census {
+                census
                     .environment(\.layoutDirection, direction)
-                    .accessibilityHidden(page != 0)
-                if let census {
-                    census
-                        .environment(\.layoutDirection, direction)
-                        .environment(\.dsGaugeHold, !censusSeen)
-                        .accessibilityHidden(page != 1)
-                }
+                    .environment(\.dsGaugeHold, !censusSeen)
+                    .accessibilityHidden(page != 1)
             }
-            // الإزاحة بإحداثيات ثابتة (يسار ← يمين) ويُحسب الاتجاه العربي يدوياً؛ كل صفحة ترجع لاتجاه التطبيق
-            .environment(\.layoutDirection, .leftToRight)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous))
-            .adminCard(padding: 0)
-            .modifier(AdminSwipeGesture(enabled: count > 1, changed: dragged, ended: released))
+        }
+        // الإزاحة بإحداثيات ثابتة (يسار ← يمين) ويُحسب الاتجاه العربي يدوياً؛ كل صفحة ترجع لاتجاه التطبيق
+        .environment(\.layoutDirection, .leftToRight)
+        // أسفل الصفحتين: شريط النقاط داخل المربّع (أو الحشوة نفسها لصفحة واحدة)
+        .padding(.bottom, count > 1 ? DS.Hub.pageDotsHeight : DS.Hub.swipePadding)
+        .overlay(alignment: .bottom) {
             if count > 1 {
                 dots
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous))
+        .adminCard(padding: 0)
+        .modifier(AdminSwipeGesture(enabled: count > 1, changed: dragged, ended: released))
         .onAppear { if page == 1 { censusSeen = true } }
         .onChange(of: page) { if $0 == 1 { censusSeen = true } }
     }
@@ -93,8 +98,8 @@ struct AdminTodaySwipeCard: View {
 
     // MARK: النقاط
 
-    /// نقطتا الصفحة (الحالية كبسولة ذهبية) — الضغط يقلب، والقارئ الصوتي: «الصفحة ١ من ٢: يحتاج انتباهك» + أعلى/أسفل
-    /// + «التالي/السابق»
+    /// نقطتا الصفحة (الحالية كبسولة ذهبية) في شريط أسفل المربّع — الضغط يقلب، والقارئ الصوتي: «الصفحة ١ من ٢: يحتاج
+    /// انتباهك» + أعلى/أسفل + «التالي/السابق»
     private var dots: some View {
         HStack(spacing: DS.Spacing.xsm) {
             ForEach(0..<count, id: \.self) { i in

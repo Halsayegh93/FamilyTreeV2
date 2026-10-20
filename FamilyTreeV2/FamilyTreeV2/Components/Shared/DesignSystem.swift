@@ -2299,10 +2299,14 @@ extension DS.TextRole {
     /// التحية في رأس «اليوم» وعنوان صفحة القسم — Title 1 (٢٨)
     static let hubTitle = DS.TextRole(.title, weight: .bold)
     /// رقم المربّع الزجاجي في رؤوس الأقسام (`AdminKPITile`) ووسط الحلقة الكبيرة (`DS.Ring.large`: رصيد رسائل الدخول) —
-    /// Title 1 (٢٨) بموافقة المالك على رأس «أ»
+    /// Title 1 (٢٨) بموافقة المالك على رأس «أ». وأرقام المربّع اللي ينسحب في «اليوم» (الدفعة ١٣ «إلى داخله نكبر»): الأربعة في
+    /// «يحتاج انتباهك» ووسط حلقات «إحصاء الأفراد» (`DS.Ring.census`)
     static let hubKPI = DS.TextRole(.title, weight: .bold)
-    /// أرقام «يحتاج انتباهك» في رأس «اليوم»، ووسط الحلقة المتوسطة الموحّدة (`DS.Ring.medium`)، ورقم رسائل الدخول — Title 2 (٢٢)
+    /// وسط الحلقة المتوسطة الموحّدة (`DS.Ring.medium`)، ورقم رسائل الدخول — Title 2 (٢٢)
     static let hubPulse = DS.TextRole(.title2, weight: .bold)
+    /// اسم الرقم في «يحتاج انتباهك» وسطر «54 حياً · 14 متوفى» تحت حلقات «إحصاء الأفراد» (الدفعة ١٣ — كانت Caption 1 ١٢) —
+    /// Footnote (١٣) شبه عريض
+    static let hubLabel = DS.TextRole(.footnote, weight: .semibold)
     /// عنوان صفّ داخل بطاقات اللوحة وعنوان مربّع القسم — Subheadline (١٥) عريض
     static let hubRow = DS.TextRole(.subheadline, weight: .bold)
     /// نص زرّ الكبسولة في الصفوف — Footnote (١٣) عريض
@@ -2328,10 +2332,13 @@ extension DS {
         static let mini = Size(side: 22, line: 4, value: nil, caption: nil)
         /// صفّ بحلقة (اكتمال البيانات، سلامة الشجرة، نوع في تقرير الموافقات، وصول الإشعارات، تطابق الاسم)
         static let small = Size(side: 46, line: 5, value: .ringSmall, caption: nil)
-        /// بطاقة («إحصاء الأفراد»، المسجّلون، القبول، الجنس، الحالة الاجتماعية، تسجيل الأجهزة)
+        /// بطاقة (المسجّلون، القبول، الجنس، الحالة الاجتماعية، تسجيل الأجهزة)
         static let medium = Size(side: 76, line: 7, value: .hubPulse, caption: .micro)
-        /// المتوسطة مع XXXL — أصغر قليلاً (الأرقام والأسماء أكبر)
-        static let mediumCompact = Size(side: 68, line: 7, value: .hubPulse, caption: .micro)
+        /// حلقات «إحصاء الأفراد» في المربّع اللي ينسحب (الدفعة ١٣ «إلى داخله نكبر»): درجة فوق المتوسطة، وثلاث تتّسع في
+        /// عرض آيفون ٣٩٣ — والرقم بخط رقم الرأس `hubKPI`
+        static let census = Size(side: 88, line: 8, value: .hubKPI, caption: .micro)
+        /// «إحصاء الأفراد» مع XXXL — أصغر قليلاً (الأسماء والأعداد أكبر)
+        static let censusCompact = Size(side: 80, line: 8, value: .hubKPI, caption: .micro)
         /// المتوسطة بجانب النص من أحجام إمكانية الوصول (بلا رقم داخلها — الرقم بجانبها)
         static let mediumStacked = Size(side: 52, line: 6, value: nil, caption: nil)
         /// بطل الصفحة (ملخّص إحصاءات العائلة، رصيد رسائل الدخول)
@@ -2383,7 +2390,7 @@ extension DS.Hub {
     /// سطر «اليوم» الذكي تحت التحية (ذكرى اليوم، وفاة لم يُعلن عنها، الطلبات، الجدد، يوم هادئ)
     static let greetingLine = SwiftUI.Color.white.opacity(0.86)
     /// «المربّع اللي ينسحب» (`AdminTodaySwipeCard`): أقل سحب يبدأ به، المسافة التي تقلب الصفحة، المقاومة عند الطرفين،
-    /// ونقطتا الصفحة (العادية، الحالية كبسولة، وارتفاع صفّهما)
+    /// ونقطتا الصفحة (العادية، الحالية كبسولة، وارتفاع شريطهما داخل المربّع في أسفله — الدفعة ١٣ «خلهم داخل المربع»)
     static let swipeMinimum: CGFloat = 12
     static let swipeDistance: CGFloat = 60
     static let swipeResistance: CGFloat = 0.3
@@ -2392,6 +2399,10 @@ extension DS.Hub {
     static let pageDot: CGFloat = 6
     static let pageDotActive: CGFloat = 16
     static let pageDotsHeight: CGFloat = 20
+    /// حشوة صفحتي المربّع (الجانبان والأعلى، والأسفل بلا نقاط) والفراغ بين العنوان وما تحته — أضيق من بطاقات اللوحة
+    /// (الدفعة ١٣ «نصغره شوي»)
+    static let swipePadding: CGFloat = DS.Spacing.md
+    static let swipeGap: CGFloat = DS.Spacing.xs
 }
 
 extension DS.TextRole {
