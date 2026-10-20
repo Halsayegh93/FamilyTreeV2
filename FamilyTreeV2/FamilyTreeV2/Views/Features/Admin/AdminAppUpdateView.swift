@@ -7,7 +7,8 @@ import Supabase
 /// ميزة، صيانة)، لا رسائل موجّهة لأعضاء بعينهم.
 /// «أسلوب واحد» (٢٠٢٦-١٠-٠٧): الرأس الملوّن الموحّد (بـ× لأنها تُفتح مربّعاً من إشعارات الرئيسية) +
 /// صفّ أرقام، ثم أقسام: النوع ← الرسالة ← المعاينة ← زر النشر.
-/// داخل «الإشعارات والتحديثات» (`embedded`) الصفحة الأم تحمل الرأس فلا يتكرّر.
+/// داخل «الإشعارات والتحديثات» (`embedded`) الصفحة الأم تحمل الرأس فلا يتكرّر — وبشكل «اليوم»
+/// (٢٠٢٦-١٠-٢٠، `AdminPageKit`) تعطي رأسها الكحلي (`pageHeader`) والأقسام تحته كما هي.
 struct AdminAppUpdateView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
@@ -17,6 +18,8 @@ struct AdminAppUpdateView: View {
 
     /// مضمّنة في صفحة أخرى لها رأسها — بلا بطاقة رأس
     private let embedded: Bool
+    /// رأس «الإشعارات والتحديثات» الكحلي — الصفحة تُرسم بعدّة الصفحات تحته
+    private let pageHeader: AdminPageHeader?
 
     @State private var kind: UpdateKind = .feature
     @State private var version = ""
@@ -29,8 +32,9 @@ struct AdminAppUpdateView: View {
     private let maxLength = 1000
     private let tint = DS.Color.composerDiwaniya
 
-    init(embedded: Bool = false) {
+    init(embedded: Bool = false, pageHeader: AdminPageHeader? = nil) {
         self.embedded = embedded
+        self.pageHeader = pageHeader
     }
 
     // MARK: - نوع الرسالة
@@ -88,7 +92,9 @@ struct AdminAppUpdateView: View {
 
     var body: some View {
         Group {
-            if embedded {
+            if let pageHeader {
+                kitPage(pageHeader)
+            } else if embedded {
                 page
             } else {
                 // تُفتح مربّعاً طويلاً من إشعارات الرئيسية — الرأس الملوّن الموحّد و× للإغلاق
@@ -129,6 +135,43 @@ struct AdminAppUpdateView: View {
             .background(DS.Color.background.ignoresSafeArea())
     }
 
+    /// رأس الصفحة الأم ← «تعبئة ملاحظات هذا الإصدار» تصعد فوقه (إن وُجدت) ← النوع ← الرسالة ← المعاينة ← النشر
+    private func kitPage(_ header: AdminPageHeader) -> some View {
+        AdminPage(header: header,
+                  lead: AppReleaseNotes.current != nil ? AnyView(releaseNotesCard) : nil,
+                  content: AnyView(VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
+                      kindSection
+                      messageSection
+                      previewSection
+
+                      if let errorText {
+                          DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+                      }
+
+                      publishButton
+                  }))
+    }
+
+    /// «تعبئة ملاحظات هذا الإصدار» صفّاً في بطاقة بيضاء
+    private var releaseNotesCard: some View {
+        AdminSectionCard(spacing: 0) {
+            AdminTapRow(icon: "wand.and.stars", tint: DS.Color.accent,
+                        title: L10n.t("تعبئة ملاحظات هذا الإصدار \(AppReleaseNotes.currentVersionLabel)",
+                                      "Fill this release's notes \(AppReleaseNotes.currentVersionLabel)"),
+                        subtitle: L10n.t("النوع والرقم وما الجديد — راجعها ثم انشر",
+                                         "Type, version and what's new — review, then publish"),
+                        tap: .action { fillReleaseNotes() })
+        }
+    }
+
+    private func fillReleaseNotes() {
+        withAnimation(DS.Anim.quick) {
+            kind = .feature
+            version = AppReleaseNotes.currentVersionLabel
+            summary = AppReleaseNotes.current ?? summary
+        }
+    }
+
     // MARK: - الرأس
 
     /// العنوان والوصف في الرأس الملوّن — الأرقام هنا
@@ -155,11 +198,7 @@ struct AdminAppUpdateView: View {
     /// تعبئة ملاحظات هذا الإصدار تلقائياً (النوع + الرقم + ما الجديد) — تُراجَع ثم تُنشر
     private var fillReleaseNotesButton: some View {
         Button {
-            withAnimation(DS.Anim.quick) {
-                kind = .feature
-                version = AppReleaseNotes.currentVersionLabel
-                summary = AppReleaseNotes.current ?? summary
-            }
+            fillReleaseNotes()
         } label: {
             DSRow(icon: "doc.text.fill", tint: DS.Color.primary,
                    title: L10n.t("تعبئة ملاحظات هذا الإصدار \(AppReleaseNotes.currentVersionLabel)",

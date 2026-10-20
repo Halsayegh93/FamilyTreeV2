@@ -312,6 +312,7 @@ extension Notification.Name {
 //
 // مكان ثابت لإعلان الوفاة (طلب المالك «وين الوفاة؟»): المتوفون الأحدث أولاً، بحث بالاسم،
 // والضغط على الاسم يفتح مربّع «إعلان وفاة». من أُعلن عنه يظهر في قسم مستقل بعلامة ✓.
+// بشكل «اليوم» (٢٠٢٦-١٠-٢٠): رأس كحلي بالأرقام، والقسمان بطاقتان بيضاوان صفوفهما مفصولة بخط.
 
 struct DeathAnnouncementsPage: View {
     @EnvironmentObject var memberVM: MemberViewModel
@@ -341,67 +342,66 @@ struct DeathAnnouncementsPage: View {
     private var done: [FamilyMember] { filtered.filter { announced.contains($0.id) } }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.md) {
-                    // العنوان والوصف في الرأس الملوّن — الأرقام هنا
-                    DSStatsRow([
-                        DSHeroStat(value: "\(deceased.count)",
-                                   label: L10n.t("وفيات حديثة", "Recent deaths"), icon: "person.fill"),
-                        DSHeroStat(value: loaded ? "\(announced.count)" : "—",
-                                   label: L10n.t("أُعلن عنهم", "Announced"), icon: "checkmark.seal.fill")
-                    ], tint: DS.Color.actionNavy)
+        // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← البحث يصعد فوقه ←
+        // «لم يُعلن عنهم» ← «أُعلن عنهم» بطاقتين بيضاوين
+        AdminPage(header: header, lead: AnyView(leadCard), content: AnyView(cards))
+            .scrollDismissesKeyboard(.interactively)
+            .refreshable { await loadAnnounced() }
+            .task { await loadAnnounced() }
+            .onReceive(NotificationCenter.default.publisher(for: .deathAnnouncementPublished)) { _ in
+                Task { await loadAnnounced() }
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
 
-                    DSSearchField(text: $query,
-                                  placeholder: L10n.t("ابحث بالاسم…", "Search by name…"),
-                                  tint: tint)
+    private var header: AdminPageHeader {
+        let waitingCount = deceased.filter { !announced.contains($0.id) }.count
+        return AdminPageHeader(
+            title: L10n.t("الوفيات والإعلان", "Deaths & obituaries"),
+            subtitle: L10n.t("وفيات آخر ٣٠ يوماً — اختر لنشر الخبر وإشعار الأعضاء",
+                             "Deaths in the last 30 days — pick one to post and notify"),
+            glyph: icon,
+            kpis: [
+                AdminPageKPI("\(deceased.count)", L10n.t("وفيات حديثة", "Recent deaths"), icon: "person.fill"),
+                AdminPageKPI(AdminPageKPI.count(waitingCount, ready: loaded), L10n.t("لم يُعلن", "Not announced"),
+                             icon: "megaphone.fill", tint: waitingCount > 0 ? DS.Hub.kpiLate : DS.Color.textOnPrimary),
+                AdminPageKPI(AdminPageKPI.count(announced.count, ready: loaded), L10n.t("أُعلن عنهم", "Announced"),
+                             icon: "checkmark.seal.fill", tint: DS.Hub.kpiMine)
+            ])
+    }
 
-                    if deceased.isEmpty {
-                        DSEmptyView(L10n.t("لا توجد وفيات حديثة", "No recent deaths"),
-                                    message: L10n.t("تظهر هنا وفيات آخر ٣٠ يوماً فقط", "Only deaths in the last 30 days appear here"), style: .compact)
-                            .padding(.top, DS.Spacing.xl)
-                    } else if waiting.isEmpty && done.isEmpty {
-                        DSEmptyView(L10n.t("لا يوجد متوفى بهذا الاسم", "No deceased member by that name"),
-                                    style: .compact)
-                    } else {
-                        if !waiting.isEmpty {
-                            DSComposerSection(title: L10n.t("لم يُعلن عنهم", "Not announced"),
-                                              icon: icon, tint: tint,
-                                              trailing: "\(waiting.count)", index: 1) {
-                                LazyVStack(spacing: DS.Spacing.xsm) {
-                                    ForEach(waiting.prefix(200)) { member in
-                                        row(member, isDone: false)
-                                    }
-                                }
-                            }
-                        }
-                        if !done.isEmpty {
-                            DSComposerSection(title: L10n.t("أُعلن عنهم", "Announced"),
-                                              icon: "checkmark.seal.fill", tint: DS.Color.success,
-                                              trailing: "\(done.count)", index: 2) {
-                                LazyVStack(spacing: DS.Spacing.xsm) {
-                                    ForEach(done) { member in
-                                        row(member, isDone: true)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xxxl)
+    /// أول بطاقة: البحث — أو «لا توجد وفيات حديثة»
+    private var leadCard: AnyView {
+        if deceased.isEmpty {
+            return AnyView(AdminPageStateCard(.empty(L10n.t("لا توجد وفيات حديثة", "No recent deaths"),
+                                                     message: L10n.t("تظهر هنا وفيات آخر ٣٠ يوماً فقط",
+                                                                     "Only deaths in the last 30 days appear here"))))
         }
-        .scrollDismissesKeyboard(.interactively)
-        .refreshable { await loadAnnounced() }
-        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
-        .dsSubPageHeader(L10n.t("إعلان وفاة", "Death Announcement"),
-                         subtitle: L10n.t("وفيات آخر ٣٠ يوماً — اختر لنشر الخبر وإشعار الأعضاء",
-                                          "Deaths in the last 30 days — pick one to post and notify"))
-        .task { await loadAnnounced() }
-        .onReceive(NotificationCenter.default.publisher(for: .deathAnnouncementPublished)) { _ in
-            Task { await loadAnnounced() }
+        return AnyView(DSSearchField(text: $query,
+                                     placeholder: L10n.t("ابحث بالاسم…", "Search by name…"),
+                                     tint: tint)
+            .adminCard(padding: DS.Spacing.md))
+    }
+
+    private var cards: AnyView {
+        guard !deceased.isEmpty else { return AnyView(EmptyView()) }
+        if waiting.isEmpty && done.isEmpty {
+            return AnyView(AdminPageStateCard(.empty(L10n.t("لا يوجد متوفى بهذا الاسم", "No deceased member by that name"))))
         }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        return AnyView(VStack(spacing: DS.Hub.stackSpacing) {
+            if !waiting.isEmpty {
+                AnyView(AdminSectionCard(title: L10n.t("لم يُعلن عنهم", "Not announced"), badge: waiting.count,
+                                         spacing: 0) {
+                    AdminLazyRows(items: Array(waiting.prefix(200))) { AnyView(row($0, isDone: false)) }
+                })
+            }
+            if !done.isEmpty {
+                AnyView(AdminSectionCard(title: L10n.t("أُعلن عنهم", "Announced"), badge: done.count,
+                                         badgeTint: DS.Color.success, spacing: 0) {
+                    AdminLazyRows(items: done) { AnyView(row($0, isDone: true)) }
+                })
+            }
+        })
     }
 
     private func loadAnnounced() async {
@@ -428,23 +428,17 @@ struct DeathAnnouncementsPage: View {
                 id: member.id, name: member.fullName, isFemale: member.isFemale,
                 deathDate: member.deathDate))
         } label: {
-            DSRow(icon: isDone ? "checkmark.seal.fill" : icon,
-                   tint: isDone ? DS.Color.success : tint,
-                   title: member.fullName,
-                   subtitle: deathLine(member)) {
-                // وجه الشريحة الواحدة: «إعلان» ممتلئة بتعبئة القسم، و«أُعلن» خفيفة بلون النجاح
-                Text(isDone ? L10n.t("أُعلن", "Done") : L10n.t("إعلان", "Announce"))
-                    .dsFont(.chip)
-                    .foregroundColor(isDone ? DS.Color.success : DS.Color.textOnPrimary)
-                    .padding(.horizontal, DSBox.chipPadding)
-                    .frame(minHeight: DSBox.chipHeightSmall)
-                    .background {
-                        if isDone {
-                            Capsule().fill(DS.Color.success.opacity(DS.Opacity.tintFill))
-                        } else {
-                            Capsule().fill(DSActionFill.style())
-                        }
-                    }
+            AdminListRow(icon: isDone ? "checkmark.seal.fill" : icon,
+                         tint: isDone ? DS.Color.success : tint,
+                         title: member.fullName,
+                         subtitle: deathLine(member),
+                         showsChevron: false) {
+                // «إعلان» كبسولة كحلية ممتلئة، و«أُعلن» شارة خفيفة بلون النجاح
+                if isDone {
+                    AdminValueChip(text: L10n.t("أُعلن", "Done"), icon: "checkmark", tint: DS.Color.success)
+                } else {
+                    AdminPillLabel(title: L10n.t("إعلان", "Announce"), icon: "megaphone.fill", style: .navy)
+                }
             }
         }
         .buttonStyle(.plain)

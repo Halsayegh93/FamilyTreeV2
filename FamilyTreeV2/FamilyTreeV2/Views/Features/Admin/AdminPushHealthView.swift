@@ -6,6 +6,8 @@ import Supabase
 // التصميم الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بأرقام حيّة ← «صحة رموز التسجيل»
 // بحلقة نسبة ← التوزيع حسب البيئة بشريط ← النشاط الأخير ← الأجهزة المسجلة / بدون تسجيل
 // (قسمان قابلان للطي) ← اختبار الإرسال ← التنظيف. البيانات والإجراءات كما هي.
+// بشكل «اليوم» (٢٠٢٦-١٠-٢٠، `AdminPageKit`): الأرقام في الرأس الكحلي («بدون تسجيل» يفتح قائمتهم)،
+// والأقسام بطاقات بيضاء صفوفها مفصولة بخط.
 
 struct AdminPushHealthView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -29,65 +31,67 @@ struct AdminPushHealthView: View {
     private let tint = DS.Color.composerDiwaniya
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.lg) {
-                    hero
-
-                    if let stats {
-                        // الوضع الأفقي: الأقسام على عمودين
-                        AdaptiveCardStack(spacing: DS.Spacing.md, alignment: .leading) {
-                            tokenHealthSection(stats)
-                            environmentBreakdownSection(stats)
-                            lastActivitySection
-                            tokenOwnersSection
-                            missingMembersSection
-                            testPushSection
-                            cleanupSection
-                        }
-                    } else {
-                        if isLoading {
-                            DSPageLoader(L10n.t("جارٍ فحص الإشعارات…", "Checking notifications…"), fillsSpace: false)
-                                .padding(.vertical, DS.Spacing.md)
-                        } else {
-                            DSStateCard(icon: "exclamationmark.triangle.fill",
-                                         title: L10n.t("تعذّر تحميل البيانات", "Couldn't load data"),
-                                         hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                                         tint: DS.Color.error,
-                                         actionTitle: L10n.t("إعادة المحاولة", "Retry"),
-                                         action: { Task { await loadStats() } })
-                        }
-
-                        // الإجراءات متاحة دائماً — حتى قبل اكتمال الفحص
-                        AdaptiveCardStack(spacing: DS.Spacing.md, alignment: .leading) {
-                            testPushSection
-                            cleanupSection
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xxxl)
-        }
-        .refreshable { await loadStats() }
-        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
-        .dsSubPageHeader(L10n.t("فحص الإشعارات", "Push Health"),
-                         subtitle: L10n.t("حالة الأجهزة والإرسال في نظرة واضحة", "A clear view of devices and delivery"))
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task { await loadStats() }
+        // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← «صحة رموز التسجيل»
+        // تصعد فوقه ← البطاقات (عمودان أفقياً) — الاختبار والتنظيف متاحان حتى قبل اكتمال الفحص
+        AdminPage(header: header, lead: AnyView(leadCard), content: AnyView(cards))
+            .refreshable { await loadStats() }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .task { await loadStats() }
     }
 
-    // MARK: - بطاقة الرأس
+    // MARK: - الرأس الكحلي
 
-    /// العنوان والوصف في الرأس الملوّن — الأرقام هنا
-    private var hero: some View {
-        DSStatsRow([
-                DSHeroStat(value: stats.map { "\($0.totalDevices)" } ?? "—",
-                           label: L10n.t("أجهزة", "Devices"), icon: "iphone"),
-                DSHeroStat(value: stats.map { "\($0.validTokens)" } ?? "—",
-                           label: L10n.t("رمز صالح", "Valid"), icon: "checkmark.seal.fill"),
-                DSHeroStat(value: stats == nil ? "—" : "\(missingMembers.count)",
-                           label: L10n.t("بدون تسجيل", "Unregistered"), icon: "bell.slash.fill")
-        ], tint: tint)
+    /// معدل الصحة في حلقة أول بطاقة — لا يتكرّر هنا
+    private var header: AdminPageHeader {
+        AdminPageHeader(
+            title: L10n.t("وصول الإشعارات", "Notification reach"),
+            subtitle: L10n.t("حالة الأجهزة والإرسال في نظرة واضحة", "A clear view of devices and delivery"),
+            glyph: "bell.and.waves.left.and.right.fill",
+            kpis: [
+                AdminPageKPI(stats.map { "\($0.totalDevices)" } ?? "—", L10n.t("أجهزة", "Devices"), icon: "iphone"),
+                AdminPageKPI(stats.map { "\($0.validTokens)" } ?? "—", L10n.t("رمز صالح", "Valid"),
+                             icon: "checkmark.seal.fill", tint: DS.Hub.kpiMine),
+                AdminPageKPI(stats == nil ? "—" : "\(missingMembers.count)", L10n.t("بدون تسجيل", "Unregistered"),
+                             icon: "bell.slash.fill",
+                             tint: missingMembers.isEmpty ? DS.Color.textOnPrimary : DS.Hub.kpiLate,
+                             tap: stats == nil ? .none : .action { openMissing() })
+            ])
+    }
+
+    /// رقم «بدون تسجيل» يفتح قائمتهم
+    private func openMissing() {
+        withAnimation(DSMotion.expand) { missingMembersExpanded = true }
+    }
+
+    /// أول بطاقة: صحة الرموز — أو الفحص الجاري، أو تعذّر التحميل
+    private var leadCard: AnyView {
+        if let stats { return AnyView(tokenHealthSection(stats)) }
+        if isLoading {
+            return AnyView(AdminPageStateCard(.loading(L10n.t("جارٍ فحص الإشعارات…", "Checking notifications…"))))
+        }
+        return AnyView(AdminPageStateCard(.error(L10n.t("تعذّر تحميل البيانات", "Couldn't load data"),
+                                                 message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى",
+                                                                 "Check your connection and try again"),
+                                                 retry: { Task { await loadStats() } })))
+    }
+
+    private var cards: AnyView {
+        if let stats {
+            // الوضع الأفقي: الأقسام على عمودين
+            return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing, alignment: .leading) {
+                AnyView(environmentBreakdownSection(stats))
+                AnyView(lastActivitySection)
+                AnyView(tokenOwnersSection)
+                AnyView(missingMembersSection)
+                AnyView(testPushSection)
+                AnyView(cleanupSection)
+            })
+        }
+        // الإجراءات متاحة دائماً — حتى قبل اكتمال الفحص
+        return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing, alignment: .leading) {
+            AnyView(testPushSection)
+            AnyView(cleanupSection)
+        })
     }
 
     // MARK: - صحة رموز التسجيل (النظرة العامة + الصحة)
@@ -99,21 +103,19 @@ struct AdminPushHealthView: View {
     private func tokenHealthSection(_ stats: PushHealthStats) -> some View {
         let rate = stats.healthPercentage
         let color = rateColor(rate)
-        return DSComposerSection(title: L10n.t("صحة رموز التسجيل", "Token Health"),
-                                 icon: "heart.text.square.fill",
-                                 tint: tint,
-                                 trailing: L10n.t("نظرة عامة", "Overview"),
-                                 index: 0) {
+        return AdminSectionCard(title: L10n.t("صحة رموز التسجيل", "Token Health"),
+                                tag: L10n.t("نظرة عامة", "Overview")) {
             HStack(spacing: DS.Spacing.md) {
-                DSRing(progress: Double(rate) / 100, tint: color, lineWidth: DS.Spacing.sm, size: DS.Icon.ring) {
+                DSRing(progress: Double(rate) / 100, tint: color.dsReadableGlyph, lineWidth: DS.Spacing.sm,
+                       size: DS.Icon.ring) {
                     VStack(spacing: 0) {
                         Text("\(rate)%")
                             .dsFont(.statValue)
-                            .foregroundColor(DS.Color.fieldLabel)
+                            .foregroundColor(DS.Color.textPrimary)
                             .monospacedDigit()
                         Text(L10n.t("معدل الصحة", "Health Rate"))
                             .dsFont(.microCompact)
-                            .foregroundColor(DS.Color.fieldValue)
+                            .foregroundColor(DS.Color.textTertiary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
@@ -132,16 +134,15 @@ struct AdminPushHealthView: View {
                                label: L10n.t("رمز غير صالح", "Invalid"), value: stats.invalidTokens)
                 }
             }
-            .dsRowBox()
+            .padding(.bottom, DS.Spacing.xs)
 
-            DSRow(icon: "doc.text.fill", tint: DS.Color.info,
-                   title: L10n.t("رموز تسجيل فارغة", "Empty Tokens")) {
-                countValue(stats.emptyTokens, warnWhenPositive: true)
-            }
-
-            DSRow(icon: "clock.badge.exclamationmark.fill", tint: DS.Color.warning,
-                   title: L10n.t("رموز قديمة (أكثر من 30 يوم)", "Stale (>30 days)")) {
-                countValue(stats.staleTokens, warnWhenPositive: true)
+            AdminRowsCardBody {
+                AdminInfoRow(icon: "doc.text.fill", tint: DS.Color.info,
+                             title: L10n.t("رموز تسجيل فارغة", "Empty Tokens"),
+                             trailing: AnyView(countValue(stats.emptyTokens, warnWhenPositive: true)))
+                AdminInfoRow(icon: "clock.badge.exclamationmark.fill", tint: DS.Color.warning,
+                             title: L10n.t("رموز قديمة (أكثر من 30 يوم)", "Stale (>30 days)"),
+                             trailing: AnyView(countValue(stats.staleTokens, warnWhenPositive: true)))
             }
         }
     }
@@ -154,45 +155,40 @@ struct AdminPushHealthView: View {
                 .frame(width: DS.Icon.inline)
                 .accessibilityHidden(true)
             Text(label)
-                .dsFieldFont(.chip)
-                .foregroundColor(DS.Color.fieldValue)
+                .dsFont(.chip)
+                .foregroundColor(DS.Color.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Spacer(minLength: DS.Spacing.xs)
             Text("\(value)")
                 .dsFont(.headline)
-                .foregroundColor(DS.Color.fieldLabel)
+                .foregroundColor(DS.Color.textPrimary)
                 .monospacedDigit()
         }
         .accessibilityElement(children: .combine)
     }
 
     private func countValue(_ value: Int, warnWhenPositive: Bool) -> some View {
-        Text("\(value)")
-            .dsFont(.headline)
-            .foregroundColor(warnWhenPositive && value > 0 ? DS.Color.warning : DS.Color.fieldLabel)
-            .monospacedDigit()
+        AdminRowValue(text: "\(value)",
+                      tint: warnWhenPositive && value > 0 ? DS.Color.warning.dsReadableGlyph : DS.Color.textPrimary)
     }
 
     // MARK: - التوزيع حسب البيئة
 
     private func environmentBreakdownSection(_ stats: PushHealthStats) -> some View {
-        DSComposerSection(title: L10n.t("التوزيع حسب البيئة", "Environment Breakdown"),
-                          icon: "arrow.triangle.branch",
-                          tint: tint,
-                          index: 1) {
+        AdminSectionCard(title: L10n.t("التوزيع حسب البيئة", "Environment Breakdown")) {
             DSDistributionBar(segments: [
                 .init(id: "production", value: stats.productionCount, tint: DS.Color.success),
                 .init(id: "sandbox", value: stats.sandboxCount, tint: DS.Color.warning)
             ])
 
-            DSRow(icon: "checkmark.shield.fill", tint: DS.Color.success,
-                   title: L10n.t("Production (إنتاج)", "Production (Release)")) {
-                countValue(stats.productionCount, warnWhenPositive: false)
-            }
-            DSRow(icon: "hammer.fill", tint: DS.Color.warning,
-                   title: L10n.t("Sandbox (تطوير)", "Sandbox (Debug)")) {
-                countValue(stats.sandboxCount, warnWhenPositive: false)
+            AdminRowsCardBody {
+                AdminInfoRow(icon: "checkmark.shield.fill", tint: DS.Color.success,
+                             title: L10n.t("Production (إنتاج)", "Production (Release)"),
+                             trailing: AnyView(countValue(stats.productionCount, warnWhenPositive: false)))
+                AdminInfoRow(icon: "hammer.fill", tint: DS.Color.warning,
+                             title: L10n.t("Sandbox (تطوير)", "Sandbox (Debug)"),
+                             trailing: AnyView(countValue(stats.sandboxCount, warnWhenPositive: false)))
             }
         }
     }
@@ -200,53 +196,38 @@ struct AdminPushHealthView: View {
     // MARK: - Last Activity
 
     private var lastActivitySection: some View {
-        DSComposerSection(title: L10n.t("النشاط الأخير", "Recent Activity"),
-                          icon: "clock.fill",
-                          tint: tint,
-                          index: 2) {
-            DSRow(icon: "arrow.up.circle.fill", tint: DS.Color.success,
-                   title: L10n.t("آخر تسجيل جهاز", "Last device registered")) {
-                relativeValue(stats?.lastDeviceRegisteredAt)
-            }
-            DSRow(icon: "bell.badge.fill", tint: AppSection.admin.ink,
-                   title: L10n.t("آخر إشعار مرسل", "Last notification sent")) {
-                relativeValue(stats?.lastNotificationSentAt)
-            }
-            if let refresh = lastRefresh {
-                DSRow(icon: "arrow.clockwise", tint: DS.Color.textTertiary,
-                       title: L10n.t("آخر فحص", "Last refreshed")) {
-                    relativeValue(refresh)
+        AdminSectionCard(title: L10n.t("النشاط الأخير", "Recent Activity"), spacing: 0) {
+            AdminRowsCardBody {
+                AdminInfoRow(icon: "arrow.up.circle.fill", tint: DS.Color.success,
+                             title: L10n.t("آخر تسجيل جهاز", "Last device registered"),
+                             trailing: AnyView(relativeValue(stats?.lastDeviceRegisteredAt)))
+                AdminInfoRow(icon: "bell.badge.fill", tint: AppSection.admin.ink,
+                             title: L10n.t("آخر إشعار مرسل", "Last notification sent"),
+                             trailing: AnyView(relativeValue(stats?.lastNotificationSentAt)))
+                if let refresh = lastRefresh {
+                    AdminInfoRow(icon: "arrow.clockwise", tint: DS.Color.textTertiary,
+                                 title: L10n.t("آخر فحص", "Last refreshed"),
+                                 trailing: AnyView(relativeValue(refresh)))
                 }
             }
         }
     }
 
     private func relativeValue(_ date: Date?) -> some View {
-        Text(formatRelative(date))
-            .dsFieldFont(.sectionTitle)
-            .foregroundColor(DS.Color.fieldLabel)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+        AdminValueChip(text: formatRelative(date), tint: DS.Color.primary)
     }
 
     // MARK: - الأجهزة المسجلة (قابل للطي)
 
     private var tokenOwnersSection: some View {
-        DSComposerSection(title: L10n.t("الأجهزة المسجلة", "Token Owners"),
-                          icon: "person.2.badge.gearshape",
-                          tint: tint,
-                          trailing: "\(tokenOwners.count)",
-                          index: 3,
-                          isOpen: $tokenOwnersExpanded) {
+        AdminSectionCard(title: L10n.t("الأجهزة المسجلة", "Token Owners"),
+                         badge: tokenOwners.count, badgeTint: DS.Color.primary, spacing: 0,
+                         isOpen: $tokenOwnersExpanded) {
             if tokenOwners.isEmpty {
-                DSRow(icon: "person.crop.circle.badge.xmark", tint: DS.Color.textTertiary,
-                       title: L10n.t("لا يوجد أجهزة مسجلة", "No registered devices"))
+                AdminInfoRow(icon: "person.crop.circle.badge.xmark", tint: DS.Color.textTertiary,
+                             title: L10n.t("لا يوجد أجهزة مسجلة", "No registered devices"))
             } else {
-                LazyVStack(spacing: DS.Spacing.xsm) {
-                    ForEach(tokenOwners) { owner in
-                        tokenOwnerRow(owner: owner)
-                    }
-                }
+                AdminLazyRows(items: tokenOwners) { AnyView(tokenOwnerRow(owner: $0)) }
             }
         }
     }
@@ -254,21 +235,14 @@ struct AdminPushHealthView: View {
     // MARK: - بدون تسجيل إشعارات (قابل للطي)
 
     private var missingMembersSection: some View {
-        DSComposerSection(title: L10n.t("بدون تسجيل إشعارات", "No Push Registration"),
-                          icon: "bell.slash.fill",
-                          tint: missingMembers.isEmpty ? DS.Color.success : DS.Color.warning,
-                          trailing: "\(missingMembers.count)",
-                          index: 4,
-                          isOpen: $missingMembersExpanded) {
+        AdminSectionCard(title: L10n.t("بدون تسجيل إشعارات", "No Push Registration"),
+                         badge: missingMembers.count, spacing: 0,
+                         isOpen: $missingMembersExpanded) {
             if missingMembers.isEmpty {
-                DSRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
-                       title: L10n.t("جميع الأعضاء النشطين مسجلون ✓", "All active members registered ✓"))
+                AdminInfoRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
+                             title: L10n.t("جميع الأعضاء النشطين مسجلون ✓", "All active members registered ✓"))
             } else {
-                LazyVStack(spacing: DS.Spacing.xsm) {
-                    ForEach(missingMembers) { member in
-                        missingMemberRow(member: member)
-                    }
-                }
+                AdminLazyRows(items: missingMembers) { AnyView(missingMemberRow(member: $0)) }
             }
         }
     }
@@ -286,12 +260,12 @@ struct AdminPushHealthView: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(owner.fullName)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                     .dsNameLines()
                 Text("\(owner.deviceName) · \(formatRelative(owner.updatedAt))")
-                    .dsFieldFont(.footnote)
-                    .foregroundColor(DS.Color.fieldValue)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(1)
             }
 
@@ -308,7 +282,7 @@ struct AdminPushHealthView: View {
                 .frame(width: DS.Icon.legendDot, height: DS.Icon.legendDot)
                 .accessibilityHidden(true)
         }
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm)
         .accessibilityElement(children: .combine)
         .accessibilityValue(owner.isValid ? L10n.t("رمز صالح", "Valid") : L10n.t("رمز غير صالح", "Invalid"))
     }
@@ -319,13 +293,13 @@ struct AdminPushHealthView: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(member.displayFullName)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                 HStack(spacing: DS.Spacing.xs) {
                     Text(member.roleName)
-                        .dsFieldFont(.footnote)
-                        .foregroundColor(DS.Color.fieldValue)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
                     if let phone = member.phoneNumber, !phone.isEmpty {
                         Text("·")
                             .foregroundColor(DS.Color.textTertiary)
@@ -342,23 +316,20 @@ struct AdminPushHealthView: View {
 
             DSStateIcon("bell.slash.fill", tint: DS.Color.warning, size: DS.Icon.section)
         }
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm)
         .accessibilityElement(children: .combine)
     }
 
     // MARK: - Test Push
 
     private var testPushSection: some View {
-        DSComposerSection(title: L10n.t("اختبار الإرسال", "Test Delivery"),
-                          icon: "paperplane.fill",
-                          tint: tint,
-                          index: 5) {
+        AdminSectionCard(title: L10n.t("اختبار الإرسال", "Test Delivery")) {
             Text(L10n.t(
                 "اختبر استلام إشعار على جهازك الحالي. النتيجة تظهر فوراً.",
                 "Test push delivery to your current device. Result shows instantly."
             ))
-            .dsFieldFont(.subtitle)
-            .foregroundColor(DS.Color.fieldValue)
+            .dsFont(.footnote)
+            .foregroundColor(DS.Color.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
 
             DSActionButton(title: L10n.t("أرسل إشعار تجريبي", "Send Test Push"),
@@ -376,16 +347,13 @@ struct AdminPushHealthView: View {
     // MARK: - Manual Cleanup
 
     private var cleanupSection: some View {
-        DSComposerSection(title: L10n.t("تنظيف رموز التسجيل", "Cleanup Tokens"),
-                          icon: "trash.fill",
-                          tint: DS.Color.warning,
-                          index: 6) {
+        AdminSectionCard(title: L10n.t("تنظيف رموز التسجيل", "Cleanup Tokens")) {
             Text(L10n.t(
                 "يحذف رموز التسجيل التالفة فقط (الفاضية أو الناقصة). أجهزة الأعضاء الخاملين تبقى حتى تصلهم الإشعارات.",
                 "Removes broken (empty or truncated) tokens only. Idle members' devices are kept so they still get notifications."
             ))
-            .dsFieldFont(.subtitle)
-            .foregroundColor(DS.Color.fieldValue)
+            .dsFont(.footnote)
+            .foregroundColor(DS.Color.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
 
             DSActionButton(title: L10n.t("تنظيف الآن", "Clean Now"),

@@ -5,6 +5,7 @@ import SwiftUI
 // من زرّ الرسم في رأس «طلبات المراجعة» ومربّع «النظام» في لوحة الإدارة — للمالك والمدير والمراقب.
 // الفترة (هذا الشهر · الشهر الماضي · ٣ شهور) ← الأرقام ← «وقت كل مرحلة» (أشرطة بالساعات على مقياس واحد) ←
 // «حسب النوع» ← «أداء الإدارة». الأرقام من `approvals_report` على السيرفر.
+// بشكل «اليوم» (٢٠٢٦-١٠-٢٠): الفترة شرائح في الرأس الكحلي وأهم أربعة أرقام مربّعاته، والباقي بطاقات بيضاء.
 
 /// أسماء أنواع الطلبات في المسار — مكان واحد للتقرير وإعداد «المسار السريع»
 enum ApprovalTypeTitle {
@@ -68,29 +69,46 @@ struct ApprovalsReportView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: DS.Spacing.lg) {
-                if canSee {
-                    DSSegmentedSwitch(options: periodOptions, selection: $vm.period, size: .regular)
-                        .dsStaggerIn(0)
-                    content
-                } else {
-                    DSEmptyView(L10n.t("للمالك والمدير والمراقب", "For the owner, admins and monitors"),
-                                message: L10n.t("تقرير الموافقات لفريق الشجرة والأعضاء.", "The approvals report is for the tree team."),
-                                style: .card)
-                }
+        // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بأرقام الفترة وشرائحها ← بطاقة
+        // «ملخص الفترة» تصعد فوقه ← «وقت كل مرحلة» ← «حسب النوع» ← «أداء الإدارة»
+        AdminPage(header: header, lead: AnyView(leadCard), content: AnyView(cards))
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .task(id: vm.period) {
+                guard canSee else { return }
+                await vm.load()
             }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xxxl)
-            .dsLandscapeReadable()
+    }
+
+    /// الأرقام من التقرير المحمّل — «—» قبل وصوله (أو بعد الفشل)
+    private var loaded: Bool {
+        switch vm.state {
+        case .idle, .unavailable, .failed: return false
+        case .loading: return vm.report != ApprovalsReport()
+        default: return true
         }
-        .dsSubPageHeader(L10n.t("تقرير الموافقات", "Approvals report"), subtitle: periodSubtitle)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task(id: vm.period) {
-            guard canSee else { return }
-            await vm.load()
-        }
+    }
+
+    private var header: AdminPageHeader {
+        let t = vm.report.totals
+        let ready = canSee && loaded
+        return AdminPageHeader(
+            title: L10n.t("تقرير الموافقات", "Approvals report"),
+            subtitle: periodSubtitle,
+            glyph: "chart.bar.xaxis",
+            kpis: canSee ? [
+                AdminPageKPI(AdminPageKPI.count(t.submitted, ready: ready), L10n.t("مقدّمة", "Submitted"),
+                             icon: "tray.and.arrow.down.fill"),
+                AdminPageKPI(AdminPageKPI.count(t.executed, ready: ready), L10n.t("منفّذة", "Done"),
+                             icon: "checkmark.seal.fill", tint: DS.Hub.kpiMine),
+                AdminPageKPI(AdminPageKPI.count(t.pending, ready: ready), L10n.t("معلّقة", "Pending"),
+                             icon: "hourglass", tint: DS.Hub.kpiLate),
+                AdminPageKPI(AdminPageKPI.count(t.overdueNow, ready: ready), L10n.t("متأخرة الآن", "Late now"),
+                             icon: "exclamationmark.circle.fill", tint: DS.Hub.kpiHot)
+            ] : [],
+            chips: canSee ? periodOptions.map { option in
+                AdminPageChip(id: option.id.rawValue, title: option.title, icon: option.icon,
+                              selected: vm.period == option.id) { vm.period = option.id }
+            } : [])
     }
 
     /// «١ أكتوبر – ١٦ أكتوبر»
@@ -103,61 +121,66 @@ struct ApprovalsReportView: View {
         return "\(f.string(from: range.from)) – \(f.string(from: range.to.addingTimeInterval(-1)))"
     }
 
-    @ViewBuilder private var content: some View {
+    /// أول بطاقة (تصعد فوق الرأس): الصلاحية، التحميل، الحالات، أو «ملخص الفترة»
+    private var leadCard: AnyView {
+        guard canSee else {
+            return AnyView(AdminPageStateCard(.empty(L10n.t("للمالك والمدير والمراقب", "For the owner, admins and monitors"),
+                                                     message: L10n.t("تقرير الموافقات لفريق الشجرة والأعضاء.",
+                                                                     "The approvals report is for the tree team."))))
+        }
         switch vm.state {
         case .idle:
-            loader
+            return loader
         case .loading where vm.report == ApprovalsReport():
-            loader
+            return loader
         case .unavailable:
-            DSEmptyView(L10n.t("التقرير يحتاج تحديث السيرفر", "The report needs a server update"),
-                        message: L10n.t("يظهر بعد تحديث السيرفر لمسار الموافقات.", "It appears after the approvals server update."),
-                        icon: "chart.bar.xaxis", style: .card)
+            return AnyView(AdminPageStateCard(.empty(L10n.t("التقرير يحتاج تحديث السيرفر", "The report needs a server update"),
+                                                     message: L10n.t("يظهر بعد تحديث السيرفر لمسار الموافقات.",
+                                                                     "It appears after the approvals server update."))))
         case .failed(let message):
-            DSStateCard(icon: "exclamationmark.triangle.fill", title: message, tint: DS.Color.warning,
-                        actionTitle: L10n.t("إعادة المحاولة", "Try again")) {
-                Task { await vm.load() }
-            }
+            return AnyView(AdminPageStateCard(.error(message, retry: { Task { await vm.load() } })))
         default:
-            report
+            return AnyView(summaryCard
                 .opacity(vm.state == .loading ? DS.Opacity.disabled : 1)
-                .animation(.easeInOut(duration: 0.2), value: vm.state)
+                .animation(.easeInOut(duration: 0.2), value: vm.state))
         }
     }
 
-    private var loader: some View {
-        DSPageLoader(L10n.t("جارٍ تجهيز التقرير…", "Preparing the report…"), fillsSpace: false)
-            .padding(.top, DS.Spacing.xl)
+    private var loader: AnyView {
+        AnyView(AdminPageStateCard(.loading(L10n.t("جارٍ تجهيز التقرير…", "Preparing the report…"))))
     }
 
-    // MARK: التقرير
-
-    @ViewBuilder private var report: some View {
+    /// باقي أرقام الفترة (الأربعة الأولى في الرأس) — كل رقم صفّ بشارته
+    private var summaryCard: some View {
         let t = vm.report.totals
-        VStack(spacing: DS.Spacing.sm) {
-            DSStatsRow([
-                DSHeroStat(value: "\(t.submitted)", label: L10n.t("مقدّمة", "Submitted"), icon: "tray.and.arrow.down.fill"),
-                DSHeroStat(value: "\(t.executed)", label: L10n.t("منفّذة", "Done"), icon: "checkmark.seal.fill"),
-                DSHeroStat(value: "\(t.rejected)", label: L10n.t("مرفوضة", "Rejected"), icon: "xmark.circle.fill"),
-                DSHeroStat(value: "\(t.pending)", label: L10n.t("معلّقة", "Pending"), icon: "hourglass")
-            ])
-            DSStatsRow([
-                DSHeroStat(value: "\(t.urgent)", label: L10n.t("مستعجلة", "Urgent"), icon: "flame.fill"),
-                DSHeroStat(value: "\(t.escalated)", label: L10n.t("متصعّدة", "Escalated"), icon: "arrow.up.forward.circle.fill"),
-                DSHeroStat(value: "\(t.fastTrack)", label: L10n.t("مسار سريع", "Fast track"), icon: "bolt.fill"),
-                DSHeroStat(value: "\(t.overdueNow)", label: L10n.t("متأخرة الآن", "Late now"), icon: "exclamationmark.circle.fill")
-            ], tint: DS.Color.warning)
+        return AdminSectionCard(title: L10n.t("ملخص الفترة", "Period summary"), spacing: 0) {
+            AdminRowsCardBody {
+                AdminTapRow(icon: "xmark.circle.fill", tint: DS.Color.reject, title: L10n.t("مرفوضة", "Rejected"),
+                            value: "\(t.rejected)", valueTint: DS.Color.reject)
+                AdminTapRow(icon: "flame.fill", tint: DS.Color.error, title: L10n.t("مستعجلة", "Urgent"),
+                            value: "\(t.urgent)", valueTint: DS.Color.error)
+                AdminTapRow(icon: "arrow.up.forward.circle.fill", tint: DS.Color.warning,
+                            title: L10n.t("متصعّدة", "Escalated"), value: "\(t.escalated)", valueTint: DS.Color.warning)
+                AdminTapRow(icon: "bolt.fill", tint: DS.Color.info, title: L10n.t("مسار سريع", "Fast track"),
+                            value: "\(t.fastTrack)", valueTint: DS.Color.info)
+            }
         }
-        .dsStaggerIn(1)
+    }
 
+    /// البطاقات بعد الملخص — أو «لا طلبات» إن خلت الفترة
+    private var cards: AnyView {
+        guard canSee, loaded else { return AnyView(EmptyView()) }
+        let t = vm.report.totals
         if t.submitted == 0 && vm.report.types.isEmpty && vm.report.staff.isEmpty {
-            DSEmptyView(L10n.t("لا طلبات في هذه الفترة", "No requests in this period"),
-                        message: L10n.t("جرّب فترة أطول.", "Try a longer period."), style: .card)
-        } else {
-            stagesSection
-            typesSection
-            staffSection
+            return AnyView(AdminPageStateCard(.empty(L10n.t("لا طلبات في هذه الفترة", "No requests in this period"),
+                                                     message: L10n.t("جرّب فترة أطول.", "Try a longer period."))))
         }
+        return AnyView(VStack(spacing: DS.Hub.stackSpacing) {
+            AnyView(stagesSection)
+            AnyView(typesSection)
+            AnyView(staffSection)
+        }
+        .opacity(vm.state == .loading ? DS.Opacity.disabled : 1))
     }
 
     // MARK: وقت كل مرحلة
@@ -182,19 +205,18 @@ struct ApprovalsReportView: View {
     private var stagesSection: some View {
         let bars = stageBars
         let maxHours = max(bars.compactMap(\.hours).max() ?? 0, 0.0001)
-        return DSComposerSection(title: L10n.t("وقت كل مرحلة", "Time per stage"), icon: "clock.fill",
-                                 tint: DS.Color.actionNavy, trailing: L10n.t("متوسط", "Average"), index: 2) {
+        return AdminSectionCard(title: L10n.t("وقت كل مرحلة", "Time per stage"), tag: L10n.t("متوسط", "Average")) {
             VStack(spacing: DS.Spacing.md) {
                 ForEach(bars) { bar in
                     VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                         HStack {
                             Text(bar.title)
-                                .dsFieldFont(.subtitle)
-                                .foregroundColor(DS.Color.fieldLabel)
+                                .dsFont(.subtitle)
+                                .foregroundColor(DS.Color.textPrimary)
                             Spacer(minLength: DS.Spacing.sm)
                             Text(Self.hoursText(bar.hours))
-                                .dsFieldFont(.rowTitleCompact)
-                                .foregroundColor(DS.Color.fieldLabel)
+                                .dsFont(.hubRow)
+                                .foregroundColor(DS.Color.textPrimary)
                                 .monospacedDigit()
                         }
                         // الشريط على مقياس واحد (أطول مرحلة = العرض كاملاً)
@@ -205,7 +227,7 @@ struct ApprovalsReportView: View {
                                 .frame(width: bar.hours == nil ? 0 : max(DS.Spacing.sm, geo.size.width * fraction))
                         }
                         .frame(height: DS.Spacing.sm)
-                        .background(Capsule().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke)))
+                        .background(Capsule().fill(DS.Color.cardBackgroundSoft))
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(bar.title): \(Self.hoursText(bar.hours))")
@@ -234,14 +256,14 @@ struct ApprovalsReportView: View {
 
     private var typesSection: some View {
         let rows = vm.report.types.sorted { $0.count > $1.count }
-        return DSComposerSection(title: L10n.t("حسب النوع", "By type"), icon: "square.grid.2x2.fill",
-                                 tint: DS.Color.actionNavy, trailing: rows.isEmpty ? nil : "\(rows.count)", index: 3) {
+        return AdminSectionCard(title: L10n.t("حسب النوع", "By type"), badge: rows.isEmpty ? nil : rows.count,
+                                badgeTint: DS.Color.textSecondary, spacing: 0) {
             if rows.isEmpty {
                 Text(L10n.t("لا بيانات.", "No data."))
-                    .dsFieldFont(.footnote)
-                    .foregroundColor(DS.Color.fieldValue)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
             } else {
-                VStack(spacing: DS.Spacing.sm) {
+                AdminRowsCardBody {
                     ForEach(rows) { row in typeRow(row) }
                 }
             }
@@ -253,17 +275,13 @@ struct ApprovalsReportView: View {
         let title = row.label.flatMap { $0.isEmpty ? nil : $0 } ?? ApprovalTypeTitle.title(row.type)
         return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: ApprovalTypeTitle.icon(row.type), tint: DS.Color.actionNavy)
-                    .accessibilityHidden(true)
+                AdminIconSquare(symbol: ApprovalTypeTitle.icon(row.type), tint: DS.Color.primary)
                 Text(title)
-                    .dsFieldFont(.rowTitleCompact)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                 Spacer(minLength: DS.Spacing.sm)
-                Text("\(row.count)")
-                    .dsFont(.statValue)
-                    .foregroundColor(DS.Color.fieldLabel)
-                    .monospacedDigit()
+                AdminRowValue(text: "\(row.count)")
             }
             DSDistributionBar(segments: [
                 .init(id: "done", value: row.executed, tint: DS.Color.success),
@@ -275,7 +293,7 @@ struct ApprovalsReportView: View {
                 .dsFont(.caption)
                 .foregroundColor(DS.Color.textTertiary)
         }
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm + DS.Spacing.xxs)
         .accessibilityElement(children: .combine)
     }
 
@@ -283,14 +301,14 @@ struct ApprovalsReportView: View {
 
     private var staffSection: some View {
         let rows = vm.report.staff.sorted { $0.actions > $1.actions }
-        return DSComposerSection(title: L10n.t("أداء الإدارة", "Team performance"), icon: "person.3.fill",
-                                 tint: DS.Color.actionNavy, trailing: rows.isEmpty ? nil : "\(rows.count)", index: 4) {
+        return AdminSectionCard(title: L10n.t("أداء الإدارة", "Team performance"), badge: rows.isEmpty ? nil : rows.count,
+                                badgeTint: DS.Color.textSecondary, spacing: 0) {
             if rows.isEmpty {
                 Text(L10n.t("لا إجراءات في هذه الفترة.", "No actions in this period."))
-                    .dsFieldFont(.footnote)
-                    .foregroundColor(DS.Color.fieldValue)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
             } else {
-                VStack(spacing: DS.Spacing.sm) {
+                AdminRowsCardBody {
                     ForEach(rows) { row in staffRow(row) }
                 }
             }
@@ -301,12 +319,13 @@ struct ApprovalsReportView: View {
         let member = row.memberId.flatMap { memberVM.member(byId: $0) }
         let name = row.name.flatMap { $0.isEmpty ? nil : $0 } ?? member?.firstName ?? "—"
         let role = row.role.flatMap(FamilyMember.UserRole.init(rawValue:)) ?? member?.role
-        return HStack(alignment: .center, spacing: DS.Spacing.sm) {
+        return HStack(alignment: .center, spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: "person.fill", tint: role?.color ?? DS.Color.primary)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 HStack(spacing: DS.Spacing.xs) {
                     Text(name)
-                        .dsFieldFont(.rowTitleCompact)
-                        .foregroundColor(DS.Color.fieldLabel)
+                        .dsFont(.hubRow)
+                        .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                     if let role {
                         DSStatusChip(text: AdminRequestViewModel.approvalRoleTitle(role), tint: role.color, size: .mini)
@@ -324,7 +343,7 @@ struct ApprovalsReportView: View {
                              icon: "arrow.up.forward.circle.fill", tint: DS.Color.error, size: .mini)
             }
         }
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm + DS.Spacing.xxs)
         .accessibilityElement(children: .combine)
     }
 }

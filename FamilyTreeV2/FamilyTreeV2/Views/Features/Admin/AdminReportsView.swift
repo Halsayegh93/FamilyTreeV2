@@ -8,6 +8,8 @@ import UIKit
 // ← «الحقول» ← «نتائج التقرير» (تحديد الأعضاء) ← شريط سفلي ثابت: النطاق + «إنشاء تقرير PDF» بالكحلي.
 // كل الحسابات والتصفية والتحديد وإنشاء الـ PDF ومشاركته (`ActivityView`) كما كانت تماماً.
 // (اختيار «نوع التقرير» لم يكن معروضاً في الصفحة، فالتقرير يبقى «الأسماء» كما كان.)
+// بشكل «اليوم» (٢٠٢٦-١٠-٢٠، `AdminPageKit`): الأرقام وشرائح الحالة في الرأس الكحلي، والأقسام بطاقات بيضاء،
+// والتحديد علامة ✓ في طرف كل صفّ (الصفوف مفصولة بخط).
 struct AdminReportsView: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -376,37 +378,31 @@ struct AdminReportsView: View {
         let members = filteredMembers
         let loaded = !memberVM.allMembers.isEmpty
 
-        return ScrollView(showsIndicators: false) {
-            pageContent(members: members, loaded: loaded)
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xxxl)
-                // ⚠️ مهم: نعلّق مربّع الفرع على المحتوى الداخلي عشان لا يتزاحم
-                // مع sheet المشاركة المعلّق على الـScrollView. SwiftUI لا يدعم
-                // sheet متعدد على نفس الـView — يتم تجاهل الـsheet الثاني.
-                .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
-                    BranchPickerSheet(
-                        allMembers: memberVM.allMembers,
-                        selectedId: branchRootId,
-                        onSelect: { id in
-                            branchRootId = id
-                            branchPickerOpen = false
-                            displayLimit = 20
-                        }
-                    )
-                }
-        }
-        .scrollDismissesKeyboard(.interactively)
+        // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام وشرائح الحالة ← «تصفية»
+        // تصعد فوقه ← معلومات التقرير ← الحقول ← النتائج (عمودان أفقياً) ← شريط التصدير مثبّت في الأسفل
+        return AdminPage(header: header(members: members, loaded: loaded),
+                         lead: AnyView(loaded ? AnyView(filtersCard) : AnyView(membersStateCard)),
+                         content: AnyView(pageContent(members: members, loaded: loaded)
+                            // ⚠️ مهم: نعلّق مربّع الفرع على المحتوى الداخلي عشان لا يتزاحم
+                            // مع sheet المشاركة المعلّق على الصفحة. SwiftUI لا يدعم
+                            // sheet متعدد على نفس الـView — يتم تجاهل الـsheet الثاني.
+                            .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
+                                BranchPickerSheet(
+                                    allMembers: memberVM.allMembers,
+                                    selectedId: branchRootId,
+                                    onSelect: { id in
+                                        branchRootId = id
+                                        branchPickerOpen = false
+                                        displayLimit = 20
+                                    }
+                                )
+                            }))
         // التصدير مثبّت أسفل الصفحة (مثل شريط أزرار المربّعات) — النطاق يتحدّث مع التصفية والتحديد
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if loaded {
                 exportBar(members: members)
             }
         }
-        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
-        .dsSubPageHeader(L10n.t("مركز التقارير", "Reports Center"),
-                         subtitle: L10n.t("اختر الأعضاء والحقول، ثم صدّر ملف PDF للطباعة أو المشاركة",
-                                          "Pick members and fields, then export a PDF to print or share"))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             if memberVM.allMembers.isEmpty {
@@ -427,45 +423,42 @@ struct AdminReportsView: View {
 
     // MARK: - هيكل الصفحة
 
+    @ViewBuilder
     private func pageContent(members: [FamilyMember], loaded: Bool) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            hero(members: members, loaded: loaded)
-
-            if loaded {
-                filtersBlock
-
-                // الوضع الأفقي: الأقسام على عمودين
-                AdaptiveCardStack(spacing: DS.Spacing.md) {
-                    infoSection
-                    fieldsSection
-                    if members.isEmpty {
-                        noResultsCard
-                    } else {
-                        resultsSection(members: members)
-                    }
+        if loaded {
+            // الوضع الأفقي: الأقسام على عمودين
+            AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
+                AnyView(infoSection)
+                AnyView(fieldsSection)
+                if members.isEmpty {
+                    AnyView(noResultsCard)
+                } else {
+                    AnyView(resultsSection(members: members))
                 }
-            } else {
-                membersStateCard
-                    .padding(.top, DS.Spacing.xs)
-                    .dsStaggerIn(1)
             }
+        } else {
+            Color.clear.frame(height: 0)
         }
     }
 
-    // MARK: - بطاقة الرأس
+    // MARK: - الرأس الكحلي
 
     /// ٣ أرقام حيّة من بيانات الصفحة نفسها (بلا طلبات جديدة): الأعضاء المتاحون للتقارير، ومن سيدخل
-    /// الملف الآن (النطاق)، وعدد الحقول المختارة — «—» قبل تحميل الأعضاء.
-    private func hero(members: [FamilyMember], loaded: Bool) -> some View {
-        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
-        DSStatsRow([
-                DSHeroStat(value: loaded ? "\(activeMembers.count)" : "—",
-                           label: L10n.t("الأعضاء", "Members"), icon: "person.3.fill"),
-                DSHeroStat(value: loaded ? "\(selectedCount(in: members))" : "—",
-                           label: L10n.t("في التقرير", "In report"), icon: "doc.richtext.fill"),
-                DSHeroStat(value: "\(selectedFields.count)",
-                           label: L10n.t("الحقول", "Fields"), icon: "list.bullet.rectangle.fill")
-        ], tint: pageTint)
+    /// الملف الآن (النطاق)، وعدد الحقول المختارة — «—» قبل تحميل الأعضاء. وشرائح الحالة بعددها.
+    private func header(members: [FamilyMember], loaded: Bool) -> AdminPageHeader {
+        AdminPageHeader(
+            title: L10n.t("تقارير PDF", "PDF reports"),
+            subtitle: L10n.t("اختر الأعضاء والحقول، ثم صدّر ملف PDF للطباعة أو المشاركة",
+                             "Pick members and fields, then export a PDF to print or share"),
+            glyph: "doc.text.fill",
+            kpis: [
+                AdminPageKPI(loaded ? "\(activeMembers.count)" : "—", L10n.t("الأعضاء", "Members"),
+                             icon: "person.3.fill"),
+                AdminPageKPI(loaded ? "\(selectedCount(in: members))" : "—", L10n.t("في التقرير", "In report"),
+                             icon: "doc.richtext.fill", tint: DS.Hub.kpiMine),
+                AdminPageKPI("\(selectedFields.count)", L10n.t("الحقول", "Fields"), icon: "list.bullet.rectangle.fill")
+            ],
+            chips: loaded ? statusChips : [])
     }
 
     // MARK: - حالة الأعضاء (قبل التحميل)
@@ -474,59 +467,44 @@ struct AdminReportsView: View {
     @ViewBuilder
     private var membersStateCard: some View {
         if memberVM.membersLoadFailed {
-            DSStateCard(icon: "wifi.exclamationmark",
-                         title: L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
-                         hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                         tint: DS.Color.error,
-                         actionTitle: L10n.t("إعادة المحاولة", "Retry"),
-                         action: { Task { await memberVM.fetchAllMembers(force: true) } })
+            AdminPageStateCard(.error(L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
+                                      message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                                      retry: { Task { await memberVM.fetchAllMembers(force: true) } }))
         } else {
-            DSPageLoader(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"), fillsSpace: false)
-                .padding(.top, DS.Spacing.lg)
+            AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…")))
         }
     }
 
     // MARK: - التصفية
 
-    /// بحث + فلاتر الحالة بعددها (+ نطاق العمر) — نفس خيارات «تصفية» السابقة
-    @ViewBuilder
-    private var filtersBlock: some View {
-        DSSectionTitle(title: L10n.t("تصفية", "Filter"),
-                        icon: "person.crop.circle.badge.checkmark",
-                        tint: pageTint,
-                        trailing: activeFilterCount > 0
+    /// بحث (+ نطاق العمر) — والحالة شرائح في الرأس. نفس خيارات «تصفية» السابقة
+    private var filtersCard: some View {
+        AdminSectionCard(title: L10n.t("تصفية", "Filter"),
+                         tag: activeFilterCount > 0
                             ? L10n.t("\(activeFilterCount) مفعّلة", "\(activeFilterCount) active")
-                            : nil)
-            .dsStaggerIn(1)
+                            : nil) {
+            DSSearchField(text: $searchText,
+                          placeholder: L10n.t("بحث بالاسم أو الرقم…", "Search by name or number…"),
+                          tint: pageTint)
+                .onChange(of: searchText) { _ in displayLimit = 20 }
 
-        DSSearchField(text: $searchText,
-                      placeholder: L10n.t("بحث بالاسم أو الرقم…", "Search by name or number…"),
-                      tint: pageTint)
-            .onChange(of: searchText) { _ in displayLimit = 20 }
-            .dsStaggerIn(1)
-
-        statusChips
-            .dsStaggerIn(1)
-
-        if needsAgeFilter {
-            ageRangeRow
-                .dsStaggerIn(1)
+            if needsAgeFilter {
+                ageRangeRow
+            }
         }
     }
 
     /// فلتر الحالة (كان شريطاً مقسّماً) — العدد = من سيدخل التقرير بهذا الخيار، ويظهر إن كان أكبر من صفر
-    private var statusChips: some View {
+    private var statusChips: [AdminPageChip] {
         let counts = statusCounts()
-        return DSFilterChips(
-            options: StatusFilter.allCases.map { status in
-                let n = counts[status] ?? 0
-                return DSFilterOption(id: status, title: status.label, icon: status.icon,
-                                      count: n > 0 ? n : nil)
-            },
-            selection: $statusFilter,
-            tint: pageTint
-        )
-        .onChange(of: statusFilter) { _ in displayLimit = 20 }
+        return StatusFilter.allCases.map { status in
+            let n = counts[status] ?? 0
+            return AdminPageChip(id: "\(status)", title: status.label, count: n > 0 ? n : nil, icon: status.icon,
+                                 selected: statusFilter == status) {
+                statusFilter = status
+                displayLimit = 20
+            }
+        }
     }
 
     /// نطاق العمر (من → إلى) بإطار حقل البحث — يحمرّ مع «غلط» إن كان «من» أكبر من «إلى»
@@ -581,10 +559,7 @@ struct AdminReportsView: View {
     // MARK: - معلومات التقرير
 
     private var infoSection: some View {
-        DSComposerSection(title: L10n.t("معلومات التقرير", "Report info"),
-                          icon: "doc.text",
-                          tint: pageTint,
-                          index: 2) {
+        AdminSectionCard(title: L10n.t("معلومات التقرير", "Report info")) {
             // الفارغ يُنشأ بالعنوان الافتراضي — فيظهر هو كنص إرشادي
             DSComposerField(icon: "textformat",
                             label: L10n.t("عنوان التقرير", "Report title"),
@@ -644,11 +619,8 @@ struct AdminReportsView: View {
     // MARK: - الحقول
 
     private var fieldsSection: some View {
-        DSComposerSection(title: L10n.t("الحقول", "Fields"),
-                          icon: "list.bullet.rectangle",
-                          tint: pageTint,
-                          trailing: L10n.t("\(selectedFields.count) مختارة", "\(selectedFields.count) selected"),
-                          index: 3) {
+        AdminSectionCard(title: L10n.t("الحقول", "Fields"),
+                         tag: L10n.t("\(selectedFields.count) مختارة", "\(selectedFields.count) selected")) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: DS.Spacing.sm)],
                       alignment: .leading,
                       spacing: DS.Spacing.xs) {
@@ -703,18 +675,11 @@ struct AdminReportsView: View {
     // MARK: - نتائج التقرير
 
     private func resultsSection(members: [FamilyMember]) -> some View {
-        DSComposerSection(title: L10n.t("نتائج التقرير", "Report results"),
-                          icon: selectedReport.icon,
-                          tint: pageTint,
-                          trailing: resultsTrailing(members: members),
-                          index: 4) {
+        AdminSectionCard(title: L10n.t("نتائج التقرير", "Report results"),
+                         tag: resultsTrailing(members: members)) {
             resultsTools(members: members)
 
-            LazyVStack(spacing: DS.Spacing.sm) {
-                ForEach(visibleMembers(of: members)) { member in
-                    memberRow(member)
-                }
-            }
+            AdminLazyRows(items: visibleMembers(of: members)) { AnyView(memberRow($0)) }
 
             if displayLimit < members.count {
                 loadMoreButton(remaining: members.count - displayLimit)
@@ -783,8 +748,8 @@ struct AdminReportsView: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     HStack(spacing: DS.Spacing.xs) {
                         Text(member.displayFullName)
-                            .dsFieldFont(.rowTitle)
-                            .foregroundColor(DS.Color.fieldLabel)
+                            .dsFont(.hubRow)
+                            .foregroundColor(DS.Color.textPrimary)
                             .dsNameLines()
                         if deceased {
                             Image(systemName: "leaf.fill")
@@ -816,14 +781,8 @@ struct AdminReportsView: View {
                     .foregroundColor(selected ? AppSection.admin.ink : DS.Color.textTertiary)
             }
             .frame(minHeight: DSBox.fieldMinHeight)
-            .dsRowBox()
-            .overlay {
-                if selected {
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .strokeBorder(AppSection.admin.ink.opacity(DS.Opacity.selectedStroke), lineWidth: DS.Border.widthBold)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .padding(.vertical, DS.Spacing.sm)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(rowAccessibilityLabel(member, phone: phone, age: age, missingPhone: missingPhone))
@@ -839,7 +798,7 @@ struct AdminReportsView: View {
                 .monospacedDigit()
                 .lineLimit(1)
         }
-        .foregroundColor(DS.Color.fieldValue)
+        .foregroundColor(DS.Color.textTertiary)
     }
 
     private func rowAccessibilityLabel(_ member: FamilyMember, phone: String, age: Int?,
@@ -876,8 +835,9 @@ struct AdminReportsView: View {
                            actionIcon: "arrow.counterclockwise",
                            style: .compact,
                            action: reset)
-            .dsCard(padding: nil)
-            .dsStaggerIn(4)
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(maxWidth: .infinity)
+            .adminCard()
     }
 
     // MARK: - التصدير
