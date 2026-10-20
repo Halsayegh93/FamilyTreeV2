@@ -8,6 +8,8 @@ enum AdminReviewDestination: Hashable {
     case inboxItem(UUID)
     /// «رسائل الدخول · KWT SMS» (إشعار «رصيد الرسائل منخفض»)
     case sms
+    /// بيت إشارة من لوحة «حالة النظام» (تُدفع بعد أن تُغلق اللوحة — الرابط داخل النافذة المنبثقة لا يدفع في هذا المكدس)
+    case status(AdminStatusPill.Home)
     /// صفحة قسم (مربّعات «اليوم» وشريط الأقسام) — العدّاد يجعل كل انتقال من الشريط قيمة جديدة فيُستبدل المسار
     /// كله (حتى العودة لصفحة القسم الحالي من صفحة داخلية)
     case area(AdminArea, Int)
@@ -18,10 +20,11 @@ enum AdminReviewDestination: Hashable {
 // الاتجاه «أ» (مركز القيادة) أساساً + لمستان من «ب»: دوائر الإنجاز للمهام، وسحب «الوارد» مثل البريد.
 // «في اردحام بلوحة الادارة بالبداية» → «الأقسام فوق + قائمة وحدة» (اختيار المالك ٢٠٢٦-١٠-٢٠). من الأعلى:
 // الرأس الكحلي (التحية، الدور، التاريخ، وأربعة أرقام: بانتظارك · مستعجل · متأخر · رسائل؛ ومكبّر صوت «إعلان جديد» بجانب
-// البحث والجرس لمن يرسل للأعضاء؛ وتحتها سطر حالة مختصر: الصيانة · الرصيد · المجدول · بلا إشعارات — طلب المالك «ابى تختصر
-// لوحة التنبيهات وتكون عند اللوحة العلوية») ← «أعداد الأعضاء» جدولاً صغيراً (المالك والمدير والمراقب) ← «الأقسام» الستة
-// ٣×٢ بتلميح حيّ (اختيار المالك «٦ أقسام») ← «بانتظار قرارك» قائمة واحدة (القرارات والمهام معاً، أول ٣ و«عرض الكل»).
-// بطاقة «تنبيهات» حُذفت: الأربعة صارت سطر الحالة، والباقي (وفاة لم يُعلن عنها، مشكلات الشجرة للمراقب، خلل إعداد قاعدة
+// البحث والجرس لمن يرسل للأعضاء؛ وتحتها شريحة «حالة النظام» واحدة تفتح لوحة: الصيانة · الرصيد · المجدول · بلا إشعارات —
+// طلب المالك «ابى تختصر لوحة التنبيهات وتكون عند اللوحة العلوية» ثم اختياره الشريحة بدل النقاط) ← «أعداد الأعضاء»
+// جدولاً صغيراً (المالك والمدير والمراقب) ← «الأقسام» الستة ٣×٢ بتلميح حيّ (اختيار المالك «٦ أقسام») ← «بانتظار قرارك»
+// قائمة واحدة (القرارات والمهام معاً، أول ٣ و«عرض الكل»).
+// بطاقة «تنبيهات» حُذفت: الأربعة صارت «حالة النظام»، والباقي (وفاة لم يُعلن عنها، مشكلات الشجرة للمراقب، خلل إعداد قاعدة
 // البيانات) «يحتاج إجراء» في «إشعارات الإدارة» التي يفتحها الجرس (`AdminNotificationsPage`). «اليوم في العائلة» انتقل لأعلى «المناسبات»،
 // و«نبض العائلة» لأعلى «المؤشرات»، وكل إجراء سريع لأعلى قسمه. كل دور يرى مجاله فقط والقسم الفارغ لا يُرسم (IA.md).
 // صفحات الأقسام تُفتح بقيمة في المسار (`.area`) ليستبدلها شريط الأقسام (`AdminAreaRouter`) بلا تراكم.
@@ -56,7 +59,7 @@ struct AdminDashboardView: View {
     /// المعلن عنهم — nil = تعذّر الجلب (لا تنبيه «لم يُعلن» خطأً)
     @State private var announcedIds: Set<UUID>? = nil
     @State private var activeNow: Int? = nil
-    /// «بلا إشعارات» في سطر الحالة — نفس مخزن «الأجهزة ووصول الإشعارات» (رقم واحد بتعريف واحد)
+    /// «بلا إشعارات» في «حالة النظام» — نفس مخزن «الأجهزة ووصول الإشعارات» (رقم واحد بتعريف واحد)
     @ObservedObject private var devices = AdminDeviceReachStore.shared
     /// «أعداد الأعضاء» — تبدأ من آخر ما حُمّل وتتحدّث مع التحميل
     @State private var memberCounts = AdminMemberCounts.seeded(members: [])
@@ -130,6 +133,7 @@ struct AdminDashboardView: View {
         case .allRequests:       return AnyView(AdminAllRequestsView().adminArea(.inbox))
         case .inboxItem(let id): return AnyView(AdminAllRequestsView(focusId: id).adminArea(.inbox))
         case .sms:               return AnyView(AdminSmsView(backTitle: L10n.t("اليوم", "Today")).adminArea(.team))
+        case .status(let home):  return AdminSystemStatusChip.page(home)
         case .area(let area, _): return AnyView(AdminAreaView(area: area))
         }
     }
@@ -431,10 +435,11 @@ struct AdminDashboardView: View {
             }
             .padding(.top, DS.Spacing.lg + 2)
 
-            // سطر الحالة (كان بطاقة «تنبيهات») — كل إشارة تفتح بيتها الوحيد
+            // «حالة النظام» (كانت بطاقة «تنبيهات» ثم سطر نقاط): شريحة واحدة في طرف السطر تفتح لوحة الإشارات الأربع
             let pills = statusPills
             if !pills.isEmpty {
-                AnyView(AdminTodayStatusRow(pills: pills))
+                AnyView(AdminSystemStatusChip(status: AdminSystemStatus(pills: pills), open: openStatusHome))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.top, DS.Spacing.xs)
             }
         }
@@ -445,6 +450,11 @@ struct AdminDashboardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .adminBandBackground(landscape: landscape)
         .dsLightStatusBar()
+    }
+
+    /// إجراء من لوحة «حالة النظام» — يدفع بيت الإشارة في مسار «اليوم»
+    private func openStatusHome(_ home: AdminStatusPill.Home) {
+        navigationPath.append(AdminReviewDestination.status(home))
     }
 
     private func kpiLink(_ tile: AdminKPITile, filter: ApprovalListFilter) -> some View {
@@ -485,80 +495,89 @@ struct AdminDashboardView: View {
         }
     }
 
-    // MARK: سطر الحالة (كان بطاقة «تنبيهات»)
+    // MARK: «حالة النظام» (كانت بطاقة «تنبيهات» ثم سطر نقاط)
 
-    /// الصيانة · الرصيد · المجدول · بلا إشعارات — للمالك والمدير (نفس ظهور التنبيهات السابقة؛ المراقب والمشرف لا يرونها).
-    /// العبارة قصيرة في السطر، والقارئ الصوتي يقرأ الحالة كاملة
+    /// الصيانة · الرصيد · المجدول · بلا إشعارات — للمالك والمدير (نفس ظهور التنبيهات السابقة؛ المراقب والمشرف لا يرونها،
+    /// والصيانة والرصيد لمن يرى إعدادات النظام). نفس المخازن بلا جلب جديد
     private var statusPills: [AdminStatusPill] {
         guard authVM.isAdmin else { return [] }
         let notLoaded = L10n.t("لم يُحمَّل بعد", "not loaded yet")
+        let notLoadedLine = L10n.t("لم يُحمَّل بعد", "Not loaded yet")
         var list: [AdminStatusPill] = []
         if authVM.canViewSystemSettings {
             let s = appSettingsVM.settings
             if s.updatedAt == nil {
-                list.append(AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة —", "Maintenance —"),
-                                            short: L10n.t("الصيانة —", "Maintenance —"), level: .unknown,
+                list.append(AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة: —", "Maintenance: —"),
+                                            detail: notLoadedLine, level: .unknown, issue: "",
                                             spoken: L10n.t("وضع الصيانة: \(notLoaded)", "Maintenance mode: \(notLoaded)")))
             } else {
                 list.append(s.maintenanceMode
-                    ? AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة مفعّلة", "Maintenance on"),
-                                      short: L10n.t("الصيانة", "Maintenance"), level: .urgent,
+                    ? AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة: مفعّلة", "Maintenance: on"),
+                                      detail: L10n.t("الأعضاء يرون شاشة الصيانة", "Members see the maintenance screen"),
+                                      level: .urgent, issue: L10n.t("الصيانة مفعّلة", "maintenance on"),
                                       spoken: L10n.t("وضع الصيانة مفعّل", "Maintenance mode is on"))
-                    : AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة مطفأة", "Maintenance off"),
-                                      short: L10n.t("الصيانة", "Maintenance"), level: .ok,
+                    : AdminStatusPill(home: .maintenance, text: L10n.t("الصيانة: مطفأة", "Maintenance: off"),
+                                      detail: L10n.t("التطبيق يعمل للجميع", "The app is open to everyone"),
+                                      level: .ok, issue: "",
                                       spoken: L10n.t("وضع الصيانة مطفأ", "Maintenance mode is off")))
             }
             // تحت عتبة «منخفض» كهرماني وتحت «عاجل» أحمر (العتبات من السيرفر)
             let level: AdminStatusPill.Level
             let state: String
+            let issue: String
             switch sms.level {
-            case .good:    level = .ok;      state = ""
-            case .low:     level = .warn;    state = L10n.t("، منخفض", ", low")
-            case .urgent:  level = .urgent;  state = L10n.t("، منخفض جداً", ", very low")
-            case .unknown: level = .unknown; state = ""
+            case .good:    level = .ok;      state = "";                                 issue = ""
+            case .low:     level = .warn;    state = L10n.t("منخفض", "low");             issue = L10n.t("الرصيد منخفض", "balance low")
+            case .urgent:  level = .urgent;  state = L10n.t("منخفض جداً", "very low");   issue = L10n.t("الرصيد منخفض جداً", "balance very low")
+            case .unknown: level = .unknown; state = "";                                 issue = ""
             }
             if let balance = sms.status?.balance {
                 let points = SmsBalanceText.points(balance)
-                let text = L10n.t("الرصيد \(points)", "Balance \(points)")
-                list.append(AdminStatusPill(home: .sms, text: text, short: text, level: level,
-                                            spoken: L10n.t("رصيد رسائل رمز الدخول: \(points) نقطة\(state)",
-                                                           "Sign-in SMS balance: \(points) points\(state)")))
+                let enough = SmsBalanceText.enough(balance)
+                list.append(AdminStatusPill(home: .sms, text: L10n.t("الرصيد: \(points) نقطة", "Balance: \(points) points"),
+                                            detail: state.isEmpty ? enough : "\(state) · \(enough)", level: level, issue: issue,
+                                            spoken: L10n.t("رصيد رسائل رمز الدخول: \(points) نقطة", "Sign-in SMS balance: \(points) points")
+                                                + (state.isEmpty ? "" : L10n.t("، \(state)", ", \(state)"))))
             } else {
-                let text = L10n.t("الرصيد —", "Balance —")
-                list.append(AdminStatusPill(home: .sms, text: text, short: text, level: level,
+                list.append(AdminStatusPill(home: .sms, text: L10n.t("الرصيد: —", "Balance: —"), detail: notLoadedLine,
+                                            level: level, issue: issue,
                                             spoken: L10n.t("رصيد رسائل رمز الدخول: \(notLoaded)", "Sign-in SMS balance: \(notLoaded)")))
             }
         }
         // الإشعارات المجدولة: اليوم كهرماني، ولاحقاً أو لا شيء أخضر
         let dates = notificationVM.scheduledNotifications.compactMap(\.scheduledDate)
         let today = dates.filter { Calendar.current.isDateInToday($0) }.count
+        let later = dates.count - today
+        let laterLine = later > 0 ? L10n.t("لاحقاً \(later)", "\(later) later") : nil
         list.append(today > 0
-            ? AdminStatusPill(home: .scheduled, text: L10n.t("مجدول اليوم \(today)", "\(today) scheduled today"),
-                              short: L10n.t("مجدول \(today)", "Scheduled \(today)"), level: .warn,
+            ? AdminStatusPill(home: .scheduled, text: L10n.t("مجدول: \(today) اليوم", "Scheduled: \(today) today"),
+                              detail: [L10n.t("يُرسل اليوم", "Goes out today"), laterLine].compactMap { $0 }.joined(separator: " · "),
+                              level: .warn, issue: L10n.t("مجدول اليوم \(today)", "\(today) scheduled today"),
                               spoken: L10n.t("إشعارات مجدولة اليوم: \(today)", "Notifications scheduled today: \(today)"))
-            : dates.isEmpty
-                ? AdminStatusPill(home: .scheduled, text: L10n.t("لا شيء مجدول", "Nothing scheduled"),
-                                  short: L10n.t("مجدول 0", "Scheduled 0"), level: .ok,
-                                  spoken: L10n.t("لا إشعارات مجدولة", "No scheduled notifications"))
-                : AdminStatusPill(home: .scheduled, text: L10n.t("مجدول لاحقاً \(dates.count)", "\(dates.count) scheduled later"),
-                                  short: L10n.t("مجدول \(dates.count)", "Scheduled \(dates.count)"), level: .ok,
-                                  spoken: L10n.t("إشعارات مجدولة لاحقاً: \(dates.count)", "Notifications scheduled later: \(dates.count)")))
+            : AdminStatusPill(home: .scheduled, text: L10n.t("مجدول: 0 اليوم", "Scheduled: 0 today"),
+                              detail: laterLine ?? L10n.t("لا إشعارات مجدولة", "No scheduled notifications"),
+                              level: .ok, issue: "",
+                              spoken: later > 0
+                                ? L10n.t("إشعارات مجدولة لاحقاً: \(later)", "Notifications scheduled later: \(later)")
+                                : L10n.t("لا إشعارات مجدولة", "No scheduled notifications")))
         // أجهزة لا تصلها الإشعارات (غير مسجّلة أو لم تُحدَّث منذ 30 يوماً) — نفس رقم صفحتها
         if let reach = devices.stats {
             let n = reach.total - reach.reach
             let devicesText = L10n.isArabic
-                ? AdminTodayText.arabicCount(n, one: "جهاز", two: "جهازان", few: "أجهزة", many: "جهازاً", single: "جهاز")
+                ? (n == 0 ? "0" : AdminTodayText.arabicCount(n, one: "جهاز", two: "جهازان", few: "أجهزة", many: "جهازاً", single: "جهاز"))
                 : (n == 1 ? "1 device" : "\(n) devices")
             list.append(n == 0
-                ? AdminStatusPill(home: .devices, text: L10n.t("الإشعارات تصل الجميع", "All devices reached"),
-                                  short: L10n.t("بلا إشعارات 0", "Not reached 0"), level: .ok,
+                ? AdminStatusPill(home: .devices, text: L10n.t("بلا إشعارات: 0", "Not reached: 0"),
+                                  detail: L10n.t("الإشعارات تصل كل الأجهزة", "Notifications reach every device"),
+                                  level: .ok, issue: "",
                                   spoken: L10n.t("الإشعارات تصل كل الأجهزة", "Notifications reach every device"))
-                : AdminStatusPill(home: .devices, text: L10n.t("\(devicesText) بلا إشعارات", "\(devicesText) not reached"),
-                                  short: L10n.t("بلا إشعارات \(n)", "Not reached \(n)"), level: .warn,
+                : AdminStatusPill(home: .devices, text: L10n.t("بلا إشعارات: \(devicesText)", "Not reached: \(devicesText)"),
+                                  detail: L10n.t("غير مسجّلة أو لم تُحدَّث منذ 30 يوماً", "Not registered or not updated in 30 days"),
+                                  level: .warn, issue: L10n.t("\(devicesText) بلا إشعارات", "\(devicesText) not reached"),
                                   spoken: L10n.t("أجهزة لا تصلها الإشعارات: \(n)", "Devices not reached by notifications: \(n)")))
         } else {
-            list.append(AdminStatusPill(home: .devices, text: L10n.t("الأجهزة —", "Devices —"),
-                                        short: L10n.t("الأجهزة —", "Devices —"), level: .unknown,
+            list.append(AdminStatusPill(home: .devices, text: L10n.t("بلا إشعارات: —", "Not reached: —"), detail: notLoadedLine,
+                                        level: .unknown, issue: "",
                                         spoken: L10n.t("أجهزة لا تصلها الإشعارات: \(notLoaded)",
                                                        "Devices not reached by notifications: \(notLoaded)")))
         }
@@ -806,52 +825,44 @@ struct AdminTodayDoneRow: View {
     }
 }
 
-// MARK: - سطر الحالة في الرأس
+// MARK: - «حالة النظام» في الرأس
 
-/// إشارات الحالة الأربع تحت أرقام «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ «صغّر المربعات وخلّهم نقط»): نقاط ملوّنة بعبارة قصيرة
-/// بخط صغير، بلا مربّعات وبمسافات متساوية. **سطر واحد دائماً بكل أحجام الخط** (طلب المالك ٢٠٢٦-١٠-٢٠ «ليش تحت بعض؟»):
-/// العبارات كاملة (تصغر حتى ٨٠٪ إن ضاق السطر) ← العبارات الأقصر («الصيانة»، «مجدول 1»…) ← سطر يُمرَّر أفقياً بالعبارات
-/// كاملة يبدأ من أول السطر. كل إشارة تفتح بيتها الوحيد، ومنطقة لمسها ٤٤ نقطة بلا إطار مرئي، والقارئ الصوتي يقرأ الحالة كاملة
-struct AdminTodayStatusRow: View {
-    let pills: [AdminStatusPill]
-    @ScaledMetric(relativeTo: .caption) private var dotScale: CGFloat = 1
+/// شريحة «حالة النظام» تحت أرقام «اليوم» (اختيار المالك ٢٠٢٦-١٠-٢٠ بدل النقاط الأربع): واحدة في طرف السطر —
+/// «✓ النظام سليم» أخضر، «⚠︎ تنبيه/تنبيهان/3 تنبيهات» كهرماني وأحمر إن كان فيها عاجل (الصيانة مفعّلة، الرصيد تحت «عاجل»)،
+/// ثم «⌄». الضغط يفتح لوحة صغيرة منها (`AdminSystemStatusPanel`) بالإشارات وإجراء صغير لكلٍّ؛ البيت يُدفع في مسار «اليوم»
+/// بعد أن تختفي اللوحة (الرابط داخل النافذة المنبثقة لا يدفع في هذا المكدس). منطقة اللمس ٤٤ نقطة، والقارئ الصوتي يقرأ
+/// الملخّص كاملاً («حالة النظام: تنبيهان — الرصيد منخفض، 3 أجهزة بلا إشعارات»)
+struct AdminSystemStatusChip: View {
+    let status: AdminSystemStatus
+    let open: (AdminStatusPill.Home) -> Void
+    @State private var showsPanel = false
+    /// بيت اختير من اللوحة — يُفتح حين تختفي
+    @State private var pending: AdminStatusPill.Home?
 
     var body: some View {
-        AnyView(ViewThatFits(in: .horizontal) {
-            line(short: false)
-            line(short: true)
-            scroller
+        Button { showsPanel = true } label: {
+            AdminSystemStatusChipLabel(status: status)
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(status.spoken)
+        .accessibilityHint(L10n.t("يعرض الحالة والإجراءات", "Shows the status and actions"))
+        .accessibilityAddTraits(.isButton)
+        .modifier(AdminStatusPanelPresenter(isPresented: $showsPanel) {
+            AdminSystemStatusPanel(pills: status.pills) { home in
+                pending = home
+                showsPanel = false
+            }
+            .onDisappear {
+                guard let home = pending else { return }
+                pending = nil
+                open(home)
+            }
         })
     }
 
-    /// سطر واحد: الأولى على الطرف والأخيرة على الطرف الآخر، والمسافات بينها متساوية
-    private func line(short: Bool) -> some View {
-        AdminStatusLineLayout(minGap: DS.Spacing.md, minScale: DS.Hub.statusLineMinScale,
-                              fixed: AdminBaselineDot.side(DS.Hub.statusDot, scale: dotScale) + DS.Spacing.xsm) {
-            ForEach(pills) { link($0, short: short, scales: true) }
-        }
-    }
-
-    /// آخر خيار (أحجام إمكانية الوصول): السطر نفسه بالعبارات كاملة يُمرَّر أفقياً من طرف الشاشة إلى طرفها
-    private var scroller: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.lg) {
-                ForEach(pills) { link($0, short: false, scales: false) }
-            }
-            .padding(.horizontal, DS.Hub.headerSide)
-        }
-        .padding(.horizontal, -DS.Hub.headerSide)
-    }
-
-    private func link(_ pill: AdminStatusPill, short: Bool, scales: Bool) -> some View {
-        NavigationLink { AdminLazyPage { Self.page(pill.home) } } label: {
-            AdminStatusPillView(pill: pill, short: short, scales: scales)
-        }
-        .buttonStyle(DSPressStyle())
-    }
-
-    /// بيت كل إشارة: الصيانة ← «التطبيق»، الرصيد ← «رسائل رمز الدخول»، المجدول ← «المناسبات» (القادم)، الأجهزة ←
-    /// «الأجهزة ووصول الإشعارات»
+    /// بيت كل إشارة: الصيانة ← «التطبيق» (فيها مجموعة «التشغيل»)، الرصيد ← «رسائل رمز الدخول»، المجدول ← «المناسبات»
+    /// (القادم)، الأجهزة ← «الأجهزة ووصول الإشعارات»
     static func page(_ home: AdminStatusPill.Home) -> AnyView {
         let today = L10n.t("اليوم", "Today")
         switch home {
@@ -863,82 +874,166 @@ struct AdminTodayStatusRow: View {
     }
 }
 
-/// سطر الإشارات: الأولى على الطرف والأخيرة على الطرف الآخر والمسافات بينها متساوية (لا تقلّ عن `minGap`). إن ضاق السطر
-/// صغُر خط العبارات معاً حتى `minScale` والنقاط بحجمها (`fixed` = النقطة والمسافة بعدها في كل إشارة)؛ فالمقاس المثالي
-/// الذي يقيسه `ViewThatFits` هو أصغر عرض مقبول، وإن لم يتّسع انتقل للخيار التالي
-struct AdminStatusLineLayout: Layout {
-    var minGap: CGFloat
-    var minScale: CGFloat
-    var fixed: CGFloat
+/// شكل الشريحة فوق الكحلي: رمز الحالة + النص + «⌄» بلون الحالة على تعبئة خفيفة منه (محايدة زجاجية ما دام شيء لم يُحمَّل)
+struct AdminSystemStatusChipLabel: View {
+    let status: AdminSystemStatus
 
-    private func measure(_ subviews: Subviews) -> (widths: [CGFloat], height: CGFloat, gaps: CGFloat) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        return (sizes.map(\.width), sizes.map(\.height).max() ?? 0, minGap * CGFloat(max(subviews.count - 1, 0)))
+    var body: some View {
+        let tone = status.tone
+        HStack(spacing: DS.Spacing.xs) {
+            if let icon = Self.icon(tone) {
+                Image(systemName: icon).dsGlyph(DS.Glyph.xs, weight: .bold)
+            }
+            Text(verbatim: status.title)
+                .dsFont(.caption)
+                .monospacedDigit()
+                .lineLimit(1)
+            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.micro, weight: .bold)
+        }
+        .foregroundColor(Self.ink(tone))
+        .padding(.horizontal, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.xs + 1)
+        .background(Capsule().fill(Self.fill(tone)))
+        .overlay(Capsule().strokeBorder(Self.stroke(tone), lineWidth: DS.Border.width))
+        .frame(minHeight: DS.Icon.tapTarget)
+        .contentShape(Rectangle())
     }
 
-    /// عرض الإشارة حين تصغر عبارتها بنسبة `k`
-    private func width(_ natural: CGFloat, k: CGFloat) -> CGFloat {
-        min(natural, fixed + max(natural - fixed, 0) * k)
+    private static func icon(_ tone: AdminSystemStatus.Tone) -> String? {
+        switch tone {
+        case .ok:            return "checkmark"
+        case .warn, .urgent: return "exclamationmark.triangle.fill"
+        case .loading:       return nil
+        }
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let m = measure(subviews)
-        let least = m.widths.reduce(m.gaps) { $0 + width($1, k: minScale) }
-        guard let proposed = proposal.width, proposed.isFinite else { return CGSize(width: least, height: m.height) }
-        return CGSize(width: max(proposed, least), height: m.height)
+    /// لون الحالة فوق الكحلي (ثابت في الوضعين): سليم `statusOk`، تنبيه `kpiLate`، عاجل `bellDot` (والنص `kpiHot` الأفتح)
+    private static func base(_ tone: AdminSystemStatus.Tone) -> Color? {
+        switch tone {
+        case .ok:      return DS.Hub.statusOk
+        case .warn:    return DS.Hub.kpiLate
+        case .urgent:  return DS.Hub.bellDot
+        case .loading: return nil
+        }
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let m = measure(subviews)
-        guard !subviews.isEmpty else { return }
-        let texts = m.widths.reduce(0) { $0 + max($1 - fixed, 0) }
-        let fixedAll = m.widths.reduce(0) { $0 + min($1, fixed) }
-        let k = texts > 0 ? min(1, max(minScale, (bounds.width - m.gaps - fixedAll) / texts)) : 1
-        let widths = m.widths.map { width($0, k: k) }
-        let spare = subviews.count > 1
-            ? max(minGap, (bounds.width - widths.reduce(0, +)) / CGFloat(subviews.count - 1)) : 0
-        var x = bounds.minX
-        for (i, sub) in subviews.enumerated() {
-            sub.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading,
-                      proposal: ProposedViewSize(width: widths[i], height: bounds.height))
-            x += widths[i] + spare
+    private static func ink(_ tone: AdminSystemStatus.Tone) -> Color {
+        tone == .urgent ? DS.Hub.kpiHot : (base(tone) ?? DS.Hub.onBandMuted)
+    }
+
+    private static func fill(_ tone: AdminSystemStatus.Tone) -> Color {
+        base(tone).map { $0.opacity(DS.Opacity.tintFillStrong) } ?? DS.Hub.glass
+    }
+
+    private static func stroke(_ tone: AdminSystemStatus.Tone) -> Color {
+        base(tone).map { $0.opacity(DS.Hub.statusChipStroke) } ?? DS.Hub.glassLine
+    }
+}
+
+/// اللوحة: نافذة منبثقة من الشريحة نفسها من iOS 16.4 (`presentationCompactAdaptation(.popover)` — لا ورقة في الآيفون)
+/// على سطح التطبيق المصمت (لا زجاج يشفّ الكحلي خلفه)، وتحتها من iOS 18 (السهم في أعلى اللوحة)؛ وقبل 16.4 مربّع صغير بالمنتصف (`dsCenterBox`)
+private struct AdminStatusPanelPresenter<Panel: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    @ViewBuilder let panel: () -> Panel
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.popover(isPresented: $isPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+                panel()
+                    .presentationCompactAdaptation(.popover)
+                    .presentationBackground(DS.Color.surface)
+            }
+        } else if #available(iOS 16.4, *) {
+            content.popover(isPresented: $isPresented) {
+                panel()
+                    .presentationCompactAdaptation(.popover)
+                    .presentationBackground(DS.Color.surface)
+            }
+        } else {
+            content.dsCenterBox(isPresented: $isPresented, onBackgroundTap: { isPresented = false }) {
+                ScrollView { panel().dsPanelContentHeight(extra: 0) }
+            }
         }
     }
 }
 
-/// إشارة واحدة: نقطة اللون ثم العبارة القصيرة بأبيض الرأس الخافت (العاجل بالأحمر الفاتح). بلا مربّع — منطقة اللمس
-/// ٤٤ نقطة من الإطار نفسه، والقارئ الصوتي يقرأ الحالة كاملة
-struct AdminStatusPillView: View {
-    let pill: AdminStatusPill
-    /// العبارة الأقصر (حين لا يتّسع السطر بالكاملة)
-    var short = false
-    /// في السطر: تصغر العبارة إن ضاق (حتى `statusTextMinScale`)؛ في التمرير: بحجمها الكامل
-    var scales = true
-
-    private var dot: Color {
-        switch pill.level {
-        case .ok:      return DS.Hub.statusOk
-        case .warn:    return DS.Hub.kpiLate
-        case .urgent:  return DS.Hub.bellDot
-        case .unknown: return DS.Hub.onBandMuted
-        }
-    }
+/// لوحة «حالة النظام»: عنوان صغير ثم صفّ لكل إشارة — نقطة اللون (معاني التطبيق: نجاح/تحذير/خطأ)، الحالة («الرصيد: 17
+/// نقطة») وسطر ثانٍ، وإجراء صغير في الطرف («الإعدادات»، «اشحن»، «القادم»، «الأجهزة»). الصفّ كله زرّ بلمس ٤٤، ويقرؤه
+/// القارئ الصوتي بالحالة كاملة والإجراء تلميحاً. من أحجام إمكانية الوصول: أعرض، والإجراء تحت النص، واللوحة تتمرّر
+struct AdminSystemStatusPanel: View {
+    let pills: [AdminStatusPill]
+    let choose: (AdminStatusPill.Home) -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
-            AdminBaselineDot(color: dot)
-            Text(verbatim: short ? pill.short : pill.text)
-                .dsFont(.caption)
-                .monospacedDigit()
-                .foregroundColor(pill.level == .urgent ? DS.Hub.kpiHot : DS.Hub.onBandMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(scales ? DS.Hub.statusTextMinScale : 1)
-                .fixedSize(horizontal: !scales, vertical: true)
+        Group {
+            if typeSize.isAccessibilitySize {
+                ScrollView(showsIndicators: false) { list }
+            } else {
+                // بارتفاعها كاملاً (لا تنضغط الصفوف إن ضاق المكان — النافذة تختار جهة تتّسع لها)
+                list.fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .frame(minHeight: DS.Icon.tapTarget)
-        .contentShape(Rectangle())
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private var list: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(L10n.t("حالة النظام", "System status"))
+                .dsFont(.sectionTitle)
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.bottom, DS.Spacing.xxs)
+            ForEach(Array(pills.enumerated()), id: \.element.id) { index, pill in
+                if index > 0 { AdminRowDivider() }
+                row(pill)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.vertical, DS.Spacing.md)
+        .frame(width: typeSize.isAccessibilitySize ? DS.Hub.statusPanelWidthLarge : DS.Hub.statusPanelWidth,
+               alignment: .leading)
+    }
+
+    private func row(_ pill: AdminStatusPill) -> some View {
+        let large = typeSize.isAccessibilitySize
+        let action = AdminPillLabel(title: pill.actionTitle, style: pill.isFlagged ? .navy : .soft)
+        return Button { choose(pill.home) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+                AdminBaselineDot(color: Self.dot(pill.level))
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(verbatim: pill.text)
+                        .dsFont(.hubRow)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Color.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(verbatim: pill.detail)
+                        .dsFont(.footnote)
+                        .foregroundColor(pill.isFlagged ? Self.dot(pill.level) : DS.Color.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if large { action.padding(.top, DS.Spacing.xs) }
+                }
+                Spacer(minLength: DS.Spacing.sm)
+                if !large { action }
+            }
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSPressStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(pill.spoken)
+        .accessibilityHint(pill.actionTitle)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private static func dot(_ level: AdminStatusPill.Level) -> Color {
+        switch level {
+        case .ok:      return DS.Color.success
+        case .warn:    return DS.Color.warning
+        case .urgent:  return DS.Color.error
+        case .unknown: return DS.Color.textTertiary
+        }
     }
 }
 
@@ -948,13 +1043,9 @@ struct AdminBaselineDot: View {
     var size: CGFloat = DS.Hub.statusDot
     @ScaledMetric(relativeTo: .caption) private var scale: CGFloat = 1
 
-    /// قطر النقطة بخط الجهاز (`scale` من `@ScaledMetric(relativeTo: .caption)`) — يقرؤه سطر الحالة ليعرف ما لا يصغر
-    static func side(_ size: CGFloat, scale: CGFloat) -> CGFloat {
-        size * min(max(scale, 1), 1.6)
-    }
-
     var body: some View {
-        let side = Self.side(size, scale: scale)
+        // تكبر مع خط الجهاز حتى ١٫٦ مرة
+        let side = size * min(max(scale, 1), 1.6)
         Circle()
             .fill(color)
             .frame(width: side, height: side)

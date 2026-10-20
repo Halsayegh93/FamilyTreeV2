@@ -2245,13 +2245,12 @@ extension DS {
         static let bellDotSize: CGFloat = 8
         /// عدد الجرس: ارتفاع الكبسولة الحمراء
         static let bellBadge: CGFloat = 17
-        /// سطر الحالة تحت أرقام «اليوم»: نقطة اللون، وزاوية الإشارة
+        /// «حالة النظام» تحت أرقام «اليوم»: نقطة اللون في صفوف لوحتها، إطار الشريحة بلون حالتها، وعرض اللوحة المنبثقة
         static let statusDot: CGFloat = 7
-        static let statusRadius: CGFloat = DS.Radius.md
-        /// سطر الحالة سطر واحد دائماً (طلب المالك ٢٠٢٦-١٠-٢٠ «ليش تحت بعض؟»): يصغّر عباراته حتى ٨٠٪ قبل أن ينتقل للأقصر
-        /// ثم للتمرير؛ وحدّ النص نفسه أدنى بقليل كي لا يُقصّ بفرق التقريب
-        static let statusLineMinScale: CGFloat = 0.8
-        static let statusTextMinScale: CGFloat = 0.75
+        static let statusChipStroke: Double = 0.45
+        static let statusPanelWidth: CGFloat = 320
+        /// عرض اللوحة من أحجام إمكانية الوصول (الإجراء تحت النص)
+        static let statusPanelWidthLarge: CGFloat = 360
         /// مربّع الأيقونة الملوّن في صفوف البطاقات، ومربّع الأقسام، ومربّع نوع الطلب
         static let iconSquare: CGFloat = 36
         static let iconSquareRadius: CGFloat = 11

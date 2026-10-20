@@ -68,22 +68,76 @@ struct AdminTodayCounts: Equatable {
     var inboxTotal = 0
 }
 
-/// إشارة في سطر الحالة برأس «اليوم» (كانت بطاقة «تنبيهات»): الصيانة · الرصيد · المجدول · بلا إشعارات — نقطة ملوّنة
-/// (أخضر سليم، كهرماني تنبيه، أحمر عاجل) وعبارة قصيرة (وأقصر منها حين يضيق السطر)، والضغط يفتح بيتها الوحيد
+/// إشارة من إشارات «حالة النظام» في رأس «اليوم» (كانت بطاقة «تنبيهات» ثم سطر نقاط): الصيانة · الرصيد · المجدول ·
+/// بلا إشعارات — صفّ في لوحة الشريحة بنقطة لون (أخضر سليم، كهرماني تنبيه، أحمر عاجل) وإجراء صغير يفتح بيتها الوحيد
 struct AdminStatusPill: Identifiable, Equatable {
     enum Level { case ok, warn, urgent, unknown }
     enum Home: Hashable { case maintenance, sms, scheduled, devices }
 
     let home: Home
-    /// العبارة القصيرة في السطر («الصيانة مفعّلة»، «الرصيد 17»، «3 أجهزة بلا إشعارات»)
+    /// عنوان الصفّ في اللوحة («الصيانة: مطفأة»، «الرصيد: 17 نقطة»، «مجدول: 1 اليوم»، «بلا إشعارات: 3 أجهزة»)
     let text: String
-    /// الأقصر حين لا يتّسع السطر بالخط الأكبر («الصيانة»، «الرصيد 17»، «مجدول 1»، «بلا إشعارات 3») — النقطة تحمل الحالة
-    let short: String
+    /// السطر الثاني تحته («يكفي نحو 17 رمز دخول»، «لاحقاً 2»، «غير مسجّلة أو لم تُحدَّث منذ 30 يوماً»)
+    let detail: String
     let level: Level
-    /// ما يقرؤه القارئ الصوتي: الحالة كاملة («وضع الصيانة مفعّل»، «رصيد رسائل رمز الدخول: 17 نقطة، منخفض»)
+    /// العبارة في ملخّص الشريحة الصوتي حين تنبّه («الرصيد منخفض»، «3 أجهزة بلا إشعارات»)
+    let issue: String
+    /// ما يقرؤه القارئ الصوتي للصفّ: الحالة كاملة («وضع الصيانة مفعّل»، «رصيد رسائل رمز الدخول: 17 نقطة، منخفض»)
     let spoken: String
 
     var id: Home { home }
+    /// تنبيه أو عاجل (يُعدّ في الشريحة)
+    var isFlagged: Bool { level == .warn || level == .urgent }
+
+    /// الإجراء الصغير في طرف الصفّ — يفتح بيت الإشارة
+    var actionTitle: String {
+        switch home {
+        case .maintenance: return L10n.t("الإعدادات", "Settings")
+        case .sms:         return L10n.t("اشحن", "Top up")
+        case .scheduled:   return L10n.t("القادم", "Upcoming")
+        case .devices:     return L10n.t("الأجهزة", "Devices")
+        }
+    }
+}
+
+/// ملخّص «حالة النظام» (اختيار المالك ٢٠٢٦-١٠-٢٠ بدل النقاط الأربع): شريحة واحدة — «✓ النظام سليم» حين تسلم كلها،
+/// «⚠︎ تنبيه/تنبيهان/3 تنبيهات» حين ينبّه شيء (حمراء إن كان فيها عاجل)، و«حالة النظام» محايدة ما دام شيء لم يُحمَّل
+struct AdminSystemStatus: Equatable {
+    enum Tone { case ok, warn, urgent, loading }
+
+    let pills: [AdminStatusPill]
+
+    var flagged: [AdminStatusPill] { pills.filter(\.isFlagged) }
+
+    var tone: Tone {
+        if pills.contains(where: { $0.level == .urgent }) { return .urgent }
+        if !flagged.isEmpty { return .warn }
+        return pills.allSatisfy { $0.level == .ok } ? .ok : .loading
+    }
+
+    /// نص الشريحة
+    var title: String {
+        let n = flagged.count
+        switch tone {
+        case .ok:      return L10n.t("النظام سليم", "All systems OK")
+        case .loading: return L10n.t("حالة النظام", "System status")
+        case .warn, .urgent:
+            return L10n.isArabic
+                ? AdminTodayText.arabicCount(n, one: "تنبيه", two: "تنبيهان", few: "تنبيهات", many: "تنبيهاً", single: "تنبيه")
+                : (n == 1 ? "1 alert" : "\(n) alerts")
+        }
+    }
+
+    /// ما يقرؤه القارئ الصوتي للشريحة: «حالة النظام: تنبيهان — الرصيد منخفض، 3 أجهزة بلا إشعارات»
+    var spoken: String {
+        let head = L10n.t("حالة النظام", "System status")
+        switch tone {
+        case .ok:      return "\(head): \(title)"
+        case .loading: return L10n.t("\(head): لم يُحمَّل بعد", "\(head): not loaded yet")
+        case .warn, .urgent:
+            return "\(head): \(title) — " + flagged.map(\.issue).joined(separator: L10n.t("، ", ", "))
+        }
+    }
 }
 
 /// مهمة في «مهام اليوم» (لمسة من الاتجاه «ب»): مشتقة من حالة حقيقية، وتصير «منجزة» حين يُحلّ ما خلفها اليوم
