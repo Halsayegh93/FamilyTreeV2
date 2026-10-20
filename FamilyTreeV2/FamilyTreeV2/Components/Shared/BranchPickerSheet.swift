@@ -359,6 +359,16 @@ struct BranchPickerSheet: View {
         let descendants: [UUID: Int]
     }
 
+    /// رأس الشجرة — عبدالله المحمدعلي (وإلا أول من لا أب له). صفحة الأعضاء تجمع بأبنائه المباشرين (الفروع)
+    nonisolated static func familyRoot(in members: [FamilyMember]) -> FamilyMember? {
+        members.first { m in
+            m.fatherId == nil &&
+            m.fullName.contains("عبدالله") && m.fullName.contains("المحمدعلي")
+        } ?? members.first { m in
+            m.fullName.trimmingCharacters(in: .whitespaces) == "عبدالله المحمدعلي"
+        } ?? members.first { $0.fatherId == nil }
+    }
+
     nonisolated static func buildTree(from members: [FamilyMember]) -> TreeBuildResult {
         // 1) خريطة الأبناء حسب الأب
         var childrenByFather: [UUID: [FamilyMember]] = [:]
@@ -369,12 +379,7 @@ struct BranchPickerSheet: View {
         }
 
         // 2) لقّ الجذر — عبدالله المحمدعلي
-        let root: FamilyMember? = members.first { m in
-            m.fatherId == nil &&
-            m.fullName.contains("عبدالله") && m.fullName.contains("المحمدعلي")
-        } ?? members.first { m in
-            m.fullName.trimmingCharacters(in: .whitespaces) == "عبدالله المحمدعلي"
-        } ?? members.first { $0.fatherId == nil }
+        let root = familyRoot(in: members)
 
         guard let root else { return TreeBuildResult(nodes: [], descendants: [:]) }
 

@@ -70,7 +70,7 @@ struct AdminReportsView: View {
             case .alive: return L10n.t("أحياء", "Alive")
             case .deceased: return L10n.t("متوفون", "Deceased")
             case .withPhone: return L10n.t("بهاتف", "With phone")
-            case .withoutPhone: return L10n.t("بدون هاتف", "No phone")
+            case .withoutPhone: return L10n.t("بلا رقم هاتف", "No phone")
             }
         }
 
@@ -956,10 +956,10 @@ struct AdminReportsView: View {
             return member.roleName
         case .status:
             if member.isDeceased == true { return "متوفى" }
-            if member.status == .frozen { return "مجمّد" }
+            if member.status == .frozen { return "حساب موقوف" }
             let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if phone.isEmpty { return "بدون هاتف" }
-            return "نشط"
+            if phone.isEmpty { return "بلا رقم هاتف" }
+            return "له رقم هاتف"
         case .gender:
             switch member.gender {
             case "male": return "ذكر"

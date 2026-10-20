@@ -3,7 +3,7 @@ import SwiftUI
 /// إدارة أسماء العوائل — الإدارة تضع القائمة، والأعضاء يختارون منها
 /// عند التسجيل أو من تعديل الملف الشخصي.
 /// بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← «إضافة عائلة» (لمن يدير) تصعد
-/// فوقه ← «العوائل» صفوفاً في بطاقة بيضاء وقائمة خيارات لكل صف.
+/// فوقه ← «العوائل» صفوفاً في بطاقة بيضاء وقائمة خيارات لكل صف. تُفتح من «التطبيق» بجانب أسماء الفروع.
 struct AdminFamilyNamesView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var vm = FamilyNamesViewModel()
@@ -58,9 +58,10 @@ struct AdminFamilyNamesView: View {
     private var header: AdminPageHeader {
         let ready = !isFirstLoad
         return AdminPageHeader(
-            title: AdminMembersManagementView.Tab.families.title,
-            subtitle: AdminMembersManagementView.Tab.families.subtitle,
-            glyph: AdminMembersManagementView.Tab.families.icon,
+            title: L10n.t("أسماء العوائل", "Family names"),
+            subtitle: L10n.t("يختار العضو عائلته منها، وتظهر بآخر اسمه في التطبيق.",
+                             "Members pick from this list; it appears at the end of their name."),
+            glyph: "person.2.crop.square.stack.fill",
             kpis: [
                 AdminPageKPI(AdminPageKPI.count(vm.options.count, ready: ready), L10n.t("عائلة", "Families"),
                              icon: "list.bullet"),

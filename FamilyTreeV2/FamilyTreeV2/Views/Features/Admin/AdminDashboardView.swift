@@ -218,13 +218,9 @@ struct AdminDashboardView: View {
         for m in all {
             if m.role == .pending { continue }
             if moderatorRoles.contains(m.role) && m.isDeceased != true && m.status != .frozen { moderator += 1 }
-            if m.isDeceased != true {
-                let noPhone = (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let noBirth = (m.birthDate ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let noGender = (m.gender ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let notActivated = m.status == nil || m.status == .pending
-                if notActivated || noPhone || noBirth || m.fatherId == nil || noGender { issues += 1 }
-            }
+            // «بيانات ناقصة» = نفس شريحة «العائلة» (الميلاد والجنس للأحياء، والصورة للعضو المسجّل) — بلا «مفعّل/بانتظار»
+            if m.isDeceased != true
+                && !AdminMemberFacts.gaps(m, registered: AdminAccountsStore.shared.info(m.id) != nil).isEmpty { issues += 1 }
             if m.status != .frozen {
                 let isOrphan = m.fatherId == nil && !fatherIds.contains(m.id)
                 let noName = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || m.fullName == "بدون اسم"
@@ -544,9 +540,9 @@ struct AdminDashboardView: View {
         if authVM.currentUser?.role == .monitor, !isInitialLoading, treeIssuesCount > 0 {
             list.append(AdminTodayAlert(
                 id: "tree", icon: "stethoscope", tint: DS.Color.warning,
-                title: L10n.t("صحة الشجرة: \(treeIssuesCount) تحتاج مراجعة", "Tree health: \(treeIssuesCount) to review"),
-                subtitle: L10n.t("أعضاء بلا أب أو بلا اسم أو برابط مكسور", "Unlinked, unnamed or broken links"),
-                buttonTitle: L10n.t("راجع", "Review"), action: .treeHealth))
+                title: L10n.t("مشكلات الشجرة: \(treeIssuesCount) تحتاج مراجعة", "Tree problems: \(treeIssuesCount) to review"),
+                subtitle: L10n.t("غير مرتبط بأب، بلا اسم، ارتباط أب غير صالح", "Unlinked, unnamed or invalid father links"),
+                buttonTitle: L10n.t("مراجعة", "Review"), action: .treeHealth))
         }
         return list
     }
@@ -616,7 +612,7 @@ struct AdminDashboardView: View {
         case .pushHealth:  return AnyView(AdminPushHealthView().adminArea(.occasions))
         case .maintenance: return AnyView(AdminAppSettingsView(scope: .maintenance).adminArea(.app))
         case .scheduled:   return AnyView(AdminMessagingHubView().adminArea(.occasions))
-        case .treeHealth:  return AnyView(AdminTreeHealthView().adminArea(.family))
+        case .treeHealth:  return AnyView(AdminMembersPage(chip: .problems).adminArea(.family))
         }
     }
 
@@ -706,8 +702,11 @@ struct AdminDashboardView: View {
             let msgs = adminRequestVM.pendingContactMessagesCount
             return (L10n.t("\(inboxTotal) طلباً · \(msgs) رسائل", "\(inboxTotal) requests · \(msgs) messages"), false)
         case .family:
-            let gaps = issueMembersCount + treeIssuesCount
-            return gaps > 0 ? (L10n.t("\(gaps) بيانات ناقصة", "\(gaps) data gaps"), false) : (area.subtitle, false)
+            if issueMembersCount > 0 {
+                return (L10n.t("\(issueMembersCount) بيانات ناقصة", "\(issueMembersCount) with missing data"), false)
+            }
+            return treeIssuesCount > 0 ? (L10n.t("\(treeIssuesCount) مشكلات الشجرة", "\(treeIssuesCount) tree problems"), false)
+                                       : (area.subtitle, false)
         case .occasions:
             // إشعار مجدول (للمرسلين) أولاً، وإلا الذكرى القريبة
             let n = authVM.canSendNotifications ? notificationVM.scheduledNotifications.count : 0
@@ -931,8 +930,8 @@ struct AdminTodayListView: View {
 
 // MARK: - «أعداد الأعضاء»
 
-/// بطاقة «أ» مدمجة تحت الرأس: الأفراد · الرجال · النساء · الحسابات المفعّلة — كل رقم يفتح قائمته الموجودة
-/// (نظرة الأعضاء، السجل، شجرة النساء، «فعّال» في استخدام التطبيق). أربعة أعمدة، ومربّعان×مربّعين مع النص الكبير.
+/// بطاقة «أ» مدمجة تحت الرأس: الأفراد · الرجال · النساء · الأعضاء المسجّلون — كل رقم يفتح صفحته (صفحة الأعضاء،
+/// شجرة النساء، شريحة «مسجّلون»). أربعة أعمدة، ومربّعان×مربّعين مع النص الكبير.
 struct AdminMemberCountsCard: View {
     let counts: AdminMemberCounts
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -958,7 +957,7 @@ struct AdminMemberCountsCard: View {
                  note: alive(counts.menAlive), tint: DS.Color.male, target: .directory),
             Cell(id: "women", label: L10n.t("النساء", "Women"), value: counts.women,
                  note: alive(counts.womenAlive), tint: DS.Color.female, target: .women),
-            Cell(id: "accounts", label: L10n.t("الحسابات المفعّلة", "Active accounts"), value: counts.accounts,
+            Cell(id: "accounts", label: L10n.t("الأعضاء المسجّلون", "Registered members"), value: counts.accounts,
                  note: counts.living.map { L10n.t("من \($0) حيّاً", "of \($0) living") },
                  tint: DS.Color.success, target: .accounts)
         ]
@@ -1043,9 +1042,9 @@ struct AdminMemberCountsCard: View {
 
     private static func page(_ target: Target) -> AnyView {
         switch target {
-        case .overview:  return AnyView(AdminMembersManagementView(initialTab: .overview).adminArea(.family))
-        case .directory: return AnyView(AdminMembersManagementView(initialTab: .directory).adminArea(.family))
-        case .accounts:  return AnyView(AppUsageMembersView(category: .active).adminArea(.family))
+        case .overview:  return AnyView(AdminMembersPage().adminArea(.family))
+        case .directory: return AnyView(AdminMembersPage().adminArea(.family))
+        case .accounts:  return AnyView(AdminMembersPage(chip: .registered).adminArea(.family))
         case .women:     return AnyView(EmptyView())
         }
     }

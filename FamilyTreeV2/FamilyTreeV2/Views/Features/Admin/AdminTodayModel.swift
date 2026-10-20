@@ -176,7 +176,8 @@ struct AdminMemberCounts: Equatable {
 
     mutating func setUsage(_ u: AppUsageStats?) {
         guard let u else { return }
-        accounts = u.active + u.idle
+        // «الأعضاء المسجّلون» = لهم حساب دخول (نفس شريحة «مسجّلون» في العائلة)
+        accounts = u.active + u.idle + u.loginNoDevice
         living = u.active + u.idle + u.loginNoDevice + u.neverLogged + u.noPhone
     }
 
@@ -302,7 +303,7 @@ enum AdminTodayFeed {
 
         if s.tree {
             for m in memberVM.allMembers where m.role == .pending {
-                item(id: m.id, L10n.t("انضمام", "Join"), "person.badge.plus", DS.Color.info,
+                item(id: m.id, L10n.t("طلب انضمام", "Join request"), "person.badge.plus", DS.Color.info,
                      name: name(m), date: date(m.createdAt))
             }
             for r in adminRequestVM.treeEditRequests {

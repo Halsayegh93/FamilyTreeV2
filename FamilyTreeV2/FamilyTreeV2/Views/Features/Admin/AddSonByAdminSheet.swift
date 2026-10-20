@@ -216,8 +216,8 @@ struct AddSonByAdminSheet: View {
             DSLifeDatesBox(hasBirthDate: $hasBirthDate, birthDate: $birthDate,
                            isDeceased: $isDeceased,
                            hasDeathDate: $hasDeathDate, deathDate: $deathDate,
-                           deceasedTitle: isEditMode ? L10n.t("متوفّى", "Deceased")
-                                                     : L10n.t("يُسجَّل متوفّى", "Record as deceased"))
+                           deceasedTitle: isEditMode ? L10n.t("متوفى", "Deceased")
+                                                     : L10n.t("يُسجَّل متوفى", "Record as deceased"))
         }
     }
 

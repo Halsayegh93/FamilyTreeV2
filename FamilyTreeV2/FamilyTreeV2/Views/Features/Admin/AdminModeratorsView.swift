@@ -439,8 +439,8 @@ struct AdminModeratorsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 // العضو: عدد الأحياء في الشجرة لا يعني أنهم يستخدمون التطبيق
                 if guide.title == L10n.t("العضو", "Member"), let usage = usageStats {
-                    Text(L10n.t("فعّالون (رقم + جهاز): \(usage.active)",
-                                "Active (phone + device): \(usage.active)"))
+                    Text(L10n.t("يستخدمون التطبيق: \(usage.active)",
+                                "Using the app: \(usage.active)"))
                         .dsFont(.caption)
                         .foregroundColor(DS.Color.success)
                 }

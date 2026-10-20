@@ -83,7 +83,7 @@ struct AdminAllRequestsView: View {
             case .members:     return L10n.t("أعضاء", "Members")
             case .tree:        return L10n.t("الشجرة", "Tree")
             case .content:     return L10n.t("محتوى ونشاط", "Content")
-            case .treeHealth:  return L10n.t("صحة الشجرة", "Tree Health")
+            case .treeHealth:  return L10n.t("مشكلات الشجرة", "Tree problems")
             }
         }
 
@@ -122,7 +122,7 @@ struct AdminAllRequestsView: View {
         var title: String {
             switch self {
             case .all: return L10n.t("الكل", "All")
-            case .joinRequests: return L10n.t("انضمام", "Join")
+            case .joinRequests: return L10n.t("طلبات الانضمام", "Join requests")
             case .news: return L10n.t("أخبار", "News")
             case .reports: return L10n.t("بلاغات", "Reports")
             case .phone: return L10n.t("جوال", "Phone")
@@ -142,11 +142,11 @@ struct AdminAllRequestsView: View {
             case .treeOther: return L10n.t("طلب آخر (شجرة)", "Tree · Other")
             case .photos: return L10n.t("صور مقترحة", "Suggested Photos")
             case .projects: return L10n.t("مشاريع", "Projects")
-            case .healthOrphan: return L10n.t("معلّق", "Unlinked")
-            case .healthNoName: return L10n.t("بدون اسم", "No Name")
-            case .healthBrokenParent: return L10n.t("رابط مكسور", "Broken Link")
-            case .healthHidden: return L10n.t("مخفي", "Hidden")
-            case .healthDupPhone: return L10n.t("رقم مكرر", "Dup Phone")
+            case .healthOrphan: return L10n.t("غير مرتبط بأب", "Not linked to a father")
+            case .healthNoName: return L10n.t("بلا اسم", "No name")
+            case .healthBrokenParent: return L10n.t("ارتباط أب غير صالح", "Invalid father link")
+            case .healthHidden: return L10n.t("مخفي من الشجرة", "Hidden from the tree")
+            case .healthDupPhone: return L10n.t("رقم هاتف مكرر", "Duplicate phone")
             }
         }
 
@@ -306,16 +306,6 @@ struct AdminAllRequestsView: View {
             case .brokenParent:   return .healthBrokenParent
             case .hiddenFromTree: return .healthHidden
             case .duplicatePhone: return .healthDupPhone
-            }
-        }
-
-        var asAdminFilter: AdminTreeHealthView.TreeIssueFilter {
-            switch self {
-            case .orphan:         return .orphan
-            case .noName:         return .noName
-            case .brokenParent:   return .brokenParent
-            case .hiddenFromTree: return .hiddenFromTree
-            case .duplicatePhone: return .duplicatePhone
             }
         }
 
@@ -1996,7 +1986,7 @@ struct AdminAllRequestsView: View {
                     Button {
                         Task { await adminRequestVM.activateAccount(memberId: member.id) }
                     } label: {
-                        Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
+                        Label(L10n.t("تسجيل في التطبيق", "Register"), systemImage: "checkmark.circle.fill")
                     }
                     .tint(DS.Color.successFill)
                 }
@@ -2389,7 +2379,7 @@ struct AdminAllRequestsView: View {
                     Button {
                         Task { await adminRequestVM.activateAccount(memberId: member.id) }
                     } label: {
-                        Label(L10n.t("تفعيل", "Activate"), systemImage: "checkmark.circle.fill")
+                        Label(L10n.t("تسجيل في التطبيق", "Register"), systemImage: "checkmark.circle.fill")
                     }
                     .tint(DS.Color.successFill)
                 }

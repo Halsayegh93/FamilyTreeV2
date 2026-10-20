@@ -2279,12 +2279,6 @@ extension DS {
         static let chartBarGap: CGFloat = 2
         /// مربّع الرسم الصغير في المفتاح (عمود/خط)
         static let chartSwatch: CGFloat = 10
-        /// شريط التنقّل بين الأقسام أعلى الرأس: ارتفاع الشريحة وحشوتها، المسافة بينها، وهامش المسار الزجاجي
-        /// (المسار = شريحة + هامشان = ارتفاع الأزرار الدائرية)
-        static let navChipHeight: CGFloat = DSBox.chipHeightCompact
-        static let navChipPadding: CGFloat = DS.Spacing.md
-        static let navSpacing: CGFloat = DS.Spacing.xxs
-        static let navInset: CGFloat = (glassButton - navChipHeight) / 2
         /// شبكة الأقسام في «اليوم»: ٣ أعمدة × صفّان، وعمودان مع الخط الكبير جداً
         static let areaColumns = 3
         static let areaColumnsLargeText = 2

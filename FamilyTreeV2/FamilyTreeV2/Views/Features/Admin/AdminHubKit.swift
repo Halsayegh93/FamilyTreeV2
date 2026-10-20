@@ -27,19 +27,10 @@ enum AdminArea: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// الاسم المختصر في شريط التنقّل بين الأقسام (الاسم الكامل للقارئ الصوتي)
-    var shortTitle: String {
-        switch self {
-        case .occasions: return L10n.t("المناسبات", "Occasions")
-        case .team:      return L10n.t("الفريق", "Team")
-        default:         return title
-        }
-    }
-
     var subtitle: String {
         switch self {
         case .inbox:     return L10n.t("الطلبات ورسائل الأعضاء", "Requests and member messages")
-        case .family:    return L10n.t("السجل والحسابات وجودة البيانات", "Registry, accounts and data quality")
+        case .family:    return L10n.t("الأعضاء وبياناتهم وحساباتهم", "Members, their details and accounts")
         case .occasions: return L10n.t("الوفيات والذكرى والمنشورات، والإعلان للأعضاء",
                                        "Deaths, memorials and posts, and announcing to members")
         case .metrics:   return L10n.t("أرقام وتاريخ — للقراءة", "Numbers and history — read only")
@@ -94,12 +85,13 @@ enum AdminArea: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-// MARK: التنقّل بين الأقسام (طلب المالك ٢٠٢٦-١٠-٢٠ «شريط تنقّل بين الأقسام»)
+// MARK: التنقّل بين الأقسام (طلب المالك ٢٠٢٦-١٠-٢٠ «مابي تويب علوي فكر بشي ابسط»)
 //
-// «اليوم» يسجّل في `AdminAreaRouter` ناقلاً يستبدل مسار مكدسه بصفحة القسم المطلوب (لا تراكم). وقسم الصفحة في البيئة
+// لا شريط أقسام: عنوان صفحة القسم في الرأس الكحلي قائمة أصلية «العائلة ⌄» بالأقسام الظاهرة لدورك (الحالي بعلامة).
+// «اليوم» يسجّل في `AdminAreaRouter` ناقلاً يستبدل مسار مكدسه بصفحة القسم المختار (لا تراكم). وقسم الصفحة في البيئة
 // (`adminArea`) يضعه من يفتحها — الصفحة المدفوعة في `NavigationStack` لا ترث بيئة موضع الرابط، فكل من يدفع صفحة
-// يمرّر قسمه صراحةً (مثل `adminBackTitle`): صفوف الأقسام، `AdminTapWrap`، دافع صفحات `.list`، وروابط «اليوم».
-// الشريط في رأس كل صفحة قسم وكل صفحة داخلية: بلا ناقل (قبل فتح تبويب الإدارة) أو بلا قسم لا يُرسم.
+// يمرّر قسمه صراحةً (مثل `adminBackTitle`). الصفحات الداخلية: زرّ الرجوع واسم القسم فقط. بلا ناقل (قبل فتح تبويب
+// الإدارة) أو بلا قسم: العنوان نصّ عادي.
 
 /// ناقل مكدس «اليوم» إلى صفحة قسم — يضبطه `AdminDashboardView` عند ظهوره (nil قبله)
 @MainActor
@@ -118,77 +110,61 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// الصفحة تتبع هذا القسم في شريط التنقّل
+    /// الصفحة تتبع هذا القسم (قائمة العنوان، وما تدفعه من صفحات)
     func adminArea(_ area: AdminArea?) -> some View {
         environment(\.adminArea, area)
     }
 }
 
-/// شريط الأقسام أعلى الرأس الكحلي: سطر واحد يتمرّر أفقياً، رمز + اسم مختصر لكل قسم ظاهر لدورك، والحالي ذهبي.
-/// الضغط على قسم آخر ينقل إليه مباشرة (المسار يُستبدل)، وعلى القسم الحالي من صفحة داخلية يرجع لصفحته.
-struct AdminAreaNavBar: View {
-    /// الشريط في صفحة القسم نفسها (لا داخلية) — الضغط على القسم الحالي لا يفعل شيئاً
-    var isAreaRoot: Bool = false
+/// عنوان صفحة القسم: قائمة أصلية (`Menu`) — «العائلة ⌄» وتحتها الأقسام الظاهرة لدورك، والحالي بعلامة ✓.
+/// الاختيار ينقل مباشرة (المسار يُستبدل). بلا ناقل أو بلا قسم يبقى العنوان نصّاً.
+struct AdminAreaTitleMenu: View {
+    let title: String
     @EnvironmentObject private var authVM: AuthViewModel
     @Environment(\.adminArea) private var current
 
     var body: some View {
         if let navigate = AdminAreaRouter.navigate, let current {
-            strip(navigate: navigate, current: current)
-        }
-    }
-
-    private func strip(navigate: @escaping (AdminArea) -> Void, current: AdminArea) -> some View {
-        let areas = AdminArea.visible(for: authVM)
-        return ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Hub.navSpacing) {
-                    ForEach(areas) { area in
-                        AdminAreaNavChip(area: area, selected: area == current) {
-                            guard !(area == current && isAreaRoot) else { return }
-                            UISelectionFeedbackGenerator().selectionChanged()
-                            navigate(area)
-                        }
-                        .id(area)
+            Menu {
+                Picker(selection: Binding(get: { current }, set: { area in
+                    guard area != current else { return }
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    navigate(area)
+                })) {
+                    ForEach(AdminArea.visible(for: authVM)) { area in
+                        Label(area.title, systemImage: area.icon).tag(area)
                     }
+                } label: {
+                    Text(L10n.t("الأقسام", "Sections"))
                 }
-                .padding(DS.Hub.navInset)
+                .pickerStyle(.inline)
+            } label: {
+                label(chevron: true)
             }
-            .background(Capsule().fill(DS.Hub.glass))
-            .overlay(Capsule().strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
-            .clipShape(Capsule())
-            .onAppear { proxy.scrollTo(current, anchor: .center) }
+            .accessibilityLabel(L10n.t("\(title)، تبديل القسم", "\(title), switch section"))
+            .accessibilityHint(L10n.t("يعرض أقسام اللوحة", "Shows the dashboard sections"))
+        } else {
+            label(chevron: false)
         }
-        .padding(.top, DS.Spacing.sm)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(L10n.t("أقسام اللوحة", "Dashboard sections"))
     }
-}
 
-/// شريحة قسم في الشريط: الحالي ذهبي ممتلئ، والباقي نص فاتح بلا خلفية (فوق مسار الشريط الزجاجي)
-struct AdminAreaNavChip: View {
-    let area: AdminArea
-    let selected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(dsSymbol: area.icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
-                Text(area.shortTitle)
-                    .dsFont(.sectionTitle)
-                    .lineLimit(1)
+    private func label(chevron: Bool) -> some View {
+        HStack(alignment: .center, spacing: DS.Spacing.xsm) {
+            Text(title)
+                .dsFont(.hubTitle)
+                .foregroundColor(DS.Color.textOnPrimary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+            if chevron {
+                Image(systemName: "chevron.down")
+                    .dsGlyph(DS.Glyph.lg, weight: .bold)
+                    .foregroundColor(DS.Color.accentLight)
+                    .accessibilityHidden(true)
             }
-            .foregroundColor(selected ? DS.Hub.onGold : DS.Hub.onBandMuted)
-            .padding(.horizontal, DS.Hub.navChipPadding)
-            .frame(minHeight: DS.Hub.navChipHeight)
-            .background(Capsule().fill(selected ? DS.Color.accentLight : Color.clear))
-            .contentShape(Capsule())
         }
-        .buttonStyle(DSPressStyle())
-        .accessibilityLabel(area.title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityHint(selected ? "" : L10n.t("ينتقل إلى القسم", "Goes to this section"))
+        .contentShape(Rectangle())
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -321,35 +297,39 @@ struct AdminBandHeader<Buttons: View, Accessory: View>: View {
     var subtitle: String? = nil
     var badge: String? = nil
     var bottomPadding: CGFloat = DS.Hub.headerBottomCompact
-    /// صفحة القسم نفسها (لا داخلية) — في شريط الأقسام لا يفعل القسم الحالي شيئاً
+    /// صفحة القسم نفسها (لا داخلية) — العنوان قائمة الأقسام
     var isAreaRoot: Bool = false
     @ViewBuilder var buttons: () -> Buttons
     @ViewBuilder var accessory: () -> Accessory
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dsLandscape) private var landscape
+    /// اسم الصفحة التي فُتحت منها (إن مرّره من دفعها) — يغلب «اليوم» الافتراضي
+    @Environment(\.adminBackTitle) private var outerBack
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: DS.Spacing.sm) {
                 if let backTitle {
-                    AdminBackLink(title: backTitle) { dismiss() }
+                    AdminBackLink(title: outerBack ?? backTitle) { dismiss() }
                 }
                 Spacer(minLength: DS.Spacing.sm)
                 HStack(spacing: DS.Spacing.sm) { buttons() }
             }
             .frame(minHeight: DS.Hub.glassButton)
 
-            // شريط الأقسام (خلف `AnyView` — حارس المكدس)
-            AnyView(AdminAreaNavBar(isAreaRoot: isAreaRoot))
-
-            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
-                Text(title)
-                    .dsFont(.hubTitle)
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+            HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                // صفحة القسم: العنوان قائمة الأقسام (خلف `AnyView` — حارس المكدس)
+                if isAreaRoot {
+                    AnyView(AdminAreaTitleMenu(title: title))
+                } else {
+                    Text(title)
+                        .dsFont(.hubTitle)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 Spacer(minLength: 0)
                 if let badge {
                     AdminBandChip(text: badge, icon: "eye.fill")

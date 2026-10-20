@@ -67,49 +67,45 @@ enum AdminToolCatalog {
                                kind: page { AdminAppSettingsView(scope: .approvals) }))
         }
 
-        // ٢ العائلة
+        // ٢ العائلة — صفحة القسم هي صفحة الأعضاء الواحدة (`AdminMembersPage`)؛ هذه الصفوف للبحث الشامل فقط
+        // (تفتح الصفحة على شريحتها، والكلمات القديمة تجد بيتها الجديد)
         if authVM.canEditMembers {
-            let registry = L10n.t("السجل والحسابات", "Registry & accounts")
-            t.append(AdminTool(id: "family.directory", area: .family, group: registry,
-                               title: L10n.t("سجل الأعضاء", "Member registry"),
-                               subtitle: L10n.t("تصفّح الفروع، أو ابحث بالاسم أو الرقم", "Browse branches or search"),
+            let members = L10n.t("الأعضاء", "Members")
+            t.append(AdminTool(id: "family.members", area: .family, group: members,
+                               title: L10n.t("الأعضاء", "Members"),
+                               subtitle: L10n.t("بحث وشرائح، وورقة لكل عضو بكل أوامره", "Search, filters and one sheet per member"),
                                icon: "person.3.sequence.fill", tint: DS.Color.palm,
-                               keywords: ["أعضاء", "سجل", "فروع", "عضو"],
-                               kind: page { AdminMembersManagementView(initialTab: .directory) }))
-            t.append(AdminTool(id: "family.accounts", area: .family, group: registry,
-                               title: L10n.t("الحسابات والاستخدام", "Accounts & usage"),
-                               subtitle: L10n.t("محطة التفعيل: أكمل نواقص كل عضو", "Activation station"),
-                               icon: "person.crop.circle.badge.checkmark", tint: DS.Color.palm,
-                               keywords: ["تفعيل", "حسابات"],
-                               kind: page { AdminMembersManagementView(initialTab: .accounts) }))
-            t.append(AdminTool(id: "family.quality", area: .family, group: registry,
-                               title: L10n.t("جودة البيانات", "Data quality"),
-                               subtitle: L10n.t("الأفراد والمفعّلة والنواقص", "Members, active, gaps"),
-                               icon: "checklist", tint: DS.Color.palm,
-                               keywords: ["نواقص", "بيانات"],
-                               kind: page { AdminMembersManagementView(initialTab: .overview) }))
+                               keywords: ["أعضاء", "سجل", "فروع", "عضو", "إدارة السجل", "بيانات العضو"],
+                               kind: page { AdminMembersPage() }))
+            t.append(AdminTool(id: "family.registered", area: .family, group: members,
+                               title: L10n.t("الأعضاء المسجّلون", "Registered members"),
+                               subtitle: L10n.t("لهم حساب في التطبيق — ومن يستخدمه ومن لا تصله الإشعارات",
+                                                "With an app account — who uses it, who gets no notifications"),
+                               icon: "checkmark.seal.fill", tint: DS.Color.success,
+                               keywords: ["حسابات", "استخدام", "مسجّل", "موقوف", "تفعيل"],
+                               kind: page { AdminMembersPage(chip: .registered) }))
+            t.append(AdminTool(id: "family.gaps", area: .family, group: members,
+                               title: L10n.t("بيانات ناقصة", "Missing data"),
+                               subtitle: L10n.t("اكتمال البيانات واستكمالها عضواً عضواً", "Completeness, one member at a time"),
+                               icon: "checklist", tint: DS.Color.warning,
+                               keywords: ["نواقص", "جودة", "استكمال", "محطة"],
+                               kind: page { AdminMembersPage(chip: .gaps) }))
+            t.append(AdminTool(id: "family.problems", area: .family, group: members,
+                               title: L10n.t("مشكلات الشجرة", "Tree problems"),
+                               subtitle: L10n.t("غير مرتبط بأب، بلا اسم، ارتباط أب غير صالح، مخفي، رقم مكرر",
+                                                "Unlinked, unnamed, invalid link, hidden, duplicate"),
+                               icon: "stethoscope", tint: DS.Color.warning,
+                               keywords: ["صحة", "سلامة", "يتيم", "مكرر"],
+                               kind: page { AdminMembersPage(chip: .problems) }))
             if authVM.canRegisterMembers {
-                t.append(AdminTool(id: "family.register", area: .family, group: registry,
-                                   title: L10n.t("تسجيل عضو", "Register member"),
+                t.append(AdminTool(id: "family.register", area: .family, group: members,
+                                   title: L10n.t("تسجيل عضو جديد", "Register a new member"),
                                    subtitle: L10n.t("عضو جديد بصورته ورقمه", "A new member with photo and phone"),
                                    icon: "person.badge.plus", tint: DS.Color.palm,
                                    keywords: ["تسجيل", "إضافة"],
                                    kind: page { AdminRegisterMemberView() }))
             }
-            t.append(AdminTool(id: "family.families", area: .family, group: registry,
-                               title: L10n.t("أسماء العوائل", "Family names"),
-                               subtitle: L10n.t("يختار منها العضو عائلته", "Members pick their family from these"),
-                               icon: "person.2.crop.square.stack.fill", tint: DS.Color.accent,
-                               keywords: ["عوائل", "عائلة"],
-                               kind: page { AdminMembersManagementView(initialTab: .families) }))
-            let tree = L10n.t("الشجرة", "Tree")
-            t.append(AdminTool(id: "family.health", area: .family, group: tree,
-                               title: L10n.t("صحة الشجرة", "Tree health"),
-                               subtitle: L10n.t("بلا أب، بلا اسم، رابط مكسور، رقم مكرر", "Unlinked, unnamed, broken, duplicate"),
-                               icon: "stethoscope", tint: DS.Color.warning,
-                               keywords: ["صحة", "يتيم", "مكرر"],
-                               kind: page { AdminTreeHealthView() }))
-            t.append(AdminTool(id: "family.women", area: .family, group: tree,
+            t.append(AdminTool(id: "family.women", area: .family, group: members,
                                title: L10n.t("شجرة النساء", "Women's tree"),
                                subtitle: L10n.t("تُدار من تبويب الشجرة", "Managed from the Tree tab"),
                                icon: "person.2.fill", tint: DS.Color.female,
@@ -292,6 +288,13 @@ enum AdminToolCatalog {
                                icon: "arrow.triangle.branch", tint: DS.Color.palm,
                                keywords: ["فروع"],
                                kind: page { AdminAppSettingsView(scope: .branches) }))
+            // «أسماء العوائل» انتقلت من «العائلة» إلى جانب أسماء الفروع (موافقة المالك ٢٠٢٦-١٠-٢٠ — المراقب يفقد عرضها)
+            t.append(AdminTool(id: "app.families", area: .app, group: content,
+                               title: L10n.t("أسماء العوائل", "Family names"),
+                               subtitle: L10n.t("يختار منها العضو عائلته", "Members pick their family from these"),
+                               icon: "person.2.crop.square.stack.fill", tint: DS.Color.accent,
+                               keywords: ["عوائل", "عائلة"],
+                               kind: page { AdminFamilyNamesView() }))
             t.append(AdminTool(id: "app.cooldown", area: .app, group: content,
                                title: L10n.t("عداد التعديل", "Edit counter"),
                                subtitle: L10n.t("٣ تعديلات ثم بموافقة — إيقاف أو تصفير", "3 edits then approval — pause or reset"),
@@ -343,7 +346,7 @@ struct AdminAreaView: View {
     private var page: AnyView {
         switch area {
         case .inbox:     return AnyView(AdminAllRequestsView())
-        case .family:    return AnyView(AdminFamilyAreaView())
+        case .family:    return AnyView(AdminMembersPage())
         case .metrics:   return AnyView(AdminMetricsAreaView())
         case .team:      return AnyView(AdminToolsAreaView(area: .team, readOnlyBadge: true))
         case .app:       return AnyView(AdminToolsAreaView(area: .app, readOnlyBadge: true))
@@ -480,94 +483,6 @@ struct AdminToolsAreaView: View {
 
     private var warnings: Set<String> {
         return sms.needsTopUp ? ["access.sms"] : []
-    }
-}
-
-// MARK: - العائلة
-
-struct AdminFamilyAreaView: View {
-    @EnvironmentObject var authVM: AuthViewModel
-    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
-    @EnvironmentObject var memberVM: MemberViewModel
-    @State private var usage: AppUsageStats? = AppUsageStats.cached
-
-    var body: some View {
-        let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM).filter { $0.area == .family }
-        let stats = memberStats
-        AdminHubPage {
-            AdminBandHeader(title: AdminArea.family.title, subtitle: AdminArea.family.subtitle, isAreaRoot: true) {
-                EmptyView()
-            } accessory: {
-                HStack(spacing: DS.Spacing.sm) {
-                    AdminKPITile(value: "\(stats.total)", label: L10n.t("الأفراد", "Members"), icon: "person.3")
-                    AdminKPITile(value: "\(stats.active)", label: L10n.t("مفعّلة", "Active"), icon: "checkmark.seal",
-                                 tint: DS.Hub.kpiMine)
-                    AdminKPITile(value: "\(stats.pending)", label: L10n.t("بانتظار", "Pending"), icon: "clock",
-                                 tint: DS.Hub.kpiLate)
-                }
-                .padding(.top, DS.Spacing.md)
-            }
-        } content: {
-            AdminAreaQuickActions(area: .family)
-            AdminToolCards(tools: tools)
-            if let usage { usageCard(usage) }
-        }
-        .task {
-            if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
-            usage = await AppUsageStats.fetch() ?? usage
-        }
-    }
-
-    private var memberStats: (total: Int, active: Int, pending: Int) {
-        var total = 0, active = 0, pending = 0
-        for m in memberVM.allMembers where m.role != .pending && m.isDeceased != true && m.isCountable {
-            total += 1
-            if m.status == .active { active += 1 } else if m.status == nil || m.status == .pending { pending += 1 }
-        }
-        return (total, active, pending)
-    }
-
-    /// «استخدام التطبيق»: فعّال · بلا جهاز · ما دخل · دون رقم — كل فئة تفتح قائمتها
-    private func usageCard(_ u: AppUsageStats) -> some View {
-        let rows: [(AppUsageCategory, String, Int, Color)] = [
-            (.active, L10n.t("فعّال (رقم وجهاز)", "Active (phone + device)"), u.active + u.idle, DS.Color.success),
-            (.loginNoDevice, L10n.t("دخل بلا جهاز", "Signed in, no device"), u.loginNoDevice, DS.Color.info),
-            (.neverLogged, L10n.t("ما دخل أبداً", "Never signed in"), u.neverLogged, DS.Color.warning),
-            (.noPhone, L10n.t("دون رقم", "No phone"), u.noPhone, DS.Color.textTertiary)
-        ]
-        let total = rows.reduce(0) { $0 + $1.2 }
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminCardHeader(title: L10n.t("استخدام التطبيق", "App usage"))
-            DSDistributionBar(segments: rows.map { .init(id: $0.0.rawValue, value: $0.2, tint: $0.3) },
-                              height: DS.Spacing.md)
-            Text(L10n.t("من \(total) حيّاً", "of \(total) living"))
-                .dsFont(.caption)
-                .foregroundColor(DS.Color.textTertiary)
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                    if index > 0 { AdminRowDivider() }
-                    NavigationLink { AdminLazyPage { AnyView(AppUsageMembersView(category: row.0).adminArea(.family)) } } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            Circle().fill(row.3).frame(width: DS.Icon.legendDot, height: DS.Icon.legendDot)
-                            Text(row.1)
-                                .dsFont(.subtitle)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Spacer(minLength: DS.Spacing.sm)
-                            Text("\(row.2)")
-                                .dsFont(.chip)
-                                .monospacedDigit()
-                                .foregroundColor(row.3.dsReadableGlyph)
-                            DSChevron()
-                        }
-                        .frame(minHeight: DS.Icon.tapTarget)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
     }
 }
 
@@ -709,7 +624,7 @@ struct AdminAreaTop: View {
 }
 
 /// الإجراءات السريعة لقسم: أزرار كبسولة بعرض الصفحة — منشور مناسبة وإعلان وفاة ← المناسبات والإعلانات («إعلان جديد»
-/// في بطاقة «الإعلانات» تحتها)؛ تسجيل عضو وبحث عضو ← العائلة
+/// في بطاقة «الإعلانات» تحتها). «العائلة» بلا كبسولات: «تسجيل عضو جديد» زرّ رأسها، والبحث حقلها الواحد
 struct AdminAreaQuickActions: View {
     let area: AdminArea
     @EnvironmentObject var authVM: AuthViewModel
@@ -732,17 +647,6 @@ struct AdminAreaQuickActions: View {
                 list.append(Action(id: "death", icon: NewsTypeHelper.icon(for: "وفاة"),
                                    title: L10n.t("إعلان وفاة", "Obituary")) {
                     AnyView(DeathAnnouncementsPage())
-                })
-            }
-        case .family:
-            if authVM.canRegisterMembers {
-                list.append(Action(id: "register", icon: "person.badge.plus", title: L10n.t("تسجيل عضو", "Register")) {
-                    AnyView(AdminRegisterMemberView())
-                })
-            }
-            if authVM.canEditMembers {
-                list.append(Action(id: "find", icon: "magnifyingglass", title: L10n.t("بحث عضو", "Find member")) {
-                    AnyView(AdminMembersManagementView(initialTab: .directory))
                 })
             }
         default:
@@ -800,7 +704,7 @@ struct AdminFamilyTodayCard: View {
         if joined > 0 {
             rows.append(AdminFamilyTodayRow(
                 id: "joined", icon: "person.crop.circle.badge.plus", tint: DS.Color.palm,
-                title: L10n.t("أُضيفوا للشجرة هذا الأسبوع", "Added to the tree this week"),
+                title: L10n.t("قُيّدوا هذا الأسبوع", "Added this week"),
                 value: "\(joined)", target: .directory))
         }
         return rows
@@ -833,7 +737,7 @@ struct AdminFamilyTodayCard: View {
         switch target {
         case .memorial:  return AnyView(DeceasedMemorialView())
         case .deaths:    return AnyView(DeathAnnouncementsPage())
-        case .directory: return AnyView(AdminMembersManagementView(initialTab: .directory))
+        case .directory: return AnyView(AdminMembersPage(sub: .newThisWeek).adminArea(.family).adminBackTitle(AdminArea.occasions.title))
         }
     }
 }
@@ -852,7 +756,7 @@ struct AdminPulseTile: Identifiable {
     let page: () -> AnyView
 }
 
-/// «نبض العائلة» (كانت في «اليوم»): النشطون الآن (المالك والمدير)، الحسابات الفعّالة، رصيد رسائل الدخول (المالك
+/// «نبض العائلة» (كانت في «اليوم»): النشطون الآن (المالك والمدير)، الأعضاء المسجّلون، رصيد رسائل الدخول (المالك
 /// والمدير)، والمنجز هذا الأسبوع (مع مسار الموافقات) — كل مربّع يفتح صفحته. يجلب أرقامه عند فتح «المؤشرات»
 struct AdminPulseTiles: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -872,14 +776,15 @@ struct AdminPulseTiles: View {
             })
         }
         if authVM.isAdmin || authVM.currentUser?.role == .monitor, let u = usage {
+            // «عضو مسجّل» = له حساب دخول (active + idle + login_no_device) — نفس شريحة «مسجّلون» في العائلة
             let living = u.active + u.idle + u.loginNoDevice + u.neverLogged + u.noPhone
-            let activeAccounts = u.active + u.idle
-            let share = living > 0 ? Double(activeAccounts) / Double(living) : 0
-            tiles.append(AdminPulseTile(id: "accounts", icon: "iphone", label: L10n.t("حسابات فعّالة", "Active accounts"),
+            let registered = u.active + u.idle + u.loginNoDevice
+            let share = living > 0 ? Double(registered) / Double(living) : 0
+            tiles.append(AdminPulseTile(id: "accounts", icon: "iphone", label: L10n.t("الأعضاء المسجّلون", "Registered members"),
                                         value: "\(Int((share * 100).rounded()))%",
-                                        note: L10n.t("\(activeAccounts) من \(living) حيّاً", "\(activeAccounts) of \(living) living"),
+                                        note: L10n.t("\(registered) من \(living) حيّاً", "\(registered) of \(living) living"),
                                         meter: share) {
-                AnyView(AppUsageMembersView(category: .active))
+                AnyView(AdminMembersPage(chip: .registered).adminArea(.family).adminBackTitle(AdminArea.metrics.title))
             })
         }
         if authVM.canViewSystemSettings, let balance = sms.status?.balance {
@@ -1067,6 +972,8 @@ struct AdminSearchView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @State private var query = ""
+    /// ورقة العضو (نفس ورقة «العائلة») على نتائج البحث
+    @State private var sheet: AdminMemberSheetContext?
 
     private var q: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -1124,9 +1031,10 @@ struct AdminSearchView: View {
                 if !members.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
                         AdminCardHeader(title: L10n.t("الأعضاء", "Members"), badge: members.count, badgeTint: DS.Color.palm)
+                        let ids = members.map(\.id)
                         ForEach(Array(members.enumerated()), id: \.element.id) { index, m in
                             if index > 0 { AdminRowDivider() }
-                            NavigationLink { AdminLazyPage { AnyView(AdminMemberDetailSheet(member: m)) } } label: {
+                            Button { sheet = AdminMemberSheetContext(ids: ids, start: index) } label: {
                                 AdminListRow(icon: m.isDeceased == true ? "person.fill.xmark" : "person.fill",
                                              tint: DS.Color.palm, title: m.displayFullName,
                                              subtitle: m.phoneNumber.map { KuwaitPhone.display($0) })
@@ -1141,6 +1049,9 @@ struct AdminSearchView: View {
                                 message: L10n.t("جرّب كلمة أخرى", "Try another word"), style: .card)
                 }
             }
+        }
+        .dsTallBox(item: $sheet) { context in
+            AdminMemberSheet(ids: context.ids, start: context.start)
         }
     }
 }

@@ -455,7 +455,7 @@ struct AdminAnalyticsView: View {
 
             if lifespans.count < deceased.count {
                 Text(L10n.t(
-                    "محسوبة من \(lifespans.count) متوفّى لديهم تاريخ ميلاد ووفاة",
+                    "محسوبة من \(lifespans.count) متوفى لديهم تاريخ ميلاد ووفاة",
                     "Based on \(lifespans.count) deceased with both birth & death dates"
                 ))
                 .dsFont(.footnote)
