@@ -16,6 +16,9 @@ import SwiftUI
 //             content: AnyView(cards))
 //   • البطاقات: `AdminSectionCard(title:tag:link:)`، الصفوف `AdminTapRow(icon:title:subtitle:value:tap:)`، الحالات
 //     `AdminPageStateCard(.loading/.empty/.error)`، الحلقة `AdminScoreRow`، الأزرار `DSButton` (عرض السطر) و`AdminPillButton`.
+//   • (المرحلة ٢أ) بطاقة تُطوى `AdminSectionCard(…, isOpen: $open)`، صفّ معلومة بلا ضغطة `AdminInfoRow(…, trailing:)` مع
+//     رقمه `AdminRowValue`، وقائمة طويلة كسولة بفواصل `AdminLazyRows(items:) { AnyView(row($0)) }`. صناديق `.dsRowBox()`
+//     لا توضع داخل البطاقة البيضاء — الصفوف تُفصل بخط. مربّعات الكتابة (`DSComposerSection`) تبقى كما هي تحت الرأس.
 //   • الضغطة `AdminPageTap`: `.action { }` أو `.page { AnyView(صفحة) }` — الصفحة المدفوعة تعرف عنوان هذه الصفحة.
 //   • «رجوع + اسم القسم»: من يفتح الصفحة يسمّيه بـ `.adminBackTitle(_:)` (الضغطات `AdminPageTap` تفعل ذلك تلقائياً)،
 //     وإلا «رجوع». صفوف الأقسام (`AdminToolRow` في AdminAreaPages) تحتاج سطراً واحداً: `.adminBackTitle(tool.area.title)`.
@@ -472,7 +475,8 @@ struct AdminPageLink {
     let tap: AdminPageTap
 }
 
-/// بطاقة قسم بيضاء: عنوان (+ عدد) وطرف (نص صغير أو رابط ذهبي) ثم المحتوى
+/// بطاقة قسم بيضاء: عنوان (+ عدد) وطرف (نص صغير أو رابط ذهبي) ثم المحتوى.
+/// `isOpen` = بطاقة تُطوى: العنوان زرّ بسهم، والمحتوى يظهر عند الفتح (قوائم طويلة اختيارية)
 struct AdminSectionCard<Content: View>: View {
     var title: String? = nil
     var badge: Int? = nil
@@ -481,14 +485,42 @@ struct AdminSectionCard<Content: View>: View {
     var tag: String? = nil
     var link: AdminPageLink? = nil
     var spacing: CGFloat = DS.Spacing.sm
+    var isOpen: Binding<Bool>? = nil
     @ViewBuilder var content: () -> Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: spacing) {
             if let title {
-                AdminCardHeader(title: title, badge: badge, badgeTint: badgeTint) { trailing }
+                if let isOpen {
+                    Button {
+                        withAnimation(reduceMotion ? nil : DSMotion.expand) { isOpen.wrappedValue.toggle() }
+                    } label: {
+                        AdminCardHeader(title: title, badge: badge, badgeTint: badgeTint) {
+                            AnyView(HStack(spacing: DS.Spacing.xs) {
+                                trailing
+                                Image(systemName: "chevron.down")
+                                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                                    .foregroundColor(DS.Color.textTertiary)
+                                    .rotationEffect(.degrees(isOpen.wrappedValue ? 180 : 0))
+                                    .accessibilityHidden(true)
+                            })
+                        }
+                        .frame(minHeight: DS.Icon.tapTarget)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, -DS.Spacing.xsm)
+                    .accessibilityHint(isOpen.wrappedValue ? L10n.t("يخفي المحتوى", "Collapses")
+                                                           : L10n.t("يعرض المحتوى", "Expands"))
+                } else {
+                    AdminCardHeader(title: title, badge: badge, badgeTint: badgeTint) { trailing }
+                }
             }
-            content()
+            if isOpen?.wrappedValue ?? true {
+                content()
+                    .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .adminCard()
@@ -506,6 +538,54 @@ struct AdminSectionCard<Content: View>: View {
                 .lineLimit(1))
         }
         return AnyView(EmptyView())
+    }
+}
+
+/// صفّ معلومة في بطاقة (بلا ضغطة): مربّع أيقونة + عنوان + وصف + طرف حرّ (رقم، شارة، مفتاح…)
+/// — بديل `DSRow` داخل بطاقات اللوحة (صفوف مفصولة بخط، لا صناديق داخل البطاقة)
+struct AdminInfoRow: View {
+    let icon: String
+    var tint: Color = DS.Color.primary
+    let title: String
+    var subtitle: String? = nil
+    var trailing: AnyView? = nil
+
+    var body: some View {
+        AdminListRow(icon: icon, tint: tint, title: title, subtitle: subtitle, showsChevron: false) {
+            trailing ?? AnyView(EmptyView())
+        }
+    }
+}
+
+/// رقم كبير في طرف صفّ المعلومة (عدد الأجهزة، الرموز…)
+struct AdminRowValue: View {
+    let text: String
+    var tint: Color = DS.Color.textPrimary
+
+    var body: some View {
+        Text(text)
+            .dsFont(.statValue)
+            .monospacedDigit()
+            .foregroundColor(tint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+}
+
+/// صفوف قائمة طويلة كسولة داخل بطاقة، بخط رفيع بين كل صفّين (القوائم التي قد تطول لمئات الصفوف)
+struct AdminLazyRows<Item: Identifiable>: View {
+    let items: [Item]
+    let row: (Item) -> AnyView
+
+    var body: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                VStack(spacing: 0) {
+                    if index > 0 { AdminRowDivider() }
+                    row(item)
+                }
+            }
+        }
     }
 }
 

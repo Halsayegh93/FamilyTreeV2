@@ -71,7 +71,10 @@ struct AdminAppSettingsView: View {
     /// المالك يعدّل، باقي المدراء يتصفّحون فقط.
     private var canEdit: Bool { authVM.canManageSettings }
 
-    var body: some View { page }
+    var body: some View {
+        // «إعدادات المسار» بشكل «اليوم» (`AdminPageKit`) — باقي النطاقات كما هي
+        if scope == .approvals { approvalsPage } else { page }
+    }
 
     private var alerts: AppSettingsAlerts {
         AppSettingsAlerts(
@@ -784,6 +787,51 @@ struct AdminAppSettingsView: View {
     }
 }
 
+
+// MARK: - «إعدادات المسار» بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ «كل الصفحات بنفس شكل «اليوم»»)
+//
+// رأس كحلي بحال المسار وأرقامه (السريع، مهلة التذكير، الردود الجاهزة) ثم قسم «طلبات الوارد» نفسه —
+// نفس المفاتيح والصلاحيات والحفظ ومربّع الردود الجاهزة تماماً.
+extension AdminAppSettingsView {
+    var approvalsPage: some View {
+        AdminPage(header: approvalsHeader, lead: AnyView(approvalsSection), content: AnyView(EmptyView()))
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .task {
+                await appSettingsVM.fetchSettings()
+            }
+            // «مسار الموافقات ٢»: الردود الجاهزة — المالك يضيف ويحذف، والمدير يقرأ
+            .dsCenterBox(isPresented: $templatesOpen) {
+                ApprovalTemplatesBox(adminRequestVM: adminRequestVM, canEdit: canEdit) { templatesOpen = false }
+            }
+    }
+
+    private var approvalsHeader: AdminPageHeader {
+        let s = appSettingsVM.settings
+        let on = s.approvalsWorkflow
+        let running = on == true
+        let templatesKnown = adminRequestVM.approvalTemplatesAvailable == true
+        var kpis = [
+            AdminPageKPI(on.map { $0 ? L10n.t("يعمل", "On") : L10n.t("متوقف", "Off") } ?? "—",
+                         L10n.t("المسار", "Path"), icon: "point.topleft.down.to.point.bottomright.curvepath.fill",
+                         tint: running ? DS.Hub.kpiMine : DS.Hub.kpiLate),
+            AdminPageKPI(running ? s.approvalsFastTypes.map { "\($0.count)" } ?? "—" : "—",
+                         L10n.t("مسار سريع", "Fast track"), icon: "bolt.fill"),
+            AdminPageKPI(running ? s.approvalsSlaHours.map { L10n.t("\(Int($0)) س", "\(Int($0))h") } ?? "—" : "—",
+                         L10n.t("تذكير بعد", "Remind after"), icon: "timer")
+        ]
+        if running && templatesKnown {
+            kpis.append(AdminPageKPI("\(adminRequestVM.approvalTemplates.count)", L10n.t("ردود جاهزة", "Replies"),
+                                     icon: "text.badge.plus", tap: .action { templatesOpen = true }))
+        }
+        return AdminPageHeader(
+            title: L10n.t("إعدادات المسار", "Approval Path Settings"),
+            subtitle: L10n.t("مسار الموافقات، المهلة، المسار السريع، الردود الجاهزة",
+                             "Approvals path, SLA, fast track, ready replies"),
+            glyph: "gearshape.fill",
+            readOnly: !canEdit,
+            kpis: kpis)
+    }
+}
 
 /// تنبيها «إعادة التعيين» و«تصفير العداد» — مشتركة بين الصفحة والنسخة المضمّنة
 private struct AppSettingsAlerts: ViewModifier {

@@ -8,12 +8,21 @@ import SwiftUI
 /// «الإشعار» (العنوان الجاهز/المخصّص + التفاصيل بعدّادها) ← قسم «المستلمون» (الدول بعددها، البحث خلف
 /// زر، الكل/إلغاء، صفوف `.dsRowBox()` بعلامة الاختيار) ← شريط سفلي ثابت: «إرسال الآن» كحلي و«جدولة»
 /// فاتح + ملخّص الجمهور. التحقق والتأكيد والجدولة والإرسال كما كانت تماماً.
+/// بشكل «اليوم» (٢٠٢٦-١٠-٢٠، `AdminPageKit`): الصفحة الأم تعطي رأسها الكحلي (`pageHeader`)، ومربّع
+/// «الإشعار» يصعد فوقه، ورقم «مجدول» في الرأس يفتح المجدولة.
 struct AdminNotificationsView: View {
+    /// رأس «الإشعارات والتحديثات» (العنوان والأرقام وشريحتا الوضعين)
+    let pageHeader: AdminPageHeader
+
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(pageHeader: AdminPageHeader) {
+        self.pageHeader = pageHeader
+    }
 
     @State private var title = "عائلة المحمدعلي"
     @State private var bodyText = ""
@@ -104,29 +113,20 @@ struct AdminNotificationsView: View {
     // MARK: - Body
 
     var body: some View {
-        // الأقسام تتمرّر معاً (قائمة الأعضاء آخرها) — وشريط الإرسال مثبّت في الأسفل
-        // (الصفحة مضمّنة في «الإشعارات والتحديثات» تحت رأسها الملوّن — بلا عنوان خاص بها)
-        ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    // شريط الإشعارات المجدولة — يظهر فقط عند وجود إشعارات معلّقة
-                    if !notificationVM.scheduledNotifications.isEmpty {
-                        scheduledBanner
-                            .dsStaggerIn(0)
-                    }
-
-                    messageSection
-
-                    recipientsContent
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.lg)
-            }
-            .scrollDismissesKeyboard(.interactively)
+        // الرأس الكحلي ← «الإشعار» يصعد فوقه ← شريط المجدولة (إن وُجدت) ← «المستلمون» — تتمرّر معاً،
+        // وشريط الإرسال مثبّت في الأسفل
+        AdminPage(header: header,
+                  lead: AnyView(messageSection),
+                  content: AnyView(VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
+                      // شريط الإشعارات المجدولة — يظهر فقط عند وجود إشعارات معلّقة
+                      if !notificationVM.scheduledNotifications.isEmpty {
+                          scheduledBanner
+                      }
+                      recipientsContent
+                  }))
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 sendBar
             }
-        .background(DS.Color.background.ignoresSafeArea())
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             await loadData()
@@ -181,6 +181,18 @@ struct AdminNotificationsView: View {
             Text(L10n.t("لا يوجد أعضاء في هذه الدولة، فلم يُرسل الإشعار لأحد. اختر دولة أخرى أو «الكل».",
                         "There are no members in this country, so nothing was sent. Pick another country or “All”."))
         }
+    }
+
+    /// رأس الصفحة الأم + ضغطة رقم «مجدول» تفتح قائمة المجدولة
+    private var header: AdminPageHeader {
+        var h = pageHeader
+        h.kpis = h.kpis.map { kpi in
+            guard kpi.label == AdminMessagingHubView.scheduledKPILabel else { return kpi }
+            var k = kpi
+            k.tap = .action { showScheduledSheet = true }
+            return k
+        }
+        return h
     }
 
     /// المستلمون الفعليون: `nil` = إعلان للجميع، وقائمة = هؤلاء فقط. مع تصفية الدولة لا يُستخدم
@@ -394,17 +406,12 @@ struct AdminNotificationsView: View {
     @ViewBuilder
     private var recipientsContent: some View {
         if memberVM.allMembers.isEmpty && (isLoadingMembers || !hasLoaded) {
-            DSPageLoader(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"), fillsSpace: false)
-                .padding(.top, DS.Spacing.md)
+            AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…")))
                 .dsStaggerIn(2)
         } else if memberVM.allMembers.isEmpty && memberVM.membersLoadFailed {
-            DSStateCard(icon: "wifi.exclamationmark",
-                         title: L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
-                         hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                         tint: DS.Color.error,
-                         actionTitle: L10n.t("إعادة المحاولة", "Retry"),
-                         action: { Task { await loadData() } })
-                .padding(.top, DS.Spacing.xs)
+            AdminPageStateCard(.error(L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
+                                      message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                                      retry: { Task { await loadData() } }))
                 .dsStaggerIn(2)
         } else {
             let members = filteredMembers
@@ -657,7 +664,7 @@ struct AdminNotificationsView: View {
         .padding(.top, DS.Spacing.sm)
         .padding(.bottom, DS.Spacing.sm)
         .background(
-            DS.Color.background
+            DS.Hub.background
                 .overlay(alignment: .top) {
                     Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.tintFill)).frame(height: DS.Border.width)
                 }

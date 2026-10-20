@@ -9,6 +9,7 @@ import SwiftUI
 //      (نفس صلاحية «تعديل بيانات عضو») يحفظ بنفس مسار ذاك التعديل (DeceasedDateBox).
 // البيانات من أعضاء الشجرة المحمّلين (memberVM.allMembers) — بلا طلبات جديدة للسيرفر غير حفظ التاريخ.
 // التصنيف والحساب في `DeceasedMemorial` (Core/DeceasedMemorial.swift).
+// بشكل «اليوم» (٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام، البحث، والقسمان بطاقتان بيضاوان.
 
 /// الأعضاء المتوفون مصنّفون للصفحة ولصفّ لوحة الإدارة
 struct DeceasedMemorialBoard {
@@ -93,30 +94,17 @@ struct DeceasedMemorialView: View {
         let board = DeceasedMemorialBoard(memberVM.allMembers)
         let upcoming = filter(board.upcoming) { $0.member }
         let missing = filter(board.missing) { $0.member }
-        return ScrollView(showsIndicators: false) {
-            VStack(spacing: DS.Spacing.md) {
-                DSStatsRow([
-                    DSHeroStat(value: "\(board.withinWeek)", label: L10n.t("هالأسبوع", "This week"), icon: "calendar"),
-                    DSHeroStat(value: "\(board.upcoming.count)", label: L10n.t("خلال ٣٠ يوماً", "Next 30 days"),
-                               icon: "moon.stars.fill"),
-                    DSHeroStat(value: "\(board.missing.count)", label: L10n.t("ناقص تاريخهم", "Missing a date"),
-                               icon: "calendar.badge.exclamationmark"),
-                ], tint: tint)
-
-                DSSearchField(text: $query, placeholder: L10n.t("ابحث بالاسم…", "Search by name…"), tint: tint)
-
-                upcomingSection(upcoming)
-                missingSection(missing, total: board.missing.count)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xxxl)
-        }
+        // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← البحث يصعد فوقه ←
+        // «الذكرى القريبة» ← «ناقص تاريخه» بطاقتين بيضاوين
+        return AdminPage(header: header(board),
+                         lead: AnyView(DSSearchField(text: $query, placeholder: L10n.t("ابحث بالاسم…", "Search by name…"),
+                                                     tint: tint)
+                            .adminCard(padding: DS.Spacing.md)),
+                         content: AnyView(VStack(spacing: DS.Hub.stackSpacing) {
+                             AnyView(upcomingSection(upcoming))
+                             AnyView(missingSection(missing, total: board.missing.count))
+                         }))
         .scrollDismissesKeyboard(.interactively)
-        .dsSubPageHeader(L10n.t("ذكرى الراحلين", "Memorials"),
-                         subtitle: L10n.t("الذكرى القريبة بالتاريخ الميلادي، ومن ينقصه تاريخ الوفاة",
-                                          "Upcoming anniversaries (Gregorian), and who is missing a death date"),
-                         icon: "moon.stars.fill")
         // نفس تحميل الأعضاء الموجود (لو فُتحت الصفحة قبل ما تتحمّل الشجرة)
         .task { if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() } }
         .onChange(of: query) { _ in missingLimit = Self.pageSize }
@@ -126,6 +114,25 @@ struct DeceasedMemorialView: View {
                 .environmentObject(memberVM)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// الأرقام من الأعضاء المحمّلين — «—» قبل وصولهم
+    private func header(_ board: DeceasedMemorialBoard) -> AdminPageHeader {
+        let ready = !memberVM.allMembers.isEmpty
+        return AdminPageHeader(
+            title: L10n.t("ذكرى الراحلين", "Memorials"),
+            subtitle: L10n.t("الذكرى القريبة بالتاريخ الميلادي، ومن ينقصه تاريخ الوفاة",
+                             "Upcoming anniversaries (Gregorian), and who is missing a death date"),
+            glyph: "moon.stars.fill",
+            kpis: [
+                AdminPageKPI(AdminPageKPI.count(board.withinWeek, ready: ready), L10n.t("هالأسبوع", "This week"),
+                             icon: "calendar", tint: board.withinWeek > 0 ? DS.Hub.kpiMine : DS.Color.textOnPrimary),
+                AdminPageKPI(AdminPageKPI.count(board.upcoming.count, ready: ready),
+                             L10n.t("خلال ٣٠ يوماً", "Next 30 days"), icon: "moon.stars.fill"),
+                AdminPageKPI(AdminPageKPI.count(board.missing.count, ready: ready),
+                             L10n.t("ناقص تاريخهم", "Missing a date"), icon: "calendar.badge.exclamationmark",
+                             tint: board.missing.isEmpty ? DS.Color.textOnPrimary : DS.Hub.kpiLate)
+            ])
     }
 
     // MARK: البحث
@@ -144,16 +151,14 @@ struct DeceasedMemorialView: View {
     // MARK: «الذكرى القريبة»
 
     private func upcomingSection(_ list: [DeceasedMemorialBoard.Upcoming]) -> some View {
-        DSComposerSection(title: L10n.t("الذكرى القريبة", "Upcoming anniversaries"), icon: "moon.stars.fill", tint: tint,
-                          trailing: list.isEmpty ? nil : "\(list.count)", index: 1) {
+        AdminSectionCard(title: L10n.t("الذكرى القريبة", "Upcoming anniversaries"),
+                         badge: list.isEmpty ? nil : list.count, badgeTint: DS.Color.accent, spacing: 0) {
             if list.isEmpty {
                 DSEmptyView(isSearching ? L10n.t("لا يوجد متوفى بهذا الاسم", "No deceased member by that name")
                                         : L10n.t("لا توجد ذكرى خلال ٣٠ يوماً", "No anniversaries in the next 30 days"),
                             icon: "moon.stars", style: .compact)
             } else {
-                LazyVStack(spacing: DS.Spacing.xsm) {
-                    ForEach(list) { upcomingRow($0) }
-                }
+                AdminLazyRows(items: list) { AnyView(upcomingRow($0)) }
             }
         }
     }
@@ -162,23 +167,23 @@ struct DeceasedMemorialView: View {
         let a = item.anniversary
         let when = DeceasedMemorial.whenLabel(a.daysUntil, arabic: arabic)
         let line = DeceasedMemorial.anniversaryLine(a, arabic: arabic)
-        return HStack(spacing: DS.Spacing.sm) {
+        return HStack(spacing: DS.Spacing.md) {
             avatar(item.member)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 // الاسم الكامل داخل المربع (طلب المالك ٢٠٢٦-١٠-١٩) — يلتف بدل ما ينقص
                 Text(item.member.fullName)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(line)
-                    .dsFieldFont(.subtitle)
-                    .foregroundColor(DS.Color.fieldValue)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
             }
             Spacer(minLength: 0)
-            DSStatusChip(text: when, tint: a.daysUntil <= 1 ? DS.Color.accent : tint, size: .mini)
+            AdminValueChip(text: when, tint: a.daysUntil <= 1 ? DS.Color.accent : DS.Color.primary)
         }
         .frame(minHeight: DSBox.fieldMinHeight)
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.member.fullName)، \(line)، \(when)")
     }
@@ -187,16 +192,14 @@ struct DeceasedMemorialView: View {
 
     private func missingSection(_ list: [DeceasedMemorialBoard.Missing], total: Int) -> some View {
         let shown = list.prefix(missingLimit)
-        return DSComposerSection(title: L10n.t("ناقص تاريخه", "Missing a date"), icon: "calendar.badge.exclamationmark",
-                                 tint: DS.Color.warning, trailing: list.isEmpty ? nil : "\(list.count)", index: 2) {
+        return AdminSectionCard(title: L10n.t("ناقص تاريخه", "Missing a date"),
+                                badge: list.isEmpty ? nil : list.count, spacing: 0) {
             if list.isEmpty {
                 DSEmptyView(isSearching ? L10n.t("لا يوجد متوفى بهذا الاسم", "No deceased member by that name")
                                         : L10n.t("كل المتوفين تواريخهم كاملة", "Every deceased member has a full date"),
                             icon: "checkmark.seal", style: .compact)
             } else {
-                LazyVStack(spacing: DS.Spacing.xsm) {
-                    ForEach(shown) { missingRow($0) }
-                }
+                AdminLazyRows(items: Array(shown)) { AnyView(missingRow($0)) }
                 if list.count > shown.count {
                     Button {
                         withAnimation(DS.Anim.quick) { missingLimit += Self.pageSize }
@@ -214,28 +217,24 @@ struct DeceasedMemorialView: View {
 
     private func missingRow(_ item: DeceasedMemorialBoard.Missing) -> some View {
         let note = DeceasedMemorial.missingNote(item.kind, arabic: arabic)
-        return HStack(spacing: DS.Spacing.sm) {
+        return HStack(spacing: DS.Spacing.md) {
             avatar(item.member)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 // الاسم الكامل داخل المربع (طلب المالك ٢٠٢٦-١٠-١٩) — يلتف بدل ما ينقص
                 Text(item.member.fullName)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(note)
-                    .dsFieldFont(.subtitle)
-                    .foregroundColor(DS.Color.fieldValue)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.warning.dsReadableGlyph)
             }
             Spacer(minLength: 0)
             // نفس صلاحية «تعديل بيانات عضو» (الإدارة والمراقب)
             if authVM.canEditMembers {
                 Button { editing = item.member } label: {
-                    Text(L10n.t("تكميل التاريخ", "Add date"))
-                        .dsFont(.chip)
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .padding(.horizontal, DSBox.chipPadding)
-                        .frame(minHeight: DSBox.chipHeightSmall)
-                        .background(Capsule().fill(DSActionFill.style()))
+                    AdminPillLabel(title: L10n.t("تكميل التاريخ", "Add date"), style: .navy)
+                        .dsTapArea(width: DS.Icon.tapTarget, height: DS.Hub.pillHeight)
                 }
                 .buttonStyle(DSPressStyle())
                 .accessibilityLabel(L10n.t("تكميل تاريخ وفاة \(item.member.shortFullName)",
@@ -243,7 +242,7 @@ struct DeceasedMemorialView: View {
             }
         }
         .frame(minHeight: DSBox.fieldMinHeight)
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm)
     }
 
     private func avatar(_ m: FamilyMember) -> some View {

@@ -5,6 +5,8 @@ import SwiftUI
 // بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بلون بلاطة «إحصائيات متقدمة»
 // (مجال «الشجرة والأعضاء») وأرقامها الحيّة ← «ملخص عام» بحلقة الأحياء ← التوزيعات بأشرطة ونِسَب
 // ← شبكات أرقام `DSStatTile` ← «نمو الأعضاء» بالأعمدة ← الأخبار.
+// بشكل «اليوم» (٢٠٢٦-١٠-٢٠، `AdminPageKit`): الأرقام في الرأس الكحلي، الأقسام بطاقات بيضاء، والشبكات
+// تحت عناوين أقسام مثل «نبض العائلة».
 // كل رقم من البيانات المحمّلة أصلاً (الأعضاء، شجرة النساء، الأخبار) وبنفس الحسابات السابقة.
 struct AdminAnalyticsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
@@ -43,59 +45,11 @@ struct AdminAnalyticsView: View {
         // نمو الأعضاء يُحسب مرة واحدة — لبطاقة الرأس («جديد هذا الشهر») ولقسم النمو
         let growth = monthlyGrowth()
 
-        return ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.md) {
-                    heroSection(newThisMonth: growth.last?.count ?? 0)
-
-                    if totalMembers == 0 {
-                        membersStateCard
-                            .padding(.top, DS.Spacing.xs)
-                            .dsStaggerIn(1)
-                    } else {
-                        // الوضع الأفقي: الأقسام على عمودين
-                        AdaptiveCardStack(spacing: DS.Spacing.md) {
-                            // ملخص عام
-                            overviewSection
-
-                            // توزيع الأدوار
-                            rolesSection
-
-                            // توزيع الجنس
-                            genderSection
-
-                            // شجرة النساء
-                            womenSection
-
-                            // الحالة الاجتماعية
-                            maritalSection
-
-                            // الفئات العمرية
-                            ageGroupsSection
-
-                            // نظرة على الشجرة (أجيال، متوسط الأبناء، أكبر عائلة)
-                            treeInsightsSection
-
-                            // إحصائيات الوفيات (متوسط العمر عند الوفاة)
-                            if deceasedMembers.count > 0 {
-                                deceasedInsightsSection
-                            }
-
-                            // نمو الأعضاء الشهري
-                            monthlyGrowthSection(growth)
-
-                            // الأخبار
-                            newsSection
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xxxl)
-        }
-        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
-        .dsSubPageHeader(L10n.t("إحصائيات متقدمة", "Analytics"),
-                         subtitle: L10n.t("العائلة بالأرقام — الأدوار والأعمار والنمو",
-                                          "The family in numbers — roles, ages and growth"))
+        // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← «ملخص عام» يصعد فوقه ←
+        // البطاقات والشبكات (عمودان أفقياً)
+        return AdminPage(header: header(newThisMonth: growth.last?.count ?? 0),
+                         lead: AnyView(totalMembers == 0 ? AnyView(membersStateCard) : AnyView(overviewSection)),
+                         content: AnyView(sections(growth)))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             // جلب بيانات شجرة النساء إن لم تكن محمّلة (كاش التبويب يغني عن الجلب غالباً)
@@ -117,23 +71,46 @@ struct AdminAnalyticsView: View {
         womenAttempted = true
     }
 
-    // MARK: - بطاقة الرأس
+    // MARK: - الرأس الكحلي
 
     /// ٣ أرقام حيّة من البيانات المحمّلة أصلاً: أفراد العائلة (نفس «إجمالي» الملخص)، نسبة الأحياء،
     /// ومن أُضيف هذا الشهر (آخر عمود في «نمو الأعضاء») — «—» قبل تحميل الأعضاء.
-    private func heroSection(newThisMonth: Int) -> some View {
+    private func header(newThisMonth: Int) -> AdminPageHeader {
         let ready = totalMembers > 0
         let alivePct = AnalyticsPercent.value(activeMembers.count, of: totalMembers)
-        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
-        return DSStatsRow([
-                DSHeroStat(value: ready ? totalMembers.formatted() : "—",
-                           label: L10n.t("أفراد العائلة", "Members"), icon: "person.3.fill"),
-                DSHeroStat(value: ready ? L10n.t("\(alivePct)٪", "\(alivePct)%") : "—",
-                           label: L10n.t("أحياء", "Alive"), icon: "heart.fill"),
-                DSHeroStat(value: ready ? signed(newThisMonth) : "—",
-                           label: L10n.t("جديد هذا الشهر", "New this month"),
-                           icon: "chart.line.uptrend.xyaxis")
-        ], tint: pageTint)
+        return AdminPageHeader(
+            title: L10n.t("الإحصائيات", "Statistics"),
+            subtitle: L10n.t("العائلة بالأرقام — الأدوار والأعمار والنمو",
+                             "The family in numbers — roles, ages and growth"),
+            glyph: "chart.bar.xaxis",
+            kpis: [
+                AdminPageKPI(ready ? totalMembers.formatted() : "—", L10n.t("أفراد العائلة", "Members"),
+                             icon: "person.3.fill"),
+                AdminPageKPI(ready ? L10n.t("\(alivePct)٪", "\(alivePct)%") : "—", L10n.t("أحياء", "Alive"),
+                             icon: "heart.fill", tint: DS.Hub.kpiMine),
+                AdminPageKPI(ready ? signed(newThisMonth) : "—", L10n.t("جديد هذا الشهر", "New this month"),
+                             icon: "chart.line.uptrend.xyaxis", tint: DS.Hub.kpiLate)
+            ])
+    }
+
+    /// البطاقات بعد «ملخص عام» — بنفس الترتيب السابق (عمودان أفقياً)
+    private func sections(_ growth: [(label: String, count: Int)]) -> AnyView {
+        guard totalMembers > 0 else { return AnyView(EmptyView()) }
+        return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
+            AnyView(rolesSection)
+            AnyView(genderSection)
+            AnyView(womenSection)
+            AnyView(maritalSection)
+            AnyView(ageGroupsSection)
+            // نظرة على الشجرة (أجيال، متوسط الأبناء، أكبر عائلة)
+            AnyView(treeInsightsSection)
+            // إحصائيات الوفيات (متوسط العمر عند الوفاة)
+            if deceasedMembers.count > 0 {
+                AnyView(deceasedInsightsSection)
+            }
+            AnyView(monthlyGrowthSection(growth))
+            AnyView(newsSection)
+        })
     }
 
     /// «+١٢» — الإشارة قبل الرقم في السطر العربي أيضاً
@@ -147,19 +124,15 @@ struct AdminAnalyticsView: View {
     @ViewBuilder
     private var membersStateCard: some View {
         if memberVM.membersLoadFailed {
-            DSStateCard(icon: "wifi.exclamationmark",
-                         title: L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
-                         hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                         tint: DS.Color.error,
-                         actionTitle: L10n.t("إعادة المحاولة", "Retry"),
-                         action: { Task { await memberVM.fetchAllMembers(force: true) } })
+            AdminPageStateCard(.error(L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
+                                      message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                                      retry: { Task { await memberVM.fetchAllMembers(force: true) } }))
         } else if memberVM.allMembers.isEmpty {
-            DSPageLoader(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"), fillsSpace: false)
-                .padding(.top, DS.Spacing.lg)
+            AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…")))
         } else {
-            DSEmptyView(L10n.t("لا توجد بيانات كافية", "No data available"),
-                        message: L10n.t("أضف أعضاء للشجرة لعرض الإحصائيات", "Add members to the tree to see analytics"), style: .compact)
-                .padding(.top, DS.Spacing.lg)
+            AdminPageStateCard(.empty(L10n.t("لا توجد بيانات كافية", "No data available"),
+                                      message: L10n.t("أضف أعضاء للشجرة لعرض الإحصائيات",
+                                                      "Add members to the tree to see analytics")))
         }
     }
 
@@ -172,11 +145,8 @@ struct AdminAnalyticsView: View {
         let deceased = deceasedMembers.count
         let pct = AnalyticsPercent.value(alive, of: total)
 
-        return DSComposerSection(title: L10n.t("ملخص عام", "Overview"),
-                                 icon: "chart.bar.fill",
-                                 tint: pageTint,
-                                 trailing: L10n.t("\(total.formatted()) فرد", "\(total.formatted()) members"),
-                                 index: 1) {
+        return AdminSectionCard(title: L10n.t("ملخص عام", "Overview"),
+                                tag: L10n.t("\(total.formatted()) فرد", "\(total.formatted()) members")) {
             HStack(spacing: DS.Spacing.md) {
                 DSRing(progress: total > 0 ? Double(alive) / Double(total) : 0,
                         tint: DS.Color.success, lineWidth: DS.Spacing.sm, size: DS.Icon.ring) {
@@ -194,7 +164,6 @@ struct AdminAnalyticsView: View {
                               label: L10n.t("متوفين", "Deceased"), value: deceased)
                 }
             }
-            .dsRowBox()
         }
     }
 
@@ -209,11 +178,8 @@ struct AdminAnalyticsView: View {
         let sum = admins + monitors + supervisors + members
         let total = max(sum, 1)
 
-        return DSComposerSection(title: L10n.t("توزيع الأدوار (الأحياء)", "Roles (alive)"),
-                                 icon: "shield.fill",
-                                 tint: pageTint,
-                                 trailing: L10n.t("\(sum.formatted()) حي", "\(sum.formatted()) alive"),
-                                 index: 2) {
+        return AdminSectionCard(title: L10n.t("توزيع الأدوار (الأحياء)", "Roles (alive)"),
+                                tag: L10n.t("\(sum.formatted()) حي", "\(sum.formatted()) alive")) {
             VStack(spacing: DS.Spacing.sm) {
                 AnalyticsBarRow(label: L10n.t("مدير", "Admin"), count: admins, total: total,
                                 color: FamilyMember.UserRole.admin.color)
@@ -224,7 +190,6 @@ struct AdminAnalyticsView: View {
                 AnalyticsBarRow(label: L10n.t("عضو", "Member"), count: members, total: total,
                                 color: FamilyMember.UserRole.member.color)
             }
-            .dsRowBox()
         }
     }
 
@@ -236,12 +201,9 @@ struct AdminAnalyticsView: View {
         let total = max(males + females, 1)
         let known = womenKnown
 
-        return DSComposerSection(title: L10n.t("توزيع الجنس (الأحياء)", "Gender (alive)"),
-                                 icon: "person.2.circle.fill",
-                                 tint: pageTint,
-                                 trailing: known ? L10n.t("\((males + females).formatted()) حي",
-                                                          "\((males + females).formatted()) alive") : nil,
-                                 index: 3) {
+        return AdminSectionCard(title: L10n.t("توزيع الجنس (الأحياء)", "Gender (alive)"),
+                                tag: known ? L10n.t("\((males + females).formatted()) حي",
+                                                    "\((males + females).formatted()) alive") : nil) {
             VStack(spacing: DS.Spacing.sm) {
                 HStack(alignment: .top, spacing: DS.Spacing.sm) {
                     // عدد الذكور معروف دائماً (من الأعضاء) — النسبة فقط تنتظر شجرة النساء
@@ -261,7 +223,6 @@ struct AdminAnalyticsView: View {
                     ], height: 12)
                 }
             }
-            .dsRowBox()
         }
     }
 
@@ -302,9 +263,7 @@ struct AdminAnalyticsView: View {
         let linked = women.filter { WomenStore.linkedUserByWoman[$0.id] != nil }.count
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            DSSectionTitle(title: L10n.t("شجرة النساء", "Women Tree"),
-                            icon: "figure.dress.line.vertical.figure",
-                            tint: pageTint)
+            AdminSectionLabel(title: L10n.t("شجرة النساء", "Women Tree"))
 
             if women.isEmpty {
                 womenStateCard
@@ -332,21 +291,15 @@ struct AdminAnalyticsView: View {
     @ViewBuilder
     private var womenStateCard: some View {
         if womenFailed {
-            DSStateCard(icon: "wifi.exclamationmark",
-                         title: L10n.t("تعذّر تحميل بيانات النساء", "Couldn't load women data"),
-                         hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                         tint: DS.Color.error,
-                         actionTitle: L10n.t("إعادة المحاولة", "Retry"),
-                         action: { Task { await loadWomen() } })
+            AdminPageStateCard(.error(L10n.t("تعذّر تحميل بيانات النساء", "Couldn't load women data"),
+                                      message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                                      retry: { Task { await loadWomen() } }))
         } else if womenLoading || !womenAttempted {
-            DSPageLoader(L10n.t("جاري تحميل بيانات النساء…", "Loading women data…"), fillsSpace: false)
-                .padding(.vertical, DS.Spacing.md)
+            AdminPageStateCard(.loading(L10n.t("جاري تحميل بيانات النساء…", "Loading women data…")))
         } else {
-            DSEmptyView(L10n.t("لا توجد بيانات بعد", "No data yet"),
-                        message: L10n.t("تظهر هنا أرقام شجرة النساء بعد إضافتهن",
-                                        "Women tree numbers appear here once they're added"),
-                        style: .compact)
-                .dsCard(padding: nil)
+            AdminPageStateCard(.empty(L10n.t("لا توجد بيانات بعد", "No data yet"),
+                                      message: L10n.t("تظهر هنا أرقام شجرة النساء بعد إضافتهن",
+                                                      "Women tree numbers appear here once they're added")))
         }
     }
 
@@ -359,11 +312,8 @@ struct AdminAnalyticsView: View {
         let total = max(pool.count, 1)
         let pct = AnalyticsPercent.value(married, of: total)
 
-        return DSComposerSection(title: L10n.t("الحالة الاجتماعية", "Marital Status"),
-                                 icon: "heart.circle.fill",
-                                 tint: pageTint,
-                                 trailing: L10n.t("الأحياء", "Alive"),
-                                 index: 5) {
+        return AdminSectionCard(title: L10n.t("الحالة الاجتماعية", "Marital Status"),
+                                tag: L10n.t("الأحياء", "Alive")) {
             HStack(spacing: DS.Spacing.md) {
                 DSRing(progress: Double(married) / Double(total),
                         tint: DS.Color.success, lineWidth: DS.Spacing.sm) {
@@ -387,7 +337,6 @@ struct AdminAnalyticsView: View {
                     }
                 }
             }
-            .dsRowBox()
         }
     }
 
@@ -414,9 +363,7 @@ struct AdminAnalyticsView: View {
         let generations = treeDepth(all: all, ids: ids, childIndex: buildChildIndex(all))
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            DSSectionTitle(title: L10n.t("نظرة على الشجرة", "Tree Insights"),
-                            icon: "tree.fill",
-                            tint: pageTint)
+            AdminSectionLabel(title: L10n.t("نظرة على الشجرة", "Tree Insights"))
 
             LazyVGrid(columns: tileColumns(3), spacing: DS.Spacing.sm) {
                 DSStatTile(value: generations.formatted(), label: L10n.t("عدد الأجيال", "Generations"),
@@ -490,11 +437,9 @@ struct AdminAnalyticsView: View {
             : 0
 
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            DSSectionTitle(title: L10n.t("إحصائيات الوفيات", "Deceased Insights"),
-                            icon: "hourglass",
-                            tint: pageTint,
-                            trailing: L10n.t("\(deceased.count.formatted()) متوفى",
-                                             "\(deceased.count.formatted()) deceased"))
+            AdminSectionLabel(title: L10n.t("إحصائيات الوفيات", "Deceased Insights"),
+                              trailing: L10n.t("\(deceased.count.formatted()) متوفى",
+                                               "\(deceased.count.formatted()) deceased"))
 
             LazyVGrid(columns: tileColumns(3), spacing: DS.Spacing.sm) {
                 DSStatTile(value: avgLifespan > 0 ? "\(avgLifespan)" : "—",
@@ -546,11 +491,8 @@ struct AdminAnalyticsView: View {
         let total = max(pool.count, 1)
 
         // فئات متتالية — لون القسم نفسه لكل الفئات، و«بدون تاريخ» رمادي
-        return DSComposerSection(title: L10n.t("الفئات العمرية", "Age Groups"),
-                                 icon: "calendar.circle.fill",
-                                 tint: pageTint,
-                                 trailing: L10n.t("الأحياء", "Alive"),
-                                 index: 6) {
+        return AdminSectionCard(title: L10n.t("الفئات العمرية", "Age Groups"),
+                                tag: L10n.t("الأحياء", "Alive")) {
             VStack(spacing: DS.Spacing.sm) {
                 AnalyticsBarRow(label: L10n.t("أقل من ١٨", "Under 18"), count: under18, total: total, color: pageTint)
                 AnalyticsBarRow(label: "18–29", count: age18to30, total: total, color: pageTint)
@@ -562,7 +504,6 @@ struct AdminAnalyticsView: View {
                                     color: DS.Color.textTertiary)
                 }
             }
-            .dsRowBox()
         }
     }
 
@@ -605,14 +546,10 @@ struct AdminAnalyticsView: View {
 
     private func monthlyGrowthSection(_ months: [(label: String, count: Int)]) -> some View {
         let sum = months.reduce(0) { $0 + $1.count }
-        return DSComposerSection(title: L10n.t("نمو الأعضاء", "Member Growth"),
-                                 icon: "chart.line.uptrend.xyaxis",
-                                 tint: pageTint,
-                                 trailing: L10n.t("آخر ٦ أشهر", "Last 6 months"),
-                                 index: 6) {
+        return AdminSectionCard(title: L10n.t("نمو الأعضاء", "Member Growth"),
+                                tag: L10n.t("آخر ٦ أشهر", "Last 6 months")) {
             AnalyticsGrowthColumns(months: months, tint: pageTint)
-                .dsRowBox()
-
+    
             Text(L10n.t("أُضيف \(sum.formatted()) خلال آخر ٦ أشهر",
                         "\(sum.formatted()) added in the last 6 months"))
                 .dsFont(.footnote)
@@ -633,9 +570,7 @@ struct AdminAnalyticsView: View {
 
         // الأخبار من مجال «المحتوى والبلاغات» — عنوانها بلونه
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            DSSectionTitle(title: L10n.t("إحصائيات الأخبار", "News Statistics"),
-                            icon: "newspaper.fill",
-                            tint: DS.Color.composerLibrary)
+            AdminSectionLabel(title: L10n.t("إحصائيات الأخبار", "News Statistics"))
 
             LazyVGrid(columns: tileColumns(3), spacing: DS.Spacing.sm) {
                 DSStatTile(value: totalNews.formatted(), label: L10n.t("إجمالي", "Total"),
