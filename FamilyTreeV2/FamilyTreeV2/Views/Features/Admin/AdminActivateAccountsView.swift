@@ -1,6 +1,10 @@
 import SwiftUI
 import PhotosUI
 
+// MARK: - «الحسابات والاستخدام» = محطة التفعيل — بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`)
+//
+// رأس كحلي (رجوع، أرقام النواقص، شرائح التصنيف بعددها) ← بطاقة التقدّم تصعد فوقه ← بطاقات الأعضاء تُسحب أفقياً
+// (كل بطاقة بنواقصها أزراراً) ← «استخدام التطبيق» (من آخر أرقام محفوظة). الإجراءات والمربّعات والشروط كما كانت.
 struct AdminActivateAccountsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -23,8 +27,6 @@ struct AdminActivateAccountsView: View {
     @State private var showGenderResult = false
     @State private var displayLimit = 20
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// لون مجال «الشجرة والأعضاء»
-    private let stationTint = DS.Color.composerProject
 
     /// نوع النقص المطلوب التركيز عليه — يُمرَّر من بطاقات «جودة البيانات»
     enum IssueFocus: String, CaseIterable {
@@ -250,134 +252,115 @@ struct AdminActivateAccountsView: View {
     // MARK: - Body
 
     var body: some View {
-        // صفحة واحدة تتمرّر: صفّ الأرقام ← المحطة (بطاقة عضو + إجراءاته) — طلب المالك ٢٠٢٦-٠٩-٢٧
-        // (العنوان والوصف في رأس «إدارة الأعضاء» الملوّن — «أسلوب واحد» ٢٠٢٦-١٠-٠٧)
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: DS.Spacing.md) {
-                stationHero
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                if memberVM.isLoading && memberVM.allMembers.isEmpty {
-                    DSPageLoader(L10n.t("جاري فحص البيانات...", "Checking data..."), fillsSpace: false)
-                        .padding(.horizontal, DS.Spacing.lg)
-                } else if allIssueMembers.isEmpty {
-                    emptyState
-                        .padding(.horizontal, DS.Spacing.lg)
-                } else {
-                    stationView
+        // صفحة واحدة تتمرّر: الرأس (الأرقام والتصنيفات) ← التقدّم ← المحطة (بطاقة عضو + إجراءاته) ← الاستخدام
+        AdminPage(header: header, lead: AnyView(leadCard), content: AnyView(stationContent))
+            .dsAlert(
+                L10n.t("تفعيل الحساب", "Activate Account"),
+                isPresented: $showActivateConfirm,
+                presenting: memberToActivate
+            ) { member in
+                Button(L10n.t("تفعيل", "Activate")) {
+                    Task { await activateMember(member) }
                 }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: { member in
+                Text(L10n.t(
+                    "تفعيل حساب \(member.fullName)؟",
+                    "Activate \(member.fullName)'s account?"
+                ))
             }
-            .padding(.top, DS.Spacing.sm)
-            .padding(.bottom, DS.Spacing.xxxl)
-        }
-        .background(DS.Color.background.ignoresSafeArea())
-        .dsAlert(
-            L10n.t("تفعيل الحساب", "Activate Account"),
-            isPresented: $showActivateConfirm,
-            presenting: memberToActivate
-        ) { member in
-            Button(L10n.t("تفعيل", "Activate")) {
-                Task { await activateMember(member) }
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: { member in
-            Text(L10n.t(
-                "تفعيل حساب \(member.fullName)؟",
-                "Activate \(member.fullName)'s account?"
-            ))
-        }
-        // رفض تفعيل حساب خارج الشجرة (من activateAccount) — يُعرض سببه بدل لا شيء
-        .dsAlert(
-            L10n.t("تعذّر التفعيل", "Couldn't activate"),
-            isPresented: Binding(get: { adminRequestVM.errorMessage != nil },
-                                 set: { if !$0 { adminRequestVM.errorMessage = nil } })
-        ) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) { adminRequestVM.errorMessage = nil }
-        } message: {
-            Text(adminRequestVM.errorMessage ?? "")
-        }
-        .dsAlert(
-            L10n.t("تأكيد تحديث الجنس", "Confirm Gender Update"),
-            isPresented: $showGenderConfirm
-        ) {
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-            Button(
-                pendingGender == "male"
-                    ? L10n.t("تعيين ذكر", "Set Male")
-                    : L10n.t("تعيين أنثى", "Set Female")
+            // رفض تفعيل حساب خارج الشجرة (من activateAccount) — يُعرض سببه بدل لا شيء
+            .dsAlert(
+                L10n.t("تعذّر التفعيل", "Couldn't activate"),
+                isPresented: Binding(get: { adminRequestVM.errorMessage != nil },
+                                     set: { if !$0 { adminRequestVM.errorMessage = nil } })
             ) {
-                let ids = selectedMembers
-                let gender = pendingGender
-                withAnimation(DS.Anim.snappy) {
-                    selectedMembers.removeAll()
+                Button(L10n.t("حسناً", "OK"), role: .cancel) { adminRequestVM.errorMessage = nil }
+            } message: {
+                Text(adminRequestVM.errorMessage ?? "")
+            }
+            .dsAlert(
+                L10n.t("تأكيد تحديث الجنس", "Confirm Gender Update"),
+                isPresented: $showGenderConfirm
+            ) {
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                Button(
+                    pendingGender == "male"
+                        ? L10n.t("تعيين ذكر", "Set Male")
+                        : L10n.t("تعيين أنثى", "Set Female")
+                ) {
+                    let ids = selectedMembers
+                    let gender = pendingGender
+                    withAnimation(DS.Anim.snappy) {
+                        selectedMembers.removeAll()
+                        isSelectionMode = false
+                    }
+                    Task {
+                        let count = await memberVM.bulkUpdateGender(memberIds: ids, gender: gender)
+                        let genderText = gender == "male" ? L10n.t("ذكر", "male") : L10n.t("أنثى", "female")
+                        genderUpdateResult = L10n.t(
+                            "تم تحديث \(count) عضو إلى \(genderText)",
+                            "Updated \(count) members to \(genderText)"
+                        )
+                        showGenderResult = true
+                    }
+                }
+            } message: {
+                let genderText = pendingGender == "male" ? L10n.t("ذكر", "male") : L10n.t("أنثى", "female")
+                Text(L10n.t(
+                    "هل تريد تعيين \(selectedMembers.count) عضو كـ \(genderText)؟",
+                    "Set \(selectedMembers.count) members as \(genderText)?"
+                ))
+            }
+            .dsAlert(L10n.t("تم التحديث", "Updated"), isPresented: $showGenderResult) {
+                Button(L10n.t("حسناً", "OK")) {}
+            } message: {
+                Text(genderUpdateResult ?? "")
+            }
+            // مربّعات المحطة بمنتصف الشاشة بدل الأوراق السفلية (طلب المالك)
+            .dsCenterBox(item: $memberToEditPhone) { member in
+                PendingMemberPhoneSheet(member: member, activateOnSave: true)
+                    .environmentObject(adminRequestVM)
+            }
+            .dsCenterBox(item: $memberToEditBirthDate) { member in
+                EditBirthDateSheet(member: member, memberVM: memberVM)
+            }
+            .dsTallBox(item: $memberToEdit) { member in   // قائمة أعضاء طويلة — مربّع طويل (توصية أبل)
+                LinkFatherSheet(member: member, memberVM: memberVM)
+            }
+            .dsCenterBox(item: $memberToEditGender) { member in
+                EditGenderSheet(member: member, memberVM: memberVM)
+            }
+            .dsCenterBox(item: $memberToEditPhoto) { member in
+                EditMemberPhotoSheet(member: member, memberVM: memberVM)
+            }
+            .dsCenterBox(item: $memberToEditDeathDate) { member in
+                EditDeathDateSheet(member: member, memberVM: memberVM)
+            }
+            .onChange(of: memberVM.allMembers.count) { _ in rebuildStationPool() }
+            .onChange(of: focus) { _ in
+                stationCursor = 0
+                rebuildStationPool()
+            }
+            .onChange(of: selectedFilter) { _ in
+                displayLimit = 20
+                // Exit selection mode when switching filters
+                if isSelectionMode {
                     isSelectionMode = false
-                }
-                Task {
-                    let count = await memberVM.bulkUpdateGender(memberIds: ids, gender: gender)
-                    let genderText = gender == "male" ? L10n.t("ذكر", "male") : L10n.t("أنثى", "female")
-                    genderUpdateResult = L10n.t(
-                        "تم تحديث \(count) عضو إلى \(genderText)",
-                        "Updated \(count) members to \(genderText)"
-                    )
-                    showGenderResult = true
+                    selectedMembers.removeAll()
                 }
             }
-        } message: {
-            let genderText = pendingGender == "male" ? L10n.t("ذكر", "male") : L10n.t("أنثى", "female")
-            Text(L10n.t(
-                "هل تريد تعيين \(selectedMembers.count) عضو كـ \(genderText)؟",
-                "Set \(selectedMembers.count) members as \(genderText)?"
-            ))
-        }
-        .dsAlert(L10n.t("تم التحديث", "Updated"), isPresented: $showGenderResult) {
-            Button(L10n.t("حسناً", "OK")) {}
-        } message: {
-            Text(genderUpdateResult ?? "")
-        }
-        // مربّعات المحطة بمنتصف الشاشة بدل الأوراق السفلية (طلب المالك)
-        .dsCenterBox(item: $memberToEditPhone) { member in
-            PendingMemberPhoneSheet(member: member, activateOnSave: true)
-                .environmentObject(adminRequestVM)
-        }
-        .dsCenterBox(item: $memberToEditBirthDate) { member in
-            EditBirthDateSheet(member: member, memberVM: memberVM)
-        }
-        .dsTallBox(item: $memberToEdit) { member in   // قائمة أعضاء طويلة — مربّع طويل (توصية أبل)
-            LinkFatherSheet(member: member, memberVM: memberVM)
-        }
-        .dsCenterBox(item: $memberToEditGender) { member in
-            EditGenderSheet(member: member, memberVM: memberVM)
-        }
-        .dsCenterBox(item: $memberToEditPhoto) { member in
-            EditMemberPhotoSheet(member: member, memberVM: memberVM)
-        }
-        .dsCenterBox(item: $memberToEditDeathDate) { member in
-            EditDeathDateSheet(member: member, memberVM: memberVM)
-        }
-        .onChange(of: memberVM.allMembers.count) { _ in rebuildStationPool() }
-        .onChange(of: focus) { _ in
-            stationCursor = 0
-            rebuildStationPool()
-        }
-        .onChange(of: selectedFilter) { _ in
-            displayLimit = 20
-            // Exit selection mode when switching filters
-            if isSelectionMode {
-                isSelectionMode = false
-                selectedMembers.removeAll()
+            .onAppear {
+                withAnimation(DS.Anim.smooth.delay(0.15)) {
+                    appeared = true
+                }
+                if stationPool.isEmpty { rebuildStationPool() }
+                // اختر أول فلتر متاح إذا الفلتر الافتراضي فارغ
+                if count(for: selectedFilter) == 0, let first = availableFilters.first {
+                    selectedFilter = first
+                }
             }
-        }
-        .onAppear {
-            withAnimation(DS.Anim.smooth.delay(0.15)) {
-                appeared = true
-            }
-            if stationPool.isEmpty { rebuildStationPool() }
-            // اختر أول فلتر متاح إذا الفلتر الافتراضي فارغ
-            if count(for: selectedFilter) == 0, let first = availableFilters.first {
-                selectedFilter = first
-            }
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     // MARK: - محطة الاستكمال
@@ -390,6 +373,30 @@ struct AdminActivateAccountsView: View {
         let pool = membersMatchingFocus
         stationPool = pool
         if stationCursor >= pool.count { stationCursor = max(0, pool.count - 1) }
+        focusCounts = countFocuses()
+    }
+
+    /// عدد كل تصنيف لشرائح الرأس — مرور واحد بلا فرز (نفس شروط `membersMatchingFocus`)
+    @State private var focusCounts: [IssueFocus: Int] = [:]
+
+    private func countFocuses() -> [IssueFocus: Int] {
+        func isBlank(_ v: String?) -> Bool { (v ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
+        var c: [IssueFocus: Int] = [:]
+        for m in memberVM.allMembers {
+            if m.isDeceased == true {
+                if isBlank(m.deathDate) && m.deathDateUnknown != true { c[.deceasedNoDeathDate, default: 0] += 1 }
+                continue
+            }
+            if m.role != .pending && memberHasAnyIssue(m) { c[.all, default: 0] += 1 }
+            if hasNoPhone(m) { c[.noPhone, default: 0] += 1 }
+            if isMissingBirthDate(m) { c[.noBirthDate, default: 0] += 1 }
+            if isMissingFather(m) { c[.noFather, default: 0] += 1 }
+            if isMissingGender(m) { c[.noGender, default: 0] += 1 }
+            if !isBlank(m.phoneNumber) && isBlank(m.avatarUrl) && m.avatarUnavailable != true {
+                c[.noPhoto, default: 0] += 1
+            }
+        }
+        return c
     }
 
     /// العضو المعروض حالياً في المحطة
@@ -411,130 +418,122 @@ struct AdminActivateAccountsView: View {
         return (noPhone, noBirth)
     }
 
-    private var stationHero: some View {
+    /// الرأس الكحلي: أرقام النواقص + شرائح التصنيف (كل النواقص، بلا رقم، بلا ميلاد…) بعددها
+    private var header: AdminPageHeader {
         let loading = memberVM.isLoading && memberVM.allMembers.isEmpty
         let counts = heroCounts
-        return DSStatsRow([
-            DSHeroStat(value: loading ? "—" : "\(stationPool.count)",
-                       label: L10n.t("في القائمة", "In queue"), icon: "list.bullet.rectangle.fill"),
-            DSHeroStat(value: loading ? "—" : "\(counts.noPhone)",
-                       label: L10n.t("بلا رقم", "No phone"), icon: "phone.down.fill"),
-            DSHeroStat(value: loading ? "—" : "\(counts.noBirth)",
-                       label: L10n.t("بلا ميلاد", "No birth date"), icon: "calendar.badge.exclamationmark")
-        ], tint: stationTint)
+        let chips: [AdminPageChip] = loading ? [] : IssueFocus.allCases.compactMap { f in
+            let n = focusCounts[f] ?? 0
+            // تصنيف فارغ لا يظهر — إلا المختار (لإلغائه) و«كل النواقص»
+            guard n > 0 || f == focus || f == .all else { return nil }
+            return AdminPageChip(id: f.rawValue, title: f.label, count: n, selected: focus == f) {
+                withAnimation(DS.Anim.snappy) { focus = f }
+            }
+        }
+        return AdminPageHeader(
+            title: AdminMembersManagementView.Tab.accounts.title,
+            subtitle: AdminMembersManagementView.Tab.accounts.subtitle,
+            glyph: AdminMembersManagementView.Tab.accounts.icon,
+            kpis: [
+                AdminPageKPI(AdminPageKPI.count(stationPool.count, ready: !loading), L10n.t("في القائمة", "In queue"),
+                             icon: "list.bullet.rectangle"),
+                AdminPageKPI(AdminPageKPI.count(counts.noPhone, ready: !loading), L10n.t("بلا رقم", "No phone"),
+                             icon: "phone.down", tint: DS.Hub.kpiHot,
+                             tap: .action { withAnimation(DS.Anim.snappy) { focus = .noPhone } }),
+                AdminPageKPI(AdminPageKPI.count(counts.noBirth, ready: !loading), L10n.t("بلا ميلاد", "No birth date"),
+                             icon: "calendar.badge.exclamationmark", tint: DS.Hub.kpiLate,
+                             tap: .action { withAnimation(DS.Anim.snappy) { focus = .noBirthDate } })
+            ],
+            chips: chips)
+    }
+
+    /// بطاقة أعلى الصفحة (تصعد فوق الرأس): الفحص، أو «مكتملة»، أو التقدّم في القائمة
+    @ViewBuilder
+    private var leadCard: some View {
+        if memberVM.isLoading && memberVM.allMembers.isEmpty {
+            AdminPageStateCard(.loading(L10n.t("جاري فحص البيانات...", "Checking data...")))
+        } else if allIssueMembers.isEmpty && focus == .all {
+            emptyState
+        } else if stationPool.isEmpty {
+            AdminPageStateCard(.empty(L10n.t("ما فيه ملفات ناقصة", "No incomplete profiles"),
+                                      message: focus != .all
+                                          ? L10n.t("لا أحد في هذا التصنيف — اختر «كل النواقص»",
+                                                   "Nobody in this category — pick “All issues”")
+                                          : nil,
+                                      tint: DS.Color.success))
+        } else {
+            stationProgress
+                .adminCard()
+        }
+    }
+
+    /// بطاقات الأعضاء + تلميح السحب، ثم «استخدام التطبيق»
+    private var stationContent: some View {
+        VStack(spacing: DS.Hub.stackSpacing) {
+            if !(memberVM.isLoading && memberVM.allMembers.isEmpty) && !stationPool.isEmpty {
+                AnyView(stationView)
+            }
+            if let usage = AppUsageStats.cached {
+                AdminUsageCard(usage: usage)
+            }
+        }
     }
 
     // MARK: - المحطة
 
     private var stationView: some View {
-        VStack(spacing: DS.Spacing.md) {
-            // ═══ شريحة التصنيف النشط — تبقى ظاهرة حتى لو فرغ التصنيف (لإلغائه) ═══
-            if focus != .all {
-                focusChip
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, DS.Spacing.lg)
-            }
-
-            if stationPool.isEmpty {
-                DSEmptyView(L10n.t("ما فيه ملفات ناقصة", "No incomplete profiles"),
-                            message: focus != .all
-                                ? L10n.t("لا أحد في هذا التصنيف — ألغِه لعرض كل النواقص",
-                                         "Nobody in this category — clear it to see all gaps")
-                                : nil,
-                            tint: DS.Color.success,
-                            style: .compact)
-                    .padding(.horizontal, DS.Spacing.lg)
-            } else {
-                // ═══ التقدّم ═══
-                stationProgress
-                    .padding(.horizontal, DS.Spacing.lg)
-
-                // ═══ تمرير أفقي سلس بين الأعضاء ═══
-                TabView(selection: $stationCursor) {
-                    // الفهارس ثابتة — إعادة بناء القائمة أثناء السحب كانت تقطّع الحركة.
-                    // التوفير يتم داخل البطاقة: الصورة تُحمَّل للقريبة فقط.
-                    ForEach(stationPool.indices, id: \.self) { index in
-                        stationCard(stationPool[index], loadsImage: abs(index - stationCursor) <= 1)
-                            .padding(.horizontal, DS.Spacing.lg)
-                            .tag(index)
-                    }
+        VStack(spacing: DS.Spacing.sm) {
+            // ═══ تمرير أفقي سلس بين الأعضاء ═══ (بعرض الشاشة — كل بطاقة بهامش الصفحة)
+            TabView(selection: $stationCursor) {
+                // الفهارس ثابتة — إعادة بناء القائمة أثناء السحب كانت تقطّع الحركة.
+                // التوفير يتم داخل البطاقة: الصورة تُحمَّل للقريبة فقط.
+                ForEach(stationPool.indices, id: \.self) { index in
+                    stationCard(stationPool[index], loadsImage: abs(index - stationCursor) <= 1)
+                        // أعلى الإطار لا وسطه — بلا فراغ بين بطاقة التقدّم وبطاقة العضو
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .tag(index)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: Self.stationCardHeight)
-
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "hand.draw")
-                        .dsGlyph(DS.Glyph.smCompact, weight: .semibold)
-                        .accessibilityHidden(true)
-                    Text(L10n.t("اسحب يميناً أو يساراً للتنقّل", "Swipe to move between members"))
-                        .dsFont(.caption)
-                }
-                .foregroundColor(DS.Color.textTertiary)
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: Self.stationCardHeight)
+            .padding(.horizontal, -DS.Spacing.lg)
+
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "hand.draw")
+                    .dsGlyph(DS.Glyph.smCompact, weight: .semibold)
+                    .accessibilityHidden(true)
+                Text(L10n.t("اسحب يميناً أو يساراً للتنقّل", "Swipe to move between members"))
+                    .dsFont(.caption)
+            }
+            .foregroundColor(DS.Color.textTertiary)
         }
     }
 
     /// ارتفاع شريط بطاقات المحطة (بطاقة العضو + صفّا إجراءات)
     private static let stationCardHeight: CGFloat = 340
 
-    /// التصنيف النشط (من «جودة البيانات») — × يرجّع لكل النواقص (بمقاس الشريحة الموحّدة وألوانها)
-    private var focusChip: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                .dsGlyph(DS.Glyph.sm)
-                .accessibilityHidden(true)
-            Text(focus.label)
-                .dsFont(.chip)
-                .lineLimit(1)
-            Button {
-                focus = .all
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .dsGlyph(DS.Glyph.mdCompact)
-                    .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, -(DS.Icon.tapTarget - DSBox.chipHeight) / 2)
-            .accessibilityLabel(L10n.t("إلغاء التصنيف", "Clear filter"))
-        }
-        .foregroundColor(stationTint)
-        .padding(.leading, DSBox.chipPadding)
-        .frame(minHeight: DSBox.chipHeight)
-        .background(Capsule().fill(stationTint.opacity(DS.Opacity.tintFill)))
-        .overlay(Capsule().strokeBorder(stationTint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
-    }
-
-    /// «٣ من ٤٥» + شريط التقدّم بلون القسم
+    /// «٣ من ٤٥» + التصنيف + شريط التقدّم
     private var stationProgress: some View {
-        VStack(spacing: DS.Spacing.xsm) {
-            HStack {
-                Text(L10n.t(
-                    "\(min(stationCursor + 1, stationPool.count)) من \(stationPool.count)",
-                    "\(min(stationCursor + 1, stationPool.count)) of \(stationPool.count)"
-                ))
-                .dsFieldFont(.chip)
-                .foregroundColor(DS.Color.fieldLabel)
-                .monospacedDigit()
-                Spacer()
+        let position = min(stationCursor + 1, stationPool.count)
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                Text(L10n.t("\(position) من \(stationPool.count)", "\(position) of \(stationPool.count)"))
+                    .dsFont(.headline)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .monospacedDigit()
+                Text(focus.label)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
                 if resolvedCount > 0 {
-                    DSStatusChip(text: L10n.t("أنجزت \(resolvedCount)", "\(resolvedCount) done"),
-                                  icon: "checkmark.circle.fill",
-                                  tint: DS.Color.success)
+                    AdminValueChip(text: L10n.t("أنجزت \(resolvedCount)", "\(resolvedCount) done"),
+                                   icon: "checkmark", tint: DS.Color.success)
                 }
             }
-
-            GeometryReader { geo in
-                let ratio = CGFloat(stationCursor + 1) / CGFloat(max(1, stationPool.count))
-                ZStack(alignment: .leading) {
-                    Capsule().fill(DS.Color.textTertiary.opacity(DS.Opacity.tintFill))
-                    Capsule().fill(stationTint)
-                        .frame(width: max(DS.Spacing.xsm, geo.size.width * min(1, ratio)))
-                }
-            }
-            .frame(height: DS.Spacing.xsm)
-            .animation(reduceMotion ? nil : DS.Anim.snappy, value: stationCursor)
-            .accessibilityHidden(true)
+            AdminMeter(progress: Double(position) / Double(max(1, stationPool.count)), tint: DS.Color.palm)
+                .animation(reduceMotion ? nil : DS.Anim.snappy, value: stationCursor)
         }
         .accessibilityElement(children: .combine)
     }
@@ -622,12 +621,12 @@ struct AdminActivateAccountsView: View {
             VStack(spacing: DS.Spacing.xxs) {
                 Text(member.shortFullName)
                     .dsFont(.title)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(member.displayFullName)
-                    .dsFieldFont(.footnote)
-                    .foregroundColor(DS.Color.fieldValue)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
@@ -647,7 +646,7 @@ struct AdminActivateAccountsView: View {
         }
         .padding(DS.Spacing.lg)
         .frame(maxWidth: .infinity)
-        .dsCard(padding: nil)
+        .adminCard(padding: nil)
     }
 
     /// زر إجراء أيقوني مع تسمية تحته (قرص الحالة المجسّم ٥٢ نقطة — فوق حد الضغط؛ المعطّل رمادي باهت)
@@ -693,10 +692,10 @@ struct AdminActivateAccountsView: View {
 
     // MARK: - Empty State
     private var emptyState: some View {
-        DSEmptyView(L10n.t("جميع الحسابات مفعلة والبيانات مكتملة", "All accounts activated and data complete"),
-                    message: L10n.t("تظهر هنا الملفات الناقصة أولاً بأول", "Incomplete profiles show up here as they appear"),
-                    tint: DS.Color.success,
-                    style: .compact)
+        AdminPageStateCard(.empty(L10n.t("جميع الحسابات مفعلة والبيانات مكتملة", "All accounts activated and data complete"),
+                                  message: L10n.t("تظهر هنا الملفات الناقصة أولاً بأول",
+                                                  "Incomplete profiles show up here as they appear"),
+                                  tint: DS.Color.success))
     }
 
     // MARK: - Helpers

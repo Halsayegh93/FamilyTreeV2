@@ -2,10 +2,9 @@ import SwiftUI
 
 // MARK: - Admin Members Registry — سجل الأعضاء
 //
-// تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): قائمة واحدة تتمرّر كلها —
-// صفّ أرقام حيّة (العنوان في رأس «إدارة الأعضاء» الملوّن) ← بحث ← فلاتر بالعدد ← مسار الفروع ← صفوف `.dsRowBox()`.
-// بقيت `List` لأجل السحب (تجميد/تفعيل/رقم) والتحميل التدريجي.
-// الضغط على الصف يفتح تفاصيل العضو، وعلى عدّاد الذرّية ينزل داخل الفرع — كما كان.
+// بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي (رجوع إلى «العائلة»، أرقام حيّة، شرائح الكل/الأحياء/
+// المتوفين) ← بطاقة البحث ومسار الفروع تصعد فوقه ← صفوف الأعضاء بطاقات بيضاء. بقيت `List` لأجل السحب
+// (تجميد/تفعيل/رقم) والتحميل التدريجي. الضغط على الصف يفتح تفاصيل العضو، وعلى عدّاد الذرّية ينزل داخل الفرع — كما كان.
 struct AdminMembersDirectoryView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -30,10 +29,6 @@ struct AdminMembersDirectoryView: View {
 
     /// لون مجال «الشجرة والأعضاء»
     private let tint = DS.Color.composerProject
-
-    /// الرأس الملوّن الموحّد (`.dsSubPageHeader`) حين تُفتح الصفحة وحدها؛ داخل «إدارة الأعضاء» (تبويب «السجل»)
-    /// رأس تلك الصفحة فوقها فلا يتكرّر — `AdminMembersManagementView` تمرّر false
-    var showsHeader: Bool = true
 
     // MARK: - Filter
 
@@ -229,7 +224,6 @@ struct AdminMembersDirectoryView: View {
                     }
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
         }
     }
 
@@ -298,97 +292,7 @@ struct AdminMembersDirectoryView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            List {
-                // 0) بطاقة الرأس — تتمرّر مع القائمة
-                hero
-                    .registryListRow(top: DS.Spacing.sm, bottom: DS.Spacing.sm)
-
-                // 1) البحث
-                DSSearchField(text: $searchText,
-                              placeholder: L10n.t("بحث بالاسم أو رقم الهاتف...", "Search by name or phone..."),
-                              tint: tint)
-                    .onChange(of: searchText) { _ in displayLimit = 20 }
-                    .registryListRow(top: 0, bottom: DS.Spacing.xxs)
-
-                // 2) فلتر الحالة (الكل/أحياء/متوفون)
-                filterChips
-                    .registryListRow(top: 0, bottom: 0)
-
-                if searchText.isEmpty {
-                    breadcrumbBar
-                        .registryListRow(top: 0, bottom: DS.Spacing.xxs, horizontal: 0)
-                }
-
-                if filteredMembers.isEmpty {
-                    noResultsState
-                        .registryListRow(top: DS.Spacing.sm)
-                } else if searchText.isEmpty {
-                    // تصفّح شجري — مستوى واحد في كل مرة
-                    // نمط الأخبار والديوانيات: أول ٧ صفوف تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
-                    ForEach(Array(currentLevelMembers.enumerated()), id: \.element.id) { index, member in
-                        branchRow(member)
-                            .dsCardCascade(index, appeared: appeared)
-                            .registryListRow()
-                    }
-                    if currentLevelMembers.isEmpty {
-                        DSEmptyView(L10n.t("ما فيه ذرّية مسجّلة لهذا الفرع", "No descendants recorded for this branch"),
-                                    style: .compact)
-                            .registryListRow(top: DS.Spacing.sm)
-                    }
-                } else {
-                    let visible = Array(filteredMembers.prefix(displayLimit))
-                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
-                        searchResultRow(member)
-                            .dsCardCascade(index, appeared: appeared)
-                            .registryListRow()
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                // التجميد/التفعيل للمدير فقط (كان canEditMembers يشمل المراقب)
-                                // لا تجميد للمالك ولا لنفسك (السيرفر يرفضهما أيضاً)
-                                if authVM.canFreezeMembers && member.isDeceased != true
-                                    && member.role != .owner && member.id != authVM.currentUser?.id {
-                                    if member.status == .frozen {
-                                        Button {
-                                            memberToActivate = member
-                                        } label: {
-                                            Label(L10n.t("تفعيل", "Activate"), systemImage: "lock.open.fill")
-                                        }
-                                        .tint(DS.Color.successFill)
-                                    } else {
-                                        Button {
-                                            memberToFreeze = member
-                                        } label: {
-                                            Label(L10n.t("تجميد", "Freeze"), systemImage: "lock.fill")
-                                        }
-                                        .tint(DS.Color.errorFill)
-                                    }
-                                }
-                            }
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                if authVM.canEditMembers && member.isDeceased != true {
-                                    Button {
-                                        memberToEditPhone = member
-                                    } label: {
-                                        Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
-                                    }
-                                    .tint(AppSection.admin.ink)
-                                }
-                            }
-                    }
-
-                    // Load more
-                    if displayLimit < filteredMembers.count {
-                        loadMoreButton
-                            .registryListRow(top: DS.Spacing.xs)
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .scrollDismissesKeyboard(.interactively)
-            .environment(\.defaultMinListRowHeight, 0)
+        AdminPage(header: header, lead: AnyView(searchCard), layout: .list, content: AnyView(listRows))
             .onAppear {
                 // دخول الصفوف مرة واحدة (نمط الأخبار والديوانيات) — الحركة نفسها في dsCardCascade؛
                 // بعد أول تخطيط (خلايا `List` تُبنى فيه) حتى تبدأ أول الصفوف مخفية ثم تصعد
@@ -396,78 +300,152 @@ struct AdminMembersDirectoryView: View {
                 if descendantCounts.isEmpty { buildDescendantCounts() }
             }
             .onChange(of: memberVM.allMembers.count) { _ in buildDescendantCounts() }
-        }
-        // تعديل / إضافة رقم — واجهة «رقم العضو» الموحّدة (تحفظ على السيرفر وتعتمد وتفعّل)
-        .dsCenterBox(item: $memberToEditPhone) { member in
-            PendingMemberPhoneSheet(member: member, activateOnSave: true)
-                .environmentObject(adminRequestVM)
-        }
-        // Freeze confirm
-        .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
-            BranchPickerSheet(
-                allMembers: memberVM.allMembers,
-                selectedId: branchRootId,
-                onSelect: { id in
-                    branchRootId = id
-                    branchPickerOpen = false
-                    displayLimit = 20
+            .onChange(of: searchText) { _ in displayLimit = 20 }
+            .onChange(of: selectedFilter) { _ in
+                displayLimit = 20
+                searchText = ""
+            }
+            // تعديل / إضافة رقم — واجهة «رقم العضو» الموحّدة (تحفظ على السيرفر وتعتمد وتفعّل)
+            .dsCenterBox(item: $memberToEditPhone) { member in
+                PendingMemberPhoneSheet(member: member, activateOnSave: true)
+                    .environmentObject(adminRequestVM)
+            }
+            .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
+                BranchPickerSheet(
+                    allMembers: memberVM.allMembers,
+                    selectedId: branchRootId,
+                    onSelect: { id in
+                        branchRootId = id
+                        branchPickerOpen = false
+                        displayLimit = 20
+                    }
+                )
+            }
+            // تأكيد التجميد/التفعيل — المربّع الوسطي الموحّد (`dsAlert`) بدل الورقة السفلية
+            .dsAlert(
+                memberToFreeze.map {
+                    L10n.t("تجميد حساب \($0.fullName)؟", "Freeze \($0.fullName)'s account?")
+                } ?? "",
+                isPresented: Binding(
+                    get: { memberToFreeze != nil },
+                    set: { if !$0 { memberToFreeze = nil } }
+                ),
+                presenting: memberToFreeze
+            ) { member in
+                Button(L10n.t("تجميد الحساب", "Freeze Account"), role: .destructive) {
+                    Task { await memberVM.setMemberStatus(memberId: member.id, status: .frozen) }
+                    memberToFreeze = nil
                 }
-            )
-        }
-        // تأكيد التجميد/التفعيل — المربّع الوسطي الموحّد (`dsAlert`) بدل الورقة السفلية
-        .dsAlert(
-            memberToFreeze.map {
-                L10n.t("تجميد حساب \($0.fullName)؟", "Freeze \($0.fullName)'s account?")
-            } ?? "",
-            isPresented: Binding(
-                get: { memberToFreeze != nil },
-                set: { if !$0 { memberToFreeze = nil } }
-            ),
-            presenting: memberToFreeze
-        ) { member in
-            Button(L10n.t("تجميد الحساب", "Freeze Account"), role: .destructive) {
-                Task { await memberVM.setMemberStatus(memberId: member.id, status: .frozen) }
-                memberToFreeze = nil
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { memberToFreeze = nil }
+            } message: { _ in
+                Text(L10n.t("لن يتمكن من الدخول للتطبيق.", "They won't be able to access the app."))
             }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { memberToFreeze = nil }
-        } message: { _ in
-            Text(L10n.t("لن يتمكن من الدخول للتطبيق.", "They won't be able to access the app."))
-        }
-        // Activate confirm
-        .dsAlert(
-            memberToActivate.map {
-                L10n.t("تفعيل حساب \($0.fullName)؟", "Activate \($0.fullName)'s account?")
-            } ?? "",
-            isPresented: Binding(
-                get: { memberToActivate != nil },
-                set: { if !$0 { memberToActivate = nil } }
-            ),
-            presenting: memberToActivate
-        ) { member in
-            Button(L10n.t("تفعيل الحساب", "Activate Account")) {
-                Task { await memberVM.setMemberStatus(memberId: member.id, status: .active) }
-                memberToActivate = nil
+            // Activate confirm
+            .dsAlert(
+                memberToActivate.map {
+                    L10n.t("تفعيل حساب \($0.fullName)؟", "Activate \($0.fullName)'s account?")
+                } ?? "",
+                isPresented: Binding(
+                    get: { memberToActivate != nil },
+                    set: { if !$0 { memberToActivate = nil } }
+                ),
+                presenting: memberToActivate
+            ) { member in
+                Button(L10n.t("تفعيل الحساب", "Activate Account")) {
+                    Task { await memberVM.setMemberStatus(memberId: member.id, status: .active) }
+                    memberToActivate = nil
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { memberToActivate = nil }
+            } message: { _ in
+                Text(L10n.t("سيتمكن من الدخول للتطبيق مجدداً.", "They will be able to access the app again."))
             }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { memberToActivate = nil }
-        } message: { _ in
-            Text(L10n.t("سيتمكن من الدخول للتطبيق مجدداً.", "They will be able to access the app again."))
-        }
-        // الرأس الملوّن الموحّد مثل بقية صفحات الإدارة (نفس نمط «إدارة الأعضاء»)
-        .modifier(RegistryHeader(shows: showsHeader))
     }
 
-    /// رأس «سجل الأعضاء» الملوّن — مرة واحدة فقط (لا يُرسم تحت رأس «إدارة الأعضاء»)
-    private struct RegistryHeader: ViewModifier {
-        let shows: Bool
-        func body(content: Content) -> some View {
-            if shows {
-                content.dsSubPageHeader(L10n.t("سجل الأعضاء", "Members Registry"),
-                                        subtitle: L10n.t("تصفّح الفروع، أو ابحث بالاسم أو الرقم",
-                                                         "Browse branches, or search by name or phone"))
-            } else {
-                content
+    /// صفوف القائمة تحت بطاقة البحث: الأعضاء (تصفّح شجري أو نتائج بحث) ثم «عرض المزيد»
+    @ViewBuilder
+    private var listRows: some View {
+        if filteredMembers.isEmpty {
+            noResultsState
+                .adminPageRow(top: DS.Hub.stackSpacing)
+        } else if searchText.isEmpty {
+            // تصفّح شجري — مستوى واحد في كل مرة
+            // نمط الأخبار والديوانيات: أول ٧ صفوف تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
+            AdminSectionLabel(title: drillPath.last.map { L10n.t("ذرّية \($0.firstName)", "\($0.firstName)'s line") }
+                                ?? L10n.t("رؤوس الفروع", "Branch heads"),
+                              trailing: currentLevelMembers.isEmpty ? nil : "\(currentLevelMembers.count)")
+                .adminPageRow(top: DS.Hub.stackSpacing, bottom: 0)
+            ForEach(Array(currentLevelMembers.enumerated()), id: \.element.id) { index, member in
+                branchRow(member)
+                    .dsCardCascade(index, appeared: appeared)
+                    .adminPageRow()
+            }
+            if currentLevelMembers.isEmpty {
+                AdminPageStateCard(.empty(L10n.t("ما فيه ذرّية مسجّلة لهذا الفرع",
+                                                 "No descendants recorded for this branch")))
+                    .adminPageRow(top: DS.Spacing.sm)
+            }
+        } else {
+            AdminSectionLabel(title: L10n.t("النتائج", "Results"), trailing: "\(filteredMembers.count)")
+                .adminPageRow(top: DS.Hub.stackSpacing, bottom: 0)
+            let visible = Array(filteredMembers.prefix(displayLimit))
+            ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
+                searchResultRow(member)
+                    .dsCardCascade(index, appeared: appeared)
+                    .adminPageRow()
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        // التجميد/التفعيل للمدير فقط (كان canEditMembers يشمل المراقب)
+                        // لا تجميد للمالك ولا لنفسك (السيرفر يرفضهما أيضاً)
+                        if authVM.canFreezeMembers && member.isDeceased != true
+                            && member.role != .owner && member.id != authVM.currentUser?.id {
+                            if member.status == .frozen {
+                                Button {
+                                    memberToActivate = member
+                                } label: {
+                                    Label(L10n.t("تفعيل", "Activate"), systemImage: "lock.open.fill")
+                                }
+                                .tint(DS.Color.successFill)
+                            } else {
+                                Button {
+                                    memberToFreeze = member
+                                } label: {
+                                    Label(L10n.t("تجميد", "Freeze"), systemImage: "lock.fill")
+                                }
+                                .tint(DS.Color.errorFill)
+                            }
+                        }
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        if authVM.canEditMembers && member.isDeceased != true {
+                            Button {
+                                memberToEditPhone = member
+                            } label: {
+                                Label(L10n.t("رقم", "Number"), systemImage: "phone.badge.plus")
+                            }
+                            .tint(AppSection.admin.ink)
+                        }
+                    }
+            }
+
+            // Load more
+            if displayLimit < filteredMembers.count {
+                loadMoreButton
+                    .adminPageRow(top: DS.Spacing.sm)
             }
         }
+    }
+
+    /// بطاقة البحث (تصعد فوق الرأس) + مسار الفروع تحت الحقل
+    private var searchCard: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            DSSearchField(text: $searchText,
+                          placeholder: L10n.t("بحث بالاسم أو رقم الهاتف...", "Search by name or phone..."),
+                          tint: tint)
+            if searchText.isEmpty {
+                breadcrumbBar
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard(padding: DS.Spacing.md)
     }
 
     // MARK: - بطاقة الرأس
@@ -483,35 +461,42 @@ struct AdminMembersDirectoryView: View {
         return (total, branches, withPhone)
     }
 
-    /// الأرقام السريعة — العنوان والوصف في رأس «إدارة الأعضاء» الملوّن
-    private var hero: some View {
+    /// الرأس الكحلي: الأرقام الحيّة + شرائح الحالة (الكل/الأحياء/المتوفين بعددها) + تسجيل عضو (للمالك والمدير)
+    private var header: AdminPageHeader {
         let n = heroNumbers
         let ready = !memberVM.allMembers.isEmpty
-        return DSStatsRow([
-            DSHeroStat(value: ready ? "\(n.total)" : "—",
-                       label: L10n.t("الأفراد", "Members"), icon: "person.3.fill"),
-            DSHeroStat(value: ready ? "\(n.branches)" : "—",
-                       label: L10n.t("الفروع", "Branches"), icon: "arrow.triangle.branch"),
-            DSHeroStat(value: ready ? "\(n.withPhone)" : "—",
-                       label: L10n.t("لهم رقم", "With phone"), icon: "phone.fill")
-        ], tint: tint)
+        var actions: [AdminPageAction] = []
+        // تسجيل عضو جديد — للمالك والمدير فقط (canRegisterMembers)
+        if authVM.canRegisterMembers {
+            actions.append(AdminPageAction(symbol: "person.badge.plus",
+                                           label: L10n.t("تسجيل عضو جديد", "Register new member"),
+                                           tap: .page { AnyView(AdminRegisterMemberView()) }))
+        }
+        return AdminPageHeader(
+            title: AdminMembersManagementView.Tab.directory.title,
+            subtitle: AdminMembersManagementView.Tab.directory.subtitle,
+            glyph: AdminMembersManagementView.Tab.directory.icon,
+            kpis: [
+                AdminPageKPI(AdminPageKPI.count(n.total, ready: ready), L10n.t("الأفراد", "Members"), icon: "person.3"),
+                AdminPageKPI(AdminPageKPI.count(n.branches, ready: ready), L10n.t("الفروع", "Branches"),
+                             icon: "arrow.triangle.branch", tint: DS.Hub.kpiMine),
+                AdminPageKPI(AdminPageKPI.count(n.withPhone, ready: ready), L10n.t("لهم رقم", "With phone"),
+                             icon: "phone", tint: DS.Hub.kpiLate)
+            ],
+            actions: actions,
+            chips: filterChips)
     }
 
     // MARK: - Filter Chips
 
-    private var filterChips: some View {
-        DSFilterChips(
-            options: RegistryFilter.allCases.map { filter in
-                let n = count(for: filter)
-                return DSFilterOption(id: filter, title: filter.label, icon: filter.icon,
-                                      count: n > 0 ? n : nil)
-            },
-            selection: $selectedFilter,
-            tint: tint
-        )
-        .onChange(of: selectedFilter) { _ in
-            displayLimit = 20
-            searchText = ""
+    /// شرائح الحالة فوق الرأس — اختيارها يرجع «عرض المزيد» للبداية ويمسح البحث (كما كان)
+    private var filterChips: [AdminPageChip] {
+        RegistryFilter.allCases.map { filter in
+            let n = count(for: filter)
+            return AdminPageChip(id: filter.rawValue, title: filter.label, count: n > 0 ? n : nil,
+                                 icon: filter.icon, selected: selectedFilter == filter) {
+                withAnimation(DS.Anim.snappy) { selectedFilter = filter }
+            }
         }
     }
 
@@ -529,8 +514,8 @@ struct AdminMembersDirectoryView: View {
                 // سطران: الاسم، ثم شارة العضو والهاتف — بلا تكرار الاسم
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     Text(member.shortFullName)
-                        .dsFieldFont(.rowTitle)
-                        .foregroundColor(muted ? DS.Color.textTertiary : DS.Color.fieldLabel)
+                        .dsFont(.hubRow)
+                        .foregroundColor(muted ? DS.Color.textTertiary : DS.Color.textPrimary)
                         .lineLimit(1)
 
                     HStack(spacing: DS.Spacing.xsm) {
@@ -546,7 +531,7 @@ struct AdminMembersDirectoryView: View {
                                     .monospacedDigit()
                                     .lineLimit(1)
                             }
-                            .foregroundColor(DS.Color.fieldValue)
+                            .foregroundColor(DS.Color.textTertiary)
                         }
 
                         Spacer(minLength: 0)
@@ -561,7 +546,9 @@ struct AdminMembersDirectoryView: View {
             trailing()
         }
         .frame(minHeight: DS.Icon.tapTarget)
-        .dsRowBox()
+        .padding(.horizontal, DS.Hub.cardPadding)
+        .padding(.vertical, DS.Spacing.md)
+        .adminCard(padding: nil)
         .contentShape(Rectangle())
     }
 
@@ -589,7 +576,7 @@ struct AdminMembersDirectoryView: View {
             .foregroundColor(DS.Color.textOnPrimary)
             .frame(width: DS.Icon.avatarBadge, height: DS.Icon.avatarBadge)
             .background(Circle().fill(color))
-            .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: DS.Border.widthBold))
+            .overlay(Circle().strokeBorder(DS.Color.surface, lineWidth: DS.Border.widthBold))
             .offset(x: DS.Spacing.xxs, y: DS.Spacing.xxs)
     }
 
@@ -601,12 +588,12 @@ struct AdminMembersDirectoryView: View {
         return parts.joined(separator: "، ")
     }
 
-    /// «عرض المزيد» — الشريحة الموحّدة بلون المجال في وسط السطر
+    /// «عرض المزيد» — زرّ الكبسولة الهادئ في وسط السطر
     private var loadMoreButton: some View {
-        DSChipButton(L10n.t(
+        AdminPillButton(title: L10n.t(
             "عرض المزيد (\(filteredMembers.count - displayLimit) متبقي)",
             "Show more (\(filteredMembers.count - displayLimit) remaining)"
-        ), icon: "arrow.down.circle.fill", tint: tint) {
+        ), icon: "arrow.down.circle.fill", style: .soft, height: DS.Hub.pillHeightCard) {
             displayLimit += 20
         }
         .frame(maxWidth: .infinity)
@@ -615,21 +602,7 @@ struct AdminMembersDirectoryView: View {
     // MARK: - Empty States
 
     private var noResultsState: some View {
-        DSEmptyView(L10n.t("لا يوجد نتائج", "No results found"),
-                    message: L10n.t("جرّب اسماً آخر أو غيّر الفلتر", "Try another name or change the filter"),
-                    style: .compact)
-    }
-}
-
-// MARK: - صف القائمة الشفاف (نمط صفحات الإدارة)
-
-private extension View {
-    /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
-    func registryListRow(top: CGFloat = DS.Spacing.xs, bottom: CGFloat = DS.Spacing.xs,
-                         horizontal: CGFloat = DS.Spacing.lg) -> some View {
-        self
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: top, leading: horizontal, bottom: bottom, trailing: horizontal))
+        AdminPageStateCard(.empty(L10n.t("لا يوجد نتائج", "No results found"),
+                                  message: L10n.t("جرّب اسماً آخر أو غيّر الفلتر", "Try another name or change the filter")))
     }
 }

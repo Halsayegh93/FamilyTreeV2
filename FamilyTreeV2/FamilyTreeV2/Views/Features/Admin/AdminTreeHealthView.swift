@@ -4,10 +4,9 @@ import Supabase
 // MARK: - Admin Tree Health View
 /// واجهة صحة الشجرة — تكشف الأعضاء المشكلين (يتائم، بدون أسماء، روابط مكسورة)
 ///
-/// بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بلون مجال «الشجرة
-/// والأعضاء» وأرقامها الحيّة ← حلقة «سلامة الشجرة» ← بحث + فلاتر المشاكل بعددها ←
-/// صفوف `.dsRowBox()` داخل `List` (بقيت لأجل أزرار السحب). الإجراءات والتأكيدات
-/// والمربّعات كما كانت تماماً.
+/// بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي (رجوع، المشاكل بأنواعها أرقاماً، شرائح
+/// الفلاتر بعددها) ← بطاقة «سلامة الشجرة» تصعد فوقه ← بحث ← صفوف الأعضاء بطاقات بيضاء داخل `List` (بقيت لأجل
+/// أزرار السحب). الإجراءات والتأكيدات والمربّعات كما كانت تماماً.
 struct AdminTreeHealthView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @State private var appeared = false
@@ -179,219 +178,198 @@ struct AdminTreeHealthView: View {
     // MARK: - Body
 
     var body: some View {
-        // صفّ الأرقام ← الحلقة ← البحث والفلاتر ← الأعضاء: قائمة واحدة تتمرّر معاً
+        // الرأس (الأرقام والفلاتر) ← بطاقة السلامة ← البحث ← الأعضاء: قائمة واحدة تتمرّر معاً
         // (بقيت `List` لأجل أزرار السحب)
-        List {
-                heroSection
-                    .healthListRow(top: DS.Spacing.sm, bottom: DS.Spacing.sm)
-
-                if isCheckingTree {
-                    DSPageLoader(L10n.t("جاري فحص الشجرة...", "Checking tree health..."), fillsSpace: false)
-                        .padding(.top, DS.Spacing.xl)
-                        .dsStaggerIn(1)
-                        .healthListRow()
-                } else if membersFailed {
-                    DSStateCard(icon: "wifi.exclamationmark",
-                                 title: L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
-                                 hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                                 tint: DS.Color.error,
-                                 actionTitle: L10n.t("إعادة المحاولة", "Retry"),
-                                 action: { Task { await memberVM.fetchAllMembers(force: true) } })
-                        .padding(.top, DS.Spacing.xs)
-                        .dsStaggerIn(1)
-                        .healthListRow()
-                } else if cachedIssueMembers.isEmpty {
-                    emptyState
-                        .padding(.top, DS.Spacing.xl)
-                        .dsStaggerIn(1)
-                        .healthListRow()
-                } else {
-                    let members = filteredMembers
-
-                    healthScoreRow
-                        .dsStaggerIn(1)
-                        .healthListRow()
-
-                    // Search
-                    DSSearchField(text: $searchText,
-                                  placeholder: L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."),
-                                  tint: pageTint)
-                        .dsStaggerIn(2)
-                        .healthListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xxs)
-
-                    filterChips
-                        .dsStaggerIn(2)
-                        .healthListRow(top: 0, bottom: 0)
-
-                    // عنوان الفلتر المختار + تلميح السحب
-                    DSSectionTitle(title: selectedFilter.label,
-                                    icon: selectedFilter.icon,
-                                    tint: selectedFilter.color,
-                                    trailing: members.isEmpty ? nil
-                                        : L10n.t("← سحب لإجراءات سريعة →", "← Swipe for quick actions →"))
-                        .dsStaggerIn(3)
-                        // العنوان يظهر مع الصفوف (بعد الفحص) — فتبدأ الصفوف بعده
-                        .onAppear(perform: startRowsCascade)
-                        .healthListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xxs)
-
-                    if members.isEmpty {
-                        noResultsState
-                            .padding(.top, DS.Spacing.xs)
-                            .healthListRow()
-                    } else {
-                        let visible = Array(members.prefix(displayLimit))
-                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
-                            let memberIssues = cachedMemberIssues[member.id] ?? []
-                            memberRow(member: member)
-                                // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
-                                .dsCardCascade(index, appeared: appeared)
-                                .healthListRow()
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button(role: .destructive) {
-                                        memberToDelete = member
-                                        showDeleteConfirm = true
-                                    } label: {
-                                        Label(L10n.t("حذف", "Delete"), systemImage: "trash")
-                                    }
-                                    if memberIssues.contains(.orphan) || memberIssues.contains(.brokenParent) {
-                                        Button {
-                                            memberToLinkFather = member
-                                        } label: {
-                                            Label(L10n.t("ربط أب", "Link Father"), systemImage: "person.line.dotted.person")
-                                        }
-                                        .tint(DS.Color.info)
-                                    }
-                                    if memberIssues.contains(.noName) {
-                                        Button {
-                                            memberToEditName = member
-                                        } label: {
-                                            Label(L10n.t("تعديل اسم", "Edit Name"), systemImage: "pencil")
-                                        }
-                                        .tint(DS.Color.warning)
-                                    }
-                                    if memberIssues.contains(.duplicatePhone) {
-                                        Button {
-                                            memberToClearPhone = member
-                                            showClearPhoneConfirm = true
-                                        } label: {
-                                            Label(L10n.t("مسح الرقم", "Clear Phone"), systemImage: "phone.badge.minus")
-                                        }
-                                        .tint(DS.Color.neonPink)
-                                    }
-                                }
-                                .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                                    Button {
-                                        memberToToggleHidden = member
-                                        showToggleHiddenConfirm = true
-                                    } label: {
-                                        Label(
-                                            member.isHiddenFromTree
-                                                ? L10n.t("إظهار", "Show")
-                                                : L10n.t("إخفاء", "Hide"),
-                                            systemImage: member.isHiddenFromTree ? "eye" : "eye.slash"
-                                        )
-                                    }
-                                    .tint(member.isHiddenFromTree ? DS.Color.success : DS.Color.textTertiary)
-                                }
-                        }
-
-                        if displayLimit < members.count {
-                            showMoreButton(remaining: members.count - displayLimit)
-                                .healthListRow(top: DS.Spacing.xs, bottom: DS.Spacing.lg)
-                        }
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .scrollDismissesKeyboard(.interactively)
-            .environment(\.defaultMinListRowHeight, 0)
+        AdminPage(header: header, lead: AnyView(leadCard), layout: .list, content: AnyView(listRows))
             .onChange(of: searchText) { _ in displayLimit = 20 }
-        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
-        .dsSubPageHeader(L10n.t("صحة الشجرة", "Tree Health"),
-                         subtitle: L10n.t("أعضاء يحتاجون ربطاً أو تصحيحاً في الشجرة",
-                                          "Members who need a link or a fix in the tree"))
-        .dsAlert(
-            L10n.t("تأكيد", "Confirm"),
-            isPresented: $showToggleHiddenConfirm,
-            presenting: memberToToggleHidden
-        ) { member in
-            Button(member.isHiddenFromTree
-                   ? L10n.t("إظهار بالشجرة", "Show in Tree")
-                   : L10n.t("إخفاء من الشجرة", "Hide from Tree")
-            ) {
-                Task { await toggleHidden(member) }
+            .dsAlert(
+                L10n.t("تأكيد", "Confirm"),
+                isPresented: $showToggleHiddenConfirm,
+                presenting: memberToToggleHidden
+            ) { member in
+                Button(member.isHiddenFromTree
+                       ? L10n.t("إظهار بالشجرة", "Show in Tree")
+                       : L10n.t("إخفاء من الشجرة", "Hide from Tree")
+                ) {
+                    Task { await toggleHidden(member) }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: { member in
+                Text(member.isHiddenFromTree
+                     ? L10n.t("إظهار \(member.fullName) بالشجرة؟", "Show \(member.fullName) in tree?")
+                     : L10n.t("إخفاء \(member.fullName) من الشجرة؟", "Hide \(member.fullName) from tree?")
+                )
             }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: { member in
-            Text(member.isHiddenFromTree
-                 ? L10n.t("إظهار \(member.fullName) بالشجرة؟", "Show \(member.fullName) in tree?")
-                 : L10n.t("إخفاء \(member.fullName) من الشجرة؟", "Hide \(member.fullName) from tree?")
-            )
-        }
-        .dsAlert(
-            L10n.t("حذف العضو نهائياً", "Delete Member Permanently"),
-            isPresented: $showDeleteConfirm,
-            presenting: memberToDelete
-        ) { member in
-            Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                Task {
-                    if await !memberVM.deleteMember(memberId: member.id) {
-                        deleteFailureText = memberVM.errorMessage
-                        showDeleteFailure = true
+            .dsAlert(
+                L10n.t("حذف العضو نهائياً", "Delete Member Permanently"),
+                isPresented: $showDeleteConfirm,
+                presenting: memberToDelete
+            ) { member in
+                Button(L10n.t("حذف", "Delete"), role: .destructive) {
+                    Task {
+                        if await !memberVM.deleteMember(memberId: member.id) {
+                            deleteFailureText = memberVM.errorMessage
+                            showDeleteFailure = true
+                        }
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: { member in
+                Text(L10n.t(
+                    "هل أنت متأكد من حذف \(member.fullName)؟ هذا الإجراء لا يمكن التراجع عنه.",
+                    "Are you sure you want to delete \(member.fullName)? This action cannot be undone."
+                ))
+            }
+            .dsAlert(L10n.t("لم يُحذف العضو", "Member Not Deleted"), isPresented: $showDeleteFailure) {
+                Button(L10n.t("حسناً", "OK")) {}
+            } message: {
+                Text(deleteFailureText ?? "")
+            }
+            .dsAlert(
+                L10n.t("مسح رقم الهاتف", "Clear Phone Number"),
+                isPresented: $showClearPhoneConfirm,
+                presenting: memberToClearPhone
+            ) { member in
+                Button(L10n.t("مسح", "Clear"), role: .destructive) {
+                    Task {
+                        _ = await memberVM.clearPhoneNumber(for: member.id)
+                        rebuildCache()
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: { member in
+                let phone = member.phoneNumber ?? ""
+                Text(L10n.t(
+                    "مسح رقم \(KuwaitPhone.display(phone)) من \(member.fullName)؟",
+                    "Clear \(KuwaitPhone.display(phone)) from \(member.fullName)?"
+                ))
+            }
+            // مربّعات بمنتصف الشاشة بدل الأوراق السفلية (طلب المالك)
+            .dsTallBox(item: $memberToLinkFather) { member in   // قائمة أعضاء طويلة — مربّع طويل (توصية أبل)
+                LinkFatherSheet(member: member, memberVM: memberVM)
+            }
+            .dsCenterBox(item: $memberToEditName) { member in
+                EditNameSheet(member: member, memberVM: memberVM)
+            }
+            .onAppear {
+                rebuildCache()
+                if (cachedCounts[selectedFilter] ?? 0) == 0 {
+                    if let first = TreeIssueFilter.allCases.first(where: { (cachedCounts[$0] ?? 0) > 0 }) {
+                        selectedFilter = first
                     }
                 }
             }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: { member in
-            Text(L10n.t(
-                "هل أنت متأكد من حذف \(member.fullName)؟ هذا الإجراء لا يمكن التراجع عنه.",
-                "Are you sure you want to delete \(member.fullName)? This action cannot be undone."
-            ))
+            .onChange(of: memberVM.membersVersion) { _ in
+                rebuildCache()
+            }
+            .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// بطاقة أعلى الصفحة (تصعد فوق الرأس): الفحص، أو تعذّر التحميل، أو «الشجرة سليمة»، أو حلقة السلامة
+    @ViewBuilder
+    private var leadCard: some View {
+        if isCheckingTree {
+            AdminPageStateCard(.loading(L10n.t("جاري فحص الشجرة...", "Checking tree health...")))
+        } else if membersFailed {
+            AdminPageStateCard(.error(L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
+                                      message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                                      retry: { Task { await memberVM.fetchAllMembers(force: true) } }))
+        } else if cachedIssueMembers.isEmpty {
+            emptyState
+        } else {
+            healthScoreRow
+                .adminCard()
         }
-        .dsAlert(L10n.t("لم يُحذف العضو", "Member Not Deleted"), isPresented: $showDeleteFailure) {
-            Button(L10n.t("حسناً", "OK")) {}
-        } message: {
-            Text(deleteFailureText ?? "")
-        }
-        .dsAlert(
-            L10n.t("مسح رقم الهاتف", "Clear Phone Number"),
-            isPresented: $showClearPhoneConfirm,
-            presenting: memberToClearPhone
-        ) { member in
-            Button(L10n.t("مسح", "Clear"), role: .destructive) {
-                Task {
-                    _ = await memberVM.clearPhoneNumber(for: member.id)
-                    rebuildCache()
+    }
+
+    /// البحث ← عنوان الفلتر المختار ← صفوف الأعضاء بأزرار السحب ← «عرض المزيد»
+    @ViewBuilder
+    private var listRows: some View {
+        if !isCheckingTree && !membersFailed && !cachedIssueMembers.isEmpty {
+            let members = filteredMembers
+
+            // Search
+            DSSearchField(text: $searchText,
+                          placeholder: L10n.t("بحث بالاسم أو الرقم...", "Search by name or phone..."),
+                          tint: pageTint)
+                .dsStaggerIn(2)
+                .adminPageRow(top: DS.Hub.stackSpacing, bottom: DS.Spacing.xxs)
+
+            // عنوان الفلتر المختار + تلميح السحب
+            AdminSectionLabel(title: selectedFilter.label,
+                              trailing: members.isEmpty ? nil
+                                  : L10n.t("← سحب لإجراءات سريعة →", "← Swipe for quick actions →"))
+                .dsStaggerIn(3)
+                // العنوان يظهر مع الصفوف (بعد الفحص) — فتبدأ الصفوف بعده
+                .onAppear(perform: startRowsCascade)
+                .adminPageRow(top: DS.Spacing.xs, bottom: 0)
+
+            if members.isEmpty {
+                noResultsState
+                    .adminPageRow(top: DS.Spacing.xs)
+            } else {
+                let visible = Array(members.prefix(displayLimit))
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, member in
+                    let memberIssues = cachedMemberIssues[member.id] ?? []
+                    memberRow(member: member)
+                        // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
+                        .dsCardCascade(index, appeared: appeared)
+                        .adminPageRow()
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                memberToDelete = member
+                                showDeleteConfirm = true
+                            } label: {
+                                Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                            }
+                            if memberIssues.contains(.orphan) || memberIssues.contains(.brokenParent) {
+                                Button {
+                                    memberToLinkFather = member
+                                } label: {
+                                    Label(L10n.t("ربط أب", "Link Father"), systemImage: "person.line.dotted.person")
+                                }
+                                .tint(DS.Color.info)
+                            }
+                            if memberIssues.contains(.noName) {
+                                Button {
+                                    memberToEditName = member
+                                } label: {
+                                    Label(L10n.t("تعديل اسم", "Edit Name"), systemImage: "pencil")
+                                }
+                                .tint(DS.Color.warning)
+                            }
+                            if memberIssues.contains(.duplicatePhone) {
+                                Button {
+                                    memberToClearPhone = member
+                                    showClearPhoneConfirm = true
+                                } label: {
+                                    Label(L10n.t("مسح الرقم", "Clear Phone"), systemImage: "phone.badge.minus")
+                                }
+                                .tint(DS.Color.neonPink)
+                            }
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button {
+                                memberToToggleHidden = member
+                                showToggleHiddenConfirm = true
+                            } label: {
+                                Label(
+                                    member.isHiddenFromTree
+                                        ? L10n.t("إظهار", "Show")
+                                        : L10n.t("إخفاء", "Hide"),
+                                    systemImage: member.isHiddenFromTree ? "eye" : "eye.slash"
+                                )
+                            }
+                            .tint(member.isHiddenFromTree ? DS.Color.success : DS.Color.textTertiary)
+                        }
+                }
+
+                if displayLimit < members.count {
+                    showMoreButton(remaining: members.count - displayLimit)
+                        .adminPageRow(top: DS.Spacing.sm, bottom: DS.Spacing.lg)
                 }
             }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: { member in
-            let phone = member.phoneNumber ?? ""
-            Text(L10n.t(
-                "مسح رقم \(KuwaitPhone.display(phone)) من \(member.fullName)؟",
-                "Clear \(KuwaitPhone.display(phone)) from \(member.fullName)?"
-            ))
         }
-        // مربّعات بمنتصف الشاشة بدل الأوراق السفلية (طلب المالك)
-        .dsTallBox(item: $memberToLinkFather) { member in   // قائمة أعضاء طويلة — مربّع طويل (توصية أبل)
-            LinkFatherSheet(member: member, memberVM: memberVM)
-        }
-        .dsCenterBox(item: $memberToEditName) { member in
-            EditNameSheet(member: member, memberVM: memberVM)
-        }
-        .onAppear {
-            rebuildCache()
-            if (cachedCounts[selectedFilter] ?? 0) == 0 {
-                if let first = TreeIssueFilter.allCases.first(where: { (cachedCounts[$0] ?? 0) > 0 }) {
-                    selectedFilter = first
-                }
-            }
-        }
-        .onChange(of: memberVM.membersVersion) { _ in
-            rebuildCache()
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     /// الصفوف تدخل بعد أقسام الصفحة فوقها (الحلقة ← البحث والفلاتر ← العنوان = ٣)، فيبقى التسلسل:
@@ -422,22 +400,29 @@ struct AdminTreeHealthView: View {
 
     // MARK: - Hero
 
-    /// ٣ أرقام حيّة من الفحص المحلي نفسه (بلا طلبات جديدة للسيرفر) — «—» قبل اكتماله
-    private var heroSection: some View {
+    /// الرأس الكحلي: المشاكل بأنواعها أرقاماً (من الفحص المحلي نفسه، بلا طلبات جديدة) — «—» قبل اكتماله —
+    /// والضغط على نوع يختار فلتره؛ وشرائح الفلاتر الخمسة بعددها
+    private var header: AdminPageHeader {
         let ready = !isCheckingTree && !membersFailed
-        func value(_ n: Int) -> String { ready ? "\(n)" : "—" }
-        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
-        return DSStatsRow([
-                DSHeroStat(value: value(cachedIssueMembers.count),
-                           label: L10n.t("يحتاجون مراجعة", "Need review"),
-                           icon: "exclamationmark.triangle.fill"),
-                DSHeroStat(value: value(cachedCounts[.orphan] ?? 0),
-                           label: TreeIssueFilter.orphan.label,
-                           icon: TreeIssueFilter.orphan.icon),
-                DSHeroStat(value: value(cachedCounts[.brokenParent] ?? 0),
-                           label: TreeIssueFilter.brokenParent.label,
-                           icon: TreeIssueFilter.brokenParent.icon)
-        ], tint: pageTint)
+        func value(_ n: Int) -> String { AdminPageKPI.count(n, ready: ready) }
+        func pick(_ f: TreeIssueFilter) -> AdminPageTap {
+            .action { withAnimation(DS.Anim.snappy) { filterSelection.wrappedValue = f } }
+        }
+        return AdminPageHeader(
+            title: L10n.t("صحة الشجرة", "Tree Health"),
+            subtitle: L10n.t("أعضاء يحتاجون ربطاً أو تصحيحاً في الشجرة",
+                             "Members who need a link or a fix in the tree"),
+            glyph: "stethoscope",
+            // الأنواع الثلاثة الأهم (السلامة الكلية في صفّ النسبة) — أربعة مربّعات تقصّ «رابط مكسور» بالخط الكبير
+            kpis: [
+                AdminPageKPI(value(cachedCounts[.orphan] ?? 0), TreeIssueFilter.orphan.label,
+                             icon: TreeIssueFilter.orphan.icon, tint: DS.Hub.kpiHot, tap: pick(.orphan)),
+                AdminPageKPI(value(cachedCounts[.brokenParent] ?? 0), TreeIssueFilter.brokenParent.label,
+                             icon: TreeIssueFilter.brokenParent.icon, tint: DS.Hub.kpiLate, tap: pick(.brokenParent)),
+                AdminPageKPI(value(cachedCounts[.duplicatePhone] ?? 0), TreeIssueFilter.duplicatePhone.label,
+                             icon: TreeIssueFilter.duplicatePhone.icon, tint: DS.Hub.kpiMine, tap: pick(.duplicatePhone))
+            ],
+            chips: ready && !cachedIssueMembers.isEmpty ? filterChips : [])
     }
 
     // MARK: - Health Score
@@ -451,39 +436,11 @@ struct AdminTreeHealthView: View {
     /// حلقة «سلامة الشجرة» — لا تعرض ١٠٠٪ ما دامت هناك ملاحظة واحدة
     private var healthScoreRow: some View {
         let score = healthScore
-        let pct = cachedIssueMembers.isEmpty ? 100 : min(99, Int((score * 100).rounded(.down)))
-        let ringTint = score >= 0.9 ? DS.Color.success
-            : (score >= 0.6 ? DS.Color.warning : DS.Color.error)
-        return HStack(spacing: DS.Spacing.md) {
-            DSRing(progress: score, tint: ringTint, lineWidth: DS.Spacing.xsm, size: DS.Icon.sizeLg) {
-                Text(L10n.t("\(pct)٪", "\(pct)%"))
-                    .dsFieldFont(.rowTitleCompact)
-                    .foregroundColor(DS.Color.fieldLabel)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(L10n.t("سلامة الشجرة", "Tree integrity"))
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
-                Text(L10n.t("بلا ملاحظات: \(cachedCleanCount) من \(cachedCheckedCount)",
-                            "No issues: \(cachedCleanCount) of \(cachedCheckedCount)"))
-                    .dsFieldFont(.subtitle)
-                    .foregroundColor(DS.Color.fieldValue)
-                    .monospacedDigit()
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .dsRowBox()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(L10n.t(
-            "سلامة الشجرة \(pct)٪، بلا ملاحظات: \(cachedCleanCount) من \(cachedCheckedCount)",
-            "Tree integrity \(pct)%, no issues: \(cachedCleanCount) of \(cachedCheckedCount)"
-        ))
+        let shown = cachedIssueMembers.isEmpty ? 1 : min(0.99, score)
+        return AdminScoreRow(progress: shown,
+                             title: L10n.t("سلامة الشجرة", "Tree integrity"),
+                             subtitle: L10n.t("بلا ملاحظات: \(cachedCleanCount) من \(cachedCheckedCount)",
+                                              "No issues: \(cachedCleanCount) of \(cachedCheckedCount)"))
     }
 
     // MARK: - Filter Chips
@@ -499,18 +456,16 @@ struct AdminTreeHealthView: View {
         )
     }
 
-    private var filterChips: some View {
-        DSFilterChips(
-            options: TreeIssueFilter.allCases.map { filter in
-                let filterCount = cachedCounts[filter] ?? 0
-                return DSFilterOption(id: filter,
-                                      title: filter.label,
-                                      icon: filter.icon,
-                                      count: filterCount > 0 ? filterCount : nil)
-            },
-            selection: filterSelection,
-            tint: pageTint
-        )
+    /// شرائح الفلاتر فوق الرأس بعدد كل مشكلة
+    private var filterChips: [AdminPageChip] {
+        TreeIssueFilter.allCases.map { filter in
+            let filterCount = cachedCounts[filter] ?? 0
+            return AdminPageChip(id: filter.rawValue, title: filter.label,
+                                 count: filterCount > 0 ? filterCount : nil, icon: filter.icon,
+                                 selected: selectedFilter == filter) {
+                withAnimation(DS.Anim.snappy) { filterSelection.wrappedValue = filter }
+            }
+        }
     }
 
     // MARK: - Member Row
@@ -529,25 +484,25 @@ struct AdminTreeHealthView: View {
                 // Avatar
                 Text(displayName.isEmpty ? "?" : String(displayName.prefix(1)))
                     .dsFont(.rowTitle)
-                    .foregroundColor(tint)
-                    .frame(width: DS.Icon.row, height: DS.Icon.row)
-                    .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
-                        .fill(tint.opacity(DS.Opacity.tintFill)))
+                    .foregroundColor(tint.dsReadableGlyph)
+                    .frame(width: DS.Hub.iconSquare, height: DS.Hub.iconSquare)
+                    .background(RoundedRectangle(cornerRadius: DS.Hub.iconSquareRadius, style: .continuous)
+                        .fill(tint.dsReadableGlyph.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     // Name
                     Text(displayName.isEmpty ? L10n.t("بدون اسم", "No Name") : displayName)
-                        .dsFieldFont(.rowTitle)
-                        .foregroundColor(displayName.isEmpty ? DS.Color.textTertiary : DS.Color.fieldLabel)
+                        .dsFont(.hubRow)
+                        .foregroundColor(displayName.isEmpty ? DS.Color.textTertiary : DS.Color.textPrimary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
                     // Phone
                     if hasPhone {
                         Text(phone)
-                            .dsFieldFont(.subtitle)
-                            .foregroundColor(DS.Color.fieldValue)
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.textTertiary)
                             .monospacedDigit()
                             .lineLimit(1)
                             .environment(\.layoutDirection, .leftToRight)
@@ -561,14 +516,16 @@ struct AdminTreeHealthView: View {
                     .fixedSize()
             }
 
-            // Issue tags — تبدأ تحت الاسم (بعد عمود الأيقونة ٣٢ + ٨)
+            // Issue tags — تبدأ تحت الاسم (بعد عمود الأيقونة ٣٦ + ٨)
             if !issues.isEmpty {
                 issueTags(issues)
-                    .padding(.leading, DS.Spacing.xxxxl)
+                    .padding(.leading, DS.Hub.iconSquare + DS.Spacing.sm)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .dsRowBox()
+        .padding(.horizontal, DS.Hub.cardPadding)
+        .padding(.vertical, DS.Spacing.md)
+        .adminCard(padding: nil)
         .accessibilityElement(children: .combine)
     }
 
@@ -597,8 +554,8 @@ struct AdminTreeHealthView: View {
 
     private func showMoreButton(remaining: Int) -> some View {
         // الشريحة الواحدة بلون الصفحة (مساحة ضغط ٤٤)
-        DSChipButton(L10n.t("عرض المزيد (\(remaining) متبقي)", "Show more (\(remaining) remaining)"),
-                     icon: "chevron.down", tint: pageTint) {
+        AdminPillButton(title: L10n.t("عرض المزيد (\(remaining) متبقي)", "Show more (\(remaining) remaining)"),
+                        icon: "chevron.down", style: .soft, height: DS.Hub.pillHeightCard) {
             displayLimit += 20
         }
         .frame(maxWidth: .infinity)
@@ -607,32 +564,17 @@ struct AdminTreeHealthView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        DSEmptyView(
-            L10n.t("الشجرة سليمة!", "Tree is Healthy!"),
-            message: L10n.t("ما في أعضاء مشكلين حالياً", "No problematic members found"),
-            tint: DS.Color.success, style: .compact)
+        AdminPageStateCard(.empty(L10n.t("الشجرة سليمة!", "Tree is Healthy!"),
+                                  message: L10n.t("ما في أعضاء مشكلين حالياً", "No problematic members found"),
+                                  tint: DS.Color.success))
     }
 
     private var noResultsState: some View {
-        DSEmptyView(
+        AdminPageStateCard(.empty(
             L10n.t("لا توجد نتائج", "No Results"),
             message: searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? L10n.t("لا أحد في «\(selectedFilter.label)» الآن", "Nobody in \(selectedFilter.label) right now")
-                : L10n.t("جرّب اسماً آخر أو رقماً", "Try another name or number"),
-            style: .compact
-        )
-    }
-}
-
-// MARK: - صف القائمة الشفاف (نمط صفحات الإدارة)
-
-private extension View {
-    /// صف بلا خلفية ولا فاصل، بهوامش الصفحة — المحتوى نفسه يرسم صندوقه
-    func healthListRow(top: CGFloat = DS.Spacing.xs, bottom: CGFloat = DS.Spacing.xs) -> some View {
-        self
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: top, leading: DS.Spacing.lg, bottom: bottom, trailing: DS.Spacing.lg))
+                : L10n.t("جرّب اسماً آخر أو رقماً", "Try another name or number")))
     }
 }
 

@@ -1,11 +1,10 @@
 import SwiftUI
 
-// MARK: - إدارة الأعضاء — بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧)
+// MARK: - صفحات «العائلة» — بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠: «كل الصفحات بنفس شكل «اليوم»»)
 //
-// شريط أقسام بعرض الصفحة (نظرة · الحسابات · السجل · العوائل) — المختار كحلي مثل
-// الفلاتر — وتحته محتوى القسم، ولكل قسم بطاقة رأسه وأرقامه الحيّة.
-// «نظرة»: بطاقة رأس ← «الحسابات» (لمحة توزيع + صفوف تفتح قوائمها) ←
-// «جودة البيانات» (حلقة اكتمال + صف لكل نقص يفتح محطة الحسابات على تصنيفه).
+// كل تبويب قديم صار صفحته (تُفتح من صفّها في قسم «العائلة»، و«رجوع» يعود للقسم): «جودة البيانات» (نظرة) هنا،
+// «الحسابات والاستخدام» = محطة التفعيل (`AdminActivateAccountsView`)، «سجل الأعضاء» (`AdminMembersDirectoryView`)،
+// «أسماء العوائل» (`AdminFamilyNamesView`). ما كان يقلب التبويب صار يدفع الصفحة نفسها (المحطة على تصنيفها).
 // الوجهات والصلاحيات كما كانت تماماً (تسجيل عضو جديد للمالك والمدير فقط).
 
 struct AdminMembersManagementView: View {
@@ -15,40 +14,32 @@ struct AdminMembersManagementView: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
 
     enum Tab: Int, CaseIterable {
-        // ملاحظة: تاب صحة الشجرة (treeHealth) نُقل إلى "طلبات المراجعة" → قسم "صحة الشجرة"
+        // ملاحظة: تاب صحة الشجرة (treeHealth) نُقل إلى قسم «العائلة» → «صحة الشجرة»
         case overview, accounts, directory, families
 
         var title: String {
             switch self {
-            case .overview:   return L10n.t("نظرة", "Overview")
-            case .accounts:   return L10n.t("الحسابات", "Accounts")
-            case .directory:  return L10n.t("السجل", "Registry")
-            case .families:   return L10n.t("العوائل", "Families")
+            case .overview:   return L10n.t("جودة البيانات", "Data quality")
+            case .accounts:   return L10n.t("الحسابات والاستخدام", "Accounts & usage")
+            case .directory:  return L10n.t("سجل الأعضاء", "Member registry")
+            case .families:   return L10n.t("أسماء العوائل", "Family names")
             }
         }
 
         var icon: String {
             switch self {
-            case .overview:   return "square.grid.2x2.fill"
-            case .accounts:   return "person.crop.circle.badge.exclamationmark"
+            case .overview:   return "checklist"
+            case .accounts:   return "person.crop.circle.badge.checkmark"
             case .directory:  return "person.3.sequence.fill"
             case .families:   return "person.2.crop.square.stack.fill"
             }
         }
 
-        var color: Color {
-            switch self {
-            case .overview:   return DS.Color.secondary
-            case .accounts:   return AppSection.admin.ink
-            case .directory:  return AppSection.admin.ink
-            case .families:   return DS.Color.accent
-            }
-        }
-
-        /// وصف رأس الصفحة لكل قسم — كان في بطاقة رأس كل قسم (`DSPageHero`)، وصار في الرأس الملوّن
+        /// وصف رأس الصفحة
         var subtitle: String {
             switch self {
-            case .overview:   return L10n.t("الحسابات والسجل والعوائل", "Accounts, registry, families")
+            case .overview:   return L10n.t("الحسابات ونواقص البيانات — كل صفّ يفتح ما خلفه",
+                                            "Accounts and data gaps — every row opens what's behind it")
             case .accounts:   return L10n.t("عضو واحد في كل مرة — أكمل نواقصه ثم اسحب للتالي",
                                             "One member at a time — fill the gaps, then swipe to the next")
             case .directory:  return L10n.t("تصفّح الفروع، أو ابحث بالاسم أو الرقم",
@@ -59,160 +50,120 @@ struct AdminMembersManagementView: View {
         }
     }
 
-    @State private var selectedTab: Tab = .overview
+    private let tab: Tab
+    /// التصنيف الذي تفتح عليه المحطة (من صفوف «جودة البيانات»)
+    @State private var issueFocus: AdminActivateAccountsView.IssueFocus
 
-    /// يُفتح على تبويب بعينه من صفّه في قسم «العائلة» (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠) — الافتراضي «نظرة»
-    init(initialTab: Tab = .overview) {
-        _selectedTab = State(initialValue: initialTab)
+    /// يُفتح على صفحة بعينها من صفّها في قسم «العائلة» — الافتراضي «جودة البيانات»
+    init(initialTab: Tab = .overview, focus: AdminActivateAccountsView.IssueFocus = .all) {
+        self.tab = initialTab
+        _issueFocus = State(initialValue: focus)
     }
-    @State private var showRegisterMember = false
-    /// التصنيف الذي تفتح عليه المحطة عند الضغط على بطاقة جودة بيانات
-    @State private var issueFocus: AdminActivateAccountsView.IssueFocus = .all
+
     /// أُحصيت الأرقام مرة على الأقل — قبلها «—» بدل أصفار مضلِّلة
     @State private var statsReady = false
-
-    /// لون مجال «الشجرة والأعضاء»
-    private let tint = DS.Color.composerProject
+    @State private var stats = MemberStats()
 
     var body: some View {
-        VStack(spacing: 0) {
-            tabBar
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xs)
-
-            switch selectedTab {
-            case .overview:
-                overviewTab
-
-            case .accounts:
-                accountsTab
-
-            case .directory:
-                // رأس هذه الصفحة فوق السجل — لا رأس ثانٍ
-                AdminMembersDirectoryView(showsHeader: false)
-                    .environmentObject(authVM)
-                    .environmentObject(memberVM)
-
-            case .families:
-                AdminFamilyNamesView()
-                    .environmentObject(authVM)
-            }
-        }
-        // الرأس الملوّن الموحّد (طلب المالك ٢٠٢٦-١٠-٠٧) — وصفه وصف القسم المختار
-        .dsSubPageHeader(L10n.t("إدارة الأعضاء", "Members Management"), subtitle: selectedTab.subtitle) {
-            // تسجيل عضو جديد — نُقل من اللوحة الرئيسية إلى حيث ينتمي
-            // للمالك والمدير فقط (canRegisterMembers) — كان يظهر للمراقب
-            if authVM.canRegisterMembers {
-                DSHeaderButton(symbol: "person.badge.plus",
-                               label: L10n.t("تسجيل عضو جديد", "Register new member")) {
-                    showRegisterMember = true
+        page
+            .task {
+                if memberVM.allMembers.isEmpty {
+                    await memberVM.fetchAllMembers()
                 }
+                stats = computeStats()
+                statsReady = true
             }
-            // «الأرقام المحظورة» انتقلت إلى «النظام ← الفريق والأمان» في لوحة الإدارة
-        }
-        .navigationDestination(isPresented: $showRegisterMember) {
-            AdminRegisterMemberView()
-                .environmentObject(authVM)
-                .environmentObject(memberVM)
-                .environmentObject(adminRequestVM)
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .task {
-            if memberVM.allMembers.isEmpty {
-                await memberVM.fetchAllMembers()
+            .onChange(of: memberVM.allMembers.count) { _ in
+                stats = computeStats()
             }
-            stats = computeStats()
-            statsReady = true
-        }
-        .onChange(of: memberVM.allMembers.count) { _ in
-            stats = computeStats()
+    }
+
+    private var page: AnyView {
+        switch tab {
+        case .overview:
+            return AnyView(qualityPage)
+        case .accounts:
+            return AnyView(AdminActivateAccountsView(focus: $issueFocus))
+        case .directory:
+            return AnyView(AdminMembersDirectoryView())
+        case .families:
+            return AnyView(AdminFamilyNamesView())
         }
     }
 
-    // MARK: - نظرة عامة
+    // MARK: - جودة البيانات (نظرة)
 
-    private var overviewTab: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                overviewHero
-
-                accountsSection
-
-                // ملاحظة: «الملفات الناقصة» و«النشاط» و«الأجهزة» لا تتكرّر هنا —
-                // الناقصة هي نفسها محطة «الحسابات»، والنشاط والأجهزة في تبويب «النظام».
-                dataQualitySection
-
-                // نفس زر الشريط العلوي — ظاهر هنا لأنه أكثر إجراء يُطلب من هذه الصفحة
-                if authVM.canRegisterMembers {
-                    DSActionButton(title: L10n.t("تسجيل عضو جديد", "Register new member"),
-                                    icon: "person.badge.plus") {
-                        showRegisterMember = true
-                    }
-                    .padding(.top, DS.Spacing.xs)
-                    .dsStaggerIn(3)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.sm)
-            .padding(.bottom, DS.Spacing.xxxl)
-        }
+    private var qualityPage: some View {
+        AdminPage(header: qualityHeader,
+                  lead: AnyView(accountsCard),
+                  content: AnyView(qualityContent))
     }
 
-    private func heroValue(_ n: Int) -> String { statsReady ? "\(n)" : "—" }
+    private func heroValue(_ n: Int) -> String { AdminPageKPI.count(n, ready: statsReady) }
 
-    /// الأرقام السريعة — العنوان والوصف في الرأس الملوّن
-    private var overviewHero: some View {
-        DSStatsRow([
-            DSHeroStat(value: heroValue(stats.total),
-                       label: L10n.t("الأفراد", "Members"), icon: "person.3.fill"),
-            DSHeroStat(value: heroValue(stats.active),
-                       label: L10n.t("مفعّلة", "Active"), icon: "checkmark.seal.fill"),
-            DSHeroStat(value: heroValue(stats.pending),
-                       label: L10n.t("بانتظار التفعيل", "Pending"), icon: "clock.badge.questionmark")
-        ], tint: tint)
+    /// صفحة تُدفع من هنا
+    private static func membersPage(_ tab: Tab, focus: AdminActivateAccountsView.IssueFocus = .all) -> AdminPageTap {
+        .page { AnyView(AdminMembersManagementView(initialTab: tab, focus: focus)) }
+    }
+
+    private var registerTap: AdminPageTap { .page { AnyView(AdminRegisterMemberView()) } }
+
+    private var qualityHeader: AdminPageHeader {
+        var actions: [AdminPageAction] = []
+        // تسجيل عضو جديد — للمالك والمدير فقط (canRegisterMembers)
+        if authVM.canRegisterMembers {
+            actions.append(AdminPageAction(symbol: "person.badge.plus",
+                                           label: L10n.t("تسجيل عضو جديد", "Register new member"),
+                                           tap: registerTap))
+        }
+        return AdminPageHeader(
+            title: Tab.overview.title,
+            subtitle: Tab.overview.subtitle,
+            glyph: Tab.overview.icon,
+            kpis: [
+                AdminPageKPI(heroValue(stats.total), L10n.t("الأفراد", "Members"), icon: "person.3",
+                             tap: Self.membersPage(.directory)),
+                AdminPageKPI(heroValue(stats.active), L10n.t("مفعّلة", "Active"), icon: "checkmark.seal",
+                             tint: DS.Hub.kpiMine),
+                AdminPageKPI(heroValue(stats.pending), L10n.t("بانتظار", "Pending"), icon: "clock",
+                             tint: DS.Hub.kpiLate, tap: Self.membersPage(.accounts)),
+                AdminPageKPI(heroValue(qualityGaps), L10n.t("نواقص", "Gaps"), icon: "exclamationmark.circle",
+                             tint: DS.Hub.kpiHot)
+            ],
+            actions: actions)
     }
 
     // MARK: - الحسابات
 
-    private var accountsSection: some View {
-        DSComposerSection(title: L10n.t("الحسابات", "Accounts"),
-                          icon: "person.crop.circle.badge.checkmark",
-                          tint: tint,
-                          trailing: statsReady ? L10n.t("\(stats.total) فرد", "\(stats.total) members") : nil,
-                          index: 1) {
+    /// «الحسابات»: لمحة التوزيع + صفوف تفتح السجل أو المحطة
+    private var accountsCard: some View {
+        AdminSectionCard(title: L10n.t("الحسابات", "Accounts"),
+                         tag: statsReady ? L10n.t("\(stats.total) فرد", "\(stats.total) members") : nil) {
             if statsReady && stats.active + stats.pending + stats.frozen > 0 {
                 accountsGlance
             }
-
-            overviewRow(icon: "person.3.fill", tint: tint,
-                        title: L10n.t("إجمالي الأفراد", "Total members"),
-                        subtitle: L10n.t("تصفّح السجل بالفروع", "Browse the registry by branch"),
-                        value: stats.total, valueTint: tint) {
-                selectedTab = .directory
-            }
-
-            overviewRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
-                        title: L10n.t("حسابات مفعّلة", "Active accounts"),
-                        subtitle: L10n.t("يدخلون التطبيق برقمهم", "Sign in with their number"),
-                        value: stats.active, valueTint: DS.Color.success) {
-                selectedTab = .directory
-            }
-
-            overviewRow(icon: "clock.badge.questionmark", tint: DS.Color.warning,
-                        title: L10n.t("بانتظار التفعيل", "Pending activation"),
-                        subtitle: L10n.t("أكمل بياناتهم من محطة الحسابات", "Complete them in the accounts station"),
-                        value: stats.pending, valueTint: DS.Color.warning) {
-                issueFocus = .all
-                selectedTab = .accounts
-            }
-
-            if stats.frozen > 0 {
-                overviewRow(icon: "snowflake", tint: DS.Color.error,
-                            title: L10n.t("مجمّدة", "Frozen"),
-                            subtitle: L10n.t("لا يستطيعون دخول التطبيق", "Can't access the app"),
-                            value: stats.frozen, valueTint: DS.Color.error) {
-                    issueFocus = .all
-                    selectedTab = .accounts
+            AdminRowsCardBody {
+                AdminTapRow(icon: "person.3.fill", tint: DS.Color.palm,
+                            title: L10n.t("إجمالي الأفراد", "Total members"),
+                            subtitle: L10n.t("تصفّح السجل بالفروع", "Browse the registry by branch"),
+                            value: heroValue(stats.total), valueTint: DS.Color.palm,
+                            tap: Self.membersPage(.directory))
+                AdminTapRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
+                            title: L10n.t("حسابات مفعّلة", "Active accounts"),
+                            subtitle: L10n.t("يدخلون التطبيق برقمهم", "Sign in with their number"),
+                            value: heroValue(stats.active), valueTint: DS.Color.success,
+                            tap: Self.membersPage(.directory))
+                AdminTapRow(icon: "clock.badge.questionmark", tint: DS.Color.warning,
+                            title: L10n.t("بانتظار التفعيل", "Pending activation"),
+                            subtitle: L10n.t("أكمل بياناتهم من محطة الحسابات", "Complete them in the accounts station"),
+                            value: heroValue(stats.pending), valueTint: DS.Color.warning,
+                            tap: Self.membersPage(.accounts))
+                if stats.frozen > 0 {
+                    AdminTapRow(icon: "snowflake", tint: DS.Color.error,
+                                title: L10n.t("مجمّدة", "Frozen"),
+                                subtitle: L10n.t("لا يستطيعون دخول التطبيق", "Can't access the app"),
+                                value: heroValue(stats.frozen), valueTint: DS.Color.error,
+                                tap: Self.membersPage(.accounts))
                 }
             }
         }
@@ -222,12 +173,12 @@ struct AdminMembersManagementView: View {
     private var accountsGlance: some View {
         let sum = max(1, stats.active + stats.pending + stats.frozen)
         func pct(_ v: Int) -> Int { Int((Double(v) / Double(sum) * 100).rounded()) }
-        return VStack(alignment: .leading, spacing: DSBox.sectionInnerSpacing) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             DSDistributionBar(segments: [
                 .init(id: "active", value: stats.active, tint: DS.Color.success),
                 .init(id: "pending", value: stats.pending, tint: DS.Color.warning),
                 .init(id: "frozen", value: stats.frozen, tint: DS.Color.error)
-            ])
+            ], height: DS.Hub.meterHeight)
             HStack(spacing: DS.Spacing.md) {
                 if stats.active > 0 {
                     legendItem(L10n.t("مفعّلة", "Active"), pct(stats.active), DS.Color.success)
@@ -241,8 +192,7 @@ struct AdminMembersManagementView: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.horizontal, DS.Spacing.xxs)
-        .padding(.bottom, DS.Spacing.xxs)
+        .padding(.bottom, DS.Spacing.xs)
         .accessibilityElement(children: .combine)
     }
 
@@ -251,26 +201,12 @@ struct AdminMembersManagementView: View {
             Circle().fill(color).frame(width: DS.Icon.legendDotCompact, height: DS.Icon.legendDotCompact)
                 .accessibilityHidden(true)
             Text(L10n.t("\(title) \(percent)٪", "\(title) \(percent)%"))
-                .dsFont(.micro)
+                .dsFont(.caption)
                 .foregroundColor(DS.Color.textSecondary)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-    }
-
-    /// صف قابل للضغط: أيقونة + عنوان + وصف + العدد + سهم
-    private func overviewRow(icon: String, tint: Color, title: String, subtitle: String,
-                             value: Int, valueTint: Color,
-                             action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            DSRow(icon: icon, tint: tint, title: title, subtitle: subtitle) {
-                DSStatusChip(text: heroValue(value), tint: valueTint)
-                DSChevron()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(DSScaleButtonStyle())
     }
 
     // MARK: - جودة البيانات
@@ -279,35 +215,51 @@ struct AdminMembersManagementView: View {
         stats.noBirthDate + stats.noGender + stats.accountNoPhoto + stats.deceasedNoDeathDate
     }
 
-    private var dataQualitySection: some View {
-        DSComposerSection(title: L10n.t("جودة البيانات", "Data quality"),
-                          icon: "checklist",
-                          tint: tint,
-                          trailing: !statsReady ? nil
-                            : (qualityGaps == 0 ? L10n.t("مكتملة", "Complete")
-                                                : L10n.t("\(qualityGaps) نقص", "\(qualityGaps) gaps")),
-                          index: 2) {
-            completenessRow
+    private var qualityContent: some View {
+        VStack(spacing: DS.Hub.stackSpacing) {
+            AnyView(dataQualityCard)
+            // أكثر إجراء يُطلب من هنا — نفس زرّ الرأس
+            if authVM.canRegisterMembers {
+                AdminTapWrap(tap: registerTap, label: AnyView(registerButtonFace))
+            }
+        }
+    }
 
-            qualityRow(icon: "calendar.badge.exclamationmark", tint: DS.Color.accent,
-                       title: L10n.t("بلا تاريخ ميلاد", "No birth date"),
-                       subtitle: L10n.t("من الأحياء", "Living members"),
-                       value: stats.noBirthDate, focus: .noBirthDate)
+    private var registerButtonFace: some View {
+        HStack(spacing: DSBox.buttonSpacing) {
+            Image(systemName: "person.badge.plus").dsGlyph(DSButtonSize.regular.glyph)
+            Text(L10n.t("تسجيل عضو جديد", "Register new member"))
+        }
+        .modifier(DSButtonFace())
+    }
 
-            qualityRow(icon: "person.fill.questionmark", tint: DS.Color.neonPurple,
-                       title: L10n.t("بلا جنس محدّد", "No gender"),
-                       subtitle: L10n.t("من الأحياء", "Living members"),
-                       value: stats.noGender, focus: .noGender)
-
-            qualityRow(icon: "person.crop.circle.badge.questionmark", tint: DS.Color.secondary,
-                       title: L10n.t("صاحب حساب بلا صورة", "Account without photo"),
-                       subtitle: L10n.t("أصحاب الحسابات فقط", "Account holders only"),
-                       value: stats.accountNoPhoto, focus: .noPhoto)
-
-            qualityRow(icon: "leaf.fill", tint: DS.Color.textSecondary,
-                       title: L10n.t("متوفّى بلا تاريخ وفاة", "Deceased, no death date"),
-                       subtitle: L10n.t("من المتوفّين", "Deceased members"),
-                       value: stats.deceasedNoDeathDate, focus: .deceasedNoDeathDate)
+    private var dataQualityCard: some View {
+        AdminSectionCard(title: L10n.t("نواقص البيانات", "Data gaps"),
+                         badge: statsReady ? qualityGaps : nil,
+                         tag: statsReady && qualityGaps == 0 ? L10n.t("مكتملة", "Complete") : nil) {
+            AdminScoreRow(progress: statsReady ? completeness : nil,
+                          title: L10n.t("اكتمال البيانات", "Data completeness"),
+                          subtitle: L10n.t("الميلاد والجنس وصور الحسابات وتواريخ الوفاة",
+                                           "Birth dates, gender, account photos and death dates"))
+                .padding(.bottom, DS.Spacing.xs)
+            AdminRowsCardBody {
+                qualityRow(icon: "calendar.badge.exclamationmark", tint: DS.Color.accent,
+                           title: L10n.t("بلا تاريخ ميلاد", "No birth date"),
+                           subtitle: L10n.t("من الأحياء", "Living members"),
+                           value: stats.noBirthDate, focus: .noBirthDate)
+                qualityRow(icon: "person.fill.questionmark", tint: DS.Color.neonPurple,
+                           title: L10n.t("بلا جنس محدّد", "No gender"),
+                           subtitle: L10n.t("من الأحياء", "Living members"),
+                           value: stats.noGender, focus: .noGender)
+                qualityRow(icon: "person.crop.circle.badge.questionmark", tint: DS.Color.secondary,
+                           title: L10n.t("صاحب حساب بلا صورة", "Account without photo"),
+                           subtitle: L10n.t("أصحاب الحسابات فقط", "Account holders only"),
+                           value: stats.accountNoPhoto, focus: .noPhoto)
+                qualityRow(icon: "leaf.fill", tint: DS.Color.slate,
+                           title: L10n.t("متوفّى بلا تاريخ وفاة", "Deceased, no death date"),
+                           subtitle: L10n.t("من المتوفّين", "Deceased members"),
+                           value: stats.deceasedNoDeathDate, focus: .deceasedNoDeathDate)
+            }
         }
     }
 
@@ -319,60 +271,15 @@ struct AdminMembersManagementView: View {
         return max(0, min(1, 1 - Double(qualityGaps) / Double(checks)))
     }
 
-    private var completenessRow: some View {
-        let pct = Int((completeness * 100).rounded())
-        let ringTint = completeness >= 0.9 ? DS.Color.success
-            : (completeness >= 0.6 ? DS.Color.warning : DS.Color.error)
-        return HStack(spacing: DS.Spacing.md) {
-            DSRing(progress: statsReady ? completeness : 0, tint: ringTint, lineWidth: DS.Spacing.xsm, size: DS.Icon.sizeLg) {
-                Text(statsReady ? L10n.t("\(pct)٪", "\(pct)%") : "—")
-                    .dsFieldFont(.rowTitleCompact)
-                    .foregroundColor(DS.Color.fieldLabel)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(L10n.t("اكتمال البيانات", "Data completeness"))
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
-                Text(L10n.t("الميلاد والجنس وصور الحسابات وتواريخ الوفاة",
-                            "Birth dates, gender, account photos and death dates"))
-                    .dsFieldFont(.subtitle)
-                    .foregroundColor(DS.Color.fieldValue)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .dsRowBox()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(statsReady
-                            ? L10n.t("اكتمال البيانات \(pct)٪", "Data completeness \(pct)%")
-                            : L10n.t("اكتمال البيانات", "Data completeness"))
-    }
-
     /// صف نقص: يفتح محطة «الحسابات» على تصنيفه — «مكتمل» أخضر إذا لا شيء ناقص
     private func qualityRow(icon: String, tint: Color, title: String, subtitle: String,
                             value: Int, focus: AdminActivateAccountsView.IssueFocus) -> some View {
-        Button {
-            issueFocus = focus
-            selectedTab = .accounts
-        } label: {
-            DSRow(icon: icon, tint: tint, title: title, subtitle: subtitle) {
-                if !statsReady {
-                    DSStatusChip(text: "—", tint: DS.Color.textTertiary)
-                } else if value == 0 {
-                    DSStatusChip(text: L10n.t("مكتمل", "Complete"), icon: "checkmark", tint: DS.Color.success)
-                } else {
-                    DSStatusChip(text: "\(value)", tint: DS.Color.warning)
-                }
-                DSChevron()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(DSScaleButtonStyle())
+        let done = statsReady && value == 0
+        return AdminTapRow(icon: icon, tint: tint, title: title, subtitle: subtitle,
+                           value: !statsReady ? "—" : (done ? L10n.t("مكتمل", "Complete") : "\(value)"),
+                           valueIcon: done ? "checkmark" : nil,
+                           valueTint: !statsReady ? DS.Color.textTertiary : (done ? DS.Color.success : DS.Color.warning),
+                           tap: Self.membersPage(.accounts, focus: focus))
     }
 
     // MARK: - الأرقام
@@ -386,8 +293,6 @@ struct AdminMembersManagementView: View {
         /// مقامات «اكتمال البيانات»: الأحياء، أصحاب الحسابات منهم، المتوفّون
         var living = 0, livingAccounts = 0, deceased = 0
     }
-
-    @State private var stats = MemberStats()
 
     private func computeStats() -> MemberStats {
         var s = MemberStats()
@@ -422,22 +327,5 @@ struct AdminMembersManagementView: View {
             }
         }
         return s
-    }
-
-    // MARK: - الحسابات
-
-    private var accountsTab: some View {
-        AdminActivateAccountsView(focus: $issueFocus)
-            .environmentObject(authVM)
-            .environmentObject(memberVM)
-            .environmentObject(adminRequestVM)
-    }
-
-    // MARK: - شريط الأقسام — المبدّل الموحّد (`DSSegmentedSwitch`)، المختار بتعبئة القسم
-
-    private var tabBar: some View {
-        DSSegmentedSwitch(options: Tab.allCases.map { DSSegmentOption(id: $0, title: $0.title, icon: $0.icon) },
-                          selection: $selectedTab)
-            .padding(.horizontal, DS.Spacing.lg)
     }
 }
