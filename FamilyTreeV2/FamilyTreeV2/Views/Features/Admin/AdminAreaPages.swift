@@ -387,7 +387,8 @@ struct AdminToolRow: View {
     var body: some View {
         switch tool.kind {
         case .page(let make):
-            NavigationLink { AdminLazyPage(make: make) } label: { label }
+            // اسم القسم على زر «رجوع» الصفحة الداخلية (AdminPageKit)
+            NavigationLink { AdminLazyPage(make: make).adminBackTitle(tool.area.title) } label: { label }
                 .buttonStyle(.plain)
         case .action(let run):
             Button(action: run) { label }
