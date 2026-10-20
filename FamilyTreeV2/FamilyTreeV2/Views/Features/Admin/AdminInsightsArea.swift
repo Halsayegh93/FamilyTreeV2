@@ -8,7 +8,7 @@ import SwiftUI
 //   العائلة (`AdminAnalyticsView` — بيت «إحصاء الأفراد»؛ المراقب: الأعداد فقط) · الاستخدام (`AdminActiveMembersView`) ·
 //   الموافقات (`ApprovalsReportView` — بيت تقرير الموافقات الوحيد)
 // «سجل التعديلات» صار «نشاط الفريق» في «إشعارات الإدارة» (جرس «اليوم»، بحثه هناك). «تقارير PDF» انتقلت إلى
-// «العائلة ← ⋯ ← تصدير». الصلاحيات من فهرس الأدوات (`AdminToolCatalog`).
+// «العائلة ← زر التقارير». الصلاحيات من فهرس الأدوات (`AdminToolCatalog`).
 
 struct AdminMetricsAreaView: View {
     @EnvironmentObject var authVM: AuthViewModel

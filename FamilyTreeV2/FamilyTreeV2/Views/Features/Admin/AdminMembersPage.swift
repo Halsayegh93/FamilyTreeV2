@@ -37,7 +37,7 @@ struct AdminMembersPage: View {
     @State private var branchLimit = Self.branchPreview
     @State private var sheet: AdminMemberSheetContext?
     @State private var showExport = false
-    /// «⋯ ← تصدير» بالفلتر الحالي (الدفعة ج): الشريحة والبحث المختاران — nil = كل العائلة
+    /// «زر التقارير» بالفلتر الحالي (الدفعة ج): الشريحة والبحث المختاران — nil = كل العائلة
     @State private var exportScope: AdminReportScope?
     /// «متوفى» من «تحقق من الأحياء» — مربّع تسجيل الوفاة الموجود (`AdminMemberDetailSheet(deathOnly:)`)
     @State private var deathTarget: FamilyMember?
@@ -110,31 +110,21 @@ struct AdminMembersPage: View {
                 .buttonStyle(DSPressStyle())
                 .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register a new member"))
             }
-            moreMenu
+            if authVM.isAdmin { reportsButton }
         }
     }
 
-    /// «⋯»: تصدير قائمة الأعضاء (PDF) للمالك والمدير، وشجرة النساء
-    private var moreMenu: some View {
-        Menu {
-            if authVM.isAdmin {
-                Button {
-                    exportScope = currentExportScope
-                    showExport = true
-                } label: {
-                    Label(L10n.t("تصدير قائمة الأعضاء (PDF)", "Export member list (PDF)"), systemImage: "doc.text")
-                }
-            }
-            Button {
-                TreeTabContainer.openWomenOnAppear = true
-                NotificationCenter.default.post(name: .openWomenTree, object: nil)
-            } label: {
-                Label(L10n.t("شجرة النساء", "Women's tree"), systemImage: "person.2")
-            }
+    /// زر «التقارير» المباشر للمالك والمدير (طلب المالك ٢٠٢٦-١٠-٢٠: «الاختصار الثاني يدش على التقارير دايركت»)
+    /// — بدل قائمة «⋯»؛ يفتح التقارير بالشريحة المختارة. اختصار «شجرة النساء» أُزيل: بيتها الواحد تبويب الشجرة.
+    private var reportsButton: some View {
+        Button {
+            exportScope = currentExportScope
+            showExport = true
         } label: {
-            AdminGlassCircle(symbol: "ellipsis")
+            AdminGlassCircle(symbol: "doc.text")
         }
-        .accessibilityLabel(L10n.t("المزيد", "More"))
+        .buttonStyle(DSPressStyle())
+        .accessibilityLabel(L10n.t("التقارير (PDF)", "Reports (PDF)"))
     }
 
     private var headerAccessory: some View {

@@ -103,20 +103,12 @@ enum AdminToolCatalog {
                                    keywords: ["تسجيل", "إضافة"],
                                    kind: page { AdminRegisterMemberView() }))
             }
-            t.append(AdminTool(id: "family.women", area: .family, group: members,
-                               title: L10n.t("شجرة النساء", "Women's tree"),
-                               subtitle: L10n.t("تُدار من تبويب الشجرة", "Managed from the Tree tab"),
-                               icon: "person.2.fill", tint: DS.Color.female,
-                               keywords: ["نساء", "بنات"],
-                               kind: .action {
-                                   TreeTabContainer.openWomenOnAppear = true
-                                   NotificationCenter.default.post(name: .openWomenTree, object: nil)
-                               }))
+            // «شجرة النساء» أُزيل اختصارها من الإدارة (طلب المالك ٢٠٢٦-١٠-٢٠ «شيله»): بيتها الواحد تبويب الشجرة
             // «تقارير PDF» — بيتها الواحد «⋯ ← تصدير» في صفحة الأعضاء (الدفعة ج؛ كانت صفّاً في «المؤشرات»)
             if isAdmin {
                 t.append(AdminTool(id: "family.export", area: .family, group: members,
                                    title: L10n.t("تصدير قائمة الأعضاء (PDF)", "Export member list (PDF)"),
-                                   subtitle: L10n.t("من «⋯» في صفحة الأعضاء — بالشريحة المختارة", "From “⋯” on the members page — with the chosen filter"),
+                                   subtitle: L10n.t("زر التقارير في صفحة الأعضاء — بالشريحة المختارة", "Reports button on the members page — with the chosen filter"),
                                    icon: "doc.text.fill", tint: DS.Color.accent,
                                    keywords: ["تقرير", "تقارير", "طباعة", "pdf"],
                                    kind: page { AdminReportsView() }))
