@@ -2271,6 +2271,14 @@ extension DS {
         static let gaugeWidth: CGFloat = 112
         static let gaugeHeight: CGFloat = 70
         static let gaugeLine: CGFloat = 10
+        /// رسم «آخر ٣٠ يوماً» في صفحة رسائل الدخول: ارتفاعه، عرض خط الرصيد ونقطته، زاوية العمود والفراغ بينها
+        static let chartHeight: CGFloat = 92
+        static let chartLine: CGFloat = 2
+        static let chartDot: CGFloat = 6
+        static let chartBarRadius: CGFloat = 2
+        static let chartBarGap: CGFloat = 2
+        /// مربّع الرسم الصغير في المفتاح (عمود/خط)
+        static let chartSwatch: CGFloat = 10
     }
 }
 

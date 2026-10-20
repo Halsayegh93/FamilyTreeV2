@@ -466,8 +466,7 @@ struct AdminToolsAreaView: View {
     }
 
     private var warnings: Set<String> {
-        guard let balance = sms.status?.balance, balance < SmsBalanceStore.lowThreshold else { return [] }
-        return ["access.sms"]
+        return sms.needsTopUp ? ["access.sms"] : []
     }
 }
 

@@ -305,9 +305,8 @@ enum AdminTodayFeed {
         var tasks: [AdminTodayTask] = []
 
         // رصيد رسائل الدخول (المالك والمدير)
-        if authVM.canViewSystemSettings, let balance = sms.status?.balance,
-           balance < SmsBalanceStore.lowThreshold {
-            let urgent = balance < SmsBalanceStore.urgentThreshold
+        if authVM.canViewSystemSettings, let balance = sms.status?.balance, sms.needsTopUp {
+            let urgent = sms.level == .urgent
             tasks.append(AdminTodayTask(
                 id: "sms-balance",
                 title: L10n.t("اشحن رصيد رسائل الدخول", "Top up the sign-in SMS balance"),

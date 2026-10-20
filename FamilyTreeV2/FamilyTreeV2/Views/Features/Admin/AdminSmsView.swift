@@ -1,125 +1,94 @@
 import SwiftUI
-import Supabase
 import Combine
 
 // MARK: - «رسائل الدخول · KWT SMS» (طلب المالك ٢٠٢٦-١٠-١٩ «نضيف قسم جديد تبع kwt-sms» — أول صفّ في «الدخول والأمان»)
 //
-// المالك والمدير فقط (نفس صلاحية `sms_balance_status()` على السيرفر — غيرهما 42501).
-// بلا أي عمل سيرفر جديد: الرصيد = آخر `balance_after` من إرسال مقبول حقيقي (الجدول يُحذف ما قبل يومين، فقد لا
-// توجد قراءة)، والباقي حقائق ثابتة من دوال السيرفر نفسها (المرسل، التغطية، النص، الحدود، عتبات التنبيه).
-// الإحصاءات المفصّلة (٧/٣٠ يوماً، نسبة الوصول، آخر الإرسالات، الرصيد الحي، اختبار الإرسال) تحتاج عمل سيرفر
-// (IA.md «عمل السيرفر المطلوب») — تظهر مكانها ملاحظة واحدة، بلا أرقام مختلقة.
+// المالك والمدير فقط (نفس صلاحية `sms_admin_overview()` على السيرفر — غيرهما 42501). البيانات الحية منذ ٢٠٢٦-١٠-٢٠
+// (`AdminSmsData.swift`): الرأس (الرصيد وحالته، يكفي كم رمز وكم يوم، تحديث حي، الشحن) ← الإرسال (اليوم/٧/٣٠،
+// القبول، النقاط، عدّاد الساعة) ← آخر ٣٠ يوماً ← آخر الإرسالات (فحص الحالة) ← أدوات (اختبار المالك، فحص رقم،
+// المرسلون، التغطية) ← التنبيهات (المالك يعدّل) ← الحدود ← الإعداد.
+// حارس المكدس (تعطّل «اليوم» على الجوال ٢٠٢٦-١٠-٢٠): كل بطاقة نوع مستقل خلف `AnyView` — لا جسم واحد ضخم.
 
-/// آخر رصيد معروف لرسائل الدخول — مشترك بين «اليوم» وصفحة KWT SMS
+/// ما يُفتح من أدوات الصفحة في مربّع
+enum SmsToolBox: String, Identifiable {
+    case senders, coverage, validate
+    var id: String { rawValue }
+}
+
+/// نتيجة إجراء تظهر في نافذة صغيرة
+struct SmsNotice: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+/// حالة إجراءات الصفحة: ما يعمل الآن، آخر نتيجة، والمربّع المفتوح
 @MainActor
-final class SmsBalanceStore: ObservableObject {
-    static let shared = SmsBalanceStore()
+final class SmsPageActions: ObservableObject {
+    @Published private(set) var busy: Set<String> = []
+    @Published var notice: SmsNotice?
+    @Published var box: SmsToolBox?
+    @Published var confirmTest = false
+    private var store: SmsBalanceStore { SmsBalanceStore.shared }
 
-    /// ما تُرجعه `sms_balance_status()`
-    struct Status: Equatable {
-        /// nil = لا قراءة حديثة (لا إرسال مقبول خلال آخر يومين)
-        var balance: Double?
-        var at: Date?
-    }
+    func isBusy(_ key: String) -> Bool { busy.contains(key) }
 
-    enum LoadState: Equatable { case idle, loading, loaded, denied, failed }
-
-    /// نفس عتبات تنبيه السيرفر (`finish_kwtsms_send`): منخفض تحت ٥٠، عاجل تحت ١٠
-    static let lowThreshold: Double = 50
-    static let urgentThreshold: Double = 10
-    /// مرجع مقياس الرصيد في رأس الصفحة («من ١٠٠»)
-    static let gaugeReference: Double = 100
-    /// صفحة شحن الرصيد عند المزوّد
-    static let rechargeURL = URL(string: "https://www.kwtsms.com/")!
-
-    @Published var status: Status?
-    @Published private(set) var state: LoadState = .idle
-    private var lastFetch: Date?
-
-    enum Level { case unknown, good, low, urgent }
-
-    var level: Level {
-        guard let balance = status?.balance else { return .unknown }
-        if balance < Self.urgentThreshold { return .urgent }
-        if balance < Self.lowThreshold { return .low }
-        return .good
-    }
-
-    /// المالك والمدير فقط — ولا يُكرَّر الطلب خلال دقيقة إلا بالسحب للتحديث
-    func refresh(force: Bool = false) async {
-        if !force, let last = lastFetch, Date().timeIntervalSince(last) < 60 { return }
-        lastFetch = Date()
-        state = .loading
-        nonisolated struct Row: Decodable {
-            let balance: Double?
-            let at: String?
-        }
-        do {
-            let row: Row = try await SupabaseConfig.client.rpc("sms_balance_status").execute().value
-            status = Status(balance: row.balance, at: ApprovalWorkflow.date(row.at))
-            state = .loaded
-        } catch {
-            guard !ErrorHelper.isCancellation(error) else { state = .idle; return }
-            let pg = error as? PostgrestError
-            state = pg?.code == "42501" ? .denied : .failed
-            Log.warning("[KWT SMS] تعذّر جلب الرصيد: \(error.localizedDescription)")
-        }
-    }
-}
-
-extension SmsBalanceStore.Level {
-    var title: String {
-        switch self {
-        case .unknown: return L10n.t("لا قراءة", "No reading")
-        case .good:    return L10n.t("جيد", "Good")
-        case .low:     return L10n.t("منخفض", "Low")
-        case .urgent:  return L10n.t("عاجل", "Urgent")
+    /// يشغّل إجراءً واحداً بمفتاحه (لا يتكرر وهو يعمل) ويعرض نتيجته أو خطأه بالعربي
+    func run(_ key: String, _ work: @escaping () async throws -> SmsNotice?) {
+        guard !busy.contains(key) else { return }
+        busy.insert(key)
+        Task {
+            defer { busy.remove(key) }
+            do {
+                if let result = try await work() { notice = result }
+            } catch let error as SmsAdminError {
+                notice = SmsNotice(title: error.title, message: error.message)
+            } catch {
+                guard !ErrorHelper.isCancellation(error) else { return }
+                let fallback = SmsAdminError(code: "network")
+                notice = SmsNotice(title: fallback.title, message: fallback.message)
+            }
         }
     }
 
-    /// لون المعنى: جيد أخضر، منخفض تحذير، عاجل خطأ
-    var tint: Color {
-        switch self {
-        case .unknown: return DS.Color.textTertiary
-        case .good:    return DS.Color.success
-        case .low:     return DS.Color.warning
-        case .urgent:  return DS.Color.error
+    /// «تحديث الرصيد الآن» — رصيد حي من KWT (المالك والمدير)
+    func refreshBalance() {
+        run("balance") { [store] in
+            try await store.refreshLiveBalance()
+            return nil
         }
     }
 
-    /// لون الرقم الكبير فوق الكحلي
-    var bandTint: Color {
-        switch self {
-        case .unknown: return DS.Color.textOnPrimary
-        case .good:    return DS.Hub.kpiMine
-        case .low:     return DS.Hub.kpiLate
-        case .urgent:  return DS.Hub.kpiHot
+    /// «اختبار إرسال لرقمي» — المالك فقط، لرقم ملفه، بعد التأكيد
+    func testSend() {
+        run("test") { [store] in
+            let reply = try await store.call("test_send", as: SmsBalanceStore.TestSendReply.self)
+            await store.refresh(force: true)
+            if reply.testMode == true {
+                return SmsNotice(title: L10n.t("تم الاختبار — وضع تجريبي", "Test done — test mode"),
+                                 message: L10n.t("الحساب في الوضع التجريبي: قبل المزوّد الرسالة لكن لا تصل رسالة فعلية ولا تُخصم نقاط.",
+                                                 "The account is in test mode: the provider accepted it, but no real message is sent and no points are charged."))
+            }
+            let points = reply.points.map { SmsText.number($0) } ?? "1"
+            let balance = reply.balance.map { SmsBalanceText.points($0) }
+            return SmsNotice(title: L10n.t("أُرسلت رسالة الاختبار", "Test message sent"),
+                             message: balance.map { L10n.t("تصل رقمك خلال ثوانٍ. خُصم \(points) نقطة — الرصيد الآن \($0).",
+                                                           "It reaches your number in seconds. \(points) point(s) charged — balance now \($0).") }
+                                ?? L10n.t("تصل رقمك خلال ثوانٍ. خُصم \(points) نقطة.",
+                                          "It reaches your number in seconds. \(points) point(s) charged."))
         }
     }
-}
 
-/// نصوص الرصيد المشتركة (اليوم + الصفحة)
-enum SmsBalanceText {
-    static func points(_ balance: Double) -> String { "\(Int(balance.rounded(.down)))" }
-
-    /// «يكفي ~١٧ رمز دخول» — كل رسالة دخول بنقطة واحدة (٥٣ حرفاً)
-    static func enough(_ balance: Double) -> String {
-        let n = Int(balance.rounded(.down))
-        return L10n.t("يكفي نحو \(n) رمز دخول", "Enough for about \(n) sign-in codes")
+    /// «فحص الحالة» لرسالة برقمها عند المزوّد — النتيجة تُحفظ على الإرسال نفسه
+    func checkStatus(_ msgid: String) {
+        run("status:\(msgid)") { [store] in
+            let reply = try await store.call("status", msgid: msgid, as: SmsBalanceStore.StatusReply.self)
+            await store.refresh(force: true)
+            let text = SmsText.deliveryStatus(reply.status)
+            return SmsNotice(title: L10n.t("حالة الرسالة", "Message status"),
+                             message: text == reply.status ? text : "\(text) (\(reply.status))")
+        }
     }
-
-    /// «آخر قراءة منذ ساعتين»
-    static func updated(_ date: Date?) -> String? {
-        guard let date else { return nil }
-        let f = RelativeDateTimeFormatter()
-        f.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-        f.unitsStyle = .full
-        return L10n.t("آخر قراءة \(f.localizedString(for: date, relativeTo: Date()))",
-                      "Last reading \(f.localizedString(for: date, relativeTo: Date()))")
-    }
-
-    static let noReading = L10n.t("لا توجد قراءة حديثة — يتحدّث مع أول رسالة دخول",
-                                  "No recent reading — updates with the next sign-in code")
 }
 
 // MARK: - الصفحة
@@ -127,69 +96,125 @@ enum SmsBalanceText {
 struct AdminSmsView: View {
     /// نص الرجوع: «الدخول والأمان» من صفّها، و«اليوم» من تنبيهه أو نبضه
     var backTitle: String = AdminArea.access.title
-    @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject private var store = SmsBalanceStore.shared
-    @Environment(\.openURL) private var openURL
+    @StateObject private var actions = SmsPageActions()
 
     var body: some View {
         AdminHubPage {
-            header
+            AnyView(SmsHeroHeader(backTitle: backTitle, store: store, actions: actions))
         } content: {
-            if !authVM.canViewSystemSettings || (store.state == .denied && store.status == nil) {
-                DSNoteCard(L10n.t("صفحة رسائل الدخول للمالك والمدير فقط.", "Sign-in messages are for the owner and admins only."),
-                           icon: "lock.fill", tint: DS.Color.warning)
-            } else {
-                if store.state == .failed && store.status == nil {
-                    DSNoteCard(L10n.t("تعذّر جلب الرصيد الآن — اسحب للتحديث أو اضغط زر التحديث.",
-                                      "Couldn't load the balance — pull to refresh or tap refresh."),
-                               icon: "wifi.exclamationmark", tint: DS.Color.warning)
-                }
-                DSNoteCard(L10n.t("إحصاءات الإرسال المفصّلة تحتاج تفعيلاً من السيرفر — بانتظار موافقة المالك",
-                                  "Detailed sending stats need server work — awaiting the owner's approval"),
-                           icon: "chart.bar.doc.horizontal", tint: DS.Color.info)
-                limitsCard
-                setupCard
-                alertsCard
-            }
+            AnyView(SmsPageContent(store: store, actions: actions))
         }
         .refreshable { await store.refresh(force: true) }
         .task { await store.refresh() }
+        .modifier(SmsPagePresentations(actions: actions))
     }
+}
 
-    // MARK: الرأس
+/// المربّعات والنوافذ: الأدوات، تأكيد الاختبار، نتيجة الإجراء
+private struct SmsPagePresentations: ViewModifier {
+    @ObservedObject var actions: SmsPageActions
 
-    private var header: some View {
+    func body(content: Content) -> some View {
+        content
+            .dsCenterBox(item: $actions.box) { kind in
+                AnyView(SmsToolBoxView(kind: kind))
+            }
+            .dsAlert(L10n.t("إرسال رسالة اختبار لرقمك؟", "Send a test message to your number?"),
+                     isPresented: $actions.confirmTest, icon: "paperplane.fill") {
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                Button(L10n.t("أرسل الاختبار", "Send test")) { actions.testSend() }
+            } message: {
+                Text(L10n.t("تُرسل رسالة اختبار واحدة إلى رقم ملفك أنت فقط، وتخصم نقطة واحدة من الرصيد. مسموح مرة كل 10 دقائق.",
+                            "One test message goes to your own profile number only and costs 1 point. Allowed once every 10 minutes."))
+            }
+            .dsAlert(actions.notice?.title ?? "", isPresented: Binding(
+                get: { actions.notice != nil },
+                set: { if !$0 { actions.notice = nil } }
+            ), presenting: actions.notice) { _ in
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: { notice in
+                Text(notice.message)
+            }
+    }
+}
+
+/// المحتوى تحت الرأس — كل بطاقة نوع مستقل (حارس المكدس)
+private struct SmsPageContent: View {
+    @ObservedObject var store: SmsBalanceStore
+    @ObservedObject var actions: SmsPageActions
+    @EnvironmentObject var authVM: AuthViewModel
+
+    var body: some View {
+        if !authVM.canViewSystemSettings || (store.state == .denied && store.status == nil) {
+            DSNoteCard(L10n.t("صفحة رسائل الدخول للمالك والمدير فقط.", "Sign-in messages are for the owner and admins only."),
+                       icon: "lock.fill", tint: DS.Color.warning)
+        } else {
+            VStack(spacing: DS.Hub.stackSpacing) {
+                if let overview = store.overview {
+                    AnyView(SmsNumbersCard(overview: overview))
+                    AnyView(SmsTrendCard(overview: overview))
+                    AnyView(SmsRecentCard(overview: overview, actions: actions))
+                } else if store.state == .loading {
+                    DSPageLoader(L10n.t("جاري جلب أرقام الرسائل…", "Loading message stats…"),
+                                 size: DS.Icon.loaderArtInline, fillsSpace: false)
+                } else if store.overviewFailed || store.state == .failed {
+                    DSNoteCard(L10n.t("تعذّر جلب أرقام الرسائل الآن — اسحب للتحديث.",
+                                      "Couldn't load message stats — pull to refresh."),
+                               icon: "wifi.exclamationmark", tint: DS.Color.warning)
+                }
+                AnyView(SmsToolsCard(actions: actions, isOwner: authVM.isOwner))
+                AnyView(SmsAlertsCard(alerts: store.overview?.alerts))
+                AnyView(SmsLimitsCard(limits: store.overview?.limits ?? SmsOverview.Limits()))
+                AnyView(SmsSetupCard())
+            }
+        }
+    }
+}
+
+// MARK: - الرأس
+
+private struct SmsHeroHeader: View {
+    let backTitle: String
+    @ObservedObject var store: SmsBalanceStore
+    @ObservedObject var actions: SmsPageActions
+
+    var body: some View {
         AdminBandHeader(backTitle: backTitle,
                         title: L10n.t("رسائل الدخول", "Sign-in messages"),
                         subtitle: L10n.t("KWT SMS · رموز الدخول برسالة نصية", "KWT SMS · sign-in codes by text message"),
                         bottomPadding: DS.Spacing.xl) {
-            AdminGlassButton(symbol: "arrow.clockwise", label: L10n.t("تحديث الرصيد", "Refresh balance")) {
+            AdminGlassButton(symbol: "arrow.clockwise", label: L10n.t("تحديث الصفحة", "Refresh page")) {
                 Task { await store.refresh(force: true) }
             }
         } accessory: {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                balanceBlock
-                HStack(spacing: DS.Spacing.sm) {
-                    Button { openURL(SmsBalanceStore.rechargeURL) } label: {
-                        AdminPillLabel(title: L10n.t("اشحن الرصيد", "Top up balance"), icon: "creditcard.fill",
-                                       style: .gold, height: DS.Hub.pillHeightCard)
-                    }
-                    .buttonStyle(DSPressStyle())
-                    .accessibilityHint(L10n.t("يفتح موقع KWT SMS", "Opens the KWT SMS website"))
-                    Spacer(minLength: 0)
-                }
+                SmsBalanceBlock(store: store)
+                SmsHeroButtons(actions: actions)
             }
             .padding(.top, DS.Spacing.md)
         }
     }
+}
 
-    private var balanceBlock: some View {
+/// الرصيد الكبير وحالته وكم يكفي، والمقياس نصف الدائري
+private struct SmsBalanceBlock: View {
+    @ObservedObject var store: SmsBalanceStore
+
+    var body: some View {
         let level = store.level
-        return HStack(alignment: .center, spacing: DS.Spacing.md) {
+        HStack(alignment: .center, spacing: DS.Spacing.md) {
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(L10n.t("الرصيد · \(level.title)", "Balance · \(level.title)"))
-                    .dsFont(.sectionTitle)
-                    .foregroundColor(DS.Hub.onBandMuted)
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("الرصيد · \(level.title)", "Balance · \(level.title)"))
+                        .dsFont(.sectionTitle)
+                        .foregroundColor(DS.Hub.onBandMuted)
+                    if let test = store.overview?.lastTestMode {
+                        AdminBandChip(text: test ? L10n.t("وضع تجريبي", "Test mode") : L10n.t("تشغيل فعلي", "Live"),
+                                      icon: test ? "flask.fill" : "dot.radiowaves.left.and.right",
+                                      tint: test ? DS.Hub.kpiLate : DS.Hub.rolePillInk)
+                    }
+                }
                 if let balance = store.status?.balance {
                     HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
                         Text(SmsBalanceText.points(balance))
@@ -202,13 +227,18 @@ struct AdminSmsView: View {
                             .dsFont(.headline)
                             .foregroundColor(level.bandTint)
                     }
-                    Text([SmsBalanceText.enough(balance), SmsBalanceText.updated(store.status?.at)]
-                            .compactMap { $0 }.joined(separator: " · "))
+                    Text(verbatim: enoughLine(balance))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Hub.onBandMuted)
                         .fixedSize(horizontal: false, vertical: true)
-                } else if store.state == .loading && store.status == nil {
-                    Text("—")
+                    if let updated = SmsBalanceText.updated(store.status?.at) {
+                        Text(updated)
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Hub.onBandMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else if store.state == .loading {
+                    Text(verbatim: "—")
                         .dsFont(.hubBalance)
                         .foregroundColor(DS.Color.textOnPrimary)
                 } else {
@@ -227,87 +257,57 @@ struct AdminSmsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: البطاقات
-
-    private var limitsCard: some View {
-        AdminRowsCard(title: L10n.t("الحدود", "Limits"),
-                      footnote: L10n.t("حدود ثابتة في السيرفر تحمي الرصيد من التكرار.",
-                                       "Fixed server limits that protect the balance from repeats.")) {
-            kv("clock.fill", L10n.t("بين رمزين لنفس الرقم", "Between two codes to one number"),
-               L10n.t("دقيقة", "1 minute"))
-            kv("phone.fill", L10n.t("لكل رقم بالساعة", "Per number per hour"), L10n.t("حتى 5", "Up to 5"))
-            kv("person.3.fill", L10n.t("للجميع بالساعة", "Everyone per hour"), L10n.t("حتى 100", "Up to 100"))
-            kv("speedometer", L10n.t("للجميع بالثانية", "Everyone per second"), L10n.t("حتى 5", "Up to 5"))
+    /// «يكفي نحو ١٧ رمز دخول · نحو ٦ أيام بمعدّل الأسبوع»
+    private func enoughLine(_ balance: Double) -> String {
+        var parts = [SmsBalanceText.enough(balance)]
+        if let days = store.overview?.daysLeft {
+            parts.append(L10n.t("يخلص خلال \(SmsText.days(days)) تقريباً", "runs out in about \(SmsText.days(days))"))
         }
+        return parts.joined(separator: " · ")
     }
+}
 
-    private var setupCard: some View {
-        AdminRowsCard(title: L10n.t("الإعداد", "Setup")) {
-            kv("tag.fill", L10n.t("المرسل", "Sender"), L10n.t("KWT-SMS (مشترك)", "KWT-SMS (shared)"),
-               note: L10n.t("مرسل مشترك: أبطأ قليلاً وقد لا يصل لأرقام حجب الإعلانات.",
-                            "Shared sender: a bit slower and may miss numbers that block promotions."))
-            kv("globe", L10n.t("التغطية", "Coverage"), L10n.t("الكويت فقط", "Kuwait only"),
-               note: L10n.t("أرقام جوال الكويت (+965) التي تبدأ بـ 4 أو 5 أو 6 أو 9.",
-                            "+965 mobile numbers starting with 4, 5, 6 or 9."))
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                kv("text.bubble.fill", L10n.t("نص الرسالة", "Message text"),
-                   L10n.t("53 حرفاً · نقطة واحدة", "53 characters · 1 point"))
-                Text("عائلة المحمدعلي: رمز الدخول 123456. لا تشاركه مع أحد.")
-                    .dsFont(.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(DS.Spacing.md)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .fill(DS.Color.cardBackgroundSoft))
-                    .environment(\.layoutDirection, .rightToLeft)
-                    .padding(.bottom, DS.Spacing.sm)
-                    .accessibilityLabel(L10n.t("معاينة الرسالة", "Message preview"))
-            }
-        }
-    }
+/// «اشحن الرصيد» + «تحديث الرصيد الآن» — عمود واحد إن كبر الخط
+private struct SmsHeroButtons: View {
+    @ObservedObject var actions: SmsPageActions
+    @Environment(\.openURL) private var openURL
 
-    private var alertsCard: some View {
-        AdminRowsCard(title: L10n.t("التنبيهات", "Alerts")) {
-            kv("exclamationmark.triangle.fill", L10n.t("منخفض", "Low"),
-               L10n.t("أقل من 50 · مرة كل 24 ساعة", "Below 50 · once a day"), tint: DS.Color.warning)
-            kv("flame.fill", L10n.t("عاجل", "Urgent"),
-               L10n.t("أقل من 10 · كل 12 ساعة", "Below 10 · every 12 hours"), tint: DS.Color.error)
-            kv("person.2.fill", L10n.t("يستلمها", "Sent to"), L10n.t("المالك والمدراء", "Owner and admins"))
-        }
-    }
-
-    /// صفّ «اسم ← قيمة» مع ملاحظة اختيارية
-    private func kv(_ icon: String, _ label: String, _ value: String, note: String? = nil,
-                    tint: Color = DS.Color.textTertiary) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
             HStack(spacing: DS.Spacing.sm) {
-                Image(dsSymbol: icon)
-                    .dsGlyph(DS.Glyph.md, weight: .semibold)
-                    .foregroundColor(tint.dsReadableGlyph)
-                    .frame(width: DS.Icon.section)
-                    .accessibilityHidden(true)
-                Text(label)
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Color.textSecondary)
-                Spacer(minLength: DS.Spacing.sm)
-                Text(value)
-                    .dsFont(.hubRow)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.trailing)
-                    .fixedSize(horizontal: false, vertical: true)
+                recharge
+                refresh
+                Spacer(minLength: 0)
             }
-            if let note {
-                Text(note)
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, DS.Icon.section + DS.Spacing.sm)
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                recharge
+                refresh
             }
         }
-        .padding(.vertical, DS.Spacing.sm + 1)
-        .frame(minHeight: DS.Icon.tapTarget)
-        .accessibilityElement(children: .combine)
+    }
+
+    private var recharge: some View {
+        Button { openURL(SmsBalanceStore.rechargeURL) } label: {
+            AdminPillLabel(title: L10n.t("اشحن الرصيد", "Top up balance"), icon: "creditcard.fill",
+                           style: .gold, height: DS.Hub.pillHeightCard)
+                .fixedSize()
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityHint(L10n.t("يفتح صفحة شراء الرصيد في حساب KWT SMS", "Opens the KWT SMS buy-credits page"))
+    }
+
+    private var refresh: some View {
+        let busy = actions.isBusy("balance")
+        return Button { actions.refreshBalance() } label: {
+            AdminPillLabel(title: busy ? L10n.t("جارٍ جلب الرصيد…", "Fetching balance…")
+                                       : L10n.t("تحديث الرصيد الآن", "Refresh balance now"),
+                           icon: busy ? "hourglass" : "arrow.triangle.2.circlepath",
+                           style: .glass, height: DS.Hub.pillHeightCard)
+                .fixedSize()
+        }
+        .buttonStyle(DSPressStyle())
+        .disabled(busy)
+        .accessibilityHint(L10n.t("يسأل KWT SMS عن الرصيد الحالي ويحفظه", "Asks KWT SMS for the current balance and saves it"))
     }
 }
 
@@ -348,5 +348,343 @@ struct SmsBalanceGauge: View {
                         endAngle: .degrees(180 + 180 * fraction), clockwise: false)
             return path
         }
+    }
+}
+
+// MARK: - الإرسال (اليوم / ٧ / ٣٠)
+
+private struct SmsNumbersCard: View {
+    let overview: SmsOverview
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            AdminCardHeader(title: L10n.t("الإرسال", "Sending"))
+            if typeSize.isAccessibilitySize {
+                VStack(spacing: DS.Spacing.sm) { tiles }
+            } else {
+                HStack(alignment: .top, spacing: DS.Spacing.sm) { tiles }
+            }
+            SmsOutcomeBar(totals: overview.days30)
+            VStack(alignment: .leading, spacing: 0) {
+                SmsKVRow(icon: "chart.line.downtrend.xyaxis", label: L10n.t("معدّل الاستهلاك اليومي (7 أيام)", "Daily use (7-day average)"),
+                         value: L10n.t("\(SmsText.number(overview.avgDailyPoints7d)) نقطة", "\(SmsText.number(overview.avgDailyPoints7d)) pts"))
+                if let days = overview.daysLeft {
+                    AdminRowDivider()
+                    SmsKVRow(icon: "calendar", label: L10n.t("يكفي الرصيد تقريباً", "Balance lasts about"),
+                             value: SmsText.days(days))
+                }
+                AdminRowDivider()
+                SmsHourRow(count: overview.hourCount, cap: overview.hourCap)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
+    }
+
+    @ViewBuilder private var tiles: some View {
+        SmsTotalsTile(title: L10n.t("اليوم", "Today"), totals: overview.today)
+        SmsTotalsTile(title: L10n.t("7 أيام", "7 days"), totals: overview.days7)
+        SmsTotalsTile(title: L10n.t("30 يوماً", "30 days"), totals: overview.days30)
+    }
+}
+
+/// مربّع فترة: عدد رموز الدخول، نسبة القبول، النقاط
+private struct SmsTotalsTile: View {
+    let title: String
+    let totals: SmsOverview.Totals
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            Text(verbatim: "\(totals.sends)")
+                .dsFont(.hubPulse)
+                .monospacedDigit()
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(title)
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textSecondary)
+            Text(verbatim: acceptance)
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textTertiary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: points)
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textTertiary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.Hub.kpiPadding)
+        .background(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous).fill(DS.Color.cardBackgroundSoft))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.t("\(title): \(totals.sends) رمز دخول، \(acceptance)، \(points)",
+                                   "\(title): \(totals.sends) codes, \(acceptance), \(points)"))
+    }
+
+    /// «قبول 98%»
+    private var acceptance: String {
+        let pct = totals.acceptancePct.map { SmsText.percent($0) } ?? "—"
+        return L10n.t("قبول \(pct)", "\(pct) accepted")
+    }
+
+    /// «12 نقطة»
+    private var points: String {
+        L10n.t("\(SmsText.number(totals.points)) نقطة", "\(SmsText.number(totals.points)) pts")
+    }
+}
+
+/// شريط النتائج لآخر ٣٠ يوماً: مقبول · فشل · غير معروف (+ التجريبية)
+private struct SmsOutcomeBar: View {
+    let totals: SmsOverview.Totals
+
+    var body: some View {
+        if totals.sends > 0 || totals.testSends > 0 {
+            VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+                DSDistributionBar(segments: [
+                    .init(id: "ok", value: totals.accepted, tint: DS.Color.success),
+                    .init(id: "unknown", value: totals.unknown, tint: DS.Color.warning),
+                    .init(id: "failed", value: totals.failed, tint: DS.Color.error)
+                ], height: DS.Hub.meterHeight)
+                Text(verbatim: legend)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.t("آخر 30 يوماً: \(legend)", "Last 30 days: \(legend)"))
+        }
+    }
+
+    private var legend: String {
+        var parts = [L10n.t("مقبول \(totals.accepted)", "\(totals.accepted) accepted"),
+                     L10n.t("فشل \(totals.failed)", "\(totals.failed) failed"),
+                     L10n.t("غير معروف \(totals.unknown)", "\(totals.unknown) unknown")]
+        if totals.testSends > 0 {
+            parts.append(L10n.t("تجريبي \(totals.testSends)", "\(totals.testSends) test"))
+        }
+        return L10n.t("آخر 30 يوماً: ", "Last 30 days: ") + parts.joined(separator: " · ")
+    }
+}
+
+/// «هذه الساعة: ١٢ من ١٠٠» بشريط
+private struct SmsHourRow: View {
+    let count: Int
+    let cap: Int
+
+    var body: some View {
+        let share = cap > 0 ? Double(count) / Double(cap) : 0
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            SmsKVRow(icon: "gauge.with.dots.needle.33percent", label: L10n.t("هذه الساعة (للجميع)", "This hour (everyone)"),
+                     value: L10n.t("\(count) من \(cap)", "\(count) of \(cap)"))
+            AdminMeter(progress: share, tint: share >= 0.8 ? DS.Color.error : share >= 0.5 ? DS.Color.warning : DS.Color.success)
+                .padding(.bottom, DS.Spacing.sm)
+        }
+    }
+}
+
+// MARK: - آخر ٣٠ يوماً
+
+private struct SmsTrendCard: View {
+    let overview: SmsOverview
+
+    var body: some View {
+        let series = overview.series()
+        let maxSends = max(1, series.map(\.sends).max() ?? 0)
+        let total = series.reduce(0) { $0 + $1.sends }
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            AdminCardHeader(title: L10n.t("آخر 30 يوماً", "Last 30 days"))
+            if total == 0 && !series.contains(where: { $0.balance != nil }) {
+                Text(L10n.t("لا إرسال خلال آخر 30 يوماً بعد — يمتلئ الرسم مع أول رموز الدخول.",
+                            "No sends in the last 30 days yet — the chart fills with the first sign-in codes."))
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                SmsTrendChart(series: series, maxSends: maxSends)
+                    .frame(height: DS.Hub.chartHeight)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.t("آخر 30 يوماً: \(total) رمز دخول، أعلى يوم \(maxSends)",
+                                               "Last 30 days: \(total) codes, busiest day \(maxSends)"))
+                HStack {
+                    Text(SmsText.shortDay(series.first?.day ?? ""))
+                    Spacer(minLength: DS.Spacing.sm)
+                    Text(L10n.t("اليوم", "Today"))
+                }
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityHidden(true)
+                SmsTrendLegend(maxSends: maxSends)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
+    }
+}
+
+/// أعمدة الإرسال اليومي + خط الرصيد (مقياس مستقل) — رسم ساكن، الأقدم في بداية السطر
+private struct SmsTrendChart: View {
+    let series: [SmsOverview.Day]
+    let maxSends: Int
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            HStack(alignment: .bottom, spacing: DS.Hub.chartBarGap) {
+                ForEach(series, id: \.day) { day in
+                    RoundedRectangle(cornerRadius: DS.Hub.chartBarRadius, style: .continuous)
+                        .fill(day.sends > 0 ? DS.Color.primary.opacity(day.failed > 0 ? DS.Opacity.selectedStroke : 1)
+                                            : DS.Color.textTertiary.opacity(DS.Opacity.divider))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: barHeight(day))
+                }
+            }
+            SmsBalanceLine(values: series.map(\.balance))
+                .stroke(DS.Color.accentLight, style: StrokeStyle(lineWidth: DS.Hub.chartLine, lineCap: .round, lineJoin: .round))
+                .flipsForRightToLeftLayoutDirection(true)
+            SmsBalanceDots(values: series.map(\.balance))
+                .fill(DS.Color.accentLight)
+                .flipsForRightToLeftLayoutDirection(true)
+        }
+    }
+
+    private func barHeight(_ day: SmsOverview.Day) -> CGFloat {
+        guard day.sends > 0 else { return DS.Hub.chartLine }
+        let usable = DS.Hub.chartHeight - DS.Hub.chartDot
+        return max(DS.Hub.chartLine * 2, usable * CGFloat(day.sends) / CGFloat(maxSends))
+    }
+}
+
+/// خط الرصيد بين الأيام المعروفة (الفارغة تُتخطّى) — موضع فيزيائي، يقلبه الاتجاه
+private struct SmsBalanceLine: Shape {
+    let values: [Double?]
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let points = SmsChartGeometry.points(values, in: rect)
+        guard let first = points.first else { return path }
+        path.move(to: first)
+        for p in points.dropFirst() { path.addLine(to: p) }
+        return path
+    }
+}
+
+/// نقطة على كل يوم معروف الرصيد
+private struct SmsBalanceDots: Shape {
+    let values: [Double?]
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let r = DS.Hub.chartDot / 2
+        for p in SmsChartGeometry.points(values, in: rect) {
+            path.addEllipse(in: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
+        }
+        return path
+    }
+}
+
+private enum SmsChartGeometry {
+    /// مواضع الأيام المعروفة: الأفقي بمنتصف عمود اليوم، والعمودي من صفر إلى أعلى رصيد في الفترة
+    static func points(_ values: [Double?], in rect: CGRect) -> [CGPoint] {
+        guard !values.isEmpty else { return [] }
+        let top = max(1, values.compactMap { $0 }.max() ?? 1)
+        let inset = DS.Hub.chartDot / 2
+        let slot = rect.width / CGFloat(values.count)
+        return values.enumerated().compactMap { i, v in
+            guard let v else { return nil }
+            let y = rect.maxY - inset - (rect.height - 2 * inset) * CGFloat(v / top)
+            return CGPoint(x: rect.minX + slot * (CGFloat(i) + 0.5), y: y)
+        }
+    }
+}
+
+/// مفتاح الرسم: العمود = رموز الدخول اليومية، الخط = الرصيد
+private struct SmsTrendLegend: View {
+    let maxSends: Int
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: DS.Spacing.md) { items }
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) { items }
+        }
+        .dsFont(.caption)
+        .foregroundColor(DS.Color.textSecondary)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private var items: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            RoundedRectangle(cornerRadius: DS.Hub.chartBarRadius, style: .continuous)
+                .fill(DS.Color.primary)
+                .frame(width: DS.Hub.chartSwatch, height: DS.Hub.chartSwatch)
+            Text(L10n.t("رموز الدخول يومياً (أعلى يوم \(maxSends))", "Codes per day (busiest \(maxSends))"))
+        }
+        HStack(spacing: DS.Spacing.xs) {
+            Capsule()
+                .fill(DS.Color.accentLight)
+                .frame(width: DS.Hub.chartSwatch * 2, height: DS.Hub.chartLine)
+            Text(L10n.t("الرصيد آخر اليوم", "Balance at day end"))
+        }
+    }
+}
+
+// MARK: - صفّ «اسم ← قيمة»
+
+/// صفّ «اسم ← قيمة» مع ملاحظة اختيارية — مشترك بين بطاقات الصفحة
+struct SmsKVRow<Trailing: View>: View {
+    let icon: String
+    let label: String
+    var note: String? = nil
+    var tint: Color = DS.Color.textTertiary
+    /// false = الطرف عنصر تفاعلي مستقل (مبدّل) — لا يُدمج مع الاسم للقارئ الصوتي
+    var combines: Bool = true
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(dsSymbol: icon)
+                    .dsGlyph(DS.Glyph.md, weight: .semibold)
+                    .foregroundColor(tint.dsReadableGlyph)
+                    .frame(width: DS.Icon.section)
+                    .accessibilityHidden(true)
+                Text(label)
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: DS.Spacing.sm)
+                trailing()
+            }
+            if let note {
+                Text(note)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, DS.Icon.section + DS.Spacing.sm)
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm + 1)
+        .frame(minHeight: DS.Icon.tapTarget)
+        .accessibilityElement(children: combines ? .combine : .contain)
+    }
+}
+
+extension SmsKVRow where Trailing == SmsKVValue {
+    init(icon: String, label: String, value: String, note: String? = nil, tint: Color = DS.Color.textTertiary) {
+        self.init(icon: icon, label: label, note: note, tint: tint) { SmsKVValue(text: value) }
+    }
+}
+
+/// قيمة الصفّ العريضة في الطرف
+struct SmsKVValue: View {
+    let text: String
+
+    var body: some View {
+        Text(verbatim: text)
+            .dsFont(.hubRow)
+            .foregroundColor(DS.Color.textPrimary)
+            .multilineTextAlignment(.trailing)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

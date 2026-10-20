@@ -416,17 +416,16 @@ struct AdminDashboardView: View {
 
     private var todayAlerts: [AdminTodayAlert] {
         var list: [AdminTodayAlert] = []
-        // رصيد رسائل الدخول — تحت ٥٠ تحذير، تحت ١٠ عاجل (نفس عتبات السيرفر)
-        if authVM.canViewSystemSettings, let balance = sms.status?.balance,
-           balance < SmsBalanceStore.lowThreshold {
-            let urgent = balance < SmsBalanceStore.urgentThreshold
+        // رصيد رسائل الدخول — تحت عتبة «منخفض» تحذير وتحت «عاجل» خطأ (العتبات من السيرفر، افتراضياً ٥٠/١٠)
+        if authVM.canViewSystemSettings, let balance = sms.status?.balance, sms.needsTopUp {
+            let urgent = sms.level == .urgent
             list.append(AdminTodayAlert(
                 id: "sms", icon: "ellipsis.message.fill", tint: urgent ? DS.Color.error : DS.Color.warning,
                 title: urgent ? L10n.t("عاجل: رصيد رسائل الدخول قارب يخلص", "Urgent: sign-in SMS balance nearly out")
                               : L10n.t("رصيد رسائل الدخول منخفض", "Sign-in SMS balance is low"),
                 subtitle: L10n.t("\(SmsBalanceText.points(balance)) نقطة · \(SmsBalanceText.enough(balance))",
                                  "\(SmsBalanceText.points(balance)) points · \(SmsBalanceText.enough(balance))"),
-                meter: balance / SmsBalanceStore.lowThreshold,
+                meter: sms.lowThreshold > 0 ? balance / sms.lowThreshold : 0,
                 buttonTitle: L10n.t("اشحن", "Top up"), buttonStyle: .navy, action: .sms))
         }
         // تحذير توافق قاعدة البيانات (للكل عند الخلل)
@@ -1069,7 +1068,7 @@ struct AdminDashboardView: View {
         case .access:
             if let balance = sms.status?.balance {
                 return (L10n.t("رصيد الرسائل \(SmsBalanceText.points(balance))", "SMS balance \(SmsBalanceText.points(balance))"),
-                        balance < SmsBalanceStore.lowThreshold)
+                        sms.needsTopUp)
             }
             return (area.subtitle, false)
         case .app:

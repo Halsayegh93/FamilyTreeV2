@@ -161,13 +161,17 @@ struct ApprovalTemplatesBox: View {
 
 // MARK: مبدّل الساعات الصغير
 
-/// «− ٢٤ ساعة +» بارتفاع الشريحة الصغيرة ومساحة ضغط ٤٤ — للمهلة (تذكير/تصعيد)
+/// «− ٢٤ ساعة +» بارتفاع الشريحة الصغيرة ومساحة ضغط ٤٤ — للمهلة (تذكير/تصعيد)، وبالنقاط لعتبات رصيد الرسائل
 struct ApprovalHoursStepper: View {
+    /// وحدة الرقم المعروض: ساعات (المهلة، فواصل التنبيه) أو نقاط (عتبات رصيد KWT SMS)
+    enum Unit { case hours, points }
+
     let value: Int
     let range: ClosedRange<Int>
     var step: Int = 1
     let label: String
     let onChange: (Int) -> Void
+    var unit: Unit = .hours
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.dsSection) private var section
 
@@ -175,7 +179,7 @@ struct ApprovalHoursStepper: View {
         let ink = DS.Color.primary.dsChrome(in: section).dsReadableGlyph
         HStack(spacing: DS.Spacing.xxs) {
             button("minus", enabled: value - step >= range.lowerBound) { onChange(max(range.lowerBound, value - step)) }
-            Text(L10n.t("\(value) س", "\(value) h"))
+            Text(unit == .hours ? L10n.t("\(value) س", "\(value) h") : L10n.t("\(value) نقطة", "\(value) pts"))
                 .dsFont(.chipCompact)
                 .monospacedDigit()
                 .foregroundColor(DS.Color.fieldLabel)
@@ -189,7 +193,8 @@ struct ApprovalHoursStepper: View {
         .opacity(isEnabled ? 1 : DSActionFill.disabledOpacity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue(L10n.t("\(value) ساعة", "\(value) hours"))
+        .accessibilityValue(unit == .hours ? L10n.t("\(value) ساعة", "\(value) hours")
+                                           : L10n.t("\(value) نقطة", "\(value) points"))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: if value + step <= range.upperBound { onChange(value + step) }
