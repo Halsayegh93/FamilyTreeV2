@@ -209,8 +209,9 @@ class AppSettingsViewModel: ObservableObject {
 
     // MARK: - حدود رسائل الدخول (KWT SMS، ٢٠٢٦-١٠-٢٠)
 
-    /// المدى الذي يقبله السيرفر لكل حد (قيد `check` على الأعمدة — خارجه خطأ 23514)
-    static let smsWaitRange = 60...600
+    /// المدى الذي يقبله السيرفر لكل حد (قيد `check` على الأعمدة — خارجه خطأ 23514). الانتظار ٣٠–٦٠٠ ث منذ ٢٠٢٦-١٠-٢٠
+    /// (كان ٦٠–٦٠٠؛ حدّ خدمة الدخول نفسها ٥ ث فقط لكل رقم)
+    static let smsWaitRange = 30...600
     static let smsPerNumberHourRange = 1...20
     static let smsAllHourRange = 20...1000
     static let loginAttemptsRetentionRange = 7...90

@@ -962,6 +962,10 @@ struct ApprovalRequestBox<Details: View>: View {
             pendingChip = nil
             if let error {
                 noteError = error
+            } else if action == .approve {
+                // «لحظة نجاح» (الدفعة ١٠): الاعتماد بلا تأكيد سابق — اللحظة الخفيفة (فيها اهتزاز النجاح)
+                onClose()
+                DSMomentToast.show(L10n.t("تم الاعتماد", "Approved"), moment: .approved)
             } else {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 onClose()

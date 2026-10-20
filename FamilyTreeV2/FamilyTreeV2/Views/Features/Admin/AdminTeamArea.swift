@@ -75,7 +75,9 @@ struct AdminTeamAreaView: View {
                             value: reach.map { L10n.t("\($0.reachPercent)٪", "\($0.reachPercent)%") } ?? "—",
                             label: L10n.t("وصول الإشعارات", "Notification reach"),
                             icon: "bell.badge",
-                            tint: (reach?.reachShare ?? 1) < 0.7 ? DS.Hub.kpiLate : DS.Color.textOnPrimary)))
+                            tint: (reach?.reachShare ?? 1) < 0.7 ? DS.Hub.kpiLate : DS.Color.textOnPrimary,
+                            ring: reach?.reachShare,
+                            ringTint: (reach?.reachShare ?? 1) < 0.7 ? DS.Hub.kpiLate : DS.Hub.statusOk)))
         }
         .padding(.top, DS.Spacing.lg)
     }

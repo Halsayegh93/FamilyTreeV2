@@ -2188,13 +2188,14 @@ extension DS.Border {
 // MARK: - لوحة الإدارة «مركز القيادة» (طلب المالك ٢٠٢٦-١٠-٢٠: الاتجاه «أ» + لمستان من «ب»)
 //
 // رأس كحلي بتدرّج خفيف وحلقة ذهبية ساكنة، وأرقام كبيرة («اللوحة العلوي ب أ ممتازه» — المالك ٢٠٢٦-١٠-٢٠،
-// فأرقام الرأس والنبض استثناء مقصود من «لا نصّ فوق ١٧ إلا العناوين»)، بطاقات على أرضية رملية، وشبكة أقسام.
+// فأرقام الرأس والنبض استثناء مقصود من «لا نصّ فوق ١٧ إلا العناوين»)، بطاقات على أرضية بيضاء (كانت رملية)، وشبكة أقسام.
 // كل ألوان ومقاسات الرأس والبطاقات وأزرارها من هنا — الشاشات (`AdminHubKit.swift`) لا تكتب أرقاماً.
 extension DS {
     enum Hub {
         // الألوان
-        /// أرضية صفحات اللوحة (الرملي الفاتح) — أسود صافٍ في الداكن
-        static let background = SwiftUI.Color.adaptive(light: "#F5F2EC", dark: "#000000")
+        /// أرضية صفحات اللوحة: أبيض في الفاتح (طلب المالك ٢٠٢٦-١٠-٢٠ «ابيض بدال الكريمي» — كان رملياً #F5F2EC) — أسود صافٍ
+        /// في الداكن. البطاقات فوقها تنفصل بالإطار الرفيع وظلّ البطاقة الخفيف
+        static let background = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#000000")
         /// طرفا تدرّج الرأس: كحلي المصمم ← كحلي أفتح؛ وفي الداكن أعمق
         static let bandTop = SwiftUI.Color.adaptive(light: "#172536", dark: "#0B111A")
         static let bandBottom = SwiftUI.Color.adaptive(light: "#2A3E5C", dark: "#1B2638")
@@ -2271,21 +2272,11 @@ extension DS {
         /// الإجراءات السريعة: الدائرة وعرض العمود
         static let quickCircle: CGFloat = 54
         static let quickWidth: CGFloat = 66
-        /// خط حالة الطلب على طرف البطاقة، ومقياس الرصيد، وشريط مراحل الطلب
+        /// خط حالة الطلب على طرف البطاقة، وشريط مراحل الطلب (المقاييس والنسب: `DS.Ring`)
         static let stripeWidth: CGFloat = 4
-        static let meterHeight: CGFloat = 6
         static let trackHeight: CGFloat = 4
         /// دائرة إنجاز المهمة («مهام اليوم»)
         static let taskRing: CGFloat = 23
-        /// حلقات «إحصاء الأفراد»: القطر، وأصغر قليلاً مع XXXL، والصغيرة بجانب النص من أحجام إمكانية الوصول، وعرض خطّها
-        static let countsRing: CGFloat = 76
-        static let countsRingCompact: CGFloat = 68
-        static let countsRingStacked: CGFloat = 52
-        static let countsRingLine: CGFloat = 7
-        /// مقياس الرصيد نصف الدائري في صفحة رسائل الدخول
-        static let gaugeWidth: CGFloat = 112
-        static let gaugeHeight: CGFloat = 70
-        static let gaugeLine: CGFloat = 10
         /// رسم «آخر ٣٠ يوماً» في صفحة رسائل الدخول: ارتفاعه، عرض خط الرصيد ونقطته، زاوية العمود والفراغ بينها
         static let chartHeight: CGFloat = 92
         static let chartLine: CGFloat = 2
@@ -2307,14 +2298,103 @@ extension DS {
 extension DS.TextRole {
     /// التحية في رأس «اليوم» وعنوان صفحة القسم — Title 1 (٢٨)
     static let hubTitle = DS.TextRole(.title, weight: .bold)
-    /// رقم المربّع الزجاجي في رؤوس الأقسام (`AdminKPITile`) — Title 1 (٢٨) بموافقة المالك على رأس «أ»
+    /// رقم المربّع الزجاجي في رؤوس الأقسام (`AdminKPITile`) ووسط الحلقة الكبيرة (`DS.Ring.large`: رصيد رسائل الدخول) —
+    /// Title 1 (٢٨) بموافقة المالك على رأس «أ»
     static let hubKPI = DS.TextRole(.title, weight: .bold)
-    /// أرقام «يحتاج انتباهك» في رأس «اليوم»، ووسط حلقات «إحصاء الأفراد»، ورقم رسائل الدخول — Title 2 (٢٢)
+    /// أرقام «يحتاج انتباهك» في رأس «اليوم»، ووسط الحلقة المتوسطة الموحّدة (`DS.Ring.medium`)، ورقم رسائل الدخول — Title 2 (٢٢)
     static let hubPulse = DS.TextRole(.title2, weight: .bold)
     /// عنوان صفّ داخل بطاقات اللوحة وعنوان مربّع القسم — Subheadline (١٥) عريض
     static let hubRow = DS.TextRole(.subheadline, weight: .bold)
     /// نص زرّ الكبسولة في الصفوف — Footnote (١٣) عريض
     static let hubButton = DS.TextRole(.footnote, weight: .bold)
-    /// رصيد رسائل الدخول الكبير في رأس صفحتها — رسم بمقاس ثابت مقيّد بـ Large Title
-    static let hubBalance = DS.TextRole(size: 56, weight: .bold, style: .largeTitle)
+}
+
+// MARK: - المؤشرات الموحّدة (الدفعة ١٠ «وحّد شكلها كلها» — طلب المالك ٢٠٢٦-١٠-٢٠)
+//
+// كل مؤشر/نسبة في لوحة الإدارة بشكل حلقة «إحصاء الأفراد» (`DSRingGauge` في `DSGauges.swift`): المقاس والسُّمك وخط الرقم
+// والحركة من هنا. حيث الحلقة خطأ (خطّ زمني، توزيع من ٤ أجزاء فأكثر، مقارنة أطوال) شريط واحد `DSMeterBar` بسُمك الحلقة
+// المتوسطة وألوانها ومسارها وحركتها.
+extension DS {
+    enum Ring {
+        struct Size: Equatable {
+            let side: CGFloat
+            let line: CGFloat
+            /// خط الرقم في الوسط — nil = بلا رقم (المصغّرة)
+            let value: DS.TextRole?
+            /// كلمة صغيرة تحت الرقم («أحياء»، «قبول») — nil = بلا كلمة
+            let caption: DS.TextRole?
+        }
+        /// بجانب نصّ أو رقم (مربّع رقم في الرأس، قيمة صفّ، مربّع إحصاء، مربّع فترة) — بلا رقم في الوسط
+        static let mini = Size(side: 22, line: 4, value: nil, caption: nil)
+        /// صفّ بحلقة (اكتمال البيانات، سلامة الشجرة، نوع في تقرير الموافقات، وصول الإشعارات، تطابق الاسم)
+        static let small = Size(side: 46, line: 5, value: .ringSmall, caption: nil)
+        /// بطاقة («إحصاء الأفراد»، المسجّلون، القبول، الجنس، الحالة الاجتماعية، تسجيل الأجهزة)
+        static let medium = Size(side: 76, line: 7, value: .hubPulse, caption: .micro)
+        /// المتوسطة مع XXXL — أصغر قليلاً (الأرقام والأسماء أكبر)
+        static let mediumCompact = Size(side: 68, line: 7, value: .hubPulse, caption: .micro)
+        /// المتوسطة بجانب النص من أحجام إمكانية الوصول (بلا رقم داخلها — الرقم بجانبها)
+        static let mediumStacked = Size(side: 52, line: 6, value: nil, caption: nil)
+        /// بطل الصفحة (ملخّص إحصاءات العائلة، رصيد رسائل الدخول)
+        static let large = Size(side: 104, line: 10, value: .hubKPI, caption: .caption)
+        /// سُمك الشريط الموحّد (= خطّ المتوسطة)، والفراغ بين الأجزاء في الحلقة والشريط
+        static let barHeight: CGFloat = 7
+        static let segmentGap: CGFloat = 2
+        /// المسار الفارغ قبل وصول الأرقام، و«الباقي» الخافت (رمادي المتوفين نصف شفاف — لون معنى، لا أحمر)
+        static var emptyTrack: SwiftUI.Color { DS.Color.textTertiary.opacity(DS.Opacity.cardStroke) }
+        static var restTrack: SwiftUI.Color { DS.Color.deceased.opacity(0.5) }
+        /// المسار فوق الرأس الكحلي
+        static var bandTrack: SwiftUI.Color { DS.Hub.glassLine }
+        /// الحركة: الحلقة تمتلئ والرقم يعدّ معاً مرة عند الظهور الأول (تباطؤ ٠٫٧ ث بعد ٠٫١ ث)، وعند تغيّر واضح فقط
+        static let fill = Animation.easeOut(duration: 0.7)
+        static let fillDelay: Double = 0.1
+        static let change = Animation.easeOut(duration: 0.5)
+        /// تغيّر «واضح»: ١٠ نقاط مئوية في الحلقة، أو ٢٠٪ من الرقم — أقلّ منه يتبدّل بلا حركة (لا حركة مع كل تحديث)
+        static let notableShare: Double = 0.1
+        static let notableCount: Double = 0.2
+    }
+
+    /// نبضة «حالة النظام» العاجلة (أحمر): هالة حول النقطة تتّسع وتتلاشى — على الساعة الهادئة المشتركة (`FTAmbientClock`)
+    enum Pulse {
+        static let period: Double = 1.6
+        static let scale: CGFloat = 2.4
+        static let opacity: Double = 0.6
+        static let dot: CGFloat = 8
+    }
+
+    /// لحظة النجاح الخفيفة (`DSMomentToast`): كبسولة أعلى الشاشة بمجسّم اللحظة مصغّراً + سطر، ثم تختفي وحدها
+    enum MomentToast {
+        static let art: CGFloat = 40
+        static let artWidth: CGFloat = 56
+        /// مجسّم اللحظة يُرسم ١٦٠×١١٢ — يُصغَّر إلى `art`
+        static let artScale: CGFloat = 0.36
+        /// تبقى ظاهرة، ثم تتلاشى في `fadeOut`؛ وتنزل من `rise` فوق مكانها
+        static let hold: Double = 1.8
+        static let fadeOut: Double = 0.5
+        static let rise: CGFloat = 80
+        /// مهلة بعد الموافقة المتفائلة قبل اللحظة (تظهر أخطاء الفحص المحلي أولاً، وتُغلق نافذة التفاصيل)
+        static let settle: Double = 0.35
+        static let topInset: CGFloat = DS.Spacing.sm
+        static let padding: CGFloat = DS.Spacing.md
+        static let minHeight: CGFloat = 52
+    }
+}
+
+extension DS.Hub {
+    /// سطر «اليوم» الذكي تحت التحية (ذكرى اليوم، وفاة لم يُعلن عنها، الطلبات، الجدد، يوم هادئ)
+    static let greetingLine = SwiftUI.Color.white.opacity(0.86)
+    /// «المربّع اللي ينسحب» (`AdminTodaySwipeCard`): أقل سحب يبدأ به، المسافة التي تقلب الصفحة، المقاومة عند الطرفين،
+    /// ونقطتا الصفحة (العادية، الحالية كبسولة، وارتفاع صفّهما)
+    static let swipeMinimum: CGFloat = 12
+    static let swipeDistance: CGFloat = 60
+    static let swipeResistance: CGFloat = 0.3
+    /// الرمية: السرعة × هذا = المسافة الإضافية المتوقّعة (ث)
+    static let swipeThrow: CGFloat = 0.2
+    static let pageDot: CGFloat = 6
+    static let pageDotActive: CGFloat = 16
+    static let pageDotsHeight: CGFloat = 20
+}
+
+extension DS.TextRole {
+    /// الرقم داخل الحلقة الصغيرة — Footnote (١٣) عريض
+    static let ringSmall = DS.TextRole(.footnote, weight: .bold)
 }

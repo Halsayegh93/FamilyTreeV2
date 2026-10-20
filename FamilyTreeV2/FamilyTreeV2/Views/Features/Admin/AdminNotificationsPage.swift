@@ -323,6 +323,8 @@ struct AdminNotificationsPage: View {
                 AnyView(detailBox(n))
             }
             .task {
+                // «ظهور موحّد» (الدفعة ١٠): الصفوف تصعد بعد البطاقة الأولى مرة عند الظهور
+                appeared = true
                 await notificationVM.fetchNotifications(force: true)
                 withAnimation(reduceMotion ? nil : DS.Anim.smooth) { hasLoaded = true }
             }
@@ -498,6 +500,7 @@ struct AdminNotificationsPage: View {
             } else {
                 ForEach(days(shown), id: \.title) { day in
                     AdminSectionLabel(title: day.title, trailing: "\(day.items.count)")
+                        .dsCardCascade(1, appeared: appeared)
                         .adminPageRow(top: DS.Hub.stackSpacing, bottom: 0)
                     ForEach(day.items) { item in
                         row(item)
@@ -510,6 +513,7 @@ struct AdminNotificationsPage: View {
     private func row(_ item: AdminNoticeItem) -> some View {
         let picked = item.notificationId.map(selectedIds.contains) ?? false
         return AdminNoticeRow(item: item, selecting: isSelecting, picked: picked, onTap: { tap(item) })
+            .dsCardCascade(1, appeared: appeared)
             .adminPageRow()
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if let id = item.notificationId {

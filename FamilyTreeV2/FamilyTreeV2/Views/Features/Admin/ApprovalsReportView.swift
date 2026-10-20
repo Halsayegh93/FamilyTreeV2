@@ -220,15 +220,9 @@ struct ApprovalsReportView: View {
                                 .foregroundColor(DS.Color.textPrimary)
                                 .monospacedDigit()
                         }
-                        // الشريط على مقياس واحد (أطول مرحلة = العرض كاملاً)
-                        GeometryReader { geo in
-                            let fraction = CGFloat((bar.hours ?? 0) / maxHours)
-                            Capsule()
-                                .fill(bar.tint.dsReadableGlyph)
-                                .frame(width: bar.hours == nil ? 0 : max(DS.Spacing.sm, geo.size.width * fraction))
-                        }
-                        .frame(height: DS.Spacing.sm)
-                        .background(Capsule().fill(DS.Color.cardBackgroundSoft))
+                        // مقارنة أطوال على مقياس واحد (أطول مرحلة = العرض كاملاً) — الشريط الموحّد لا الحلقة (الدفعة ١٠)
+                        DSMeterBar(progress: bar.hours.map { $0 / maxHours }, tint: bar.tint.dsReadableGlyph,
+                                   track: DS.Ring.emptyTrack)
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(bar.title): \(Self.hoursText(bar.hours))")
@@ -274,28 +268,16 @@ struct ApprovalsReportView: View {
     private func typeRow(_ row: ApprovalsReport.TypeRow) -> some View {
         let pending = max(0, row.count - row.executed - row.rejected)
         let title = row.label.flatMap { $0.isEmpty ? nil : $0 } ?? ApprovalTypeTitle.title(row.type)
-        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.sm) {
-                AdminIconSquare(symbol: ApprovalTypeTitle.icon(row.type), tint: DS.Color.primary)
-                Text(title)
-                    .dsFont(.hubRow)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                Spacer(minLength: DS.Spacing.sm)
-                AdminRowValue(text: "\(row.count)")
-            }
-            DSDistributionBar(segments: [
-                .init(id: "done", value: row.executed, tint: DS.Color.success),
-                .init(id: "rejected", value: row.rejected, tint: DS.Color.reject),
-                .init(id: "pending", value: pending, tint: DS.Color.warning)
-            ], height: DS.Spacing.sm)
-            Text(L10n.t("منفّذة \(row.executed) · مرفوضة \(row.rejected) · معلّقة \(pending)",
-                        "Done \(row.executed) · Rejected \(row.rejected) · Pending \(pending)"))
-                .dsFont(.caption)
-                .foregroundColor(DS.Color.textTertiary)
-        }
-        .padding(.vertical, DS.Spacing.sm + DS.Spacing.xxs)
-        .accessibilityElement(children: .combine)
+        let legend = L10n.t("منفّذة \(row.executed) · مرفوضة \(row.rejected) · معلّقة \(pending)",
+                            "Done \(row.executed) · Rejected \(row.rejected) · Pending \(pending)")
+        // صفّ الحلقة الموحّد (الدفعة ١٠، كان شريطاً): منفّذة · مرفوضة · معلّقة بألوان المعنى والعدد في وسطها
+        return DSGaugeRow(gauge: DSRingGauge(parts: DSGaugePart.counts([("done", row.executed, DS.Color.success),
+                                                                       ("rejected", row.rejected, DS.Color.reject),
+                                                                       ("pending", pending, DS.Color.warning)]),
+                                             size: DS.Ring.small, track: DS.Ring.emptyTrack, center: .count(row.count)),
+                          title: title, subtitle: legend,
+                          spoken: L10n.t("\(title): \(row.count)، \(legend)", "\(title): \(row.count), \(legend)"))
+            .padding(.vertical, DS.Spacing.sm)
     }
 
     // MARK: أداء الإدارة

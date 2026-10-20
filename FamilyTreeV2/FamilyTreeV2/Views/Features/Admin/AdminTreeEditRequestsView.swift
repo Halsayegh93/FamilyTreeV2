@@ -417,7 +417,11 @@ struct AdminTreeEditRequestsView: View {
                 icon: action.iconName,
                 onExecute: {
                     approvalRequest = nil
-                    Task { await adminRequestVM.approveTreeEditRequest(request: request) }
+                    Task {
+                        await adminRequestVM.approveTreeEditRequest(request: request)
+                        // «لحظة نجاح» (الدفعة ١٠)
+                        AdminApprovalMoment.after(adminRequestVM, title: L10n.t("تم التنفيذ", "Carried out"))
+                    }
                 },
                 onReject: { reason in
                     approvalRequest = nil

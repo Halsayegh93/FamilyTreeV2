@@ -96,7 +96,8 @@ struct AdminAnalyticsView: View {
                 AdminPageKPI(ready ? totalMembers.formatted() : "—", L10n.t("أفراد العائلة", "Members"),
                              icon: "person.3.fill"),
                 AdminPageKPI(ready ? L10n.t("\(alivePct)٪", "\(alivePct)%") : "—", L10n.t("أحياء", "Alive"),
-                             icon: "heart.fill", tint: DS.Hub.kpiMine),
+                             icon: "heart.fill", tint: DS.Hub.kpiMine,
+                             ring: ready ? Double(activeMembers.count) / Double(totalMembers) : nil),
                 AdminPageKPI(ready ? signed(newThisMonth) : "—", L10n.t("جديد هذا الشهر", "New this month"),
                              icon: "chart.line.uptrend.xyaxis", tint: DS.Hub.kpiLate)
             ])
@@ -165,12 +166,11 @@ struct AdminAnalyticsView: View {
         return AdminSectionCard(title: L10n.t("ملخص عام", "Overview"),
                                 tag: L10n.t("\(total.formatted()) فرد", "\(total.formatted()) members")) {
             HStack(spacing: DS.Spacing.md) {
-                DSRing(progress: total > 0 ? Double(alive) / Double(total) : 0,
-                        tint: DS.Color.success, lineWidth: DS.Spacing.sm, size: DS.Icon.ring) {
-                    ringCenter(value: L10n.t("\(pct)٪", "\(pct)%"), caption: L10n.t("أحياء", "Alive"))
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(L10n.t("الأحياء \(pct)٪", "Alive \(pct)%"))
+                // الحلقة الكبيرة الموحّدة (الدفعة ١٠): الأحياء أخضر فوق رمادي المتوفين — كحلقات «إحصاء الأفراد»
+                DSRingGauge(progress: total > 0 ? Double(alive) / Double(total) : nil, tint: DS.Color.success,
+                            size: DS.Ring.large, track: DS.Ring.restTrack,
+                            center: .percent(total > 0 ? pct : nil), caption: L10n.t("أحياء", "Alive"),
+                            spoken: L10n.t("الأحياء \(pct)٪", "Alive \(pct)%"))
 
                 VStack(spacing: DS.Spacing.xsm) {
                     valueLine(icon: "person.2.fill", tint: pageTint,
@@ -193,12 +193,17 @@ struct AdminAnalyticsView: View {
         let treeOnly = u.map { $0.neverLogged + $0.noPhone }
         let living = (registered ?? 0) + (treeOnly ?? 0)
         let pct = AnalyticsPercent.value(registered ?? 0, of: living)
+        let line = L10n.t("\(registered ?? 0) من \(living) من الأحياء", "\(registered ?? 0) of \(living) living members")
         return AdminSectionCard(title: L10n.t("المسجّلون في التطبيق من الأحياء", "Registered among the living"),
-                                tag: u == nil ? nil : L10n.t("\(pct)٪", "\(pct)%"), spacing: DS.Spacing.sm) {
-            DSDistributionBar(segments: [
-                .init(id: "registered", value: registered ?? 0, tint: DS.Color.success),
-                .init(id: "tree", value: treeOnly ?? 0, tint: DS.Color.slate)
-            ])
+                                spacing: DS.Spacing.sm) {
+            // الحلقة الموحّدة (الدفعة ١٠): المسجّلون أخضر فوق رمادي «مقيّدون في الشجرة»
+            DSGaugeRow(gauge: DSRingGauge(progress: u == nil || living == 0 ? nil : Double(registered ?? 0) / Double(living),
+                                          tint: DS.Color.success, size: DS.Ring.medium, track: DS.Ring.restTrack,
+                                          center: .percent(u == nil || living == 0 ? nil : pct),
+                                          caption: L10n.t("مسجّلون", "Registered")),
+                       title: L10n.t("لهم حساب في التطبيق", "Have an app account"),
+                       subtitle: u == nil ? L10n.t("جارٍ تحميل الحسابات…", "Loading accounts…") : line,
+                       spoken: u == nil ? nil : L10n.t("المسجّلون \(pct)٪، \(line)", "Registered \(pct)%, \(line)"))
             AdminRowsCardBody {
                 AdminTapRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
                             title: L10n.t("الأعضاء المسجّلون", "Registered members"),
@@ -251,24 +256,22 @@ struct AdminAnalyticsView: View {
         return AdminSectionCard(title: L10n.t("توزيع الجنس (الأحياء)", "Gender (alive)"),
                                 tag: known ? L10n.t("\((males + females).formatted()) حي",
                                                     "\((males + females).formatted()) alive") : nil) {
-            VStack(spacing: DS.Spacing.sm) {
-                HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                    // عدد الذكور معروف دائماً (من الأعضاء) — النسبة فقط تنتظر شجرة النساء
-                    genderBlock(title: L10n.t("ذكور", "Males"), count: males, total: total,
-                                color: DS.Color.male, alignment: .leading,
-                                countKnown: true, shareKnown: known)
-                    Spacer(minLength: 0)
-                    genderBlock(title: L10n.t("إناث", "Females"), count: females, total: total,
-                                color: DS.Color.female, alignment: .trailing,
-                                countKnown: known, shareKnown: known)
-                }
-                // لمحة النسبة — بعد معرفة أرقام شجرة النساء (قبلها تبدو ١٠٠٪ ذكوراً)
-                if known {
-                    DSDistributionBar(segments: [
-                        .init(id: "male", value: males, tint: DS.Color.male),
-                        .init(id: "female", value: females, tint: DS.Color.female)
-                    ], height: 12)
-                }
+            // الحلقة الموحّدة (الدفعة ١٠) بين العددين: الذكور والإناث بلونيهما والمجموع في الوسط — بعد معرفة أرقام شجرة
+            // النساء (قبلها تبدو ١٠٠٪ ذكوراً، فمسار فارغ و«—»)
+            HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                // عدد الذكور معروف دائماً (من الأعضاء) — النسبة فقط تنتظر شجرة النساء
+                genderBlock(title: L10n.t("ذكور", "Males"), count: males, total: total,
+                            color: DS.Color.male, alignment: .leading,
+                            countKnown: true, shareKnown: known)
+                Spacer(minLength: 0)
+                DSRingGauge(parts: known ? DSGaugePart.counts([("male", males, DS.Color.male),
+                                                               ("female", females, DS.Color.female)]) : nil,
+                            size: DS.Ring.medium, track: DS.Ring.emptyTrack,
+                            center: .count(known ? males + females : nil), caption: L10n.t("أحياء", "Alive"))
+                Spacer(minLength: 0)
+                genderBlock(title: L10n.t("إناث", "Females"), count: females, total: total,
+                            color: DS.Color.female, alignment: .trailing,
+                            countKnown: known, shareKnown: known)
             }
         }
     }
@@ -331,7 +334,6 @@ struct AdminAnalyticsView: View {
                 }
             }
         }
-        .dsStaggerIn(4)
     }
 
     /// شجرة النساء بلا أرقام بعد: خطأ (مع إعادة نفس الجلب) · تحميل · لا بيانات
@@ -362,12 +364,9 @@ struct AdminAnalyticsView: View {
         return AdminSectionCard(title: L10n.t("الحالة الاجتماعية", "Marital Status"),
                                 tag: L10n.t("الأحياء", "Alive")) {
             HStack(spacing: DS.Spacing.md) {
-                DSRing(progress: Double(married) / Double(total),
-                        tint: DS.Color.success, lineWidth: DS.Spacing.sm) {
-                    ringCenter(value: L10n.t("\(pct)٪", "\(pct)%"), caption: L10n.t("متزوج", "Married"), role: .title)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(L10n.t("متزوج \(pct)٪", "Married \(pct)%"))
+                DSRingGauge(progress: Double(married) / Double(total), tint: DS.Color.success, size: DS.Ring.medium,
+                            center: .percent(pct), caption: L10n.t("متزوج", "Married"),
+                            spoken: L10n.t("متزوج \(pct)٪", "Married \(pct)%"))
 
                 VStack(spacing: DS.Spacing.xsm) {
                     valueLine(icon: "heart.fill", tint: DS.Color.success,
@@ -427,7 +426,6 @@ struct AdminAnalyticsView: View {
                            icon: "arrow.triangle.branch", tint: AppSection.admin.ink)
             }
         }
-        .dsStaggerIn(6)
     }
 
     /// فهرس الأبناء (أب → معرّفات أبنائه) لحساب العمق.
@@ -497,7 +495,8 @@ struct AdminAnalyticsView: View {
                            icon: "star.fill", tint: DS.Color.success)
                 DSStatTile(value: L10n.t("\(ratio)٪", "\(ratio)%"),
                            label: L10n.t("نسبة المتوفين", "Deceased %"),
-                           icon: "heart.slash.fill", tint: DS.Color.textSecondary)
+                           icon: "heart.slash.fill", tint: DS.Color.textSecondary,
+                           ring: totalMembers > 0 ? Double(deceased.count) / Double(totalMembers) : nil)
             }
 
             if lifespans.count < deceased.count {
@@ -512,7 +511,6 @@ struct AdminAnalyticsView: View {
                 .padding(.horizontal, DS.Spacing.xxs)
             }
         }
-        .dsStaggerIn(6)
     }
 
     // MARK: - Age Groups
@@ -635,7 +633,6 @@ struct AdminAnalyticsView: View {
                            icon: "checklist", tint: DS.Color.accent)
             }
         }
-        .dsStaggerIn(6)
     }
 
     // MARK: - Shared Components
@@ -643,24 +640,6 @@ struct AdminAnalyticsView: View {
     /// أعمدة متساوية لشبكات الأرقام
     private func tileColumns(_ count: Int) -> [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm, alignment: .top), count: count)
-    }
-
-    /// النسبة داخل الحلقة: الرقم كبيراً وتحته ما يعنيه
-    private func ringCenter(value: String, caption: String, role: DS.TextRole = .statValue) -> some View {
-        VStack(spacing: 0) {
-            Text(value)
-                .dsFont(role)
-                .foregroundColor(DS.Color.fieldLabel)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(caption)
-                .dsFont(.microCompact)
-                .foregroundColor(DS.Color.fieldValue)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .padding(.horizontal, DS.Spacing.xsm)
     }
 
     /// سطر رقم بجانب الحلقة: أيقونة صغيرة + العنوان + الرقم (+ النسبة) — مثل أسطر «حالة الإشعارات»
@@ -716,15 +695,12 @@ private enum AnalyticsPercent {
 
 // MARK: - صف توزيع
 
-/// العنوان + شريط يمتلئ بنسبة العدد + العدد والنسبة. الشريط يمتلئ بحركة ناعمة عند الظهور
-/// (ثابت مع «تقليل الحركة»).
+/// العنوان + الشريط الموحّد بنسبة العدد (`DSMeterBar` — يمتلئ مرة عند الظهور، ثابت مع «تقليل الحركة») + العدد والنسبة
 private struct AnalyticsBarRow: View {
     let label: String
     let count: Int
     let total: Int
     let color: Color
-    @State private var shown = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var fraction: Double { total > 0 ? Double(count) / Double(total) : 0 }
 
@@ -739,18 +715,8 @@ private struct AnalyticsBarRow: View {
                 .minimumScaleFactor(0.8)
                 .frame(width: DS.Chart.barLabelWidth, alignment: .leading)
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(color.opacity(DS.Opacity.tintFill))
-                    Capsule()
-                        .fill(color)
-                        .frame(width: shown || reduceMotion
-                               ? max(geo.size.width * fraction, count > 0 ? DS.Chart.barMinLength : 0)
-                               : 0)
-                }
-            }
-            .frame(height: DS.Chart.barHeight)
+            // الشريط الموحّد (الدفعة ١٠ — توزيع من ٤ أجزاء فأكثر: صفّ لكل جزء)
+            DSMeterBar(progress: fraction, tint: color)
 
             // الرقم بخط واضح + النسبة تحته
             VStack(alignment: .trailing, spacing: 0) {
@@ -770,10 +736,6 @@ private struct AnalyticsBarRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.t("\(label): \(count.formatted())، \(share)",
                                    "\(label): \(count.formatted()), \(share)"))
-        .onAppear {
-            guard !reduceMotion else { shown = true; return }
-            withAnimation(.easeOut(duration: 0.8).delay(0.2)) { shown = true }
-        }
     }
 }
 

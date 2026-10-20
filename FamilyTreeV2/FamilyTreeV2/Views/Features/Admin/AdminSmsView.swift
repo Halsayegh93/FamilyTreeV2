@@ -240,17 +240,6 @@ private struct SmsBalanceBlock: View {
                     }
                 }
                 if let balance = store.status?.balance {
-                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
-                        Text(SmsBalanceText.points(balance))
-                            .dsFont(.hubBalance)
-                            .monospacedDigit()
-                            .foregroundColor(level.bandTint)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                        Text(L10n.t("نقطة", "pts"))
-                            .dsFont(.headline)
-                            .foregroundColor(level.bandTint)
-                    }
                     Text(verbatim: enoughLine(balance))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Hub.onBandMuted)
@@ -262,9 +251,9 @@ private struct SmsBalanceBlock: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } else if store.state == .loading {
-                    Text(verbatim: "—")
-                        .dsFont(.hubBalance)
-                        .foregroundColor(DS.Color.textOnPrimary)
+                    Text(L10n.t("جارٍ جلب الرصيد…", "Fetching the balance…"))
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Hub.onBandMuted)
                 } else {
                     Text(SmsBalanceText.noReading)
                         .dsFont(.subtitle)
@@ -274,8 +263,16 @@ private struct SmsBalanceBlock: View {
                 }
             }
             Spacer(minLength: 0)
-            if let balance = store.status?.balance {
-                SmsBalanceGauge(progress: balance / SmsBalanceStore.gaugeReference, tint: level.bandTint)
+            // الحلقة الكبيرة الموحّدة (الدفعة ١٠، كانت نصف دائرة ورقماً كبيراً بجانبها): الرصيد من ١٠٠ نقطة بلون حاله،
+            // والنقاط في وسطها تعدّ من الصفر
+            if store.status?.balance != nil || store.state == .loading {
+                let balance = store.status?.balance
+                DSRingGauge(progress: balance.map { min(1, $0 / SmsBalanceStore.gaugeReference) }, tint: level.bandTint,
+                            size: DS.Ring.large, track: DS.Ring.bandTrack,
+                            center: .count(balance.map { Int($0.rounded(.down)) }),
+                            caption: L10n.t("نقطة من 100", "pts of 100"),
+                            ink: level.bandTint, captionInk: DS.Hub.onBandMuted,
+                            spoken: balance.map { L10n.t("الرصيد \(SmsBalanceText.points($0)) نقطة", "Balance \(SmsBalanceText.points($0)) points") })
             }
         }
         .accessibilityElement(children: .combine)
@@ -335,46 +332,6 @@ private struct SmsHeroButtons: View {
     }
 }
 
-/// مقياس نصف دائري للرصيد (٠…١ من مرجع ١٠٠ نقطة) — رسم ساكن
-struct SmsBalanceGauge: View {
-    let progress: Double
-    var tint: Color
-
-    var body: some View {
-        let p = min(max(progress, 0), 1)
-        ZStack(alignment: .bottom) {
-            ZStack {
-                ArcShape(fraction: 1)
-                    .stroke(DS.Hub.glassLine, style: StrokeStyle(lineWidth: DS.Hub.gaugeLine, lineCap: .round))
-                ArcShape(fraction: p)
-                    .stroke(tint, style: StrokeStyle(lineWidth: DS.Hub.gaugeLine, lineCap: .round))
-            }
-            // يمتلئ من بداية السطر (اليمين في العربية)
-            .scaleEffect(x: L10n.isArabic ? -1 : 1, y: 1)
-            Text(L10n.t("من 100", "of 100"))
-                .dsFont(.caption)
-                .foregroundColor(DS.Hub.onBandMuted)
-                .padding(.bottom, DS.Spacing.xxs)
-        }
-        .frame(width: DS.Hub.gaugeWidth, height: DS.Hub.gaugeHeight)
-        .accessibilityHidden(true)
-    }
-
-    /// قوس نصف دائرة من اليسار إلى اليمين (موضع فيزيائي ثابت)
-    private struct ArcShape: Shape {
-        var fraction: Double
-        func path(in rect: CGRect) -> Path {
-            let inset = DS.Hub.gaugeLine / 2
-            let radius = min(rect.width / 2, rect.height) - inset
-            let center = CGPoint(x: rect.midX, y: rect.maxY - inset)
-            var path = Path()
-            path.addArc(center: center, radius: radius, startAngle: .degrees(180),
-                        endAngle: .degrees(180 + 180 * fraction), clockwise: false)
-            return path
-        }
-    }
-}
-
 // MARK: - الإرسال (اليوم / ٧ / ٣٠)
 
 private struct SmsNumbersCard: View {
@@ -429,11 +386,17 @@ private struct SmsTotalsTile: View {
             Text(title)
                 .dsFont(.caption)
                 .foregroundColor(DS.Color.textSecondary)
-            Text(verbatim: acceptance)
-                .dsFont(.caption)
-                .foregroundColor(DS.Color.textTertiary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            // «قبول 98%» بحلقة مصغّرة موحّدة (الدفعة ١٠)
+            HStack(spacing: DS.Spacing.xs) {
+                if let pct = totals.acceptancePct {
+                    DSRingValue(progress: pct / 100, tint: DS.Color.success)
+                }
+                Text(verbatim: acceptance)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(verbatim: points)
                 .dsFont(.caption)
                 .foregroundColor(DS.Color.textTertiary)
@@ -460,26 +423,41 @@ private struct SmsTotalsTile: View {
     }
 }
 
-/// شريط النتائج لآخر ٣٠ يوماً: مقبول · فشل · غير معروف (+ التجريبية)
+/// نتائج آخر ٣٠ يوماً بالحلقة الموحّدة (الدفعة ١٠، كانت شريطاً): مقبول · غير معروف · فشل بألوان المعنى ونسبة القبول في
+/// وسطها، والمفتاح بجانبها (+ التجريبية)
 private struct SmsOutcomeBar: View {
     let totals: SmsOverview.Totals
 
     var body: some View {
         if totals.sends > 0 || totals.testSends > 0 {
-            VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
-                DSDistributionBar(segments: [
-                    .init(id: "ok", value: totals.accepted, tint: DS.Color.success),
-                    .init(id: "unknown", value: totals.unknown, tint: DS.Color.warning),
-                    .init(id: "failed", value: totals.failed, tint: DS.Color.error)
-                ], height: DS.Hub.meterHeight)
-                Text(verbatim: legend)
-                    .dsFont(.caption)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .center, spacing: DS.Spacing.md) {
+                DSRingGauge(parts: DSGaugePart.counts([("ok", totals.accepted, DS.Color.success),
+                                                       ("unknown", totals.unknown, DS.Color.warning),
+                                                       ("failed", totals.failed, DS.Color.error)]),
+                            size: DS.Ring.medium, track: DS.Ring.emptyTrack,
+                            center: .percent(totals.acceptancePct.map { Int($0.rounded(.down)) }),
+                            caption: L10n.t("قبول", "Accepted"))
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(L10n.t("آخر 30 يوماً", "Last 30 days"))
+                        .dsFont(.hubRow)
+                        .foregroundColor(DS.Color.textPrimary)
+                    DSGaugeLegend(items: legendItems, columns: 1)
+                }
+                Spacer(minLength: 0)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(L10n.t("آخر 30 يوماً: \(legend)", "Last 30 days: \(legend)"))
         }
+    }
+
+    private var legendItems: [DSGaugeLegend.Item] {
+        var items = [DSGaugeLegend.Item("ok", L10n.t("مقبول", "Accepted"), "\(totals.accepted)", tint: DS.Color.success),
+                     DSGaugeLegend.Item("unknown", L10n.t("غير معروف", "Unknown"), "\(totals.unknown)", tint: DS.Color.warning),
+                     DSGaugeLegend.Item("failed", L10n.t("فشل", "Failed"), "\(totals.failed)", tint: DS.Color.error)]
+        if totals.testSends > 0 {
+            items.append(DSGaugeLegend.Item("test", L10n.t("تجريبي", "Test"), "\(totals.testSends)", tint: DS.Color.textTertiary))
+        }
+        return items
     }
 
     private var legend: String {
@@ -500,11 +478,11 @@ private struct SmsHourRow: View {
 
     var body: some View {
         let share = cap > 0 ? Double(count) / Double(cap) : 0
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            SmsKVRow(icon: "gauge.with.dots.needle.33percent", label: L10n.t("هذه الساعة (للجميع)", "This hour (everyone)"),
-                     value: L10n.t("\(count) من \(cap)", "\(count) of \(cap)"))
-            AdminMeter(progress: share, tint: share >= 0.8 ? DS.Color.error : share >= 0.5 ? DS.Color.warning : DS.Color.success)
-                .padding(.bottom, DS.Spacing.sm)
+        // الحلقة المصغّرة الموحّدة (الدفعة ١٠، كانت شريطاً) بلون الحال كما كان
+        SmsKVRow(icon: "gauge.with.dots.needle.33percent", label: L10n.t("هذه الساعة (للجميع)", "This hour (everyone)")) {
+            DSRingValue(progress: share,
+                        tint: share >= 0.8 ? DS.Color.error : share >= 0.5 ? DS.Color.warning : DS.Color.success,
+                        text: L10n.t("\(count) من \(cap)", "\(count) of \(cap)"))
         }
     }
 }

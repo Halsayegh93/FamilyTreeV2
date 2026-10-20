@@ -276,6 +276,8 @@ struct DeathAnnouncementBox: View {
                 NotificationCenter.default.post(name: .deathAnnouncementPublished, object: target.id)
                 await RealtimeManager.shared.newsVM?.fetchNews(force: true)
                 isBusy = false
+                // تأكيد هادئ يليق بالوفاة: قسم «تم» كما كان + اهتزاز خفيف — بلا لحظة احتفال (الدفعة ١٠)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
                 withAnimation(DSMotion.fade) { published = true }
             } catch {
                 Log.error("[DeathAnnouncement] فشل النشر: \(error.localizedDescription)")

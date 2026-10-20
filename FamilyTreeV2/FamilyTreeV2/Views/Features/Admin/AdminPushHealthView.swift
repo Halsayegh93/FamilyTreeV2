@@ -222,15 +222,20 @@ struct AdminPushHealthView: View {
         })
     }
 
-    /// «تسجيل الأجهزة للإشعارات»: النسبة وشريطها ثم التوزيع الثلاثي
+    /// «تسجيل الأجهزة للإشعارات»: الحلقة الموحّدة (الدفعة ١٠) — تصلها · لم تُحدَّث · غير مسجّلة بألوان المعنى والنسبة في وسطها،
+    /// ثم الصفوف الثلاثة بأعدادها
     private func registrationCard(_ s: AdminDeviceReachStats) -> some View {
-        return AdminSectionCard(title: L10n.t("تسجيل الأجهزة للإشعارات", "Device registration for notifications"),
-                                tag: L10n.t("\(s.reachPercent)٪", "\(s.reachPercent)%")) {
-            DSDistributionBar(segments: [
-                .init(id: "reach", value: s.reach, tint: DS.Color.success),
-                .init(id: "stale", value: s.stale, tint: DS.Color.warning),
-                .init(id: "invalid", value: s.invalid, tint: DS.Color.error)
-            ])
+        let parts = DSGaugePart.counts([("reach", s.reach, DS.Color.success), ("stale", s.stale, DS.Color.warning),
+                                        ("invalid", s.invalid, DS.Color.error)])
+        let line = L10n.t("\(s.reach) من \(s.total) جهازاً — رمز صالح ومحدَّث خلال 30 يوماً",
+                          "\(s.reach) of \(s.total) devices — a valid token refreshed within 30 days")
+        return AdminSectionCard(title: L10n.t("تسجيل الأجهزة للإشعارات", "Device registration for notifications")) {
+            DSGaugeRow(gauge: DSRingGauge(parts: parts, size: DS.Ring.medium, track: DS.Ring.emptyTrack,
+                                          center: .percent(s.total > 0 ? s.reachPercent : nil),
+                                          caption: L10n.t("تصلها", "Reached")),
+                       title: L10n.t("تصلها الإشعارات", "Notifications reach them"), subtitle: line,
+                       spoken: L10n.t("تصل الإشعارات إلى \(s.reachPercent)٪ من الأجهزة، \(line)",
+                                      "Notifications reach \(s.reachPercent)% of devices, \(line)"))
             AdminRowsCardBody {
                 AdminInfoRow(icon: "bell.badge.fill", tint: DS.Color.success,
                              title: L10n.t("تصلها الإشعارات", "Notifications reach them"),

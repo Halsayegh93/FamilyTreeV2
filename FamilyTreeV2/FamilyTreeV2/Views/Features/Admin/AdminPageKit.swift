@@ -4,7 +4,7 @@ import SwiftUI
 //
 // كل صفحة تُفتح من صفّ في قسم (سجل الأعضاء، صحة الشجرة، الأجهزة…) تأخذ شكل «اليوم» و«الوارد»: رأس كحلي (رجوع
 // زجاجي + اسم القسم بالذهبي، عنوان كبير، سطر وصف، رمز الصفحة، حتى ٤ أرقام، أزرار دائرية، شرائح فلتر) ثم بطاقات
-// بيضاء على الأرضية الرملية — وأولها يصعد فوق الرأس قليلاً. القطع الصغيرة من `AdminHubKit.swift`، والمقاسات من `DS.Hub`.
+// بيضاء على أرضية اللوحة (`DS.Hub.background` — بيضاء في الفاتح) — وأولها يصعد فوق الرأس قليلاً. القطع الصغيرة من `AdminHubKit.swift`، والمقاسات من `DS.Hub`.
 //
 // الاستعمال (للأقسام الباقية):
 //   AdminPage(header: AdminPageHeader(title: "الأجهزة", subtitle: "…", glyph: "iphone.gen3", readOnly: !canEdit,
@@ -128,16 +128,19 @@ struct AdminPageKPI: Identifiable {
     let icon: String
     var tint: Color = DS.Color.textOnPrimary
     var tap: AdminPageTap = .none
+    /// نسبة (٠…١) — حلقة مصغّرة بجانب الرقم (`AdminKPITile.ring`)
+    var ring: Double? = nil
 
     var id: String { label }
 
     init(_ value: String, _ label: String, icon: String, tint: Color = DS.Color.textOnPrimary,
-         tap: AdminPageTap = .none) {
+         tap: AdminPageTap = .none, ring: Double? = nil) {
         self.value = value
         self.label = label
         self.icon = icon
         self.tint = tint
         self.tap = tap
+        self.ring = ring
     }
 
     /// العدد، أو «—» قبل وصول البيانات (لا أصفار مضلِّلة)
@@ -282,7 +285,7 @@ struct AdminPageBand: View {
             ForEach(header.kpis) { kpi in
                 AdminTapWrap(tap: kpi.tap,
                              label: AnyView(AdminKPITile(value: kpi.value, label: kpi.label,
-                                                         icon: kpi.icon, tint: kpi.tint)))
+                                                         icon: kpi.icon, tint: kpi.tint, ring: kpi.ring)))
             }
         })
     }
@@ -325,7 +328,7 @@ struct AdminPageBackButton: View {
 
 // MARK: - هيكل الصفحة
 
-/// الصفحة الداخلية: الرأس الكحلي ثم المحتوى على الرملي — يُخفي شريط النظام (سحب الرجوع من الحافة يبقى)
+/// الصفحة الداخلية: الرأس الكحلي ثم المحتوى على أرضية اللوحة — يُخفي شريط النظام (سحب الرجوع من الحافة يبقى)
 struct AdminPage: View {
     enum Layout {
         /// بطاقات في `ScrollView`
@@ -346,6 +349,8 @@ struct AdminPage: View {
     /// صفحة مدفوعة من صفحة `.list` (عبر `AdminPagePusher`)
     @State private var pushed: AdminPushedPage?
     @State private var isPushed = false
+    /// «ظهور موحّد لكل الصفحات» (الدفعة ١٠): البطاقة الأولى ثم المحتوى يصعدان تباعاً مرة عند الظهور (`dsCardCascade`)
+    @State private var appeared = false
 
     private var resolvedBack: String { header.back ?? outerBack ?? L10n.t("رجوع", "Back") }
 
@@ -386,6 +391,7 @@ struct AdminPage: View {
             .adminStatusBarCover()
             .toolbar(.hidden, for: .navigationBar)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            .onAppear { appeared = true }
     }
 
     private var band: AnyView {
@@ -406,8 +412,8 @@ struct AdminPage: View {
             VStack(spacing: 0) {
                 band
                 VStack(spacing: DS.Hub.stackSpacing) {
-                    if let lead { inPage(lead) }
-                    inPage(content)
+                    if let lead { inPage(lead).dsCardCascade(0, appeared: appeared) }
+                    inPage(content).dsCardCascade(lead == nil ? 0 : 1, appeared: appeared)
                 }
                 .padding(.horizontal, DS.Spacing.lg)
                 .padding(.top, lead != nil ? -DS.Hub.headerOverlap : DS.Hub.stackSpacing)
@@ -428,6 +434,7 @@ struct AdminPage: View {
                 band
                 if let lead {
                     inPage(lead)
+                        .dsCardCascade(0, appeared: appeared)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.top, -DS.Hub.headerOverlap)
                         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
@@ -477,7 +484,7 @@ private struct AdminPageRowModifier: ViewModifier {
 }
 
 extension View {
-    /// صفّ في صفحة `.list`: أرضية رملية، بلا فاصل، بهوامش الصفحة، وعمود قراءة أفقياً
+    /// صفّ في صفحة `.list`: أرضية اللوحة، بلا فاصل، بهوامش الصفحة، وعمود قراءة أفقياً
     func adminPageRow(top: CGFloat = DS.Spacing.xs, bottom: CGFloat = DS.Spacing.xs) -> some View {
         modifier(AdminPageRowModifier(top: top, bottom: bottom))
     }
@@ -705,47 +712,28 @@ struct AdminRowsCardBody<Content: View>: View {
     }
 }
 
-/// صفّ نسبة بحلقة (اكتمال البيانات، سلامة الشجرة): الحلقة بلون الحال + عنوان + سطر
+/// صفّ نسبة بحلقة (اكتمال البيانات، سلامة الشجرة): الحلقة الصغيرة الموحّدة بالنسبة في وسطها (تعدّ من الصفر) + عنوان + سطر.
+/// اللون بالحال (≥ ٩٠٪ نجاح، ≥ ٦٠٪ تحذير، وإلا خطأ) أو لون ثابت (`tint`)
 struct AdminScoreRow: View {
     /// ٠…١ — nil = لم تكتمل الأرقام بعد («—»)
     let progress: Double?
     let title: String
     let subtitle: String
+    /// لون ثابت بدل لون الحال (اكتمال البيانات ذهبي)
+    var tint: Color? = nil
 
     private var percent: Int? { progress.map { Int(($0 * 100).rounded(.down)) } }
 
-    private var tint: Color {
+    private var ink: Color {
+        if let tint { return tint }
         guard let progress else { return DS.Color.textTertiary }
-        return progress >= 0.9 ? DS.Color.success : (progress >= 0.6 ? DS.Color.warning : DS.Color.error)
+        return (progress >= 0.9 ? DS.Color.success : (progress >= 0.6 ? DS.Color.warning : DS.Color.error)).dsReadableGlyph
     }
 
     var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            DSRing(progress: progress ?? 0, tint: tint.dsReadableGlyph, lineWidth: DS.Spacing.xsm,
-                   size: DS.Icon.sizeLg) {
-                Text(percent.map { L10n.t("\($0)٪", "\($0)%") } ?? "—")
-                    .dsFont(.chip)
-                    .monospacedDigit()
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .padding(.horizontal, DS.Spacing.xs)
-            }
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(title)
-                    .dsFont(.hubRow)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(subtitle)
-                    .dsFont(.footnote)
-                    .monospacedDigit()
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(percent.map { "\(title) \(L10n.t("\($0)٪", "\($0)%"))، \(subtitle)" } ?? title)
+        DSGaugeRow(gauge: DSRingGauge(progress: progress, tint: ink, size: DS.Ring.small, center: .percent(percent)),
+                   title: title, subtitle: subtitle,
+                   spoken: percent.map { "\(title) \(DSGaugeText.percent($0))، \(subtitle)" } ?? title)
     }
 }
 

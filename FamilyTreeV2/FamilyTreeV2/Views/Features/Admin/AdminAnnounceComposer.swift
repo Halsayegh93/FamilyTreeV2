@@ -502,6 +502,8 @@ struct AdminAnnounceComposer: View {
                                             "Push scheduled to \(audienceText) for \(scheduledText).")
                                    : L10n.t("وصل الإشعار \(audienceText).", "Push sent to \(audienceText)."))
         }
+        // لحظة النجاح الموجودة (`dsAlert(…, moment: .success)`) + اهتزاز نجاح خفيف (الدفعة ١٠)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
         sent = done.joined(separator: "\n")
     }
 }

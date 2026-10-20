@@ -396,6 +396,9 @@ struct AdminKPITile: View {
     let label: String
     let icon: String
     var tint: Color = DS.Color.textOnPrimary
+    /// نسبة (٠…١) — حلقة مصغّرة موحّدة بجانب الرقم (الدفعة ١٠: كل نسبة بحلقة)
+    var ring: Double? = nil
+    var ringTint: Color? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -404,13 +407,18 @@ struct AdminKPITile: View {
         // الحجم الافتراضي كما كان تماماً.
         let wraps = typeSize > .large
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            Text(value)
-                .dsFont(.hubKPI)
-                .monospacedDigit()
-                .foregroundColor(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .contentTransition(.numericText())
+            HStack(spacing: DS.Spacing.xsm) {
+                Text(value)
+                    .dsFont(.hubKPI)
+                    .monospacedDigit()
+                    .foregroundColor(tint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                if let ring {
+                    DSRingValue(progress: ring, tint: ringTint ?? tint, track: DS.Ring.bandTrack)
+                }
+            }
             HStack(alignment: wraps ? .firstTextBaseline : .center, spacing: DS.Spacing.xs) {
                 Image(dsSymbol: icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
                 Text(label)
@@ -732,22 +740,14 @@ extension AdminListRow where Trailing == EmptyView {
     }
 }
 
-/// شريط تقدّم رفيع (رصيد، نسبة الحسابات)
+/// شريط تقدّم (٠…١) — غلاف للشريط الموحّد `DSMeterBar` (الدفعة ١٠؛ الصفحات الجديدة تستعمل `DSMeterBar`/`DSRingValue` مباشرة)
 struct AdminMeter: View {
     /// ٠…١
     let progress: Double
     var tint: Color = DS.Color.warning
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(DS.Color.cardBackgroundSoft)
-                Capsule().fill(tint)
-                    .frame(width: max(DS.Hub.meterHeight, geo.size.width * min(max(progress, 0), 1)))
-            }
-        }
-        .frame(height: DS.Hub.meterHeight)
-        .accessibilityHidden(true)
+        DSMeterBar(progress: progress, tint: tint)
     }
 }
 
@@ -809,17 +809,19 @@ extension View {
 
 // MARK: صفحة القسم
 
-/// هيكل صفحة القسم: الرأس الكحلي ثم المحتوى المتمرّر على الأرضية الرملية — يُخفي شريط النظام
+/// هيكل صفحة القسم: الرأس الكحلي ثم المحتوى المتمرّر على أرضية اللوحة — يُخفي شريط النظام
 struct AdminHubPage<Header: View, Content: View>: View {
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
     @Environment(\.dsLandscape) private var landscape
+    /// «ظهور موحّد لكل الصفحات» (الدفعة ١٠): كل بطاقة في المحتوى تصعد تباعاً مرة عند الظهور (`dsCardCascade`)
+    @State private var appeared = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 header()
-                VStack(spacing: DS.Hub.stackSpacing) {
+                _VariadicView.Tree(AdminCascadeLayout(appeared: appeared)) {
                     content()
                 }
                 .padding(.horizontal, DS.Spacing.lg)
@@ -840,6 +842,21 @@ struct AdminHubPage<Header: View, Content: View>: View {
         .adminStatusBarCover()
         .toolbar(.hidden, for: .navigationBar)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onAppear { appeared = true }
+    }
+}
+
+/// عمود بطاقات صفحة القسم: كل ابن يصعد ويظهر تباعاً (`dsCardCascade` بترتيبه — أول ٧ والباقي مع السابع)
+struct AdminCascadeLayout: _VariadicView_UnaryViewRoot {
+    let appeared: Bool
+
+    @ViewBuilder
+    func body(children: _VariadicView.Children) -> some View {
+        VStack(spacing: DS.Hub.stackSpacing) {
+            ForEach(Array(children.enumerated()), id: \.element.id) { index, child in
+                child.dsCardCascade(index, appeared: appeared)
+            }
+        }
     }
 }
 
@@ -878,6 +895,20 @@ struct AdminDividedLayout: _VariadicView_UnaryViewRoot {
                 child
                 if child.id != last { AdminRowDivider() }
             }
+        }
+    }
+}
+
+// MARK: - لحظة الموافقة (الدفعة ١٠)
+
+/// بعد الموافقة على طلب في «الوارد»: لحظة «تمت الموافقة» — إن لم يظهر خطأ من الموافقة نفسها (رقم مستخدم، صلاحية…)
+@MainActor
+enum AdminApprovalMoment {
+    static func after(_ adminRequestVM: AdminRequestViewModel, title: String = L10n.t("تمت الموافقة", "Approved")) {
+        // الموافقة متفائلة (يختفي الصفّ فوراً) — مهلة قصيرة لتظهر أخطاء الفحص المحلي أولاً وتُغلق نافذة التفاصيل
+        DispatchQueue.main.asyncAfter(deadline: .now() + DS.MomentToast.settle) {
+            guard adminRequestVM.errorMessage == nil else { return }
+            DSMomentToast.show(title, moment: .approved)
         }
     }
 }

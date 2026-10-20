@@ -6,7 +6,7 @@ import SwiftUI
 // المعتمدين للمدير)، الدول المتاحة (والقائمة الحية من KWT)، ونص الرسالة — كانت مكرّرة في بطاقتي «الحدود» و«الإعداد» وصفّي
 // «المرسلون/التغطية» في الأدوات و«طريقة العمل».
 //
-// الحدود الأربعة (`app_settings`: الانتظار ٦٠–٦٠٠ ث · لنفس الرقم بالساعة ١–٢٠ · للجميع بالساعة ٢٠–١٠٠٠ · حفظ
+// الحدود الأربعة (`app_settings`: الانتظار ٣٠–٦٠٠ ث · لنفس الرقم بالساعة ١–٢٠ · للجميع بالساعة ٢٠–١٠٠٠ · حفظ
 // «محاولات الدخول» ٧–٩٠ يوماً): تُقرأ من النظرة (`limits`/`retention`)، المالك يعدّل (تُحفظ الأربعة معاً بعد توقّف الضغط —
 // `updateSmsLimits`)، المدير يقرأ. سيرفر أقدم بلا `wait_seconds` أو النظرة لم تصل ← للقراءة.
 // «اسم المرسل»: من `sms_admin_overview().sender`؛ المالك يغيّره من قائمة KWT المعتمدة عبر `kwtsms-admin`
@@ -20,7 +20,7 @@ struct SmsSendingLimits: Equatable {
     var retentionDays: Int
 
     /// درجات «−/+» — الانتظار بدرجات مفهومة، والباقي بقفزات معقولة داخل مدى السيرفر
-    static let waitLadder = [60, 90, 120, 180, 300, 600]
+    static let waitLadder = [30, 45, 60, 90, 120, 180, 300, 600]
     static let allHourLadder = [20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000]
     static let retentionLadder = [7, 14, 21, 30, 45, 60, 90]
 }
@@ -42,8 +42,7 @@ struct SmsSendingSettingsCard: View {
         AdminRowsCard(title: L10n.t("إعدادات الإرسال", "Sending settings"), footnote: footnote(canEdit: canEdit)) {
             if canEdit {
                 stepperRow("hourglass", DS.Color.info, L10n.t("الانتظار بين رمزين", "Wait between two codes"),
-                           note: L10n.t("أقل من دقيقة غير ممكن — حد خدمة الدخول \(SmsText.isolate("Supabase")).",
-                                        "Under a minute isn't possible — a Supabase sign-in limit."),
+                           note: L10n.t("أقل شي 30 ثانية", "At least 30 seconds"),
                            value.waitSeconds, AppSettingsViewModel.smsWaitRange, .seconds, ladder: SmsSendingLimits.waitLadder) {
                     var v = value; v.waitSeconds = $0; save(v)
                 }

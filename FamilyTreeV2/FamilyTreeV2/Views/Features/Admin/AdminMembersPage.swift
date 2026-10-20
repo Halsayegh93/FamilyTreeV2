@@ -441,34 +441,18 @@ struct AdminMembersSummary: View {
         .adminCard()
     }
 
-    private func percent(_ p: Double) -> String {
-        let n = Int((p * 100).rounded(.down))
-        return L10n.t("\(n)٪", "\(n)%")
-    }
-
-    /// «اكتمال البيانات» + «ابدأ الاستكمال» (يحلّ محلّ «جودة البيانات» و«محطة التفعيل»)
+    /// «اكتمال البيانات» + «ابدأ الاستكمال» (يحلّ محلّ «جودة البيانات» و«محطة التفعيل») — صفّ الحلقة الموحّد (الدفعة ١٠)
+    /// بذهبي «اليوم» كما كان
     private var gapsCard: some View {
-        let p = index.completeness
         let empty = index.rows(.gaps, sub).isEmpty
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(L10n.t("اكتمال البيانات", "Data completeness"))
-                    .dsFont(.headline)
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer(minLength: DS.Spacing.sm)
-                Text(verbatim: percent(p))
-                    .dsFont(.statValue)
-                    .monospacedDigit()
-                    .foregroundColor(DS.Color.accent)
-            }
-            AdminMeter(progress: p, tint: DS.Color.accentLight)
-            HStack(alignment: .center, spacing: DS.Spacing.sm) {
-                Text(L10n.t("عضو واحد في كل مرة — أكمل ثم «التالي»", "One member at a time — fill in, then “Next”"))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: DS.Spacing.xs)
-                if !empty {
+            AdminScoreRow(progress: index.completeness,
+                          title: L10n.t("اكتمال البيانات", "Data completeness"),
+                          subtitle: L10n.t("عضو واحد في كل مرة — أكمل ثم «التالي»", "One member at a time — fill in, then “Next”"),
+                          tint: DS.Color.accent)
+            if !empty {
+                HStack {
+                    Spacer(minLength: 0)
                     AdminPillButton(title: L10n.t("ابدأ الاستكمال", "Start"), icon: L10n.isArabic ? "chevron.left" : "chevron.right",
                                     style: .navy, height: DS.Hub.pillHeightCard, action: start)
                         .fixedSize()
@@ -519,9 +503,10 @@ struct AdminMembersSummary: View {
                     .foregroundColor(DS.Color.success.dsReadableGlyph)
             }
             if accountsReady {
-                DSDistributionBar(segments: parts.map { .init(id: $0.0.rawValue, value: index.count(.registered, $0.0), tint: $0.1) },
-                                  height: DS.Hub.meterHeight)
-                FlowLegend(items: parts.map { ($0.0.title, index.count(.registered, $0.0), $0.1) })
+                // ٤ أجزاء — الشريط الموحّد ومفتاحه (الحلقة للجزأين والثلاثة)
+                DSMeterBar(parts: DSGaugePart.counts(parts.map { ($0.0.rawValue, index.count(.registered, $0.0), $0.1) }),
+                           track: DS.Ring.emptyTrack)
+                DSGaugeLegend(items: parts.map { .init($0.0.rawValue, $0.0.title, "\(index.count(.registered, $0.0))", tint: $0.1) })
             } else {
                 Text(L10n.t("جارٍ تحميل الحسابات…", "Loading accounts…"))
                     .dsFont(.footnote)
@@ -534,29 +519,6 @@ struct AdminMembersSummary: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .adminCard()
-    }
-}
-
-/// مفتاح التوزيع: نقطة ملوّنة + الاسم + العدد، يلتفّ على سطرين
-private struct FlowLegend: View {
-    let items: [(String, Int, Color)]
-
-    var body: some View {
-        let columns = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
-        LazyVGrid(columns: columns, alignment: .leading, spacing: DS.Spacing.xs) {
-            ForEach(items.indices, id: \.self) { i in
-                HStack(spacing: DS.Spacing.xs) {
-                    Circle().fill(items[i].2).frame(width: DS.Icon.legendDotCompact, height: DS.Icon.legendDotCompact)
-                        .accessibilityHidden(true)
-                    Text(verbatim: "\(items[i].0) \(items[i].1)")
-                        .dsFont(.caption)
-                        .monospacedDigit()
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(2)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

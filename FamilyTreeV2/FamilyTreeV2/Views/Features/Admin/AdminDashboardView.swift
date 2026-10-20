@@ -59,10 +59,14 @@ struct AdminDashboardView: View {
     /// المعلن عنهم — nil = تعذّر الجلب (لا تنبيه «لم يُعلن» خطأً)
     @State private var announcedIds: Set<UUID>? = nil
     @State private var activeNow: Int? = nil
+    /// قُيّدوا في الشجرة هذا الأسبوع (الأحياء المحسوبون) — لسطر التحية الذكي
+    @State private var joinedThisWeek = 0
     /// «بلا إشعارات» في «حالة النظام» — نفس مخزن «الأجهزة ووصول الإشعارات» (رقم واحد بتعريف واحد)
     @ObservedObject private var devices = AdminDeviceReachStore.shared
     /// «إحصاء الأفراد» — تبدأ من آخر ما حُمّل وتتحدّث مع التحميل
     @State private var memberCounts = AdminMemberCounts.seeded(members: [])
+    /// «ظهور موحّد» (الدفعة ١٠): البطاقات تصعد تباعاً مرة عند الظهور (`dsCardCascade`) — يُضبط في `.task` الموجودة
+    @State private var appeared = false
 
     @Environment(\.dsLandscape) private var landscape
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -116,6 +120,7 @@ struct AdminDashboardView: View {
         .task {
             // شريط الأقسام في كل صفحة من هذا المكدس ينقل عبر هذا (في `.task` الموجودة — بلا مُعدِّل إضافي على الجذر)
             AdminAreaRouter.navigate = openArea
+            appeared = true
             await loadAllAdminData()
         }
         .onChange(of: memberVM.membersVersion) { _ in recalculate() }
@@ -225,7 +230,8 @@ struct AdminDashboardView: View {
     /// الأرقام المحسوبة من الأعضاء والطلبات — مرور واحد على الأعضاء
     private func recalculate() {
         let all = memberVM.allMembers
-        var moderator = 0, issues = 0, treeIssues = 0
+        var moderator = 0, issues = 0, treeIssues = 0, joined = 0
+        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
         let moderatorRoles: Set<FamilyMember.UserRole> = [.owner, .admin, .monitor, .supervisor]
         var activeIds = Set<UUID>(), fatherIds = Set<UUID>()
         for m in all where m.role != .pending && m.status != .frozen {
@@ -235,6 +241,9 @@ struct AdminDashboardView: View {
         for m in all {
             if m.role == .pending { continue }
             if moderatorRoles.contains(m.role) && m.isDeceased != true && m.status != .frozen { moderator += 1 }
+            // نفس «قُيّدوا هذا الأسبوع» في «العائلة»
+            if m.isDeceased != true && m.isCountable,
+               let created = ApprovalWorkflow.date(m.createdAt), created >= weekAgo { joined += 1 }
             // «بيانات ناقصة» = نفس شريحة «العائلة» (الميلاد والجنس للأحياء، والصورة للعضو المسجّل) — بلا «مفعّل/بانتظار»
             if m.isDeceased != true
                 && !AdminMemberFacts.gaps(m, registered: AdminAccountsStore.shared.info(m.id) != nil).isEmpty { issues += 1 }
@@ -259,6 +268,7 @@ struct AdminDashboardView: View {
         if countsNow.women == nil { countsNow.setWomen(WomenStore.cache) }
         withAnimation(DS.Anim.smooth) {
             moderatorCount = moderator
+            joinedThisWeek = joined
             issueMembersCount = issues
             treeIssuesCount = treeIssues
             inboxTotal = total
@@ -321,6 +331,9 @@ struct AdminDashboardView: View {
 
     /// «إحصاء الأفراد» لمن يرى الإحصائيات (كبطاقة «أفراد العائلة» القديمة): المالك والمدير والمراقب
     private var seesMemberCounts: Bool { authVM.isAdmin || authVM.currentUser?.role == .monitor }
+
+    /// مجاله الشجرة والأعضاء (المالك والمدير والمراقب — المشرف للمحتوى): «انضمّوا هذا الأسبوع» في سطر التحية
+    private var seesTreeDomain: Bool { authVM.isAdmin || authVM.currentUser?.role == .monitor }
 
     private var roleGuide: RoleGuide? {
         authVM.currentUser.flatMap { RoleGuide.forRole($0.role) }
@@ -385,6 +398,20 @@ struct AdminDashboardView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, DS.Spacing.sm + 2)
 
+            // سطر التحية الذكي (الدفعة ١٠): جملة واحدة من بيانات حقيقية — السطر محجوز أثناء التحميل (لا قفزة)
+            let smart = AdminTodayText.smartLine(memorialToday: memorial.today.map(\.member), unannounced: unannounced,
+                                                 waiting: c.waiting,
+                                                 joinedThisWeek: seesTreeDomain ? joinedThisWeek : nil, loading: loading)
+            Text(verbatim: smart ?? " ")
+                .dsFont(.subtitle)
+                .foregroundColor(DS.Hub.greetingLine)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .opacity(smart == nil ? 0 : 1)
+                .animation(DSMotion.fade, value: smart == nil)
+                .padding(.top, DS.Spacing.xxs)
+                .accessibilityHidden(smart == nil)
+
             HStack(spacing: DS.Spacing.sm) {
                 if let guide = roleGuide {
                     AdminBandChip(text: guide.title)
@@ -419,13 +446,6 @@ struct AdminDashboardView: View {
                 .padding(.top, DS.Spacing.md)
             }
 
-            // «يحتاج انتباهك» (الدفعة ٩): الأرقام الأربعة وسطر «حالة النظام» في لوحة زجاجية واحدة — نوع مستقل خلف
-            // `AnyView` (حارس المكدس). السطر للمالك والمدير فقط (لا إشارات لغيرهما)
-            let pills = statusPills
-            AnyView(AdminAttentionPanel(counts: c, loading: loading,
-                                        status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
-                                        open: openStatusHome))
-                .padding(.top, DS.Spacing.md)
         }
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth - 2 * DS.Spacing.lg)
         .padding(.horizontal, landscape ? DS.Spacing.xxl : DS.Hub.headerSide)
@@ -452,21 +472,28 @@ struct AdminDashboardView: View {
     private var todayContent: AnyView { AnyView(todayContentStack) }
 
     private var todayContentStack: some View {
-        let entries = todayEntries(decisionItems)
-        let seesCounts = seesMemberCounts
+        let items = decisionItems
+        let entries = todayEntries(items)
+        let pills = statusPills
         return VStack(spacing: DS.Hub.stackSpacing) {
-            if seesCounts {
-                AnyView(AdminMemberCountsCard(counts: memberCounts))
-            }
-            // بلا «إحصاء الأفراد» (المشرف) تصعد المربّعات نفسها فوق الرأس — عنوان «الأقسام» لا يقع على الكحلي
-            AnyView(areasSection(labeled: seesCounts))
-            AnyView(decisionCard(entries))
+            // «المربّع اللي ينسحب» (الدفعة ١٠، اختيار المالك): «يحتاج انتباهك» ثم «إحصاء الأفراد» في مربّع واحد يصعد فوق حافة
+            // الرأس — كل صفحة نوع مستقل خلف `AnyView` (حارس المكدس). سطر «حالة النظام» للمالك والمدير فقط، و«إحصاء الأفراد»
+            // للمالك والمدير والمراقب (المشرف صفحة واحدة بلا نقاط). كل بطاقة تصعد تباعاً (المُعدِّل داخل `AnyView`)
+            AnyView(AdminTodaySwipeCard(
+                userKey: authVM.currentUser?.id.uuidString ?? "",
+                attention: AnyView(AdminAttentionPanel(counts: counts(items), loading: isInitialLoading,
+                                                       status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
+                                                       open: openStatusHome)),
+                census: seesMemberCounts ? AnyView(AdminMemberCountsCard(counts: memberCounts)) : nil)
+                .dsCardCascade(0, appeared: appeared))
+            AnyView(areasSection(labeled: true).dsCardCascade(1, appeared: appeared))
+            AnyView(decisionCard(entries).dsCardCascade(2, appeared: appeared))
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.bottom, DS.Spacing.xxxl)
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
         .dsTabBarClearance()
-        // الأرضية الرملية تبدأ تحت ما يصعد من البطاقة فوق الرأس
+        // أرضية اللوحة (`DS.Hub.background`) تبدأ تحت ما يصعد من المربّع فوق الرأس
         .background(alignment: .top) {
             DS.Hub.background
                 .padding(.top, DS.Hub.headerOverlap)
@@ -804,12 +831,12 @@ struct AdminTodayDoneRow: View {
     }
 }
 
-// MARK: - «يحتاج انتباهك» في الرأس
+// MARK: - «يحتاج انتباهك» (الصفحة الأولى من «المربّع اللي ينسحب»)
 
-/// لوحة «يحتاج انتباهك» (اختيار المالك ٢٠٢٦-١٠-٢٠، الدفعة ٩ — بدل المربّعات الأربعة وشريحة «حالة النظام» تحتها): لوحة
-/// زجاجية واحدة في الرأس الكحلي، أقصر منهما معاً. صفّها الأعلى الأرقام الأربعة بأيقوناتها وأسمائها (أصغر من المربّعات،
-/// بخطوط رفيعة بينها): بانتظار قرارك · عاجل · متأخر ← «الوارد» بفلتره، ورسائل ← رسائل الأعضاء؛ ثم خطّ رفيع، ثم سطر
-/// «حالة النظام» في اللوحة نفسها (المالك والمدير فقط) يفتح لوحة الإشارات الأربع. من أحجام إمكانية الوصول الأرقام ٢×٢.
+/// صفحة «يحتاج انتباهك» (الدفعة ٩ لوحة زجاجية في الرأس؛ الدفعة ١٠ الصفحة الأولى من «المربّع اللي ينسحب» `AdminTodaySwipeCard`
+/// على البطاقة البيضاء): العنوان، ثم الأرقام الأربعة بأيقوناتها وأسمائها (بخطوط رفيعة بينها، تعدّ من الصفر): بانتظار قرارك ·
+/// عاجل · متأخر ← «الوارد» بفلتره، ورسائل ← رسائل الأعضاء؛ ثم سطر «حالة النظام» (المالك والمدير فقط) بتعبئة خفيفة من لونه
+/// يفتح لوحة الإشارات الأربع. الصفحة تملأ ارتفاع المربّع (الأرقام في الوسط). من أحجام إمكانية الوصول الأرقام ٢×٢.
 /// القارئ الصوتي: حاوية «يحتاج انتباهك» فيها كل رقم زرّاً ثم سطر الحالة
 struct AdminAttentionPanel: View {
     let counts: AdminTodayCounts
@@ -832,28 +859,29 @@ struct AdminAttentionPanel: View {
     private var items: [Item] {
         [
             Item(id: "waiting", value: counts.waiting, label: L10n.t("بانتظار قرارك", "Awaiting you"), icon: "tray",
-                 tint: DS.Hub.kpiMine, filter: .waiting),
+                 tint: DS.Color.accent, filter: .waiting),
             Item(id: "urgent", value: counts.urgent, label: L10n.t("عاجل", "Urgent"), icon: "flame",
-                 tint: DS.Hub.kpiHot, filter: .urgent),
+                 tint: DS.Color.error.dsReadableGlyph, filter: .urgent),
             Item(id: "late", value: counts.late, label: L10n.t("متأخر", "Late"), icon: "clock",
-                 tint: DS.Hub.kpiLate, filter: .late),
+                 tint: DS.Color.warning.dsReadableGlyph, filter: .late),
             Item(id: "messages", value: counts.unreadMessages, label: L10n.t("رسائل", "Messages"), icon: "bubble.left",
-                 tint: DS.Color.textOnPrimary, filter: nil)
+                 tint: DS.Color.textPrimary, filter: nil)
         ]
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous)
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            AdminCardHeader(title: L10n.t("يحتاج انتباهك", "Needs your attention"))
+            Spacer(minLength: 0)
             numbers
+            Spacer(minLength: 0)
             if let status {
-                hairline(horizontal: true)
                 AnyView(AdminSystemStatusLine(status: status, open: open))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous))
             }
         }
-        .background(shape.fill(DS.Hub.glass))
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
+        .padding(DS.Hub.cardPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("يحتاج انتباهك", "Needs your attention"))
     }
@@ -885,7 +913,7 @@ struct AdminAttentionPanel: View {
                     ?? AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox))
             }
         } label: {
-            AdminAttentionNumber(value: loading ? "—" : "\(item.value)", label: item.label, icon: item.icon, tint: item.tint)
+            AdminAttentionNumber(value: loading ? nil : item.value, label: item.label, icon: item.icon, tint: item.tint)
         }
         .buttonStyle(DSPressStyle())
         .overlay(alignment: .leading) {
@@ -897,16 +925,18 @@ struct AdminAttentionPanel: View {
 
     private func hairline(horizontal: Bool) -> some View {
         Rectangle()
-            .fill(DS.Hub.glassLine)
+            .fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
             .frame(width: horizontal ? nil : DS.Border.width, height: horizontal ? DS.Border.width : nil)
             .accessibilityHidden(true)
     }
 }
 
-/// رقم في «يحتاج انتباهك»: الرقم بلونه فوق الكحلي (ذهبي فاتح، مرجاني، كهرماني، أبيض) وتحته الأيقونة والاسم بالأبيض الخافت،
-/// في وسط عموده. خط الجهاز أكبر من الافتراضي: الاسم على سطرين محجوزين فتبقى الأعمدة بطول واحد (بلا `fixedSize`)
+/// رقم في «يحتاج انتباهك»: الرقم بلون معناه على البطاقة (ذهبي، أحمر، كهرماني، أساسي) وتحته الأيقونة والاسم بالثانوي،
+/// في وسط عموده. الرقم يعدّ من الصفر حين يصل (`DSCountText`، الدفعة ١٠ «الأرقام تعدّ»). خط الجهاز أكبر من الافتراضي: الاسم
+/// على سطرين محجوزين فتبقى الأعمدة بطول واحد (بلا `fixedSize`)
 struct AdminAttentionNumber: View {
-    let value: String
+    /// nil = لم يُحمَّل («—»)
+    let value: Int?
     let label: String
     let icon: String
     let tint: Color
@@ -915,13 +945,12 @@ struct AdminAttentionNumber: View {
     var body: some View {
         let wraps = typeSize > .large
         VStack(spacing: DS.Spacing.xxs) {
-            Text(verbatim: value)
+            DSCountText(value: value)
                 .dsFont(.hubPulse)
                 .monospacedDigit()
                 .foregroundColor(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .contentTransition(.numericText())
             HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
                 Image(dsSymbol: icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
                 Text(label)
@@ -930,14 +959,14 @@ struct AdminAttentionNumber: View {
                     .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
             }
-            .foregroundColor(DS.Hub.onBandMuted)
+            .foregroundColor(DS.Color.textSecondary)
         }
         .padding(.horizontal, DS.Spacing.xs)
         .padding(.vertical, DS.Spacing.sm)
         .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label): \(value)")
+        .accessibilityLabel("\(label): \(value.map { "\($0)" } ?? "—")")
     }
 }
 
@@ -988,8 +1017,8 @@ struct AdminSystemStatusLine: View {
     }
 }
 
-/// شكل السطر فوق الكحلي: رمز الحالة + النص بلون الحالة على تعبئة خفيفة منه تملأ أسفل اللوحة، و«⌄» في الطرف (بلا تعبئة
-/// والنص أبيض خافت ما دام شيء لم يُحمَّل)
+/// شكل السطر على البطاقة: رمز الحالة + النص بلون الحالة على تعبئة خفيفة منه (زوايا مدوّرة أسفل الصفحة)، و«⌄» في الطرف
+/// (تعبئة رمادية والنص ثانوي ما دام شيء لم يُحمَّل)
 struct AdminSystemStatusLineLabel: View {
     let status: AdminSystemStatus
 
@@ -998,6 +1027,8 @@ struct AdminSystemStatusLineLabel: View {
         HStack(spacing: DS.Spacing.xsm) {
             if let icon = Self.icon(tone) {
                 Image(systemName: icon).dsGlyph(DS.Glyph.sm, weight: .bold)
+                    // «نبضة للعاجل» (الدفعة ١٠): هالة حمراء هادئة على الساعة المشتركة — تقف خارج الشاشة ومع «تقليل الحركة»
+                    .dsUrgentPulse(DS.Color.error, active: tone == .urgent)
             }
             Text(verbatim: status.title)
                 .dsFont(.hubButton)
@@ -1022,22 +1053,22 @@ struct AdminSystemStatusLineLabel: View {
         }
     }
 
-    /// لون الحالة فوق الكحلي (ثابت في الوضعين): سليم `statusOk`، تنبيه `kpiLate`، عاجل `bellDot` (والنص `kpiHot` الأفتح)
+    /// لون الحالة على البطاقة (ألوان المعنى، الدفعة ١٠): سليم `success`، تنبيه `warning`، عاجل `error`
     private static func base(_ tone: AdminSystemStatus.Tone) -> Color? {
         switch tone {
-        case .ok:      return DS.Hub.statusOk
-        case .warn:    return DS.Hub.kpiLate
-        case .urgent:  return DS.Hub.bellDot
+        case .ok:      return DS.Color.success
+        case .warn:    return DS.Color.warning
+        case .urgent:  return DS.Color.error
         case .loading: return nil
         }
     }
 
     private static func ink(_ tone: AdminSystemStatus.Tone) -> Color {
-        tone == .urgent ? DS.Hub.kpiHot : (base(tone) ?? DS.Hub.onBandMuted)
+        base(tone)?.dsReadableGlyph ?? DS.Color.textSecondary
     }
 
     private static func fill(_ tone: AdminSystemStatus.Tone) -> Color {
-        base(tone).map { $0.opacity(DS.Hub.statusLineFill) } ?? .clear
+        base(tone).map { $0.opacity(DS.Hub.statusLineFill) } ?? DS.Color.cardBackgroundSoft
     }
 }
 
@@ -1175,7 +1206,7 @@ struct AdminBaselineDot: View {
 /// (`AdminTodayText.arabicCount`؛ سطران إن ضاق). ثم شريحة «✓ الأعضاء المسجّلون N ›». كل رقم يفتح صفحته كما كان:
 /// الإجمالي ← «المؤشرات ← العائلة»، الرجال ← صفحة الأعضاء (و«متوفى» الرجال ← شريحة «متوفون»)، النساء ← شجرة النساء،
 /// المسجّلون ← شريحة «مسجّلون». مع XXXL تصغر الحلقات قليلاً وتلتفّ الأسماء؛ من أحجام إمكانية الوصول كل حلقة كتلة (حلقة
-/// صغيرة بجانب الاسم والعدد، ثم الأحياء والمتوفون صفّين بلمس ٤٤). الحلقات بأشكال (`DSRing`)، بلا Charts.
+/// صغيرة بجانب الاسم والعدد، ثم الأحياء والمتوفون صفّين بلمس ٤٤). الحلقات من المكوّن الموحّد (`DSRingGauge`، الدفعة ١٠ — مرجع كل مؤشرات اللوحة)، بلا Charts.
 /// نفس التعريفات: الرجال = الشجرة بلا طلبات الانضمام، النساء = إناث شجرة النساء، المسجّلون = لهم حساب دخول.
 struct AdminMemberCountsCard: View {
     let counts: AdminMemberCounts
@@ -1215,11 +1246,8 @@ struct AdminMemberCountsCard: View {
     /// كتل عمودية من أحجام إمكانية الوصول
     private var stacked: Bool { typeSize.isAccessibilitySize }
 
-    /// قطر الحلقة: أصغر قليلاً مع XXXL (الأسماء والأعداد أكبر)
-    private var ringSide: CGFloat { typeSize >= .xxxLarge ? DS.Hub.countsRingCompact : DS.Hub.countsRing }
-
-    /// رمادي المتوفين الخافت (لون معنى، لا أحمر)
-    private static var deceasedTint: Color { DS.Color.deceased.opacity(0.5) }
+    /// مقاس الحلقة الموحّدة: المتوسطة، وأصغر قليلاً مع XXXL (الأسماء والأعداد أكبر)
+    private var ringSize: DS.Ring.Size { typeSize >= .xxxLarge ? DS.Ring.mediumCompact : DS.Ring.medium }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -1239,26 +1267,17 @@ struct AdminMemberCountsCard: View {
             registeredChip
                 .frame(maxWidth: .infinity, alignment: stacked ? .leading : .center)
         }
+        // الصفحة الثانية من «المربّع اللي ينسحب» (الدفعة ١٠) — البطاقة البيضاء من المربّع نفسه
+        .padding(DS.Hub.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
     }
 
     // MARK: الحلقات
 
     /// عمود: الحلقة وعددها في الوسط، ثم الاسم بلونها (رابط واحد)، ثم «54 حياً · 14 متوفى»
     private func column(_ g: Gauge) -> some View {
-        let total = Self.number(g.total)
         let face = VStack(spacing: DS.Spacing.xsm) {
-            ring(g, side: ringSide) {
-                Text(verbatim: total)
-                    .dsFont(.hubPulse)
-                    .monospacedDigit()
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .contentTransition(.numericText())
-                    .padding(.horizontal, DS.Hub.countsRingLine + DS.Spacing.xxs)
-            }
+            ring(g, size: ringSize)
             Text(g.title)
                 .dsFont(.hubRow)
                 .foregroundColor(g.tint)
@@ -1314,7 +1333,7 @@ struct AdminMemberCountsCard: View {
         return VStack(alignment: .leading, spacing: 0) {
             link(g.main, face: AnyView(
                 HStack(spacing: DS.Spacing.md) {
-                    ring(g, side: DS.Hub.countsRingStacked) { EmptyView() }
+                    ring(g, size: DS.Ring.mediumStacked)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(g.title).dsFont(.hubRow).foregroundColor(g.tint)
                         Text(verbatim: total).dsFont(.hubPulse).monospacedDigit().foregroundColor(DS.Color.textPrimary)
@@ -1339,20 +1358,19 @@ struct AdminMemberCountsCard: View {
             .foregroundColor(color)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
-            .padding(.leading, DS.Hub.countsRingStacked + DS.Spacing.md)
+            .padding(.leading, DS.Ring.mediumStacked.side + DS.Spacing.md)
             .contentShape(Rectangle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(title)، \(text)")
     }
 
-    /// الحلقة: الأحياء بلونها فوق مسار رمادي المتوفين (الباقي من الدائرة)؛ مسار باهت فارغ قبل وصول الأعداد
-    private func ring<Center: View>(_ g: Gauge, side: CGFloat, @ViewBuilder center: @escaping () -> Center) -> some View {
+    /// الحلقة الموحّدة (`DSRingGauge`، مرجع الدفعة ١٠): الأحياء بلونها فوق مسار رمادي المتوفين (الباقي من الدائرة)
+    /// والعدد في وسطها يعدّ من الصفر؛ مسار باهت فارغ و«—» قبل وصول الأعداد
+    private func ring(_ g: Gauge, size: DS.Ring.Size) -> DSRingGauge {
         let total = g.total ?? 0
         let known = g.alive != nil && total > 0
-        let progress = known ? Double(g.alive ?? 0) / Double(total) : 0
-        return DSRing(progress: progress, tint: g.tint, lineWidth: DS.Hub.countsRingLine, size: side,
-                      track: known ? Self.deceasedTint : DS.Color.textTertiary.opacity(DS.Opacity.cardStroke),
-                      center: center)
+        return DSRingGauge(progress: known ? Double(g.alive ?? 0) / Double(total) : nil, tint: g.tint, size: size,
+                           track: DS.Ring.restTrack, center: .count(g.total))
     }
 
     // MARK: المسجّلون

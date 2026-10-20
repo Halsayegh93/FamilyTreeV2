@@ -432,9 +432,11 @@ struct AdminOccasionsNumbersCard: View {
                                         ?? L10n.t("وصول الإشعارات", "Notification reach"),
                                      subtitle: AdminArea.team.title) {
                             if let reach {
-                                AdminValueChip(text: L10n.t("\(reach.reachPercent)٪", "\(reach.reachPercent)%"),
-                                               tint: reach.reachPercent >= 90 ? DS.Color.success
-                                                   : (reach.reachPercent >= 70 ? DS.Color.warning : DS.Color.error))
+                                // الحلقة المصغّرة الموحّدة (الدفعة ١٠) بلون الحال كما كان
+                                DSRingValue(progress: reach.reachShare,
+                                            tint: reach.reachPercent >= 90 ? DS.Color.success
+                                                : (reach.reachPercent >= 70 ? DS.Color.warning : DS.Color.error),
+                                            text: DSGaugeText.percent(reach.reachPercent))
                             }
                         }
                     }

@@ -234,6 +234,8 @@ struct AdminAllRequestsView: View {
 
     // Multi-select (works for all tabs)
     @State private var isSelectMode = false
+    /// «ظهور موحّد» (الدفعة ١٠): بطاقات الطلبات تصعد بعد البحث والشرائح مرة عند ظهورها الأول (`dsCardCascade`)
+    @State private var rowsAppeared = false
     @State private var selectedIds: Set<UUID> = []
     @State private var showBulkApproveConfirm = false
     @State private var bulkSelectApproveResult: String?
@@ -389,6 +391,7 @@ struct AdminAllRequestsView: View {
             Button(L10n.t("الموافقة على الكل", "Approve All"), role: .destructive) {
                 Task {
                     let count = await adminRequestVM.bulkApproveChildAddRequests()
+                    if count > 0 { UINotificationFeedbackGenerator().notificationOccurred(.success) }
                     bulkApproveResult = L10n.t(
                         "تم قبول \(count) طلب بنجاح",
                         "Successfully approved \(count) requests"
@@ -420,6 +423,7 @@ struct AdminAllRequestsView: View {
                 Task {
                     let count = await bulkApproveSelected()
                     await MainActor.run {
+                        if count > 0 { UINotificationFeedbackGenerator().notificationOccurred(.success) }
                         bulkSelectApproveResult = L10n.t("تم قبول \(count) طلب بنجاح", "Successfully approved \(count) requests")
                         showBulkSelectApproveResult = true
                         isSelectMode = false
@@ -1389,6 +1393,14 @@ struct AdminAllRequestsView: View {
             (f.isLate || f.isEscalated) ? DS.Color.error : f.isUrgent ? DS.Color.warning : nil
         }
         let cardShape = RoundedRectangle(cornerRadius: DS.Hub.tileRadius, style: .continuous)
+        // «لحظة نجاح» (الدفعة ١٠): الموافقة من البطاقة أو بالسحب تُظهر «تمت الموافقة» — إلا «ربط» طلب الانضمام (يفتح مربّعه)
+        let tab = forTab ?? selectedTab
+        let approve: (() -> Void)? = onApprove.map { work in
+            guard tab != .joinRequests else { return work }
+            let title = flow != nil ? L10n.t("تم التنفيذ", "Carried out")
+                : tab == .children ? L10n.t("تم التأكيد", "Confirmed") : L10n.t("تمت الموافقة", "Approved")
+            return { work(); AdminApprovalMoment.after(adminRequestVM, title: title) }
+        }
         // المحتوى — قابل للنقر، يفتح تفاصيل الطلب (وفي وضع التحديد يحدّده)
         return Group {
             if visible {
@@ -1433,7 +1445,7 @@ struct AdminAllRequestsView: View {
                         cardActions(flow: flow, waitingForMe: waitingForMe,
                                     allowsApprove: allowsApprove, allowsReject: allowsReject,
                                     approveLabel: approveLabel, approveIcon: approveIcon,
-                                    onApprove: onApprove, onReject: onReject, onTap: onTap)
+                                    onApprove: approve, onReject: onReject, onTap: onTap)
                     }
                 }
                 .padding(DS.Spacing.md)
@@ -1459,12 +1471,17 @@ struct AdminAllRequestsView: View {
                             .allowsHitTesting(false)
                     }
                 }
+                .dsCardCascade(2, appeared: rowsAppeared)
+                .onAppear {
+                    guard !rowsAppeared else { return }
+                    DispatchQueue.main.async { rowsAppeared = true }
+                }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: DS.Spacing.xsm, leading: DS.Spacing.lg, bottom: DS.Spacing.xsm, trailing: DS.Spacing.lg))
                 .modifier(RequestSwipeActions(
                     enabled: !isSelectMode && (onApprove != nil || onReject != nil),
-                    approve: allowsApprove ? onApprove : nil,
+                    approve: allowsApprove ? approve : nil,
                     approveLabel: approveLabel ?? L10n.t("موافقة", "Approve"),
                     approveIcon: approveIcon, approveColor: approveColor,
                     reject: allowsReject ? onReject : nil,
@@ -2388,17 +2405,9 @@ struct AdminAllRequestsView: View {
         let matchPercent = hasNameMatch ? Int(Double(match.matchCount) / Double(max(totalParts, 1)) * 100) : 0
 
         return HStack(spacing: DS.Spacing.sm) {
-            // نسبة التطابق كحلقة صغيرة
-            DSRing(progress: Double(matchPercent) / 100, tint: AppSection.admin.ink,
-                   lineWidth: DS.Border.widthBold * 2, size: DS.Icon.rowLarge) {
-                Text(L10n.t("\(matchPercent)٪", "\(matchPercent)%"))
-                    .dsFont(.micro)
-                    .foregroundColor(AppSection.admin.ink)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .accessibilityHidden(true)
+            // نسبة التطابق — الحلقة الصغيرة الموحّدة (الدفعة ١٠)
+            DSRingGauge(progress: Double(matchPercent) / 100, tint: AppSection.admin.ink, size: DS.Ring.small,
+                        center: .percent(matchPercent), ink: AppSection.admin.ink)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(match.member.displayFullName)
@@ -4119,6 +4128,14 @@ struct AdminAllRequestsView: View {
     }
 
     private func approveDetail(_ detail: RequestDetail) {
+        // «لحظة نجاح» (الدفعة ١٠) بعد أن تنتهي الموافقة — إلا «ربط» طلب الانضمام (يفتح مربّع الربط)
+        let title: String?
+        switch detail {
+        case .join:  title = nil
+        case .child: title = L10n.t("تم التأكيد", "Confirmed")
+        default:
+            title = selectedFlowIsExecute(detail) ? L10n.t("تم التنفيذ", "Carried out") : L10n.t("تمت الموافقة", "Approved")
+        }
         Task {
             switch detail {
             case .join(let member):
@@ -4164,7 +4181,16 @@ struct AdminAllRequestsView: View {
                 await adminRequestVM.approveTreeEditRequest(request: request)
                 await MainActor.run { selectedDetail = nil }
             }
+            if let title {
+                await MainActor.run { AdminApprovalMoment.after(adminRequestVM, title: title) }
+            }
         }
+    }
+
+    /// الطلب في مرحلة «التنفيذ» من مسار الموافقات (الموافقة عندها = التنفيذ)
+    private func selectedFlowIsExecute(_ detail: RequestDetail) -> Bool {
+        guard let id = UUID(uuidString: String(detail.id.split(separator: "-", maxSplits: 1).last ?? "")) else { return false }
+        return adminRequestVM.approvalSnapshot(forRowId: id)?.stage == .execute
     }
 
     private func rejectDetail(_ detail: RequestDetail, reason: String? = nil) {
