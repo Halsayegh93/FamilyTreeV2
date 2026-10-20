@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - صفحات الأقسام الستة (إعادة تصميم لوحة الإدارة — طلب المالك ٢٠٢٦-١٠-٢٠، «٦ أقسام»)
 //
-// كل قسم = رأس كحلي («‹ اليوم»، شريط الأقسام، العنوان، الوصف) + بطاقات صفوف تفتح الصفحات الموجودة كما هي (لا منطق
+// كل قسم = رأس كحلي («‹ اليوم»، العنوان قائمة الأقسام، الوصف) + بطاقات صفوف تفتح الصفحات الموجودة كما هي (لا منطق
 // جديد). «المناسبات والإعلانات» صفحتها الخاصة (`AdminOccasionsPage`: إنشاء · القادم · المنشور)، و«الفريق
 // والأمان» تجمع «الفريق» و«من يدخل وكيف».
 // فهرس الأدوات `AdminToolCatalog` هو المصدر الواحد: الأقسام والبحث الشامل وجدول الانتقال (REACHABILITY.md)
@@ -108,6 +108,15 @@ enum AdminToolCatalog {
                                    TreeTabContainer.openWomenOnAppear = true
                                    NotificationCenter.default.post(name: .openWomenTree, object: nil)
                                }))
+            // «تقارير PDF» — بيتها الواحد «⋯ ← تصدير» في صفحة الأعضاء (الدفعة ج؛ كانت صفّاً في «المؤشرات»)
+            if isAdmin {
+                t.append(AdminTool(id: "family.export", area: .family, group: members,
+                                   title: L10n.t("تصدير قائمة الأعضاء (PDF)", "Export member list (PDF)"),
+                                   subtitle: L10n.t("من «⋯» في صفحة الأعضاء — بالشريحة المختارة", "From “⋯” on the members page — with the chosen filter"),
+                                   icon: "doc.text.fill", tint: DS.Color.accent,
+                                   keywords: ["تقرير", "تقارير", "طباعة", "pdf"],
+                                   kind: page { AdminReportsView() }))
+            }
         }
 
         // ٣ المناسبات والإعلانات — صفحة القسم (`AdminOccasionsPage`): «إنشاء» · «القادم» · «المنشور» (الدفعة ب ٢٠٢٦-١٠-٢٠)؛
@@ -143,175 +152,135 @@ enum AdminToolCatalog {
                                    kind: page { AdminOccasionsPage() }))
             }
         }
-        // «وصول الإشعارات» انتقل من «المناسبات والإعلانات» إلى «الفريق والأمان» (بيته «الأجهزة ووصول الإشعارات» —
-        // الدفعة ج تدمجه في صفحة الأجهزة)؛ في «المناسبات» سطر رقم فقط يفتحه
-        if authVM.canSendNotifications {
-            t.append(AdminTool(id: "ann.push", area: .team, group: L10n.t("من يدخل وكيف", "Who signs in and how"),
-                               title: L10n.t("وصول الإشعارات", "Notification reach"),
-                               subtitle: L10n.t("تسجيل الأجهزة للإشعارات، الإشعار التجريبي، وحذف القديمة",
-                                                "Device registration, test push and cleanup"),
-                               icon: "bell.and.waves.left.and.right.fill", tint: DS.Color.info,
-                               keywords: ["رموز", "أجهزة", "تجربة", "إشعارات"],
+
+        // ٤ المؤشرات — أربعة مداخل للقراءة (الدفعة ج من «نفّذ كل المقترح»): العائلة · الاستخدام · الموافقات · سجل التعديلات.
+        // كل رقم في بيته هنا، و«اليوم» يعرض أرقاماً تفتحه فقط
+        let insights = L10n.t("أرقام وسجل", "Numbers & history")
+        if isAdmin || role == .monitor {
+            // المراقب: الأعداد فقط (`AdminAnalyticsView` يقرأ الدور)
+            t.append(AdminTool(id: "metrics.family", area: .metrics, group: insights,
+                               title: L10n.t("العائلة", "The family"),
+                               subtitle: isAdmin ? L10n.t("الأفراد والأحياء، المسجّلون، النمو والأعمار والأدوار",
+                                                          "Members, living, registered, growth, ages and roles")
+                                                 : L10n.t("أعداد الأفراد والأحياء والمسجّلين", "Members, living and registered counts"),
+                               icon: "person.3.fill", tint: DS.Color.palm,
+                               keywords: ["إحصائيات", "إحصاءات", "أعمار", "أفراد", "نمو", "رجال", "نساء"],
+                               kind: page { AdminAnalyticsView() }))
+        }
+        if isAdmin {
+            t.append(AdminTool(id: "metrics.usage", area: .metrics, group: insights,
+                               title: L10n.t("الاستخدام", "Usage"),
+                               subtitle: L10n.t("المستخدمون الآن، آخر 24 ساعة، آخر 30 يوماً — التطبيق والموقع",
+                                                "Using now, last 24 hours, last 30 days — app and web"),
+                               icon: "bolt.fill", tint: DS.Color.sea,
+                               keywords: ["نشاط", "نشط", "الآن", "مستخدمون"],
+                               kind: page { AdminActiveMembersView() }))
+        }
+        // تقرير الموافقات — بيته الواحد هنا (كان أيضاً في رأس «الوارد» وصفّه ومربّع «منجز هذا الأسبوع»)
+        if adminRequestVM.approvalsWorkflowOn && (isAdmin || role == .monitor) {
+            t.append(AdminTool(id: "metrics.approvals", area: .metrics, group: insights,
+                               title: L10n.t("الموافقات", "Approvals"),
+                               subtitle: L10n.t("المنجز، وقت كل مرحلة، حسب النوع، أداء الإدارة", "Done, time per stage, by type, team"),
+                               icon: "chart.bar.doc.horizontal", tint: DS.Color.warning,
+                               keywords: ["تقرير", "تقرير الموافقات", "منجز", "مسار"],
+                               kind: page { ApprovalsReportView() }))
+        }
+        if isAdmin || role == .monitor {
+            t.append(AdminTool(id: "metrics.activity", area: .metrics, group: insights,
+                               title: L10n.t("سجل التعديلات", "Change log"),
+                               subtitle: L10n.t("كل تعديل: من وماذا ومتى", "Every change: who, what, when"),
+                               icon: "clock.arrow.circlepath", tint: DS.Color.primary,
+                               keywords: ["سجل", "سجل النشاط", "تعديلات"],
+                               kind: page { AdminActivityLogView() }))
+        }
+
+        // ٥ الفريق والأمان — أربعة مداخل: فريق الإدارة · رسائل رمز الدخول · التسجيل والمنع · الأجهزة ووصول الإشعارات
+        // (صفحة القسم `AdminTeamAreaView` في `AdminTeamArea.swift`؛ «صلاحيات الأدوار» داخل فريق الإدارة)
+        if isAdmin {
+            t.append(AdminTool(id: "team.members", area: .team, group: L10n.t("الفريق", "Team"),
+                               title: L10n.t("فريق الإدارة", "Admin team"),
+                               subtitle: authVM.canManageRoles ? L10n.t("الأعضاء حسب الدور، وصلاحيات الأدوار — إضافة وتغيير",
+                                                                        "Members by role and role permissions — add and change")
+                                                               : L10n.t("الأعضاء حسب الدور، وصلاحيات الأدوار", "Members by role and role permissions"),
+                               icon: "person.3.fill", tint: DS.Color.primary,
+                               keywords: ["فريق", "مدير", "مراقب", "مشرف", "أدوار", "صلاحيات", "نطاقي", "صلاحياتي"],
+                               kind: page { AdminModeratorsView() }))
+        }
+        if authVM.canViewSystemSettings {
+            let access = L10n.t("الدخول والأمان", "Sign-in and security")
+            t.append(AdminTool(id: "access.sms", area: .team, group: access,
+                               title: L10n.t("رسائل رمز الدخول (KWT SMS)", "Sign-in code messages (KWT SMS)"),
+                               subtitle: L10n.t("الرصيد، طلبات رمز الدخول، إعدادات الإرسال",
+                                                "Balance, code requests, sending settings"),
+                               icon: "ellipsis.message.fill", tint: DS.Hub.securityFill,
+                               keywords: ["رسائل", "sms", "رصيد", "kwt", "محاولات", "مرسل"],
+                               kind: page { AdminSmsView() }))
+            t.append(AdminTool(id: "access.registration", area: .team, group: access,
+                               title: L10n.t("التسجيل والمنع", "Sign-up and blocking"),
+                               subtitle: L10n.t("السماح بالتسجيل · الأرقام الممنوعة من التسجيل",
+                                                "Allow sign-ups · numbers blocked from signing up"),
+                               icon: "person.crop.circle.badge.checkmark", tint: DS.Color.palm,
+                               keywords: ["تسجيل", "شروط", "حظر", "محظور", "منع", "ممنوع"],
+                               kind: page { AdminRegistrationBansView() }))
+            t.append(AdminTool(id: "access.devices", area: .team, group: access,
+                               title: L10n.t("الأجهزة ووصول الإشعارات", "Devices and notification reach"),
+                               subtitle: L10n.t("الأجهزة المرتبطة، وصول الإشعارات، عدد الأجهزة لكل عضو",
+                                                "Linked devices, notification reach, devices per member"),
+                               icon: "iphone.gen3", tint: DS.Color.primary,
+                               keywords: ["أجهزة", "إشعارات", "رموز", "وصول", "فصل", "تجربة", "تسجيل الأجهزة", "إشعار تجريبي"],
                                kind: page { AdminPushHealthView() }))
         }
 
-        // ٤ المؤشرات
-        let numbers = L10n.t("أرقام وسجل", "Numbers & history")
-        if isAdmin {
-            t.append(AdminTool(id: "metrics.analytics", area: .metrics, group: numbers,
-                               title: L10n.t("الإحصائيات", "Statistics"),
-                               subtitle: L10n.t("الأعمار والأدوار والنمو والأخبار", "Ages, roles, growth, news"),
-                               icon: "chart.bar.xaxis", tint: DS.Color.palm,
-                               keywords: ["إحصائيات", "أعمار"],
-                               kind: page { AdminAnalyticsView() }))
-            t.append(AdminTool(id: "metrics.live", area: .metrics, group: numbers,
-                               title: L10n.t("النشاط الآن", "Live activity"),
-                               subtitle: L10n.t("الدخول وآخر نشاط — التطبيق والموقع", "Sign-ins and activity — app and web"),
-                               icon: "bolt.fill", tint: DS.Color.palm,
-                               keywords: ["نشط", "الآن"],
-                               kind: page { AdminActiveMembersView() }))
-        }
-        if isAdmin || role == .monitor {
-            t.append(AdminTool(id: "metrics.activity", area: .metrics, group: numbers,
-                               title: L10n.t("سجل النشاط", "Activity log"),
-                               subtitle: L10n.t("كل تعديل: من وماذا ومتى", "Every change: who, what, when"),
-                               icon: "clock.arrow.circlepath", tint: DS.Color.primary,
-                               keywords: ["سجل", "تعديلات"],
-                               kind: page { AdminActivityLogView() }))
-        }
-        if adminRequestVM.approvalsWorkflowOn && (isAdmin || role == .monitor) {
-            t.append(AdminTool(id: "metrics.approvals", area: .metrics, group: numbers,
-                               title: L10n.t("تقرير الموافقات", "Approvals report"),
-                               subtitle: L10n.t("المراحل والأداء", "Stages and performance"),
-                               icon: "chart.bar.doc.horizontal", tint: DS.Color.warning,
-                               kind: page { ApprovalsReportView() }))
-        }
-        if isAdmin {
-            t.append(AdminTool(id: "metrics.pdf", area: .metrics, group: numbers,
-                               title: L10n.t("تقارير PDF", "PDF reports"),
-                               subtitle: L10n.t("تصفية الأعضاء وتصدير ملف للطباعة", "Filter members and export"),
-                               icon: "doc.text.fill", tint: DS.Color.accent,
-                               keywords: ["تقرير", "طباعة", "pdf"],
-                               kind: page { AdminReportsView() }))
-        }
-
-        // ٥ الفريق والأمان — «الفريق»
-        if isAdmin {
-            let team = L10n.t("الفريق", "Team")
-            t.append(AdminTool(id: "team.members", area: .team, group: team,
-                               title: L10n.t("فريق الإدارة بالأدوار", "Admin team by role"),
-                               subtitle: authVM.canManageRoles ? L10n.t("إضافة وتغيير الدور وإزالته", "Add, change and remove roles")
-                                                               : L10n.t("عرض — الأدوار يمنحها المالك", "View — the owner grants roles"),
-                               icon: "person.3.fill", tint: DS.Color.primary,
-                               keywords: ["فريق", "مدير", "مراقب", "مشرف"],
-                               kind: page { AdminModeratorsView() }))
-            t.append(AdminTool(id: "team.roles", area: .team, group: team,
-                               title: L10n.t("ما يقدر عليه كل دور", "What each role can do"),
-                               subtitle: L10n.t("يقدر / ما يقدر لكل دور", "Can / can't for every role"),
-                               icon: "list.bullet.rectangle.portrait.fill", tint: DS.Color.primary,
-                               keywords: ["صلاحيات", "أدوار"],
-                               kind: page { AdminRolesGuideView() }))
-            if let guide = authVM.currentUser.flatMap({ RoleGuide.forRole($0.role) }) {
-                t.append(AdminTool(id: "team.scope", area: .team, group: team,
-                                   title: L10n.t("نطاقي", "My scope"),
-                                   subtitle: guide.mandate,
-                                   icon: guide.icon, tint: guide.color,
-                                   kind: page { AdminMyScopeView(guide: guide) }))
-            }
-        }
-
-        // ٥ب الفريق والأمان — «من يدخل وكيف» (كان قسم «الدخول والأمان»)
+        // ٦ التطبيق — صفحة القسم هي الإعدادات نفسها (`AdminAppAreaPage`، المفاتيح في مكانها)؛ هذه الصفوف للبحث الشامل
+        // (تفتح الصفحة أو قائمتها). «كل الإعدادات في صفحة واحدة» حُذفت — الصفحة نفسها صارت كل الإعدادات
         if authVM.canViewSystemSettings {
-            let access = L10n.t("من يدخل وكيف", "Who signs in and how")
-            t.append(AdminTool(id: "access.sms", area: .team, group: access,
-                               title: L10n.t("رسائل الدخول · KWT SMS", "Sign-in messages · KWT SMS"),
-                               subtitle: L10n.t("الرصيد، المرسل، الحدود والتنبيهات", "Balance, sender, limits, alerts"),
-                               icon: "ellipsis.message.fill", tint: DS.Hub.securityFill,
-                               keywords: ["رسائل", "sms", "رصيد", "kwt"],
-                               kind: page { AdminSmsView() }))
-            t.append(AdminTool(id: "access.devices", area: .team, group: access,
-                               title: L10n.t("الأجهزة", "Devices"),
-                               subtitle: authVM.canManageDevices ? L10n.t("أجهزة كل عضو وفصلها", "Each member's devices and sign-out")
-                                                                 : L10n.t("عرض — الفصل للمالك", "View — the owner signs out"),
-                               icon: "iphone.gen3", tint: DS.Color.primary,
-                               keywords: ["أجهزة", "فصل"],
-                               kind: page { AdminDevicesView() }))
-            t.append(AdminTool(id: "access.banned", area: .team, group: access,
-                               title: L10n.t("الأرقام المحظورة", "Banned numbers"),
-                               subtitle: L10n.t("منع التسجيل برقم", "Block sign-up by number"),
-                               icon: "phone.down.fill", tint: DS.Color.error,
-                               keywords: ["حظر", "محظور"],
-                               kind: page { AdminBannedPhonesView() }))
-            t.append(AdminTool(id: "access.registration", area: .team, group: access,
-                               title: L10n.t("قواعد التسجيل", "Sign-up rules"),
-                               subtitle: L10n.t("السماح بالتسجيل وحدّ الأجهزة", "Allow sign-ups and device limit"),
-                               icon: "person.crop.circle.badge.checkmark", tint: DS.Color.palm,
-                               keywords: ["تسجيل", "أجهزة"],
-                               kind: page { AdminAppSettingsView(scope: .registration) }))
-        }
-
-        // ٦ التطبيق
-        if authVM.canViewSystemSettings {
-            let content = L10n.t("المحتوى والميزات", "Content & features")
-            let ops = L10n.t("التشغيل", "Operations")
-            t.append(AdminTool(id: "app.features", area: .app, group: content,
-                               title: L10n.t("الميزات واللغة", "Features & language"),
-                               subtitle: L10n.t("لغة التطبيق، الديوانيات، النساء، المشاريع، الاستطلاعات", "Language and sections"),
+            let settings = L10n.t("التطبيق", "App")
+            t.append(AdminTool(id: "app.sections", area: .app, group: settings,
+                               title: L10n.t("الأقسام الظاهرة للأعضاء", "Sections members see"),
+                               subtitle: L10n.t("لغة التطبيق، الديوانيات، شجرة النساء، المشاريع، الاستطلاعات، اعتماد الأخبار",
+                                                "Language, Diwaniyas, women's tree, projects, polls, news approval"),
                                icon: "switch.2", tint: DS.Color.primary,
-                               keywords: ["لغة", "ميزات"],
-                               kind: page { AdminAppSettingsView(scope: .featuresLanguage) }))
-            t.append(AdminTool(id: "app.news", area: .app, group: content,
-                               title: L10n.t("الأخبار والتصنيفات", "News & categories"),
-                               subtitle: L10n.t("مراجعة الأخبار وتصنيفات الأخبار والمكتبة", "News review and categories"),
-                               icon: "newspaper.fill", tint: DS.Color.accent,
-                               keywords: ["أخبار", "تصنيفات"],
-                               kind: page { AdminAppSettingsView(scope: .newsCategories) }))
-            t.append(AdminTool(id: "app.branches", area: .app, group: content,
-                               title: L10n.t("أسماء الفروع", "Branch names"),
-                               subtitle: L10n.t("أسماء تظهر في قائمة الفروع", "Names shown in the branch list"),
-                               icon: "arrow.triangle.branch", tint: DS.Color.palm,
-                               keywords: ["فروع"],
-                               kind: page { AdminAppSettingsView(scope: .branches) }))
-            // «أسماء العوائل» انتقلت من «العائلة» إلى جانب أسماء الفروع (موافقة المالك ٢٠٢٦-١٠-٢٠ — المراقب يفقد عرضها)
-            t.append(AdminTool(id: "app.families", area: .app, group: content,
-                               title: L10n.t("أسماء العوائل", "Family names"),
-                               subtitle: L10n.t("يختار منها العضو عائلته", "Members pick their family from these"),
+                               keywords: ["لغة", "ميزات", "ديوانيات", "مشاريع", "استطلاعات", "أخبار", "اعتماد"],
+                               kind: page { AdminAppAreaPage() }))
+            t.append(AdminTool(id: "app.categories", area: .app, group: settings,
+                               title: L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"),
+                               subtitle: L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب", "Name, icon, colour, hide and order"),
+                               icon: "tag.fill", tint: DS.Color.accent,
+                               keywords: ["تصنيفات", "قوائم"],
+                               kind: page { CategoriesManagerView() }))
+            // «أسماء العوائل» (من «العائلة») + «أسماء الفروع» في صفحة واحدة
+            t.append(AdminTool(id: "app.names", area: .app, group: settings,
+                               title: L10n.t("أسماء العوائل والفروع", "Family and branch names"),
+                               subtitle: L10n.t("يختار منها العضو عائلته، وأسماء قائمة الفروع", "Members pick their family; branch list names"),
                                icon: "person.2.crop.square.stack.fill", tint: DS.Color.accent,
-                               keywords: ["عوائل", "عائلة"],
+                               keywords: ["عوائل", "عائلة", "فروع", "قوائم"],
                                kind: page { AdminFamilyNamesView() }))
-            t.append(AdminTool(id: "app.cooldown", area: .app, group: content,
-                               title: L10n.t("عداد التعديل", "Edit counter"),
-                               subtitle: L10n.t("٣ تعديلات ثم بموافقة — إيقاف أو تصفير", "3 edits then approval — pause or reset"),
+            t.append(AdminTool(id: "app.selfEdits", area: .app, group: settings,
+                               title: L10n.t("حدّ التعديلات الذاتية", "Self-edit limit"),
+                               subtitle: L10n.t("3 تعديلات ثم بموافقة الإدارة — إيقاف الحدّ أو إعادة ضبط العدّاد",
+                                                "3 edits then approval — pause or reset the counter"),
                                icon: "timer", tint: DS.Color.info,
-                               keywords: ["عداد", "تعديل"],
-                               kind: page { AdminAppSettingsView(scope: .cooldown) }))
-            t.append(AdminTool(id: "app.forceUpdate", area: .app, group: ops,
-                               title: L10n.t("التحديث الإجباري", "Force update"),
-                               subtitle: L10n.t("أقل رقم بناء للآيفون والأندرويد", "Minimum build for iPhone and Android"),
-                               icon: "arrow.down.app.fill", tint: DS.Color.primary,
-                               keywords: ["تحديث", "إجباري"],
-                               kind: page { AdminForceUpdateView() }))
-            t.append(AdminTool(id: "app.maintenance", area: .app, group: ops,
-                               title: L10n.t("الصيانة", "Maintenance"),
-                               subtitle: L10n.t("إيقاف مؤقت أو قراءة فقط", "Pause or read-only"),
+                               keywords: ["عداد", "تعديل", "حد"],
+                               kind: page { AdminAppAreaPage() }))
+            t.append(AdminTool(id: "app.maintenance", area: .app, group: settings,
+                               title: L10n.t("وضع الصيانة", "Maintenance mode"),
+                               subtitle: L10n.t("إيقاف التطبيق مؤقتاً للأعضاء", "Pause the app for members"),
                                icon: "wrench.and.screwdriver.fill", tint: DS.Color.warning,
-                               keywords: ["صيانة"],
-                               kind: page { AdminAppSettingsView(scope: .maintenance) }))
-            t.append(AdminTool(id: "app.info", area: .app, group: ops,
-                               title: L10n.t("معلومات النظام", "System info"),
-                               subtitle: L10n.t("الإصدار وآخر تحديث للإعدادات", "Version and last settings change"),
+                               keywords: ["صيانة", "تشغيل"],
+                               kind: page { AdminAppAreaPage() }))
+            t.append(AdminTool(id: "app.forceUpdate", area: .app, group: settings,
+                               title: L10n.t("فرض التحديث", "Force update"),
+                               subtitle: L10n.t("أقل إصدار مسموح للآيفون والأندرويد", "Minimum allowed version for iPhone and Android"),
+                               icon: "arrow.down.app.fill", tint: DS.Color.primary,
+                               keywords: ["تحديث", "إجباري", "إصدار"],
+                               kind: page { AdminForceUpdateView() }))
+            t.append(AdminTool(id: "app.system", area: .app, group: settings,
+                               title: L10n.t("النظام", "System"),
+                               subtitle: L10n.t("الإصدار، آخر تعديل للإعدادات، استعادة الإعدادات الافتراضية",
+                                                "Version, last settings change, restore defaults"),
                                icon: "info.circle.fill", tint: DS.Color.slate,
-                               kind: page { AdminAppSettingsView(scope: .systemInfo) }))
-            t.append(AdminTool(id: "app.reset", area: .app, group: ops,
-                               title: L10n.t("إعادة التعيين", "Reset"),
-                               subtitle: L10n.t("إرجاع الإعدادات للافتراضي", "Restore default settings"),
-                               icon: "arrow.counterclockwise", tint: DS.Color.error,
-                               kind: page { AdminAppSettingsView(scope: .reset) }))
-            t.append(AdminTool(id: "app.all", area: .app, group: ops,
-                               title: L10n.t("كل الإعدادات في صفحة واحدة", "All settings on one page"),
-                               subtitle: L10n.t("التطبيق · الأعضاء · النظام", "App · Members · System"),
-                               icon: "slider.horizontal.3", tint: DS.Color.slate,
-                               kind: page { AdminAppSettingsView() }))
+                               keywords: ["معلومات", "إعادة التعيين", "افتراضي", "استعادة"],
+                               kind: page { AdminAppAreaPage() }))
         }
         return t
     }
@@ -332,8 +301,8 @@ struct AdminAreaView: View {
         case .inbox:     return AnyView(AdminAllRequestsView())
         case .family:    return AnyView(AdminMembersPage())
         case .metrics:   return AnyView(AdminMetricsAreaView())
-        case .team:      return AnyView(AdminToolsAreaView(area: .team, readOnlyBadge: true))
-        case .app:       return AnyView(AdminToolsAreaView(area: .app, readOnlyBadge: true))
+        case .team:      return AnyView(AdminTeamAreaView())
+        case .app:       return AnyView(AdminAppAreaPage())
         case .occasions: return AnyView(AdminOccasionsPage())
         }
     }
@@ -380,7 +349,7 @@ struct AdminToolRow: View {
     var body: some View {
         switch tool.kind {
         case .page(let make):
-            // اسم القسم على زر «رجوع» الصفحة الداخلية (AdminPageKit)، وقسمها في شريط الأقسام (من البحث أيضاً)
+            // اسم القسم على زر «رجوع» الصفحة الداخلية (AdminPageKit)، وقسمها في قائمة العنوان (من البحث أيضاً)
             NavigationLink { AdminLazyPage(make: make).adminBackTitle(tool.area.title).adminArea(tool.area) } label: { label }
                 .buttonStyle(.plain)
         case .action(let run):
@@ -403,356 +372,17 @@ struct AdminToolRow: View {
     }
 }
 
-/// قسم بلا بطاقات خاصة: الرأس + بطاقات أدواته
-struct AdminToolsAreaView: View {
-    let area: AdminArea
-    var readOnlyBadge: Bool = false
-    @EnvironmentObject var authVM: AuthViewModel
-    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
-    @EnvironmentObject var memberVM: MemberViewModel
-    @EnvironmentObject var notificationVM: NotificationViewModel
-    @ObservedObject private var sms = SmsBalanceStore.shared
+// MARK: - «صلاحياتي» (سطر «اليوم» للمراقب والمشرف)
 
-    var body: some View {
-        let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM)
-            .filter { $0.area == area }
-        let announces = area == .occasions && authVM.canSendNotifications
-        AdminHubPage {
-            AdminBandHeader(title: area.title, subtitle: area.subtitle,
-                            badge: readOnlyBadge && !authVM.canManageSettings
-                                ? L10n.t("للقراءة — يعدّلها المالك", "Read-only — the owner edits") : nil,
-                            isAreaRoot: true)
-        } content: {
-            if tools.isEmpty && !announces {
-                DSEmptyView(L10n.t("لا أدوات لدورك هنا", "No tools for your role here"), style: .card)
-            } else if !tools.isEmpty {
-                AdminToolCards(tools: tools, hints: hints, warnings: warnings)
-            }
-        }
-        .task {
-            if area == .team && authVM.canViewSystemSettings { await sms.refresh() }
-            if announces { await notificationVM.fetchScheduledNotifications() }
-            if area == .occasions && memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
-        }
-    }
-
-    private var hints: [String: String] {
-        var h: [String: String] = [:]
-        if let balance = sms.status?.balance {
-            h["access.sms"] = L10n.t("\(SmsBalanceText.points(balance)) نقطة", "\(SmsBalanceText.points(balance)) pts")
-        }
-        if !authVM.bannedPhones.isEmpty { h["access.banned"] = "\(authVM.bannedPhones.count)" }
-        let scheduled = notificationVM.scheduledNotifications.count
-        if scheduled > 0 { h["ann.scheduled"] = "\(scheduled)" }
-        if area == .occasions {
-            let memorial = DeceasedMemorialBoard(memberVM.allMembers)
-            if memorial.withinWeek > 0 {
-                h["occasions.memorial"] = L10n.t("\(memorial.withinWeek) هالأسبوع", "\(memorial.withinWeek) this week")
-            }
-            let recent = memberVM.allMembers.filter {
-                $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate)
-            }.count
-            if recent > 0 { h["occasions.deaths"] = L10n.t("\(recent) حديثة", "\(recent) recent") }
-        }
-        if area == .team {
-            let staff = memberVM.allMembers.filter {
-                [.owner, .admin, .monitor, .supervisor].contains($0.role) && $0.isDeceased != true && $0.status != .frozen
-            }.count
-            h["team.members"] = "\(staff)"
-        }
-        return h
-    }
-
-    private var warnings: Set<String> {
-        return sms.needsTopUp ? ["access.sms"] : []
-    }
-}
-
-// MARK: - المؤشرات
-
-struct AdminMetricsAreaView: View {
-    @EnvironmentObject var authVM: AuthViewModel
-    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
-    @EnvironmentObject var memberVM: MemberViewModel
-    @EnvironmentObject var notificationVM: NotificationViewModel
-    /// إناث شجرة النساء — تبدأ من كاشها إن فُتحت قبلاً
-    @State private var women: (total: Int, alive: Int, deceased: Int)? = Self.womenCounts(WomenStore.cache)
-
-    var body: some View {
-        let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM).filter { $0.area == .metrics }
-        AdminHubPage {
-            AdminBandHeader(title: AdminArea.metrics.title, subtitle: AdminArea.metrics.subtitle, isAreaRoot: true)
-        } content: {
-            // «نبض العائلة» انتقل من «اليوم» إلى هنا (طلب المالك ٢٠٢٦-١٠-٢٠ «الأقسام فوق + قائمة وحدة»)
-            AdminPulseTiles()
-            familyMembersCard
-            AdminToolCards(tools: tools, hints: hints)
-        }
-        .task {
-            if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
-            if let rows = try? await WomenStore.fetch(), let counts = Self.womenCounts(rows) { women = counts }
-        }
-    }
-
-    private static func womenCounts(_ rows: [FamilyMember]) -> (total: Int, alive: Int, deceased: Int)? {
-        guard !rows.isEmpty else { return nil }
-        let females = rows.filter { $0.isFemale }
-        let deceased = females.filter { $0.isDeceased == true }.count
-        return (females.count, females.count - deceased, deceased)
-    }
-
-    private var hints: [String: String] {
-        let unread = notificationVM.unreadActivityLogCount
-        return unread > 0 ? ["metrics.activity": L10n.t("\(unread) جديد", "\(unread) new")] : [:]
-    }
-
-    /// «أفراد العائلة» (بطاقة اللوحة القديمة): الرجال والنساء — الأحياء والمتوفون. أعدادها المختصرة في «اليوم»
-    private var familyMembersCard: some View {
-        var total = 0, alive = 0, deceased = 0
-        for m in memberVM.allMembers where m.role != .pending {
-            total += 1
-            if m.isDeceased == true { deceased += 1 } else { alive += 1 }
-        }
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminCardHeader(title: L10n.t("أفراد العائلة", "Family members"))
-            HStack(spacing: DS.Spacing.sm) {
-                GenderRingPanel(title: L10n.t("الرجال", "Men"), dot: DS.Color.male,
-                                total: total, alive: alive, deceased: deceased, loading: memberVM.allMembers.isEmpty)
-                GenderRingPanel(title: L10n.t("النساء", "Women"), dot: DS.Color.female,
-                                total: women?.total ?? 0, alive: women?.alive ?? 0, deceased: women?.deceased ?? 0,
-                                loading: women == nil)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
-    }
-}
-
-/// حلقة جنس في «أفراد العائلة»: نسبة الأحياء حلقةً بلون المعنى (`DSRing`) والعدد في وسطها
-struct GenderRingPanel: View {
-    let title: String
-    let dot: Color
-    let total: Int
-    let alive: Int
-    let deceased: Int
-    let loading: Bool
-
-    private var share: Double { total > 0 && !loading ? Double(alive) / Double(total) : 0 }
-
-    var body: some View {
-        let ink = dot.dsReadableGlyph
-        HStack(spacing: DS.Spacing.sm) {
-            DSRing(progress: share, tint: ink, lineWidth: DS.Spacing.xs + 1, size: DS.Icon.sizeLg) {
-                Text(loading ? "—" : "\(total)")
-                    .dsFont(.headline)
-                    .monospacedDigit()
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.55)
-                    .padding(.horizontal, DS.Spacing.xsm)
-            }
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(title)
-                    .dsFont(.rowTitleCompact)
-                    .foregroundColor(ink)
-                    .lineLimit(1)
-                line(L10n.t("أحياء", "Alive"), alive)
-                line(L10n.t("متوفون", "Deceased"), deceased)
-            }
-            Spacer(minLength: 0)
-        }
-        .dsRowBox()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.t("\(title): \(total)، أحياء \(alive)، متوفون \(deceased)",
-                                   "\(title): \(total), alive \(alive), deceased \(deceased)"))
-    }
-
-    private func line(_ label: String, _ value: Int) -> some View {
-        HStack(spacing: DS.Spacing.xs) {
-            Text(label)
-                .dsFont(.footnote)
-                .foregroundColor(DS.Color.textSecondary)
-            Text(loading ? "—" : "\(value)")
-                .dsFont(.chip)
-                .monospacedDigit()
-                .foregroundColor(DS.Color.textPrimary)
-        }
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-    }
-}
-
-// MARK: - «نبض العائلة» (انتقل من «اليوم» إلى أعلى «المؤشرات» — طلب المالك ٢٠٢٦-١٠-٢٠ «الأقسام فوق + قائمة وحدة»)
-
-/// مربّع في «نبض العائلة»
-struct AdminPulseTile: Identifiable {
-    let id: String
-    let icon: String
-    let label: String
-    let value: String
-    var unit: String? = nil
-    var valueTint: Color = DS.Color.textPrimary
-    let note: String
-    var meter: Double? = nil
-    var meterTint: Color = DS.Color.primaryFill
-    let page: () -> AnyView
-}
-
-/// «نبض العائلة» (كانت في «اليوم»): النشطون الآن (المالك والمدير)، الأعضاء المسجّلون، رصيد رسائل الدخول (المالك
-/// والمدير)، والمنجز هذا الأسبوع (مع مسار الموافقات) — كل مربّع يفتح صفحته. يجلب أرقامه عند فتح «المؤشرات»
-struct AdminPulseTiles: View {
-    @EnvironmentObject var authVM: AuthViewModel
-    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
-    @ObservedObject private var sms = SmsBalanceStore.shared
-    @Environment(\.dsLandscape) private var landscape
-    @State private var activeNow: Int? = nil
-    @State private var usage: AppUsageStats? = AppUsageStats.cached
-    @State private var weekly: (executed: Int, rejected: Int)? = nil
-
-    private var tiles: [AdminPulseTile] {
-        var tiles: [AdminPulseTile] = []
-        if authVM.isAdmin, let now = activeNow {
-            tiles.append(AdminPulseTile(id: "active", icon: "bolt.fill", label: L10n.t("النشطون الآن", "Active now"),
-                                        value: "\(now)", note: L10n.t("يستخدمون التطبيق الآن", "Using the app now")) {
-                AnyView(AdminActiveMembersView())
-            })
-        }
-        if authVM.isAdmin || authVM.currentUser?.role == .monitor, let u = usage {
-            // «عضو مسجّل» = له حساب دخول (active + idle + login_no_device) — نفس شريحة «مسجّلون» في العائلة
-            let living = u.active + u.idle + u.loginNoDevice + u.neverLogged + u.noPhone
-            let registered = u.active + u.idle + u.loginNoDevice
-            let share = living > 0 ? Double(registered) / Double(living) : 0
-            tiles.append(AdminPulseTile(id: "accounts", icon: "iphone", label: L10n.t("الأعضاء المسجّلون", "Registered members"),
-                                        value: "\(Int((share * 100).rounded()))%",
-                                        note: L10n.t("\(registered) من \(living) حيّاً", "\(registered) of \(living) living"),
-                                        meter: share) {
-                AnyView(AdminMembersPage(chip: .registered).adminArea(.family).adminBackTitle(AdminArea.metrics.title))
-            })
-        }
-        if authVM.canViewSystemSettings, let balance = sms.status?.balance {
-            let level = sms.level
-            tiles.append(AdminPulseTile(id: "sms", icon: "ellipsis.message", label: L10n.t("رسائل الدخول", "Sign-in SMS"),
-                                        value: SmsBalanceText.points(balance), unit: L10n.t("نقطة", "pts"),
-                                        valueTint: level == .good ? DS.Color.textPrimary : level.tint,
-                                        note: SmsBalanceText.enough(balance)) {
-                AnyView(AdminSmsView(backTitle: AdminArea.metrics.title))
-            })
-        }
-        if let w = weekly {
-            tiles.append(AdminPulseTile(id: "done", icon: "checkmark.circle", label: L10n.t("منجز هذا الأسبوع", "Done this week"),
-                                        value: "\(w.executed + w.rejected)",
-                                        note: L10n.t("نُفّذ \(w.executed) · رُفض \(w.rejected)",
-                                                     "\(w.executed) done · \(w.rejected) rejected")) {
-                AnyView(ApprovalsReportView())
-            })
-        }
-        return tiles
-    }
-
-    var body: some View {
-        let tiles = self.tiles
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            if !tiles.isEmpty {
-                AdminSectionLabel(title: L10n.t("نبض العائلة", "Family pulse"))
-                LazyVGrid(columns: AdminGrid.columns(landscape: landscape), spacing: AdminGrid.spacing) {
-                    ForEach(tiles) { tile in
-                        NavigationLink { AdminLazyPage(make: tile.page).adminArea(.metrics) } label: { AdminPulseTileView(tile: tile) }
-                            .buttonStyle(DSPressStyle())
-                    }
-                }
-            }
-        }
-        .task { await load() }
-    }
-
-    private func load() async {
-        let isAdmin = authVM.isAdmin
-        let isSystem = authVM.canViewSystemSettings
-        let flowOn = adminRequestVM.approvalsWorkflowOn
-        await withTaskGroup(of: Void.self) { group in
-            if isAdmin {
-                group.addTask { @MainActor in activeNow = await AdminTodayFetch.activeNowCount() }
-            }
-            // فشل الجلب يُبقي آخر قيمة محفوظة
-            group.addTask { @MainActor in if let u = await AppUsageStats.fetch() { usage = u } }
-            if isSystem {
-                group.addTask { @MainActor in await SmsBalanceStore.shared.refresh() }
-            }
-            if flowOn {
-                group.addTask { @MainActor in weekly = await AdminTodayFetch.weeklyDone() }
-            }
-        }
-    }
-}
-
-struct AdminPulseTileView: View {
-    let tile: AdminPulseTile
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(dsSymbol: tile.icon).dsGlyph(DS.Glyph.sm)
-                Text(tile.label).lineLimit(1).minimumScaleFactor(0.8)
-            }
-            .dsFont(.caption)
-            .foregroundColor(DS.Color.textTertiary)
-            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
-                Text(verbatim: tile.value)
-                    .dsFont(.hubPulse)
-                    .monospacedDigit()
-                    .foregroundColor(tile.valueTint.dsReadableGlyph)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                if let unit = tile.unit {
-                    Text(unit)
-                        .dsFont(.caption)
-                        .foregroundColor(tile.valueTint.dsReadableGlyph)
-                }
-            }
-            Text(tile.note)
-                .dsFont(.caption)
-                .foregroundColor(DS.Color.textTertiary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            if let meter = tile.meter {
-                AdminMeter(progress: meter, tint: tile.meterTint)
-                    .padding(.top, DS.Spacing.xs)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: DS.Hub.tileMinHeight, alignment: .topLeading)
-        .dsCard(padding: DS.Spacing.md, radius: DS.Hub.tileRadius)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-// MARK: - الفريق: الأدوار ونطاقي
-
-/// «ما يقدر عليه كل دور» — من `RoleGuides` (المصدر الواحد لنصوص الأدوار)، بشكل «اليوم» (`AdminPageKit`):
-/// رأس كحلي ثم بطاقة لكل دور، أولها تصعد فوق الرأس
-struct AdminRolesGuideView: View {
-    var body: some View {
-        let guides = RoleGuide.all
-        AdminPage(header: AdminPageHeader(title: L10n.t("ما يقدر عليه كل دور", "What each role can do"),
-                                          subtitle: L10n.t("الدور = مجال عمل، لا درجة صلاحية", "A role is a domain, not a rank"),
-                                          glyph: "list.bullet.rectangle.portrait.fill"),
-                  lead: guides.first.map { AnyView(AdminRoleGuideCard(guide: $0)) },
-                  content: AnyView(VStack(spacing: DS.Hub.stackSpacing) {
-                      ForEach(guides.dropFirst()) { guide in
-                          AdminRoleGuideCard(guide: guide)
-                      }
-                  }))
-    }
-}
-
-/// «نطاقي» — ما يقدر عليه دورك وما لا يقدر (البطاقة تصعد فوق الرأس). تُفتح من «الفريق» (يسمّي الرجوع) ومن سطر
-/// «نطاقي» في «اليوم» — بلا اسم من فتحها فالرجوع «اليوم» كما كان
+/// «صلاحياتي» (كان «نطاقي») — ما يقدر عليه دورك وما لا يقدر (البطاقة تصعد فوق الرأس). تُفتح من سطر «صلاحياتي» في
+/// «اليوم» للمراقب والمشرف (بيته الوحيد؛ للمالك والمدير «دورك» مميّز في فريق الإدارة ← صلاحيات الأدوار)
 struct AdminMyScopeView: View {
     let guide: RoleGuide
     @Environment(\.adminBackTitle) private var opener
 
     var body: some View {
         AdminPage(header: AdminPageHeader(back: opener ?? L10n.t("اليوم", "Today"),
-                                          title: L10n.t("نطاقي · \(guide.title)", "My scope · \(guide.title)"),
+                                          title: L10n.t("صلاحياتي · \(guide.title)", "My permissions · \(guide.title)"),
                                           subtitle: guide.mandate,
                                           glyph: guide.icon),
                   lead: AnyView(AdminRoleGuideCard(guide: guide, showsTitle: false)),
@@ -849,8 +479,8 @@ struct AdminSearchView: View {
             }
         } content: {
             if q.isEmpty {
-                DSNoteCard(L10n.t("اكتب اسم عضو أو رقمه، أو اسم أداة مثل «الأجهزة» أو «الصيانة».",
-                                  "Type a member's name or number, or a tool like “Devices”."),
+                DSNoteCard(L10n.t("اكتب اسم عضو أو رقمه، أو اسم أداة مثل «الأجهزة» أو «وضع الصيانة».",
+                                  "Type a member's name or number, or a tool like “Devices” or “Maintenance mode”."),
                            icon: "magnifyingglass")
             } else {
                 if adminRequestVM.approvalsWorkflowOn || authVM.canModerate {

@@ -1,49 +1,27 @@
 import SwiftUI
 
-/// الأرقام المحظورة — بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بأرقام حيّة وزرّ «حظر رقم»
-/// للمالك (وشارة «للقراءة» لغيره) ← البحث يصعد فوقه ← بطاقة بيضاء فيها الأرقام صفوفاً مفصولة بخط
-/// (الرقم من اليسار · السبب · تاريخ الحظر · «إلغاء»).
-/// الحظر وإلغاؤه للمالك فقط (`canManageBannedPhones`) وبنفس التأكيد والمربّع كما كانا تماماً.
-struct AdminBannedPhonesView: View {
+/// «التسجيل والمنع» — صفحة واحدة في «الفريق والأمان» (الدفعة ج من «نفّذ كل المقترح»، ٢٠٢٦-١٠-٢٠): كانت «قواعد التسجيل»
+/// (`AdminAppSettingsView(scope: .registration)`) و«الأرقام المحظورة» صفحتين. الرأس الكحلي (حالة التسجيل وعدد الأرقام
+/// الممنوعة، و«＋ منع رقم» للمالك) ← «شروط التسجيل» (مفتاح «السماح بالتسجيل» في مكانه) ← «الأرقام الممنوعة من التسجيل»
+/// صفوفاً بلا بحث (القائمة قصيرة). «عدد الأجهزة المسموح لكل عضو» انتقل إلى «الأجهزة ووصول الإشعارات».
+/// المفتاح والمنع ورفعه للمالك فقط (`canManageSettings` / `canManageBannedPhones`) وبنفس النداءات والتأكيد والمربّع.
+struct AdminRegistrationBansView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
-    @State private var searchText = ""
     @State private var isLoading = true
     @State private var showAddSheet = false
     @State private var phoneToUnban: BannedPhone?
     @State private var isProcessing = false
-    /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل «لا توجد أرقام محظورة» المضلِّلة
-    /// (تبقى حتى جلب ناجح عبر «إعادة المحاولة»)
+    /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل «لا توجد أرقام ممنوعة» المضلِّلة
     @State private var lastFetchOffline = false
 
-    /// لون بلاطة «الأرقام المحظورة» في إعدادات النظام — رأس الصفحة يطابق البلاطة التي ضُغطت
     private let pageTint = DS.Color.error
 
-    // قائمة مفلترة بالبحث
-    private var filteredPhones: [BannedPhone] {
-        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return authVM.bannedPhones
-        }
-        let query = searchText.lowercased()
-        return authVM.bannedPhones.filter {
-            $0.phoneNumber.contains(query) ||
-            ($0.reason?.lowercased().contains(query) ?? false)
-        }
-    }
-
-    // MARK: - حالة التحميل
-
-    /// أول تحميل ولا أرقام محمّلة بعد (إن كانت محمّلة من لوحة الإدارة تظهر فوراً وتتحدّث)
-    private var isInitialLoading: Bool {
-        isLoading && authVM.bannedPhones.isEmpty
-    }
-
-    /// الجلب انتهى بلا أرقام والجهاز غير متصل — القائمة الفارغة هنا ليست «لا توجد أرقام محظورة»
-    private var loadFailed: Bool {
-        !isLoading && authVM.bannedPhones.isEmpty && lastFetchOffline
-    }
+    private var isInitialLoading: Bool { isLoading && authVM.bannedPhones.isEmpty }
+    private var loadFailed: Bool { !isLoading && authVM.bannedPhones.isEmpty && lastFetchOffline }
 
     /// نفس الجلب السابق تماماً (`fetchBannedPhones`) — ويحفظ هل انتهى بلا اتصال
     private func loadBans() async {
@@ -54,20 +32,20 @@ struct AdminBannedPhonesView: View {
     }
 
     var body: some View {
-        AdminPage(header: header, lead: leadCard, content: phonesContent)
+        AdminPage(header: header, lead: AnyView(rulesCard), content: phonesContent)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .dsCenterBox(isPresented: $showAddSheet) {
                 AddBanSheet(authVM: authVM)
             }
             .dsAlert(
-                t("إلغاء الحظر", "Remove Ban"),
+                t("رفع المنع", "Unblock"),
                 isPresented: Binding(
                     get: { phoneToUnban != nil },
                     set: { if !$0 { phoneToUnban = nil } }
                 )
             ) {
                 Button(t("إلغاء", "Cancel"), role: .cancel) { phoneToUnban = nil }
-                Button(t("إلغاء الحظر", "Remove Ban"), role: .destructive) {
+                Button(t("رفع المنع", "Unblock"), role: .destructive) {
                     guard let phone = phoneToUnban else { return }
                     Task {
                         isProcessing = true
@@ -78,91 +56,99 @@ struct AdminBannedPhonesView: View {
                 }
             } message: {
                 if let phone = phoneToUnban {
-                    Text(t(
-                        "هل تريد إلغاء حظر الرقم \(phone.phoneNumber)؟",
-                        "Remove ban for \(phone.phoneNumber)?"
-                    ))
+                    Text(t("رفع منع الرقم \(phone.phoneNumber) من التسجيل؟", "Allow \(phone.phoneNumber) to sign up again?"))
                 }
             }
             .task {
+                async let settings: Void = appSettingsVM.fetchSettings()
                 await loadBans()
+                await settings
             }
     }
 
     // MARK: - الرأس الكحلي
 
-    /// ٣ أرقام حيّة من القائمة المحمّلة أصلاً (بلا طلبات جديدة للسيرفر): كل المحظورة، وما أُضيف
-    /// هذا الشهر وهذا الأسبوع — «—» قبل اكتمال أول تحميل. زرّ «حظر رقم» للمالك فقط (المدير يتصفّح للقراءة)
+    /// حالة التسجيل، وعدد الأرقام الممنوعة وما أُضيف هذا الشهر — «—» قبل اكتمال أول تحميل. «منع رقم» للمالك فقط
     private var header: AdminPageHeader {
         let pending = isInitialLoading || loadFailed
         let phones = authVM.bannedPhones
-        let calendar = Calendar.current
         let now = Date()
-        let dates = phones.compactMap { Self.parseDate($0.createdAt) }
-        let thisMonth = dates.filter { calendar.isDate($0, equalTo: now, toGranularity: .month) }.count
-        let thisWeek = dates.filter { calendar.isDate($0, equalTo: now, toGranularity: .weekOfYear) }.count
+        let thisMonth = phones.compactMap { Self.parseDate($0.createdAt) }
+            .filter { Calendar.current.isDate($0, equalTo: now, toGranularity: .month) }.count
+        let ready = appSettingsVM.settings.updatedAt != nil
+        let open = appSettingsVM.settings.allowNewRegistrations
         let canBan = authVM.canManageBannedPhones
         return AdminPageHeader(
-            title: t("الأرقام المحظورة", "Banned Numbers"),
-            subtitle: t("أرقام ممنوعة من التسجيل واستخدام التطبيق", "Numbers blocked from signing up and using the app"),
-            glyph: "phone.down.fill",
-            readOnly: !canBan,
+            title: t("التسجيل والمنع", "Sign-up and blocking"),
+            subtitle: t("من يقدر يسجّل في التطبيق، والأرقام الممنوعة من التسجيل",
+                        "Who can sign up, and the numbers blocked from signing up"),
+            glyph: "person.crop.circle.badge.checkmark",
+            readOnly: !authVM.canManageSettings,
             kpis: [
-                AdminPageKPI(pending ? "—" : "\(phones.count)", t("محظور", "Banned"), icon: "phone.down.fill",
+                AdminPageKPI(ready ? (open ? t("مسموح", "Open") : t("مغلق", "Closed")) : "—", t("التسجيل", "Sign-up"),
+                             icon: "person.badge.plus",
+                             tint: ready ? (open ? DS.Hub.kpiMine : DS.Hub.kpiLate) : DS.Color.textOnPrimary),
+                AdminPageKPI(pending ? "—" : "\(phones.count)", t("أرقام ممنوعة", "Blocked numbers"), icon: "phone.down.fill",
                              tint: !pending && !phones.isEmpty ? DS.Hub.kpiLate : DS.Color.textOnPrimary),
-                AdminPageKPI(pending ? "—" : "\(thisMonth)", t("هذا الشهر", "This month"), icon: "calendar"),
-                AdminPageKPI(pending ? "—" : "\(thisWeek)", t("هذا الأسبوع", "This week"), icon: "clock.fill")
+                AdminPageKPI(pending ? "—" : "\(thisMonth)", t("هذا الشهر", "This month"), icon: "calendar")
             ],
-            actions: canBan ? [AdminPageAction(symbol: "plus", label: t("حظر رقم هاتف", "Ban Phone Number"),
+            actions: canBan ? [AdminPageAction(symbol: "plus", label: t("منع رقم من التسجيل", "Block a number"),
                                                tap: .action { showAddSheet = true })] : [])
     }
 
-    // MARK: - المحتوى
+    // MARK: - شروط التسجيل
 
-    /// أول بطاقة (تصعد فوق الرأس): التحميل، أو تعذّره، أو «لا توجد أرقام محظورة»، أو البحث
-    private var leadCard: AnyView {
+    /// «السماح بالتسجيل» — نفس المفتاح السابق (`allow_new_registrations`)، المالك يعدّل والمدير يقرأ
+    private var rulesCard: some View {
+        let s = appSettingsVM.settings
+        return AdminSectionCard(title: t("شروط التسجيل", "Sign-up rules")) {
+            AdminControlRow(icon: "person.badge.plus", tint: DS.Color.palm,
+                            title: t("السماح بالتسجيل", "Allow sign-ups"),
+                            subtitle: t("أعضاء جدد يسجّلون بأنفسهم، ويصل طلبهم «الوارد» للمراجعة",
+                                        "New members sign up themselves; their request reaches the Inbox for review"),
+                            control: AnyView(
+                                Toggle("", isOn: Binding(
+                                    get: { s.allowNewRegistrations },
+                                    set: { on in
+                                        Task { await appSettingsVM.updateSetting("allow_new_registrations", value: on,
+                                                                                 updatedBy: authVM.currentUser?.id) }
+                                    }))
+                                .labelsHidden()
+                                .tint(AppSection.admin.ink)
+                                .accessibilityLabel(t("السماح بالتسجيل", "Allow sign-ups"))
+                                .disabled(!authVM.canManageSettings)))
+        }
+    }
+
+    // MARK: - الأرقام الممنوعة
+
+    private var phonesContent: AnyView {
         if isInitialLoading {
-            return AnyView(AdminPageStateCard(.loading(t("جارٍ تحميل الأرقام المحظورة…", "Loading banned numbers…"))))
+            return AnyView(AdminPageStateCard(.loading(t("جارٍ تحميل الأرقام الممنوعة…", "Loading blocked numbers…"))))
         }
         if loadFailed {
-            return AnyView(AdminPageStateCard(.error(t("تعذّر تحميل الأرقام المحظورة", "Couldn't load banned numbers"),
+            return AnyView(AdminPageStateCard(.error(t("تعذّر تحميل الأرقام الممنوعة", "Couldn't load blocked numbers"),
                                                      message: t("تحقّق من اتصالك وحاول مرة أخرى",
                                                                 "Check your connection and try again"),
                                                      retry: { Task { await loadBans() } })))
         }
-        if authVM.bannedPhones.isEmpty {
-            return AnyView(AdminPageStateCard(.empty(t("لا توجد أرقام محظورة", "No Banned Numbers"),
+        let phones = authVM.bannedPhones
+        if phones.isEmpty {
+            return AnyView(AdminPageStateCard(.empty(t("لا توجد أرقام ممنوعة من التسجيل", "No blocked numbers"),
                                                      message: authVM.canManageBannedPhones
-                                                        ? t("يمكنك حظر أرقام هواتف من زر + في الأعلى",
-                                                            "You can ban phone numbers using the + button above")
+                                                        ? t("تمنع رقماً من زر ＋ في الأعلى، أو من ورقة العضو",
+                                                            "Block a number with the + button above, or from the member sheet")
                                                         : nil,
                                                      tint: DS.Color.success)))
         }
-        return AnyView(DSSearchField(text: $searchText,
-                                     placeholder: t("بحث عن رقم...", "Search number..."),
-                                     tint: pageTint)
-            .adminCard(padding: DS.Spacing.md))
-    }
-
-    /// بطاقة الأرقام — عنوانها وعدد ما يظهر منها (مع البحث)، والصفوف مفصولة بخط
-    private var phonesContent: AnyView {
-        guard !isInitialLoading, !loadFailed, !authVM.bannedPhones.isEmpty else { return AnyView(EmptyView()) }
-        let phones = filteredPhones
-        if phones.isEmpty {
-            return AnyView(AdminPageStateCard(.empty(t("لا توجد نتائج مطابقة", "No matching results"),
-                                                     message: t("جرّب رقماً آخر أو كلمة من سبب الحظر",
-                                                                "Try another number or a word from the reason"))))
-        }
-        return AnyView(AdminSectionCard(title: t("الأرقام المحظورة", "Banned Numbers"),
+        return AnyView(AdminSectionCard(title: t("الأرقام الممنوعة من التسجيل", "Numbers blocked from signing up"),
                                         tag: t("\(phones.count) رقم", phones.count == 1 ? "1 number" : "\(phones.count) numbers"),
                                         spacing: 0) {
             AdminLazyRows(items: phones) { AnyView(bannedPhoneRow($0)) }
         })
     }
 
-    // MARK: - Row
-
-    /// صفّ: مربّع الحظر + الرقم (من اليسار) + السبب + تاريخ الحظر، و«إلغاء» في الطرف للمالك فقط
+    /// صفّ: مربّع المنع + الرقم (من اليسار) + السبب + تاريخ المنع، و«رفع المنع» في الطرف للمالك فقط
     private func bannedPhoneRow(_ banned: BannedPhone) -> some View {
         HStack(spacing: DS.Spacing.md) {
             AdminIconSquare(symbol: "phone.down.fill", tint: pageTint)
@@ -174,15 +160,12 @@ struct AdminBannedPhonesView: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
-
                 if let reason = banned.reason, !reason.isEmpty {
                     Text(reason)
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                // تاريخ الحظر
                 HStack(spacing: DS.Spacing.xs) {
                     Image(systemName: "calendar")
                         .dsGlyph(DS.Glyph.micro, weight: .semibold)
@@ -198,30 +181,23 @@ struct AdminBannedPhonesView: View {
 
             Spacer(minLength: 0)
 
-            // زر إلغاء الحظر — للمالك فقط (المدير يتصفّح بدون تعديل)
             if authVM.canManageBannedPhones {
-                unbanButton(banned)
+                let number = formatPhoneDisplay(banned.phoneNumber)
+                DSChipButton(t("رفع المنع", "Unblock"), icon: "lock.open.fill", tint: DS.Color.error) {
+                    phoneToUnban = banned
+                }
+                .disabled(isProcessing)
+                .accessibilityLabel(t("رفع منع \(number)", "Unblock \(number)"))
             }
         }
         .padding(.vertical, DS.Spacing.sm + 2)
         .frame(minHeight: DS.Icon.tapTarget)
     }
 
-    /// «إلغاء» — الشريحة الواحدة بالأحمر (مساحة ضغط ٤٤)
-    private func unbanButton(_ banned: BannedPhone) -> some View {
-        let number = formatPhoneDisplay(banned.phoneNumber)
-        return DSChipButton(t("إلغاء", "Unban"), icon: "lock.open.fill", tint: DS.Color.error) {
-            phoneToUnban = banned
-        }
-        .accessibilityLabel(t("إلغاء حظر \(number)", "Unban \(number)"))
-    }
-
     // MARK: - Helpers
+
     private func formatPhoneDisplay(_ phone: String) -> String {
-        if phone.count == 8 {
-            return "+965 \(phone)"
-        }
-        return KuwaitPhone.display(phone)
+        phone.count == 8 ? "+965 \(phone)" : KuwaitPhone.display(phone)
     }
 
     /// الأرقام تبقى بترتيبها من اليسار داخل سطر عربي
@@ -229,29 +205,12 @@ struct AdminBannedPhonesView: View {
         "\u{2066}\(text)\u{2069}"
     }
 
-    private static let isoFull: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private static let isoBasic: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
-    /// تاريخ الحظر (بكسر ثوانٍ أو بدونها) — nil إن تعذّرت قراءته
     private static func parseDate(_ isoString: String) -> Date? {
-        isoFull.date(from: isoString) ?? isoBasic.date(from: isoString)
+        AdminDeviceReachStore.date(isoString)
     }
 
     private func formatDate(_ isoString: String) -> String {
         guard let date = Self.parseDate(isoString) else { return isoString }
-        return dateDisplay(date)
-    }
-
-    private func dateDisplay(_ date: Date) -> String {
         let df = DateFormatter()
         df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
         df.dateStyle = .medium
@@ -279,7 +238,7 @@ struct AddBanSheet: View {
         KuwaitPhone.normalizeDigits(phoneNumber).filter(\.isNumber)
     }
 
-    /// الرقم النهائي بصيغة E.164 (كود الدولة + المحلي) للحظر.
+    /// الرقم النهائي بصيغة E.164 (كود الدولة + المحلي) للمنع.
     private var cleanPhone: String {
         KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber)
             ?? "\(selectedPhoneCountry.dialingCode)\(localDigits)"
@@ -297,14 +256,14 @@ struct AddBanSheet: View {
     }
 
     var body: some View {
-        // نفس هيكل مربّعات الإضافة (طلب المالك): رأس أحمر للحظر، قسم البيانات،
-        // و«حظر الرقم» كحلي يمين / «إلغاء» رمادي يسار
+        // نفس هيكل مربّعات الإضافة (طلب المالك): رأس أحمر للمنع، قسم البيانات،
+        // و«منع الرقم» كحلي يمين / «إلغاء» رمادي يسار
         DSComposer(
-            title: t("حظر رقم هاتف", "Ban Phone Number"),
-            subtitle: t("يُمنع الرقم من استخدام التطبيق", "The number is blocked from using the app"),
+            title: t("منع رقم من التسجيل", "Block a number from signing up"),
+            subtitle: t("لا يقدر صاحب الرقم يسجّل أو يدخل التطبيق", "The number can't sign up or sign in"),
             icon: "phone.down.fill",
             tint: DS.Color.error,
-            actionTitle: t("حظر الرقم", "Ban Number"),
+            actionTitle: t("منع الرقم", "Block number"),
             actionIcon: "phone.down.fill",
             canSubmit: isValid,
             isBusy: isLoading,
@@ -312,15 +271,15 @@ struct AddBanSheet: View {
             onSubmit: { Task { await banAction() } },
             onCancel: { dismiss() }
         ) {
-            DSComposerSection(title: t("بيانات الحظر", "Ban details"), icon: "phone.down.fill",
+            DSComposerSection(title: t("بيانات المنع", "Block details"), icon: "phone.down.fill",
                               tint: DS.Color.error, index: 0) {
                 // حقل الرقم
                 phoneRow
 
-                // سبب الحظر
+                // سبب المنع
                 DSComposerField(icon: "text.bubble.fill",
                                 label: t("السبب (اختياري)", "Reason (optional)"),
-                                placeholder: t("سبب الحظر...", "Ban reason..."),
+                                placeholder: t("سبب المنع...", "Reason..."),
                                 text: $reason,
                                 tint: DS.Color.error)
             }
@@ -371,8 +330,8 @@ struct AddBanSheet: View {
             dismiss()
         } else {
             errorMessage = t(
-                "فشل حظر الرقم. قد يكون محظوراً بالفعل.",
-                "Failed to ban number. It may already be banned."
+                "تعذّر منع الرقم. قد يكون ممنوعاً بالفعل.",
+                "Couldn't block the number. It may already be blocked."
             )
         }
         isLoading = false

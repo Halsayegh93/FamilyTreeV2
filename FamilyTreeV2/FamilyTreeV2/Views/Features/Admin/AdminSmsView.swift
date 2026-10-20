@@ -1,12 +1,15 @@
 import SwiftUI
 import Combine
 
-// MARK: - «رسائل الدخول · KWT SMS» (طلب المالك ٢٠٢٦-١٠-١٩ «نضيف قسم جديد تبع kwt-sms» — أول صفّ في «الدخول والأمان»)
+// MARK: - «رسائل رمز الدخول (KWT SMS)» (طلب المالك ٢٠٢٦-١٠-١٩ «نضيف قسم جديد تبع kwt-sms» — في «الفريق والأمان»)
 //
 // المالك والمدير فقط (نفس صلاحية `sms_admin_overview()` على السيرفر — غيرهما 42501). البيانات الحية منذ ٢٠٢٦-١٠-٢٠
 // (`AdminSmsData.swift`): الرأس (الرصيد وحالته، يكفي كم رمز وكم يوم، تحديث حي، الشحن) ← الإرسال (اليوم/٧/٣٠،
-// القبول، النقاط، عدّاد الساعة) ← محاولات الدخول (`AdminSmsAttempts.swift`) ← آخر ٣٠ يوماً ← آخر الإرسالات (فحص الحالة) ← أدوات (اختبار المالك، فحص رقم،
-// المرسلون، التغطية) ← إعدادات الإرسال (الحدود واسم المرسل — `AdminSmsSettings.swift`) ← التنبيهات (المالك يعدّل) ← الحدود ← الإعداد.
+// القبول، النقاط، عدّاد الساعة) ← طلبات رمز الدخول (`AdminSmsAttempts.swift`) ← آخر ٣٠ يوماً ← آخر الإرسالات (فحص الحالة) ←
+// الأدوات (رسالة تجريبية للمالك، التحقق من رقم) ← إعدادات الإرسال (الحدود، اسم المرسل، الدول المتاحة، نص الرسالة —
+// `AdminSmsSettings.swift`، المكان الوحيد لتعديلها) ← تنبيهات الرصيد ← طريقة العمل (مطويّة).
+// الدفعة ج (٢٠٢٦-١٠-٢٠): كل معلومة مرة واحدة — حُذفت بطاقتا «الحدود» و«الإعداد» وصفّا «المرسلون/التغطية» في الأدوات، وصفّا
+// «الحدود/التنبيهات» في «طريقة العمل» (كانت أزواجاً مكررة).
 // حارس المكدس (تعطّل «اليوم» على الجوال ٢٠٢٦-١٠-٢٠): كل بطاقة نوع مستقل خلف `AnyView` — لا جسم واحد ضخم.
 
 /// ما يُفتح من أدوات الصفحة في مربّع
@@ -74,7 +77,7 @@ final class SmsPageActions: ObservableObject {
             }
             let points = reply.points.map { SmsText.number($0) } ?? "1"
             let balance = reply.balance.map { SmsBalanceText.points($0) }
-            return SmsNotice(title: L10n.t("أُرسلت رسالة الاختبار", "Test message sent"),
+            return SmsNotice(title: L10n.t("أُرسلت الرسالة التجريبية", "Test message sent"),
                              message: balance.map { L10n.t("تصل رقمك خلال ثوانٍ. خُصم \(points) نقطة — الرصيد الآن \($0).",
                                                            "It reaches your number in seconds. \(points) point(s) charged — balance now \($0).") }
                                 ?? L10n.t("تصل رقمك خلال ثوانٍ. خُصم \(points) نقطة.",
@@ -127,12 +130,12 @@ private struct SmsPagePresentations: ViewModifier {
             .dsCenterBox(item: $actions.box) { kind in
                 AnyView(SmsToolBoxView(kind: kind, actions: actions))
             }
-            .dsAlert(L10n.t("إرسال رسالة اختبار لرقمك؟", "Send a test message to your number?"),
+            .dsAlert(L10n.t("إرسال رسالة تجريبية لرقمك؟", "Send a test message to your number?"),
                      isPresented: $actions.confirmTest, icon: "paperplane.fill") {
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-                Button(L10n.t("أرسل الاختبار", "Send test")) { actions.testSend() }
+                Button(L10n.t("إرسال", "Send")) { actions.testSend() }
             } message: {
-                Text(L10n.t("تُرسل رسالة اختبار واحدة إلى رقم ملفك أنت فقط، وتخصم نقطة واحدة من الرصيد. مسموح مرة كل 10 دقائق.",
+                Text(L10n.t("تُرسل رسالة تجريبية واحدة إلى رقم ملفك أنت فقط، وتخصم نقطة واحدة من الرصيد. مسموح مرة كل 10 دقائق.",
                             "One test message goes to your own profile number only and costs 1 point. Allowed once every 10 minutes."))
             }
             .dsAlert(actions.notice?.title ?? "", isPresented: Binding(
@@ -141,7 +144,7 @@ private struct SmsPagePresentations: ViewModifier {
             ), presenting: actions.notice) { notice in
                 if notice.offersTest {
                     Button(L10n.t("لاحقاً", "Later"), role: .cancel) {}
-                    Button(L10n.t("اختبار إرسال لرقمي", "Test send to my number")) {
+                    Button(L10n.t("إرسال رسالة تجريبية لرقمي", "Send a test message to my number")) {
                         // بعد أن تُغلق هذه النافذة — ثم تأكيد الاختبار المعتاد (نقطة واحدة)
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { actions.confirmTest = true }
                     }
@@ -162,7 +165,7 @@ private struct SmsPageContent: View {
 
     var body: some View {
         if !authVM.canViewSystemSettings || (store.state == .denied && store.status == nil) {
-            DSNoteCard(L10n.t("صفحة رسائل الدخول للمالك والمدير فقط.", "Sign-in messages are for the owner and admins only."),
+            DSNoteCard(L10n.t("رسائل رمز الدخول للمالك والمدير فقط.", "Sign-in code messages are for the owner and admins only."),
                        icon: "lock.fill", tint: DS.Color.warning)
         } else {
             VStack(spacing: DS.Hub.stackSpacing) {
@@ -176,7 +179,7 @@ private struct SmsPageContent: View {
                                       "Couldn't load message stats — pull to refresh."),
                                icon: "wifi.exclamationmark", tint: DS.Color.warning)
                 }
-                // «محاولات الدخول» — دالتها مستقلة عن النظرة، فتظهر ولو تعذّرت (AdminSmsAttempts.swift)
+                // «طلبات رمز الدخول» — دالتها مستقلة عن النظرة، فتظهر ولو تعذّرت (AdminSmsAttempts.swift)
                 AnyView(SmsAttemptsCard())
                 if let overview = store.overview {
                     AnyView(SmsTrendCard(overview: overview))
@@ -185,9 +188,7 @@ private struct SmsPageContent: View {
                 AnyView(SmsToolsCard(actions: actions, isOwner: authVM.isOwner))
                 AnyView(SmsSendingSettingsCard(overview: store.overview, actions: actions))
                 AnyView(SmsAlertsCard(alerts: store.overview?.alerts))
-                AnyView(SmsLimitsCard(limits: store.overview?.limits ?? SmsOverview.Limits()))
-                AnyView(SmsSetupCard())
-                // «كيف تشتغل رسائل الدخول» مطويّة (طلب المالك ٢٠٢٦-١٠-٢٠ «سجل التفاصيل الجديدة في القسم بالتطبيق كاملة»)
+                // «طريقة العمل» مطويّة (طلب المالك ٢٠٢٦-١٠-٢٠ «سجل التفاصيل الجديدة في القسم بالتطبيق كاملة»)
                 AnyView(SmsHowItWorksCard(overview: store.overview))
             }
         }
@@ -203,8 +204,8 @@ private struct SmsHeroHeader: View {
 
     var body: some View {
         AdminBandHeader(backTitle: backTitle,
-                        title: L10n.t("رسائل الدخول", "Sign-in messages"),
-                        subtitle: L10n.t("KWT SMS · رموز الدخول برسالة نصية", "KWT SMS · sign-in codes by text message"),
+                        title: L10n.t("رسائل رمز الدخول", "Sign-in code messages"),
+                        subtitle: L10n.t("KWT SMS · رمز الدخول برسالة نصية", "KWT SMS · the sign-in code by text message"),
                         bottomPadding: DS.Spacing.xl) {
             AdminGlassButton(symbol: "arrow.clockwise", label: L10n.t("تحديث الصفحة", "Refresh page")) {
                 Task { await store.refresh(force: true) }
@@ -290,7 +291,7 @@ private struct SmsBalanceBlock: View {
     }
 }
 
-/// «اشحن الرصيد» + «تحديث الرصيد الآن» — عمود واحد إن كبر الخط
+/// «شحن الرصيد» + «تحديث الرصيد الآن» — عمود واحد إن كبر الخط
 private struct SmsHeroButtons: View {
     @ObservedObject var actions: SmsPageActions
     @Environment(\.openURL) private var openURL
@@ -311,7 +312,7 @@ private struct SmsHeroButtons: View {
 
     private var recharge: some View {
         Button { openURL(SmsBalanceStore.rechargeURL) } label: {
-            AdminPillLabel(title: L10n.t("اشحن الرصيد", "Top up balance"), icon: "creditcard.fill",
+            AdminPillLabel(title: L10n.t("شحن الرصيد", "Top up balance"), icon: "creditcard.fill",
                            style: .gold, height: DS.Hub.pillHeightCard)
                 .fixedSize()
         }

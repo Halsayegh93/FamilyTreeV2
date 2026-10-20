@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - «تقرير الموافقات» (طلب المالك ٢٠٢٦-١٠-١٦ مسار الموافقات ٢)
 //
-// من زرّ الرسم في رأس «طلبات المراجعة» ومربّع «النظام» في لوحة الإدارة — للمالك والمدير والمراقب.
+// بيته الوحيد «المؤشرات ← الموافقات» (الدفعة ج، ٢٠٢٦-١٠-٢٠؛ كان أيضاً في رأس «الوارد» وصفّه ومربّع «منجز هذا الأسبوع») —
+// للمالك والمدير والمراقب.
 // الفترة (هذا الشهر · الشهر الماضي · ٣ شهور) ← الأرقام ← «وقت كل مرحلة» (أشرطة بالساعات على مقياس واحد) ←
 // «حسب النوع» ← «أداء الإدارة». الأرقام من `approvals_report` على السيرفر.
 // بشكل «اليوم» (٢٠٢٦-١٠-٢٠): الفترة شرائح في الرأس الكحلي وأهم أربعة أرقام مربّعاته، والباقي بطاقات بيضاء.
@@ -157,11 +158,11 @@ struct ApprovalsReportView: View {
             AdminRowsCardBody {
                 AdminTapRow(icon: "xmark.circle.fill", tint: DS.Color.reject, title: L10n.t("مرفوضة", "Rejected"),
                             value: "\(t.rejected)", valueTint: DS.Color.reject)
-                AdminTapRow(icon: "flame.fill", tint: DS.Color.error, title: L10n.t("مستعجلة", "Urgent"),
+                AdminTapRow(icon: "flame.fill", tint: DS.Color.error, title: L10n.t("عاجلة", "Urgent"),
                             value: "\(t.urgent)", valueTint: DS.Color.error)
                 AdminTapRow(icon: "arrow.up.forward.circle.fill", tint: DS.Color.warning,
                             title: L10n.t("متصعّدة", "Escalated"), value: "\(t.escalated)", valueTint: DS.Color.warning)
-                AdminTapRow(icon: "bolt.fill", tint: DS.Color.info, title: L10n.t("مسار سريع", "Fast track"),
+                AdminTapRow(icon: "bolt.fill", tint: DS.Color.info, title: L10n.t("الاعتماد المباشر", "Direct approval"),
                             value: "\(t.fastTrack)", valueTint: DS.Color.info)
             }
         }
@@ -195,7 +196,7 @@ struct ApprovalsReportView: View {
     private var stageBars: [StageBar] {
         let s = vm.report.stages
         return [
-            StageBar(id: "review", title: L10n.t("مراجعة المختص", "Specialist review"), hours: s.reviewHours, tint: ApprovalStage.review.tint),
+            StageBar(id: "review", title: L10n.t("المراجعة", "Review"), hours: s.reviewHours, tint: ApprovalStage.review.tint),
             StageBar(id: "approve", title: L10n.t("اعتماد المدير", "Manager approval"), hours: s.approveHours, tint: ApprovalStage.approve.tint),
             StageBar(id: "execute", title: L10n.t("التنفيذ", "Carrying out"), hours: s.executeHours, tint: ApprovalStage.execute.tint),
             StageBar(id: "info", title: L10n.t("ردّ العضو", "Member's reply"), hours: s.infoHours, tint: ApprovalStage.info.tint)

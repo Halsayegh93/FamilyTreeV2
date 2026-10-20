@@ -380,7 +380,7 @@ struct AdminDashboardView: View {
                 NavigationLink { AdminMyScopeView(guide: guide) } label: {
                     HStack(spacing: DS.Spacing.xsm) {
                         Image(dsSymbol: guide.icon).dsGlyph(DS.Glyph.sm)
-                        Text(L10n.t("نطاقي: \(guide.mandate)", "My scope: \(guide.mandate)"))
+                        Text(L10n.t("صلاحياتي: \(guide.mandate)", "My permissions: \(guide.mandate)"))
                             .dsFont(.footnote)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
@@ -478,7 +478,7 @@ struct AdminDashboardView: View {
                 subtitle: L10n.t("\(SmsBalanceText.points(balance)) نقطة · \(SmsBalanceText.enough(balance))",
                                  "\(SmsBalanceText.points(balance)) points · \(SmsBalanceText.enough(balance))"),
                 meter: sms.lowThreshold > 0 ? balance / sms.lowThreshold : 0,
-                buttonTitle: L10n.t("اشحن", "Top up"), buttonStyle: .navy, action: .sms))
+                buttonTitle: L10n.t("شحن الرصيد", "Top up"), buttonStyle: .navy, action: .sms))
         }
         // تحذير توافق قاعدة البيانات (للكل عند الخلل)
         if !authVM.notificationsFeatureAvailable || !authVM.newsApprovalFeatureAvailable {
@@ -487,18 +487,18 @@ struct AdminDashboardView: View {
                 lines.append(L10n.t("جدول الإشعارات غير موجود — الإشعارات معطلة", "Notifications table missing"))
             }
             if !authVM.newsApprovalFeatureAvailable {
-                lines.append(L10n.t("عمود موافقة الأخبار غير موجود — موافقات الأخبار معطلة", "News approval column missing"))
+                lines.append(L10n.t("عمود اعتماد الأخبار غير موجود — اعتماد الأخبار معطّل", "News approval column missing"))
             }
             list.append(AdminTodayAlert(id: "schema", icon: "exclamationmark.triangle.fill", tint: DS.Color.error,
-                                        title: L10n.t("توافق قاعدة البيانات", "Database compatibility"),
+                                        title: L10n.t("خلل في إعداد قاعدة البيانات", "Database setup problem"),
                                         subtitle: lines.joined(separator: "\n")))
         }
         // وضع الصيانة مفعّل
         if authVM.canViewSystemSettings && appSettingsVM.settings.maintenanceMode {
             list.append(AdminTodayAlert(id: "maintenance", icon: "wrench.and.screwdriver.fill", tint: DS.Color.warning,
-                                        title: L10n.t("وضع الصيانة مفعّل", "Maintenance mode is on"),
+                                        title: L10n.t("وضع الصيانة يعمل", "Maintenance mode is on"),
                                         subtitle: L10n.t("الأعضاء لا يقدرون يستخدمون التطبيق الآن", "Members can't use the app now"),
-                                        buttonTitle: L10n.t("راجع", "Review"), action: .maintenance))
+                                        buttonTitle: L10n.t("مراجعة", "Review"), action: .maintenance))
         }
         // وفاة لم يُعلن عنها (المالك والمدير)
         let waiting = unannounced
@@ -519,9 +519,9 @@ struct AdminDashboardView: View {
         if authVM.isAdmin, let stale = staleTokens, stale > 0 {
             list.append(AdminTodayAlert(
                 id: "push", icon: "bell.slash.fill", tint: DS.Color.info,
-                title: L10n.t("\(stale) أجهزة قد لا تصلها الإشعارات", "\(stale) devices may miss notifications"),
-                subtitle: L10n.t("رموز أقدم من 30 يوماً", "Tokens older than 30 days"),
-                buttonTitle: L10n.t("راجع", "Review"), action: .pushHealth))
+                title: L10n.t("\(stale) أجهزة لا تصلها الإشعارات", "\(stale) devices not reached by notifications"),
+                subtitle: L10n.t("لم تُحدَّث منذ 30 يوماً", "Not updated in 30 days"),
+                buttonTitle: L10n.t("مراجعة", "Review"), action: .pushHealth))
         }
         // إشعار مجدول اليوم
         if authVM.isAdmin, let next = notificationVM.scheduledNotifications
@@ -604,8 +604,8 @@ struct AdminDashboardView: View {
         switch action {
         case .sms:         return AnyView(AdminSmsView(backTitle: L10n.t("اليوم", "Today")).adminArea(.team))
         case .deaths, .announce: return AnyView(AdminOccasionsPage().adminArea(.occasions).adminBackTitle(L10n.t("اليوم", "Today")))
-        case .pushHealth:  return AnyView(AdminPushHealthView().adminArea(.occasions))
-        case .maintenance: return AnyView(AdminAppSettingsView(scope: .maintenance).adminArea(.app))
+        case .pushHealth:  return AnyView(AdminPushHealthView().adminArea(.team))
+        case .maintenance: return AnyView(AdminAppAreaPage().adminArea(.app))
         case .scheduled:   return AnyView(AdminOccasionsPage().adminArea(.occasions).adminBackTitle(L10n.t("اليوم", "Today")))
         case .treeHealth:  return AnyView(AdminMembersPage(chip: .problems).adminArea(.family))
         }
@@ -710,9 +710,9 @@ struct AdminDashboardView: View {
             let n = authVM.canSendNotifications ? notificationVM.scheduledNotifications.count : 0
             return n > 0 ? (L10n.t("\(n) إشعار مجدول", "\(n) scheduled"), false) : (memorial.dashboardCaption, false)
         case .metrics:
-            if let now = activeNow { return (L10n.t("\(now) نشطون الآن", "\(now) active now"), false) }
+            if let now = activeNow { return (L10n.t("المستخدمون الآن \(now)", "\(now) using now"), false) }
             let unread = notificationVM.unreadActivityLogCount
-            return unread > 0 ? (L10n.t("سجل النشاط · \(unread) جديد", "Activity · \(unread) new"), false)
+            return unread > 0 ? (L10n.t("سجل التعديلات · \(unread) جديد", "Change log · \(unread) new"), false)
                               : (area.subtitle, false)
         case .team:
             // رصيد رسائل الدخول حين يحتاج شحناً (تحذير)، وإلا عدد الفريق
@@ -723,8 +723,8 @@ struct AdminDashboardView: View {
             return (L10n.t("\(moderatorCount) في الفريق", "\(moderatorCount) on the team"), false)
         case .app:
             return appSettingsVM.settings.maintenanceMode
-                ? (L10n.t("الصيانة مفعّلة", "Maintenance on"), true)
-                : (L10n.t("الصيانة مطفأة", "Maintenance off"), false)
+                ? (L10n.t("وضع الصيانة يعمل", "Maintenance on"), true)
+                : (L10n.t("وضع الصيانة مطفأ", "Maintenance off"), false)
         }
     }
 }
@@ -803,7 +803,7 @@ struct AdminTodayCaughtUpRow: View {
     var body: some View {
         HStack(spacing: DS.Spacing.md) {
             AdminIconSquare(symbol: "checkmark.seal.fill", tint: DS.Color.success)
-            Text(L10n.t("لا توجد طلبات بانتظار قرارك", "Nothing awaits your decision"))
+            Text(L10n.t("لا توجد طلبات بانتظار قرارك", "No requests await your decision"))
                 .dsFont(.subtitle)
                 .foregroundColor(DS.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -877,7 +877,7 @@ struct AdminMemberCountsCard: View {
     private var cells: [Cell] {
         func alive(_ n: Int?) -> String? { n.map { L10n.t("\($0) أحياء", "\($0) alive") } }
         return [
-            Cell(id: "total", label: L10n.t("الأفراد", "Members"), value: counts.total,
+            Cell(id: "total", label: L10n.t("إجمالي الأفراد", "All members"), value: counts.total,
                  note: alive(counts.totalAlive), tint: DS.Color.textPrimary, target: .overview),
             Cell(id: "men", label: L10n.t("الرجال", "Men"), value: counts.men,
                  note: alive(counts.menAlive), tint: DS.Color.male, target: .directory),
@@ -968,7 +968,8 @@ struct AdminMemberCountsCard: View {
 
     private static func page(_ target: Target) -> AnyView {
         switch target {
-        case .overview:  return AnyView(AdminMembersPage().adminArea(.family))
+        // «إجمالي الأفراد» ← بيت الأعداد «المؤشرات ← العائلة» (الدفعة ج)
+        case .overview:  return AnyView(AdminAnalyticsView().adminArea(.metrics))
         case .directory: return AnyView(AdminMembersPage().adminArea(.family))
         case .accounts:  return AnyView(AdminMembersPage(chip: .registered).adminArea(.family))
         case .women:     return AnyView(EmptyView())

@@ -35,6 +35,8 @@ struct AdminMembersPage: View {
     @State private var branchLimit = Self.branchPreview
     @State private var sheet: AdminMemberSheetContext?
     @State private var showExport = false
+    /// «⋯ ← تصدير» بالفلتر الحالي (الدفعة ج): الشريحة والبحث المختاران — nil = كل العائلة
+    @State private var exportScope: AdminReportScope?
 
     static let pageSize = 30
     static let branchPreview = 8
@@ -58,7 +60,9 @@ struct AdminMembersPage: View {
             AdminMemberSheet(ids: context.ids, start: context.start)
         }
         .navigationDestination(isPresented: $showExport) {
-            AdminLazyPage { AnyView(AdminReportsView().adminBackTitle(AdminArea.family.title).adminArea(.family)) }
+            AdminLazyPage { [exportScope] in
+                AnyView(AdminReportsView(scope: exportScope).adminBackTitle(AdminArea.family.title).adminArea(.family))
+            }
         }
         .task {
             if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
@@ -106,7 +110,10 @@ struct AdminMembersPage: View {
     private var moreMenu: some View {
         Menu {
             if authVM.isAdmin {
-                Button { showExport = true } label: {
+                Button {
+                    exportScope = currentExportScope
+                    showExport = true
+                } label: {
                     Label(L10n.t("تصدير قائمة الأعضاء (PDF)", "Export member list (PDF)"), systemImage: "doc.text")
                 }
             }
@@ -159,6 +166,16 @@ struct AdminMembersPage: View {
             sub = .all
             limit = Self.pageSize
         }
+    }
+
+    /// الفلتر الحالي للتصدير: الشريحة · الشريحة الفرعية · «البحث» — بلا فلتر = كل العائلة
+    private var currentExportScope: AdminReportScope? {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard chip != .all || sub != .all || !q.isEmpty else { return nil }
+        var parts = [chip.title]
+        if sub != .all { parts.append(sub.title) }
+        if !q.isEmpty { parts.append("«\(q)»") }
+        return AdminReportScope(ids: Set(currentRows.map { index.entries[$0].id }), title: parts.joined(separator: " · "))
     }
 
     // MARK: المحتوى

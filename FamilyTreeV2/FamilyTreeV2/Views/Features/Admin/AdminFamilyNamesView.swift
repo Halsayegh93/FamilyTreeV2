@@ -1,12 +1,17 @@
 import SwiftUI
 
-/// إدارة أسماء العوائل — الإدارة تضع القائمة، والأعضاء يختارون منها
-/// عند التسجيل أو من تعديل الملف الشخصي.
-/// بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← «إضافة عائلة» (لمن يدير) تصعد
-/// فوقه ← «العوائل» صفوفاً في بطاقة بيضاء وقائمة خيارات لكل صف. تُفتح من «التطبيق» بجانب أسماء الفروع.
+/// «أسماء العوائل والفروع» — صفحة واحدة في «التطبيق ← القوائم» (الدفعة ج، ٢٠٢٦-١٠-٢٠؛ كانتا صفحتين):
+/// أسماء العوائل (الإدارة تضع القائمة، والأعضاء يختارون منها عند التسجيل أو تعديل الملف) وأسماء الفروع (تظهر في قائمة
+/// اختيار الفرع فقط). بشكل «اليوم» (`AdminPageKit`): رأس كحلي بالأرقام ← «إضافة عائلة» (لمن يدير) تصعد فوقه ←
+/// «أسماء الفروع» (صفّ يفتح شجرة الفروع بوضع التسمية) ← «العوائل» صفوفاً بقائمة خيارات لكل صف. بلا تبويبات.
+/// العوائل: المالك والمدير يضيفان ويعدّلان · الفروع: المالك يسمّي والمدير يقرأ (كما كانتا).
 struct AdminFamilyNamesView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @StateObject private var vm = FamilyNamesViewModel()
+    /// مربّع «أسماء الفروع» (شجرة الفروع بوضع التسمية)
+    @State private var branchNamesOpen = false
 
     @State private var newName = ""
     @State private var renaming: FamilyNameOption?
@@ -24,9 +29,25 @@ struct AdminFamilyNamesView: View {
 
     var body: some View {
         AdminPage(header: header,
-                  lead: AnyView(canManage ? AnyView(addSection) : AnyView(listSection)),
-                  content: AnyView(canManage ? AnyView(listSection) : AnyView(EmptyView())))
+                  lead: AnyView(canManage ? AnyView(addSection) : AnyView(branchesSection)),
+                  content: AnyView(VStack(spacing: DS.Hub.stackSpacing) {
+                      if canManage { AnyView(branchesSection) }
+                      AnyView(listSection)
+                  }))
         .task { await vm.fetch(force: true) }
+        .task { await appSettingsVM.fetchSettings() }
+        // أسماء الفروع — شجرة الفروع نفسها بوضع التسمية (كما كانت في «إعدادات التطبيق»)
+        .dsTallBox(isPresented: $branchNamesOpen) {
+            BranchPickerSheet(
+                allMembers: memberVM.allMembers,
+                renamesBranches: true,
+                canRename: authVM.canManageSettings,
+                onRename: { id, name in
+                    Task { await appSettingsVM.updateBranchName(name, for: id, updatedBy: authVM.currentUser?.id) }
+                }
+            )
+            .environmentObject(appSettingsVM)
+        }
         .refreshable { await vm.fetch(force: true) }
         .dsAlert(L10n.t("تعديل الاسم", "Rename"), isPresented: Binding(
             get: { renaming != nil }, set: { if !$0 { renaming = nil } }
@@ -58,18 +79,39 @@ struct AdminFamilyNamesView: View {
     private var header: AdminPageHeader {
         let ready = !isFirstLoad
         return AdminPageHeader(
-            title: L10n.t("أسماء العوائل", "Family names"),
-            subtitle: L10n.t("يختار العضو عائلته منها، وتظهر بآخر اسمه في التطبيق.",
-                             "Members pick from this list; it appears at the end of their name."),
+            title: L10n.t("أسماء العوائل والفروع", "Family and branch names"),
+            subtitle: L10n.t("يختار العضو عائلته منها، وأسماء الفروع تظهر في قائمة اختيار الفرع.",
+                             "Members pick their family from this list; branch names show in the branch picker."),
             glyph: "person.2.crop.square.stack.fill",
             kpis: [
                 AdminPageKPI(AdminPageKPI.count(vm.options.count, ready: ready), L10n.t("عائلة", "Families"),
                              icon: "list.bullet"),
                 AdminPageKPI(AdminPageKPI.count(activeCount, ready: ready), L10n.t("متاحة للاختيار", "Selectable"),
                              icon: "checkmark.circle", tint: DS.Hub.kpiMine),
-                AdminPageKPI(AdminPageKPI.count(vm.options.count - activeCount, ready: ready),
-                             L10n.t("معطّلة", "Disabled"), icon: "eye.slash", tint: DS.Hub.kpiLate)
+                AdminPageKPI("\(customBranchNamesCount)", L10n.t("فروع بأسماء", "Named branches"),
+                             icon: "arrow.triangle.branch")
             ])
+    }
+
+    // MARK: - أسماء الفروع (طلب المالك ٢٠٢٦-١٠-٠٩)
+
+    /// عدد الفروع التي لها اسم مخصّص
+    private var customBranchNamesCount: Int {
+        (appSettingsVM.settings.branchNames ?? [:]).values
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+    }
+
+    private var branchesSection: some View {
+        AdminSectionCard(title: L10n.t("أسماء الفروع", "Branch names"),
+                         tag: customBranchNamesCount > 0
+                            ? L10n.t("\(customBranchNamesCount) اسم مخصّص", "\(customBranchNamesCount) custom") : nil) {
+            AdminTapRow(icon: "arrow.triangle.branch", tint: DS.Color.palm,
+                        title: L10n.t("تسمية الفروع", "Name the branches"),
+                        subtitle: authVM.canManageSettings
+                            ? L10n.t("اسم يظهر في قائمة اختيار الفرع فقط", "A name shown in the branch picker list only")
+                            : AdminPageHeader.readOnlyText,
+                        tap: .action { branchNamesOpen = true })
+        }
     }
 
     // MARK: - إضافة عائلة
@@ -153,7 +195,7 @@ struct AdminFamilyNamesView: View {
                 .lineLimit(2)
 
             if !option.isActive {
-                DSStatusChip(text: L10n.t("معطّلة", "Disabled"), tint: DS.Color.textTertiary)
+                DSStatusChip(text: L10n.t("مخفية من الاختيار", "Hidden from the picker"), tint: DS.Color.textTertiary)
             }
 
             Spacer(minLength: 0)
@@ -168,8 +210,8 @@ struct AdminFamilyNamesView: View {
                     Button {
                         Task { await vm.setActive(id: option.id, !option.isActive) }
                     } label: {
-                        Label(option.isActive ? L10n.t("تعطيل", "Disable")
-                                              : L10n.t("تفعيل", "Enable"),
+                        Label(option.isActive ? L10n.t("إخفاء من الاختيار", "Hide from the picker")
+                                              : L10n.t("إظهار في الاختيار", "Show in the picker"),
                               systemImage: option.isActive ? "eye.slash" : "eye")
                     }
 

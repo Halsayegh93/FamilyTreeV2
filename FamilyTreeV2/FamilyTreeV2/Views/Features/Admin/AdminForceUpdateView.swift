@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// «التحديث الإجباري» — شاشة مستقلة في إعدادات النظام (طلب المالك).
+/// «فرض التحديث» (كان «التحديث الإجباري») — يُفتح من «التطبيق ← التشغيل» (طلب المالك).
 /// لكل منصة أقل رقم بناء مسموح + رابط المتجر. أي نسخة أقل تنقفل بشاشة «حدّث التطبيق».
 /// التعديل للمالك فقط؛ المدير يشوفها للقراءة.
 /// التصميم بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالحدّين ونسختك (وشارة «للقراءة» لغير
@@ -39,8 +39,8 @@ struct AdminForceUpdateView: View {
     private var header: AdminPageHeader {
         let ready = s.updatedAt != nil
         return AdminPageHeader(
-            title: L10n.t("التحديث الإجباري", "Force Update"),
-            subtitle: L10n.t("أقل نسخة مسموحة لكل منصة — الأقدم تنقفل", "Minimum build per platform — older ones are blocked"),
+            title: L10n.t("فرض التحديث", "Force update"),
+            subtitle: L10n.t("أقل إصدار مسموح لكل منصة — الأقدم تنقفل", "Minimum allowed version per platform — older ones are blocked"),
             glyph: "arrow.down.app.fill",
             readOnly: !canEdit,
             kpis: [
@@ -60,8 +60,8 @@ struct AdminForceUpdateView: View {
         AdminSectionCard {
             AdminInfoRow(icon: canEdit ? "info.circle.fill" : "eye.fill", tint: DS.Color.info,
                          title: canEdit ? L10n.t("كيف يعمل", "How it works")
-                                        : L10n.t("للقراءة فقط — التعديل للمالك.", "Read only — the owner edits this."),
-                         subtitle: L10n.t("أي نسخة رقمها أقل من الحد تنقفل بشاشة «حدّث التطبيق» لين يحدّث العضو. 0 = بلا إجبار.",
+                                        : AdminPageHeader.readOnlyText,
+                         subtitle: L10n.t("أي نسخة رقمها أقل من الحد تنقفل بشاشة «حدّث التطبيق» لين يحدّث العضو. 0 = بلا فرض.",
                                           "Any build below the minimum is blocked until the member updates. 0 = off."))
         }
     }
@@ -96,10 +96,10 @@ struct AdminForceUpdateView: View {
     private func platformCard(title: String, icon: String, key: String, value: Int, hint: String,
                               urlTitle: String, urlDraft: Binding<String>, urlKey: String) -> some View {
         AdminSectionCard(title: title,
-                         tag: value == 0 ? L10n.t("بلا إجبار", "Off") : L10n.t("مفعّل", "On")) {
+                         tag: value == 0 ? L10n.t("بلا فرض", "Off") : L10n.t("يعمل", "On")) {
             // أقل رقم بناء مسموح
             AdminControlRow(icon: "number", tint: value == 0 ? DS.Color.textTertiary : AppSection.admin.ink,
-                            title: L10n.t("أقل رقم بناء", "Minimum build"),
+                            title: L10n.t("أقل إصدار مسموح", "Minimum allowed version"),
                             subtitle: hint,
                             control: AnyView(HStack(spacing: DS.Spacing.sm) {
                                 Text(value == 0 ? L10n.t("بلا", "Off") : "\(value)")
@@ -113,7 +113,7 @@ struct AdminForceUpdateView: View {
                                     set: { save(key, max(0, $0)) }
                                 ), in: 0...100_000)
                                 .labelsHidden()
-                                .accessibilityLabel(L10n.t("أقل رقم بناء — \(title)", "Minimum build — \(title)"))
+                                .accessibilityLabel(L10n.t("أقل إصدار مسموح — \(title)", "Minimum allowed version — \(title)"))
                                 .accessibilityValue(value == 0 ? L10n.t("بلا", "Off") : "\(value)")
                             }
                             .fixedSize()))

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// سجل النشاط — قسم إداري مستقل يعرض **كل حركة أو تغيير** في التطبيق:
+/// سجل التعديلات (كان «سجل النشاط») — قسم إداري مستقل يعرض **كل حركة أو تغيير** في التطبيق:
 /// تعديلات الأعضاء، الموافقات والرفض، نشر/حذف المحتوى، وتغيّرات النظام.
 /// انتقل هنا من تبويب «المستجدات» في مركز الإشعارات (طلب المالك)، فصار
 /// مركز الإشعارات مخصّصاً لإشعارات العضو نفسه، وهذا السجل للإدارة فقط.
@@ -294,9 +294,9 @@ struct AdminActivityLogView: View {
                 }))
         }
         return AdminPageHeader(
-            title: L10n.t("سجل النشاط", "Activity Log"),
-            subtitle: L10n.t("كل حركة وتغيير في التطبيق — اضغط أي حركة لتفاصيلها",
-                             "Every change in the app — tap an entry for its details"),
+            title: L10n.t("سجل التعديلات", "Change log"),
+            subtitle: L10n.t("كل تعديل: من وماذا ومتى — اضغط أي تعديل لتفاصيله",
+                             "Every change: who, what, when — tap one for its details"),
             glyph: "clock.arrow.circlepath",
             kpis: heroStats(counts: counts),
             actions: actions,
@@ -317,8 +317,8 @@ struct AdminActivityLogView: View {
                                                      retry: { Task { await fetchLog() } })))
         }
         if activityItems.isEmpty {
-            return AnyView(AdminPageStateCard(.empty(L10n.t("لا توجد حركة بعد", "No activity yet"),
-                                                     message: L10n.t("كل حركة أو تغيير في التطبيق يظهر هنا",
+            return AnyView(AdminPageStateCard(.empty(L10n.t("لا توجد تعديلات بعد", "No changes yet"),
+                                                     message: L10n.t("كل تعديل في التطبيق يظهر هنا",
                                                                      "Every change in the app shows up here"))))
         }
         return AnyView(DSSearchField(text: $searchText,
@@ -374,8 +374,8 @@ struct AdminActivityLogView: View {
     /// ٣ أرقام حيّة من السجل المحمّل أصلاً (بلا طلبات جديدة للسيرفر): حركة اليوم، من نفّذ حركات
     /// هذا الأسبوع (بلا تكرار)، والتصنيف الأكثر حركة — «—» قبل اكتمال أول تحميل.
     private func heroStats(counts: [ActivityFilter: Int]) -> [AdminPageKPI] {
-        let todayLabel = L10n.t("حركة اليوم", "Today")
-        let weekLabel = L10n.t("نشطون هذا الأسبوع", "Active this week")
+        let todayLabel = L10n.t("تعديلات اليوم", "Today")
+        let weekLabel = L10n.t("عدّلوا هذا الأسبوع", "Editors this week")
         let topLabel = L10n.t("الأكثر", "Most common")
 
         guard !isInitialLoading, !loadFailed else {

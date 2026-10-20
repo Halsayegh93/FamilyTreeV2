@@ -192,17 +192,6 @@ struct AdminMemberCounts: Equatable {
     }
 }
 
-/// صفّ «اليوم في العائلة»
-struct AdminFamilyTodayRow: Identifiable {
-    enum Target { case memorial, deaths, directory }
-    let id: String
-    let icon: String
-    let tint: Color
-    let title: String
-    let value: String
-    let target: Target
-}
-
 // MARK: - نصوص مشتركة
 
 enum AdminTodayText {
@@ -391,7 +380,7 @@ enum AdminTodayFeed {
             let urgent = sms.level == .urgent
             tasks.append(AdminTodayTask(
                 id: "sms-balance",
-                title: L10n.t("اشحن رصيد رسائل الدخول", "Top up the sign-in SMS balance"),
+                title: L10n.t("شحن رصيد رسائل الدخول", "Top up the sign-in SMS balance"),
                 detail: L10n.t("بقي \(SmsBalanceText.points(balance)) نقطة · \(SmsBalanceText.enough(balance))",
                                "\(SmsBalanceText.points(balance)) points left · \(SmsBalanceText.enough(balance))"),
                 marks: urgent ? 3 : 2,

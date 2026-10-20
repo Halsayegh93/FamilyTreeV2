@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - بطاقات صفحة «رسائل الدخول · KWT SMS» السفلى ومربّعات أدواتها
+// MARK: - بطاقات صفحة «رسائل رمز الدخول (KWT SMS)» السفلى ومربّعات أدواتها
 //
 // آخر الإرسالات (فحص الحالة) · أدوات · التنبيهات (المالك يعدّل، المدير يقرأ) · الحدود · الإعداد، ومربّعات
 // «فحص رقم» و«المرسلون» و«التغطية». كل بطاقة نوع مستقل يُرسم خلف `AnyView` في `AdminSmsView` (حارس المكدس).
@@ -153,22 +153,23 @@ private struct SmsOutcomeChips: View {
     }
 }
 
-// MARK: أدوات
+// MARK: الأدوات
 
 struct SmsToolsCard: View {
     @ObservedObject var actions: SmsPageActions
-    /// اختبار الإرسال للمالك فقط (السيرفر يرفض غيره `owner_only`)
+    /// الرسالة التجريبية للمالك فقط (السيرفر يرفض غيره `owner_only`)
     let isOwner: Bool
 
     var body: some View {
-        AdminRowsCard(title: L10n.t("أدوات", "Tools"),
-                      footnote: L10n.t("اختبار الإرسال وحده يرسل رسالة فعلية ويخصم نقطة.",
-                                       "Only the test send delivers a real message and costs a point.")) {
+        // «اسم المرسل» و«الدول المتاحة» صارا صفّين في «إعدادات الإرسال» (كانا مكرّرين هنا وهناك — الدفعة ج)
+        AdminRowsCard(title: L10n.t("الأدوات", "Tools"),
+                      footnote: isOwner ? L10n.t("الرسالة التجريبية وحدها ترسل رسالة فعلية وتخصم نقطة.",
+                                                 "Only the test message is really sent and costs a point.") : nil) {
             if isOwner {
                 let busy = actions.isBusy("test")
                 Button { actions.confirmTest = true } label: {
                     AdminListRow(icon: "paperplane.fill", tint: DS.Color.sea,
-                                 title: L10n.t("اختبار إرسال لرقمي", "Test send to my number"),
+                                 title: L10n.t("إرسال رسالة تجريبية لرقمي", "Send a test message to my number"),
                                  subtitle: busy ? L10n.t("جارٍ الإرسال…", "Sending…")
                                                 : L10n.t("رسالة لرقم ملفك · نقطة واحدة · مرة كل 10 دقائق",
                                                          "To your profile number · 1 point · once every 10 minutes"))
@@ -178,34 +179,24 @@ struct SmsToolsCard: View {
             }
             Button { actions.box = .validate } label: {
                 AdminListRow(icon: "phone.fill", tint: DS.Color.sea,
-                             title: L10n.t("فحص رقم", "Check a number"),
+                             title: L10n.t("التحقق من رقم", "Check a number"),
                              subtitle: L10n.t("هل يصل رمز الدخول لرقم كويتي؟", "Will a sign-in code reach a Kuwaiti number?"))
-            }
-            .buttonStyle(.plain)
-            Button { actions.box = .senders } label: {
-                AdminListRow(icon: "tag.fill", tint: DS.Color.primary,
-                             title: L10n.t("المرسلون", "Sender IDs"),
-                             subtitle: L10n.t("أسماء المرسل المعتمدة في الحساب", "Approved sender names on the account"))
-            }
-            .buttonStyle(.plain)
-            Button { actions.box = .coverage } label: {
-                AdminListRow(icon: "globe", tint: DS.Color.primary,
-                             title: L10n.t("التغطية", "Coverage"),
-                             subtitle: L10n.t("الدول المفعّلة في الحساب", "Countries enabled on the account"))
             }
             .buttonStyle(.plain)
         }
     }
 }
 
-// MARK: التنبيهات
+// MARK: تنبيهات الرصيد
 
-/// عتبات تنبيه الرصيد وفواصله — المالك يعدّل (تُحفظ الأربعة معاً بعد توقّف الضغط)، المدير يقرأ
+/// عتبات تنبيه الرصيد وفواصله — المالك يعدّل (تُحفظ الأربعة معاً بعد توقّف الضغط)، المدير يقرأ. مكانها الوحيد
+/// (كانت تُشرح ثانيةً في «طريقة العمل»)، ومعها «آخر تنبيه»
 struct SmsAlertsCard: View {
     /// من النظرة (الأحدث من السيرفر) — احتياط إن لم تصل أعمدة `app_settings` بعد
     let alerts: SmsOverview.Alerts?
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @EnvironmentObject private var notificationVM: NotificationViewModel
     /// تعديل المالك قبل الحفظ (يظهر فوراً)
     @State private var draft: SmsOverview.Alerts?
     @State private var generation = 0
@@ -218,7 +209,7 @@ struct SmsAlertsCard: View {
         let canEdit = authVM.canManageSettings && appSettingsVM.settings.smsLowThreshold != nil
         // حدود المبدّل صالحة دائماً (أدنى ≤ أعلى) ولو وصلت قيم غريبة
         let lowUpper = max(Self.lowMax, value.lowThreshold, value.urgentThreshold)
-        AdminRowsCard(title: L10n.t("التنبيهات", "Alerts"), footnote: footnote(canEdit: canEdit)) {
+        AdminRowsCard(title: L10n.t("تنبيهات الرصيد", "Balance alerts"), footnote: footnote(canEdit: canEdit)) {
             if canEdit {
                 stepperRow("exclamationmark.triangle.fill", DS.Color.warning, L10n.t("منخفض تحت", "Low below"),
                            value.lowThreshold, min(value.urgentThreshold, lowUpper)...lowUpper, 10, .points) {
@@ -249,7 +240,15 @@ struct SmsAlertsCard: View {
                          tint: DS.Color.error)
             }
             SmsKVRow(icon: "person.2.fill", label: L10n.t("يستلمها", "Sent to"), value: L10n.t("المالك والمدراء", "Owner and admins"))
+            if let last = lastAlert.flatMap({ AdminTodayText.since($0) }) {
+                SmsKVRow(icon: "bell.badge.fill", label: L10n.t("آخر تنبيه", "Last alert"), value: last)
+            }
         }
+    }
+
+    /// آخر تنبيه «رصيد الرسائل منخفض» وصل هذا المستخدم — nil إن لم يُحمَّل شيء
+    private var lastAlert: Date? {
+        notificationVM.notifications.filter { $0.kind == "sms_balance_low" }.map(\.createdDate).max()
     }
 
     /// المحفوظ: أعمدة `app_settings` (تُحدَّث بعد الحفظ) وإلا النظرة وإلا الافتراضي
@@ -269,7 +268,7 @@ struct SmsAlertsCard: View {
         }
         let rule = L10n.t("يصل التنبيه بعد أي رمز دخول مقبول والرصيد تحت العتبة. «منخفض» صفر يطفئ التنبيه.",
                           "The alert follows any accepted sign-in code while the balance is below the threshold. Low = 0 turns it off.")
-        return canEdit ? rule : L10n.t("للقراءة — يعدّلها المالك. ", "Read-only — the owner edits. ") + rule
+        return canEdit ? rule : AdminPageHeader.readOnlyText + ". " + rule
     }
 
     private func stepperRow(_ icon: String, _ tint: Color, _ label: String, _ value: Int, _ range: ClosedRange<Int>,
@@ -299,82 +298,23 @@ struct SmsAlertsCard: View {
     }
 }
 
-// MARK: الحدود والإعداد
+// MARK: - طريقة العمل
 
-struct SmsLimitsCard: View {
-    let limits: SmsOverview.Limits
-
-    var body: some View {
-        AdminRowsCard(title: L10n.t("الحدود", "Limits"),
-                      footnote: L10n.t("تحمي الرصيد من التكرار. الانتظار والحدود بالساعة يعدّلها المالك من «إعدادات الإرسال»، والباقي ثابت في السيرفر.",
-                                       "They protect the balance from repeats. The wait and hourly limits are set by the owner in “Sending settings”; the rest is fixed on the server.")) {
-            // الانتظار كما يراه العضو (`wait_seconds`) — لا المهلة الداخلية (الانتظار − ١٠)
-            SmsKVRow(icon: "clock.fill", label: L10n.t("بين رمزين لنفس الرقم", "Between two codes to one number"),
-                     value: L10n.t("\(limits.waitSeconds) ثانية", "\(limits.waitSeconds) s"))
-            SmsKVRow(icon: "phone.fill", label: L10n.t("لكل رقم بالساعة", "Per number per hour"),
-                     value: L10n.t("حتى \(limits.phonePerHour)", "Up to \(limits.phonePerHour)"))
-            SmsKVRow(icon: "person.3.fill", label: L10n.t("للجميع بالساعة", "Everyone per hour"),
-                     value: L10n.t("حتى \(limits.allPerHour)", "Up to \(limits.allPerHour)"))
-            SmsKVRow(icon: "speedometer", label: L10n.t("للجميع بالثانية", "Everyone per second"),
-                     value: L10n.t("حتى \(limits.allPerSecond)", "Up to \(limits.allPerSecond)"))
-            SmsKVRow(icon: "paperplane.fill", label: L10n.t("اختبار المالك", "Owner test"),
-                     value: L10n.t("مرة كل \(limits.adminTestMinutes) دقائق", "Once every \(limits.adminTestMinutes) min"))
-        }
-    }
-}
-
-struct SmsSetupCard: View {
-    var body: some View {
-        // «المرسل» انتقل إلى «إعدادات الإرسال» (اسمه الفعلي + تغييره للمالك)
-        AdminRowsCard(title: L10n.t("الإعداد", "Setup")) {
-            SmsKVRow(icon: "globe", label: L10n.t("التغطية", "Coverage"), value: L10n.t("الكويت فقط", "Kuwait only"),
-                     note: L10n.t("أرقام جوال الكويت (+965) التي تبدأ بـ 4 أو 5 أو 6 أو 9.",
-                                  "+965 mobile numbers starting with 4, 5, 6 or 9."))
-            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                SmsKVRow(icon: "text.bubble.fill", label: L10n.t("نص الرسالة", "Message text"),
-                         value: L10n.t("53 حرفاً · نقطة واحدة", "53 characters · 1 point"))
-                Text(verbatim: "عائلة المحمدعلي: رمز الدخول 123456. لا تشاركه مع أحد.")
-                    .dsFont(.callout)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(DS.Spacing.md)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                        .fill(DS.Color.cardBackgroundSoft))
-                    .environment(\.layoutDirection, .rightToLeft)
-                    .padding(.bottom, DS.Spacing.sm)
-                    .accessibilityLabel(L10n.t("معاينة الرسالة", "Message preview"))
-            }
-        }
-    }
-}
-
-// MARK: - كيف تشتغل رسائل الدخول
-
-/// «كيف تشتغل رسائل الدخول» — بطاقة مطويّة آخر الصفحة (سطر ملخّص وهي مطويّة): المسار، ما يُحفظ، ما لا يُحفظ أبداً، من
-/// يرى ماذا، الحدود والتنبيهات (أرقامها من النظرة الحيّة `limits`/`alerts`، وإلا القيم الافتراضية)، معنى «دخل ✓» و«مريب»،
-/// ورابط الشحن الوحيد. النص نفسه سيُنقل للأندرويد
+/// «طريقة العمل» (كانت «كيف تشتغل رسائل الدخول») — بطاقة مطويّة آخر الصفحة (سطر ملخّص وهي مطويّة): المسار، ما يُحفظ، ما
+/// لا يُحفظ أبداً، من يرى ماذا، معنى «ناجحة» و«مشبوهة»، ورابط الشحن. الحدود والتنبيهات لم تعد تُشرح هنا ثانيةً — مكانهما
+/// «إعدادات الإرسال» و«تنبيهات الرصيد» (الدفعة ج). النص نفسه سيُنقل للأندرويد
 struct SmsHowItWorksCard: View {
     let overview: SmsOverview?
-    @EnvironmentObject private var notificationVM: NotificationViewModel
     @ObservedObject private var attempts = SmsLoginAttemptsStore.shared
-    @Environment(\.openURL) private var openURL
     @State private var open = false
 
-    private var limits: SmsOverview.Limits { overview?.limits ?? SmsOverview.Limits() }
     private var sender: SmsOverview.Sender { overview?.sender ?? SmsOverview.Sender() }
-    private var alerts: SmsOverview.Alerts { overview?.alerts ?? SmsOverview.Alerts() }
-
-    /// آخر تنبيه «رصيد الرسائل منخفض» وصل هذا المستخدم — nil إن لم يُحمَّل شيء
-    private var lastAlert: Date? {
-        notificationVM.notifications.filter { $0.kind == "sms_balance_low" }.map(\.createdDate).max()
-    }
 
     var body: some View {
-        AdminSectionCard(title: L10n.t("كيف تشتغل رسائل الدخول", "How sign-in messages work"),
+        AdminSectionCard(title: L10n.t("طريقة العمل", "How it works"),
                          isOpen: $open,
-                         summary: L10n.t("المسار · ما يُحفظ وما لا يُحفظ · الحدود والتنبيهات",
-                                         "The path · what's kept and what never is · limits and alerts")) {
+                         summary: L10n.t("المسار · ما يُحفظ وما لا يُحفظ · من يرى ماذا",
+                                         "The path · what's kept and what never is · who sees what")) {
             AdminRowsCardBody {
                 SmsHowRow(icon: "paperplane.fill", tint: DS.Color.sea,
                           title: L10n.t("المسار", "The path"),
@@ -390,33 +330,13 @@ struct SmsHowItWorksCard: View {
                                           "Heads-up: the KWT SMS account dashboard may show sent message text — protect the KWT password and turn on two-step verification if offered."))
                 SmsHowRow(icon: "eye.fill", tint: DS.Color.info,
                           title: L10n.t("من يرى ماذا", "Who sees what"),
-                          text: L10n.t("المالك يرى أرقام «محاولات الدخول» كاملة، والمدير يراها مخفية جزئياً، وغيرهما لا يرى الصفحة.",
-                                       "The owner sees full numbers in “Sign-in attempts”, admins see them partly masked, and no one else sees this page."))
-                SmsHowRow(icon: "speedometer", tint: DS.Color.warning,
-                          title: L10n.t("الحدود", "Limits"),
-                          text: limitsText)
-                SmsHowRow(icon: "bell.badge.fill", tint: DS.Color.warning,
-                          title: L10n.t("التنبيهات", "Alerts"),
-                          text: alertsText,
-                          note: lastAlert.flatMap { AdminTodayText.since($0) }.map { L10n.t("آخر تنبيه: \($0)", "Last alert: \($0)") })
+                          text: L10n.t("المالك يرى أرقام «طلبات رمز الدخول» كاملة، والمدير يراها مخفية جزئياً، وغيرهما لا يرى الصفحة.",
+                                       "The owner sees full numbers in “Sign-in code requests”, admins see them partly masked, and no one else sees this page."))
                 SmsHowRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
-                          title: L10n.t("«دخل» و«مريب»", "“Signed in” and “Suspicious”"),
-                          text: L10n.t("شارة «دخل» (بعلامة صح) تعني أن الرقم سجّل دخولاً بعد أول محاولة في الفترة؛ «مريب» = 5 محاولات أو أكثر في ساعة.",
-                                       "The “Signed in” chip (with a tick) means the number signed in after its first attempt in the period; “Suspicious” = 5 or more attempts in an hour."))
-                Button { openURL(SmsBalanceStore.rechargeURL) } label: {
-                    HStack(spacing: DS.Spacing.sm) {
-                        SmsHowRow(icon: "creditcard.fill", tint: DS.Color.accent,
-                                  title: L10n.t("شحن الرصيد", "Top up"),
-                                  text: SmsText.isolate("kwtsms.com/cportal/buy"))
-                        Image(systemName: "arrow.up.forward.square")
-                            .dsGlyph(DS.Glyph.md, weight: .semibold)
-                            .foregroundColor(DS.Color.accent)
-                            .accessibilityHidden(true)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint(L10n.t("يفتح صفحة شراء الرصيد في KWT SMS", "Opens the KWT SMS top-up page"))
+                          title: L10n.t("«ناجحة» و«مشبوهة»", "“Signed in” and “Suspicious”"),
+                          text: L10n.t("شارة «ناجحة» (بعلامة صح) تعني أن الرقم سجّل دخولاً بعد أول طلب في الفترة؛ «مشبوهة» = 5 طلبات أو أكثر في ساعة.",
+                                       "The “Signed in” chip (with a tick) means the number signed in after its first request in the period; “Suspicious” = 5 or more requests in an hour."))
+                // «شحن الرصيد» زرّ الرأس وحده (كان رابطاً ثانياً هنا)
             }
         }
     }
@@ -434,27 +354,10 @@ struct SmsHowItWorksCard: View {
 
     private var keptText: String {
         let recent = SmsText.days(overview?.retentionDays ?? 2)
-        // إعداد المالك (النظرة الأحدث بعد الحفظ)، وإلا ما رجع مع «محاولات الدخول»
+        // إعداد المالك (النظرة الأحدث بعد الحفظ)، وإلا ما رجع مع «طلبات رمز الدخول»
         let tries = SmsText.days(overview?.loginAttemptsDays ?? attempts.current?.retentionDays ?? 30)
-        return L10n.t("السجل اليومي دائم (عدد الرسائل والمقبولة والفاشلة والنقاط والرصيد). تفاصيل آخر الإرسالات \(recent) فقط (النتيجة، سبب الفشل، رقم الرسالة عند \(SmsText.isolate("KWT"))، الرصيد بعدها — الرقم مخفي). «محاولات الدخول» \(tries) (الرقم والنتيجة وهل دخل).",
+        return L10n.t("السجل اليومي دائم (عدد الرسائل والمقبولة والفاشلة والنقاط والرصيد). تفاصيل آخر الإرسالات \(recent) فقط (النتيجة، سبب الفشل، رقم الرسالة عند \(SmsText.isolate("KWT"))، الرصيد بعدها — الرقم مخفي). «طلبات رمز الدخول» \(tries) (الرقم والنتيجة وهل سجّل الدخول).",
                       "The daily log is permanent (messages, accepted, failed, points, balance). Recent-send details are kept \(recent) only (result, failure reason, KWT message id, balance after — number hidden). “Sign-in attempts” are kept \(tries) (number, result, signed in or not).")
-    }
-
-    private var limitsText: String {
-        // الانتظار كما يراه العضو (`wait_seconds`، يعدّله المالك) — «دقيقة»، «دقيقتين»، «90 ثانية»…
-        let duration = OTPWaitText.exactDuration(seconds: limits.waitSeconds, arabic: L10n.isArabic)
-        let gap = L10n.isArabic ? duration : duration.prefix(1).uppercased() + duration.dropFirst()
-        return L10n.t("\(gap) بين رمزين لنفس الرقم (وخدمة الدخول \(SmsText.isolate("Supabase")) نفسها تمنع التكرار خلال 60 ثانية ولا تُحسب تلك الطلبات)، \(limits.phonePerHour) بالساعة لكل رقم، \(limits.allPerHour) بالساعة للجميع، \(limits.allPerSecond) بالثانية.",
-                      "\(gap) between two codes to one number (Supabase itself blocks repeats within 60 seconds, and those aren't counted), \(limits.phonePerHour) per hour per number, \(limits.allPerHour) per hour for everyone, \(limits.allPerSecond) per second.")
-    }
-
-    private var alertsText: String {
-        guard alerts.lowThreshold > 0 else {
-            return L10n.t("تنبيه الرصيد مطفأ (العتبة صفر) — يُضبط من بطاقة «التنبيهات» أعلاه.",
-                          "Balance alerts are off (threshold 0) — set it in the “Alerts” card above.")
-        }
-        return L10n.t("الرصيد تحت \(alerts.lowThreshold) نقطة: تنبيه مرة كل \(alerts.lowRepeatHours) ساعة، وتحت \(alerts.urgentThreshold) يصير «عاجلاً» كل \(alerts.urgentRepeatHours) ساعة — للمالك والمدراء.",
-                      "Balance under \(alerts.lowThreshold) points: an alert every \(alerts.lowRepeatHours) hours; under \(alerts.urgentThreshold): “Urgent” every \(alerts.urgentRepeatHours) hours — to the owner and admins.")
     }
 }
 
@@ -543,7 +446,7 @@ private struct SmsValidateBox: View {
     private var isValid: Bool { local.count == 8 && "4569".contains(local.prefix(1)) }
 
     var body: some View {
-        DSComposer(title: L10n.t("فحص رقم", "Check a number"),
+        DSComposer(title: L10n.t("التحقق من رقم", "Check a number"),
                    subtitle: L10n.t("هل يصل رمز الدخول لهذا الرقم؟", "Will a sign-in code reach this number?"),
                    icon: "phone.fill", tint: DS.Color.sea,
                    actionTitle: L10n.t("افحص", "Check"), actionIcon: "magnifyingglass",
@@ -610,7 +513,7 @@ private struct SmsSendersBox: View {
     @State private var failure: SmsBoxResult?
 
     var body: some View {
-        DSComposer(title: L10n.t("المرسلون", "Sender IDs"),
+        DSComposer(title: L10n.t("أسماء المرسل المعتمدة", "Approved sender names"),
                    subtitle: L10n.t("أسماء المرسل المعتمدة في حساب KWT SMS", "Approved sender names on the KWT SMS account"),
                    icon: "tag.fill", tint: DS.Color.actionNavy,
                    actionTitle: "", showsAction: false, cancelTitle: L10n.t("إغلاق", "Close"),
@@ -662,17 +565,17 @@ private struct SmsCoverageBox: View {
     @State private var failure: SmsBoxResult?
 
     var body: some View {
-        DSComposer(title: L10n.t("التغطية", "Coverage"),
-                   subtitle: L10n.t("الدول المفعّلة في حساب KWT SMS", "Countries enabled on the KWT SMS account"),
+        DSComposer(title: L10n.t("الدول المتاحة", "Available countries"),
+                   subtitle: L10n.t("الدول المتاحة في حساب KWT SMS", "Countries enabled on the KWT SMS account"),
                    icon: "globe", tint: DS.Color.actionNavy,
                    actionTitle: "", showsAction: false, cancelTitle: L10n.t("إغلاق", "Close"),
                    canSubmit: false, onSubmit: {}, onCancel: { dismiss() }) {
             if let reply {
-                DSNoteCard(reply.kuwait ? L10n.t("الكويت (+965) مفعّلة — رموز الدخول تصل.", "Kuwait (+965) is enabled — sign-in codes go out.")
-                                        : L10n.t("الكويت (+965) غير مفعّلة في الحساب — رموز الدخول لن تصل!", "Kuwait (+965) is NOT enabled — sign-in codes won't go out!"),
+                DSNoteCard(reply.kuwait ? L10n.t("الكويت (+965) متاحة — رموز الدخول تصل.", "Kuwait (+965) is enabled — sign-in codes go out.")
+                                        : L10n.t("الكويت (+965) غير متاحة في الحساب — رموز الدخول لن تصل!", "Kuwait (+965) is NOT enabled — sign-in codes won't go out!"),
                            icon: reply.kuwait ? "checkmark.circle.fill" : "exclamationmark.octagon.fill",
                            tint: reply.kuwait ? DS.Color.success : DS.Color.error)
-                DSComposerSection(title: L10n.t("رموز الدول المفعّلة", "Enabled country codes"), icon: "globe",
+                DSComposerSection(title: L10n.t("رموز الدول المتاحة", "Enabled country codes"), icon: "globe",
                                   trailing: "\(reply.prefixes.count)", index: 1) {
                     Text(verbatim: reply.prefixes.isEmpty ? "—" : reply.prefixes.map { "+\($0)" }.joined(separator: " · "))
                         .dsFont(.callout)
@@ -681,7 +584,7 @@ private struct SmsCoverageBox: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .environment(\.layoutDirection, .leftToRight)
-                    Text(L10n.t("التطبيق يرسل لأرقام الكويت فقط مهما كانت التغطية.", "The app sends to Kuwaiti numbers only, whatever the coverage."))
+                    Text(L10n.t("التطبيق يرسل لأرقام الكويت فقط مهما كانت الدول المتاحة.", "The app sends to Kuwaiti numbers only, whatever the coverage."))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)

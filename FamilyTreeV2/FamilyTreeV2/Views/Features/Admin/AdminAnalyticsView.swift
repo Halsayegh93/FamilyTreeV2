@@ -11,6 +11,12 @@ import SwiftUI
 struct AdminAnalyticsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var newsVM: NewsViewModel
+    @EnvironmentObject var authVM: AuthViewModel
+    /// المسجّلون مقابل المقيّدين في الشجرة (`app_usage_stats` — نفس أرقام «اليوم»)
+    @State private var usage: AppUsageStats? = AppUsageStats.cached
+
+    /// «المؤشرات ← العائلة» بيت أعداد الأعضاء (الدفعة ج): المراقب يرى الأعداد فقط (الملخص، المسجّلون، الجنس، النساء)
+    private var countsOnly: Bool { !authVM.isAdmin }
 
     /// بيانات شجرة النساء (women_members) — كاش فوري ثم جلب عند الحاجة.
     @State private var womenData: [FamilyMember] = WomenStore.cache
@@ -53,7 +59,9 @@ struct AdminAnalyticsView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             // جلب بيانات شجرة النساء إن لم تكن محمّلة (كاش التبويب يغني عن الجلب غالباً)
+            async let accounts = AppUsageStats.fetch()
             if womenData.isEmpty { await loadWomen() }
+            if let u = await accounts { usage = u }
         }
     }
 
@@ -79,9 +87,10 @@ struct AdminAnalyticsView: View {
         let ready = totalMembers > 0
         let alivePct = AnalyticsPercent.value(activeMembers.count, of: totalMembers)
         return AdminPageHeader(
-            title: L10n.t("الإحصائيات", "Statistics"),
-            subtitle: L10n.t("العائلة بالأرقام — الأدوار والأعمار والنمو",
-                             "The family in numbers — roles, ages and growth"),
+            title: L10n.t("إحصاءات العائلة", "Family statistics"),
+            subtitle: countsOnly ? L10n.t("أعداد الأفراد والأحياء والمسجّلين", "Members, living and registered counts")
+                                 : L10n.t("الأفراد والأحياء، المسجّلون، الأدوار والأعمار والنمو",
+                                          "Members and living, registered, roles, ages and growth"),
             glyph: "chart.bar.xaxis",
             kpis: [
                 AdminPageKPI(ready ? totalMembers.formatted() : "—", L10n.t("أفراد العائلة", "Members"),
@@ -96,7 +105,15 @@ struct AdminAnalyticsView: View {
     /// البطاقات بعد «ملخص عام» — بنفس الترتيب السابق (عمودان أفقياً)
     private func sections(_ growth: [(label: String, count: Int)]) -> AnyView {
         guard totalMembers > 0 else { return AnyView(EmptyView()) }
+        if countsOnly {
+            return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
+                AnyView(registeredSection)
+                AnyView(genderSection)
+                AnyView(womenSection)
+            })
+        }
         return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
+            AnyView(registeredSection)
             AnyView(rolesSection)
             AnyView(genderSection)
             AnyView(womenSection)
@@ -131,7 +148,7 @@ struct AdminAnalyticsView: View {
             AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…")))
         } else {
             AdminPageStateCard(.empty(L10n.t("لا توجد بيانات كافية", "No data available"),
-                                      message: L10n.t("أضف أعضاء للشجرة لعرض الإحصائيات",
+                                      message: L10n.t("أضف أعضاء للشجرة لعرض الإحصاءات",
                                                       "Add members to the tree to see analytics")))
         }
     }
@@ -161,8 +178,38 @@ struct AdminAnalyticsView: View {
                     valueLine(icon: "heart.fill", tint: DS.Color.success,
                               label: L10n.t("أحياء", "Alive"), value: alive)
                     valueLine(icon: "heart.slash.fill", tint: DS.Color.textSecondary,
-                              label: L10n.t("متوفين", "Deceased"), value: deceased)
+                              label: L10n.t("متوفون", "Deceased"), value: deceased)
                 }
+            }
+        }
+    }
+
+    // MARK: - المسجّلون في التطبيق من الأحياء (الحالات الرسمية — «عضو مسجّل» · «مقيّد في الشجرة»)
+
+    /// كل رقم يفتح شريحته في «العائلة» (بيت القائمة)
+    private var registeredSection: some View {
+        let u = usage
+        let registered = u.map { $0.active + $0.idle + $0.loginNoDevice }
+        let treeOnly = u.map { $0.neverLogged + $0.noPhone }
+        let living = (registered ?? 0) + (treeOnly ?? 0)
+        let pct = AnalyticsPercent.value(registered ?? 0, of: living)
+        return AdminSectionCard(title: L10n.t("المسجّلون في التطبيق من الأحياء", "Registered among the living"),
+                                tag: u == nil ? nil : L10n.t("\(pct)٪", "\(pct)%"), spacing: DS.Spacing.sm) {
+            DSDistributionBar(segments: [
+                .init(id: "registered", value: registered ?? 0, tint: DS.Color.success),
+                .init(id: "tree", value: treeOnly ?? 0, tint: DS.Color.slate)
+            ])
+            AdminRowsCardBody {
+                AdminTapRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
+                            title: L10n.t("الأعضاء المسجّلون", "Registered members"),
+                            subtitle: L10n.t("لهم حساب في التطبيق", "Have an app account"),
+                            value: registered.map { "\($0)" } ?? "—",
+                            tap: .page { AnyView(AdminMembersPage(chip: .registered).adminArea(.family)) })
+                AdminTapRow(icon: "person.fill", tint: DS.Color.slate,
+                            title: L10n.t("مقيّدون في الشجرة", "In the tree only"),
+                            subtitle: L10n.t("أسماء في الشجرة بلا حساب", "Names in the tree without an account"),
+                            value: treeOnly.map { "\($0)" } ?? "—",
+                            tap: .page { AnyView(AdminMembersPage(chip: .treeOnly).adminArea(.family)) })
             }
         }
     }

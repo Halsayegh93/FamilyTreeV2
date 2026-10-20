@@ -3,7 +3,9 @@ import SwiftUI
 // MARK: - فريق الإدارة — بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ «كل الصفحات بنفس شكل «اليوم»»، `AdminPageKit`)
 //
 // رأس كحلي بعدد كل دور وزرّ «إضافة» للمالك (وشارة «للقراءة» لغيره) ← لكل دور عنوان بعدده ثم أعضاؤه، كل عضو بطاقة
-// بيضاء (الصورة · الاسم · مجال الدور · الرقم · شارة الدور) ← بطاقة «الأدوار وما يقدر عليه كل دور». بقيت `List`
+// بيضاء (الصورة · الاسم · مجال الدور · الرقم · شارة الدور) ← بطاقة «صلاحيات الأدوار» (دورك مميّز — كان صفّا «ما يقدر عليه
+// كل دور» و«نطاقي» في «الفريق والأمان»، الدفعة ج). «إضافة»: المنتقي الموحّد للعضو (`DSMemberPickerBox`) ثم ورقة الدور
+// نفسها (`ChangeRoleSheet`) — بدل مربّع ببحثه الخاص. بقيت `List`
 // (`AdminPage(layout: .list)`) لأجل السحب «إزالة» على صفّ المسؤول. الضغط على العضو يفتح «تغيير الدور» للمالك فقط،
 // والمالك ونفسك لا يُغيَّران — كل الحراسات والمربّعات والتأكيدات كما كانت تماماً.
 
@@ -11,6 +13,8 @@ struct AdminModeratorsView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @State private var showAddSheet = false
+    /// بحث المنتقي الموحّد في «إضافة»
+    @State private var pickerSearch = ""
     @State private var memberToChange: FamilyMember?
     @State private var showRoleConfirm = false
     @State private var pendingRole: FamilyMember.UserRole = .member
@@ -57,12 +61,21 @@ struct AdminModeratorsView: View {
         .dsCenterBox(item: $selectedRoleGuide, onBackgroundTap: { selectedRoleGuide = nil }) { guide in
             roleDetailBox(guide)
         }
-        .dsTallBox(isPresented: $showAddSheet, onDismiss: {   // قائمة أعضاء طويلة (توصية أبل)
-            Task { await memberVM.fetchAllMembers(force: true) }
-        }) {
-            AddModeratorSheet()
-                .environmentObject(authVM)
-                .environmentObject(memberVM)
+        // «إضافة»: المنتقي الموحّد (قائمة أعضاء طويلة — مربّع طويل) ثم ورقة الدور نفسها لمن اختير
+        .dsTallBox(isPresented: $showAddSheet, onDismiss: { pickerSearch = "" }) {
+            DSMemberPickerBox(
+                title: L10n.t("إضافة لفريق الإدارة", "Add to the admin team"),
+                subtitle: L10n.t("اختر العضو، ثم دوره", "Pick the member, then their role"),
+                icon: "person.badge.plus",
+                candidates: addCandidates,
+                search: $pickerSearch,
+                emptyTitle: L10n.t("لا يوجد أعضاء", "No members found"),
+                rowHint: L10n.t("يختار دوره بعدها", "Then choose their role"),
+                onPick: { member in
+                    showAddSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { roleChangeTarget = member }
+                },
+                onCancel: { showAddSheet = false })
         }
         .dsAlert(
             L10n.t("تغيير مستوى الحساب", "Change Account Level"),
@@ -107,7 +120,9 @@ struct AdminModeratorsView: View {
             ))
         }
         .dsCenterBox(item: $roleChangeTarget) { member in
-            ChangeRoleSheet(member: member) { newRole in
+            ChangeRoleSheet(member: member,
+                            title: member.role == .member ? L10n.t("إضافة لفريق الإدارة", "Add to the admin team")
+                                                          : L10n.t("تغيير الدور", "Change Role")) { newRole in
                 Task { await memberVM.updateMemberRole(memberId: member.id, newRole: newRole) }
             }
             .environmentObject(authVM)
@@ -118,6 +133,13 @@ struct AdminModeratorsView: View {
             Task { await loadTeam() }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// مرشّحو «إضافة»: الأعضاء الأحياء غير الموقوفين بلا دور إداري — نفس تصفية المربّع السابق
+    private var addCandidates: [FamilyMember] {
+        memberVM.allMembers
+            .filter { $0.role == .member && $0.isDeceased != true && $0.status != .frozen }
+            .sorted { $0.fullName < $1.fullName }
     }
 
     // MARK: - التحميل
@@ -159,9 +181,9 @@ struct AdminModeratorsView: View {
             kpis: [
                 AdminPageKPI(value([.owner, .admin]), L10n.t("المدراء", "Admins"),
                              icon: RoleGuide.forRole(.admin)?.icon ?? "person.fill"),
-                AdminPageKPI(value([.monitor]), L10n.t("المراقبين", "Monitors"),
+                AdminPageKPI(value([.monitor]), L10n.t("المراقبون", "Monitors"),
                              icon: RoleGuide.forRole(.monitor)?.icon ?? "person.fill", tint: DS.Hub.kpiMine),
-                AdminPageKPI(value([.supervisor]), L10n.t("المشرفين", "Supervisors"),
+                AdminPageKPI(value([.supervisor]), L10n.t("المشرفون", "Supervisors"),
                              icon: RoleGuide.forRole(.supervisor)?.icon ?? "person.fill", tint: DS.Hub.kpiMine)
             ],
             actions: isOwner ? [AdminPageAction(symbol: "plus", label: L10n.t("إضافة", "Add"),
@@ -229,9 +251,9 @@ struct AdminModeratorsView: View {
             // المالك يظهر ضمن المدراء — بدون قسم خاص
             group("admins", L10n.t("المدراء", "Admins"), .admin,
                   team.filter { $0.role == .admin || $0.role == .owner }),
-            group("monitors", L10n.t("المراقبين", "Monitors"), .monitor,
+            group("monitors", L10n.t("المراقبون", "Monitors"), .monitor,
                   team.filter { $0.role == .monitor }),
-            group("supervisors", L10n.t("المشرفين", "Supervisors"), .supervisor,
+            group("supervisors", L10n.t("المشرفون", "Supervisors"), .supervisor,
                   team.filter { $0.role == .supervisor })
         ]
         .filter { !$0.members.isEmpty }
@@ -378,7 +400,7 @@ struct AdminModeratorsView: View {
     // «يقدر» و«ما يقدر» بكلام واضح — ليعرف المالك ما الذي يمنحه بالضبط.
 
     private var rolesGuideSection: some View {
-        AdminSectionCard(title: L10n.t("الأدوار وما يقدر عليه كل دور", "Roles and what each can do")) {
+        AdminSectionCard(title: L10n.t("صلاحيات الأدوار", "Role permissions")) {
             // ١) خريطة المجالات
             HStack(spacing: DS.Spacing.xs) {
                 ForEach(Array(RoleDomain.all.enumerated()), id: \.offset) { _, domain in
@@ -393,7 +415,7 @@ struct AdminModeratorsView: View {
                         roleCompactRow(guide)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint(L10n.t("يعرض ما يقدر عليه وما لا يقدر", "Shows what it can and can't do"))
+                    .accessibilityHint(L10n.t("يعرض المسموح وغير المسموح", "Shows what's allowed and what isn't"))
                 }
             }
         }
@@ -426,13 +448,20 @@ struct AdminModeratorsView: View {
     /// صف الدور بإطار صفوف المربّعات: رمزه بلونه + اسمه + مجاله + عدد من يحملونه + سهم
     private func roleCompactRow(_ guide: RoleGuide) -> some View {
         let count = holdersCount(for: guide.title)
+        // «دورك» مميّز (كان صفّ «نطاقي» للمالك والمدير) — المالك يرى دوره «المالك»
+        let isMine = authVM.currentUser.flatMap { RoleGuide.forRole($0.role) }?.title == guide.title
         return HStack(spacing: DS.Spacing.md) {
             AdminIconSquare(symbol: guide.icon, tint: guide.color)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(guide.title)
-                    .dsFont(.hubRow)
-                    .foregroundColor(DS.Color.textPrimary)
+                HStack(spacing: DS.Spacing.xsm) {
+                    Text(guide.title)
+                        .dsFont(.hubRow)
+                        .foregroundColor(DS.Color.textPrimary)
+                    if isMine {
+                        DSStatusChip(text: L10n.t("دورك", "Your role"), tint: DS.Color.info, size: .mini)
+                    }
+                }
                 Text(guide.mandate)
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
@@ -491,15 +520,15 @@ struct AdminModeratorsView: View {
             onSubmit: {},
             onCancel: { selectedRoleGuide = nil }
         ) {
-            guideSection(title: L10n.t("يقدر", "Can"), lines: guide.can, allowed: true, index: 0)
+            guideSection(title: L10n.t("مسموح", "Allowed"), lines: guide.can, allowed: true, index: 0)
 
             if !guide.cannot.isEmpty {
-                guideSection(title: L10n.t("ما يقدر", "Cannot"), lines: guide.cannot, allowed: false, index: 1)
+                guideSection(title: L10n.t("غير مسموح", "Not allowed"), lines: guide.cannot, allowed: false, index: 1)
             }
         }
     }
 
-    /// قسم «يقدر» أو «ما يقدر» — الأسطر داخل صندوق صف المربّعات
+    /// قسم «مسموح» أو «غير مسموح» — الأسطر داخل صندوق صف المربّعات
     private func guideSection(title: String, lines: [String], allowed: Bool, index: Int) -> some View {
         DSComposerSection(title: title,
                           icon: allowed ? "checkmark.circle.fill" : "xmark.circle.fill",
@@ -527,183 +556,6 @@ struct AdminModeratorsView: View {
     }
 }
 
-// MARK: - Add Moderator Sheet
-//
-// مربّع بمنتصف الشاشة بتصميم مربّعات الإضافة (طلب المالك): قسم «الدور» (مبدّل
-// مشرف/مراقب/مدير + مجال الدور المختار) ثم قسم «العضو» (بحث + صفوف بعلامة اختيار)،
-// و«إضافة» كحلي يمين / «إلغاء» رمادي يسار.
-struct AddModeratorSheet: View {
-    @EnvironmentObject var authVM: AuthViewModel
-    @EnvironmentObject var memberVM: MemberViewModel
-    @Environment(\.dismiss) var dismiss
-    /// «تقليل الحركة» (توصية أبل): مؤشّر الدور ينتقل مباشرة بلا انزلاق
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var searchText = ""
-    @State private var selectedRole: FamilyMember.UserRole = .supervisor
-    /// العضو المختار — يُعيَّن بالدور عند الضغط على «إضافة»
-    @State private var selectedMember: FamilyMember?
-    @State private var isSaving = false
-    @State private var filterCache = RegularMembersCache()
-
-    /// نفس ترتيب المبدّل السابق: مشرف، مراقب، مدير
-    private let roleOptions: [FamilyMember.UserRole] = [.supervisor, .monitor, .admin]
-
-    /// نفس التصفية والترتيب — مع حفظ النتيجة حتى يتغيّر الأعضاء أو نص البحث:
-    /// القائمة ~٢٤٠٠ عضو، والمربّع يُعاد رسمه كلما تغيّر ارتفاع القائمة الكسولة أثناء التمرير
-    private var regularMembers: [FamilyMember] {
-        let all = memberVM.allMembers
-        if let cached = filterCache.result(for: all, query: searchText) { return cached }
-        let result = all
-            .filter { $0.role == .member && $0.isDeceased != true && $0.status != .frozen }
-            .filter { member in
-                searchText.isEmpty || member.fullName.localizedCaseInsensitiveContains(searchText)
-            }
-            .sorted { $0.fullName < $1.fullName }
-        filterCache.store(result, for: all, query: searchText)
-        return result
-    }
-
-    var body: some View {
-        DSComposer(
-            title: L10n.t("إضافة مدير/مشرف", "Add Admin/Supervisor"),
-            subtitle: L10n.t("اختر الدور ثم العضو", "Choose a role, then a member"),
-            icon: "person.badge.plus",
-            tint: DS.Color.actionNavy,
-            actionTitle: L10n.t("إضافة", "Add"),
-            actionIcon: "plus",
-            canSubmit: selectedMember != nil,
-            isBusy: isSaving,
-            // من سيُمنح الدور — ظاهر دائماً فوق الزر حتى لو خرج العضو من نتائج البحث
-            note: selectedMember.map { "\($0.displayFullName) ← \(roleLabel(selectedRole))" },
-            // عضو مختار ولم يُعيَّن بعد → «إلغاء» يسأل قبل التجاهل، ولا يُسحب المربّع الطويل
-            hasUnsavedChanges: selectedMember != nil,
-            onSubmit: assignRole,
-            onCancel: { dismiss() }
-        ) {
-            roleSection
-            memberSection
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-    }
-
-    // MARK: الدور
-
-    private var roleSection: some View {
-        DSComposerSection(title: L10n.t("الدور", "Role"), icon: "person.badge.key.fill",
-                          tint: AppSection.admin.ink, index: 0) {
-            // اختيار مستوى الحساب — المبدّل الموحّد (`DSSegmentedSwitch`)
-            DSSegmentedSwitch(options: roleOptions.map {
-                                  DSSegmentOption(id: $0, title: roleLabel($0),
-                                                  icon: RoleGuide.forRole($0)?.icon ?? "person.fill")
-                              },
-                              selection: $selectedRole, size: .regular)
-
-            // مجال الدور المختار — ليعرف من يمنح الدور ما الذي يمنحه بالضبط
-            // (ZStack: القديم والجديد يتداخلان أثناء التلاشي بدل أن يتكدّسا)
-            if let guide = RoleGuide.forRole(selectedRole) {
-                ZStack(alignment: .top) {
-                    RoleScopeRowBox(guide: guide)
-                        .id(selectedRole)
-                        .transition(.opacity)
-                }
-            }
-        }
-    }
-
-    /// نفس أسماء المبدّل السابق
-    private func roleLabel(_ role: FamilyMember.UserRole) -> String {
-        switch role {
-        case .admin: return L10n.t("مدير", "Admin")
-        case .monitor: return L10n.t("مراقب", "Monitor")
-        default: return L10n.t("مشرف", "Supervisor")
-        }
-    }
-
-    // MARK: العضو
-
-    private var memberSection: some View {
-        let members = regularMembers
-        return DSComposerSection(title: L10n.t("العضو", "Member"), icon: "person.fill",
-                                 tint: AppSection.admin.ink, trailing: selectedMember?.firstName, index: 1) {
-            // البحث
-            DSComposerField(icon: "magnifyingglass",
-                            label: L10n.t("بحث", "Search"),
-                            placeholder: L10n.t("بحث عن عضو...", "Search member..."),
-                            text: $searchText)
-
-            if members.isEmpty {
-                emptyMembers
-            } else {
-                // كسولة — قائمة الأعضاء قد تكون طويلة
-                LazyVStack(spacing: DS.Spacing.sm) {
-                    ForEach(members) { member in
-                        memberRow(member)
-                    }
-                }
-            }
-        }
-    }
-
-    private func memberRow(_ member: FamilyMember) -> some View {
-        let isSelected = selectedMember?.id == member.id
-        return Button {
-            selectedMember = member
-        } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: "person.fill", tint: AppSection.admin.ink)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(member.displayFullName)
-                        .dsFieldFont(.rowTitle)
-                        .foregroundColor(DS.Color.fieldLabel)
-                        .dsNameLines()
-
-                    if let phone = member.phoneNumber, !phone.isEmpty {
-                        Text(KuwaitPhone.display(phone))
-                            .dsFieldFont(.subtitle)
-                            .foregroundColor(DS.Color.fieldValue)
-                            .monospacedDigit()
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                // للعين فقط — «محدّد» يُعلن من صفة isSelected
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .dsGlyph(DS.Glyph.xl, weight: .semibold)
-                    .foregroundColor(isSelected ? AppSection.admin.ink : DS.Color.textTertiary.opacity(DS.Opacity.disabled))
-                    .accessibilityHidden(true)
-            }
-            .dsRowBox()
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(AppSection.admin.ink.opacity(isSelected ? DS.Opacity.selectedStroke : 0),
-                                  lineWidth: DS.Border.widthBold)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var emptyMembers: some View {
-        DSEmptyView(L10n.t("لا يوجد أعضاء", "No members found"), style: .inline)
-    }
-
-    // MARK: التعيين — نفس الاستدعاء ثم الإغلاق
-
-    private func assignRole() {
-        guard let member = selectedMember, !isSaving else { return }
-        isSaving = true
-        Task {
-            await memberVM.updateMemberRole(memberId: member.id, newRole: selectedRole)
-            isSaving = false
-            dismiss()
-        }
-    }
-}
-
 // MARK: - ورقة تغيير الدور (طلب المالك)
 //
 // الدور صار مجال عمل لا درجة، فالتغيير صار اختيار مجال من بطاقات واضحة
@@ -711,6 +563,8 @@ struct AddModeratorSheet: View {
 
 struct ChangeRoleSheet: View {
     let member: FamilyMember
+    /// «تغيير الدور»، أو «إضافة لفريق الإدارة» لعضو اختير من المنتقي
+    let title: String
     /// يُستدعى عند التأكيد بالدور الجديد
     let onSelect: (FamilyMember.UserRole) -> Void
 
@@ -720,8 +574,10 @@ struct ChangeRoleSheet: View {
 
     private let options: [FamilyMember.UserRole] = [.admin, .monitor, .supervisor, .member]
 
-    init(member: FamilyMember, onSelect: @escaping (FamilyMember.UserRole) -> Void) {
+    init(member: FamilyMember, title: String = L10n.t("تغيير الدور", "Change Role"),
+         onSelect: @escaping (FamilyMember.UserRole) -> Void) {
         self.member = member
+        self.title = title
         self.onSelect = onSelect
         _selected = State(initialValue: member.role)
     }
@@ -730,7 +586,7 @@ struct ChangeRoleSheet: View {
         // نفس هيكل المربّعات الموحّد (طلب المالك): العضو، ثم بطاقات الأدوار كصفوف
         // بعلامة اختيار — المختارة تعرض كل «يقدر» و«ما يقدر» — ثم «حفظ» يطلب التأكيد
         DSComposer(
-            title: L10n.t("تغيير الدور", "Change Role"),
+            title: title,
             subtitle: member.displayFullName,
             icon: "person.badge.key.fill",
             tint: DS.Color.actionNavy,
@@ -840,12 +696,12 @@ struct ChangeRoleSheet: View {
                         .fill(DS.Color.textTertiary.opacity(DS.Opacity.border))
                         .frame(height: DS.Border.width)
                         .padding(.bottom, DS.Spacing.xxs)
-                    scopeCaption(L10n.t("يقدر", "Can"), color: DS.Color.success)
+                    scopeCaption(L10n.t("مسموح", "Allowed"), color: DS.Color.success)
                     ForEach(guide.can, id: \.self) { text in
                         RoleScopeLineRow(text: text, allowed: true)
                     }
                     if !guide.cannot.isEmpty {
-                        scopeCaption(L10n.t("ما يقدر", "Cannot"), color: DS.Color.textTertiary)
+                        scopeCaption(L10n.t("غير مسموح", "Not allowed"), color: DS.Color.textTertiary)
                             .padding(.top, DS.Spacing.xxs)
                         ForEach(guide.cannot, id: \.self) { text in
                             RoleScopeLineRow(text: text, allowed: false)
@@ -876,27 +732,6 @@ struct ChangeRoleSheet: View {
     }
 }
 
-// MARK: - ذاكرة تصفية الأعضاء (خاصة بهذا الملف)
-
-/// آخر نتيجة لتصفية «الأعضاء العاديين» — تُعاد فقط إذا تغيّرت مصفوفة الأعضاء أو نص البحث.
-/// مقارنة المصفوفة فورية ما دامت لم تتغيّر (نفس التخزين)، وعنصراً بعنصر عند أي تعديل.
-private final class RegularMembersCache {
-    private var source: [FamilyMember] = []
-    private var query: String?
-    private var cached: [FamilyMember] = []
-
-    func result(for members: [FamilyMember], query: String) -> [FamilyMember]? {
-        guard self.query == query, source == members else { return nil }
-        return cached
-    }
-
-    func store(_ result: [FamilyMember], for members: [FamilyMember], query: String) {
-        source = members
-        self.query = query
-        cached = result
-    }
-}
-
 // MARK: - أسطر مجال الدور بخط المربّعات (خاصة بهذا الملف)
 
 /// سطر «يقدر» / «ما يقدر» — نصوص `RoleGuide` نفسها
@@ -918,42 +753,6 @@ private struct RoleScopeLineRow: View {
         }
         // القارئ الصوتي: العلامة (✓/✗) تحمل المعنى — تُقرأ «يقدر: …» أو «ما يقدر: …» سطراً واحداً
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel((allowed ? L10n.t("يقدر", "Can") : L10n.t("ما يقدر", "Cannot")) + ": " + text)
-    }
-}
-
-/// مجال الدور المختار في صندوق صف — المختصر نفسه الذي كان في `RoleScopeCard(compact:)`:
-/// المجال، وأول سطرين «يقدر»، وأول «ما يقدر»
-private struct RoleScopeRowBox: View {
-    let guide: RoleGuide
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: guide.icon, tint: guide.color)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(guide.title)
-                        .dsFieldFont(.label)
-                        .foregroundColor(DS.Color.fieldLabel)
-                    Text(guide.mandate)
-                        .dsFieldFont(.bodyCompact)
-                        .foregroundColor(DS.Color.fieldValue)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .accessibilityElement(children: .combine)
-                Spacer(minLength: 0)
-            }
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                ForEach(Array(guide.can.prefix(2)), id: \.self) { text in
-                    RoleScopeLineRow(text: text, allowed: true)
-                }
-                ForEach(Array(guide.cannot.prefix(1)), id: \.self) { text in
-                    RoleScopeLineRow(text: text, allowed: false)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dsRowBox()
+        .accessibilityLabel((allowed ? L10n.t("مسموح", "Allowed") : L10n.t("غير مسموح", "Not allowed")) + ": " + text)
     }
 }
