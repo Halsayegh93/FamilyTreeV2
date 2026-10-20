@@ -84,7 +84,7 @@ struct AdminActiveMembersView: View {
     /// الرأس الكحلي: الأرقام السريعة + زرّ «تحديث الآن»
     private var header: AdminPageHeader {
         AdminPageHeader(
-            title: L10n.t("النشاط الآن", "Live Activity"),
+            title: L10n.t("الاستخدام", "Usage"),
             subtitle: L10n.t("من يستخدم التطبيق والموقع — يتحدّث كل ١٥ ثانية",
                              "Who's on the app and the website — refreshes every 15 seconds"),
             glyph: "bolt.fill",
@@ -105,13 +105,13 @@ struct AdminActiveMembersView: View {
 
     // ── النشطون الآن (آخر 5 دقائق) ──
     private var nowSection: some View {
-        AdminSectionCard(title: L10n.t("النشطون الآن", "Active Now"), badge: nowRows.count, badgeTint: DS.Color.success, spacing: 0) {
+        AdminSectionCard(title: L10n.t("المستخدمون الآن", "Using now"), badge: nowRows.count, badgeTint: DS.Color.success, spacing: 0) {
             if isLoading && nowRows.isEmpty {
                 DSPageLoader(fillsSpace: false)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.md)
             } else if nowRows.isEmpty {
-                inlineEmpty(text: L10n.t("لا يوجد نشاط حالياً", "No one active right now"))
+                inlineEmpty(text: L10n.t("لا أحد يستخدم التطبيق الآن", "No one is using the app right now"))
             } else {
                 AdminRowsCardBody {
                     ForEach(nowRows, id: \.sessionKey) { row in
@@ -126,7 +126,7 @@ struct AdminActiveMembersView: View {
     private var last24Section: some View {
         AdminSectionCard(title: L10n.t("آخر 24 ساعة", "Last 24 Hours"), badge: actionRows.count, badgeTint: DS.Color.primary, spacing: 0) {
             if actionRows.isEmpty {
-                inlineEmpty(text: L10n.t("لا يوجد نشاط خلال 24 ساعة", "No activity in last 24 hours"))
+                inlineEmpty(text: L10n.t("لا استخدام خلال 24 ساعة", "No use in the last 24 hours"))
             } else {
                 AdminRowsCardBody {
                     ForEach(actionRows, id: \.sessionKey) { row in
@@ -139,9 +139,9 @@ struct AdminActiveMembersView: View {
 
     // ── آخر 30 يوم (كانت 14 — طلب المالك) ──
     private var last30Section: some View {
-        AdminSectionCard(title: L10n.t("نشطون آخر 30 يوم", "Last 30 Days"), badge: recentRows.count, badgeTint: DS.Color.primary, spacing: 0) {
+        AdminSectionCard(title: L10n.t("آخر 30 يوماً", "Last 30 Days"), badge: recentRows.count, badgeTint: DS.Color.primary, spacing: 0) {
             if recentRows.isEmpty {
-                inlineEmpty(text: L10n.t("لا يوجد نشاط في آخر 30 يوم", "No activity in last 30 days"))
+                inlineEmpty(text: L10n.t("لا استخدام في آخر 30 يوماً", "No use in the last 30 days"))
             } else {
                 AdminRowsCardBody {
                     ForEach(recentRows, id: \.sessionKey) { row in

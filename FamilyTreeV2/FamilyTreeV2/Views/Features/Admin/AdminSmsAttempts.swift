@@ -191,7 +191,7 @@ struct SmsAttemptsCard: View {
     var body: some View {
         let result = store.current
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            AdminCardHeader(title: L10n.t("محاولات الدخول", "Sign-in attempts"),
+            AdminCardHeader(title: L10n.t("طلبات رمز الدخول", "Sign-in code requests"),
                             badge: result?.totals.suspicious, badgeTint: DS.Color.warning) {
                 if let result, !result.items.isEmpty {
                     NavigationLink { AdminLazyPage { AnyView(SmsAttemptsListPage().adminArea(area)) } } label: {
@@ -238,14 +238,14 @@ private struct SmsAttemptsStatus: View {
 
     var body: some View {
         if store.denied {
-            DSNoteCard(L10n.t("محاولات الدخول للمالك والمدير فقط.", "Sign-in attempts are for the owner and admins only."),
+            DSNoteCard(L10n.t("طلبات رمز الدخول للمالك والمدير فقط.", "Sign-in code requests are for the owner and admins only."),
                        icon: "lock.fill", tint: DS.Color.warning)
         } else if store.isFailed && !store.isLoading {
-            DSNoteCard(L10n.t("تعذّر جلب محاولات الدخول الآن — اسحب للتحديث.",
+            DSNoteCard(L10n.t("تعذّر جلب طلبات رمز الدخول الآن — اسحب للتحديث.",
                               "Couldn't load sign-in attempts — pull to refresh."),
                        icon: "wifi.exclamationmark", tint: DS.Color.warning)
         } else {
-            DSPageLoader(L10n.t("جاري جلب محاولات الدخول…", "Loading sign-in attempts…"),
+            DSPageLoader(L10n.t("جاري جلب طلبات رمز الدخول…", "Loading sign-in code requests…"),
                          size: DS.Icon.loaderArtInline, fillsSpace: false)
         }
     }
@@ -274,13 +274,13 @@ private struct SmsAttemptsTotalsView: View {
         SmsAttemptsStat(value: totals.phones, label: L10n.t("أرقام", "Numbers"))
     }
     private var attempts: some View {
-        SmsAttemptsStat(value: totals.attempts, label: L10n.t("محاولات", "Attempts"))
+        SmsAttemptsStat(value: totals.attempts, label: L10n.t("طلبات", "Requests"))
     }
     private var unknown: some View {
         SmsAttemptsStat(value: totals.unknownNumbers, label: L10n.t("غير مسجّلة", "Not registered"))
     }
     private var suspicious: some View {
-        SmsAttemptsStat(value: totals.suspicious, label: L10n.t("مريبة", "Suspicious"), warns: totals.suspicious > 0)
+        SmsAttemptsStat(value: totals.suspicious, label: L10n.t("مشبوهة", "Suspicious"), warns: totals.suspicious > 0)
     }
 }
 
@@ -315,7 +315,7 @@ private struct SmsAttemptsStat: View {
 /// «ما في محاولات في هذه الفترة — العدّ بدأ من 20 أكتوبر»
 private struct SmsAttemptsEmpty: View {
     var body: some View {
-        DSEmptyView(L10n.t("ما في محاولات في هذه الفترة", "No attempts in this period"),
+        DSEmptyView(L10n.t("لا طلبات في هذه الفترة", "No requests in this period"),
                     message: L10n.t("العدّ بدأ من 20 أكتوبر", "Counting started on 20 October"),
                     icon: "person.badge.key.fill", style: .inline)
     }
@@ -433,14 +433,14 @@ private struct SmsAttemptRow: View {
                      icon: "calendar", tint: DS.Color.primary, size: .mini)
         if item.loggedIn {
             // «دخل ✓» — العلامة رمز النظام (حرف ✓ في خط Plex يظهر كـ V)
-            DSStatusChip(text: L10n.t("دخل", "Signed in"), icon: "checkmark", tint: DS.Color.success, size: .mini)
+            DSStatusChip(text: L10n.t("ناجحة", "Signed in"), icon: "checkmark", tint: DS.Color.success, size: .mini)
         } else {
-            DSStatusChip(text: L10n.t("ما دخل", "Didn't sign in"), tint: DS.Color.slate, size: .mini)
+            DSStatusChip(text: L10n.t("لم يسجّل الدخول", "Didn't sign in"), tint: DS.Color.slate, size: .mini)
         }
         if item.suspicious {
-            DSStatusChip(text: L10n.t("مريب", "Suspicious"), icon: "exclamationmark.triangle.fill",
+            DSStatusChip(text: L10n.t("مشبوهة", "Suspicious"), icon: "exclamationmark.triangle.fill",
                          tint: DS.Color.warning, size: .mini)
-                .accessibilityLabel(L10n.t("مريب: \(item.maxInHour) محاولات في ساعة واحدة",
+                .accessibilityLabel(L10n.t("مشبوهة: \(item.maxInHour) طلبات في ساعة واحدة",
                                            "Suspicious: \(item.maxInHour) attempts in one hour"))
         }
         let outcome = SmsAttemptsText.outcome(item.lastOutcome)
@@ -501,8 +501,8 @@ private struct SmsAttemptsListHeader: View {
     @ObservedObject var store: SmsLoginAttemptsStore
 
     var body: some View {
-        AdminBandHeader(backTitle: L10n.t("رسائل الدخول", "Sign-in messages"),
-                        title: L10n.t("محاولات الدخول", "Sign-in attempts"),
+        AdminBandHeader(backTitle: L10n.t("رسائل رمز الدخول", "Sign-in code messages"),
+                        title: L10n.t("طلبات رمز الدخول", "Sign-in code requests"),
                         subtitle: L10n.t("من طلب رمز دخول، وكم مرة", "Who asked for a sign-in code, and how often")) {
             AdminGlassButton(symbol: "arrow.clockwise", label: L10n.t("تحديث", "Refresh")) {
                 Task { await store.refresh(force: true) }

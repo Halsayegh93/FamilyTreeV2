@@ -391,7 +391,7 @@ enum AdminTodayFeed {
             let urgent = sms.level == .urgent
             tasks.append(AdminTodayTask(
                 id: "sms-balance",
-                title: L10n.t("اشحن رصيد رسائل الدخول", "Top up the sign-in SMS balance"),
+                title: L10n.t("شحن رصيد رسائل الدخول", "Top up the sign-in SMS balance"),
                 detail: L10n.t("بقي \(SmsBalanceText.points(balance)) نقطة · \(SmsBalanceText.enough(balance))",
                                "\(SmsBalanceText.points(balance)) points left · \(SmsBalanceText.enough(balance))"),
                 marks: urgent ? 3 : 2,
@@ -410,7 +410,7 @@ enum AdminTodayFeed {
                 source: AdminArea.inbox.title, sourceIcon: "tray.fill",
                 target: .inbox(item.id))
             if item.isUrgent {
-                task.flag = L10n.t("مستعجل", "Urgent")
+                task.flag = L10n.t("عاجل", "Urgent")
                 task.flagIcon = "flame"
                 task.flagTint = DS.Color.error
             } else if item.isLate {
@@ -464,7 +464,7 @@ enum AdminTodayFeed {
             let task = taskById["req-\(item.id.uuidString)"]
             let chip: AdminTodayEntry.Chip?
             if item.isUrgent {
-                chip = .init(text: L10n.t("مستعجل", "Urgent"), icon: "flame.fill", tint: DS.Color.warning)
+                chip = .init(text: L10n.t("عاجل", "Urgent"), icon: "flame.fill", tint: DS.Color.warning)
             } else if item.isLate {
                 chip = .init(text: AdminTodayText.late(item.snapshot), icon: "clock", tint: DS.Color.error)
             } else if item.snapshot != nil {

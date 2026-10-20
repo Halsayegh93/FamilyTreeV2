@@ -183,7 +183,7 @@ struct AdminPageHeader {
     /// ملحق حرّ آخر الرأس (حقل بحث فوق الكحلي…)
     var accessory: AnyView? = nil
 
-    static let readOnlyText = L10n.t("للقراءة — يعدّلها المالك", "Read-only — the owner edits")
+    static let readOnlyText = L10n.t("للاطلاع فقط — التعديل للمالك", "View only — the owner edits")
 }
 
 // MARK: - الرأس الكحلي

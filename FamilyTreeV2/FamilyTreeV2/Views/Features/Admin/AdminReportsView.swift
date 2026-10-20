@@ -3,15 +3,27 @@ import UIKit
 
 // MARK: - مركز التقارير (تصميم صفحات الإدارة الموحّد — طلب المالك ٢٠٢٦-٠٩-٢٧)
 //
-// من الأعلى: بطاقة رأس بلون بلاطة «تقارير PDF» في لوحة الإدارة وأرقامها الحيّة ← «تصفية»: بحث
+// من الأعلى: بطاقة رأس بلون بلاطة «تقارير PDF» في لوحة الإدارة وأرقامها الحيّة ← «النطاق» (بلا بحث منذ الدفعة ج)
 // وفلاتر الحالة بعددها (+ نطاق العمر عند اختيار حقل «العمر») ← «معلومات التقرير» (العنوان والفرع)
 // ← «الحقول» ← «نتائج التقرير» (تحديد الأعضاء) ← شريط سفلي ثابت: النطاق + «إنشاء تقرير PDF» بالكحلي.
 // كل الحسابات والتصفية والتحديد وإنشاء الـ PDF ومشاركته (`ActivityView`) كما كانت تماماً.
 // (اختيار «نوع التقرير» لم يكن معروضاً في الصفحة، فالتقرير يبقى «الأسماء» كما كان.)
 // بشكل «اليوم» (٢٠٢٦-١٠-٢٠، `AdminPageKit`): الأرقام وشرائح الحالة في الرأس الكحلي، والأقسام بطاقات بيضاء،
 // والتحديد علامة ✓ في طرف كل صفّ (الصفوف مفصولة بخط).
+/// ما يُصدَّر من صفحة الأعضاء: أعضاء الشريحة المختارة (والبحث) وعنوانها — «⋯ ← تصدير» بالفلتر الحالي
+struct AdminReportScope {
+    let ids: Set<UUID>
+    let title: String
+}
+
 struct AdminReportsView: View {
     @EnvironmentObject private var memberVM: MemberViewModel
+    /// nil = كل أعضاء العائلة (البحث الشامل)، وإلا ما صُدّر من صفحة الأعضاء
+    private let scope: AdminReportScope?
+
+    init(scope: AdminReportScope? = nil) {
+        self.scope = scope
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum ReportType: String, CaseIterable {
@@ -156,7 +168,6 @@ struct AdminReportsView: View {
     }
 
     @State private var selectedReport: ReportType = .family
-    @State private var searchText = ""
     @State private var minAgeText = ""
     @State private var maxAgeText = ""
     @State private var statusFilter: StatusFilter = .all
@@ -188,7 +199,8 @@ struct AdminReportsView: View {
     private var activeMembers: [FamilyMember] {
         memberVM.allMembers.filter {
             $0.role != .pending &&
-            !$0.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            !$0.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            (scope?.ids.contains($0.id) ?? true)
         }
     }
 
@@ -228,15 +240,6 @@ struct AdminReportsView: View {
         if let rootId = branchRootId {
             let ids = descendantIds(of: rootId)
             members = members.filter { ids.contains($0.id) }
-        }
-
-        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedSearch.isEmpty {
-            members = members.filter {
-                $0.fullName.localizedCaseInsensitiveContains(trimmedSearch) ||
-                $0.firstName.localizedCaseInsensitiveContains(trimmedSearch) ||
-                normalizedPhone(for: $0).contains(trimmedSearch)
-            }
         }
 
         switch statusFilter {
@@ -297,7 +300,6 @@ struct AdminReportsView: View {
 
     private var activeFilterCount: Int {
         var count = 0
-        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { count += 1 }
         if statusFilter != .all { count += 1 }
         if needsAgeFilter &&
             ((Int(minAgeText) ?? 0) > 0 || (Int(maxAgeText) ?? 0) > 0) {
@@ -320,15 +322,6 @@ struct AdminReportsView: View {
         if let rootId = branchRootId {
             let ids = descendantIds(of: rootId)
             pool = pool.filter { ids.contains($0.id) }
-        }
-
-        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedSearch.isEmpty {
-            pool = pool.filter {
-                $0.fullName.localizedCaseInsensitiveContains(trimmedSearch) ||
-                $0.firstName.localizedCaseInsensitiveContains(trimmedSearch) ||
-                normalizedPhone(for: $0).contains(trimmedSearch)
-            }
         }
 
         let minAgeVal = Int(minAgeText) ?? 0
@@ -447,9 +440,9 @@ struct AdminReportsView: View {
     /// الملف الآن (النطاق)، وعدد الحقول المختارة — «—» قبل تحميل الأعضاء. وشرائح الحالة بعددها.
     private func header(members: [FamilyMember], loaded: Bool) -> AdminPageHeader {
         AdminPageHeader(
-            title: L10n.t("تقارير PDF", "PDF reports"),
-            subtitle: L10n.t("اختر الأعضاء والحقول، ثم صدّر ملف PDF للطباعة أو المشاركة",
-                             "Pick members and fields, then export a PDF to print or share"),
+            title: L10n.t("تصدير قائمة الأعضاء (PDF)", "Export member list (PDF)"),
+            subtitle: L10n.t("اختر الحقول (والأعضاء إن شئت)، ثم صدّر ملف PDF للطباعة أو المشاركة",
+                             "Pick fields (and members if you like), then export a PDF to print or share"),
             glyph: "doc.text.fill",
             kpis: [
                 AdminPageKPI(loaded ? "\(activeMembers.count)" : "—", L10n.t("الأعضاء", "Members"),
@@ -477,16 +470,20 @@ struct AdminReportsView: View {
 
     // MARK: - التصفية
 
-    /// بحث (+ نطاق العمر) — والحالة شرائح في الرأس. نفس خيارات «تصفية» السابقة
+    /// النطاق: ما جاء من صفحة الأعضاء (الشريحة المختارة) أو كل العائلة (+ نطاق العمر) — والحالة شرائح في الرأس.
+    /// بلا حقل بحث (الدفعة ج): البحث عن عضو بعينه في صفحة الأعضاء ثم «⋯ ← تصدير»
     private var filtersCard: some View {
-        AdminSectionCard(title: L10n.t("تصفية", "Filter"),
+        AdminSectionCard(title: L10n.t("النطاق", "Scope"),
                          tag: activeFilterCount > 0
-                            ? L10n.t("\(activeFilterCount) مفعّلة", "\(activeFilterCount) active")
+                            ? L10n.t("\(activeFilterCount) تصفية", "\(activeFilterCount) filters")
                             : nil) {
-            DSSearchField(text: $searchText,
-                          placeholder: L10n.t("بحث بالاسم أو الرقم…", "Search by name or number…"),
-                          tint: pageTint)
-                .onChange(of: searchText) { _ in displayLimit = 20 }
+            AdminInfoRow(icon: scope == nil ? "person.3.fill" : "line.3.horizontal.decrease.circle.fill", tint: pageTint,
+                         title: scope?.title ?? L10n.t("كل أعضاء العائلة", "Every family member"),
+                         subtitle: scope == nil
+                            ? L10n.t("لتصدير شريحة: اخترها في صفحة الأعضاء ثم «⋯ ← تصدير»",
+                                     "To export a filter: pick it on the members page, then “⋯ → Export”")
+                            : L10n.t("من صفحة الأعضاء — بالشريحة المختارة", "From the members page — with the chosen filter"),
+                         trailing: AnyView(AdminRowValue(text: "\(activeMembers.count)")))
 
             if needsAgeFilter {
                 ageRangeRow
@@ -887,7 +884,6 @@ struct AdminReportsView: View {
     }
 
     private func resetFilters() {
-        searchText = ""
         minAgeText = ""
         maxAgeText = ""
         statusFilter = .all
@@ -1014,9 +1010,9 @@ struct AdminReportsView: View {
             }
         }
         if statusFilter == .alive { filters.append("أحياء فقط") }
-        if statusFilter == .deceased { filters.append("متوفين فقط") }
-        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            filters.append("بحث: \(searchText)")
+        if statusFilter == .deceased { filters.append("متوفون فقط") }
+        if let scope {
+            filters.append(scope.title)
         }
         if let m = branchRootMember {
             filters.append("فرع: \(m.fullName)")
