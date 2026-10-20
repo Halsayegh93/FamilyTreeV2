@@ -18,7 +18,8 @@ struct RegistrationView: View {
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
     /// اختار تاريخه فعلاً؟ — وإلا لا يُحفظ تاريخ «قبل ٢٠ سنة» الافتراضي كأنه تاريخ ميلاده (حدث ٢٠٢٦-١٠-٠٥)
     @State private var birthDateChosen = false
-    @State private var selectedGender: String = "male"
+    /// الجنس مطلوب بلا اختيار مسبق (الدفعة ١٢ — كان «ذكر» ثابتاً فيُسجَّل كل منضم ذكراً): «male» أو «female»
+    @State private var selectedGender: String = ""
     @State private var selectedImage: UIImage? = nil
 
     // Animation states
@@ -58,11 +59,8 @@ struct RegistrationView: View {
                                 nameFieldSection
                                 familyNameSection
                                 birthDateSection
+                                genderSection
                             }
-
-                            // TODO: gender — re-enable when needed
-                            // genderSection
-                            //     .dsStaggerIn(3)
 
                             // الموافقة على الشروط — قبل زر الإرسال مباشرة
                             TermsConsentRow(isAccepted: $termsAccepted,
@@ -256,6 +254,16 @@ struct RegistrationView: View {
                 validationError(L10n.t("اختيار العائلة مطلوب", "Choosing a family is required"))
             }
 
+            // ملاحظة الربط — الاسم الأخير هو العائلة المختارة (كانت تحت الجنس المخفي — مكانها تحت العائلة)
+            Text(familyName.isEmpty
+                 ? L10n.t("العائلة التي تختارها تُضاف تلقائياً كاسم أخير",
+                          "The family you choose is added automatically as your last name")
+                 : L10n.t("اسمك الأخير سيكون: \(familyName)",
+                          "Your last name will be: \(familyName)"))
+            .dsFont(.footnote)
+            .foregroundColor(DS.Color.textTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+
             // فقط إن جاءت القائمة فارغة فعلاً (بعد انتهاء الجلب بلا خطأ)
             if familiesFetched
                 && familyNamesVM.errorMessage == nil
@@ -299,20 +307,14 @@ struct RegistrationView: View {
         .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
     }
 
-    // MARK: - Gender — اختيار الجنس الموحّد (مخفي حالياً)
+    // MARK: - Gender — اختيار الجنس الموحّد (مطلوب، بلا اختيار مسبق — الدفعة ١٢)
     private var genderSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            DSGenderPicker(selection: $selectedGender)
+            DSGenderPicker(selection: $selectedGender, required: true)
 
-            // ملاحظة الربط — الاسم الأخير هو العائلة المختارة
-            Text(familyName.isEmpty
-                 ? L10n.t("العائلة التي تختارها تُضاف تلقائياً كاسم أخير",
-                          "The family you choose is added automatically as your last name")
-                 : L10n.t("اسمك الأخير سيكون: \(familyName)",
-                          "Your last name will be: \(familyName)"))
-            .dsFont(.subtitle)
-            .foregroundColor(DS.Color.textTertiary)
-            .padding(.leading, DS.Spacing.sm)
+            if hasAttemptedSubmit && selectedGender.isEmpty {
+                validationError(L10n.t("اختيار الجنس مطلوب", "Choosing a gender is required"))
+            }
         }
     }
 
@@ -326,6 +328,7 @@ struct RegistrationView: View {
             let familyLetterCount = trimmedFamily.filter { $0.isLetter }.count
             let isValid = trimmedFull.count >= 2 && trimmedFull.count <= 50 && fullLetterCount >= 2
                        && trimmedFamily.count >= 2 && trimmedFamily.count <= 50 && familyLetterCount >= 2
+                       && !selectedGender.isEmpty
                        && termsAccepted
             let isDisabled = !isValid || authVM.isLoading
 
@@ -341,6 +344,9 @@ struct RegistrationView: View {
                 showConfirmSubmit = true
             }
             .disabled(authVM.isLoading)
+            // معطّل ظاهرياً حتى تكتمل الحقول المطلوبة (ومنها الجنس) — الضغط يُظهر الناقص ولا يُرسل
+            .opacity(isValid || authVM.isLoading ? 1 : DS.Opacity.disabled)
+            .accessibilityHint(isValid ? "" : L10n.t("أكمل الحقول المطلوبة أولاً", "Complete the required fields first"))
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.xxl)
             // تأكيد الإرسال — مربّع التطبيق الموحّد بالمنتصف بدل القائمة السفلية

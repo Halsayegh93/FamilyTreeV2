@@ -203,6 +203,9 @@ struct AdminMemberCounts: Equatable {
     var accounts: Int? = nil
     /// كل الأحياء في «استخدام التطبيق» (مقام نسبة الحسابات)
     var living: Int? = nil
+    /// مرشّحو «تحقق من الأحياء» (الأجيال القديمة بلا وفاة مسجّلة) — قبل استبعاد ما راجعه المستخدم «حي ✓» على جهازه.
+    /// ما دام منهم من لم يُراجَع فأحياء الرجال والإجمالي «تقديري»
+    var oldLiving: Set<UUID>? = nil
 
     var total: Int? {
         guard let men, let women else { return nil }
@@ -219,6 +222,7 @@ struct AdminMemberCounts: Equatable {
     var totalDeceased: Int? { total.flatMap { t in totalAlive.map { t - $0 } } }
 
     /// الرجال من أعضاء الشجرة المحمّلة
+    @MainActor
     mutating func setMen(from all: [FamilyMember]) {
         guard !all.isEmpty else { return }
         var total = 0, alive = 0
@@ -228,6 +232,9 @@ struct AdminMemberCounts: Equatable {
         }
         men = total
         menAlive = alive
+        // نفس معيار شريحة «تحقق من الأحياء» (ومن له حساب دخول حيّ قطعاً — حين وصلت قوائم الحسابات)
+        let accounts = AdminAccountsStore.shared
+        oldLiving = Set(AdminLivingCheck.candidates(all, hasLogin: accounts.loaded ? { accounts.info($0) != nil } : nil).keys)
     }
 
     mutating func setWomen(_ rows: [FamilyMember]) {

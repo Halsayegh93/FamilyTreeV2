@@ -639,16 +639,21 @@ struct AdminPillLabel: View {
     var style: AdminPillStyle = .soft
     var height: CGFloat = DS.Hub.pillHeight
     var fullWidth: Bool = false
+    /// الرمز بعد النص («حي ✓») بدل قبله
+    var iconTrailing: Bool = false
 
     var body: some View {
         HStack(spacing: DS.Spacing.xs) {
-            if let icon {
+            if let icon, !iconTrailing {
                 Image(dsSymbol: icon).dsGlyph(DS.Glyph.md, weight: .semibold)
             }
             Text(title)
                 .dsFont(.hubButton)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+            if let icon, iconTrailing {
+                Image(dsSymbol: icon).dsGlyph(DS.Glyph.md, weight: .semibold)
+            }
         }
         .foregroundColor(ink)
         .padding(.horizontal, DS.Hub.pillPadding)
@@ -684,11 +689,12 @@ struct AdminPillButton: View {
     var style: AdminPillStyle = .soft
     var height: CGFloat = DS.Hub.pillHeight
     var fullWidth: Bool = false
+    var iconTrailing: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            AdminPillLabel(title: title, icon: icon, style: style, height: height, fullWidth: fullWidth)
+            AdminPillLabel(title: title, icon: icon, style: style, height: height, fullWidth: fullWidth, iconTrailing: iconTrailing)
                 .dsTapArea(width: DS.Icon.tapTarget, height: height)
         }
         .buttonStyle(DSPressStyle())

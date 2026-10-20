@@ -2259,6 +2259,7 @@ struct AdminAllRequestsView: View {
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     joinStatusLine(matches: results.count, fromWeb: fromWeb)
+                    if member.isFemale { Self.femaleJoinTag }
                 }
 
                 Spacer(minLength: DS.Spacing.xs)
@@ -2293,6 +2294,19 @@ struct AdminAllRequestsView: View {
 
     /// صورة المنضم في صفّه (= مساحة الضغط) وفي بطاقة تفاصيله
     private static let joinAvatar: CGFloat = DS.Icon.tapTarget
+
+    /// «أنثى · تُربط بشجرة النساء» (الدفعة ١٢) — التسجيل صار يسأل عن الجنس؛ الربط والموافقة كما هما
+    static var femaleJoinTag: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            DSStatusChip(text: L10n.t("أنثى", "Female"), icon: "figure.stand.dress", tint: DS.Color.female, size: .mini)
+            Text(L10n.t("تُربط بشجرة النساء", "Belongs in the women's tree"))
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .accessibilityElement(children: .combine)
+    }
 
     /// سطر حالة هادئ بلا شارات: «٣ مطابقات في الشجرة» أو «اسم جديد» · «من الموقع»
     private func joinStatusLine(matches: Int, fromWeb: Bool) -> some View {
@@ -3446,6 +3460,7 @@ struct AdminAllRequestsView: View {
             }
             .dsFieldFont(.chip)
             .foregroundColor(fromWeb ? DS.Color.info.dsReadableGlyph : DS.Color.fieldValue)
+            if member.isFemale { Self.femaleJoinTag }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DS.Spacing.xs)
@@ -3481,6 +3496,12 @@ struct AdminAllRequestsView: View {
                 joinFactRow(icon: "calendar", tint: DS.Color.neonPurple,
                             label: L10n.t("تاريخ الميلاد", "Birth date"),
                             value: birth.isEmpty ? L10n.t("غير مذكور", "Not given") : birth) { EmptyView() }
+                if member.isFemale {
+                    Divider().padding(.leading, DS.Icon.row + DS.Spacing.sm + DS.Spacing.xs)
+                    joinFactRow(icon: "figure.stand.dress", tint: DS.Color.female,
+                                label: L10n.t("الجنس", "Gender"),
+                                value: L10n.t("أنثى — تُربط بشجرة النساء", "Female — belongs in the women's tree")) { EmptyView() }
+                }
             }
             .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
             // البطاقة الواحدة (صندوق فوق بطاقة القسم)
@@ -3696,6 +3717,11 @@ struct AdminAllRequestsView: View {
             if let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines), !birth.isEmpty {
                 infoCard(icon: "calendar", label: L10n.t("تاريخ الميلاد", "Birth Date"),
                          value: birth, color: DS.Color.palm)
+            }
+            if member.isFemale {
+                infoCard(icon: "figure.stand.dress", label: L10n.t("الجنس", "Gender"),
+                         value: L10n.t("أنثى — تُربط بشجرة النساء", "Female — belongs in the women's tree"),
+                         color: DS.Color.female)
             }
             // طريقة التسجيل في سطر واحد: الموقع باسم دخول وكلمة مرور، والتطبيق برقم الجوال
             if member.registrationPlatform == "web" {
