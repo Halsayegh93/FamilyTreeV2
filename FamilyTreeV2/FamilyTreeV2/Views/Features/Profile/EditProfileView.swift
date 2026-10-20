@@ -1393,11 +1393,16 @@ private struct PhoneRequestCard: View {
         } catch {
             Log.error("[PhoneChange] إرسال الرمز: \(error.localizedDescription)")
             let reason = error.localizedDescription.lowercased()
+            let waitSeconds = OTPWaitText.seconds(in: "\(error) \(error.localizedDescription)")
             if reason.contains("already been registered") || reason.contains("already registered")
                 || reason.contains("phone_exists") {
                 // الرقم على حساب دخول آخر: السيرفر يحرّره إن كان حساباً يتيماً (بلا عضو)،
                 // ثم نطلب الرمز من جديد — الرقم لا ينتقل إلا بعد التحقق (طلب المالك)
                 await releaseAndRetry(authNumber: authNumber)
+            } else if let waitSeconds {
+                // «انتظر N ثانية» من نص الحجب (٢٠٢٦-١٠-٢٠) — وعدّاد إعادة الإرسال يبدأ منها
+                self.error = OTPWaitText.message(seconds: waitSeconds, arabic: L10n.isArabic)
+                if codeSent { secondsLeft = waitSeconds }
             } else if reason.contains("security purposes") || reason.contains("rate limit")
                         || reason.contains("too many") {
                 self.error = t("محاولات كثيرة — انتظر دقيقة ثم أعد المحاولة.",

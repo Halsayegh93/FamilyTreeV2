@@ -161,10 +161,11 @@ struct ApprovalTemplatesBox: View {
 
 // MARK: مبدّل الساعات الصغير
 
-/// «− ٢٤ ساعة +» بارتفاع الشريحة الصغيرة ومساحة ضغط ٤٤ — للمهلة (تذكير/تصعيد)، وبالنقاط لعتبات رصيد الرسائل
+/// «− ٢٤ ساعة +» بارتفاع الشريحة الصغيرة ومساحة ضغط ٤٤ — للمهلة (تذكير/تصعيد)، وبالنقاط لعتبات رصيد الرسائل،
+/// وبالثواني/العدد/الأيام لحدود رسائل الدخول (درجات ثابتة `ladder` بدل خطوة واحدة)
 struct ApprovalHoursStepper: View {
-    /// وحدة الرقم المعروض: ساعات (المهلة، فواصل التنبيه) أو نقاط (عتبات رصيد KWT SMS)
-    enum Unit { case hours, points }
+    /// وحدة الرقم المعروض: ساعات (المهلة، فواصل التنبيه) · نقاط (عتبات رصيد KWT SMS) · ثوانٍ · عدد · أيام (حدود الرسائل)
+    enum Unit { case hours, points, seconds, count, days }
 
     let value: Int
     let range: ClosedRange<Int>
@@ -172,19 +173,51 @@ struct ApprovalHoursStepper: View {
     let label: String
     let onChange: (Int) -> Void
     var unit: Unit = .hours
+    /// درجات محددة (مرتّبة تصاعدياً) — «−/+» ينتقل للدرجة السابقة/التالية بدل `step`؛ قيمة خارج الدرجات تذهب لأقرب درجة
+    var ladder: [Int]? = nil
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.dsSection) private var section
+
+    /// القيمة التالية/السابقة داخل المدى — nil = لا شيء بعدها (الزر معطّل)
+    private var next: Int? {
+        if let ladder { return ladder.filter(range.contains).first { $0 > value } }
+        return value + step <= range.upperBound ? value + step : nil
+    }
+    private var previous: Int? {
+        if let ladder { return ladder.filter(range.contains).last { $0 < value } }
+        return value - step >= range.lowerBound ? value - step : nil
+    }
+
+    private var shortText: String {
+        switch unit {
+        case .hours:   return L10n.t("\(value) س", "\(value) h")
+        case .points:  return L10n.t("\(value) نقطة", "\(value) pts")
+        case .seconds: return L10n.t("\(value) ث", "\(value) s")
+        case .count:   return "\(value)"
+        case .days:    return L10n.t("\(value) يوم", "\(value) d")
+        }
+    }
+
+    private var spokenText: String {
+        switch unit {
+        case .hours:   return L10n.t("\(value) ساعة", "\(value) hours")
+        case .points:  return L10n.t("\(value) نقطة", "\(value) points")
+        case .seconds: return L10n.t("\(value) ثانية", "\(value) seconds")
+        case .count:   return "\(value)"
+        case .days:    return L10n.t("\(value) يوم", "\(value) days")
+        }
+    }
 
     var body: some View {
         let ink = DS.Color.primary.dsChrome(in: section).dsReadableGlyph
         HStack(spacing: DS.Spacing.xxs) {
-            button("minus", enabled: value - step >= range.lowerBound) { onChange(max(range.lowerBound, value - step)) }
-            Text(unit == .hours ? L10n.t("\(value) س", "\(value) h") : L10n.t("\(value) نقطة", "\(value) pts"))
+            button("minus", enabled: previous != nil) { if let previous { onChange(previous) } }
+            Text(shortText)
                 .dsFont(.chipCompact)
                 .monospacedDigit()
                 .foregroundColor(DS.Color.fieldLabel)
                 .frame(minWidth: DS.Icon.tapTarget)
-            button("plus", enabled: value + step <= range.upperBound) { onChange(min(range.upperBound, value + step)) }
+            button("plus", enabled: next != nil) { if let next { onChange(next) } }
         }
         .padding(.horizontal, DS.Spacing.xxs)
         .frame(minHeight: DSBox.chipHeightSmall)
@@ -193,12 +226,11 @@ struct ApprovalHoursStepper: View {
         .opacity(isEnabled ? 1 : DSActionFill.disabledOpacity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue(unit == .hours ? L10n.t("\(value) ساعة", "\(value) hours")
-                                           : L10n.t("\(value) نقطة", "\(value) points"))
+        .accessibilityValue(spokenText)
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: if value + step <= range.upperBound { onChange(value + step) }
-            case .decrement: if value - step >= range.lowerBound { onChange(value - step) }
+            case .increment: if let next { onChange(next) }
+            case .decrement: if let previous { onChange(previous) }
             @unknown default: break
             }
         }

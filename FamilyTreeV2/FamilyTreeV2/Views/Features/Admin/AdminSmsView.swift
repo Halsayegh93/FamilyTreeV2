@@ -6,12 +6,13 @@ import Combine
 // المالك والمدير فقط (نفس صلاحية `sms_admin_overview()` على السيرفر — غيرهما 42501). البيانات الحية منذ ٢٠٢٦-١٠-٢٠
 // (`AdminSmsData.swift`): الرأس (الرصيد وحالته، يكفي كم رمز وكم يوم، تحديث حي، الشحن) ← الإرسال (اليوم/٧/٣٠،
 // القبول، النقاط، عدّاد الساعة) ← محاولات الدخول (`AdminSmsAttempts.swift`) ← آخر ٣٠ يوماً ← آخر الإرسالات (فحص الحالة) ← أدوات (اختبار المالك، فحص رقم،
-// المرسلون، التغطية) ← التنبيهات (المالك يعدّل) ← الحدود ← الإعداد.
+// المرسلون، التغطية) ← إعدادات الإرسال (الحدود واسم المرسل — `AdminSmsSettings.swift`) ← التنبيهات (المالك يعدّل) ← الحدود ← الإعداد.
 // حارس المكدس (تعطّل «اليوم» على الجوال ٢٠٢٦-١٠-٢٠): كل بطاقة نوع مستقل خلف `AnyView` — لا جسم واحد ضخم.
 
 /// ما يُفتح من أدوات الصفحة في مربّع
 enum SmsToolBox: String, Identifiable {
-    case senders, coverage, validate
+    /// `sender` = مربّع تغيير «اسم المرسل» (المالك)
+    case senders, coverage, validate, sender
     var id: String { rawValue }
 }
 
@@ -20,6 +21,8 @@ struct SmsNotice: Identifiable, Equatable {
     let id = UUID()
     let title: String
     let message: String
+    /// بعد تغيير المرسل: زر «اختبار إرسال لرقمي» في النافذة نفسها
+    var offersTest = false
 }
 
 /// حالة إجراءات الصفحة: ما يعمل الآن، آخر نتيجة، والمربّع المفتوح
@@ -122,7 +125,7 @@ private struct SmsPagePresentations: ViewModifier {
     func body(content: Content) -> some View {
         content
             .dsCenterBox(item: $actions.box) { kind in
-                AnyView(SmsToolBoxView(kind: kind))
+                AnyView(SmsToolBoxView(kind: kind, actions: actions))
             }
             .dsAlert(L10n.t("إرسال رسالة اختبار لرقمك؟", "Send a test message to your number?"),
                      isPresented: $actions.confirmTest, icon: "paperplane.fill") {
@@ -135,8 +138,16 @@ private struct SmsPagePresentations: ViewModifier {
             .dsAlert(actions.notice?.title ?? "", isPresented: Binding(
                 get: { actions.notice != nil },
                 set: { if !$0 { actions.notice = nil } }
-            ), presenting: actions.notice) { _ in
-                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            ), presenting: actions.notice) { notice in
+                if notice.offersTest {
+                    Button(L10n.t("لاحقاً", "Later"), role: .cancel) {}
+                    Button(L10n.t("اختبار إرسال لرقمي", "Test send to my number")) {
+                        // بعد أن تُغلق هذه النافذة — ثم تأكيد الاختبار المعتاد (نقطة واحدة)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { actions.confirmTest = true }
+                    }
+                } else {
+                    Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+                }
             } message: { notice in
                 Text(notice.message)
             }
@@ -172,6 +183,7 @@ private struct SmsPageContent: View {
                     AnyView(SmsRecentCard(overview: overview, actions: actions))
                 }
                 AnyView(SmsToolsCard(actions: actions, isOwner: authVM.isOwner))
+                AnyView(SmsSendingSettingsCard(overview: store.overview, actions: actions))
                 AnyView(SmsAlertsCard(alerts: store.overview?.alerts))
                 AnyView(SmsLimitsCard(limits: store.overview?.limits ?? SmsOverview.Limits()))
                 AnyView(SmsSetupCard())

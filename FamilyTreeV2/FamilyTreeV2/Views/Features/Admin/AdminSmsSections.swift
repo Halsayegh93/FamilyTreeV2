@@ -306,10 +306,11 @@ struct SmsLimitsCard: View {
 
     var body: some View {
         AdminRowsCard(title: L10n.t("الحدود", "Limits"),
-                      footnote: L10n.t("حدود ثابتة في السيرفر تحمي الرصيد من التكرار.",
-                                       "Fixed server limits that protect the balance from repeats.")) {
+                      footnote: L10n.t("تحمي الرصيد من التكرار. الانتظار والحدود بالساعة يعدّلها المالك من «إعدادات الإرسال»، والباقي ثابت في السيرفر.",
+                                       "They protect the balance from repeats. The wait and hourly limits are set by the owner in “Sending settings”; the rest is fixed on the server.")) {
+            // الانتظار كما يراه العضو (`wait_seconds`) — لا المهلة الداخلية (الانتظار − ١٠)
             SmsKVRow(icon: "clock.fill", label: L10n.t("بين رمزين لنفس الرقم", "Between two codes to one number"),
-                     value: L10n.t("\(limits.phoneCooldownSeconds) ثانية", "\(limits.phoneCooldownSeconds) s"))
+                     value: L10n.t("\(limits.waitSeconds) ثانية", "\(limits.waitSeconds) s"))
             SmsKVRow(icon: "phone.fill", label: L10n.t("لكل رقم بالساعة", "Per number per hour"),
                      value: L10n.t("حتى \(limits.phonePerHour)", "Up to \(limits.phonePerHour)"))
             SmsKVRow(icon: "person.3.fill", label: L10n.t("للجميع بالساعة", "Everyone per hour"),
@@ -324,10 +325,8 @@ struct SmsLimitsCard: View {
 
 struct SmsSetupCard: View {
     var body: some View {
+        // «المرسل» انتقل إلى «إعدادات الإرسال» (اسمه الفعلي + تغييره للمالك)
         AdminRowsCard(title: L10n.t("الإعداد", "Setup")) {
-            SmsKVRow(icon: "tag.fill", label: L10n.t("المرسل", "Sender"), value: L10n.t("KWT-SMS (مشترك)", "KWT-SMS (shared)"),
-                     note: L10n.t("مرسل مشترك: أبطأ قليلاً وقد لا يصل لأرقام حجب الإعلانات.",
-                                  "Shared sender: a bit slower and may miss numbers that block promotions."))
             SmsKVRow(icon: "globe", label: L10n.t("التغطية", "Coverage"), value: L10n.t("الكويت فقط", "Kuwait only"),
                      note: L10n.t("أرقام جوال الكويت (+965) التي تبدأ بـ 4 أو 5 أو 6 أو 9.",
                                   "+965 mobile numbers starting with 4, 5, 6 or 9."))
@@ -363,6 +362,7 @@ struct SmsHowItWorksCard: View {
     @State private var open = false
 
     private var limits: SmsOverview.Limits { overview?.limits ?? SmsOverview.Limits() }
+    private var sender: SmsOverview.Sender { overview?.sender ?? SmsOverview.Sender() }
     private var alerts: SmsOverview.Alerts { overview?.alerts ?? SmsOverview.Alerts() }
 
     /// آخر تنبيه «رصيد الرسائل منخفض» وصل هذا المستخدم — nil إن لم يُحمَّل شيء
@@ -378,8 +378,7 @@ struct SmsHowItWorksCard: View {
             AdminRowsCardBody {
                 SmsHowRow(icon: "paperplane.fill", tint: DS.Color.sea,
                           title: L10n.t("المسار", "The path"),
-                          text: L10n.t("العضو يطلب الرمز ← يصله \(SmsText.isolate("SMS")) من المرسل «\(SmsText.isolate("KWT-SMS"))» (مرسل مشترك: أبطأ وقد لا يصل لأرقام حجب الإعلانات) ← كل رسالة = نقطة واحدة (الرسالة 53 حرفاً).",
-                                       "A member asks for a code → it arrives by SMS from the sender “KWT-SMS” (a shared sender: slower, and may miss numbers that block promotions) → each message = 1 point (53 characters)."))
+                          text: pathText)
                 SmsHowRow(icon: "tray.full.fill", tint: DS.Color.primary,
                           title: L10n.t("ما يُحفظ", "What's kept"),
                           text: keptText)
@@ -422,16 +421,29 @@ struct SmsHowItWorksCard: View {
         }
     }
 
+    /// المسار باسم المرسل الفعلي (المحفوظ أو الافتراضي المشترك)
+    private var pathText: String {
+        let name = SmsText.isolate(sender.current)
+        if sender.isDefault {
+            return L10n.t("العضو يطلب الرمز ← يصله \(SmsText.isolate("SMS")) من المرسل «\(name)» (مرسل مشترك: أبطأ وقد لا يصل لأرقام حجب الإعلانات) ← كل رسالة = نقطة واحدة (الرسالة 53 حرفاً).",
+                          "A member asks for a code → it arrives by SMS from the sender “\(sender.current)” (a shared sender: slower, and may miss numbers that block promotions) → each message = 1 point (53 characters).")
+        }
+        return L10n.t("العضو يطلب الرمز ← يصله \(SmsText.isolate("SMS")) من المرسل «\(name)» (مرسل خاص معتمد في حساب \(SmsText.isolate("KWT"))، يغيّره المالك من «إعدادات الإرسال») ← كل رسالة = نقطة واحدة (الرسالة 53 حرفاً).",
+                      "A member asks for a code → it arrives by SMS from the sender “\(sender.current)” (your own sender approved on the KWT account; the owner changes it in “Sending settings”) → each message = 1 point (53 characters).")
+    }
+
     private var keptText: String {
         let recent = SmsText.days(overview?.retentionDays ?? 2)
-        let tries = SmsText.days(attempts.current?.retentionDays ?? 30)
+        // إعداد المالك (النظرة الأحدث بعد الحفظ)، وإلا ما رجع مع «محاولات الدخول»
+        let tries = SmsText.days(overview?.loginAttemptsDays ?? attempts.current?.retentionDays ?? 30)
         return L10n.t("السجل اليومي دائم (عدد الرسائل والمقبولة والفاشلة والنقاط والرصيد). تفاصيل آخر الإرسالات \(recent) فقط (النتيجة، سبب الفشل، رقم الرسالة عند \(SmsText.isolate("KWT"))، الرصيد بعدها — الرقم مخفي). «محاولات الدخول» \(tries) (الرقم والنتيجة وهل دخل).",
                       "The daily log is permanent (messages, accepted, failed, points, balance). Recent-send details are kept \(recent) only (result, failure reason, KWT message id, balance after — number hidden). “Sign-in attempts” are kept \(tries) (number, result, signed in or not).")
     }
 
     private var limitsText: String {
-        let gap = limits.phoneCooldownSeconds == 60 ? L10n.t("دقيقة", "A minute")
-                                                    : L10n.t("\(limits.phoneCooldownSeconds) ثانية", "\(limits.phoneCooldownSeconds) seconds")
+        // الانتظار كما يراه العضو (`wait_seconds`، يعدّله المالك) — «دقيقة»، «دقيقتين»، «90 ثانية»…
+        let duration = OTPWaitText.exactDuration(seconds: limits.waitSeconds, arabic: L10n.isArabic)
+        let gap = L10n.isArabic ? duration : duration.prefix(1).uppercased() + duration.dropFirst()
         return L10n.t("\(gap) بين رمزين لنفس الرقم (وخدمة الدخول \(SmsText.isolate("Supabase")) نفسها تمنع التكرار خلال 60 ثانية ولا تُحسب تلك الطلبات)، \(limits.phonePerHour) بالساعة لكل رقم، \(limits.allPerHour) بالساعة للجميع، \(limits.allPerSecond) بالثانية.",
                       "\(gap) between two codes to one number (Supabase itself blocks repeats within 60 seconds, and those aren't counted), \(limits.phonePerHour) per hour per number, \(limits.allPerHour) per hour for everyone, \(limits.allPerSecond) per second.")
     }
@@ -495,12 +507,15 @@ private struct SmsHowRow: View {
 
 struct SmsToolBoxView: View {
     let kind: SmsToolBox
+    /// لنتيجة «اسم المرسل» (نافذة اقتراح الاختبار) — nil في المعاينة
+    var actions: SmsPageActions? = nil
 
     var body: some View {
         switch kind {
         case .validate: SmsValidateBox()
         case .senders:  SmsSendersBox()
         case .coverage: SmsCoverageBox()
+        case .sender:   SmsSenderBox(actions: actions)
         }
     }
 }

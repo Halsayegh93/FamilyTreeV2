@@ -47,6 +47,8 @@ struct AppSettings: Codable {
     var smsUrgentThreshold: Int?
     var smsLowRepeatHours: Int?
     var smsUrgentRepeatHours: Int?
+    // حدود رسائل الدخول واسم المرسل (sms_wait_seconds…، ٢٠٢٦-١٠-٢٠) تُقرأ من `sms_admin_overview()` لا من هنا —
+    // تحتاجها صفحة KWT SMS وحدها، وتكبير هذا النوع يكبّر كل نسخة منه في المكدس (حارس المكدس)
     var updatedAt: String?
     var updatedBy: UUID?
 
@@ -201,6 +203,61 @@ class AppSettingsViewModel: ObservableObject {
             Log.error("خطأ في حفظ تنبيه رصيد الرسائل: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             await fetchSettings()
+            return false
+        }
+    }
+
+    // MARK: - حدود رسائل الدخول (KWT SMS، ٢٠٢٦-١٠-٢٠)
+
+    /// المدى الذي يقبله السيرفر لكل حد (قيد `check` على الأعمدة — خارجه خطأ 23514)
+    static let smsWaitRange = 60...600
+    static let smsPerNumberHourRange = 1...20
+    static let smsAllHourRange = 20...1000
+    static let loginAttemptsRetentionRange = 7...90
+
+    /// يحفظ الحدود الأربعة معاً في تحديث واحد (بلا `sms_sender` — لا يُكتب من التطبيق). للمالك وحده.
+    /// المدير يمر تحديثه بلا خطأ لكن بصفر صفوف (RLS) — لذلك يُطلب الصف المحدّث ويُعدّ: لا صف = لم يُحفظ.
+    /// قيمة خارج المدى يرفضها السيرفر (23514). false = لم يُحفظ. القراءة بعدها من `sms_admin_overview()`.
+    func updateSmsLimits(waitSeconds: Int, perNumberHour: Int, allHour: Int, retentionDays: Int,
+                         updatedBy: UUID?) async -> Bool {
+        guard canManageSettings else {
+            Log.warning("[AUTH] Unauthorized updateSmsLimits attempt — owner only")
+            return false
+        }
+        guard Self.smsWaitRange.contains(waitSeconds), Self.smsPerNumberHourRange.contains(perNumberHour),
+              Self.smsAllHourRange.contains(allHour), Self.loginAttemptsRetentionRange.contains(retentionDays) else {
+            return false
+        }
+        nonisolated struct Row: Decodable { let id: UUID }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            var updateData: [String: AnyEncodable] = [
+                "sms_wait_seconds": AnyEncodable(waitSeconds),
+                "sms_per_number_hour": AnyEncodable(perNumberHour),
+                "sms_all_hour": AnyEncodable(allHour),
+                "login_attempts_retention_days": AnyEncodable(retentionDays),
+                "updated_at": AnyEncodable(DateHelper.now)
+            ]
+            if let updatedBy {
+                updateData["updated_by"] = AnyEncodable(updatedBy.uuidString)
+            }
+            let rows: [Row] = try await supabase
+                .from("app_settings")
+                .update(updateData)
+                .eq("id", value: settings.id.uuidString)
+                .select("id")
+                .execute()
+                .value
+            guard !rows.isEmpty else {
+                Log.warning("حدود رسائل الدخول: لم يُحدَّث أي صف (صلاحية)")
+                return false
+            }
+            Log.info("تم حفظ حدود رسائل الدخول")
+            return true
+        } catch {
+            Log.error("خطأ في حفظ حدود رسائل الدخول: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
             return false
         }
     }

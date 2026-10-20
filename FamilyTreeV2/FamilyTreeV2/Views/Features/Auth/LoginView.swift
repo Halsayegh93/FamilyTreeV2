@@ -507,7 +507,8 @@ struct LoginView: View {
                     timeRemaining = 60
                     Task {
                         await authVM.sendOTP(channel: .sms)
-                        if authVM.otpErrorMessage != nil { timeRemaining = 30 }
+                        // محجوب بمهلة معروفة (نفس الرقم): عدّاد «إعادة عبر SMS» يبدأ منها، وإلا ٣٠ ث كما كان
+                        if authVM.otpErrorMessage != nil { timeRemaining = authVM.otpRetryAfter ?? 30 }
                     }
                 }
                 .disabled(authVM.isLoading || timeRemaining > 0)

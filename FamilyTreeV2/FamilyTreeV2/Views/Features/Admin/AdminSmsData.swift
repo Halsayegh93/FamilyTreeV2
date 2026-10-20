@@ -9,7 +9,8 @@ import Combine
 // إن فشلت (سيرفر أقدم، انقطاع) يبقى الرصيد من `sms_balance_status()` كما كان.
 // الإجراءات: الدالة الطرفية `kwtsms-admin` بجلسة المستخدم — balance · senderid · coverage · status · validate ·
 // test_send (المالك فقط، لرقم ملفه، مرة كل ١٠ دقائق). بيانات حساب KWT لا تخرج من السيرفر.
-// العتبات: أعمدة `app_settings.sms_*` (المالك يعدّلها عبر `AppSettingsViewModel.updateSetting`).
+// العتبات: أعمدة `app_settings.sms_*` (المالك يعدّلها عبر `AppSettingsViewModel.updateSmsAlerts`).
+// الحدود (الانتظار، لكل رقم/للجميع بالساعة، حفظ المحاولات): `updateSmsLimits` — المالك. اسم المرسل: `set_sender` فقط.
 
 /// ما ترجعه `sms_admin_overview()` — فكّ متسامح: أي حقل ناقص يأخذ الافتراضي ولا يُفشل الصفحة
 struct SmsOverview: Equatable {
@@ -30,7 +31,18 @@ struct SmsOverview: Equatable {
     }
 
     struct Limits: Equatable {
-        var phoneCooldownSeconds = 50, phonePerHour = 5, allPerSecond = 5, allPerHour = 100, adminTestMinutes = 10
+        /// `wait_seconds` = الانتظار بين رمزين كما يراه العضو (يعدّله المالك)؛ `phone_cooldown_seconds` = الانتظار − ١٠ (داخلي)
+        var waitSeconds = 60, phoneCooldownSeconds = 50, phonePerHour = 5, allPerSecond = 5, allPerHour = 100, adminTestMinutes = 10
+    }
+
+    /// اسم المرسل المستخدم: المحفوظ في الإعدادات أو الافتراضي «KWT-SMS»
+    struct Sender: Equatable {
+        static let fallback = "KWT-SMS"
+        var current = Sender.fallback
+        var defaultName = Sender.fallback
+        /// settings · default
+        var source = "default"
+        var isDefault: Bool { source != "settings" }
     }
 
     struct Alerts: Equatable {
@@ -63,10 +75,15 @@ struct SmsOverview: Equatable {
     var days: [Day] = []
     var hourCount = 0, hourCap = 100
     var limits = Limits()
+    /// السيرفر يرجع `wait_seconds` = أعمدة الحدود القابلة للتعديل موجودة (المالك يعدّلها من «إعدادات الإرسال»)
+    var limitsEditable = false
     var alerts = Alerts()
     /// آخر رمز دخول: وضع تجريبي (لا رسالة فعلية) أو تشغيل فعلي — nil = لا إرسال محفوظ
     var lastTestMode: Bool?
     var retentionDays = 2
+    /// مدة حفظ «محاولات الدخول» (إعداد المالك) — nil = السيرفر أقدم
+    var loginAttemptsDays: Int?
+    var sender = Sender()
     var recent: [Send] = []
 
     /// من رد الدالة (jsonb)
@@ -98,7 +115,11 @@ struct SmsOverview: Equatable {
         }
         if let l = root["limits"] as? [String: Any] {
             let d = Limits()
-            o.limits = Limits(phoneCooldownSeconds: SmsJSON.int(l["phone_cooldown_seconds"]) ?? d.phoneCooldownSeconds,
+            let cooldown = SmsJSON.int(l["phone_cooldown_seconds"])
+            o.limitsEditable = SmsJSON.int(l["wait_seconds"]) != nil
+            // سيرفر أقدم بلا `wait_seconds`: الانتظار = المهلة الداخلية + ١٠
+            o.limits = Limits(waitSeconds: SmsJSON.int(l["wait_seconds"]) ?? cooldown.map { $0 + 10 } ?? d.waitSeconds,
+                              phoneCooldownSeconds: cooldown ?? d.phoneCooldownSeconds,
                               phonePerHour: SmsJSON.int(l["phone_per_hour"]) ?? d.phonePerHour,
                               allPerSecond: SmsJSON.int(l["all_per_second"]) ?? d.allPerSecond,
                               allPerHour: SmsJSON.int(l["all_per_hour"]) ?? d.allPerHour,
@@ -113,6 +134,16 @@ struct SmsOverview: Equatable {
         }
         o.lastTestMode = root["last_test_mode"] as? Bool
         o.retentionDays = SmsJSON.int(root["retention_days"]) ?? 2
+        if let r = root["retention"] as? [String: Any] {
+            o.retentionDays = SmsJSON.int(r["deliveries_days"]) ?? o.retentionDays
+            o.loginAttemptsDays = SmsJSON.int(r["login_attempts_days"])
+        }
+        if let s = root["sender"] as? [String: Any] {
+            let d = Sender()
+            o.sender = Sender(current: (s["current"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? d.current,
+                              defaultName: (s["default"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? d.defaultName,
+                              source: s["source"] as? String ?? d.source)
+        }
         o.recent = (root["recent"] as? [[String: Any]] ?? []).enumerated().map { i, r in
             Send(id: i,
                  at: ApprovalWorkflow.date(r["at"] as? String),
@@ -226,8 +257,8 @@ struct SmsAdminError: Error, Equatable {
             return L10n.t("أُرسل اختبار قبل أقل من 10 دقائق — اختبار واحد كل 10 دقائق حفاظاً على الرصيد. جرّب بعد قليل.",
                           "A test went out less than 10 minutes ago — one test every 10 minutes to protect the balance. Try again shortly.")
         case "rate_limited":
-            return L10n.t("الإرسال مزدحم الآن أو وصل رقمك رمز قبل أقل من دقيقة — جرّب بعد دقيقة.",
-                          "Sending is busy right now or your number just got a code — try again in a minute.")
+            return L10n.t("الإرسال مزدحم الآن، أو وصل رقمك رمز قبل قليل، أو بلغ حدّ الساعة — جرّب بعد قليل.",
+                          "Sending is busy right now, your number just got a code, or the hourly limit was hit — try again shortly.")
         case "provider_error":
             let hint = providerCode.flatMap { SmsText.providerHint($0) }
             let codeText = SmsText.isolate(providerCode ?? "—")
@@ -245,6 +276,27 @@ struct SmsAdminError: Error, Equatable {
             return L10n.t("تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية.", "Couldn't connect — check the internet and retry.")
         default:
             return L10n.t("حدث خطأ غير متوقع — حدّث التطبيق أو جرّب لاحقاً.", "Something went wrong — update the app or try later.")
+        }
+    }
+
+    /// رسالة «تغيير اسم المرسل» (`set_sender`) — في كل الأخطاء لا يُحفظ شيء
+    var senderMessage: String {
+        switch code {
+        case "sender_not_approved":
+            return L10n.t("هذا الاسم ليس في قائمة المرسلين المعتمدين في حسابك على KWT (الحروف الكبيرة والصغيرة والمسافات تفرق) — لم يُحفظ شيء.",
+                          "That name isn't on your KWT account's approved sender list (case and spaces matter) — nothing was saved.")
+        case "owner_only":
+            return L10n.t("تغيير اسم المرسل للمالك فقط.", "Only the owner can change the sender name.")
+        case "bad_sender":
+            return L10n.t("اسم المرسل غير مقبول — حروف إنجليزية وأرقام ومسافة وشرطة فقط، حتى 11 خانة.",
+                          "Sender name not accepted — English letters, digits, space and dash only, up to 11 characters.")
+        case "provider_unavailable":
+            return L10n.t("موقع KWT SMS لم يردّ في الوقت — لم يُحفظ شيء، جرّب بعد قليل.",
+                          "KWT SMS didn't answer in time — nothing was saved, try again shortly.")
+        case "provider_error":
+            return message + " " + L10n.t("لم يُحفظ شيء.", "Nothing was saved.")
+        default:
+            return message
         }
     }
 }
@@ -373,19 +425,44 @@ final class SmsBalanceStore: ObservableObject {
         enum CodingKeys: String, CodingKey { case points, balance; case testMode = "test_mode" }
     }
 
+    /// رد `set_sender`: المحفوظ (nil = الافتراضي) والمستخدم فعلاً
+    nonisolated struct SetSenderReply: Decodable {
+        let sender: String?
+        let inUse: String?
+        let defaultName: String?
+        let source: String?
+        enum CodingKeys: String, CodingKey { case sender, source; case inUse = "in_use"; case defaultName = "default" }
+    }
+
     nonisolated struct Body: Encodable {
         let action: String
         let msgid: String?
         let phone: String?
     }
 
+    /// جسم `set_sender` — `sender` يُرسل دائماً (null صريح = الرجوع للافتراضي؛ غيابه يرفضه السيرفر)
+    nonisolated struct SenderBody: Encodable {
+        let action = "set_sender"
+        let sender: String?
+        enum CodingKeys: String, CodingKey { case action, sender }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(action, forKey: .action)
+            if let sender { try c.encode(sender, forKey: .sender) } else { try c.encodeNil(forKey: .sender) }
+        }
+    }
+
     /// نداء واحد للدالة الطرفية بجلسة المستخدم — يرمي `SmsAdminError` بسبب مفهوم
     func call<T: Decodable>(_ action: String, msgid: String? = nil, phone: String? = nil,
                             as type: T.Type = T.self) async throws -> T {
+        try await call(action, body: Body(action: action, msgid: msgid, phone: phone), as: type)
+    }
+
+    private func call<B: Encodable, T: Decodable>(_ action: String, body: B, as type: T.Type) async throws -> T {
         do {
             let data: Data = try await SupabaseConfig.client.functions.invoke(
                 "kwtsms-admin",
-                options: FunctionInvokeOptions(method: .post, body: Body(action: action, msgid: msgid, phone: phone))
+                options: FunctionInvokeOptions(method: .post, body: body)
             ) { data, _ in data }
             return try JSONDecoder().decode(T.self, from: data)
         } catch let FunctionsError.httpError(code, data) {
@@ -399,6 +476,32 @@ final class SmsBalanceStore: ObservableObject {
             if ErrorHelper.isCancellation(error) { throw error }
             throw SmsAdminError(code: "network")
         }
+    }
+
+    /// «اسم المرسل» (المالك): اسم من قائمة KWT المعتمدة، أو nil للرجوع إلى «KWT-SMS» — ثم تُعاد النظرة
+    func setSender(_ sender: String?) async throws -> SetSenderReply {
+        let reply = try await call("set_sender", body: SenderBody(sender: sender), as: SetSenderReply.self)
+        if var o = overview {
+            let d = SmsOverview.Sender()
+            o.sender = SmsOverview.Sender(current: reply.inUse ?? reply.sender ?? d.current,
+                                          defaultName: reply.defaultName ?? d.defaultName,
+                                          source: reply.source ?? (reply.sender == nil ? "default" : "settings"))
+            overview = o
+        }
+        await refresh(force: true)
+        return reply
+    }
+
+    /// بعد حفظ المالك للحدود (تأكّد السيرفر بعدد الصفوف): تظهر القيم الجديدة فوراً قبل إعادة النظرة
+    func applyLimits(_ l: SmsSendingLimits) {
+        guard var o = overview else { return }
+        o.limits.waitSeconds = l.waitSeconds
+        o.limits.phoneCooldownSeconds = l.waitSeconds - 10
+        o.limits.phonePerHour = l.perNumberHour
+        o.limits.allPerHour = l.allHour
+        o.hourCap = l.allHour
+        o.loginAttemptsDays = l.retentionDays
+        overview = o
     }
 
     /// «تحديث الرصيد الآن»: رصيد حي من KWT (يُحفظ في السجل اليومي) ثم تُعاد النظرة
