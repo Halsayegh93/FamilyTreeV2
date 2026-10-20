@@ -68,8 +68,8 @@ struct AdminTodayCounts: Equatable {
     var inboxTotal = 0
 }
 
-/// إشارة من إشارات «حالة النظام» في رأس «اليوم» (كانت بطاقة «تنبيهات» ثم سطر نقاط): الصيانة · الرصيد · المجدول ·
-/// بلا إشعارات — صفّ في لوحة الشريحة بنقطة لون (أخضر سليم، كهرماني تنبيه، أحمر عاجل) وإجراء صغير يفتح بيتها الوحيد
+/// إشارة من إشارات «حالة النظام» في رأس «اليوم» (كانت بطاقة «تنبيهات» ثم سطر نقاط ثم شريحة): الصيانة · الرصيد · المجدول ·
+/// بلا إشعارات — صفّ في لوحة السطر بنقطة لون (أخضر سليم، كهرماني تنبيه، أحمر عاجل) وإجراء صغير يفتح بيتها الوحيد
 struct AdminStatusPill: Identifiable, Equatable {
     enum Level { case ok, warn, urgent, unknown }
     enum Home: Hashable { case maintenance, sms, scheduled, devices }
@@ -80,13 +80,13 @@ struct AdminStatusPill: Identifiable, Equatable {
     /// السطر الثاني تحته («يكفي نحو 17 رمز دخول»، «لاحقاً 2»، «غير مسجّلة أو لم تُحدَّث منذ 30 يوماً»)
     let detail: String
     let level: Level
-    /// العبارة في ملخّص الشريحة الصوتي حين تنبّه («الرصيد منخفض»، «3 أجهزة بلا إشعارات»)
+    /// العبارة في ملخّص السطر الصوتي حين تنبّه («الرصيد منخفض»، «3 أجهزة بلا إشعارات»)
     let issue: String
     /// ما يقرؤه القارئ الصوتي للصفّ: الحالة كاملة («وضع الصيانة مفعّل»، «رصيد رسائل رمز الدخول: 17 نقطة، منخفض»)
     let spoken: String
 
     var id: Home { home }
-    /// تنبيه أو عاجل (يُعدّ في الشريحة)
+    /// تنبيه أو عاجل (يُعدّ في السطر)
     var isFlagged: Bool { level == .warn || level == .urgent }
 
     /// الإجراء الصغير في طرف الصفّ — يفتح بيت الإشارة
@@ -100,8 +100,9 @@ struct AdminStatusPill: Identifiable, Equatable {
     }
 }
 
-/// ملخّص «حالة النظام» (اختيار المالك ٢٠٢٦-١٠-٢٠ بدل النقاط الأربع): شريحة واحدة — «✓ النظام سليم» حين تسلم كلها،
-/// «⚠︎ تنبيه/تنبيهان/3 تنبيهات» حين ينبّه شيء (حمراء إن كان فيها عاجل)، و«حالة النظام» محايدة ما دام شيء لم يُحمَّل
+/// ملخّص «حالة النظام» (اختيار المالك ٢٠٢٦-١٠-٢٠ بدل النقاط الأربع؛ سطر أسفل «يحتاج انتباهك» منذ الدفعة ٩): «✓ النظام
+/// سليم» حين تسلم كلها، «⚠︎ تنبيه/تنبيهان/3 تنبيهات للنظام» حين ينبّه شيء (أحمر إن كان فيها عاجل)، و«حالة النظام» محايدة
+/// ما دام شيء لم يُحمَّل
 struct AdminSystemStatus: Equatable {
     enum Tone { case ok, warn, urgent, loading }
 
@@ -115,27 +116,31 @@ struct AdminSystemStatus: Equatable {
         return pills.allSatisfy { $0.level == .ok } ? .ok : .loading
     }
 
-    /// نص الشريحة
-    var title: String {
+    /// عدد التنبيهات بالمعدود الصحيح («تنبيه»، «تنبيهان»، «3 تنبيهات»)
+    private var alerts: String {
         let n = flagged.count
+        return L10n.isArabic
+            ? AdminTodayText.arabicCount(n, one: "تنبيه", two: "تنبيهان", few: "تنبيهات", many: "تنبيهاً", single: "تنبيه")
+            : (n == 1 ? "1 alert" : "\(n) alerts")
+    }
+
+    /// نص السطر: «النظام سليم» · «تنبيهان للنظام» · «حالة النظام»
+    var title: String {
         switch tone {
-        case .ok:      return L10n.t("النظام سليم", "All systems OK")
-        case .loading: return L10n.t("حالة النظام", "System status")
-        case .warn, .urgent:
-            return L10n.isArabic
-                ? AdminTodayText.arabicCount(n, one: "تنبيه", two: "تنبيهان", few: "تنبيهات", many: "تنبيهاً", single: "تنبيه")
-                : (n == 1 ? "1 alert" : "\(n) alerts")
+        case .ok:            return L10n.t("النظام سليم", "All systems OK")
+        case .loading:       return L10n.t("حالة النظام", "System status")
+        case .warn, .urgent: return L10n.isArabic ? "\(alerts) للنظام" : (flagged.count == 1 ? "1 system alert" : "\(flagged.count) system alerts")
         }
     }
 
-    /// ما يقرؤه القارئ الصوتي للشريحة: «حالة النظام: تنبيهان — الرصيد منخفض، 3 أجهزة بلا إشعارات»
+    /// ما يقرؤه القارئ الصوتي للسطر: «حالة النظام: تنبيهان — الرصيد منخفض، 3 أجهزة بلا إشعارات»
     var spoken: String {
         let head = L10n.t("حالة النظام", "System status")
         switch tone {
         case .ok:      return "\(head): \(title)"
         case .loading: return L10n.t("\(head): لم يُحمَّل بعد", "\(head): not loaded yet")
         case .warn, .urgent:
-            return "\(head): \(title) — " + flagged.map(\.issue).joined(separator: L10n.t("، ", ", "))
+            return "\(head): \(alerts) — " + flagged.map(\.issue).joined(separator: L10n.t("، ", ", "))
         }
     }
 }
@@ -187,7 +192,7 @@ struct AdminTodayEntry: Identifiable, Equatable {
     let target: Target
 }
 
-/// «أعداد الأعضاء» أعلى «اليوم» — نفس تعريفات بطاقة «أفراد العائلة» القديمة (قبل إعادة التصميم):
+/// «إحصاء الأفراد» أعلى «اليوم» — نفس تعريفات بطاقة «أفراد العائلة» القديمة (قبل إعادة التصميم):
 /// الرجال = شجرة العائلة بلا المعلّقين، النساء = إناث شجرة النساء (جدولها يضمّ مرايا الرجال)، الأفراد = مجموعهما؛
 /// والحسابات المفعّلة = «فعّال» في «استخدام التطبيق» (رقم وجهاز — فعّال + خامل، تعريف المالك). nil = لم يُعرف بعد.
 struct AdminMemberCounts: Equatable {

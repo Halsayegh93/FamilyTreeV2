@@ -716,24 +716,30 @@ struct DSActionButton: View {
     }
 }
 
-/// حلقة نسبة (٠…١) بلون الحالة — تمتلئ بحركة ناعمة (ثابتة مع «تقليل الحركة»)
+/// حلقة نسبة (٠…١) بلون الحالة — تمتلئ بحركة ناعمة (ثابتة مع «تقليل الحركة»). المسار تحتها بلون الحلقة الخافت، أو لون
+/// آخر يعني الباقي (`track` — «إحصاء الأفراد»: الأحياء بلون الحلقة فوق رمادي المتوفين)
 struct DSRing<Center: View>: View {
     let progress: Double
     var tint: Color = DS.Color.success
     var lineWidth: CGFloat = DS.Spacing.sm
     var size: CGFloat = 84
+    var track: Color? = nil
     @ViewBuilder var center: () -> Center
     @State private var shown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            Circle()
-                .stroke(tint.opacity(DS.Opacity.tintFill), lineWidth: lineWidth)
-            Circle()
-                .trim(from: 0, to: shown || reduceMotion ? max(0, min(1, progress)) : 0)
-                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+            Group {
+                Circle()
+                    .stroke(track ?? tint.opacity(DS.Opacity.tintFill), lineWidth: lineWidth)
+                Circle()
+                    .trim(from: 0, to: shown || reduceMotion ? max(0, min(1, progress)) : 0)
+                    .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+            // تبدأ من أعلى وتدور مع عقارب الساعة في الاتجاهين — في العربية كان الدوران ينعكس فتبدأ الحلقة من أسفل
+            .environment(\.layoutDirection, .leftToRight)
             center()
         }
         .frame(width: size, height: size)

@@ -2245,9 +2245,9 @@ extension DS {
         static let bellDotSize: CGFloat = 8
         /// عدد الجرس: ارتفاع الكبسولة الحمراء
         static let bellBadge: CGFloat = 17
-        /// «حالة النظام» تحت أرقام «اليوم»: نقطة اللون في صفوف لوحتها، إطار الشريحة بلون حالتها، وعرض اللوحة المنبثقة
+        /// سطر «حالة النظام» أسفل «يحتاج انتباهك»: نقطة اللون في صفوف لوحته، تعبئة السطر بلون حالته، وعرض اللوحة المنبثقة
         static let statusDot: CGFloat = 7
-        static let statusChipStroke: Double = 0.45
+        static let statusLineFill: Double = 0.14
         static let statusPanelWidth: CGFloat = 320
         /// عرض اللوحة من أحجام إمكانية الوصول (الإجراء تحت النص)
         static let statusPanelWidthLarge: CGFloat = 360
@@ -2277,6 +2277,11 @@ extension DS {
         static let trackHeight: CGFloat = 4
         /// دائرة إنجاز المهمة («مهام اليوم»)
         static let taskRing: CGFloat = 23
+        /// حلقات «إحصاء الأفراد»: القطر، وأصغر قليلاً مع XXXL، والصغيرة بجانب النص من أحجام إمكانية الوصول، وعرض خطّها
+        static let countsRing: CGFloat = 76
+        static let countsRingCompact: CGFloat = 68
+        static let countsRingStacked: CGFloat = 52
+        static let countsRingLine: CGFloat = 7
         /// مقياس الرصيد نصف الدائري في صفحة رسائل الدخول
         static let gaugeWidth: CGFloat = 112
         static let gaugeHeight: CGFloat = 70
@@ -2302,9 +2307,9 @@ extension DS {
 extension DS.TextRole {
     /// التحية في رأس «اليوم» وعنوان صفحة القسم — Title 1 (٢٨)
     static let hubTitle = DS.TextRole(.title, weight: .bold)
-    /// رقم مربّع الرأس (بانتظارك، مستعجل…) — Title 1 (٢٨) بموافقة المالك على رأس «أ»
+    /// رقم المربّع الزجاجي في رؤوس الأقسام (`AdminKPITile`) — Title 1 (٢٨) بموافقة المالك على رأس «أ»
     static let hubKPI = DS.TextRole(.title, weight: .bold)
-    /// رقم بطاقة «نبض العائلة» — Title 2 (٢٢)
+    /// أرقام «يحتاج انتباهك» في رأس «اليوم»، ووسط حلقات «إحصاء الأفراد»، ورقم رسائل الدخول — Title 2 (٢٢)
     static let hubPulse = DS.TextRole(.title2, weight: .bold)
     /// عنوان صفّ داخل بطاقات اللوحة وعنوان مربّع القسم — Subheadline (١٥) عريض
     static let hubRow = DS.TextRole(.subheadline, weight: .bold)

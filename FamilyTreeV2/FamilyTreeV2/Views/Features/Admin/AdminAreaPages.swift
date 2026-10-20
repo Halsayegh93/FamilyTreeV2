@@ -47,7 +47,7 @@ enum AdminToolCatalog {
                            title: L10n.t("الطلبات", "Requests"),
                            subtitle: L10n.t("كل ما ينتظر قراراً — بالنوع والمهلة", "Everything awaiting a decision"),
                            icon: "tray.full.fill", tint: DS.Color.primary,
-                           keywords: ["طلبات", "مراجعة", "انضمام", "موافقة", "بانتظار قرارك", "عاجل", "متأخر"],
+                           keywords: ["طلبات", "مراجعة", "انضمام", "موافقة", "بانتظار قرارك", "عاجل", "متأخر", "يحتاج انتباهك"],
                            kind: page { AdminAllRequestsView() }))
         t.append(AdminTool(id: "inbox.messages", area: .inbox, group: L10n.t("الوارد", "Inbox"),
                            title: L10n.t("الرسائل", "Messages"),
@@ -168,7 +168,8 @@ enum AdminToolCatalog {
                                                           "Members, living, registered, growth, ages and roles")
                                                  : L10n.t("أعداد الأفراد والأحياء والمسجّلين", "Members, living and registered counts"),
                                icon: "person.3.fill", tint: DS.Color.palm,
-                               keywords: ["إحصائيات", "إحصاءات", "أعمار", "أفراد", "نمو", "رجال", "نساء"],
+                               keywords: ["إحصائيات", "إحصاءات", "إحصاء الأفراد", "أعداد الأعضاء", "أعمار", "أفراد", "نمو",
+                                          "رجال", "نساء", "أحياء", "متوفون"],
                                kind: page { AdminAnalyticsView() }))
         }
         if isAdmin {

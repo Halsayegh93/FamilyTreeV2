@@ -15,7 +15,7 @@ struct AdminAnalyticsView: View {
     /// المسجّلون مقابل المقيّدين في الشجرة (`app_usage_stats` — نفس أرقام «اليوم»)
     @State private var usage: AppUsageStats? = AppUsageStats.cached
 
-    /// «المؤشرات ← العائلة» بيت أعداد الأعضاء (الدفعة ج): المراقب يرى الأعداد فقط (الملخص، المسجّلون، الجنس، النساء)
+    /// «المؤشرات ← العائلة» بيت «إحصاء الأفراد» (الدفعة ج): المراقب يرى الأعداد فقط (الملخص، المسجّلون، الجنس، النساء)
     private var countsOnly: Bool { !authVM.isAdmin }
 
     /// بيانات شجرة النساء (women_members) — كاش فوري ثم جلب عند الحاجة.
