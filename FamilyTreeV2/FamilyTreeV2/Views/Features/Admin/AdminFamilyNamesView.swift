@@ -2,8 +2,8 @@ import SwiftUI
 
 /// إدارة أسماء العوائل — الإدارة تضع القائمة، والأعضاء يختارون منها
 /// عند التسجيل أو من تعديل الملف الشخصي.
-/// تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧، «أسلوب واحد» ٢٠٢٦-١٠-٠٧): صفّ أرقام حيّة ←
-/// «إضافة عائلة» (لمن يدير) ← «العوائل» صفوفاً `.dsRowBox()` وقائمة خيارات لكل صف.
+/// بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← «إضافة عائلة» (لمن يدير) تصعد
+/// فوقه ← «العوائل» صفوفاً في بطاقة بيضاء وقائمة خيارات لكل صف.
 struct AdminFamilyNamesView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var vm = FamilyNamesViewModel()
@@ -23,22 +23,9 @@ struct AdminFamilyNamesView: View {
     private var isFirstLoad: Bool { vm.isLoading && vm.options.isEmpty }
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    hero
-                    if canManage { addSection }
-                    listSection
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xxxl)
-            }
-            .scrollDismissesKeyboard(.interactively)
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        AdminPage(header: header,
+                  lead: AnyView(canManage ? AnyView(addSection) : AnyView(listSection)),
+                  content: AnyView(canManage ? AnyView(listSection) : AnyView(EmptyView())))
         .task { await vm.fetch(force: true) }
         .refreshable { await vm.fetch(force: true) }
         .dsAlert(L10n.t("تعديل الاسم", "Rename"), isPresented: Binding(
@@ -66,17 +53,22 @@ struct AdminFamilyNamesView: View {
         }
     }
 
-    // MARK: - الأرقام السريعة (العنوان والوصف في رأس «إدارة الأعضاء» الملوّن)
+    // MARK: - الرأس الكحلي بالأرقام
 
-    private var hero: some View {
-        DSStatsRow([
-            DSHeroStat(value: isFirstLoad ? "—" : "\(vm.options.count)",
-                       label: L10n.t("عائلة", "Families"), icon: "list.bullet"),
-            DSHeroStat(value: isFirstLoad ? "—" : "\(activeCount)",
-                       label: L10n.t("متاحة للاختيار", "Selectable"), icon: "checkmark.circle.fill"),
-            DSHeroStat(value: isFirstLoad ? "—" : "\(vm.options.count - activeCount)",
-                       label: L10n.t("معطّلة", "Disabled"), icon: "eye.slash.fill")
-        ], tint: tint)
+    private var header: AdminPageHeader {
+        let ready = !isFirstLoad
+        return AdminPageHeader(
+            title: AdminMembersManagementView.Tab.families.title,
+            subtitle: AdminMembersManagementView.Tab.families.subtitle,
+            glyph: AdminMembersManagementView.Tab.families.icon,
+            kpis: [
+                AdminPageKPI(AdminPageKPI.count(vm.options.count, ready: ready), L10n.t("عائلة", "Families"),
+                             icon: "list.bullet"),
+                AdminPageKPI(AdminPageKPI.count(activeCount, ready: ready), L10n.t("متاحة للاختيار", "Selectable"),
+                             icon: "checkmark.circle", tint: DS.Hub.kpiMine),
+                AdminPageKPI(AdminPageKPI.count(vm.options.count - activeCount, ready: ready),
+                             L10n.t("معطّلة", "Disabled"), icon: "eye.slash", tint: DS.Hub.kpiLate)
+            ])
     }
 
     // MARK: - إضافة عائلة
@@ -86,10 +78,7 @@ struct AdminFamilyNamesView: View {
     }
 
     private var addSection: some View {
-        DSComposerSection(title: L10n.t("إضافة عائلة", "Add a family"),
-                          icon: "plus.circle.fill",
-                          tint: tint,
-                          index: 1) {
+        AdminSectionCard(title: L10n.t("إضافة عائلة", "Add a family")) {
             // الحقل الموحّد (`DSComposerField`) + شريحة «إضافة» ممتلئة بلون القسم
             HStack(spacing: DS.Spacing.sm) {
                 DSComposerField(icon: "person.2.fill",
@@ -112,31 +101,25 @@ struct AdminFamilyNamesView: View {
     @ViewBuilder
     private var listSection: some View {
         if isFirstLoad {
-            DSPageLoader(L10n.t("جارٍ تحميل العوائل…", "Loading families…"), fillsSpace: false)
+            AdminPageStateCard(.loading(L10n.t("جارٍ تحميل العوائل…", "Loading families…")))
         } else if vm.options.isEmpty, let error = vm.errorMessage {
             // الجدول قد لا يكون مُهاجَراً بعد — السبب ظاهر بدل قائمة فارغة صامتة
-            DSStateCard(icon: "exclamationmark.triangle.fill",
-                         title: L10n.t("تعذّر تحميل العوائل", "Couldn't load families"),
-                         hint: error,
-                         tint: DS.Color.error,
-                         actionTitle: L10n.t("إعادة المحاولة", "Retry")) {
-                Task { await vm.fetch(force: true) }
-            }
+            AdminPageStateCard(.error(L10n.t("تعذّر تحميل العوائل", "Couldn't load families"),
+                                      message: error,
+                                      retry: { Task { await vm.fetch(force: true) } }))
         } else if vm.options.isEmpty {
-            DSEmptyView(L10n.t("لا توجد عوائل بعد — أضف أول اسم.",
-                               "No families yet — add the first one."),
-                        style: .compact)
+            AdminPageStateCard(.empty(L10n.t("لا توجد عوائل بعد — أضف أول اسم.",
+                                             "No families yet — add the first one.")))
         } else {
-            DSComposerSection(title: L10n.t("العوائل", "Families"),
-                              icon: "list.bullet",
-                              tint: tint,
-                              trailing: vm.isLoading ? L10n.t("تحديث…", "Updating…") : "\(vm.options.count)",
-                              index: 2) {
+            AdminSectionCard(title: L10n.t("العوائل", "Families"),
+                             tag: vm.isLoading ? L10n.t("تحديث…", "Updating…") : "\(vm.options.count)") {
                 if let error = vm.errorMessage {
                     errorRow(error)
                 }
-                ForEach(vm.options) { option in
-                    row(option)
+                AdminRowsCardBody {
+                    ForEach(vm.options) { option in
+                        row(option)
+                    }
                 }
             }
         }
@@ -159,14 +142,13 @@ struct AdminFamilyNamesView: View {
     }
 
     private func row(_ option: FamilyNameOption) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: option.isActive ? "checkmark.circle.fill" : "circle.slash",
-                        tint: option.isActive ? DS.Color.success : DS.Color.textTertiary)
-                .accessibilityHidden(true)
+        HStack(spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: option.isActive ? "checkmark.circle.fill" : "circle.slash",
+                            tint: option.isActive ? DS.Color.success : DS.Color.textTertiary)
 
             Text(option.name)
-                .dsFieldFont(.rowTitle)
-                .foregroundColor(option.isActive ? DS.Color.fieldLabel : DS.Color.textTertiary)
+                .dsFont(.hubRow)
+                .foregroundColor(option.isActive ? DS.Color.textPrimary : DS.Color.textTertiary)
                 .lineLimit(2)
 
             if !option.isActive {
@@ -204,8 +186,8 @@ struct AdminFamilyNamesView: View {
                 .accessibilityLabel(L10n.t("خيارات \(option.name)", "Options for \(option.name)"))
             }
         }
+        .padding(.vertical, DS.Spacing.sm)
         .frame(minHeight: DSBox.fieldMinHeight)
-        .dsRowBox()
         .accessibilityElement(children: .contain)
     }
 

@@ -107,8 +107,8 @@ struct AppUsageMember: Decodable, Identifiable {
     }
 }
 
-/// أعضاء فئة من «استخدام التطبيق» — بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧):
-/// بطاقة رأس بأرقام حيّة ← «لماذا هم هنا؟» ← «الأعضاء» صفوفاً `.dsRowBox()`
+/// أعضاء فئة من «استخدام التطبيق» — بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`):
+/// رأس كحلي بأرقام حيّة ← «لماذا هم هنا؟» تصعد فوقه ← «الأعضاء» صفوفاً في بطاقة بيضاء
 /// مع اتصال/واتساب سريع لمن له رقم. التحميل والسحب للتحديث كما كانا.
 struct AppUsageMembersView: View {
     let category: AppUsageCategory
@@ -118,47 +118,30 @@ struct AppUsageMembersView: View {
     @State private var isLoading = true
     @State private var loadFailed = false
 
-    /// لون مجال «الشجرة والأعضاء» (الرأس والأقسام) — ولون الفئة للأيقونات
-    private let tint = DS.Color.composerProject
-
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: DS.Spacing.md) {
-                hero
-                explanationSection
+        AdminPage(header: header, lead: AnyView(explanationSection), content: AnyView(listContent))
+            .refreshable { await load() }
+            .task { await load() }
+    }
 
-                if isLoading {
-                    DSPageLoader(L10n.t("جارٍ تحميل القائمة…", "Loading the list…"), fillsSpace: false)
-                        .padding(.top, DS.Spacing.md)
-                } else if loadFailed {
-                    DSStateCard(icon: "wifi.exclamationmark",
-                                 title: L10n.t("تعذّر تحميل القائمة. اسحب للتحديث.",
-                                               "Couldn't load the list. Pull to refresh."),
-                                 tint: DS.Color.error,
-                                 actionTitle: L10n.t("إعادة المحاولة", "Retry")) {
-                        Task {
-                            isLoading = true
-                            await load()
-                        }
-                    }
-                } else if members.isEmpty {
-                    DSEmptyView(L10n.t("لا يوجد أحد في هذه الفئة.", "Nobody in this category."), style: .compact)
-                        .padding(.top, DS.Spacing.md)
-                } else {
-                    membersSection
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xxxl)
+    @ViewBuilder
+    private var listContent: some View {
+        if isLoading {
+            AdminPageStateCard(.loading(L10n.t("جارٍ تحميل القائمة…", "Loading the list…")))
+        } else if loadFailed {
+            AdminPageStateCard(.error(L10n.t("تعذّر تحميل القائمة. اسحب للتحديث.",
+                                             "Couldn't load the list. Pull to refresh."),
+                                      retry: {
+                                          Task {
+                                              isLoading = true
+                                              await load()
+                                          }
+                                      }))
+        } else if members.isEmpty {
+            AdminPageStateCard(.empty(L10n.t("لا يوجد أحد في هذه الفئة.", "Nobody in this category.")))
+        } else {
+            membersSection
         }
-        .refreshable { await load() }
-        // الرأس الملوّن الموحّد (بدل شريط النظام وبطاقة الرأس)
-        .dsSubPageHeader(category.title,
-                         subtitle: L10n.t("فئة من «استخدام التطبيق» — الأحياء فقط",
-                                          "An “App usage” group — living members only"))
-        .task { await load() }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     // MARK: - بطاقة الرأس
@@ -176,48 +159,46 @@ struct AppUsageMembersView: View {
         return L10n.t("\(pct)٪", "\(pct)%")
     }
 
-    /// الأرقام السريعة — العنوان والوصف في الرأس الملوّن
-    private var hero: some View {
-        DSStatsRow([
-            DSHeroStat(value: isLoading ? "—" : "\(members.count)",
-                       label: L10n.t("عضو", "Members"), icon: "person.2.fill"),
-            DSHeroStat(value: isLoading ? "—" : "\(withPhoneCount)",
-                       label: L10n.t("لهم رقم", "With phone"), icon: "phone.fill"),
-            DSHeroStat(value: shareText,
-                       label: L10n.t("من الأحياء", "Of living"), icon: "chart.pie.fill")
-        ], tint: tint)
+    /// الأرقام بعد تحميل ناجح فقط — «—» أثناء التحميل أو بعد فشله (لا أصفار مضلِّلة)
+    private var countsReady: Bool { !isLoading && !loadFailed }
+
+    /// الرأس الكحلي: اسم الفئة ورمزها + الأرقام السريعة
+    private var header: AdminPageHeader {
+        AdminPageHeader(
+            title: category.title,
+            subtitle: L10n.t("فئة من «استخدام التطبيق» — الأحياء فقط",
+                             "An “App usage” group — living members only"),
+            glyph: category.icon,
+            kpis: [
+                AdminPageKPI(countsReady ? "\(members.count)" : "—", L10n.t("عضو", "Members"), icon: "person.2"),
+                AdminPageKPI(countsReady ? "\(withPhoneCount)" : "—", L10n.t("لهم رقم", "With phone"), icon: "phone",
+                             tint: DS.Hub.kpiMine),
+                AdminPageKPI(shareText, L10n.t("من الأحياء", "Of living"), icon: "chart.pie", tint: DS.Hub.kpiLate)
+            ])
     }
 
     // MARK: - لماذا هم هنا؟
 
     private var explanationSection: some View {
-        DSComposerSection(title: L10n.t("لماذا هم هنا؟", "Why are they here?"),
-                          icon: "info.circle.fill",
-                          tint: tint,
-                          index: 1) {
-            HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: category.icon, tint: category.color)
-                    .accessibilityHidden(true)
+        AdminSectionCard(title: L10n.t("لماذا هم هنا؟", "Why are they here?")) {
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                AdminIconSquare(symbol: category.icon, tint: category.color)
                 Text(category.explanation)
-                    .dsFieldFont(.calloutCompact)
-                    .foregroundColor(DS.Color.fieldValue)
+                    .dsFont(.callout)
+                    .foregroundColor(DS.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
-            .dsRowBox()
         }
     }
 
     // MARK: - الأعضاء
 
     private var membersSection: some View {
-        DSComposerSection(title: L10n.t("الأعضاء", "Members"),
-                          icon: "person.2.fill",
-                          tint: tint,
-                          trailing: "\(members.count)",
-                          index: 2) {
-            LazyVStack(spacing: DS.Spacing.xsm) {
-                ForEach(members) { member in
+        AdminSectionCard(title: L10n.t("الأعضاء", "Members"), tag: "\(members.count)", spacing: 0) {
+            LazyVStack(spacing: 0) {
+                ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
+                    if index > 0 { AdminRowDivider() }
                     memberRow(member)
                 }
             }
@@ -233,12 +214,12 @@ struct AppUsageMembersView: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(name)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                 Text(lastSeenText(member))
-                    .dsFieldFont(.subtitle)
-                    .foregroundColor(DS.Color.fieldValue)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(1)
             }
             .accessibilityElement(children: .combine)
@@ -260,8 +241,8 @@ struct AppUsageMembersView: View {
                 }
             }
         }
+        .padding(.vertical, DS.Spacing.sm)
         .frame(minHeight: DSBox.fieldMinHeight)
-        .dsRowBox()
     }
 
     /// زرّ تواصل: قرص الحالة المجسّم بلون المعنى (اتصال/واتساب) داخل مساحة ضغط ٤٤
@@ -308,5 +289,58 @@ struct AppUsageMembersView: View {
             Log.fetchError("تعذر جلب أعضاء فئة الاستخدام", error)
         }
         isLoading = false
+    }
+}
+
+// MARK: - بطاقة «استخدام التطبيق»
+
+/// «استخدام التطبيق»: فعّال · بلا جهاز · ما دخل · دون رقم — كل فئة تفتح قائمتها (صفحة «الحسابات والاستخدام»؛
+/// بطاقة قسم «العائلة» في `AdminAreaPages` نسختها القديمة — تُستبدل بهذه عند دمج الفرعين)
+struct AdminUsageCard: View {
+    let usage: AppUsageStats
+
+    var body: some View {
+        let u = usage
+        let rows: [(AppUsageCategory, String, Int, Color)] = [
+            (.active, L10n.t("فعّال (رقم وجهاز)", "Active (phone + device)"), u.active + u.idle, DS.Color.success),
+            (.loginNoDevice, L10n.t("دخل بلا جهاز", "Signed in, no device"), u.loginNoDevice, DS.Color.info),
+            (.neverLogged, L10n.t("ما دخل أبداً", "Never signed in"), u.neverLogged, DS.Color.warning),
+            (.noPhone, L10n.t("دون رقم", "No phone"), u.noPhone, DS.Color.textTertiary)
+        ]
+        let total = rows.reduce(0) { $0 + $1.2 }
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            AdminCardHeader(title: L10n.t("استخدام التطبيق", "App usage"))
+            DSDistributionBar(segments: rows.map { .init(id: $0.0.rawValue, value: $0.2, tint: $0.3) },
+                              height: DS.Spacing.md)
+            Text(L10n.t("من \(total) حيّاً", "of \(total) living"))
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textTertiary)
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                    if index > 0 { AdminRowDivider() }
+                    AdminTapWrap(tap: .page { AnyView(AppUsageMembersView(category: row.0)) }, feel: .plain,
+                                 label: AnyView(usageRow(title: row.1, value: row.2, tint: row.3)))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
+    }
+
+    private func usageRow(title: String, value: Int, tint: Color) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Circle().fill(tint).frame(width: DS.Icon.legendDot, height: DS.Icon.legendDot)
+            Text(title)
+                .dsFont(.subtitle)
+                .foregroundColor(DS.Color.textPrimary)
+            Spacer(minLength: DS.Spacing.sm)
+            Text("\(value)")
+                .dsFont(.chip)
+                .monospacedDigit()
+                .foregroundColor(tint.dsReadableGlyph)
+            DSChevron()
+        }
+        .frame(minHeight: DS.Icon.tapTarget)
+        .contentShape(Rectangle())
     }
 }
