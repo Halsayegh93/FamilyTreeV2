@@ -480,6 +480,10 @@ struct NotificationsCenterView: View {
         // «المستجدات» لها تبويبها المستقل
         if belongsToActivityTab(n) { return false }
 
+        // إشعارات الإدارة (الطلبات، نشاط الفريق، تنبيهات النظام) مكانها «إشعارات الإدارة» — جرس «اليوم»
+        // (طلب المالك ٢٠٢٦-١٠-٢٠: صفحة واحدة)، فلا يظهر الإشعار نفسه في قائمتين. العضو العادي لا يتأثر.
+        if authVM.canModerate, AdminNotices.category(of: n, me: myId) != nil { return false }
+
         let isPendingApproval = Self.pendingApprovalKinds.contains(n.kind)
         let isCompletedAction = Self.completedActionKinds.contains(n.kind)
         let titleIndicatesCompleted = n.title.hasPrefix("تم قبول")
@@ -488,8 +492,7 @@ struct NotificationsCenterView: View {
             || n.title.contains("Rejected")
 
         // إشعاراتي = ما يخصّني أنا: وضع طلباتي، وأي تغيير على بياناتي.
-        // طلبات الآخرين وحركات الإدارة شغل إداري — مكانها أقسام الإدارة
-        // وسجل النشاط، لا هنا (طلب المالك).
+        // طلبات الآخرين وحركات الإدارة شغل إداري — مكانها «إشعارات الإدارة»، لا هنا (طلب المالك).
         if isPendingApproval || isCompletedAction || titleIndicatesCompleted {
             if n.createdBy == myId { return false }   // أنا من نفّذها
             return n.subjectMemberId == myId          // تخصّني شخصياً فقط
@@ -521,7 +524,7 @@ struct NotificationsCenterView: View {
     ]
 
     /// تاب «المستجدات»: إعلانات الإدارة وتحديثات التطبيق فقط.
-    /// (تنبيهات مثل «فلان نشر منشوراً» هي حركة إدارية ومكانها «سجل النشاط»
+    /// (تنبيهات مثل «فلان نشر منشوراً» هي حركة إدارية ومكانها «إشعارات الإدارة»
     /// في لوحة الإدارة — طلب المالك)
     /// «المستجدات» = ما يخصّ التطبيق نفسه: إصدار جديد، ميزة، صيانة، تنويه.
     /// أي رسالة موجّهة للأعضاء (بث إداري) مكانها «إشعاراتي» — فهي تخصّ العضو

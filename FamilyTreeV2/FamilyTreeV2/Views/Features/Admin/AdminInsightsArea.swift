@@ -1,24 +1,25 @@
 import SwiftUI
 
-// MARK: - «المؤشرات» — أربعة مداخل للقراءة (الدفعة ج من «نفّذ كل المقترح»، ٢٠٢٦-١٠-٢٠)
+// MARK: - «المؤشرات» — ثلاثة مداخل للقراءة (الدفعة ج من «نفّذ كل المقترح»، ٢٠٢٦-١٠-٢٠؛ الدفعة ٥)
 //
 // كانت ١٠ مداخل: مربّعات «نبض العائلة» الأربعة (كل واحد يكرر صفحة)، بطاقة «أفراد العائلة» (تكرر «أعداد الأعضاء» و«ملخص
-// عام»)، وخمسة صفوف (الإحصائيات، النشاط الآن، سجل النشاط، تقرير الموافقات، تقارير PDF). صارت أربعة صفوف في بطاقة
-// واحدة، كل صفّ برقمه الحي ويفتح بيته — بلا تبويبات:
+// عام»)، وخمسة صفوف (الإحصائيات، النشاط الآن، سجل النشاط، تقرير الموافقات، تقارير PDF). صارت صفوفاً في بطاقة واحدة،
+// كل صفّ برقمه الحي ويفتح بيته — بلا تبويبات:
 //   العائلة (`AdminAnalyticsView` — بيت أعداد الأعضاء؛ المراقب: الأعداد فقط) · الاستخدام (`AdminActiveMembersView`) ·
-//   الموافقات (`ApprovalsReportView` — بيت تقرير الموافقات الوحيد) · سجل التعديلات (`AdminActivityLogView`، بحثه يبقى)
-// «تقارير PDF» انتقلت إلى «العائلة ← ⋯ ← تصدير». الصلاحيات من فهرس الأدوات (`AdminToolCatalog`).
+//   الموافقات (`ApprovalsReportView` — بيت تقرير الموافقات الوحيد)
+// «سجل التعديلات» صار «نشاط الفريق» في «إشعارات الإدارة» (جرس «اليوم»، بحثه هناك). «تقارير PDF» انتقلت إلى
+// «العائلة ← ⋯ ← تصدير». الصلاحيات من فهرس الأدوات (`AdminToolCatalog`).
 
 struct AdminMetricsAreaView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var memberVM: MemberViewModel
-    @EnvironmentObject var notificationVM: NotificationViewModel
     @State private var activeNow: Int?
     @State private var weekly: (executed: Int, rejected: Int)?
 
     var body: some View {
-        let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM).filter { $0.area == .metrics }
+        let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM)
+            .filter { $0.area == .metrics && !$0.searchOnly }
         AdminHubPage {
             AdminBandHeader(title: AdminArea.metrics.title, subtitle: AdminArea.metrics.subtitle, isAreaRoot: true)
         } content: {
@@ -38,8 +39,6 @@ struct AdminMetricsAreaView: View {
         if members > 0 { h["metrics.family"] = L10n.t("\(members.formatted()) فرد", "\(members.formatted()) members") }
         if let now = activeNow { h["metrics.usage"] = L10n.t("\(now) الآن", "\(now) now") }
         if let w = weekly { h["metrics.approvals"] = L10n.t("\(w.executed + w.rejected) هذا الأسبوع", "\(w.executed + w.rejected) this week") }
-        let unread = notificationVM.unreadActivityLogCount
-        if unread > 0 { h["metrics.activity"] = L10n.t("\(unread) جديد", "\(unread) new") }
         return h
     }
 

@@ -179,14 +179,13 @@ class NotificationViewModel: ObservableObject {
         }.count
     }
 
-    /// عدد حركات «سجل النشاط» غير المقروءة — للإدارة فقط.
-    /// يستثني ما يُعدّ في جرس الإشعارات حتى لا يُحسب الشيء مرّتين.
-    var unreadActivityLogCount: Int {
+    /// غير المقروء في «إشعارات الإدارة» (جرس «اليوم») — للإدارة فقط. تصنيف واحد (`AdminNotices`) فلا يُحسب
+    /// إشعار في الجرسين معاً.
+    var unreadAdminNoticesCount: Int {
         guard canModerate else { return 0 }
         let myId = currentUser?.id
         return notifications.filter { n in
-            guard !n.read else { return false }
-            return !Self.isVisibleToUser(n, myId: myId, isAdmin: true)
+            !n.read && AdminNotices.category(of: n, me: myId) != nil
         }.count
     }
 
@@ -196,6 +195,8 @@ class NotificationViewModel: ObservableObject {
         // «المستجدات» — تحديثات التطبيق
         if n.kind == "app_update" { return true }
         guard let myId else { return false }
+        // إشعارات الإدارة مكانها صفحتها (جرس «اليوم») — لا تُعدّ هنا (مرآة `NotificationsCenterView`)
+        if isAdmin, AdminNotices.category(of: n, me: myId) != nil { return false }
 
         let isPending = Self.pendingApprovalKindsRaw.contains(n.kind)
         let isCompleted = Self.completedActionKindsRaw.contains(n.kind)

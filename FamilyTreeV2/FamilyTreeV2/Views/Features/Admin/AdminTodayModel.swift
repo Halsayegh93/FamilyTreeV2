@@ -68,22 +68,20 @@ struct AdminTodayCounts: Equatable {
     var inboxTotal = 0
 }
 
-/// تنبيه في بطاقة «تنبيهات» — يظهر فقط عند وجود مشكلة
-struct AdminTodayAlert: Identifiable {
-    enum Action {
-        case sms, deaths, announce(DeathAnnouncementTarget), pushHealth, maintenance, scheduled, treeHealth
-    }
+/// إشارة في سطر الحالة برأس «اليوم» (كانت بطاقة «تنبيهات»): الصيانة · الرصيد · المجدول · بلا إشعارات — نقطة ملوّنة
+/// (أخضر سليم، كهرماني تنبيه، أحمر عاجل) وقيمة قصيرة، والضغط يفتح بيتها الوحيد
+struct AdminStatusPill: Identifiable, Equatable {
+    enum Level { case ok, warn, urgent, unknown }
+    enum Home: Hashable { case maintenance, sms, scheduled, devices }
 
-    let id: String
-    let icon: String
-    let tint: Color
-    let title: String
-    let subtitle: String?
-    /// مقياس صغير تحت النص (رصيد رسائل الدخول) — nil بلا مقياس
-    var meter: Double? = nil
-    var buttonTitle: String? = nil
-    var buttonStyle: AdminPillStyle = .soft
-    var action: Action? = nil
+    let home: Home
+    let label: String
+    let value: String
+    let level: Level
+    /// ما يقرؤه القارئ الصوتي بدل «العنوان: القيمة» (مثل «لا شيء مجدول»)
+    var spoken: String? = nil
+
+    var id: Home { home }
 }
 
 /// مهمة في «مهام اليوم» (لمسة من الاتجاه «ب»): مشتقة من حالة حقيقية، وتصير «منجزة» حين يُحلّ ما خلفها اليوم
@@ -112,7 +110,7 @@ struct AdminTodayTask: Identifiable, Equatable {
 
 /// صفّ في القائمة الموحّدة «يحتاج قرارك» (طلب المالك ٢٠٢٦-١٠-٢٠: «الأقسام فوق + قائمة وحدة») — تجمع قرارات اليوم
 /// و«مهام اليوم» في صفّ واحد لكل طلب: ما عليك أنت = دائرة إنجاز (لمسة «ب»)، وما في مجالك عند غيرك = مربّع نوعه.
-/// ما تعرضه «تنبيهات» (رصيد الرسائل، وفاة لم يُعلن عنها) لا يتكرّر هنا.
+/// رصيد الرسائل (سطر الحالة في الرأس) والوفاة التي لم يُعلن عنها («إشعارات الإدارة») لا تتكرّر هنا.
 struct AdminTodayEntry: Identifiable, Equatable {
     enum Target: Equatable { case inbox(UUID), messages }
 
@@ -154,6 +152,10 @@ struct AdminMemberCounts: Equatable {
         guard let menAlive, let womenAlive else { return nil }
         return menAlive + womenAlive
     }
+
+    var menDeceased: Int? { men.flatMap { m in menAlive.map { m - $0 } } }
+    var womenDeceased: Int? { women.flatMap { w in womenAlive.map { w - $0 } } }
+    var totalDeceased: Int? { total.flatMap { t in totalAlive.map { t - $0 } } }
 
     /// الرجال من أعضاء الشجرة المحمّلة
     mutating func setMen(from all: [FamilyMember]) {
@@ -442,7 +444,7 @@ enum AdminTodayFeed {
     // MARK: القائمة الموحّدة «يحتاج قرارك»
 
     /// يدمج القرارات والمهام: صفّ واحد لكل طلب (المهمة «راجع انضمام · فلان» بدل تكرارها تحت القرار)، ثم رسائل
-    /// الأعضاء. رصيد الرسائل والوفيات غير المعلنة تبقى في «تنبيهات» فقط (لها زرّها هناك). الترتيب: المستعجل ←
+    /// الأعضاء. رصيد الرسائل (سطر الحالة) والوفيات غير المعلنة («إشعارات الإدارة») لها بيتها وزرّها هناك. الترتيب: المستعجل ←
     /// المتأخر ← ما عليك ← ما عند غيرك، ثم بترتيب الوصول.
     static func entries(items: [AdminDecisionItem], tasks: [AdminTodayTask]) -> [AdminTodayEntry] {
         var taskById: [String: AdminTodayTask] = [:]
@@ -572,22 +574,6 @@ enum AdminTodayFetch {
             let response = try await SupabaseConfig.client.rpc("get_active_members_now").execute()
             let rows = try JSONDecoder().decode([Row].self, from: response.data)
             return Set(rows.map(\.member_id)).count
-        } catch {
-            return nil
-        }
-    }
-
-    /// رموز الإشعارات الأقدم من ٣٠ يوماً (نفس تعريف «وصول الإشعارات») — المالك والمدير
-    static func staleTokenCount() async -> Int? {
-        guard let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) else { return nil }
-        let iso = ISO8601DateFormatter().string(from: cutoff)
-        do {
-            let response = try await SupabaseConfig.client
-                .from("device_tokens")
-                .select("member_id", head: true, count: .exact)
-                .or("updated_at.is.null,updated_at.lt.\(iso)")
-                .execute()
-            return response.count
         } catch {
             return nil
         }

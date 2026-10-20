@@ -872,7 +872,7 @@ class NewsViewModel: ObservableObject {
                 )
             }
 
-            // حركة إدارية — مكانها «سجل النشاط»، مربوطة بصاحب المنشور
+            // حركة إدارية — مكانها «إشعارات الإدارة»، مربوطة بصاحب المنشور
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("حذف منشور", "Post Deleted"),
                 body: L10n.t("تم حذف منشور من الأخبار", "A news post has been deleted"),

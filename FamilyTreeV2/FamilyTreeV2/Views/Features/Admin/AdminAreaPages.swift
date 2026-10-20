@@ -25,6 +25,10 @@ struct AdminTool: Identifiable {
     let tint: Color
     var keywords: [String] = []
     let kind: Kind
+    /// للبحث الشامل فقط — لا يُرسم في صفحة قسمه (بيته في مكان آخر، مثل جرس «اليوم»)
+    var searchOnly = false
+    /// اسم بيته في نتائج البحث بدل اسم القسم
+    var place: String? = nil
 }
 
 @MainActor
@@ -153,8 +157,8 @@ enum AdminToolCatalog {
             }
         }
 
-        // ٤ المؤشرات — أربعة مداخل للقراءة (الدفعة ج من «نفّذ كل المقترح»): العائلة · الاستخدام · الموافقات · سجل التعديلات.
-        // كل رقم في بيته هنا، و«اليوم» يعرض أرقاماً تفتحه فقط
+        // ٤ المؤشرات — ثلاثة مداخل للقراءة: العائلة · الاستخدام · الموافقات («سجل التعديلات» صار «نشاط الفريق» في
+        // «إشعارات الإدارة» — الدفعة ٥). كل رقم في بيته هنا، و«اليوم» يعرض أرقاماً تفتحه فقط
         let insights = L10n.t("أرقام وسجل", "Numbers & history")
         if isAdmin || role == .monitor {
             // المراقب: الأعداد فقط (`AdminAnalyticsView` يقرأ الدور)
@@ -185,13 +189,18 @@ enum AdminToolCatalog {
                                keywords: ["تقرير", "تقرير الموافقات", "منجز", "مسار"],
                                kind: page { ApprovalsReportView() }))
         }
-        if isAdmin || role == .monitor {
-            t.append(AdminTool(id: "metrics.activity", area: .metrics, group: insights,
-                               title: L10n.t("سجل التعديلات", "Change log"),
-                               subtitle: L10n.t("كل تعديل: من وماذا ومتى", "Every change: who, what, when"),
-                               icon: "clock.arrow.circlepath", tint: DS.Color.primary,
-                               keywords: ["سجل", "سجل النشاط", "تعديلات"],
-                               kind: page { AdminActivityLogView() }))
+        // «إشعارات الإدارة» — بيتها جرس «اليوم» (صفحة واحدة: الطلبات ونشاط الفريق والنظام، وفيها بحث «سجل التعديلات»).
+        // صفّ للبحث الشامل فقط (لا يُرسم في صفحة قسم)؛ الكلمات القديمة تجد بيتها الجديد
+        if authVM.canModerate {
+            t.append(AdminTool(id: "today.notices", area: .metrics, group: insights,
+                               title: L10n.t("إشعارات الإدارة", "Admin notifications"),
+                               subtitle: L10n.t("الطلبات ونشاط الفريق (سجل التعديلات) وتنبيهات النظام",
+                                                "Requests, team activity (change log) and system alerts"),
+                               icon: "bell.badge.fill", tint: DS.Color.primary,
+                               keywords: ["إشعارات", "تنبيهات", "جرس", "سجل", "سجل التعديلات", "سجل النشاط", "تعديلات",
+                                          "نشاط الفريق", "يحتاج إجراء", "النظام"],
+                               kind: page { AdminNotificationsPage() }, searchOnly: true,
+                               place: L10n.t("اليوم ← الجرس", "Today ← bell")))
         }
 
         // ٥ الفريق والأمان — أربعة مداخل: فريق الإدارة · رسائل رمز الدخول · التسجيل والمنع · الأجهزة ووصول الإشعارات
@@ -453,7 +462,7 @@ struct AdminSearchView: View {
         guard !q.isEmpty else { return [] }
         let needle = ArabicTextNormalizer.normalizeForSearch(q)
         return AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM).filter { tool in
-            ([tool.title, tool.subtitle, tool.area.title] + tool.keywords)
+            ([tool.title, tool.subtitle, tool.place ?? tool.area.title] + tool.keywords)
                 .contains { ArabicTextNormalizer.normalizeForSearch($0).contains(needle) }
         }
     }
@@ -496,7 +505,7 @@ struct AdminSearchView: View {
                 if !tools.isEmpty {
                     AdminToolCards(tools: tools.map {
                         AdminTool(id: $0.id, area: $0.area, group: L10n.t("الأدوات", "Tools"), title: $0.title,
-                                  subtitle: "\($0.area.title) · \($0.subtitle)", icon: $0.icon, tint: $0.tint,
+                                  subtitle: "\($0.place ?? $0.area.title) · \($0.subtitle)", icon: $0.icon, tint: $0.tint,
                                   keywords: $0.keywords, kind: $0.kind)
                     })
                 }

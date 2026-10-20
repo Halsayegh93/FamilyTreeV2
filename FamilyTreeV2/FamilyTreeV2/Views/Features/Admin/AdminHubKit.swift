@@ -204,10 +204,12 @@ extension View {
     }
 }
 
-/// دائرة زجاجية فوق الرأس (بحث، جرس، إعدادات…) — اسم الرمز ونقطة «جديد» اختيارية
+/// دائرة زجاجية فوق الرأس (بحث، جرس، إعدادات…) — اسم الرمز ونقطة «جديد» اختيارية، أو عدد (جرس «اليوم»)
 struct AdminGlassCircle: View {
     let symbol: String
     var dot: Bool = false
+    /// عدد أحمر على الركن بدل النقطة (٠ = لا شيء)
+    var count: Int = 0
 
     var body: some View {
         Image(dsSymbol: symbol)
@@ -217,7 +219,20 @@ struct AdminGlassCircle: View {
             .background(Circle().fill(DS.Hub.glass))
             .overlay(Circle().strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
             .overlay(alignment: .topLeading) {
-                if dot {
+                if count > 0 {
+                    Text(verbatim: count > 99 ? "99+" : "\(count)")
+                        .dsFont(.badge)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .frame(minWidth: DS.Hub.bellBadge, minHeight: DS.Hub.bellBadge)
+                        .background(Capsule().fill(DS.Hub.bellDot))
+                        .overlay(Capsule().strokeBorder(DS.Hub.bandTop, lineWidth: DS.Border.widthBold))
+                        .offset(x: -DS.Spacing.xs, y: -DS.Spacing.xs)
+                        .accessibilityHidden(true)
+                } else if dot {
                     Circle()
                         .fill(DS.Hub.bellDot)
                         .frame(width: DS.Hub.bellDotSize, height: DS.Hub.bellDotSize)

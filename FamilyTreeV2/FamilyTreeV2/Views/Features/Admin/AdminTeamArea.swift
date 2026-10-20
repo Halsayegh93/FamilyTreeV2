@@ -20,7 +20,7 @@ struct AdminTeamAreaView: View {
 
     var body: some View {
         let tools = AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM)
-            .filter { $0.area == .team && $0.id != "team.members" }
+            .filter { $0.area == .team && $0.id != "team.members" && !$0.searchOnly }
         AdminHubPage {
             AdminBandHeader(title: AdminArea.team.title, subtitle: AdminArea.team.subtitle, isAreaRoot: true) {
                 EmptyView()

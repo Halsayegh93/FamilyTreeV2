@@ -2216,8 +2216,10 @@ extension DS {
         static let kpiMine = SwiftUI.Color(hex: "#E7D3A6")
         static let kpiHot = SwiftUI.Color(hex: "#FF9C8F")
         static let kpiLate = SwiftUI.Color(hex: "#F5C46B")
-        /// نقطة «جديد» على جرس الرأس
+        /// نقطة «جديد» على جرس الرأس (وعدد «إشعارات الإدارة» عليه)
         static let bellDot = SwiftUI.Color(hex: "#F47370")
+        /// نقاط سطر الحالة فوق الكحلي: سليم أخضر فاتح، تنبيه = `kpiLate`، عاجل = `bellDot` (ثابتة في الوضعين)
+        static let statusOk = SwiftUI.Color(hex: "#7FD3A2")
         /// نص فوق الشريحة الذهبية المختارة
         static let onGold = SwiftUI.Color(hex: "#1B1407")
         /// قسم «الدخول والأمان» (صدئي من عائلة الكحلي والذهبي)
@@ -2241,6 +2243,11 @@ extension DS {
         /// الأزرار الدائرية الزجاجية في الرأس
         static let glassButton: CGFloat = 36
         static let bellDotSize: CGFloat = 8
+        /// عدد الجرس: ارتفاع الكبسولة الحمراء
+        static let bellBadge: CGFloat = 17
+        /// سطر الحالة تحت أرقام «اليوم»: نقطة اللون، وزاوية الإشارة
+        static let statusDot: CGFloat = 7
+        static let statusRadius: CGFloat = DS.Radius.md
         /// مربّع الأيقونة الملوّن في صفوف البطاقات، ومربّع الأقسام، ومربّع نوع الطلب
         static let iconSquare: CGFloat = 36
         static let iconSquareRadius: CGFloat = 11

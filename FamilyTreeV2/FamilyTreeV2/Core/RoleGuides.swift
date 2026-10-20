@@ -145,8 +145,8 @@ struct RoleGuide: Identifiable {
                           "Edit others' data or delete their content"),
                     L10n.t("رؤية أرقام الأعضاء الذين أخفوا أرقامهم",
                           "See phone numbers members chose to hide"),
-                    L10n.t("رؤية الإحصاءات أو سجل التعديلات أو الطلبات",
-                          "See statistics, activity log or requests")
+                    L10n.t("رؤية الإحصاءات أو إشعارات الإدارة أو الطلبات",
+                          "See statistics, admin notifications or requests")
                 ]
             )
         ]
