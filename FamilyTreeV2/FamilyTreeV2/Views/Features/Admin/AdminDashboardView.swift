@@ -266,7 +266,11 @@ struct AdminDashboardView: View {
 
     // MARK: - الرأس
 
-    private var todayHeader: some View {
+    // كل جزء خلف AnyView: نوع الصفحة كاملاً كان عميقاً لدرجة أن حلّه في الجوال (مكدس الخيط الرئيسي ١ ميغا) يفيض
+    // فينهار التطبيق عند فتح الإدارة (٢٠٢٦-١٠-٢٠؛ المحاكي مكدسه ٨ ميغا فلم يظهر). الحدود تقسم الحلّ إلى أجزاء صغيرة.
+    private var todayHeader: AnyView { AnyView(todayHeaderContent) }
+
+    private var todayHeaderContent: some View {
         let items = decisionItems
         let c = counts(items)
         let loading = isInitialLoading
@@ -379,20 +383,22 @@ struct AdminDashboardView: View {
 
     // MARK: - المحتوى
 
-    private var todayContent: some View {
+    private var todayContent: AnyView { AnyView(todayContentStack) }
+
+    private var todayContentStack: some View {
         let items = decisionItems
         let tasks = openTasks
         return VStack(spacing: DS.Hub.stackSpacing) {
             let alerts = todayAlerts
             if !alerts.isEmpty {
-                alertsCard(alerts)
+                AnyView(alertsCard(alerts))
             }
-            decisionCard(items)
-            tasksCard(tasks)
-            familyTodayCard
-            quickActions
-            pulseSection
-            areasSection
+            AnyView(decisionCard(items))
+            AnyView(tasksCard(tasks))
+            AnyView(familyTodayCard)
+            AnyView(quickActions)
+            AnyView(pulseSection)
+            AnyView(areasSection)
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.bottom, DS.Spacing.xxxl)
