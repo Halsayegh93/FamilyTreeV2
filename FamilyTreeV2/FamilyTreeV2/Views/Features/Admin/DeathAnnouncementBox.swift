@@ -1,7 +1,7 @@
 import SwiftUI
 import Supabase
 
-// MARK: - إعلان الوفاة (طلب المالك ٢٠٢٦-٠٩-٢٧)
+// MARK: - إعلان الوفاة (طلب المالك ٢٠٢٦-٠٩-٢٧؛ منذ الدفعة ب ٢٠٢٦-١٠-٢٠ بيته «المناسبات والإعلانات» ← «القادم»/«إنشاء»)
 //
 // عند تسجيل وفاة عضو (قبول طلب وفاة، أو تسجيلها من الإدارة مباشرة، أو في شجرة النساء)
 // يطلع للإداري مربّع «إعلان وفاة» بنص جاهز قابل للتعديل + موعد الدفن ومكانه (اختياري).
@@ -21,9 +21,12 @@ struct DeathAnnouncementTarget: Identifiable, Equatable {
 /// الوفيات «الحديثة» فقط تُعلَن (طلب المالك: «أي شخص متوفي سابقاً لا تظهره»)
 enum DeathRecency {
     static let days = 30
+    /// تنبيه «وفاة لم يُعلن عنها» في اللوحة ٧ أيام فقط (طلب المالك ٢٠٢٦-١٠-٢١ «مابي اعلن عنه خلاص انتهى الوقت») —
+    /// الإعلان نفسه يبقى ممكناً ٣٠ يوماً من صفحة العضو ومن «إنشاء»
+    static let alertDays = 7
 
-    /// تاريخ وفاة خلال آخر ٣٠ يوماً (ولا في المستقبل)
-    static func isRecent(_ deathDate: String?) -> Bool {
+    /// تاريخ وفاة خلال آخر `within` يوماً (افتراضياً ٣٠، ولا في المستقبل)
+    static func isRecent(_ deathDate: String?, within: Int = days) -> Bool {
         guard let raw = deathDate?.trimmingCharacters(in: .whitespacesAndNewlines),
               raw.count >= 10 else { return false }
         let f = DateFormatter()
@@ -32,7 +35,7 @@ enum DeathRecency {
         f.dateFormat = "yyyy-MM-dd"
         guard let date = f.date(from: String(raw.prefix(10))) else { return false }
         let today = Calendar.current.startOfDay(for: Date())
-        guard let earliest = Calendar.current.date(byAdding: .day, value: -days, to: today) else { return false }
+        guard let earliest = Calendar.current.date(byAdding: .day, value: -within, to: today) else { return false }
         return date >= earliest && date <= Date()
     }
 
@@ -139,6 +142,8 @@ enum DeathAnnouncementPresenter {
 
 struct DeathAnnouncementBox: View {
     let target: DeathAnnouncementTarget
+    /// «ماذا تنشئ؟» والمتوفى المختار أعلى المربّع (من المنشئ الواحد «إنشاء») — nil = المربّع وحده (عند تسجيل الوفاة)
+    var chooser: AnyView? = nil
     let onClose: () -> Void
 
     @State private var content: String
@@ -148,8 +153,9 @@ struct DeathAnnouncementBox: View {
     @State private var errorText: String?
     @State private var published = false
 
-    init(target: DeathAnnouncementTarget, onClose: @escaping () -> Void) {
+    init(target: DeathAnnouncementTarget, chooser: AnyView? = nil, onClose: @escaping () -> Void) {
         self.target = target
+        self.chooser = chooser
         self.onClose = onClose
         _content = State(initialValue: Self.defaultText(for: target))
     }
@@ -168,7 +174,7 @@ struct DeathAnnouncementBox: View {
     var body: some View {
         DSComposer(
             title: published ? L10n.t("تم نشر الإعلان", "Announcement Published")
-                             : L10n.t("إعلان وفاة", "Death Announcement"),
+                             : (chooser == nil ? L10n.t("إعلان وفاة", "Death Announcement") : L10n.t("ماذا تنشئ؟", "What to create?")),
             subtitle: target.name,
             icon: published ? "checkmark" : NewsTypeHelper.icon(for: "وفاة"),
             tint: tint,
@@ -186,6 +192,7 @@ struct DeathAnnouncementBox: View {
             if published {
                 publishedSection
             } else {
+                if let chooser { chooser }
                 formSections
             }
         }
@@ -272,6 +279,8 @@ struct DeathAnnouncementBox: View {
                 NotificationCenter.default.post(name: .deathAnnouncementPublished, object: target.id)
                 await RealtimeManager.shared.newsVM?.fetchNews(force: true)
                 isBusy = false
+                // تأكيد هادئ يليق بالوفاة: قسم «تم» كما كان + اهتزاز خفيف — بلا لحظة احتفال (الدفعة ١٠)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
                 withAnimation(DSMotion.fade) { published = true }
             } catch {
                 Log.error("[DeathAnnouncement] فشل النشر: \(error.localizedDescription)")
@@ -306,151 +315,4 @@ struct DeathAnnouncementBox: View {
 extension Notification.Name {
     /// نُشر إعلان وفاة — تحدّث القوائم التي تعرض «أُعلن عنهم»
     static let deathAnnouncementPublished = Notification.Name("deathAnnouncementPublished")
-}
-
-// MARK: - صفحة «إعلان وفاة» (من لوحة الإدارة ← «الأعضاء»)
-//
-// مكان ثابت لإعلان الوفاة (طلب المالك «وين الوفاة؟»): المتوفون الأحدث أولاً، بحث بالاسم،
-// والضغط على الاسم يفتح مربّع «إعلان وفاة». من أُعلن عنه يظهر في قسم مستقل بعلامة ✓.
-
-struct DeathAnnouncementsPage: View {
-    @EnvironmentObject var memberVM: MemberViewModel
-
-    @State private var announced: Set<UUID> = []
-    @State private var loaded = false
-    @State private var query = ""
-
-    /// بلون القسم مثل المربّع؛ «أُعلن عنهم» تبقى بلون النجاح (لون معنى)
-    private var tint: Color { DS.Color.primary }
-    private var icon: String { NewsTypeHelper.icon(for: "وفاة") }
-
-    /// وفيات آخر ٣٠ يوماً فقط — الأحدث أولاً (المتوفون سابقاً لا يظهرون — طلب المالك)
-    private var deceased: [FamilyMember] {
-        memberVM.allMembers
-            .filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate) }
-            .sorted { ($0.deathDate ?? "") > ($1.deathDate ?? "") }
-    }
-
-    private var filtered: [FamilyMember] {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return deceased }
-        return deceased.filter { $0.fullName.localizedCaseInsensitiveContains(q) }
-    }
-
-    private var waiting: [FamilyMember] { filtered.filter { !announced.contains($0.id) } }
-    private var done: [FamilyMember] { filtered.filter { announced.contains($0.id) } }
-
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-                VStack(spacing: DS.Spacing.md) {
-                    // العنوان والوصف في الرأس الملوّن — الأرقام هنا
-                    DSStatsRow([
-                        DSHeroStat(value: "\(deceased.count)",
-                                   label: L10n.t("وفيات حديثة", "Recent deaths"), icon: "person.fill"),
-                        DSHeroStat(value: loaded ? "\(announced.count)" : "—",
-                                   label: L10n.t("أُعلن عنهم", "Announced"), icon: "checkmark.seal.fill")
-                    ], tint: DS.Color.actionNavy)
-
-                    DSSearchField(text: $query,
-                                  placeholder: L10n.t("ابحث بالاسم…", "Search by name…"),
-                                  tint: tint)
-
-                    if deceased.isEmpty {
-                        DSEmptyView(L10n.t("لا توجد وفيات حديثة", "No recent deaths"),
-                                    message: L10n.t("تظهر هنا وفيات آخر ٣٠ يوماً فقط", "Only deaths in the last 30 days appear here"), style: .compact)
-                            .padding(.top, DS.Spacing.xl)
-                    } else if waiting.isEmpty && done.isEmpty {
-                        DSEmptyView(L10n.t("لا يوجد متوفى بهذا الاسم", "No deceased member by that name"),
-                                    style: .compact)
-                    } else {
-                        if !waiting.isEmpty {
-                            DSComposerSection(title: L10n.t("لم يُعلن عنهم", "Not announced"),
-                                              icon: icon, tint: tint,
-                                              trailing: "\(waiting.count)", index: 1) {
-                                LazyVStack(spacing: DS.Spacing.xsm) {
-                                    ForEach(waiting.prefix(200)) { member in
-                                        row(member, isDone: false)
-                                    }
-                                }
-                            }
-                        }
-                        if !done.isEmpty {
-                            DSComposerSection(title: L10n.t("أُعلن عنهم", "Announced"),
-                                              icon: "checkmark.seal.fill", tint: DS.Color.success,
-                                              trailing: "\(done.count)", index: 2) {
-                                LazyVStack(spacing: DS.Spacing.xsm) {
-                                    ForEach(done) { member in
-                                        row(member, isDone: true)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xxxl)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .refreshable { await loadAnnounced() }
-        // الرأس الملوّن الموحّد (كان شريط النظام + بطاقة رأس)
-        .dsSubPageHeader(L10n.t("إعلان وفاة", "Death Announcement"),
-                         subtitle: L10n.t("وفيات آخر ٣٠ يوماً — اختر لنشر الخبر وإشعار الأعضاء",
-                                          "Deaths in the last 30 days — pick one to post and notify"))
-        .task { await loadAnnounced() }
-        .onReceive(NotificationCenter.default.publisher(for: .deathAnnouncementPublished)) { _ in
-            Task { await loadAnnounced() }
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-    }
-
-    private func loadAnnounced() async {
-        let ids = await DeathAnnouncementPresenter.announcedIDs()
-        withAnimation(DS.Anim.smooth) {
-            announced = ids
-            loaded = true
-        }
-    }
-
-    /// «توفي ٢٠٢٦-٠٩-٢٨» / «توفيت …» — أو بلا تاريخ
-    private func deathLine(_ member: FamilyMember) -> String {
-        let verb = member.isFemale ? L10n.t("توفيت", "Died") : L10n.t("توفي", "Died")
-        if let date = member.deathDate, !date.isEmpty {
-            return "\(verb) \(String(date.prefix(10)))"
-        }
-        return L10n.t("بلا تاريخ وفاة", "No death date")
-    }
-
-    private func row(_ member: FamilyMember, isDone: Bool) -> some View {
-        Button {
-            guard !isDone else { return }
-            DeathAnnouncementPresenter.open(DeathAnnouncementTarget(
-                id: member.id, name: member.fullName, isFemale: member.isFemale,
-                deathDate: member.deathDate))
-        } label: {
-            DSRow(icon: isDone ? "checkmark.seal.fill" : icon,
-                   tint: isDone ? DS.Color.success : tint,
-                   title: member.fullName,
-                   subtitle: deathLine(member)) {
-                // وجه الشريحة الواحدة: «إعلان» ممتلئة بتعبئة القسم، و«أُعلن» خفيفة بلون النجاح
-                Text(isDone ? L10n.t("أُعلن", "Done") : L10n.t("إعلان", "Announce"))
-                    .dsFont(.chip)
-                    .foregroundColor(isDone ? DS.Color.success : DS.Color.textOnPrimary)
-                    .padding(.horizontal, DSBox.chipPadding)
-                    .frame(minHeight: DSBox.chipHeightSmall)
-                    .background {
-                        if isDone {
-                            Capsule().fill(DS.Color.success.opacity(DS.Opacity.tintFill))
-                        } else {
-                            Capsule().fill(DSActionFill.style())
-                        }
-                    }
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(isDone)
-        .accessibilityLabel(isDone
-            ? L10n.t("\(member.fullName)، أُعلن عن وفاته", "\(member.fullName), announced")
-            : L10n.t("إعلان وفاة \(member.fullName)", "Announce \(member.fullName)'s death"))
-    }
 }

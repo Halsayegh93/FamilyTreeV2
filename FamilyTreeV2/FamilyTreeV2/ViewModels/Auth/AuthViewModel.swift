@@ -126,6 +126,8 @@ class AuthViewModel: ObservableObject {
     @Published var newsApprovalFeatureAvailable: Bool = true
     @Published var contactMessageError: String?
     @Published var otpErrorMessage: String?
+    /// ثوانٍ قبل السماح بطلب رمز جديد كما ذكرها خطأ الحجب (٢٠٢٦-١٠-٢٠، الانتظار يضبطه المالك) — nil = لم يُذكر
+    @Published var otpRetryAfter: Int?
     @Published var otpStatusMessage: String = ""
     @Published var deleteAccountError: String?
     /// خطأ تسجيل يُعرض للمستخدم في شاشة التسجيل — يُمسح في بداية كل محاولة تسجيل.
@@ -390,6 +392,7 @@ class AuthViewModel: ObservableObject {
     private func userFacingOTPError(_ error: Error) -> String {
         let text = "\(error) \(error.localizedDescription)".lowercased()
         
+        if let wait = OTPWaitText.message(from: text, arabic: L10n.isArabic) { return wait }
         if text.contains("429") || text.contains("rate") {
             return L10n.t("تم تجاوز عدد المحاولات. انتظر دقيقة ثم أعد المحاولة.", "Too many attempts. Please wait a minute and try again.")
         }
@@ -716,6 +719,7 @@ class AuthViewModel: ObservableObject {
     }
 
     func sendOTP(channel: OTPChannel = .sms) async {
+        otpRetryAfter = nil
         let cleanPhone = normalizePhoneDigits(phoneNumber)
         let cleanDialingCode = normalizeDialingCode(dialingCode)
         guard cleanPhone.count >= 6 else {
@@ -775,6 +779,7 @@ class AuthViewModel: ObservableObject {
         } catch {
             Log.error("[OTP] ❌ فشل: \(error)")
             self.otpStatusMessage = ""
+            self.otpRetryAfter = OTPWaitText.seconds(in: "\(error) \(error.localizedDescription)")
             self.otpErrorMessage = friendlyOTPErrorMessage(error: error, channel: channel)
             self.isLoading = false
         }
@@ -811,6 +816,11 @@ class AuthViewModel: ObservableObject {
                 "تجاوزت عدد المحاولات. انتظر 10 دقائق ثم حاول.",
                 "Attempts exceeded. Wait 10 minutes and try again."
             )
+        }
+
+        // «انتظر N ثانية» — الحجب يذكر الثواني (دالة KWT SMS أو Supabase نفسه)، قبل الفرع العام (٢٠٢٦-١٠-٢٠)
+        if let wait = OTPWaitText.message(from: raw, arabic: L10n.isArabic) {
+            return wait
         }
 
         // Rate limited (Supabase or Twilio)

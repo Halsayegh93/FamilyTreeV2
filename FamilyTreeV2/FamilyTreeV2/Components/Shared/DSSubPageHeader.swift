@@ -12,8 +12,8 @@ import SwiftUI
 //
 // الاستعمال:
 //  ١) صفحة داخل NavigationStack بشريط النظام (صفحات الإدارة) — سطر واحد على جذر الصفحة، ويُخفى شريط النظام:
-//         AdminDevicesView-body
-//             .dsSubPageHeader(L10n.t("الأجهزة", "Devices"), subtitle: L10n.t("…", "…"))
+//         AdminPushHealthView-body
+//             .dsSubPageHeader(L10n.t("الأجهزة ووصول الإشعارات", "Devices & notification reach"), subtitle: L10n.t("…", "…"))
 //     مع إجراءات (كانت ToolbarItem — تنتقل هنا لأن شريط النظام يختفي):
 //             .dsSubPageHeader(title, subtitle: sub) {
 //                 DSHeaderButton(symbol: "plus", label: L10n.t("إضافة", "Add")) { showAdd = true }

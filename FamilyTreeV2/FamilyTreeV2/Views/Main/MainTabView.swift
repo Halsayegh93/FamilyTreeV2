@@ -154,6 +154,10 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
             withAnimation { selectedTab = 0 }
         }
+        // «شجرة النساء» من «العائلة» في لوحة الإدارة — تبويب الشجرة يفتح على النساء
+        .onReceive(NotificationCenter.default.publisher(for: .openWomenTree)) { _ in
+            withAnimation { selectedTab = 1 }
+        }
         // صلة القرابة من أي مكان (تفاصيل العضو، الرابط، الرمز): تاب الشجرة ← شجرة العائلة ← المسار.
         // كان الطلب يضيع خارج تاب الشجرة أو في تبويب النساء (طلب المالك ٢٠٢٦-١٠-٠٢)
         .onReceive(NotificationCenter.default.publisher(for: .requestKinshipPath)) { note in
