@@ -17,20 +17,10 @@ enum AdminReviewDestination: Hashable {
     case area(AdminArea, Int)
 }
 
-// MARK: - لوحة الإدارة ← «اليوم» (إعادة التصميم الكاملة — طلب المالك ٢٠٢٦-١٠-٢٠)
-//
-// الاتجاه «أ» (مركز القيادة) أساساً + لمستان من «ب»: دوائر الإنجاز للمهام، وسحب «الوارد» مثل البريد.
-// «في اردحام بلوحة الادارة بالبداية» → «الأقسام فوق + قائمة وحدة» (اختيار المالك ٢٠٢٦-١٠-٢٠). من الأعلى:
-// الرأس الكحلي (التحية، الدور، التاريخ، ومكبّر صوت «إعلان جديد» بجانب البحث والجرس لمن يرسل للأعضاء؛ ثم لوحة زجاجية
-// واحدة «يحتاج انتباهك»: الأرقام الأربعة بانتظار قرارك · عاجل · متأخر · رسائل، وتحتها في اللوحة نفسها سطر «حالة النظام»
-// يفتح لوحة: الصيانة · الرصيد · المجدول · بلا إشعارات — طلب المالك «ابى تختصر لوحة التنبيهات وتكون عند اللوحة العلوية»
-// ثم الشريحة ثم دمجها مع الأرقام، الدفعة ٩) ← «إحصاء الأفراد» ثلاث دوائر (المالك والمدير والمراقب) ← «الأقسام» الستة
-// ٣×٢ بتلميح حيّ (اختيار المالك «٦ أقسام») ← «بانتظار قرارك» قائمة واحدة (القرارات والمهام معاً، أول ٣ و«عرض الكل»).
-// بطاقة «تنبيهات» حُذفت: الأربعة صارت «حالة النظام»، والباقي (وفاة لم يُعلن عنها، مشكلات الشجرة للمراقب، خلل إعداد قاعدة
-// البيانات) «يحتاج إجراء» في «إشعارات الإدارة» التي يفتحها الجرس (`AdminNotificationsPage`). «اليوم في العائلة» انتقل لأعلى «المناسبات»،
-// و«نبض العائلة» لأعلى «المؤشرات»، وكل إجراء سريع لأعلى قسمه. كل دور يرى مجاله فقط والقسم الفارغ لا يُرسم (IA.md).
-// صفحات الأقسام تُفتح بقيمة في المسار (`.area`) ليستبدلها شريط الأقسام (`AdminAreaRouter`) بلا تراكم.
-// الصلاحيات والوجهات والروابط العميقة كما كانت، والصفحات القديمة تُفتح كما هي.
+// MARK: - لوحة الإدارة
+// Visual order: attention and system status → current decisions → sections.
+// The family census remains a compact disclosure below attention. Presentation changes
+// use the existing permission checks, data sources, navigation and review filters.
 
 struct AdminDashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -361,15 +351,12 @@ struct AdminDashboardView: View {
     private var todayHeader: AnyView { AnyView(todayHeaderContent) }
 
     private var todayHeaderContent: some View {
-        let items = decisionItems
-        let c = counts(items)
-        let loading = isInitialLoading
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: DS.Spacing.sm) {
                 HStack(spacing: DS.Spacing.xsm) {
                     Image(systemName: "checkmark.shield")
                         .dsGlyph(DS.Glyph.md, weight: .semibold)
-                    Text(L10n.t("لوحة الإدارة · اليوم", "Admin · Today"))
+                    Text(roleGuide?.title ?? L10n.t("اليوم", "Today"))
                         .dsFont(.sectionTitle)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -400,39 +387,26 @@ struct AdminDashboardView: View {
             }
             .frame(minHeight: DS.Hub.glassButton)
 
-            Text(helloLine)
-                .dsFont(.hubTitle)
+            Text(L10n.t("لوحة الإدارة", "Administration"))
+                .dsFont(.tabTitle)
                 .foregroundColor(DS.Color.textOnPrimary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, DS.Spacing.sm + 2)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.top, DS.Spacing.md)
 
-            // سطر التحية الذكي (الدفعة ١٠): جملة واحدة من بيانات حقيقية — السطر محجوز أثناء التحميل (لا قفزة)
-            let smart = AdminTodayText.smartLine(memorialToday: memorial.today.map(\.member), unannounced: unannounced,
-                                                 waiting: c.waiting,
-                                                 joinedThisWeek: seesTreeDomain ? joinedThisWeek : nil, loading: loading)
-            Text(verbatim: smart ?? " ")
-                .dsFont(.subtitle)
-                .foregroundColor(DS.Hub.greetingLine)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .opacity(smart == nil ? 0 : 1)
-                .animation(DSMotion.fade, value: smart == nil)
-                .padding(.top, DS.Spacing.xxs)
-                .accessibilityHidden(smart == nil)
-
-            HStack(spacing: DS.Spacing.sm) {
-                if let guide = roleGuide {
-                    AdminBandChip(text: guide.title)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(helloLine)
+                    Text("·").accessibilityHidden(true)
+                    Text(AdminTodayText.dayLine())
                 }
-                Text(AdminTodayText.dayLine())
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Hub.onBandMuted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(helloLine)
+                    Text(AdminTodayText.dayLine())
+                }
             }
-            .padding(.top, DS.Spacing.xs)
+            .dsFont(.footnote)
+            .foregroundColor(DS.Hub.onBandMuted)
+            .padding(.top, DS.Spacing.xxs)
 
             if let guide = scopeGuide {
                 NavigationLink { AdminMyScopeView(guide: guide) } label: {
@@ -485,22 +459,22 @@ struct AdminDashboardView: View {
         let items = decisionItems
         let entries = todayEntries(items)
         let pills = statusPills
-        return VStack(spacing: DS.Hub.stackSpacing) {
-            // العائلة مختصرة فوق التنبيهات؛ الاثنان ظاهران معاً بلا صفحات سحب.
+        return VStack(spacing: DS.Spacing.xl) {
             AnyView(VStack(spacing: 0) {
-                if seesMemberCounts {
-                    AdminFamilySummary(counts: memberCounts)
-                    Divider().padding(.horizontal, DS.Hub.swipePadding)
-                }
                 AdminAttentionPanel(counts: counts(items), loading: isInitialLoading,
                                     status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
                                     open: openStatusHome)
-                    .padding(.bottom, DS.Hub.swipePadding)
+                    .padding(.bottom, DS.Spacing.md)
+                if seesMemberCounts {
+                    Divider().padding(.horizontal, DS.Spacing.lg)
+                    AdminFamilySummary(counts: memberCounts)
+                        .padding(.bottom, DS.Spacing.xs)
+                }
             }
             .adminCard(padding: 0)
             .dsCardCascade(0, appeared: appeared))
-            AnyView(areasSection(labeled: true).dsCardCascade(1, appeared: appeared))
-            AnyView(decisionCard(entries).dsCardCascade(2, appeared: appeared))
+            AnyView(decisionCard(entries).dsCardCascade(1, appeared: appeared))
+            AnyView(areasSection(labeled: true).dsCardCascade(2, appeared: appeared))
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.bottom, DS.Spacing.xxxl)
@@ -640,19 +614,15 @@ struct AdminDashboardView: View {
 
     // MARK: الأقسام
 
-    /// الأقسام الستة: ٣ أعمدة × صفّان — وعمودان مع الخط الكبير جداً، أو حين يرى الدور قسمين أو أربعة (المشرف ٢،
-    /// المراقب ٤: صفوف كاملة بلا خانة فارغة). كل مربّع يحجز سطري الاسم وسطري التلميح فتتساوى المربّعات بلا قياس إضافي
-    /// (حارس المكدس). كل مربّع يفتح صفحة القسم بقيمة في المسار، فيستبدلها شريط الأقسام بلا تراكم
+    /// Two readable columns; one column at XXXL and accessibility sizes.
     private func areasSection(labeled: Bool) -> some View {
-        let shown = visibleAreas.count
-        let narrow = (typeSize >= .xxxLarge && !landscape) || shown <= 2 || shown == 4
-        let count = narrow ? DS.Hub.areaColumnsLargeText : DS.Hub.areaColumns
-        let columns = Array(repeating: GridItem(.flexible(), spacing: AdminGrid.spacing), count: count)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm),
+                            count: typeSize >= .xxxLarge && !landscape ? 1 : 2)
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             if labeled {
                 AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
             }
-            LazyVGrid(columns: columns, spacing: AdminGrid.spacing) {
+            LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
                 ForEach(visibleAreas) { area in
                     NavigationLink(value: AdminReviewDestination.area(area, 0)) {
                         areaTile(area)
@@ -665,24 +635,7 @@ struct AdminDashboardView: View {
 
     private func areaTile(_ area: AdminArea) -> some View {
         let hint = areaHint(area)
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminIconSquare(symbol: area.icon, tint: area.fill, side: DS.Hub.tileIcon,
-                            radius: DS.Hub.tileIconRadius, filled: true, glyph: DS.Glyph.lg)
-            Spacer(minLength: 0)
-            Text(area.title)
-                .dsFont(.hubRow)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(2, reservesSpace: true)
-                .minimumScaleFactor(0.85)
-            Text(hint.text)
-                .dsFont(.caption)
-                .foregroundColor(hint.warn ? DS.Color.warning : DS.Color.textTertiary)
-                .lineLimit(2, reservesSpace: true)
-        }
-        .frame(maxWidth: .infinity, minHeight: DS.Hub.tileMinHeight, alignment: .topLeading)
-        .dsCard(padding: DS.Spacing.md, radius: DS.Hub.tileRadius)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(hint.text)
+        return AdminDashboardAreaTile(area: area, detail: hint.text, warning: hint.warn)
     }
 
     /// تلميح حيّ واحد لكل قسم
@@ -754,7 +707,8 @@ struct AdminTodayEntryRow: View {
                     Text(verbatim: entry.subtitle)
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: DS.Spacing.xs)
@@ -886,64 +840,89 @@ struct AdminAttentionPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Hub.swipeGap) {
-            AdminCardHeader(title: L10n.t("يحتاج انتباهك", "Needs your attention"))
-            numbers
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "tray.full")
+                    .dsGlyph(DS.Glyph.md, weight: .semibold)
+                    .foregroundColor(DS.Color.accent.dsReadableGlyph)
+                Text(L10n.t("يحتاج انتباهك", "Needs your attention"))
+                    .dsFont(.headline)
+                    .foregroundColor(DS.Color.textPrimary)
+                Spacer(minLength: 0)
+                Text(L10n.t("اليوم", "Today"))
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+            NavigationLink {
+                AdminLazyPage { AnyView(AdminAllRequestsView(initialFilter: .waiting).adminArea(.inbox)) }
+            } label: {
+                HStack(spacing: DS.Spacing.md) {
+                    DSCountText(value: loading ? nil : counts.waiting)
+                        .dsFont(.statValue)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Color.textPrimary)
+                        .frame(minWidth: DS.Icon.tapTarget, minHeight: DS.Icon.tapTarget)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md)
+                            .fill(DS.Color.accent.opacity(DS.Opacity.tintFill)))
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(L10n.t("بانتظار قرارك", "Awaiting your decision"))
+                            .dsFont(.rowTitle)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(loading ? L10n.t("جارٍ تحديث الطلبات", "Updating requests") :
+                                counts.waiting == 0 ? L10n.t("كل الطلبات متابَعة", "Everything is up to date") :
+                                L10n.t("افتح الطلبات وابدأ المراجعة", "Open requests to start reviewing"))
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    DSChevron()
+                }
+                .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(DSPressStyle())
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: DS.Spacing.md) {
+                    ForEach(items.dropFirst()) { item in secondary(item) }
+                }
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    ForEach(items.dropFirst()) { item in secondary(item) }
+                }
+            }
             if let status {
+                Divider()
                 AnyView(AdminSystemStatusLine(status: status, open: open))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous))
             }
         }
-        .padding(.horizontal, DS.Hub.swipePadding)
-        .padding(.top, DS.Hub.swipePadding)
+        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.top, DS.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("يحتاج انتباهك", "Needs your attention"))
     }
 
-    @ViewBuilder
-    private var numbers: some View {
-        let list = items
-        if typeSize.isAccessibilitySize {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) { cell(list[0], divided: false); cell(list[1], divided: true) }
-                hairline(horizontal: true)
-                HStack(spacing: 0) { cell(list[2], divided: false); cell(list[3], divided: true) }
-            }
-        } else {
-            HStack(spacing: 0) {
-                ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
-                    cell(item, divided: index > 0)
-                }
-            }
-        }
-    }
-
-    /// رقم يفتح «الوارد» بفلتره (أو الرسائل)، وخطّ رفيع على طرفه الأول بينه وبين ما قبله
-    private func cell(_ item: Item, divided: Bool) -> some View {
-        let filter = item.filter
-        return NavigationLink {
+    private func secondary(_ item: Item) -> some View {
+        NavigationLink {
             AdminLazyPage {
-                filter.map { AnyView(AdminAllRequestsView(initialFilter: $0).adminArea(.inbox)) }
+                item.filter.map { AnyView(AdminAllRequestsView(initialFilter: $0).adminArea(.inbox)) }
                     ?? AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox))
             }
         } label: {
-            AdminAttentionNumber(value: loading ? nil : item.value, label: item.label, icon: item.icon, tint: item.tint)
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: item.icon).dsGlyph(DS.Glyph.xs)
+                Text(item.label).dsFont(.footnote)
+                DSCountText(value: loading ? nil : item.value).dsFont(.caption).monospacedDigit()
+            }
+            .foregroundColor(item.value > 0 && !loading ? item.tint : DS.Color.textSecondary)
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSPressStyle())
-        .overlay(alignment: .leading) {
-            if divided {
-                hairline(horizontal: false).padding(.vertical, DS.Spacing.sm)
-            }
-        }
     }
 
-    private func hairline(horizontal: Bool) -> some View {
-        Rectangle()
-            .fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
-            .frame(width: horizontal ? nil : DS.Border.width, height: horizontal ? DS.Border.width : nil)
-            .accessibilityHidden(true)
-    }
+
 }
 
 /// رقم في «يحتاج انتباهك»: الرقم بلون معناه على البطاقة (ذهبي، أحمر، كهرماني، أساسي) وتحته الأيقونة والاسم بالثانوي،
@@ -1048,17 +1027,15 @@ struct AdminSystemStatusLineLabel: View {
             }
             // الدفعة ١٣: درجة أكبر (كان `hubButton` Footnote ١٣)
             Text(verbatim: status.title)
-                .dsFont(.hubRow)
+                .dsFont(.footnote)
                 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: DS.Spacing.sm)
-            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.sm, weight: .bold)
+            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.xs, weight: .semibold)
         }
         .foregroundColor(Self.ink(tone))
-        .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)
         .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
-        .background(Self.fill(tone))
         .contentShape(Rectangle())
     }
 
