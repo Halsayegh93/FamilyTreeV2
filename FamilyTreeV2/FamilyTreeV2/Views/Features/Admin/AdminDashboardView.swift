@@ -622,10 +622,15 @@ struct AdminDashboardView: View {
             }
             LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
                 ForEach(visibleAreas) { area in
-                    NavigationLink(value: AdminReviewDestination.area(area, 0)) {
+                    Button {
+                        openArea(area)
+                    } label: {
                         areaTile(area)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(DSPressStyle())
+                    .accessibilityIdentifier("admin.area.\(area.rawValue)")
                 }
             }
         }

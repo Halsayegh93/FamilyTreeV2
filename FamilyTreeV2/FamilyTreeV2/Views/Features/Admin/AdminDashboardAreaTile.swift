@@ -33,9 +33,10 @@ struct AdminDashboardAreaTile: View {
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .fill(DS.Color.surface))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
+            .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width)
+            .allowsHitTesting(false))
         .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(area.title)
         .accessibilityValue(detail)
     }
