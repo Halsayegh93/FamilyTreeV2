@@ -81,7 +81,7 @@ nonisolated enum AdminReportPDF {
         }
     }
 
-    // MARK: الخط — URW Geometric Arabic (خط النظام احتياطاً)
+    // MARK: الخط — Alexandria (خط النظام احتياطاً)
 
     private static func plex(_ weight: String, _ size: CGFloat) -> UIFont {
         AppTypeface.uiFont(size: size, weight: weight == "Bold" ? .bold : weight == "SemiBold" ? .semibold : weight == "Medium" ? .medium : .regular)

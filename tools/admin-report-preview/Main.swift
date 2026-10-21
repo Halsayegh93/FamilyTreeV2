@@ -15,6 +15,9 @@ final class App: UIResponder, UIApplicationDelegate {
             if !condition { throw NSError(domain: title, code: 1) }
             assertions.append(title)
         }
+        for weight: UIFont.Weight in [.ultraLight, .thin, .light, .regular, .medium, .semibold, .bold, .heavy, .black] {
+            try check(AppTypeface.uiFont(size: 17, weight: weight).fontName.hasPrefix("Alexandria-"), "Alexandria weight \(weight.rawValue) is registered")
+        }
         let root = UUID()
         let branch = UUID()
         let names = ["محمد عبدالعزيز عبدالرحمن حسن المحمدعلي", "عبدالله محمدعلي عبدالمحسن إبراهيم المحمدعلي", "أحمد حسن علي المحمدعلي", "عبدالرحمن عبدالله محمد حسن إبراهيم المحمدعلي"]

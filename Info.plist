@@ -11,6 +11,15 @@
 	<false/>
 	<key>UIAppFonts</key>
 	<array>
+		<string>Alexandria-Thin.ttf</string>
+		<string>Alexandria-ExtraLight.ttf</string>
+		<string>Alexandria-Light.ttf</string>
+		<string>Alexandria-Regular.ttf</string>
+		<string>Alexandria-Medium.ttf</string>
+		<string>Alexandria-SemiBold.ttf</string>
+		<string>Alexandria-Bold.ttf</string>
+		<string>Alexandria-ExtraBold.ttf</string>
+		<string>Alexandria-Black.ttf</string>
 		<string>urw-geometric-arabic-regular.ttf</string>
 		<string>urw-geometric-arabic-semibold.ttf</string>
 		<string>urw-geometric-arabic-extrabold.ttf</string>
