@@ -30,7 +30,7 @@ enum TermsHighlights {
                  text: L10n.t("يحق لكل عضو الإبلاغ عن أي خبر أو تعليق أو محتوى أو عضو مخالف، وحظر أي عضو يسيء إليه، فلا يظهر له محتواه بعد ذلك.",
                               "Every member may report any violating post, comment, content or member, and block anyone who abuses them so that member's content no longer appears to them.")),
             Item(id: 2, icon: "checkmark.seal.fill", tint: DS.Color.success,
-                 title: L10n.t("مراجعة البلاغات خلال ٢٤ ساعة", "Reports reviewed within 24 hours"),
+                 title: L10n.t("مراجعة البلاغات خلال \(RemoteSettings.int("report_review_hours", 24, range: 1...168)) ساعة", "Reports reviewed within \(RemoteSettings.int("report_review_hours", 24, range: 1...168)) hours"),
                  text: L10n.t("تلتزم إدارة التطبيق بمراجعة كل بلاغ خلال أربع وعشرين ساعة من تقديمه، وحذف المحتوى المخالف، وإيقاف حساب ناشره.",
                               "The administration reviews every report within twenty-four hours of submission, removes the violating content and suspends the account that posted it.")),
             Item(id: 3, icon: "lock.fill", tint: DS.Color.info,

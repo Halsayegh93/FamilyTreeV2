@@ -115,6 +115,7 @@ class AppSettingsViewModel: ObservableObject {
 
     /// جلب الإعدادات من السيرفر
     func fetchSettings() async {
+        await RemoteSettingsModel.shared.refresh()
         do {
             let result: [AppSettings] = try await supabase
                 .from("app_settings")

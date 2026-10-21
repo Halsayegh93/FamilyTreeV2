@@ -47,15 +47,15 @@ struct AdminAnnounceLauncher: View {
 
 enum AdminAnnounceKit {
     /// العناوين الجاهزة (من صفحة «إشعار للأعضاء» المحذوفة) — أولها العنوان حين يُترك فارغاً
-    static let presetTitles = [
+    static var presetTitles: [String] { RemoteSettings.strings("announce_preset_titles", [
         "عائلة المحمدعلي",
         "إعلان من الإدارة",
         "تذكير",
         "دعوة",
         "تهنئة",
         "تنبيه مهم"
-    ]
-    static let defaultTitle = presetTitles[0]
+    ]) }
+    static var defaultTitle: String { presetTitles[0] }
     /// «بكرة الصبح» = الساعة ٩:٠٠ بتوقيت الكويت
     static let morningHour = 9
     private static let pinnedCountries = ["KW", "SA"]

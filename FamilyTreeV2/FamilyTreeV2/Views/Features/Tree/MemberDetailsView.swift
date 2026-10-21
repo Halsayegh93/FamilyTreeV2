@@ -342,8 +342,8 @@ struct MemberDetailsView: View {
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) { }
         } message: {
-            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة وستتم مراجعته خلال ٢٤ ساعة.",
-                        "Thank you — your report reached the admins and will be reviewed within 24 hours."))
+            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة وستتم مراجعته خلال \(RemoteSettings.int("report_review_hours", 24, range: 1...168)) ساعة.",
+                        "Thank you — your report reached the admins and will be reviewed within \(RemoteSettings.int("report_review_hours", 24, range: 1...168)) hours."))
         }
         // حظر العضو / إلغاء الحظر — نفس رسائل «إبلاغ» (بلاغ تلقائي للإدارة عند الحظر)
         .dsBlockMemberFlow(target: $blockTarget)

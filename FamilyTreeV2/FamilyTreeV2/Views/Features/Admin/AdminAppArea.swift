@@ -80,6 +80,13 @@ private struct AdminAppSettingsGroups: View {
     var body: some View {
         VStack(spacing: DS.Hub.stackSpacing) {
             group(L10n.t("الأقسام الظاهرة للأعضاء", "Sections members see")) { AnyView(sectionsRows) }
+            group(L10n.t("إعدادات السيرفر", "Server settings")) {
+                AnyView(NavigationLink { AdminRemoteSettingsView() } label: {
+                    Label(L10n.t("القيم والنصوص من السيرفر", "Server values and text"), systemImage: "slider.horizontal.3")
+                        .dsFont(.hubRow)
+                        .foregroundColor(DS.Color.textPrimary)
+                })
+            }
             group(L10n.t("القوائم", "Lists")) { AnyView(listsRows) }
             group(L10n.t("التعديلات الذاتية", "Self-edits")) { AnyView(selfEditRows) }
             if let days = appSettingsVM.settings.deathAlertDays {

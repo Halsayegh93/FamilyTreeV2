@@ -44,7 +44,7 @@ enum MemberActivityTracker {
     /// Heartbeat: يحدث آخر شاشة كل ٦٠ ثانية عشان العضو يبقى "نشط الآن"
     private static func startHeartbeat() {
         heartbeatTimer?.invalidate()
-        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(RemoteSettings.int("activity_heartbeat_seconds", 60, range: 30...600)), repeats: true) { _ in
             guard let screen = lastReportedScreen else { return }
             report(screen, force: true)
         }

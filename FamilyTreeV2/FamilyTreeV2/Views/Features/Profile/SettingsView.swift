@@ -1359,8 +1359,8 @@ struct PrivacyPolicyView: View {
                       "Zero tolerance for objectionable content or abusive users: posting offensive, insulting, indecent or hateful content is prohibited, as is harassing any member or impersonating anyone."),
                     t("يحق لكل عضو الإبلاغ عن أي خبر أو تعليق أو محتوى أو عضو عبر زر «إبلاغ»، وحظر أي عضو فلا يظهر له محتواه.",
                       "Every member may report any post, comment, content or member with the “Report” button, and block any member so their content no longer appears."),
-                    t("تراجع الإدارة كل بلاغ خلال ٢٤ ساعة، وتحذف المحتوى المخالف، وتوقف حساب ناشره.",
-                      "The administration reviews every report within 24 hours, removes the violating content and suspends the account that posted it."),
+                    t("تراجع الإدارة كل بلاغ خلال \(RemoteSettings.int("report_review_hours", 24, range: 1...168)) ساعة، وتحذف المحتوى المخالف، وتوقف حساب ناشره.",
+                      "The administration reviews every report within \(RemoteSettings.int("report_review_hours", 24, range: 1...168)) hours, removes the violating content and suspends the account that posted it."),
                     t("يلتزم العضو باستخدام التطبيق بمسؤولية، واحترام خصوصية الآخرين، وعدم تداول بياناتهم خارج التطبيق.", "Members must use the app responsibly, respect others' privacy and not share their data outside the app."),
                     t("يحق للإدارة تجميد الحسابات المخالفة أو حذفها.", "The administration may freeze or delete accounts that violate these terms.")
                    ])

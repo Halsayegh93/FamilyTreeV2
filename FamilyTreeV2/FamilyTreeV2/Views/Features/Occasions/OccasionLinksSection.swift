@@ -24,7 +24,7 @@ final class OccasionLinksModel: ObservableObject {
     @Published private(set) var isWorking = false
 
     /// عنوان الموقع العام — نفس PUBLIC_SITE في الموقع
-    static let publicSite = "https://almohali.com"
+    static var publicSite: String { FamilyLinks.website.absoluteString }
 
     private let supabase = SupabaseConfig.client
 

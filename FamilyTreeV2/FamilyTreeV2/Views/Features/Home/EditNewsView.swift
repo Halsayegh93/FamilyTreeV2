@@ -91,6 +91,7 @@ struct EditNewsView: View {
     private var isPoll: Bool { selectedType == "تصويت" }
 
     private var canSubmit: Bool {
+        guard selectedImages.isEmpty || totalPhotos <= Self.photoLimit else { return false }
         if isPoll {
             return isPollValid && !isSubmitting
         } else {
@@ -100,7 +101,7 @@ struct EditNewsView: View {
 
     // MARK: - الصور (الحالية + الجديدة بحد ٥ كما كان)
 
-    private static let photoLimit = 5
+    private static var photoLimit: Int { RemoteSettings.int("news_max_photos", 5, range: 1...10) }
     /// مصغّرات الصور بمقاس شريط صور «خبر جديد» (`DSComposerPhotoStrip`)
     private static let thumbSize: CGFloat = DSBox.photoTile
 

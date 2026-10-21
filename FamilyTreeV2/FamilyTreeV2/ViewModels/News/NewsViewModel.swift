@@ -320,23 +320,23 @@ class NewsViewModel: ObservableObject {
                     let fromAdmin = authVM?.canModerate == true && isRegularMember(postAuthorId)
                     let likerName = fromAdmin ? L10n.t("الإدارة", "The admins") : (currentUser?.fullName ?? "")
                     await notificationVM?.sendPushToMembers(
-                        title: L10n.t("إعجاب جديد", "New Like"),
+                        title: RemoteSettings.text("notify_news_like_title", L10n.t("إعجاب جديد", "New Like")),
                         body: fromAdmin
-                            ? L10n.t("الإدارة أعجبت بمنشورك", "The admins liked your post")
-                            : L10n.t(
+                            ? RemoteSettings.text("notify_news_like_admin_body", L10n.t("الإدارة أعجبت بمنشورك", "The admins liked your post"))
+                            : RemoteSettings.template("notify_news_like_body", fallback: L10n.t(
                                 "\(likerName) أعجب بمنشورك",
                                 "\(likerName) liked your post"
-                            ),
+                            ), name: likerName),
                         kind: NotificationKind.newsLike.rawValue,
                         targetMemberIds: [postAuthorId]
                     )
                     // حفظ داخلي
                     let payload: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
-                        "title": AnyEncodable(L10n.t("إعجاب جديد", "New Like")),
+                        "title": AnyEncodable(RemoteSettings.text("notify_news_like_title", L10n.t("إعجاب جديد", "New Like"))),
                         "body": AnyEncodable(fromAdmin
-                            ? L10n.t("الإدارة أعجبت بخبرك", "The admins liked your post")
-                            : L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
+                            ? RemoteSettings.text("notify_news_like_admin_body", L10n.t("الإدارة أعجبت بخبرك", "The admins liked your post"))
+                            : RemoteSettings.template("notify_news_like_body", fallback: L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post"), name: likerName)),
                         "kind": AnyEncodable(NotificationKind.newsLike.rawValue),
                         "created_by": AnyEncodable(memberId.uuidString)
                     ]
@@ -396,13 +396,13 @@ class NewsViewModel: ObservableObject {
                 // عضو الإدارة يظهر للعضو باسم «الإدارة» لا باسمه (طلب المالك)
                 let fromAdmin = authVM?.canModerate == true && isRegularMember(postAuthorId)
                 await notificationVM?.sendPushToMembers(
-                    title: L10n.t("تعليق جديد", "New Comment"),
+                    title: RemoteSettings.text("notify_news_comment_title", L10n.t("تعليق جديد", "New Comment")),
                     body: fromAdmin
-                        ? L10n.t("الإدارة علّقت على منشورك", "The admins commented on your post")
-                        : L10n.t(
+                        ? RemoteSettings.text("notify_news_comment_admin_body", L10n.t("الإدارة علّقت على منشورك", "The admins commented on your post"))
+                        : RemoteSettings.template("notify_news_comment_body", fallback: L10n.t(
                             "\(authorName) علّق على منشورك",
                             "\(authorName) commented on your post"
-                        ),
+                        ), name: authorName),
                     kind: NotificationKind.newsComment.rawValue,
                     targetMemberIds: [postAuthorId]
                 )
@@ -410,10 +410,10 @@ class NewsViewModel: ObservableObject {
                 if let creator = currentUser?.id {
                     let payload: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
-                        "title": AnyEncodable(L10n.t("تعليق جديد", "New Comment")),
+                        "title": AnyEncodable(RemoteSettings.text("notify_news_comment_title", L10n.t("تعليق جديد", "New Comment"))),
                         "body": AnyEncodable(fromAdmin
-                            ? L10n.t("الإدارة علّقت على خبرك", "The admins commented on your post")
-                            : L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
+                            ? RemoteSettings.text("notify_news_comment_admin_body", L10n.t("الإدارة علّقت على خبرك", "The admins commented on your post"))
+                            : RemoteSettings.template("notify_news_comment_body", fallback: L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post"), name: authorName)),
                         "kind": AnyEncodable(NotificationKind.newsComment.rawValue),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
@@ -930,8 +930,8 @@ class NewsViewModel: ObservableObject {
 
             await notificationVM?.sendNotification(
                 title: L10n.t("تم استلام بلاغك", "Report Received"),
-                body: L10n.t("بلاغك وصلنا وسيتم مراجعته من الإدارة خلال ٢٤ ساعة",
-                             "Your report was received and will be reviewed within 24 hours"),
+                body: L10n.t("بلاغك وصلنا وسيتم مراجعته من الإدارة خلال \(RemoteSettings.int("report_review_hours", 24, range: 1...168)) ساعة",
+                             "Your report was received and will be reviewed within \(RemoteSettings.int("report_review_hours", 24, range: 1...168)) hours"),
                 targetMemberIds: [userId]
             )
         } catch {

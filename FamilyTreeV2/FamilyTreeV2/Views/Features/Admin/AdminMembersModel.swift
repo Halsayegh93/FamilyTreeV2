@@ -176,10 +176,10 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
 
 enum AdminLivingCheck {
     /// قبل هذه السنة = قسم «مواليد قبل 1940» (عمره فوق ٨٥)
-    static let oldBirthYear = 1940
+    static var oldBirthYear: Int { RemoteSettings.int("living_check_old_birth_year", 1940, range: 1850...2010) }
     /// العمق قديم إذا وسيط مواليده قبل هذه السنة
-    static let oldDepthMedian = 1960
-    static let minKnownBirths = 3
+    static var oldDepthMedian: Int { RemoteSettings.int("living_check_median_year", 1960, range: 1850...2010) }
+    static var minKnownBirths: Int { RemoteSettings.int("living_check_min_births", 3, range: 1...20) }
 
     /// أقسام القائمة بالترتيب
     enum Group: Int, CaseIterable, Comparable {

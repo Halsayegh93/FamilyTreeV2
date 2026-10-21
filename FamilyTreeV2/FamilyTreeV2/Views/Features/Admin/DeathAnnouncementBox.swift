@@ -20,7 +20,7 @@ struct DeathAnnouncementTarget: Identifiable, Equatable {
 
 /// الوفيات «الحديثة» فقط تُعلَن (طلب المالك: «أي شخص متوفي سابقاً لا تظهره»)
 enum DeathRecency {
-    static let days = 30
+    static var days: Int { RemoteSettings.int("death_announce_window_days", 30, range: 7...90) }
     /// تنبيه «وفاة لم يُعلن عنها» في اللوحة ٧ أيام فقط (طلب المالك ٢٠٢٦-١٠-٢١ «مابي اعلن عنه خلاص انتهى الوقت») —
     /// الإعلان نفسه يبقى ممكناً ٣٠ يوماً من صفحة العضو ومن «إنشاء»
     static var alertDays: Int {
@@ -165,9 +165,11 @@ struct DeathAnnouncementBox: View {
 
     /// النص الجاهز — بصيغة المذكّر أو المؤنث
     static func defaultText(for target: DeathAnnouncementTarget) -> String {
-        target.isFemale
+        let fallback = target.isFemale
             ? "انتقلت إلى رحمة الله تعالى \(target.name)\nتغمّدها الله بواسع رحمته وأسكنها فسيح جناته\nإنا لله وإنا إليه راجعون"
             : "انتقل إلى رحمة الله تعالى \(target.name)\nتغمّده الله بواسع رحمته وأسكنه فسيح جناته\nإنا لله وإنا إليه راجعون"
+        return RemoteSettings.template(target.isFemale ? "death_announce_template_female" : "death_announce_template_male",
+                                       fallback: fallback, name: target.name)
     }
 
     /// إطار المربّع بلون القسم (طلب المالك ٢٠٢٦-١٠-٠٥ «ابى مربع المتوفي يدخل بالألوان»):
