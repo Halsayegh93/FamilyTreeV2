@@ -960,7 +960,7 @@ struct AdminAttentionNumber: View {
 
 /// سطر «حالة النظام» أسفل «يحتاج انتباهك» (كان شريحة تحت المربّعات — الدفعة ٨): «✓ النظام سليم» أخضر، «⚠︎ تنبيه /
 /// تنبيهان / 3 تنبيهات للنظام» كهرماني وأحمر إن كان فيها عاجل (الصيانة مفعّلة، الرصيد تحت «عاجل»)، و«حالة النظام» محايدة
-/// ما دام شيء لم يُحمَّل؛ ثم «⌄» في الطرف. الضغط يفتح لوحة صغيرة منه (`AdminSystemStatusPanel`) بالإشارات وإجراء صغير
+/// ما دام شيء لم يُحمَّل؛ ثم «التفاصيل» في الطرف. الضغط يفتح لوحة صغيرة منه (`AdminSystemStatusPanel`) بالإشارات وإجراء صغير
 /// لكلٍّ؛ البيت يُدفع في مسار «اليوم» بعد أن تختفي اللوحة (الرابط داخل النافذة المنبثقة لا يدفع في هذا المكدس). لمس ٤٤
 /// بعرض اللوحة، والقارئ الصوتي يقرأ الملخّص كاملاً («حالة النظام: تنبيهان — الرصيد منخفض، 3 أجهزة بلا إشعارات»)
 struct AdminSystemStatusLine: View {
@@ -977,6 +977,7 @@ struct AdminSystemStatusLine: View {
         .buttonStyle(DSPressStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(status.spoken)
+        .accessibilityIdentifier("admin.system-status")
         .accessibilityHint(L10n.t("يعرض الحالة والإجراءات", "Shows the status and actions"))
         .accessibilityAddTraits(.isButton)
         .modifier(AdminStatusPanelPresenter(isPresented: $showsPanel) {
@@ -1005,39 +1006,48 @@ struct AdminSystemStatusLine: View {
     }
 }
 
-/// شكل السطر على البطاقة: رمز الحالة + النص بلون الحالة على تعبئة خفيفة منه (زوايا مدوّرة أسفل الصفحة)، و«⌄» في الطرف
-/// (تعبئة رمادية والنص ثانوي ما دام شيء لم يُحمَّل)
+/// Compact status summary: a semantic icon, the current state and an explicit details affordance.
 struct AdminSystemStatusLineLabel: View {
     let status: AdminSystemStatus
 
     var body: some View {
         let tone = status.tone
-        HStack(spacing: DS.Spacing.xsm) {
-            if let icon = Self.icon(tone) {
-                Image(systemName: icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
-                    // «نبضة للعاجل» (الدفعة ١٠): هالة حمراء هادئة على الساعة المشتركة — تقف خارج الشاشة ومع «تقليل الحركة»
-                    .dsUrgentPulse(DS.Color.error, active: tone == .urgent)
-            }
+        let shape = RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous)
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: Self.icon(tone))
+                .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                .foregroundColor(Self.ink(tone))
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(Self.ink(tone).opacity(DS.Opacity.tintFill)))
+                .dsUrgentPulse(DS.Color.error, active: tone == .urgent)
+                .accessibilityHidden(true)
             Text(verbatim: status.title)
                 .dsFont(.hubButton)
+                .foregroundColor(DS.Color.textPrimary)
                 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: DS.Spacing.sm)
-            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.xs, weight: .semibold)
+            HStack(spacing: DS.Spacing.xxs) {
+                Text(L10n.t("التفاصيل", "Details")).dsFont(.caption)
+                DSChevron(size: DS.Glyph.xs)
+            }
+            .foregroundColor(DS.Color.textSecondary)
+            .fixedSize()
         }
-        .foregroundColor(Self.ink(tone))
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.xxs)
         .frame(maxWidth: .infinity, minHeight: DS.Hub.statusLineMinHeight)
-        .background(Self.fill(tone))
+        .background(shape.fill(DS.Color.surface))
+        .overlay(shape.strokeBorder(Self.ink(tone).opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width)
+            .allowsHitTesting(false))
         .dsTapArea(width: DS.Icon.tapTarget, height: DS.Hub.statusLineMinHeight)
     }
 
-    private static func icon(_ tone: AdminSystemStatus.Tone) -> String? {
+    private static func icon(_ tone: AdminSystemStatus.Tone) -> String {
         switch tone {
-        case .ok:            return "checkmark"
+        case .ok:            return "checkmark.shield.fill"
         case .warn, .urgent: return "exclamationmark.triangle.fill"
-        case .loading:       return nil
+        case .loading:       return "ellipsis.circle"
         }
     }
 
@@ -1053,10 +1063,6 @@ struct AdminSystemStatusLineLabel: View {
 
     private static func ink(_ tone: AdminSystemStatus.Tone) -> Color {
         base(tone)?.dsReadableGlyph ?? DS.Color.textSecondary
-    }
-
-    private static func fill(_ tone: AdminSystemStatus.Tone) -> Color {
-        base(tone).map { $0.opacity(DS.Hub.statusLineFill) } ?? DS.Color.cardBackgroundSoft
     }
 }
 
@@ -1087,7 +1093,7 @@ private struct AdminStatusPanelPresenter<Panel: View>: ViewModifier {
     }
 }
 
-/// لوحة «حالة النظام»: عنوان صغير ثم صفّ لكل إشارة — نقطة اللون (معاني التطبيق: نجاح/تحذير/خطأ)، الحالة («الرصيد: 17
+/// لوحة «حالة النظام»: عنوان صغير ثم صفّ لكل إشارة — رمز القسم بلون حالته (نجاح/تحذير/خطأ)، الحالة («الرصيد: 17
 /// نقطة») وسطر ثانٍ، وإجراء صغير في الطرف («الإعدادات»، «اشحن»، «القادم»، «الأجهزة»). الصفّ كله زرّ بلمس ٤٤، ويقرؤه
 /// القارئ الصوتي بالحالة كاملة والإجراء تلميحاً. من أحجام إمكانية الوصول: أعرض، والإجراء تحت النص، واللوحة تتمرّر
 struct AdminSystemStatusPanel: View {
@@ -1109,11 +1115,16 @@ struct AdminSystemStatusPanel: View {
 
     private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(L10n.t("حالة النظام", "System status"))
-                .dsFont(.sectionTitle)
-                .foregroundColor(DS.Color.textTertiary)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.bottom, DS.Spacing.xxs)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(L10n.t("حالة النظام", "System status"))
+                    .dsFont(.headline)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Text(L10n.t("التشغيل والإشعارات", "Operations and notifications"))
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textSecondary)
+            }
+            .padding(.bottom, DS.Spacing.sm)
             ForEach(Array(pills.enumerated()), id: \.element.id) { index, pill in
                 if index > 0 { AdminRowDivider() }
                 row(pill)
@@ -1129,21 +1140,27 @@ struct AdminSystemStatusPanel: View {
         let large = typeSize.isAccessibilitySize
         let action = AdminPillLabel(title: pill.actionTitle, style: pill.isFlagged ? .navy : .soft)
         return Button { choose(pill.home) } label: {
-            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
-                AdminBaselineDot(color: Self.dot(pill.level))
+            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                Image(systemName: Self.symbol(pill.home))
+                    .dsGlyph(DS.Glyph.md, weight: .semibold)
+                    .foregroundColor(Self.dot(pill.level).dsReadableGlyph)
+                    .frame(width: 28, height: 28)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.sm)
+                        .fill(Self.dot(pill.level).opacity(DS.Opacity.tintFillSoft)))
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(verbatim: pill.text)
-                        .dsFont(.hubRow)
+                        .dsFont(.hubButton)
                         .monospacedDigit()
                         .foregroundColor(DS.Color.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(verbatim: pill.detail)
-                        .dsFont(.footnote)
-                        .foregroundColor(pill.isFlagged ? Self.dot(pill.level) : DS.Color.textTertiary)
+                        .dsFont(.caption)
+                        .foregroundColor(pill.isFlagged ? Self.dot(pill.level).dsReadableGlyph : DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if large { action.padding(.top, DS.Spacing.xs) }
                 }
-                Spacer(minLength: DS.Spacing.sm)
+                Spacer(minLength: DS.Spacing.xs)
                 if !large { action }
             }
             .padding(.vertical, DS.Spacing.sm)
@@ -1155,6 +1172,16 @@ struct AdminSystemStatusPanel: View {
         .accessibilityLabel(pill.spoken)
         .accessibilityHint(pill.actionTitle)
         .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("admin.system-status.action.\(pill.home)")
+    }
+
+    private static func symbol(_ home: AdminStatusPill.Home) -> String {
+        switch home {
+        case .maintenance: return "wrench.and.screwdriver"
+        case .sms: return "message"
+        case .scheduled: return "calendar"
+        case .devices: return "iphone"
+        }
     }
 
     private static func dot(_ level: AdminStatusPill.Level) -> Color {
