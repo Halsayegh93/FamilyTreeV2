@@ -474,18 +474,16 @@ struct AdminDashboardView: View {
         let items = decisionItems
         let pills = statusPills
         return VStack(spacing: DS.Hub.stackSpacing) {
-            // العائلة مختصرة فوق التنبيهات؛ الاثنان ظاهران معاً بلا صفحات سحب.
-            AnyView(VStack(spacing: 0) {
+            // ملخّص واحد: إحصاء العائلة، المتابعة، ثم حالة النظام.
+            AnyView(VStack(spacing: DS.Spacing.md) {
                 if seesMemberCounts {
                     AdminFamilySummary(counts: memberCounts)
-                    Divider().padding(.horizontal, DS.Hub.swipePadding)
                 }
                 AdminAttentionPanel(counts: counts(items), loading: isInitialLoading,
                                     status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
                                     open: openStatusHome)
-                    .padding(.bottom, DS.Hub.swipePadding)
             }
-            .adminCard(padding: 0)
+            .adminCard(padding: DS.Hub.swipePadding)
             .dsCardCascade(0, appeared: appeared))
             AnyView(areasSection(labeled: true).dsCardCascade(1, appeared: appeared))
         }
@@ -817,15 +815,10 @@ struct AdminTodayDoneRow: View {
     }
 }
 
-// MARK: - «يحتاج انتباهك» (الصفحة الأولى من «المربّع اللي ينسحب»)
+// MARK: - «يحتاج انتباهك»
 
-/// صفحة «يحتاج انتباهك» (الدفعة ٩ لوحة زجاجية في الرأس؛ الدفعة ١٠ الصفحة الأولى من «المربّع اللي ينسحب» `AdminTodaySwipeCard`
-/// على البطاقة البيضاء): العنوان، ثم الأرقام الأربعة بأيقوناتها وأسمائها (بخطوط رفيعة بينها، تعدّ من الصفر): بانتظار قرارك ·
-/// عاجل · متأخر ← «الوارد» بفلتره، ورسائل ← رسائل الأعضاء؛ ثم سطر «حالة النظام» (المالك والمدير فقط) بتعبئة خفيفة من لونه
-/// يفتح لوحة الإشارات الأربع. الصفحة تملأ ارتفاع المربّع (الأرقام في الوسط). من أحجام إمكانية الوصول الأرقام ٢×٢.
-/// الدفعة ١٣ («الى داخله نكبر»): الأرقام بخط رقم الرأس `hubKPI` وأسماؤها `hubLabel`، وسطر الحالة `hubRow`، وفراغات أضيق؛
-/// الحشوة للجانبين والأعلى فقط (المربّع يضيف الأسفل وشريط النقاط).
-/// القارئ الصوتي: حاوية «يحتاج انتباهك» فيها كل رقم زرّاً ثم سطر الحالة
+/// أربع خانات للمراجعة داخل الملخّص؛ تتلوّن الأعداد غير الصفرية فقط.
+/// الطلبات والعاجل والمتأخر تفتح فلاتر الوارد، والرسائل تفتح رسائل الأعضاء.
 struct AdminAttentionPanel: View {
     let counts: AdminTodayCounts
     let loading: Bool
@@ -846,8 +839,8 @@ struct AdminAttentionPanel: View {
 
     private var items: [Item] {
         [
-            Item(id: "waiting", value: counts.waiting, label: L10n.t("بانتظار قرارك", "Awaiting you"), icon: "tray",
-                 tint: DS.Color.accent, filter: .waiting),
+            Item(id: "waiting", value: counts.waiting, label: L10n.t("طلبات", "Pending"), icon: "tray",
+                 tint: DS.Color.accent.dsReadableGlyph, filter: .waiting),
             Item(id: "urgent", value: counts.urgent, label: L10n.t("عاجل", "Urgent"), icon: "flame",
                  tint: DS.Color.error.dsReadableGlyph, filter: .urgent),
             Item(id: "late", value: counts.late, label: L10n.t("متأخر", "Late"), icon: "clock",
@@ -858,16 +851,17 @@ struct AdminAttentionPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            AdminCardHeader(title: L10n.t("يحتاج انتباهك", "Needs your attention"))
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("يحتاج انتباهك", "Needs your attention"))
+                .dsFont(.hubRow)
+                .foregroundColor(DS.Color.textPrimary)
+                .accessibilityAddTraits(.isHeader)
             numbers
             if let status {
                 AnyView(AdminSystemStatusLine(status: status, open: open))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous))
             }
         }
-        .padding(.horizontal, DS.Hub.swipePadding)
-        .padding(.top, DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("يحتاج انتباهك", "Needs your attention"))
@@ -876,23 +870,19 @@ struct AdminAttentionPanel: View {
     @ViewBuilder
     private var numbers: some View {
         let list = items
-        if typeSize.isAccessibilitySize {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) { cell(list[0], divided: false); cell(list[1], divided: true) }
-                hairline(horizontal: true)
-                HStack(spacing: 0) { cell(list[2], divided: false); cell(list[3], divided: true) }
+        if typeSize >= .xxxLarge {
+            VStack(spacing: DS.Spacing.xsm) {
+                HStack(spacing: DS.Spacing.xsm) { cell(list[0]); cell(list[1]) }
+                HStack(spacing: DS.Spacing.xsm) { cell(list[2]); cell(list[3]) }
             }
         } else {
-            HStack(spacing: 0) {
-                ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
-                    cell(item, divided: index > 0)
-                }
+            HStack(spacing: DS.Spacing.xsm) {
+                ForEach(list) { cell($0) }
             }
         }
     }
 
-    /// رقم يفتح «الوارد» بفلتره (أو الرسائل)، وخطّ رفيع على طرفه الأول بينه وبين ما قبله
-    private func cell(_ item: Item, divided: Bool) -> some View {
+    private func cell(_ item: Item) -> some View {
         let filter = item.filter
         return NavigationLink {
             AdminLazyPage {
@@ -903,56 +893,48 @@ struct AdminAttentionPanel: View {
             AdminAttentionNumber(value: loading ? nil : item.value, label: item.label, icon: item.icon, tint: item.tint)
         }
         .buttonStyle(DSPressStyle())
-        .overlay(alignment: .leading) {
-            if divided {
-                hairline(horizontal: false).padding(.vertical, DS.Spacing.sm)
-            }
-        }
-    }
-
-    private func hairline(horizontal: Bool) -> some View {
-        Rectangle()
-            .fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
-            .frame(width: horizontal ? nil : DS.Border.width, height: horizontal ? DS.Border.width : nil)
-            .accessibilityHidden(true)
+        .accessibilityIdentifier("admin.attention.\(item.id)")
+        .accessibilityHint(item.filter == .waiting
+            ? L10n.t("يفتح الطلبات التي تنتظر قرارك", "Opens requests awaiting your decision")
+            : L10n.t("يفتح القائمة للمراجعة", "Opens the list for review"))
     }
 }
 
-/// رقم في «يحتاج انتباهك»: الرقم بلون معناه على البطاقة (ذهبي، أحمر، كهرماني، أساسي) وتحته الأيقونة والاسم بالثانوي،
-/// في وسط عموده. الرقم يعدّ من الصفر حين يصل (`DSCountText`، الدفعة ١٠ «الأرقام تعدّ»). خط الجهاز أكبر من الافتراضي: الاسم
-/// على سطرين محجوزين فتبقى الأعمدة بطول واحد (بلا `fixedSize`). الدفعة ١٣: الرقم `hubKPI` (كان `hubPulse`) والاسم
-/// `hubLabel` (كان `caption`)
+/// خانة مدمجة؛ الأيقونة والعدد في سطر، والاسم تحته، واللون يبرز ما يحتاج متابعة.
 struct AdminAttentionNumber: View {
     /// nil = لم يُحمَّل («—»)
     let value: Int?
     let label: String
     let icon: String
     let tint: Color
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let wraps = typeSize > .large
+        let active = (value ?? 0) > 0
+        let ink = active ? tint : DS.Color.textSecondary
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
         VStack(spacing: DS.Spacing.xxs) {
-            DSCountText(value: value)
-                .dsFont(.statValue)
-                .monospacedDigit()
-                .foregroundColor(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
             HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
-                Image(dsSymbol: icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
-                Text(label)
-                    .dsFont(.hubLabel)
-                    .lineLimit(wraps ? 2 : 1, reservesSpace: wraps)
-                    .minimumScaleFactor(0.8)
-                    .multilineTextAlignment(.center)
+                Image(dsSymbol: icon)
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .accessibilityHidden(true)
+                DSCountText(value: value)
+                    .dsFont(.statValue)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
-            .foregroundColor(DS.Color.textSecondary)
+            .foregroundColor(ink)
+            Text(label)
+                .dsFont(.hubLabel)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundColor(DS.Color.textSecondary)
         }
-        .padding(.horizontal, DS.Spacing.xxs)
-        .padding(.vertical, DS.Spacing.xs)
-        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
-        .contentShape(Rectangle())
+        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(maxWidth: .infinity, minHeight: 60)
+        .background(shape.fill((active ? tint : DS.Color.textTertiary).opacity(DS.Opacity.tintFillSoft)))
+        .contentShape(shape)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label): \(value.map { "\($0)" } ?? "—")")
     }
@@ -1212,7 +1194,7 @@ struct AdminBaselineDot: View {
     }
 }
 
-/// ملخّص ثابت بارتفاع سطر؛ التفاصيل الكاملة متاحة من نفس البطاقة.
+/// رأس مدمج للعائلة، وتفصيل الرجال والنساء، وإحصاء قابل للفتح من الصف كله.
 private struct AdminFamilySummary: View {
     let counts: AdminMemberCounts
     @State private var expanded = false
@@ -1225,43 +1207,51 @@ private struct AdminFamilySummary: View {
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "person.3.fill")
+                        .dsGlyph(DS.Glyph.md, weight: .semibold)
                         .foregroundColor(DS.Color.accent.dsReadableGlyph)
+                        .frame(width: DS.Icon.section, height: DS.Icon.section)
                         .accessibilityHidden(true)
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: DS.Spacing.md) { figures }
-                        VStack(alignment: .leading, spacing: DS.Spacing.xs) { figures }
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+                            Text(L10n.t("العائلة", "Family")).dsFont(.hubRow)
+                            Text(number(counts.total)).dsFont(.statValue).monospacedDigit()
+                        }
+                        Text(L10n.t("الرجال \(number(counts.men)) · النساء \(number(counts.women))",
+                                    "Men \(number(counts.men)) · Women \(number(counts.women))"))
+                            .dsFont(.caption)
+                            .monospacedDigit()
+                            .foregroundColor(DS.Color.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    Spacer(minLength: 0)
+                    Spacer(minLength: DS.Spacing.xs)
                     Image(systemName: "chevron.down")
+                        .dsGlyph(DS.Glyph.xs, weight: .semibold)
                         .rotationEffect(.degrees(expanded ? 180 : 0))
-                        .foregroundColor(DS.Color.textTertiary)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(width: DS.Icon.section, height: DS.Icon.section)
                         .accessibilityHidden(true)
                 }
-                .dsFont(.footnote)
                 .foregroundColor(DS.Color.textPrimary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .padding(.vertical, DS.Spacing.xs)
                 .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
-                .contentShape(Rectangle())
+                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(DS.Color.accent.opacity(DS.Opacity.tintFillSoft)))
+                .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             }
             .buttonStyle(DSPressStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("admin.family.summary")
+            .accessibilityLabel(L10n.t("العائلة: \(number(counts.total))، الرجال: \(number(counts.men))، النساء: \(number(counts.women))",
+                                       "Family: \(number(counts.total)), men: \(number(counts.men)), women: \(number(counts.women))"))
             .accessibilityValue(expanded ? L10n.t("موسّع", "Expanded") : L10n.t("مختصر", "Collapsed"))
             .accessibilityHint(L10n.t("إظهار أو إخفاء إحصاء الأفراد", "Show or hide family census"))
             if expanded {
                 AdminMemberCountsCard(counts: counts)
-                    .padding(.bottom, DS.Spacing.sm)
+                    .accessibilityIdentifier("admin.family.census")
             }
         }
-        .padding(.horizontal, DS.Hub.swipePadding)
-        .padding(.top, DS.Spacing.xs)
-    }
-
-    @ViewBuilder
-    private var figures: some View {
-        Text(L10n.t("العائلة: \(number(counts.total))", "Family: \(number(counts.total))"))
-            .monospacedDigit()
-        Text(L10n.t("الرجال: \(number(counts.men)) · النساء: \(number(counts.women))",
-                    "Men: \(number(counts.men)) · Women: \(number(counts.women))"))
-            .monospacedDigit()
-            .foregroundColor(DS.Color.textSecondary)
     }
 
     private func number(_ value: Int?) -> String { value.map { "\($0)" } ?? "—" }
@@ -1354,9 +1344,7 @@ struct AdminMemberCountsCard: View {
             registeredChip
                 .frame(maxWidth: .infinity, alignment: stacked ? .leading : .center)
         }
-        // الصفحة الثانية من «المربّع اللي ينسحب» (الدفعة ١٠) — البطاقة البيضاء من المربّع نفسه، والأسفل منه (شريط النقاط)
-        .padding(.horizontal, DS.Hub.swipePadding)
-        .padding(.top, DS.Hub.swipePadding)
+        .padding(.top, DS.Spacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(AdminEstimateInfo(unverified: unverified, show: $showEstimate, open: $openVerify))
     }
