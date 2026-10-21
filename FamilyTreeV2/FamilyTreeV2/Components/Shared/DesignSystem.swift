@@ -338,7 +338,7 @@ enum DS {
         /// يُطبَّق على العناوين الكبرى فقط؛ ويبقى نص المحتوى على خط النظام (SF Pro) لأقصى وضوح.
         static let displayDesign: SwiftUI.Font.Design = .rounded
 
-        // MARK: Alexandria — خط الهوية (تجربة)
+        // MARK: Cairo — خط الهوية (تجربة)
         /// أسماء PostScript للأوزان المضافة في Resources/Fonts
         enum Plex {
             static let regular  = AppTypeface.regular
@@ -350,12 +350,12 @@ enum DS {
             static func name(for weight: SwiftUI.Font.Weight) -> String { DS.Font.plexName(weight) }
         }
 
-        /// اسم الوزن من مصدر الخط الموحّد (تسعة أوزان أصلية)
+        /// اسم الوزن من مصدر الخط الموحّد (الأوزان الأصلية المتاحة)
         static func plexName(_ weight: SwiftUI.Font.Weight) -> String {
             AppTypeface.name(for: weight)
         }
 
-        /// خط Alexandria مع دعم Dynamic Type — يكبر ويصغر مع «حجم النص» في إعدادات الجهاز
+        /// خط Cairo مع دعم Dynamic Type — يكبر ويصغر مع «حجم النص» في إعدادات الجهاز
         /// بنفس نسبة نمط Apple الأقرب لحجمه (`textStyle(for:)`)
         static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
             .custom(plexName(weight), size: size, relativeTo: textStyle(for: size))
@@ -441,7 +441,7 @@ enum DS {
             scaled(size, weight: weight, design: displayDesign)
         }
 
-        /// Alexandria بحجم ثابت لا يتبع Dynamic Type — لنصوص لوحة الشجرة داخل عُقد بمقاس ثابت
+        /// Cairo بحجم ثابت لا يتبع Dynamic Type — لنصوص لوحة الشجرة داخل عُقد بمقاس ثابت
         /// (بدل .system(size:) في تلك الأماكن) — من main (الهوية)
         static func plexFixed(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
             .custom(plexName(weight), fixedSize: size)
@@ -684,7 +684,7 @@ enum DS {
 
 // MARK: - أدوار النص — «التعديل من مكان واحد» (طلب المالك ٢٠٢٦-١٠-٠٧)
 //
-// كل نص في التطبيق دوره واحد من هذا الجدول (خط Alexandria + نمط Apple + وزن). تغيير سطر هنا يغيّر
+// كل نص في التطبيق دوره واحد من هذا الجدول (خط Cairo + نمط Apple + وزن). تغيير سطر هنا يغيّر
 // كل مكان بنفس الدور. كانت الأحجام تُقرَّر في كل شاشة (~١٠٤٠ موضعاً بثلاثين تركيبة).
 // «حجم الخط الافتراضي في الآيفون» (طلب المالك ٢٠٢٦-١٠-٠٨): كل دور = نمط Apple بحجمه الافتراضي
 // (`DS.Font.appleSize`) ومقيّد به (`relativeTo:`)، فيتبع «حجم النص» في إعدادات الجهاز — لا أحجام خاصة بالتطبيق.

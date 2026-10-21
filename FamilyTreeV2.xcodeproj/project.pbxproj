@@ -51,6 +51,16 @@
 		5E1AF0D12F9A000100C0FFEE /* Exceptions for "FamilyTreeV2" folder in "ShareExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"FamilyTreeV2/Resources/Fonts/Cairo-ExtraLight.ttf",
+				"FamilyTreeV2/Resources/Fonts/Cairo-Light.ttf",
+				"FamilyTreeV2/Resources/Fonts/Cairo-Regular.ttf",
+				"FamilyTreeV2/Resources/Fonts/Cairo-Medium.ttf",
+				"FamilyTreeV2/Resources/Fonts/Cairo-SemiBold.ttf",
+				"FamilyTreeV2/Resources/Fonts/Cairo-Bold.ttf",
+				"FamilyTreeV2/Resources/Fonts/Cairo-ExtraBold.ttf",
+				"FamilyTreeV2/Resources/Fonts/Cairo-Black.ttf",
+				"FamilyTreeV2/Resources/Fonts/Cairo-ExtraBlack.ttf",
+				"FamilyTreeV2/Resources/Fonts/Cairo-OFL.txt",
 				"FamilyTreeV2/Resources/Fonts/Alexandria-Thin.ttf",
 				"FamilyTreeV2/Resources/Fonts/Alexandria-ExtraLight.ttf",
 				"FamilyTreeV2/Resources/Fonts/Alexandria-Light.ttf",

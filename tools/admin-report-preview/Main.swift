@@ -16,7 +16,7 @@ final class App: UIResponder, UIApplicationDelegate {
             assertions.append(title)
         }
         for weight: UIFont.Weight in [.ultraLight, .thin, .light, .regular, .medium, .semibold, .bold, .heavy, .black] {
-            try check(AppTypeface.uiFont(size: 17, weight: weight).fontName.hasPrefix("Alexandria-"), "Alexandria weight \(weight.rawValue) is registered")
+            try check(AppTypeface.uiFont(size: 17, weight: weight).fontName.hasPrefix("Cairo-"), "Cairo weight \(weight.rawValue) is registered")
         }
         let root = UUID()
         let branch = UUID()

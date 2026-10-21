@@ -22,6 +22,15 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>UIAppFonts</key>
 	<array>
+		<string>Cairo-ExtraLight.ttf</string>
+		<string>Cairo-Light.ttf</string>
+		<string>Cairo-Regular.ttf</string>
+		<string>Cairo-Medium.ttf</string>
+		<string>Cairo-SemiBold.ttf</string>
+		<string>Cairo-Bold.ttf</string>
+		<string>Cairo-ExtraBold.ttf</string>
+		<string>Cairo-Black.ttf</string>
+		<string>Cairo-ExtraBlack.ttf</string>
 		<string>Alexandria-Thin.ttf</string>
 		<string>Alexandria-ExtraLight.ttf</string>
 		<string>Alexandria-Light.ttf</string>

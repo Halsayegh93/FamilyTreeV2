@@ -8,7 +8,7 @@ import UIKit
 // ⚠️ مصدر الحقيقة في التطبيق — أي تغيير هناك يُنقل هنا:
 //   • الألوان: `Components/Shared/AppSection.swift` ← `.home` «البحري الخفيف» (٢٠٢٦-١٠-٠٧)،
 //     ونصوص/أسطح `DS.Color` في `Components/Shared/DesignSystem.swift`
-//   • الخط وأدوار النص: `DS.Font.plex` / `DS.TextRole` (Alexandria — الخطوط نفسها من
+//   • الخط وأدوار النص: `DS.Font.plex` / `DS.TextRole` (Cairo — الخطوط نفسها من
 //     `FamilyTreeV2/Resources/Fonts`، مضمومة لهدف الامتداد في المشروع + `UIAppFonts`)
 //   • المربّع والبطاقة والأزرار: `DSBox`، `DS.Card` / `.dsCard()`، `DSBoxButtonStyle`،
 //     `DSComposerHeader`، `DSComposerSection`، `DSComposerField`، `DSOptionTiles`، `FT5SGlyph.button`
@@ -41,7 +41,7 @@ enum ShareDS {
         }
     }
 
-    // MARK: الخط — Alexandria بأدوار النص (`DS.TextRole`)
+    // MARK: الخط — Cairo بأدوار النص (`DS.TextRole`)
     // = مقاسات Apple الافتراضية (حجم النص «كبير») مقيّدة بنمطها — تتبع «حجم النص» في الجهاز
     // (طلب المالك ٢٠٢٦-١٠-٠٨ «حجم الخط الافتراضي في الآيفون»)
     struct TextRole {

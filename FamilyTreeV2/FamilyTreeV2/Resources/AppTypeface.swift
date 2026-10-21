@@ -2,17 +2,18 @@ import SwiftUI
 import UIKit
 
 /// One font family shared by app interfaces, PDFs and the share extension.
-/// Alexandria static weights are generated from the OFL variable font.
+/// Cairo static weights are generated from the OFL variable font.
 enum AppTypeface {
-    nonisolated static let ultraLight = "Alexandria-Thin"
-    nonisolated static let thin = "Alexandria-ExtraLight"
-    nonisolated static let light = "Alexandria-Light"
-    nonisolated static let regular = "Alexandria-Regular"
-    nonisolated static let medium = "Alexandria-Medium"
-    nonisolated static let semibold = "Alexandria-SemiBold"
-    nonisolated static let bold = "Alexandria-Bold"
-    nonisolated static let heavy = "Alexandria-ExtraBold"
-    nonisolated static let black = "Alexandria-Black"
+    // Cairo starts at 200; ultraLight and thin use its lightest native weight.
+    nonisolated static let ultraLight = "Cairo-ExtraLight"
+    nonisolated static let thin = "Cairo-ExtraLight"
+    nonisolated static let light = "Cairo-Light"
+    nonisolated static let regular = "Cairo-Regular"
+    nonisolated static let medium = "Cairo-Medium"
+    nonisolated static let semibold = "Cairo-SemiBold"
+    nonisolated static let bold = "Cairo-Bold"
+    nonisolated static let heavy = "Cairo-ExtraBold"
+    nonisolated static let black = "Cairo-Black"
 
     nonisolated static func name(for weight: SwiftUI.Font.Weight) -> String {
         switch weight {
