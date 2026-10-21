@@ -11,10 +11,9 @@ import PDFKit
 // («نطوّر فلاتر التقارير بشكل مبسط»): سجل العائلة «كل الفروع ⌄» + «كل الأعمار ⌄» (قائمة الفئات — «اذا بس بالاعمار؟»)
 // + الكل · أحياء · متوفون — الهواتف الكل · مسجّلون · بلا رقم هاتف — المتوفون الكل · التاريخ غير مكتمل — الملخّص بلا
 // تصفية. الافتراضي تقرير مفيد بلا أي ضغطة.
-// وتحته سطر «البيانات:» (طلب المالك «اضيف البيانات او اشيل البيانات بشكل بسيط و مرتب بدون اي تعقيد»): شرائح صغيرة
-// بما يُطبع — أعمدة الجداول، أو أقسام الملخّص — الممتلئة ✓ تُطبع والمحدّدة + لا، والضغط يبدّلها؛ الاسم (والرقم في
-// الهواتف) مقفل. الافتراضي = أعمدة التقرير السابقة، والاختيار يُحفظ لكل نوع ولكل مستخدم (`AdminReportFieldsStore`)،
-// و«الافتراضي» آخر السطر متى تغيّر. الملف يتكيّف (`AdminReportPDF.plan`): الأعمدة المختارة فقط والاسم يأخذ ما بقي.
+// وتحته «البيانات وتنسيق الملف»: يفتح نافذة بخيارات مجمعة وقوالب مختصر/أساسي/كل البيانات.
+// الاختيار محفوظ لكل نوع ولكل مستخدم، والتطبيق يعيد إنشاء المعاينة بعد «تطبيق» فقط.
+// سجل الأعضاء يدعم صفوفاً أصغر، وقائمة واحدة أو حسب الفروع، وغلافاً وملخصات اختيارية.
 // ← «المعاينة»: سطر النطاق («سجل العائلة · كل الفروع · أحياء — 2,344 فرداً») وصورة الغلاف وحدها بشارة «14 صفحة»
 // (الضغط يفتح الملف كاملاً — طلب المالك «خل بس وحدة وانا ادش عليها») ← زرّ «مشاركة / حفظ» عائم مثبّت فوق شريط
 // التبويبات (ورقة المشاركة) — بلا شريط زجاجي عريض ولا عدد صفحات بجانبه.
@@ -69,6 +68,8 @@ struct AdminReportsView: View {
     @State private var viewerURL: AdminReportViewerItem?
     /// «البيانات:» لكل نوع ولكل مستخدم (`AdminReportFieldsStore`)
     @AppStorage(AdminReportFieldsStore.key) private var fieldsRaw = ""
+    @AppStorage("adminReports.presentation") private var optionsRaw = ""
+    @State private var customizeOpen = false
 
     /// `kind`: التقرير المفتوح أولاً (الافتراضي سجل العائلة)
     init(scope: AdminReportScope? = nil, kind: AdminReportKind = .register) {
@@ -97,6 +98,12 @@ struct AdminReportsView: View {
                 await accounts.refresh()
                 if women == nil, let fetched = try? await WomenStore.fetch() { women = fetched }
             }
+            .sheet(isPresented: $customizeOpen) {
+                AdminReportCustomizationSheet(kind: kind, fields: fields, options: options) { chosen, layout in
+                    saveFields(chosen)
+                    saveOptions(layout)
+                }
+            }
             .sheet(isPresented: $showShare, onDismiss: { shareItems.removeAll() }) {
                 AdminReportShareSheet(items: shareItems) { showShare = false }
             }
@@ -124,12 +131,13 @@ struct AdminReportsView: View {
         let names: [String: String]?
         let allowed: Bool
         let fields: Set<AdminReportField>
+        let options: AdminReportOptions
     }
 
     private var genKey: GenKey {
         GenKey(kind: kind, filter: filter, members: memberVM.allMembers.count, version: memberVM.membersVersion,
                accounts: accounts.accounts.count, accountsLoaded: accounts.loaded, women: women?.count,
-               names: appSettingsVM.settings.branchNames, allowed: authVM.isAdmin, fields: fields)
+               names: appSettingsVM.settings.branchNames, allowed: authVM.isAdmin, fields: fields, options: options)
     }
 
     private func regenerate() async {
@@ -153,9 +161,10 @@ struct AdminReportsView: View {
         if jobKind != .register { current.scope = nil }
         let jobFilter = current
         let jobFields = fields
+        let jobOptions = options
         let flag = AdminReportCancelFlag()
         let job = Task.detached(priority: .userInitiated) {
-            try? AdminReportJob.run(jobKind, input: input, filter: jobFilter, fields: jobFields, flag: flag)
+            try? AdminReportJob.run(jobKind, input: input, filter: jobFilter, fields: jobFields, options: jobOptions, flag: flag)
         }
         let out = await withTaskCancellationHandler { await job.value } onCancel: { flag.cancel() }
         guard !Task.isCancelled else { return }
@@ -352,58 +361,40 @@ struct AdminReportsView: View {
         fieldsRaw = AdminReportFieldsStore.encode(all)
     }
 
-    /// سطر واحد: «البيانات:» ثم شريحة لكل بيان (✓ يُطبع · + لا يُطبع · قفل دائماً) تُمرَّر أفقياً إن ضاق،
-    /// و«الافتراضي» ثابت آخر السطر متى تغيّر شيء (لا يختفي خلف التمرير)
-    private var fieldsRow: some View {
-        let current = fields
-        let changed = current != kind.resolvedFields(nil)
-        return HStack(spacing: DS.Spacing.md) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.xsm) {
-                    Text(L10n.t("البيانات:", "Data:"))
-                        .dsFont(.chipCompact)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .fixedSize()
-                    ForEach(kind.fields) { f in
-                        fieldChip(f, on: current.contains(f), locked: kind.lockedFields.contains(f), current: current)
-                    }
-                }
-                .padding(.vertical, DS.Spacing.xxs)
-            }
-            if changed {
-                Button {
-                    UISelectionFeedbackGenerator().selectionChanged()
-                    withAnimation(reduceMotion ? nil : DS.Anim.snappy) { saveFields(nil) }
-                } label: {
-                    Text(L10n.t("الافتراضي", "Default"))
-                        .dsFont(.chipCompact)
-                        .foregroundColor(DS.Color.primary)
-                        .fixedSize()
-                        .frame(minHeight: DSBox.chipHeightSmall)
-                        .dsTapArea(width: DS.Icon.tapTarget, height: DSBox.chipHeightSmall)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.t("إرجاع البيانات الافتراضية", "Restore the default data"))
-                .transition(.opacity)
-            }
-        }
+    private var options: AdminReportOptions {
+        guard kind == .register,
+              let raw = AdminReportFieldsStore.decode(optionsRaw)[fieldsKey],
+              let data = raw.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(AdminReportOptions.self, from: data) else { return .init() }
+        return decoded
     }
 
-    private func fieldChip(_ f: AdminReportField, on: Bool, locked: Bool, current: Set<AdminReportField>) -> some View {
-        let title = Self.fieldTitle(f, kind: kind)
-        return DSChipButton(title, icon: locked ? "lock.fill" : on ? "checkmark" : "plus", tint: kindTint,
-                            isSelected: on, size: .small) {
-            guard !locked else { return }
-            UISelectionFeedbackGenerator().selectionChanged()
-            var next = current
-            if on { next.remove(f) } else { next.insert(f) }
-            withAnimation(reduceMotion ? nil : DS.Anim.snappy) { saveFields(next) }
+    private func saveOptions(_ options: AdminReportOptions) {
+        guard kind == .register, let data = try? JSONEncoder().encode(options) else { return }
+        var all = AdminReportFieldsStore.decode(optionsRaw)
+        all[fieldsKey] = String(decoding: data, as: UTF8.self)
+        optionsRaw = AdminReportFieldsStore.encode(all)
+    }
+
+    private var fieldsRow: some View {
+        Button { customizeOpen = true } label: {
+            HStack(spacing: DS.Spacing.md) {
+                AdminIconSquare(symbol: "slider.horizontal.3", tint: DS.Color.accent)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(L10n.t("البيانات وتنسيق الملف", "Data and layout"))
+                        .dsFont(.hubRow).foregroundColor(DS.Color.textPrimary)
+                    Text(kind.fields.filter(fields.contains).map { Self.fieldTitle($0, kind: kind) }.joined(separator: " · "))
+                        .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                DSChevron()
+            }
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
         }
-        .accessibilityLabel(title)
-        .accessibilityValue(on ? L10n.t("في التقرير", "In the report") : L10n.t("ليس في التقرير", "Not in the report"))
-        .accessibilityHint(locked ? L10n.t("دائماً في التقرير", "Always in the report")
-                           : on ? L10n.t("يزيله من التقرير", "Removes it from the report")
-                           : L10n.t("يضيفه للتقرير", "Adds it to the report"))
+        .buttonStyle(DSPressStyle())
+        .accessibilityHint(L10n.t("اختر البيانات وحجم الصفوف والغلاف", "Choose fields, row size and cover"))
     }
 
     static func fieldTitle(_ f: AdminReportField, kind: AdminReportKind) -> String {

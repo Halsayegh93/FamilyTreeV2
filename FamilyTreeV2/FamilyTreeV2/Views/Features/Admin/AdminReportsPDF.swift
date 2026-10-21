@@ -3,7 +3,7 @@ import UIKit
 // MARK: - رسم تقارير العائلة الرسمية (PDF) — «رسمي بهوية العائلة» (طلب المالك ٢٠٢٦-١٠-٢٠)
 //
 // تصميم أبيض (طلب المالك «ابي تصميم ابيض اكثر» و«ابيض بدال الكريمي»): ورق أبيض خالص بلا كريمي ولا رملي.
-// A4 عمودي. الصفحة الأولى غلاف أبيض: شعار العائلة الحديث (`FamilyLogoNavy` — خط «المحمدعلي» الكحلي، من أصله
+// A4 عمودي. الغلاف اختياري لسجل الأعضاء، وهو أبيض: شعار العائلة الحديث (`FamilyLogoNavy` — خط «المحمدعلي» الكحلي، من أصله
 // المتّجه بدقّة ×٤) في الوسط، ثم عنوان التقرير ونطاقه بالكحلي، وسدو ذهبي رفيع تحته، وبيانات صغيرة رمادية (التاريخ بتوقيت الكويت،
 // من أعدّه، النطاق، العدد)، وفقرة ما يحويه، وشارة محدّدة صغيرة «سرّي — لعائلة المحمدعلي فقط». كل صفحة بعدها:
 // رأس رفيع (عنوان التقرير بالكحلي + الشعار صغيراً + خطّ كحلي شعري)، وتذييل سطر واحد: الختم رمادياً صغيراً يميناً و«صفحة
@@ -143,8 +143,9 @@ nonisolated enum AdminReportPDF {
     // MARK: الرسم الكامل
 
     static func render(_ doc: AdminReportDoc, isCancelled: () -> Bool = { false }) throws -> Output {
-        let laid = try layout(doc.blocks, isCancelled: isCancelled)
-        let total = laid.count + 1
+        let laid = try layout(doc.blocks, compact: doc.kind == .register && doc.options.compactRows, isCancelled: isCancelled)
+        let coverPages = doc.options.includeCover ? 1 : 0
+        let total = laid.count + coverPages
         let vector = familyLogo()
         let logo = vector.flatMap { raster($0, height: coverLogoWidth * $0.size.height / max($0.size.width, 1)) }
         let smallLogo = vector.flatMap { raster($0, height: headerLogoHeight) }
@@ -158,14 +159,16 @@ nonisolated enum AdminReportPDF {
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: pageSize), format: format)
         var cancelled = false
         let data = renderer.pdfData { ctx in
-            ctx.beginPage()
-            drawCover(doc, total: total, logo: logo)
+            if doc.options.includeCover {
+                ctx.beginPage()
+                drawCover(doc, total: total, logo: logo)
+            }
             for (i, items) in laid.enumerated() {
                 if isCancelled() { cancelled = true; return }
                 ctx.beginPage()
                 drawHeader(doc.title, logo: smallLogo)
                 for item in items { drawItem(item) }
-                drawFooter(page: i + 2, total: total)
+                drawFooter(page: i + 1 + coverPages, total: total)
             }
         }
         if cancelled { throw Cancelled() }
@@ -180,9 +183,11 @@ nonisolated enum AdminReportPDF {
         let bold: UIFont
         let head: UIFont
         let padX: CGFloat
+        let padY: CGFloat
 
-        static let regular = TableStyle(body: fBody, bold: fBodyBold, head: fHead, padX: 6)
-        static let compact = TableStyle(body: fBodyCompact, bold: fBodyBoldCompact, head: fHeadCompact, padX: 4)
+        static let regular = TableStyle(body: fBody, bold: fBodyBold, head: fHead, padX: 6, padY: 4.5)
+        static let dense = TableStyle(body: fBodyCompact, bold: fBodyBoldCompact, head: fHeadCompact, padX: 4, padY: 3.25)
+        static let compact = TableStyle(body: fBodyCompact, bold: fBodyBoldCompact, head: fHeadCompact, padX: 4, padY: 4.5)
     }
 
     /// مقاسات أعمدة جدول (بترتيب الأعمدة) وخطّه
@@ -200,12 +205,11 @@ nonisolated enum AdminReportPDF {
         var rowH: [CGFloat] = []
         var footerH: CGFloat = 0
 
-        static let padY: CGFloat = 4.5
 
         /// `plan`: مقاسات من المحتوى (جدول بعمود `fill`) — nil = نِسَب `weight`
-        init(_ table: AdminReportTable, plan: ColumnPlan?) {
+        init(_ table: AdminReportTable, plan: ColumnPlan?, compact: Bool) {
             self.table = table
-            style = plan?.style ?? .regular
+            style = plan?.style ?? (compact ? .dense : .regular)
             let widths: [CGFloat]
             if let plan {
                 widths = plan.widths
@@ -226,7 +230,7 @@ nonisolated enum AdminReportPDF {
             for (i, c) in table.columns.enumerated() {
                 h = max(h, AdminReportPDF.textHeight(c.title, width: frames[i].w - style.padX * 2, font: style.head))
             }
-            headerH = h + Self.padY * 2 + 2
+            headerH = h + style.padY * 2 + 2
         }
 
         func measure(_ row: AdminReportTable.Row, font: UIFont) -> CGFloat {
@@ -234,7 +238,7 @@ nonisolated enum AdminReportPDF {
             for (i, c) in table.columns.enumerated() where c.wraps && i < row.cells.count {
                 h = max(h, AdminReportPDF.textHeight(row.cells[i], width: frames[i].w - style.padX * 2, font: font))
             }
-            return h + Self.padY * 2
+            return h + style.padY * 2
         }
     }
 
@@ -253,15 +257,15 @@ nonisolated enum AdminReportPDF {
     /// جداول بعمود `fill` (الاسم): كل عمود بعرض أطول محتواه (والعنوان على سطرين إن لزم)، والاسم يأخذ ما بقي.
     /// إن ضاقت الصفحة: تلتفّ الأعمدة القابلة للالتفاف حتى أطول كلمة، ثم الخط المضغوط، ثم (آخر حلّ) تصغر الأعمدة بالنسبة.
     /// تُحسب مرة لكل مجموعة جداول بالأعمدة نفسها — جداول الفروع كلها بمقاس واحد.
-    private static func plan(_ tables: [AdminReportTable]) -> ColumnPlan? {
+    private static func plan(_ tables: [AdminReportTable], compact: Bool) -> ColumnPlan? {
         guard let columns = tables.first?.columns, let fill = columns.firstIndex(where: \.fill) else { return nil }
-        return plan(tables, columns: columns, fill: fill, compact: false)
-            ?? plan(tables, columns: columns, fill: fill, compact: true)
+        return plan(tables, columns: columns, fill: fill, compact: compact, dense: compact)
+            ?? plan(tables, columns: columns, fill: fill, compact: true, dense: compact)
     }
 
     private static func plan(_ tables: [AdminReportTable], columns: [AdminReportTable.Column], fill: Int,
-                             compact: Bool) -> ColumnPlan? {
-        let style = compact ? TableStyle.compact : .regular
+                             compact: Bool, dense: Bool) -> ColumnPlan? {
+        let style = compact ? (dense ? TableStyle.dense : .compact) : .regular
         var cache: [String: CGFloat] = [:]
         // مفتاح الذاكرة بالخط (نفس النص بخط آخر عرضه آخر)
         func width(_ s: String, _ font: UIFont) -> CGFloat {
@@ -350,7 +354,7 @@ nonisolated enum AdminReportPDF {
 
     private static let blockGap: CGFloat = 12
 
-    private static func layout(_ blocks: [AdminReportBlock], isCancelled: () -> Bool) throws -> [[Item]] {
+    private static func layout(_ blocks: [AdminReportBlock], compact: Bool, isCancelled: () -> Bool) throws -> [[Item]] {
         var pages: [[Item]] = [[]]
         var y = contentTop
         func newPage() {
@@ -366,7 +370,7 @@ nonisolated enum AdminReportPDF {
         }
         var plans: [String: ColumnPlan] = [:]
         for (key, list) in groups {
-            plans[key] = plan(list)
+            plans[key] = plan(list, compact: compact)
             if isCancelled() { throw Cancelled() }
         }
 
@@ -374,7 +378,7 @@ nonisolated enum AdminReportPDF {
         var tables: [Int: TableLayout] = [:]
         for (i, b) in blocks.enumerated() {
             guard case let .table(t) = b else { continue }
-            let l = TableLayout(t, plan: plans[signature(t)])
+            let l = TableLayout(t, plan: plans[signature(t)], compact: compact)
             l.rowH = t.rows.map { l.measure($0, font: l.style.body) }
             if let f = t.footer { l.footerH = l.measure(f, font: l.style.bold) }
             tables[i] = l
@@ -516,7 +520,7 @@ nonisolated enum AdminReportPDF {
             let tint = row.tones[i].map { AdminReportPDF.color($0) } ?? ink
             let align: NSTextAlignment = c.centered ? .center : .right
             if c.wraps {
-                let th = h > single + TableLayout.padY * 2 + 1 ? textHeight(text, width: w, font: font) : single
+                let th = h > single + l.style.padY * 2 + 1 ? textHeight(text, width: w, font: font) : single
                 draw(text, in: CGRect(x: f.x + pad, y: y + (h - th) / 2, width: w, height: th + 1),
                      font: font, color: tint, align: align, wrap: true)
             } else {
@@ -984,14 +988,14 @@ nonisolated struct AdminReportResult: @unchecked Sendable {
 
 nonisolated enum AdminReportJob {
     static let thumbnailWidth: CGFloat = 220
-    /// المعاينة صفحة واحدة (الغلاف) وعليها عدد الصفحات — الضغط يفتح الملف كاملاً
+    /// المعاينة أول صفحة (الغلاف إن اختير) وعليها عدد الصفحات — الضغط يفتح الملف كاملاً
     static let thumbnailPages = 1
 
     /// `fields`: ما اختير في «البيانات:» — nil = الافتراضي
     static func run(_ kind: AdminReportKind, input: AdminReportInput, filter: AdminReportFilter,
-                    fields: Set<AdminReportField>? = nil, flag: AdminReportCancelFlag) throws -> AdminReportResult {
+                    fields: Set<AdminReportField>? = nil, options: AdminReportOptions = .init(), flag: AdminReportCancelFlag) throws -> AdminReportResult {
         let start = CFAbsoluteTimeGetCurrent()
-        let doc = AdminReportBuilder.build(kind, input: input, filter: filter, fields: fields)
+        let doc = AdminReportBuilder.build(kind, input: input, filter: filter, fields: fields, options: options)
         if flag.isCancelled { throw AdminReportPDF.Cancelled() }
         let out = try AdminReportPDF.render(doc, isCancelled: { flag.isCancelled })
         let seconds = CFAbsoluteTimeGetCurrent() - start

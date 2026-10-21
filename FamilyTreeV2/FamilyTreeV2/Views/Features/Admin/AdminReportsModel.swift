@@ -87,6 +87,29 @@ nonisolated enum AdminReportField: String, CaseIterable, Identifiable, Sendable 
     var id: String { rawValue }
 }
 
+/// Saved separately from field selection so older report preferences remain valid.
+nonisolated struct AdminReportOptions: Codable, Equatable, Sendable {
+    var compactRows = true
+    var groupByBranch = true
+    var includeCover = true
+    var includeSummary = true
+    var includeBranchSummary = true
+
+    init() {}
+    private enum CodingKeys: String, CodingKey {
+        case compactRows, groupByBranch, includeCover, includeSummary, includeBranchSummary
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        compactRows = try c.decodeIfPresent(Bool.self, forKey: .compactRows) ?? true
+        groupByBranch = try c.decodeIfPresent(Bool.self, forKey: .groupByBranch) ?? true
+        includeCover = try c.decodeIfPresent(Bool.self, forKey: .includeCover) ?? true
+        includeSummary = try c.decodeIfPresent(Bool.self, forKey: .includeSummary) ?? true
+        includeBranchSummary = try c.decodeIfPresent(Bool.self, forKey: .includeBranchSummary) ?? true
+    }
+
+}
+
 nonisolated struct AdminReportFilter: Equatable, Sendable {
     enum Life: String, CaseIterable, Sendable { case all, living, deceased }
     enum Phones: String, CaseIterable, Sendable { case all, registered, noPhone }
@@ -323,7 +346,9 @@ nonisolated struct AdminReportDoc: Sendable {
     let generatedBy: String
     let date: Date
 
-    var title: String { kind.pdfTitle }
+    var options = AdminReportOptions()
+
+    var title: String { kind == .register && !options.groupByBranch ? "قائمة الأعضاء" : kind.pdfTitle }
 
     /// «سجل العائلة · كل الفروع · أحياء — 2,344 فرداً»
     var summaryLine: String {
@@ -627,11 +652,14 @@ nonisolated enum AdminReportBuilder {
 
     /// `fields`: ما اختير في «البيانات:» — nil = الافتراضي
     static func build(_ kind: AdminReportKind, input: AdminReportInput, filter: AdminReportFilter,
-                      fields: Set<AdminReportField>? = nil) -> AdminReportDoc {
+                      fields: Set<AdminReportField>? = nil, options: AdminReportOptions = .init()) -> AdminReportDoc {
         let tree = AdminReportTree(input.people, rootId: input.rootId)
         let chosen = kind.resolvedFields(fields)
         switch kind {
-        case .register: return register(tree, input, filter, chosen)
+        case .register:
+            var doc = register(tree, input, filter, chosen, options)
+            doc.options = options
+            return doc
         case .stats: return stats(tree, input, chosen)
         case .memorial: return memorial(tree, input, filter, chosen)
         case .phones: return phones(tree, input, filter, chosen)
@@ -660,7 +688,8 @@ nonisolated enum AdminReportBuilder {
     // MARK: ١ سجل العائلة بالفروع
 
     private static func register(_ tree: AdminReportTree, _ input: AdminReportInput,
-                                 _ filter: AdminReportFilter, _ fields: Set<AdminReportField>) -> AdminReportDoc {
+                                 _ filter: AdminReportFilter, _ fields: Set<AdminReportField>,
+                                 _ options: AdminReportOptions) -> AdminReportDoc {
         var pool = tree.pool
         var scopeParts: [String] = []
         if let scope = filter.scope {
@@ -702,12 +731,12 @@ nonisolated enum AdminReportBuilder {
         let living = pool.filter { !$0.deceased }.count
         let branchCount = groups.filter { $0.head != nil }.count
 
-        var blocks: [AdminReportBlock] = [
+        var blocks: [AdminReportBlock] = options.includeSummary ? [
             .tiles([AdminReportTile(value: AdminReportText.num(pool.count), label: "الأفراد"),
                     AdminReportTile(value: AdminReportText.num(living), label: "أحياء"),
                     AdminReportTile(value: AdminReportText.num(pool.count - living), label: "متوفون"),
                     AdminReportTile(value: AdminReportText.num(branchCount), label: "الفروع")])
-        ]
+        ] : []
 
         // ملخّص الفروع
         var summary = AdminReportTable(columns: [
@@ -724,10 +753,10 @@ nonisolated enum AdminReportBuilder {
         }
         summary.footer = .init(cells: ["المجموع", "", AdminReportText.num(pool.count), AdminReportText.num(living),
                                        AdminReportText.num(pool.count - living)])
-        if !groups.isEmpty {
+        if options.includeBranchSummary && options.groupByBranch && !groups.isEmpty {
             blocks.append(.heading("ملخّص الفروع", subtitle: nil, panel: true))
             blocks.append(.table(summary))
-        } else {
+        } else if groups.isEmpty {
             blocks.append(.note("لا يوجد أفراد يطابقون هذا النطاق.", tone: .muted))
         }
 
@@ -744,12 +773,17 @@ nonisolated enum AdminReportBuilder {
         if fields.contains(.phone) { columns.append(.init(title: "رقم الهاتف", ltr: true)) }
         if fields.contains(.registration) { columns.append(.init(title: "التسجيل", wraps: true)) }
 
+        let memberBranches = Dictionary(uniqueKeysWithValues: groups.flatMap { group in
+            group.members.map { ($0.id, group.title) }
+        })
+        let memberGroups: [AdminReportTree.Group] = options.groupByBranch || groups.isEmpty ? groups
+            : [.init(title: "قائمة الأعضاء", head: nil, members: groups.flatMap(\.members))]
         var seq = 0
-        for g in groups {
+        for g in memberGroups {
             let alive = g.members.filter { !$0.deceased }.count
             var sub = "\(AdminReportText.people(g.members.count)) · أحياء \(AdminReportText.num(alive)) · متوفون \(AdminReportText.num(g.members.count - alive))"
             if let head = g.head { sub = "رأس الفرع: \(head.name) — " + sub }
-            blocks.append(.heading(g.title, subtitle: sub, panel: false))
+            blocks.append(.heading(g.title, subtitle: options.groupByBranch ? sub : (scopeParts.joined(separator: " · ") + " · " + AdminReportText.people(pool.count)), panel: false))
             var table = AdminReportTable(columns: columns, rows: [])
             table.rows.reserveCapacity(g.members.count)
             for p in g.members {
@@ -759,19 +793,13 @@ nonisolated enum AdminReportBuilder {
                 var row = AdminReportRowBuilder()
                 row.add("\(seq)")
                 row.add(p.name)
-                if fields.contains(.branch) { row.add(g.title) }
+                if fields.contains(.branch) { row.add(memberBranches[p.id] ?? "—") }
                 if fields.contains(.birth) {
                     row.add(p.birthHidden ? AdminReportText.hidden : (AdminReportText.date(p.birth) ?? "—"))
                 }
                 if fields.contains(.age) { row.add(ages[p.id].map { "\($0)" } ?? "—", dim) }
                 if fields.contains(.status) {
-                    // بلا عمود «تاريخ الوفاة» يبقى التاريخ مع الحالة كما كان
-                    if p.deceased {
-                        let withDate = fields.contains(.death) ? nil : death.map { "متوفى · \($0)" }
-                        row.add(withDate ?? "متوفى", dim)
-                    } else {
-                        row.add("حي")
-                    }
+                    row.add(p.deceased ? "متوفى" : "حي", dim)
                 }
                 if fields.contains(.death) {
                     row.add(p.deceased ? (death ?? (p.deathUnknown ? "غير معروف" : "—")) : "", dim)
@@ -785,8 +813,10 @@ nonisolated enum AdminReportBuilder {
             blocks.append(.table(table))
         }
 
-        let intro = "يضمّ هذا السجل أفراد شجرة العائلة مرتّبين بالفروع — كل فرع تحت عنوانه ورأسه، والأفراد بترتيب الشجرة"
-            + " (الأب ثم أبناؤه). يبدأ بملخّص أعداد كل فرع."
+        let intro = options.groupByBranch
+            ? "يضمّ هذا السجل أفراد شجرة العائلة مرتّبين بالفروع — كل فرع تحت عنوانه ورأسه، والأفراد بترتيب الشجرة (الأب ثم أبناؤه)."
+                + (options.includeBranchSummary ? " يبدأ بملخّص أعداد كل فرع." : "")
+            : "قائمة واحدة بأفراد شجرة العائلة وفق النطاق والبيانات المختارة، مع الحفاظ على ترتيب الشجرة."
         return AdminReportDoc(kind: .register, scope: scopeParts.joined(separator: " · "), count: pool.count,
                               intro: intro, blocks: blocks, generatedBy: input.generatedBy, date: input.date)
     }
