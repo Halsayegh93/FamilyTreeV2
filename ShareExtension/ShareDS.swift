@@ -90,7 +90,7 @@ enum ShareDS {
 
         /// = `DS.Font.role` — حجم Apple الافتراضي للدور × معامل المطابقة، مقيّداً بنمطه
         static func role(_ role: TextRole) -> Font {
-            .custom(name(role.weight), size: role.size * opticalScale, relativeTo: role.style)
+            .custom(name(role.weight), size: AppTypeface.interfaceSize(role.size * opticalScale), relativeTo: role.style)
         }
 
         /// = `DS.Font.appleSize`

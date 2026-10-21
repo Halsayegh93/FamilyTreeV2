@@ -15,6 +15,12 @@ enum AppTypeface {
     nonisolated static let heavy = "Cairo-ExtraBold"
     nonisolated static let black = "Cairo-Black"
 
+    /// Minimum base size for interface labels; diagram artwork and PDFs use their own scale.
+    nonisolated static let minimumInterfaceSize: CGFloat = 11
+    nonisolated static func interfaceSize(_ size: CGFloat) -> CGFloat {
+        max(minimumInterfaceSize, size)
+    }
+
     nonisolated static func name(for weight: SwiftUI.Font.Weight) -> String {
         switch weight {
         case .thin: return thin

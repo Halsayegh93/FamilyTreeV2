@@ -6,7 +6,8 @@ import UIKit
 struct PhoneNumberTextField: UIViewRepresentable {
     @Binding var text: String
     var placeholder: String = ""
-    var font: UIFont = AppTypeface.uiFont(size: 17, weight: .regular)
+    var font: UIFont = AppTypeface.uiFont(size: DS.TextRole.body.textSize, weight: .regular)
+    var textStyle: UIFont.TextStyle = .body
     var keyboardType: UIKeyboardType = .numberPad
     var textAlignment: NSTextAlignment = .left
     var maxLength: Int = 15
@@ -17,7 +18,7 @@ struct PhoneNumberTextField: UIViewRepresentable {
         tf.placeholder = placeholder
         // يتبع «حجم النص» في الجهاز (يكبر ويصغر معه)
         tf.adjustsFontForContentSizeCategory = true
-        tf.font = UIFontMetrics.default.scaledFont(for: font)
+        tf.font = UIFontMetrics(forTextStyle: textStyle).scaledFont(for: font)
         tf.keyboardType = keyboardType
         tf.textAlignment = textAlignment
         tf.textColor = UIColor(DS.Color.textPrimary)
@@ -37,7 +38,7 @@ struct PhoneNumberTextField: UIViewRepresentable {
         if uiView.text != text {
             uiView.text = text
         }
-        uiView.font = UIFontMetrics.default.scaledFont(for: font)
+        uiView.font = UIFontMetrics(forTextStyle: textStyle).scaledFont(for: font)
         uiView.placeholder = placeholder
     }
 
@@ -93,7 +94,7 @@ struct DSPhoneField: View {
     private var fieldHeight: CGFloat { (compact ? 44 : 56) * max(1, textScale) }
     private var innerHeight: CGFloat { (compact ? 30 : 40) * max(1, textScale) }
     /// أرقام الهاتف: سقف النص ١٧ (Body) — المضغوط ١٥ (طلب المالك ٢٠٢٦-١٠-٠٨؛ كانت ١٨)
-    private var numberFontSize: CGFloat { compact ? DS.TextRole.subtitle.size : DS.TextRole.body.size }
+    private var numberFontSize: CGFloat { compact ? DS.TextRole.subtitle.textSize : DS.TextRole.body.textSize }
     private var flagFontSize: CGFloat { compact ? 15 : 18 }
 
     var body: some View {
@@ -136,6 +137,7 @@ struct DSPhoneField: View {
                 text: $digits,
                 placeholder: placeholder,
                 font: AppTypeface.uiFont(size: numberFontSize, weight: .semibold),
+                textStyle: compact ? .subheadline : .body,
                 keyboardType: .numberPad,
                 maxLength: country.maxDigits
             )

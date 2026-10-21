@@ -423,8 +423,8 @@ enum DS {
         static var calloutBold: SwiftUI.Font { plex(DS.TextRole.callout.textSize, weight: .bold, relativeTo: .callout) }
         static var subheadline: SwiftUI.Font { role(.subtitle) }
         static var footnote: SwiftUI.Font    { role(.footnote) }
-        static var caption1: SwiftUI.Font    { plex(appleSize(.caption) * opticalScale, relativeTo: .caption) }
-        static var caption2: SwiftUI.Font    { plex(appleSize(.caption2) * opticalScale, relativeTo: .caption2) }
+        static var caption1: SwiftUI.Font    { plex(AppTypeface.interfaceSize(appleSize(.caption) * opticalScale), relativeTo: .caption) }
+        static var caption2: SwiftUI.Font    { plex(AppTypeface.interfaceSize(appleSize(.caption2) * opticalScale), relativeTo: .caption2) }
 
         /// خط مرن يدعم Dynamic Type — الحجم المطلوب نفسه مقيّداً بنمط Apple الأقرب (`textStyle(for:)`)؛
         /// الحجم الصحيح من مقاسات Apple (١١، ١٢، ١٣، ١٥، ١٦، ١٧، ٢٠، ٢٢، ٢٨، ٣٤) = النمط الافتراضي نفسه.
@@ -701,7 +701,7 @@ extension DS {
         let optical: Bool
 
         /// الحجم المرسوم فعلاً
-        var textSize: CGFloat { optical ? size * DS.Font.opticalScale : size }
+        var textSize: CGFloat { optical ? AppTypeface.interfaceSize(size * DS.Font.opticalScale) : size }
 
         /// دور نصّ = نمط Apple بحجمه الافتراضي + وزن
         init(_ style: SwiftUI.Font.TextStyle, weight: SwiftUI.Font.Weight = .regular) {

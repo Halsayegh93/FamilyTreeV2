@@ -103,14 +103,14 @@ struct OccasionOptionTile: View {
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let subtitle {
                     Text(subtitle)
                         .font(DS.Font.plex(11))
                         .foregroundColor(DS.Color.textSecondary)
                         .multilineTextAlignment(.center)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.horizontal, DS.Spacing.xs)
@@ -244,8 +244,8 @@ struct OccasionMenuField: View {
                     }
                     Text(currentTitle)
                         .font(DS.Font.plex(14, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(DS.Font.icon(12, weight: .semibold))
