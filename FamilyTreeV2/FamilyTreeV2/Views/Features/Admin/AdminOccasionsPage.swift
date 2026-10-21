@@ -203,7 +203,7 @@ struct AdminUpcomingFeed {
         scheduledCount = scheduled.count
         if let announced {
             deaths = members
-                .filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate)
+                .filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate, within: DeathRecency.alertDays)
                     && !announced.contains($0.id) }
                 .sorted { ($0.deathDate ?? "") > ($1.deathDate ?? "") }
         } else {

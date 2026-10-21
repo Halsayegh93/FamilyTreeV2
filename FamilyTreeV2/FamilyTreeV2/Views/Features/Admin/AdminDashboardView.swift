@@ -267,7 +267,7 @@ struct AdminDashboardView: View {
             diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
             pendingArchiveCount: pendingArchiveCount,
             scope: AdminAllRequestsView.reviewScope(for: authVM))
-        let deaths = all.filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate) }
+        let deaths = all.filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate, within: DeathRecency.alertDays) }
             .sorted { ($0.deathDate ?? "") > ($1.deathDate ?? "") }
         var countsNow = memberCounts
         countsNow.setMen(from: all)

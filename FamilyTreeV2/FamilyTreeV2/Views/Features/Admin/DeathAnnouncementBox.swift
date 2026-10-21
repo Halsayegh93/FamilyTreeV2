@@ -21,9 +21,12 @@ struct DeathAnnouncementTarget: Identifiable, Equatable {
 /// الوفيات «الحديثة» فقط تُعلَن (طلب المالك: «أي شخص متوفي سابقاً لا تظهره»)
 enum DeathRecency {
     static let days = 30
+    /// تنبيه «وفاة لم يُعلن عنها» في اللوحة ٧ أيام فقط (طلب المالك ٢٠٢٦-١٠-٢١ «مابي اعلن عنه خلاص انتهى الوقت») —
+    /// الإعلان نفسه يبقى ممكناً ٣٠ يوماً من صفحة العضو ومن «إنشاء»
+    static let alertDays = 7
 
-    /// تاريخ وفاة خلال آخر ٣٠ يوماً (ولا في المستقبل)
-    static func isRecent(_ deathDate: String?) -> Bool {
+    /// تاريخ وفاة خلال آخر `within` يوماً (افتراضياً ٣٠، ولا في المستقبل)
+    static func isRecent(_ deathDate: String?, within: Int = days) -> Bool {
         guard let raw = deathDate?.trimmingCharacters(in: .whitespacesAndNewlines),
               raw.count >= 10 else { return false }
         let f = DateFormatter()
@@ -32,7 +35,7 @@ enum DeathRecency {
         f.dateFormat = "yyyy-MM-dd"
         guard let date = f.date(from: String(raw.prefix(10))) else { return false }
         let today = Calendar.current.startOfDay(for: Date())
-        guard let earliest = Calendar.current.date(byAdding: .day, value: -days, to: today) else { return false }
+        guard let earliest = Calendar.current.date(byAdding: .day, value: -within, to: today) else { return false }
         return date >= earliest && date <= Date()
     }
 
