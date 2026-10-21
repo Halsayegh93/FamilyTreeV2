@@ -300,8 +300,8 @@ struct SmsAlertsCard: View {
 
 // MARK: - طريقة العمل
 
-/// «طريقة العمل» (كانت «كيف تشتغل رسائل الدخول») — بطاقة مطويّة آخر الصفحة (سطر ملخّص وهي مطويّة): المسار، ما يُحفظ، ما
-/// لا يُحفظ أبداً، من يرى ماذا، معنى «ناجحة» و«مشبوهة»، ورابط الشحن. الحدود والتنبيهات لم تعد تُشرح هنا ثانيةً — مكانهما
+/// «طريقة العمل» (كانت «كيف تشتغل رسائل الدخول») — بطاقة مطويّة آخر الصفحة (سطر ملخّص وهي مطويّة): المسار، ما يُحفظ،
+/// رمز الدخول (٥ دقائق للمالك وحده — 20261021080000)، من يرى ماذا، معنى «ناجحة» و«مشبوهة»، ورابط الشحن. الحدود والتنبيهات لم تعد تُشرح هنا ثانيةً — مكانهما
 /// «إعدادات الإرسال» و«تنبيهات الرصيد» (الدفعة ج). النص نفسه سيُنقل للأندرويد
 struct SmsHowItWorksCard: View {
     let overview: SmsOverview?
@@ -313,8 +313,8 @@ struct SmsHowItWorksCard: View {
     var body: some View {
         AdminSectionCard(title: L10n.t("طريقة العمل", "How it works"),
                          isOpen: $open,
-                         summary: L10n.t("المسار · ما يُحفظ وما لا يُحفظ · من يرى ماذا",
-                                         "The path · what's kept and what never is · who sees what")) {
+                         summary: L10n.t("المسار · ما يُحفظ · رمز الدخول · من يرى ماذا",
+                                         "The path · what's kept · the sign-in code · who sees what")) {
             AdminRowsCardBody {
                 SmsHowRow(icon: "paperplane.fill", tint: DS.Color.sea,
                           title: L10n.t("المسار", "The path"),
@@ -322,16 +322,16 @@ struct SmsHowItWorksCard: View {
                 SmsHowRow(icon: "tray.full.fill", tint: DS.Color.primary,
                           title: L10n.t("ما يُحفظ", "What's kept"),
                           text: keptText)
-                SmsHowRow(icon: "lock.shield.fill", tint: DS.Color.success,
-                          title: L10n.t("ما لا يُحفظ أبداً", "What's never kept"),
-                          text: L10n.t("رمز الدخول — لا في جداولنا ولا في سجلات الخدمة؛ \(SmsText.isolate("Supabase")) يحفظه مشفّراً تشفيراً لا ينفك لدقائق فقط للمقارنة.",
-                                       "The sign-in code — not in our tables, not in the service logs; Supabase keeps it one-way hashed for a few minutes only, to compare."),
+                SmsHowRow(icon: "key.fill", tint: DS.Color.success,
+                          title: L10n.t("رمز الدخول", "The sign-in code"),
+                          text: L10n.t("يُحفظ 5 دقائق فقط (مدة صلاحيته) في مكان مقفول لا تصله التطبيقات، ويراه المالك وحده بزرّ «اعرض الرمز» وكل عرض ينكتب في السجل. بعدها، أو إذا دخل صاحبه، يُمسح نهائياً. لا يظهر في سجلات الخدمة، ولا يراه المدراء أبداً.",
+                                       "Kept for 5 minutes only (while valid) in a locked place no app can reach; only the owner sees it with “Show code”, and every view is logged. Then, or once its owner signs in, it's erased for good. It never appears in service logs, and admins never see it."),
                           warning: L10n.t("تنبيه: لوحة حساب \(SmsText.isolate("KWT SMS")) قد تعرض نص الرسائل المرسلة — احمِ كلمة سر حساب \(SmsText.isolate("KWT")) وفعّل التحقق بخطوتين إن وُجد.",
                                           "Heads-up: the KWT SMS account dashboard may show sent message text — protect the KWT password and turn on two-step verification if offered."))
                 SmsHowRow(icon: "eye.fill", tint: DS.Color.info,
                           title: L10n.t("من يرى ماذا", "Who sees what"),
-                          text: L10n.t("المالك يرى أرقام «طلبات رمز الدخول» كاملة، والمدير يراها مخفية جزئياً، وغيرهما لا يرى الصفحة.",
-                                       "The owner sees full numbers in “Sign-in code requests”, admins see them partly masked, and no one else sees this page."))
+                          text: L10n.t("المالك يرى أرقام «طلبات رمز الدخول» كاملة ورمز الدخول خلال صلاحيته، والمدير يرى الأرقام مخفية جزئياً بلا رمز، وغيرهما لا يرى الصفحة.",
+                                       "The owner sees full numbers in “Sign-in code requests” and the sign-in code while valid, admins see numbers partly masked with no code, and no one else sees this page."))
                 SmsHowRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
                           title: L10n.t("«ناجحة» و«مشبوهة»", "“Signed in” and “Suspicious”"),
                           text: L10n.t("شارة «ناجحة» (بعلامة صح) تعني أن الرقم سجّل دخولاً بعد أول طلب في الفترة؛ «مشبوهة» = 5 طلبات أو أكثر في ساعة.",
