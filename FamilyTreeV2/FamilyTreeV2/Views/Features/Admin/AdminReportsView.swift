@@ -98,7 +98,7 @@ struct AdminReportsView: View {
                 await accounts.refresh()
                 if women == nil, let fetched = try? await WomenStore.fetch() { women = fetched }
             }
-            .sheet(isPresented: $customizeOpen) {
+            .dsTallBox(isPresented: $customizeOpen) {
                 AdminReportCustomizationSheet(kind: kind, fields: fields, options: options) { chosen, layout in
                     saveFields(chosen)
                     saveOptions(layout)

@@ -25,4 +25,4 @@ python3 tools/admin-report-preview/verify.py \
   --output /tmp/familytree-report-qa
 ```
 
-The harness imports the production builder and renderer, omitting only the live-member snapshot adapter. It generates synthetic PDFs and a screenshot of the production customization sheet. Its shims supply Arabic strings and the field labels without an authenticated app session. No Supabase requests are made.
+The harness imports the production builder and renderer, omitting only the live-member snapshot adapter. It generates synthetic PDFs without an authenticated app session; no Supabase requests are made. The customization UI uses the app’s shared DSComposer, DSComposerSection, DSToggleBox, chip and segmented-switch components, presented through dsTallBox. It is checked in a full app simulator build so its identity is not replaced by test-only controls.

@@ -89,8 +89,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let scene = scene as? UIWindowScene else { return }
         window = UIWindow(windowScene: scene)
-        window?.rootViewController = UIHostingController(rootView: AdminReportCustomizationSheet(
-            kind: .register, fields: AdminReportKind.register.defaultFields, options: .init(), apply: { _, _ in }))
+        window?.rootViewController = UIViewController()
         window?.makeKeyAndVisible()
         let app = UIApplication.shared.delegate as! App
         do { try app.generate() } catch {

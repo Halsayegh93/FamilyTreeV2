@@ -32,7 +32,6 @@ with tempfile.TemporaryDirectory(prefix='familytree-report-qa-') as temp:
     shutil.copy(src / 'Core/DeceasedMemorial.swift', work)
     for name in ['Main.swift', 'Shims.swift']:
         shutil.copy(Path(__file__).parent / name, work)
-    shutil.copy(src / 'Views/Features/Admin/AdminReportCustomizationSheet.swift', work)
     for font in args.products.glob('IBMPlex*.ttf'):
         shutil.copy(font, app)
     shutil.copy(args.products / 'Assets.car', app)
@@ -59,6 +58,4 @@ with tempfile.TemporaryDirectory(prefix='familytree-report-qa-') as temp:
     checks = json.loads((container / 'checks.json').read_text())
     args.output.mkdir(parents=True, exist_ok=True)
     for file in container.iterdir(): shutil.copy(file, args.output)
-    time.sleep(1)  # allow the first SwiftUI frame to commit after synchronous PDF generation
-    run(['xcrun','simctl','io',args.simulator,'screenshot',str(args.output / 'customization.png')])
     print(json.dumps(checks, ensure_ascii=False, indent=2))
