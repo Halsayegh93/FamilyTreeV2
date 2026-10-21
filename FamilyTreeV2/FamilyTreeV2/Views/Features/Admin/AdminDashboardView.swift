@@ -267,7 +267,7 @@ struct AdminDashboardView: View {
             diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
             pendingArchiveCount: pendingArchiveCount,
             scope: AdminAllRequestsView.reviewScope(for: authVM))
-        let deaths = all.filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate, within: DeathRecency.alertDays) }
+        let deaths = all.filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate) }
             .sorted { ($0.deathDate ?? "") > ($1.deathDate ?? "") }
         var countsNow = memberCounts
         countsNow.setMen(from: all)
@@ -301,7 +301,8 @@ struct AdminDashboardView: View {
     /// المتوفون حديثاً ولم يُعلن عنهم (المالك والمدير) — فارغة إن لم يُعرف المعلن عنهم
     private var unannounced: [FamilyMember] {
         guard authVM.isAdmin, let announcedIds else { return [] }
-        return recentDeaths.filter { !announcedIds.contains($0.id) }
+        // مدة التنبيه من السيرفر (تُقرأ مع المعلن عنهم) — الوفيات الحديثة نفسها ٣٠ يوماً
+        return recentDeaths.filter { !announcedIds.contains($0.id) && DeathRecency.isRecent($0.deathDate, within: DeathRecency.alertDays) }
     }
 
     private func openTasks(_ items: [AdminDecisionItem]) -> [AdminTodayTask] {

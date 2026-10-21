@@ -678,6 +678,7 @@ enum AdminTodayFetch {
     /// الوفيات المعلن عنها — nil إن تعذّر الجلب (فلا يظهر تنبيه «لم يُعلن عنها» خطأً)
     static func announcedDeathIds() async -> Set<UUID>? {
         struct Row: Decodable { let member_id: UUID }
+        await refreshDeathAlertDays()
         do {
             let rows: [Row] = try await SupabaseConfig.client
                 .from("death_announcements").select("member_id").execute().value
@@ -685,6 +686,15 @@ enum AdminTodayFetch {
         } catch {
             return nil
         }
+    }
+
+    /// `app_settings.death_alert_days` (١–٣٠) ← `DeathRecency.alertDays`؛ يبقى ما كان إن تعذّرت القراءة
+    private static func refreshDeathAlertDays() async {
+        struct Row: Decodable { let death_alert_days: Int? }
+        guard let rows: [Row] = try? await SupabaseConfig.client
+            .from("app_settings").select("death_alert_days").limit(1).execute().value,
+              let days = rows.first?.death_alert_days else { return }
+        DeathRecency.alertDays = min(max(days, 1), DeathRecency.days)
     }
 
     /// عدد من يستخدم التطبيق الآن (`get_active_members_now` — المالك والمدير)

@@ -21,9 +21,10 @@ struct DeathAnnouncementTarget: Identifiable, Equatable {
 /// الوفيات «الحديثة» فقط تُعلَن (طلب المالك: «أي شخص متوفي سابقاً لا تظهره»)
 enum DeathRecency {
     static let days = 30
-    /// تنبيه «وفاة لم يُعلن عنها» في اللوحة ٧ أيام فقط (طلب المالك ٢٠٢٦-١٠-٢١ «مابي اعلن عنه خلاص انتهى الوقت») —
-    /// الإعلان نفسه يبقى ممكناً ٣٠ يوماً من صفحة العضو ومن «إنشاء»
-    static let alertDays = 7
+    /// مدة تنبيه «وفاة لم يُعلن عنها» في اللوحة (طلب المالك ٢٠٢٦-١٠-٢١ «قصّر المدة لـ٧ أيام») — من السيرفر
+    /// `app_settings.death_alert_days` (يحدّثها `AdminTodayFetch.announcedDeathIds`، فتغييرها لا يحتاج نسخة جديدة)؛
+    /// ٧ إن تعذّرت القراءة. الإعلان نفسه يبقى ممكناً ٣٠ يوماً من صفحة العضو ومن «إنشاء»
+    nonisolated(unsafe) static var alertDays = 7
 
     /// تاريخ وفاة خلال آخر `within` يوماً (افتراضياً ٣٠، ولا في المستقبل)
     static func isRecent(_ deathDate: String?, within: Int = days) -> Bool {
