@@ -30,9 +30,10 @@ with tempfile.TemporaryDirectory(prefix='familytree-report-qa-') as temp:
     renderer = (src / 'Views/Features/Admin/AdminReportsPDF.swift').read_text().split('// MARK: - المهمة الكاملة')[0]
     (work / 'Renderer.swift').write_text(renderer)
     shutil.copy(src / 'Core/DeceasedMemorial.swift', work)
+    shutil.copy(src / 'Resources/AppTypeface.swift', work)
     for name in ['Main.swift', 'Shims.swift']:
         shutil.copy(Path(__file__).parent / name, work)
-    for font in args.products.glob('IBMPlex*.ttf'):
+    for font in args.products.glob('*.ttf'):
         shutil.copy(font, app)
     shutil.copy(args.products / 'Assets.car', app)
     info = {'CFBundleIdentifier':'local.familytree.reportpreview', 'CFBundleExecutable':'ReportPreview',
@@ -48,9 +49,12 @@ with tempfile.TemporaryDirectory(prefix='familytree-report-qa-') as temp:
          *map(str, work.glob('*.swift')), '-o',str(app / 'ReportPreview')])
     subprocess.run(['xcrun','simctl','terminate',args.simulator,'local.familytree.reportpreview'], capture_output=True)
     run(['xcrun','simctl','install',args.simulator,str(app)])
-    run(['xcrun','simctl','launch',args.simulator,'local.familytree.reportpreview'])
     container = Path(subprocess.check_output(['xcrun','simctl','get_app_container',args.simulator,
                      'local.familytree.reportpreview','data'], text=True).strip()) / 'Documents'
+    if container.exists():
+        shutil.rmtree(container)
+    container.mkdir(parents=True, exist_ok=True)
+    run(['xcrun','simctl','launch',args.simulator,'local.familytree.reportpreview'])
     for _ in range(120):
         if (container / 'checks.json').exists() or (container / 'failure.txt').exists(): break
         time.sleep(.25)

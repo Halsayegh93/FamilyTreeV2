@@ -6,7 +6,7 @@ import UIKit
 struct PhoneNumberTextField: UIViewRepresentable {
     @Binding var text: String
     var placeholder: String = ""
-    var font: UIFont = .systemFont(ofSize: 17, weight: .regular)
+    var font: UIFont = AppTypeface.uiFont(size: 17, weight: .regular)
     var keyboardType: UIKeyboardType = .numberPad
     var textAlignment: NSTextAlignment = .left
     var maxLength: Int = 15
@@ -135,7 +135,7 @@ struct DSPhoneField: View {
             PhoneNumberTextField(
                 text: $digits,
                 placeholder: placeholder,
-                font: .systemFont(ofSize: numberFontSize, weight: .semibold),
+                font: AppTypeface.uiFont(size: numberFontSize, weight: .semibold),
                 keyboardType: .numberPad,
                 maxLength: country.maxDigits
             )

@@ -11,7 +11,7 @@ struct AdminRemoteSettingsView: View {
             Section {
                 Text(L10n.t("تغييرات هذه الصفحة تظهر عند تحديث الإعدادات بدون بناء جديد. التعديل للمالك، والمدير يطّلع فقط.",
                             "Changes apply when settings refresh without a new build. Only the owner can edit; admins can view."))
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(DS.Font.footnote).foregroundStyle(.secondary)
             }
             if let payload = model.payload, let meta = payload.meta {
                 ForEach((payload.categories ?? []).sorted { $0.sort < $1.sort }) { category in
@@ -27,10 +27,10 @@ struct AdminRemoteSettingsView: View {
                                     VStack(alignment: .leading, spacing: 5) {
                                         Text(meta[key]!.label_ar).foregroundStyle(.primary)
                                         Text(payload.values[key]?.strings?.joined(separator: "، ") ?? payload.values[key]?.editorText ?? "—")
-                                            .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                            .font(DS.Font.caption1).foregroundStyle(.secondary).lineLimit(2)
                                         if let name = meta[key]?.updated_by_name {
                                             Text(L10n.t("آخر تعديل: \(name)", "Last changed by \(name)"))
-                                                .font(.caption2).foregroundStyle(.secondary)
+                                                .font(DS.Font.caption2).foregroundStyle(.secondary)
                                         }
                                     }
                                 }
@@ -76,7 +76,7 @@ private struct ConfigEditor: View {
         NavigationStack {
             Form {
                 Section(item.meta.label_ar) {
-                    if let help = item.meta.help_ar { Text(help).font(.footnote).foregroundStyle(.secondary) }
+                    if let help = item.meta.help_ar { Text(help).font(DS.Font.footnote).foregroundStyle(.secondary) }
                     if item.meta.kind == "int" {
                         TextField(L10n.t("القيمة", "Value"), text: $draft).keyboardType(.numberPad)
                     } else {
@@ -84,14 +84,14 @@ private struct ConfigEditor: View {
                             .autocorrectionDisabled().textInputAutocapitalization(.never)
                     }
                     if let min = item.meta.min, let max = item.meta.max {
-                        Text(L10n.t("المدى: \(Int(min)) إلى \(Int(max))", "Range: \(Int(min)) to \(Int(max))")).font(.caption)
+                        Text(L10n.t("المدى: \(Int(min)) إلى \(Int(max))", "Range: \(Int(min)) to \(Int(max))")).font(DS.Font.caption1)
                     }
                     if let max = item.meta.max_length {
-                        Text(L10n.t("الحد الأقصى: \(max) حرف", "Maximum: \(max) characters")).font(.caption)
+                        Text(L10n.t("الحد الأقصى: \(max) حرف", "Maximum: \(max) characters")).font(DS.Font.caption1)
                     }
                     if item.meta.kind == "json" {
                         Text(L10n.t("اكتب كل عنوان في سطر مستقل.", "Write each title on a separate line."))
-                            .font(.caption)
+                            .font(DS.Font.caption1)
                     }
                 }.disabled(!canEdit || model.saving)
                 if let error = validation ?? model.error { Text(error).foregroundStyle(.red) }
@@ -154,9 +154,9 @@ private struct AdminRemoteSettingsHistory: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(RemoteSettingsModel.shared.payload?.meta?[entry.key]?.label_ar ?? entry.key)
                     Text("\(entry.old_value?.editorText ?? "—") → \(entry.new_value.editorText)")
-                        .font(.caption).foregroundStyle(.secondary)
-                    if let name = entry.changed_by_name { Text(name).font(.caption2).foregroundStyle(.secondary) }
-                    Text(stamp(entry.changed_at)).font(.caption2)
+                        .font(DS.Font.caption1).foregroundStyle(.secondary)
+                    if let name = entry.changed_by_name { Text(name).font(DS.Font.caption2).foregroundStyle(.secondary) }
+                    Text(stamp(entry.changed_at)).font(DS.Font.caption2)
                 }
             }
             if entries.isEmpty && error == nil { Text(L10n.t("لا توجد تغييرات مسجّلة", "No changes recorded")) }

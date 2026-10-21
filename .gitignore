@@ -48,3 +48,6 @@ build-sim/
 
 # Isolated security-test dependencies
 tests/security/node_modules/
+
+# Licensed URW fonts: provision locally, never publish binaries
+FamilyTreeV2/FamilyTreeV2/Resources/Fonts/urw-*.ttf

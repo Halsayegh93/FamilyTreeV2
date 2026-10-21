@@ -11,6 +11,10 @@
 	<false/>
 	<key>UIAppFonts</key>
 	<array>
+		<string>urw-geometric-arabic-regular.ttf</string>
+		<string>urw-geometric-arabic-semibold.ttf</string>
+		<string>urw-geometric-arabic-extrabold.ttf</string>
+
 		<string>IBMPlexSansArabic-Regular.ttf</string>
 		<string>IBMPlexSansArabic-Medium.ttf</string>
 		<string>IBMPlexSansArabic-SemiBold.ttf</string>

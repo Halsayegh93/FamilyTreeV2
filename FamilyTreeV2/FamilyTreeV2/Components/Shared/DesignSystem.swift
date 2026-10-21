@@ -338,13 +338,13 @@ enum DS {
         /// يُطبَّق على العناوين الكبرى فقط؛ ويبقى نص المحتوى على خط النظام (SF Pro) لأقصى وضوح.
         static let displayDesign: SwiftUI.Font.Design = .rounded
 
-        // MARK: IBM Plex Sans Arabic — خط الهوية (تجربة)
+        // MARK: URW Geometric Arabic — خط الهوية (تجربة)
         /// أسماء PostScript للأوزان المضافة في Resources/Fonts
         enum Plex {
-            static let regular  = "IBMPlexSansArabic-Regular"
-            static let medium   = "IBMPlexSansArabic-Medium"
-            static let semibold = "IBMPlexSansArabic-SemiBold"
-            static let bold     = "IBMPlexSansArabic-Bold"
+            static let regular  = AppTypeface.regular
+            static let medium   = AppTypeface.medium
+            static let semibold = AppTypeface.semibold
+            static let bold     = AppTypeface.bold
 
             /// وزن الواجهة المطلوب ← ملف الخط (نفس `DS.Font.plexName`) — اسم main للتوافق
             static func name(for weight: SwiftUI.Font.Weight) -> String { DS.Font.plexName(weight) }
@@ -360,7 +360,7 @@ enum DS {
             }
         }
 
-        /// خط IBM Plex Sans Arabic مع دعم Dynamic Type — يكبر ويصغر مع «حجم النص» في إعدادات الجهاز
+        /// خط URW Geometric Arabic مع دعم Dynamic Type — يكبر ويصغر مع «حجم النص» في إعدادات الجهاز
         /// بنفس نسبة نمط Apple الأقرب لحجمه (`textStyle(for:)`)
         static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
             .custom(plexName(weight), size: size, relativeTo: textStyle(for: size))
@@ -446,7 +446,7 @@ enum DS {
             scaled(size, weight: weight, design: displayDesign)
         }
 
-        /// IBM Plex Sans Arabic بحجم ثابت لا يتبع Dynamic Type — لنصوص لوحة الشجرة داخل عُقد بمقاس ثابت
+        /// URW Geometric Arabic بحجم ثابت لا يتبع Dynamic Type — لنصوص لوحة الشجرة داخل عُقد بمقاس ثابت
         /// (بدل .system(size:) في تلك الأماكن) — من main (الهوية)
         static func plexFixed(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
             .custom(plexName(weight), fixedSize: size)
@@ -689,7 +689,7 @@ enum DS {
 
 // MARK: - أدوار النص — «التعديل من مكان واحد» (طلب المالك ٢٠٢٦-١٠-٠٧)
 //
-// كل نص في التطبيق دوره واحد من هذا الجدول (خط IBM Plex Sans Arabic + نمط Apple + وزن). تغيير سطر هنا يغيّر
+// كل نص في التطبيق دوره واحد من هذا الجدول (خط URW Geometric Arabic + نمط Apple + وزن). تغيير سطر هنا يغيّر
 // كل مكان بنفس الدور. كانت الأحجام تُقرَّر في كل شاشة (~١٠٤٠ موضعاً بثلاثين تركيبة).
 // «حجم الخط الافتراضي في الآيفون» (طلب المالك ٢٠٢٦-١٠-٠٨): كل دور = نمط Apple بحجمه الافتراضي
 // (`DS.Font.appleSize`) ومقيّد به (`relativeTo:`)، فيتبع «حجم النص» في إعدادات الجهاز — لا أحجام خاصة بالتطبيق.

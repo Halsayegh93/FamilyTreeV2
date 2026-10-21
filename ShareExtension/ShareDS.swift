@@ -8,7 +8,7 @@ import UIKit
 // ⚠️ مصدر الحقيقة في التطبيق — أي تغيير هناك يُنقل هنا:
 //   • الألوان: `Components/Shared/AppSection.swift` ← `.home` «البحري الخفيف» (٢٠٢٦-١٠-٠٧)،
 //     ونصوص/أسطح `DS.Color` في `Components/Shared/DesignSystem.swift`
-//   • الخط وأدوار النص: `DS.Font.plex` / `DS.TextRole` (IBM Plex Sans Arabic — الخطوط نفسها من
+//   • الخط وأدوار النص: `DS.Font.plex` / `DS.TextRole` (URW Geometric Arabic — الخطوط نفسها من
 //     `FamilyTreeV2/Resources/Fonts`، مضمومة لهدف الامتداد في المشروع + `UIAppFonts`)
 //   • المربّع والبطاقة والأزرار: `DSBox`، `DS.Card` / `.dsCard()`، `DSBoxButtonStyle`،
 //     `DSComposerHeader`، `DSComposerSection`، `DSComposerField`، `DSOptionTiles`، `FT5SGlyph.button`
@@ -41,7 +41,7 @@ enum ShareDS {
         }
     }
 
-    // MARK: الخط — IBM Plex Sans Arabic بأدوار النص (`DS.TextRole`)
+    // MARK: الخط — URW Geometric Arabic بأدوار النص (`DS.TextRole`)
     // = مقاسات Apple الافتراضية (حجم النص «كبير») مقيّدة بنمطها — تتبع «حجم النص» في الجهاز
     // (طلب المالك ٢٠٢٦-١٠-٠٨ «حجم الخط الافتراضي في الآيفون»)
     struct TextRole {
@@ -71,10 +71,10 @@ enum ShareDS {
     }
 
     enum Typeface {
-        static let regular  = "IBMPlexSansArabic-Regular"
-        static let medium   = "IBMPlexSansArabic-Medium"
-        static let semibold = "IBMPlexSansArabic-SemiBold"
-        static let bold     = "IBMPlexSansArabic-Bold"
+        static let regular  = AppTypeface.regular
+        static let medium   = AppTypeface.medium
+        static let semibold = AppTypeface.semibold
+        static let bold     = AppTypeface.bold
 
         static func name(_ weight: Font.Weight) -> String {
             switch weight {

@@ -51,6 +51,11 @@
 		5E1AF0D12F9A000100C0FFEE /* Exceptions for "FamilyTreeV2" folder in "ShareExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"FamilyTreeV2/Resources/AppTypeface.swift",
+				"FamilyTreeV2/Resources/Fonts/urw-geometric-arabic-regular.ttf",
+				"FamilyTreeV2/Resources/Fonts/urw-geometric-arabic-semibold.ttf",
+				"FamilyTreeV2/Resources/Fonts/urw-geometric-arabic-extrabold.ttf",
+
 				"FamilyTreeV2/Resources/Fonts/IBMPlexSansArabic-Bold.ttf",
 				"FamilyTreeV2/Resources/Fonts/IBMPlexSansArabic-Medium.ttf",
 				"FamilyTreeV2/Resources/Fonts/IBMPlexSansArabic-Regular.ttf",
