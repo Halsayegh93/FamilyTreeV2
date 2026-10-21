@@ -2244,6 +2244,8 @@ extension DS {
         /// سطر «حالة النظام» أسفل «يحتاج انتباهك»: نقطة اللون في صفوف لوحته، تعبئة السطر بلون حالته، وعرض اللوحة المنبثقة
         static let statusDot: CGFloat = 7
         static let statusLineFill: Double = 0.14
+        /// Compact system-status strip; Dynamic Type can grow beyond this minimum.
+        static let statusLineMinHeight: CGFloat = 36
         static let statusPanelWidth: CGFloat = 320
         /// عرض اللوحة من أحجام إمكانية الوصول (الإجراء تحت النص)
         static let statusPanelWidthLarge: CGFloat = 360

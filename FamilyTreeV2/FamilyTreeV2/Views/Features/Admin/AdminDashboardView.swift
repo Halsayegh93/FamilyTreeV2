@@ -1014,24 +1014,23 @@ struct AdminSystemStatusLineLabel: View {
         let tone = status.tone
         HStack(spacing: DS.Spacing.xsm) {
             if let icon = Self.icon(tone) {
-                Image(systemName: icon).dsGlyph(DS.Glyph.md, weight: .bold)
+                Image(systemName: icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
                     // «نبضة للعاجل» (الدفعة ١٠): هالة حمراء هادئة على الساعة المشتركة — تقف خارج الشاشة ومع «تقليل الحركة»
                     .dsUrgentPulse(DS.Color.error, active: tone == .urgent)
             }
-            // الدفعة ١٣: درجة أكبر (كان `hubButton` Footnote ١٣)
             Text(verbatim: status.title)
-                .dsFont(.hubRow)
+                .dsFont(.hubButton)
                 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: DS.Spacing.sm)
-            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.sm, weight: .bold)
+            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.xs, weight: .semibold)
         }
         .foregroundColor(Self.ink(tone))
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.xs)
-        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xxs)
+        .frame(maxWidth: .infinity, minHeight: DS.Hub.statusLineMinHeight)
         .background(Self.fill(tone))
-        .contentShape(Rectangle())
+        .dsTapArea(width: DS.Icon.tapTarget, height: DS.Hub.statusLineMinHeight)
     }
 
     private static func icon(_ tone: AdminSystemStatus.Tone) -> String? {
