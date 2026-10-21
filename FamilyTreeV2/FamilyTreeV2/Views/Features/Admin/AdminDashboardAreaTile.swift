@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Compact section navigation: icon and two-line title, with live detail available to VoiceOver.
+/// Original dashboard card styling, shortened to fit three sections per row.
 struct AdminDashboardAreaTile: View {
     let area: AdminArea
     let detail: String
@@ -9,10 +9,8 @@ struct AdminDashboardAreaTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: area.icon)
-                    .dsGlyph(DS.Glyph.md, weight: .semibold)
-                    .foregroundColor(area.fill.dsReadableGlyph)
-                    .frame(width: 24, height: 24)
+                AdminIconSquare(symbol: area.icon, tint: area.fill, side: 28,
+                                radius: DS.Radius.sm, filled: true, glyph: DS.Glyph.md)
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
                 if warning {
@@ -28,14 +26,9 @@ struct AdminDashboardAreaTile: View {
                 .lineLimit(2, reservesSpace: true)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(DS.Spacing.sm)
         .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .fill(DS.Color.surface))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width)
-            .allowsHitTesting(false))
-        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .dsCard(padding: DS.Spacing.sm, radius: DS.Hub.tileRadius)
+        .contentShape(RoundedRectangle(cornerRadius: DS.Hub.tileRadius, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(area.title)
         .accessibilityValue(detail)

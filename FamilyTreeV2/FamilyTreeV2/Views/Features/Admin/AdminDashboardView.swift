@@ -18,9 +18,8 @@ enum AdminReviewDestination: Hashable {
 }
 
 // MARK: - لوحة الإدارة
-// Visual order: compact attention and system status → three-column sections.
-// The family census remains a compact disclosure below attention. Presentation changes
-// use the existing permission checks, data sources, navigation and review filters.
+// Original dashboard identity, with compact three-column section cards.
+// Review details remain in the inbox. Section taps use the explicit dashboard router.
 
 struct AdminDashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -351,12 +350,15 @@ struct AdminDashboardView: View {
     private var todayHeader: AnyView { AnyView(todayHeaderContent) }
 
     private var todayHeaderContent: some View {
+        let items = decisionItems
+        let c = counts(items)
+        let loading = isInitialLoading
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: DS.Spacing.sm) {
                 HStack(spacing: DS.Spacing.xsm) {
                     Image(systemName: "checkmark.shield")
                         .dsGlyph(DS.Glyph.md, weight: .semibold)
-                    Text(roleGuide?.title ?? L10n.t("اليوم", "Today"))
+                    Text(L10n.t("لوحة الإدارة · اليوم", "Admin · Today"))
                         .dsFont(.sectionTitle)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -387,26 +389,39 @@ struct AdminDashboardView: View {
             }
             .frame(minHeight: DS.Hub.glassButton)
 
-            Text(L10n.t("لوحة الإدارة", "Administration"))
-                .dsFont(.tabTitle)
+            Text(helloLine)
+                .dsFont(.hubTitle)
                 .foregroundColor(DS.Color.textOnPrimary)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.top, DS.Spacing.md)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, DS.Spacing.sm + 2)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: DS.Spacing.sm) {
-                    Text(helloLine)
-                    Text("·").accessibilityHidden(true)
-                    Text(AdminTodayText.dayLine())
+            // سطر التحية الذكي (الدفعة ١٠): جملة واحدة من بيانات حقيقية — السطر محجوز أثناء التحميل (لا قفزة)
+            let smart = AdminTodayText.smartLine(memorialToday: memorial.today.map(\.member), unannounced: unannounced,
+                                                 waiting: c.waiting,
+                                                 joinedThisWeek: seesTreeDomain ? joinedThisWeek : nil, loading: loading)
+            Text(verbatim: smart ?? " ")
+                .dsFont(.subtitle)
+                .foregroundColor(DS.Hub.greetingLine)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .opacity(smart == nil ? 0 : 1)
+                .animation(DSMotion.fade, value: smart == nil)
+                .padding(.top, DS.Spacing.xxs)
+                .accessibilityHidden(smart == nil)
+
+            HStack(spacing: DS.Spacing.sm) {
+                if let guide = roleGuide {
+                    AdminBandChip(text: guide.title)
                 }
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(helloLine)
-                    Text(AdminTodayText.dayLine())
-                }
+                Text(AdminTodayText.dayLine())
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Hub.onBandMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .dsFont(.footnote)
-            .foregroundColor(DS.Hub.onBandMuted)
-            .padding(.top, DS.Spacing.xxs)
+            .padding(.top, DS.Spacing.xs)
 
             if let guide = scopeGuide {
                 NavigationLink { AdminMyScopeView(guide: guide) } label: {
@@ -458,17 +473,17 @@ struct AdminDashboardView: View {
     private var todayContentStack: some View {
         let items = decisionItems
         let pills = statusPills
-        return VStack(spacing: DS.Spacing.xl) {
+        return VStack(spacing: DS.Hub.stackSpacing) {
+            // العائلة مختصرة فوق التنبيهات؛ الاثنان ظاهران معاً بلا صفحات سحب.
             AnyView(VStack(spacing: 0) {
+                if seesMemberCounts {
+                    AdminFamilySummary(counts: memberCounts)
+                    Divider().padding(.horizontal, DS.Hub.swipePadding)
+                }
                 AdminAttentionPanel(counts: counts(items), loading: isInitialLoading,
                                     status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
                                     open: openStatusHome)
-                    .padding(.bottom, DS.Spacing.xs)
-                if seesMemberCounts {
-                    Divider().padding(.horizontal, DS.Spacing.lg)
-                    AdminFamilySummary(counts: memberCounts)
-                        .padding(.bottom, DS.Spacing.xs)
-                }
+                    .padding(.bottom, DS.Hub.swipePadding)
             }
             .adminCard(padding: 0)
             .dsCardCascade(0, appeared: appeared))
@@ -612,15 +627,15 @@ struct AdminDashboardView: View {
 
     // MARK: الأقسام
 
-    /// Three compact columns; larger text uses fewer columns to keep section names readable.
+    /// Three columns by default; large text keeps section titles readable.
     private func areasSection(labeled: Bool) -> some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm),
-                            count: typeSize.isAccessibilitySize ? 1 : typeSize >= .xxxLarge && !landscape ? 2 : 3)
+        let count = typeSize.isAccessibilitySize ? 1 : typeSize >= .xxxLarge && !landscape ? 2 : 3
+        let columns = Array(repeating: GridItem(.flexible(), spacing: AdminGrid.spacing), count: count)
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             if labeled {
                 AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
             }
-            LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
+            LazyVGrid(columns: columns, spacing: AdminGrid.spacing) {
                 ForEach(visibleAreas) { area in
                     Button {
                         openArea(area)
@@ -844,81 +859,63 @@ struct AdminAttentionPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: DS.Spacing.sm) {
-                    attentionTitle
-                    Spacer(minLength: DS.Spacing.sm)
-                    reviewLink
-                }
-                VStack(alignment: .leading, spacing: 0) {
-                    attentionTitle
-                    reviewLink
-                }
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: DS.Spacing.md) {
-                    ForEach(items.dropFirst()) { item in secondary(item) }
-                }
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    ForEach(items.dropFirst()) { item in secondary(item) }
-                }
-            }
+            AdminCardHeader(title: L10n.t("يحتاج انتباهك", "Needs your attention"))
+            numbers
             if let status {
-                Divider()
                 AnyView(AdminSystemStatusLine(status: status, open: open))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous))
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .padding(.horizontal, DS.Hub.swipePadding)
         .padding(.top, DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("يحتاج انتباهك", "Needs your attention"))
     }
 
-    private var attentionTitle: some View {
-        Text(L10n.t("يحتاج انتباهك", "Needs your attention"))
-            .dsFont(.headline)
-            .foregroundColor(DS.Color.textPrimary)
-            .accessibilityAddTraits(.isHeader)
-    }
-
-    private var reviewLink: some View {
-        NavigationLink {
-            AdminLazyPage { AnyView(AdminAllRequestsView(initialFilter: .waiting).adminArea(.inbox)) }
-        } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Text(L10n.t("الطلبات", "Requests")).dsFont(.footnote)
-                DSCountText(value: loading ? nil : counts.waiting)
-                    .dsFont(.caption).monospacedDigit()
-                DSChevron(size: DS.Glyph.xs)
+    @ViewBuilder
+    private var numbers: some View {
+        let list = items
+        if typeSize.isAccessibilitySize {
+            VStack(spacing: 0) {
+                HStack(spacing: 0) { cell(list[0], divided: false); cell(list[1], divided: true) }
+                hairline(horizontal: true)
+                HStack(spacing: 0) { cell(list[2], divided: false); cell(list[3], divided: true) }
             }
-            .foregroundColor(DS.Color.accent.dsReadableGlyph)
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
+        } else {
+            HStack(spacing: 0) {
+                ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
+                    cell(item, divided: index > 0)
+                }
+            }
         }
-        .buttonStyle(DSPressStyle())
     }
 
-    private func secondary(_ item: Item) -> some View {
-        NavigationLink {
+    /// رقم يفتح «الوارد» بفلتره (أو الرسائل)، وخطّ رفيع على طرفه الأول بينه وبين ما قبله
+    private func cell(_ item: Item, divided: Bool) -> some View {
+        let filter = item.filter
+        return NavigationLink {
             AdminLazyPage {
-                item.filter.map { AnyView(AdminAllRequestsView(initialFilter: $0).adminArea(.inbox)) }
+                filter.map { AnyView(AdminAllRequestsView(initialFilter: $0).adminArea(.inbox)) }
                     ?? AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox))
             }
         } label: {
-            HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: item.icon).dsGlyph(DS.Glyph.xs)
-                Text(item.label).dsFont(.footnote)
-                DSCountText(value: loading ? nil : item.value).dsFont(.caption).monospacedDigit()
-            }
-            .foregroundColor(item.value > 0 && !loading ? item.tint : DS.Color.textSecondary)
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
+            AdminAttentionNumber(value: loading ? nil : item.value, label: item.label, icon: item.icon, tint: item.tint)
         }
         .buttonStyle(DSPressStyle())
+        .overlay(alignment: .leading) {
+            if divided {
+                hairline(horizontal: false).padding(.vertical, DS.Spacing.sm)
+            }
+        }
     }
 
-
+    private func hairline(horizontal: Bool) -> some View {
+        Rectangle()
+            .fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
+            .frame(width: horizontal ? nil : DS.Border.width, height: horizontal ? DS.Border.width : nil)
+            .accessibilityHidden(true)
+    }
 }
 
 /// رقم في «يحتاج انتباهك»: الرقم بلون معناه على البطاقة (ذهبي، أحمر، كهرماني، أساسي) وتحته الأيقونة والاسم بالثانوي،
@@ -937,7 +934,7 @@ struct AdminAttentionNumber: View {
         let wraps = typeSize > .large
         VStack(spacing: DS.Spacing.xxs) {
             DSCountText(value: value)
-                .dsFont(.hubKPI)
+                .dsFont(.statValue)
                 .monospacedDigit()
                 .foregroundColor(tint)
                 .lineLimit(1)
@@ -1023,15 +1020,17 @@ struct AdminSystemStatusLineLabel: View {
             }
             // الدفعة ١٣: درجة أكبر (كان `hubButton` Footnote ١٣)
             Text(verbatim: status.title)
-                .dsFont(.footnote)
+                .dsFont(.hubRow)
                 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: DS.Spacing.sm)
-            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.xs, weight: .semibold)
+            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.sm, weight: .bold)
         }
         .foregroundColor(Self.ink(tone))
+        .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)
         .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+        .background(Self.fill(tone))
         .contentShape(Rectangle())
     }
 
