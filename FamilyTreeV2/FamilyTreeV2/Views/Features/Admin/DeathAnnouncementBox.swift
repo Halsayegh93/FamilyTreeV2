@@ -23,7 +23,10 @@ enum DeathRecency {
     static let days = 30
     /// تنبيه «وفاة لم يُعلن عنها» في اللوحة ٧ أيام فقط (طلب المالك ٢٠٢٦-١٠-٢١ «مابي اعلن عنه خلاص انتهى الوقت») —
     /// الإعلان نفسه يبقى ممكناً ٣٠ يوماً من صفحة العضو ومن «إنشاء»
-    static let alertDays = 7
+    static var alertDays: Int {
+        let days = UserDefaults.standard.integer(forKey: "server.deathAlertDays")
+        return (1...30).contains(days) ? days : 7
+    }
 
     /// تاريخ وفاة خلال آخر `within` يوماً (افتراضياً ٣٠، ولا في المستقبل)
     static func isRecent(_ deathDate: String?, within: Int = days) -> Bool {

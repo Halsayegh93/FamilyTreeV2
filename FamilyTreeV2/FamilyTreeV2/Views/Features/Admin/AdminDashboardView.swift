@@ -130,6 +130,7 @@ struct AdminDashboardView: View {
             appeared = true
             await loadAllAdminData()
         }
+        .onChange(of: appSettingsVM.settings.deathAlertDays) { _ in recalculate() }
         .onChange(of: memberVM.membersVersion) { _ in recalculate() }
         .onChange(of: pendingRequestsSum) { _ in recalculate() }
         .onChange(of: pendingArchiveCount) { _ in recalculate() }
@@ -186,6 +187,7 @@ struct AdminDashboardView: View {
         let isSystem = authVM.canViewSystemSettings
         let seesCounts = seesMemberCounts
         await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in await appSettingsVM.fetchSettings() }
             group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
             group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
             group.addTask { @MainActor in await adminRequestVM.fetchChildAddRequests() }
@@ -484,16 +486,19 @@ struct AdminDashboardView: View {
         let entries = todayEntries(items)
         let pills = statusPills
         return VStack(spacing: DS.Hub.stackSpacing) {
-            // «المربّع اللي ينسحب» (الدفعة ١٠، اختيار المالك): «يحتاج انتباهك» ثم «إحصاء الأفراد» في مربّع واحد يصعد فوق حافة
-            // الرأس — كل صفحة نوع مستقل خلف `AnyView` (حارس المكدس). سطر «حالة النظام» للمالك والمدير فقط، و«إحصاء الأفراد»
-            // للمالك والمدير والمراقب (المشرف صفحة واحدة بلا نقاط). كل بطاقة تصعد تباعاً (المُعدِّل داخل `AnyView`)
-            AnyView(AdminTodaySwipeCard(
-                userKey: authVM.currentUser?.id.uuidString ?? "",
-                attention: AnyView(AdminAttentionPanel(counts: counts(items), loading: isInitialLoading,
-                                                       status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
-                                                       open: openStatusHome)),
-                census: seesMemberCounts ? AnyView(AdminMemberCountsCard(counts: memberCounts)) : nil)
-                .dsCardCascade(0, appeared: appeared))
+            // العائلة مختصرة فوق التنبيهات؛ الاثنان ظاهران معاً بلا صفحات سحب.
+            AnyView(VStack(spacing: 0) {
+                if seesMemberCounts {
+                    AdminFamilySummary(counts: memberCounts)
+                    Divider().padding(.horizontal, DS.Hub.swipePadding)
+                }
+                AdminAttentionPanel(counts: counts(items), loading: isInitialLoading,
+                                    status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
+                                    open: openStatusHome)
+                    .padding(.bottom, DS.Hub.swipePadding)
+            }
+            .adminCard(padding: 0)
+            .dsCardCascade(0, appeared: appeared))
             AnyView(areasSection(labeled: true).dsCardCascade(1, appeared: appeared))
             AnyView(decisionCard(entries).dsCardCascade(2, appeared: appeared))
         }
@@ -883,9 +888,7 @@ struct AdminAttentionPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Hub.swipeGap) {
             AdminCardHeader(title: L10n.t("يحتاج انتباهك", "Needs your attention"))
-            Spacer(minLength: 0)
             numbers
-            Spacer(minLength: 0)
             if let status {
                 AnyView(AdminSystemStatusLine(status: status, open: open))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous))
@@ -893,7 +896,7 @@ struct AdminAttentionPanel: View {
         }
         .padding(.horizontal, DS.Hub.swipePadding)
         .padding(.top, DS.Hub.swipePadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("يحتاج انتباهك", "Needs your attention"))
     }
@@ -1209,6 +1212,61 @@ struct AdminBaselineDot: View {
             .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] + 3.5 * scale }
             .accessibilityHidden(true)
     }
+}
+
+/// ملخّص ثابت بارتفاع سطر؛ التفاصيل الكاملة متاحة من نفس البطاقة.
+private struct AdminFamilySummary: View {
+    let counts: AdminMemberCounts
+    @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Button {
+                withAnimation(reduceMotion ? nil : DS.Anim.quick) { expanded.toggle() }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "person.3.fill")
+                        .foregroundColor(DS.Color.accent.dsReadableGlyph)
+                        .accessibilityHidden(true)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: DS.Spacing.md) { figures }
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) { figures }
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .accessibilityHidden(true)
+                }
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textPrimary)
+                .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(DSPressStyle())
+            .accessibilityValue(expanded ? L10n.t("موسّع", "Expanded") : L10n.t("مختصر", "Collapsed"))
+            .accessibilityHint(L10n.t("إظهار أو إخفاء إحصاء الأفراد", "Show or hide family census"))
+            if expanded {
+                AdminMemberCountsCard(counts: counts)
+                    .padding(.bottom, DS.Spacing.sm)
+            }
+        }
+        .padding(.horizontal, DS.Hub.swipePadding)
+        .padding(.top, DS.Spacing.xs)
+    }
+
+    @ViewBuilder
+    private var figures: some View {
+        Text(L10n.t("العائلة: \(number(counts.total))", "Family: \(number(counts.total))"))
+            .monospacedDigit()
+        Text(L10n.t("الرجال: \(number(counts.men)) · النساء: \(number(counts.women))",
+                    "Men: \(number(counts.men)) · Women: \(number(counts.women))"))
+            .monospacedDigit()
+            .foregroundColor(DS.Color.textSecondary)
+    }
+
+    private func number(_ value: Int?) -> String { value.map { "\($0)" } ?? "—" }
 }
 
 // MARK: - «إحصاء الأفراد»
