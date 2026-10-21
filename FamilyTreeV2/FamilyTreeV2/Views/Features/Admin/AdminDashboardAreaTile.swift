@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Compact navigation cards keep the section name ahead of secondary statistics.
+/// Compact section navigation: icon and two-line title, with live detail available to VoiceOver.
 struct AdminDashboardAreaTile: View {
     let area: AdminArea
     let detail: String
@@ -8,33 +8,35 @@ struct AdminDashboardAreaTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            HStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: area.icon)
                     .dsGlyph(DS.Glyph.md, weight: .semibold)
                     .foregroundColor(area.fill.dsReadableGlyph)
-                    .frame(width: 32, height: 32)
-                    .background(RoundedRectangle(cornerRadius: DS.Radius.sm)
-                        .fill(area.fill.opacity(DS.Opacity.tintFillSoft)))
+                    .frame(width: 24, height: 24)
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
-                DSChevron(size: DS.Glyph.xs)
-                    .foregroundColor(DS.Color.textTertiary)
+                if warning {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .dsGlyph(DS.Glyph.xs)
+                        .foregroundColor(DS.Color.warning.dsReadableGlyph)
+                        .accessibilityHidden(true)
+                }
             }
             Text(area.title)
                 .dsFont(.hubRow)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(2, reservesSpace: true)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(detail)
-                .dsFont(.footnote)
-                .foregroundColor(warning ? DS.Color.warning.dsReadableGlyph : DS.Color.textSecondary)
-                .lineLimit(1)
         }
-        .padding(DS.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(DS.Spacing.sm)
+        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .fill(DS.Color.surface))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
         .contentShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(area.title)
+        .accessibilityValue(detail)
     }
 }

@@ -18,7 +18,7 @@ enum AdminReviewDestination: Hashable {
 }
 
 // MARK: - لوحة الإدارة
-// Visual order: attention and system status → current decisions → sections.
+// Visual order: compact attention and system status → three-column sections.
 // The family census remains a compact disclosure below attention. Presentation changes
 // use the existing permission checks, data sources, navigation and review filters.
 
@@ -457,14 +457,13 @@ struct AdminDashboardView: View {
 
     private var todayContentStack: some View {
         let items = decisionItems
-        let entries = todayEntries(items)
         let pills = statusPills
         return VStack(spacing: DS.Spacing.xl) {
             AnyView(VStack(spacing: 0) {
                 AdminAttentionPanel(counts: counts(items), loading: isInitialLoading,
                                     status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
                                     open: openStatusHome)
-                    .padding(.bottom, DS.Spacing.md)
+                    .padding(.bottom, DS.Spacing.xs)
                 if seesMemberCounts {
                     Divider().padding(.horizontal, DS.Spacing.lg)
                     AdminFamilySummary(counts: memberCounts)
@@ -473,8 +472,7 @@ struct AdminDashboardView: View {
             }
             .adminCard(padding: 0)
             .dsCardCascade(0, appeared: appeared))
-            AnyView(decisionCard(entries).dsCardCascade(1, appeared: appeared))
-            AnyView(areasSection(labeled: true).dsCardCascade(2, appeared: appeared))
+            AnyView(areasSection(labeled: true).dsCardCascade(1, appeared: appeared))
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.bottom, DS.Spacing.xxxl)
@@ -614,10 +612,10 @@ struct AdminDashboardView: View {
 
     // MARK: الأقسام
 
-    /// Two readable columns; one column at XXXL and accessibility sizes.
+    /// Three compact columns; larger text uses fewer columns to keep section names readable.
     private func areasSection(labeled: Bool) -> some View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm),
-                            count: typeSize >= .xxxLarge && !landscape ? 1 : 2)
+                            count: typeSize.isAccessibilitySize ? 1 : typeSize >= .xxxLarge && !landscape ? 2 : 3)
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             if labeled {
                 AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
@@ -840,49 +838,18 @@ struct AdminAttentionPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: "tray.full")
-                    .dsGlyph(DS.Glyph.md, weight: .semibold)
-                    .foregroundColor(DS.Color.accent.dsReadableGlyph)
-                Text(L10n.t("يحتاج انتباهك", "Needs your attention"))
-                    .dsFont(.headline)
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer(minLength: 0)
-                Text(L10n.t("اليوم", "Today"))
-                    .dsFont(.caption)
-                    .foregroundColor(DS.Color.textSecondary)
-            }
-            NavigationLink {
-                AdminLazyPage { AnyView(AdminAllRequestsView(initialFilter: .waiting).adminArea(.inbox)) }
-            } label: {
-                HStack(spacing: DS.Spacing.md) {
-                    DSCountText(value: loading ? nil : counts.waiting)
-                        .dsFont(.statValue)
-                        .monospacedDigit()
-                        .foregroundColor(DS.Color.textPrimary)
-                        .frame(minWidth: DS.Icon.tapTarget, minHeight: DS.Icon.tapTarget)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md)
-                            .fill(DS.Color.accent.opacity(DS.Opacity.tintFill)))
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(L10n.t("بانتظار قرارك", "Awaiting your decision"))
-                            .dsFont(.rowTitle)
-                            .foregroundColor(DS.Color.textPrimary)
-                        Text(loading ? L10n.t("جارٍ تحديث الطلبات", "Updating requests") :
-                                counts.waiting == 0 ? L10n.t("كل الطلبات متابَعة", "Everything is up to date") :
-                                L10n.t("افتح الطلبات وابدأ المراجعة", "Open requests to start reviewing"))
-                            .dsFont(.footnote)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                    DSChevron()
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: DS.Spacing.sm) {
+                    attentionTitle
+                    Spacer(minLength: DS.Spacing.sm)
+                    reviewLink
                 }
-                .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
-                .contentShape(Rectangle())
+                VStack(alignment: .leading, spacing: 0) {
+                    attentionTitle
+                    reviewLink
+                }
             }
-            .buttonStyle(DSPressStyle())
-
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: DS.Spacing.md) {
                     ForEach(items.dropFirst()) { item in secondary(item) }
@@ -897,10 +864,34 @@ struct AdminAttentionPanel: View {
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.lg)
+        .padding(.top, DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("يحتاج انتباهك", "Needs your attention"))
+    }
+
+    private var attentionTitle: some View {
+        Text(L10n.t("يحتاج انتباهك", "Needs your attention"))
+            .dsFont(.headline)
+            .foregroundColor(DS.Color.textPrimary)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var reviewLink: some View {
+        NavigationLink {
+            AdminLazyPage { AnyView(AdminAllRequestsView(initialFilter: .waiting).adminArea(.inbox)) }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Text(L10n.t("الطلبات", "Requests")).dsFont(.footnote)
+                DSCountText(value: loading ? nil : counts.waiting)
+                    .dsFont(.caption).monospacedDigit()
+                DSChevron(size: DS.Glyph.xs)
+            }
+            .foregroundColor(DS.Color.accent.dsReadableGlyph)
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSPressStyle())
     }
 
     private func secondary(_ item: Item) -> some View {
