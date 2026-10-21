@@ -1,0 +1,64 @@
+import { makeDb, as, read, mig, counter, P } from './app_config_env.mjs';
+const t=counter(), ok=t.ok, db=await makeDb();
+await db.exec(`alter table public.app_settings drop column sms_wait_seconds;
+ alter table auth.users add column last_sign_in_at timestamptz;
+ alter table public.notifications add column details jsonb, add column subject_member_id uuid;
+ create schema net;
+ create function net.http_post(url text,body jsonb default '{}',params jsonb default '{}',headers jsonb default '{}',timeout_milliseconds integer default 5000) returns bigint language sql as $$select 1::bigint$$;
+ create schema cron;
+ create table cron.job(jobid bigserial primary key,schedule text,command text,jobname text unique);
+ create function cron.schedule(job_name text,schedule text,command text) returns bigint language plpgsql as $$declare j bigint; begin insert into cron.job(jobname,schedule,command) values(job_name,schedule,command) on conflict(jobname) do update set schedule=excluded.schedule returning jobid into j; return j; end$$;
+ create table private.app_secrets(key text primary key,value text);
+ insert into auth.users(id,phone) values('${P.M}','96590000005');`);
+for(const f of ['20261019200000_kwtsms_delivery_guard','20261019210000_kwtsms_low_balance_alert','20261019220000_kwtsms_cooldown_one_minute','20261019230000_kwtsms_urgent_alert_12h','20261020150000_kwtsms_daily_stats','20261020151000_kwtsms_admin_overview','20261020160000_login_attempts','20261020170000_kwtsms_editable_limits','20261020180000_kwtsms_wait_min_30','20261020190000_kwtsms_daily_check_and_suspicious','20261021080000_owner_login_code']) await db.exec(read(`migrations/${f}.sql`));
+await db.exec(mig('config'));
+const source=read('migrations/20261021160000_sms_request_details.sql');
+const oldLog=(await db.query(`select md5(prosrc) h from pg_proc where oid='public.log_login_attempt(text,text)'::regprocedure`)).rows[0].h;
+await db.exec(source);
+const details=async(who='O',phone='+96590000005',days=7,before=null)=>{const r=await as(db,who,'select public.owner_sms_login_details($1,$2,$3) j',[phone,days,before]);return r.ok?r.rows[0].j:{error:r.code};};
+const log=(outcome,metadata={})=>as(db,'service','select public.log_sms_login_attempt($1,$2,$3)',['96590000005',outcome,metadata]);
+const now=new Date().toISOString();
+let r=await log('sent',{requested_at:now,msgid:'message-a',sender:'Family',points:1,balance_after:93,http_status:200,test_mode:false,otp:'123456',code:'123456',arbitrary_secret:'must-not-persist'});
+ok(r.ok,'service can record metadata');
+let d=await details();
+ok(d.total===1&&d.items[0].details.msgid==='message-a','owner reads provider metadata');
+ok(d.items[0].details.requested_at&&d.items[0].recorded_at,'request and result times are retained');
+ok(d.items[0].details.points===1&&d.items[0].details.balance_after===93,'points and balance are exact');
+ok(!JSON.stringify(d).includes('123456')&&!JSON.stringify(d).includes('must-not-persist'),'OTP and unlisted metadata are never stored in history');
+ok(d.summary.sent===1&&d.summary.name==='عضو','summary refreshes from server');
+for(const who of ['anon','A','MON','S','M','FA','FM','PEND','service']){
+ ok((await details(who)).error==='42501',`details denied: ${who}`);
+ if(who!=='service'){const w=await as(db,who,'select public.log_sms_login_attempt($1,$2,$3)',['96590000005','sent',{}]);ok(!w.ok&&w.code==='42501',`writer denied: ${who}`);}
+}
+for(const who of ['O','A','M','anon']){const q=await as(db,who,'select sms_details from public.login_attempts');ok(!q.ok&&q.code==='42501',`raw table denied: ${who}`);}
+ok((await details('O','bad')).error==='22023','bad phone rejected');
+ok((await details('O','+96590000005',7,99999)).error==='22023','bad cursor rejected');
+const admin=await as(db,'A','select public.sms_login_attempts(7) j');
+ok(admin.ok&&admin.rows[0].j.masked&&admin.rows[0].j.items[0].phone_e164===null,'admin aggregate remains masked');
+ok(!JSON.stringify(admin.rows[0].j).includes('message-a'),'admin aggregate has no provider metadata');
+await log('blocked',{retry_after_seconds:60,requested_at:now});await log('failed',{error_code:'ERR003',http_status:200,sender:'Family',requested_at:now});await log('unknown',{error_code:'TIMEOUT',sender:'Family',requested_at:now});await log('test',{sender:'Family',test_mode:true,requested_at:now});
+d=await details();ok(d.total===5&&d.summary.blocked===1&&d.summary.failed===1&&d.summary.unknown===1&&d.summary.test===1,'outcomes remain distinct');
+ok(d.summary.max_in_hour===5&&d.summary.suspicious,'per-hour activity is available');ok(d.items.some(x=>x.alerted),'original suspicious alert still runs');
+r=await log('failed',{requested_at:'bad',points:'bad',balance_after:-5,msgid:'../../bad',sender:'bad!',error_code:'bad error'});ok(r.ok,'bad optional metadata does not stop logging');
+d=await details();ok(Object.keys(d.items[0].details).length===0,'invalid metadata discarded');
+await as(db,'service',`select public.store_login_code('96590000005','047392')`);
+d=await details();ok(d.active_code?.expires_at&&!JSON.stringify(d).includes('047392'),'code availability never reveals plaintext');
+let code=await as(db,'O',`select public.owner_reveal_login_code('96590000005') j`);ok(code.rows[0].j.code==='047392'&&code.rows[0].j.sent_at,'audited owner reveal retains existing behavior');
+d=await details();ok(d.code_view_count===1&&d.code_views[0].by==='المالك'&&d.code_views[0].result==='shown','code audit includes actor, time and result');
+ok(!JSON.stringify(d.code_views).includes('047392'),'code audit has no OTP');
+await db.exec(`update auth.users set last_sign_in_at=now()+interval '1 second' where phone='96590000005'`);
+d=await details();ok(d.active_code===null&&d.summary.logged_in,'later sign-in hides code');
+code=await as(db,'O',`select public.owner_reveal_login_code('96590000005') j`);ok(code.rows[0].j.status==='used'&&code.rows[0].j.code===null,'used code cannot be revealed');
+await db.exec(`update auth.users set last_sign_in_at=null where phone='96590000005';update private.login_codes set expires_at=now()-interval '1 second' where phone='96590000005'`);
+code=await as(db,'O',`select public.owner_reveal_login_code('96590000005') j`);ok(code.rows[0].j.status==='expired'&&code.rows[0].j.code===null,'expired code cannot be revealed');
+r=await as(db,'service',`select public.record_kwtsms_delivery_status('message-a','sent') j`);ok(r.ok&&r.rows[0].j,'queue check works after short ledger expires');
+d=await details();ok(d.items.find(x=>x.details.msgid==='message-a').details.queue_status==='sent','queue state attaches to exact request');
+await db.exec(`insert into public.login_attempts(phone,outcome) values('96590000006','sent');insert into public.login_attempts(phone,outcome,created_at) select '96590000005','sent',now()-interval '1 minute' from generate_series(1,105);insert into public.login_attempts(phone,outcome,created_at) values('96590000005','sent',now()-interval '40 days');`);
+let page=await details(),ids=[],pages=0;while(true){ids.push(...page.items.map(x=>x.id));pages++;if(!page.next_before)break;page=await details('O','+96590000005',7,page.next_before);}
+ok(ids.length===111&&new Set(ids).size===111&&pages===3,'all entries paginate without duplicates, including equal times');
+const empty=await details('O','+96590000000');ok(empty.total===0&&empty.items.length===0&&empty.member===null,'empty case never includes another number');
+await db.exec(`update public.profiles set status='frozen' where id='${P.O}'`);ok((await details()).error==='42501','frozen owner denied');await db.exec(`update public.profiles set status='active' where id='${P.O}'`);
+ok((await db.query(`select md5(prosrc) h from pg_proc where oid='public.log_login_attempt(text,text)'::regprocedure`)).rows[0].h===oldLog,'existing logger unchanged');
+await db.exec(read('rollback/20261021160000_sms_request_details_rollback.sql'));ok((await db.query(`select count(*)::int n from public.login_attempts where sms_details<>'{}'`)).rows[0].n>0,'rollback keeps metadata');
+await db.exec(source);ok((await details()).total===111,'reapply preserves history');
+await db.close();t.done();

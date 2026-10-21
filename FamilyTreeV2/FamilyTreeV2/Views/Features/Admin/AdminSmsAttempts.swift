@@ -1,7 +1,6 @@
 import SwiftUI
 import Supabase
 import Combine
-import UniformTypeIdentifiers
 
 // MARK: - «محاولات الدخول» في صفحة «رسائل الدخول · KWT SMS» (طلب المالك ٢٠٢٦-١٠-٢٠ «منو حاول يدخل وكم مرة؟»)
 //
@@ -129,6 +128,7 @@ struct OwnerCodeReveal: Equatable {
     /// shown · used · expired · none
     var status = "none"
     var code: String?
+    var sentAt: Date?
     var expiresAt: Date?
 
     static func decode(_ data: Data) throws -> OwnerCodeReveal {
@@ -137,6 +137,7 @@ struct OwnerCodeReveal: Equatable {
         }
         return OwnerCodeReveal(status: root["status"] as? String ?? "none",
                                code: (root["code"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                               sentAt: ApprovalWorkflow.date(root["sent_at"] as? String),
                                expiresAt: ApprovalWorkflow.date(root["expires_at"] as? String))
     }
 }
@@ -160,6 +161,22 @@ final class SmsLoginAttemptsStore: ObservableObject {
     @Published var ownerCodes = OwnerLoginCodes()
     private var fetchedAt: [Int: Date] = [:]
     private var ownerCodesAt: Date?
+    private var scope: String?
+    private var ownerScope = false
+
+    func matches(user: UUID?, isOwner: Bool) -> Bool {
+        guard let user else { return false }
+        return scope == "\(user.uuidString):\(isOwner)"
+    }
+
+    /// Do not retain an owner's full numbers across account or role changes.
+    func activate(user: UUID?, isOwner: Bool) {
+        let next = user.map { "\($0.uuidString):\(isOwner)" }
+        guard scope != next else { return }
+        scope = next; ownerScope = isOwner && user != nil
+        days = 7; results = [:]; loading = []; failed = []; denied = false
+        ownerCodes = OwnerLoginCodes(); fetchedAt = [:]; ownerCodesAt = nil
+    }
 
     var current: SmsLoginAttempts? { results[days] }
     var isLoading: Bool { loading.contains(days) }
@@ -173,6 +190,7 @@ final class SmsLoginAttemptsStore: ObservableObject {
 
     /// يجلب الفترة المختارة — لا يُكرَّر خلال دقيقة إلا بالسحب للتحديث
     func refresh(force: Bool = false) async {
+        guard let requestScope = scope else { return }
         let period = days
         if !force, let at = fetchedAt[period], Date().timeIntervalSince(at) < 60 {
             await refreshOwnerCodes()
@@ -181,16 +199,18 @@ final class SmsLoginAttemptsStore: ObservableObject {
         guard !loading.contains(period) else { return }
         fetchedAt[period] = Date()
         loading.insert(period)
-        defer { loading.remove(period) }
+        defer { if scope == requestScope { loading.remove(period) } }
         do {
             let data = try await SupabaseConfig.client
                 .rpc("sms_login_attempts", params: ["p_days": period])
                 .execute().data
+            guard scope == requestScope else { return }
             results[period] = try SmsLoginAttempts.decode(data)
             failed.remove(period)
             denied = false
             await refreshOwnerCodes(force: force)
         } catch {
+            guard scope == requestScope else { return }
             if ErrorHelper.isCancellation(error) { fetchedAt[period] = nil; return }
             if (error as? PostgrestError)?.code == "42501" { denied = true; return }
             failed.insert(period)
@@ -200,15 +220,17 @@ final class SmsLoginAttemptsStore: ObservableObject {
 
     /// الأرقام التي لها رمز صالح + آخر عرض — للمالك فقط (الرد غير المخفي)، ولا يتكرر خلال ١٠ ثوانٍ
     func refreshOwnerCodes(force: Bool = false) async {
-        guard current?.masked == false else { return }
+        guard ownerScope, let requestScope = scope, current?.masked == false else { return }
         if !force, let at = ownerCodesAt, Date().timeIntervalSince(at) < 10 { return }
         ownerCodesAt = Date()
         do {
             let data = try await SupabaseConfig.client
                 .rpc("owner_login_codes", params: ["p_days": days])
                 .execute().data
+            guard scope == requestScope else { return }
             ownerCodes = try OwnerLoginCodes.decode(data)
         } catch {
+            guard scope == requestScope else { return }
             if ErrorHelper.isCancellation(error) { ownerCodesAt = nil; return }
             Log.warning("[KWT SMS] تعذّر جلب رموز الدخول الصالحة: \(error.localizedDescription)")
         }
@@ -216,9 +238,11 @@ final class SmsLoginAttemptsStore: ObservableObject {
 
     /// «اعرض الرمز» — يُسجَّل في السيرفر مع كل نداء، ثم يُحدَّث سطر «عرضت الرمز»
     func reveal(_ phoneE164: String) async throws -> OwnerCodeReveal {
+        guard ownerScope, let requestScope = scope else { throw SmsAdminError(code: "owner_only") }
         let data = try await SupabaseConfig.client
             .rpc("owner_reveal_login_code", params: ["p_phone": phoneE164])
             .execute().data
+        guard scope == requestScope else { throw SmsAdminError(code: "owner_only") }
         let reply = try OwnerCodeReveal.decode(data)
         await refreshOwnerCodes(force: true)
         return reply
@@ -231,15 +255,15 @@ enum SmsAttemptsText {
     static func period(_ days: Int) -> String {
         switch days {
         case 1: return L10n.t("اليوم", "Today")
-        case 7: return L10n.t("7 أيام", "7 days")
-        default: return L10n.t("\(days) يوماً", "\(days) days")
+        case 7: return L10n.t("آخر 7 أيام", "Last 7 days")
+        default: return L10n.t("آخر \(days) يوماً", "Last \(days) days")
         }
     }
 
     /// آخر نتيجة بكلام مفهوم
     static func outcome(_ raw: String) -> (title: String, icon: String, tint: Color) {
         switch raw {
-        case "sent":    return (L10n.t("انرسل", "Sent"), "paperplane.fill", DS.Color.success)
+        case "sent":    return (L10n.t("قَبِله المزوّد", "Accepted by provider"), "paperplane.fill", DS.Color.success)
         case "blocked": return (L10n.t("انرفض لكثرة الطلب", "Refused: too many requests"), "hand.raised.fill", DS.Color.warning)
         case "failed":  return (L10n.t("فشل", "Failed"), "xmark.circle.fill", DS.Color.error)
         case "test":    return (L10n.t("تجريبي", "Test"), "flask.fill", DS.Color.info)
@@ -257,6 +281,22 @@ enum SmsAttemptsText {
     /// يعزل الرقم اللاتيني داخل سطر عربي (يبقى «+965 …» بترتيبه)
     static func isolatedLTR(_ text: String) -> String { "\u{2066}\(text)\u{2069}" }
 
+    static func maskedPhone(_ text: String) -> String {
+        let digits = KuwaitPhone.normalizeDigits(text).filter(\.isNumber)
+        guard digits.count == 11, digits.hasPrefix("965") else { return text }
+        let local = digits.dropFirst(3)
+        return "+965 \(local.prefix(4))••\(local.suffix(2))"
+    }
+
+    static func fullTime(_ date: Date?) -> String {
+        guard let date else { return L10n.t("غير مسجّل", "Not recorded") }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: L10n.isArabic ? "ar_KW@numbers=latn" : "en_GB")
+        formatter.timeZone = TimeZone(identifier: "Asia/Kuwait")
+        formatter.dateFormat = L10n.isArabic ? "d MMMM yyyy · h:mm:ss a" : "d MMM yyyy · HH:mm:ss"
+        return formatter.string(from: date)
+    }
+
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .full
@@ -269,13 +309,14 @@ enum SmsAttemptsText {
 /// «محاولات الدخول»: مبدّل الفترة، المجاميع، أول ٨ أرقام و«الكل»، وسطر الحفظ
 struct SmsAttemptsCard: View {
     @ObservedObject private var store = SmsLoginAttemptsStore.shared
+    @EnvironmentObject private var authVM: AuthViewModel
     /// قسم صفحة الرسائل — يُمرَّر لصفحة «الكل»
     @Environment(\.adminArea) private var area
     /// الصفوف الظاهرة قبل «الكل»
     private static let collapsedCount = 8
 
     var body: some View {
-        let result = store.current
+        let result = store.matches(user: authVM.currentUser?.id, isOwner: authVM.isOwner) ? store.current : nil
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             AdminCardHeader(title: L10n.t("طلبات رمز الدخول", "Sign-in code requests"),
                             badge: result?.totals.suspicious, badgeTint: DS.Color.warning) {
@@ -310,11 +351,15 @@ private struct SmsAttemptsPeriodSwitch: View {
     @ObservedObject var store: SmsLoginAttemptsStore
 
     var body: some View {
-        DSSegmentedSwitch(options: [
-            DSSegmentOption(id: 1, title: SmsAttemptsText.period(1), icon: "sun.max.fill"),
-            DSSegmentOption(id: 7, title: SmsAttemptsText.period(7), icon: "calendar"),
-            DSSegmentOption(id: 30, title: SmsAttemptsText.period(30), icon: "calendar.badge.clock")
-        ], selection: Binding(get: { store.days }, set: { store.select($0) }), size: .regular)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text(L10n.t("فترة عرض الطلبات", "Request history period"))
+                .dsFont(.caption).foregroundColor(DS.Color.textSecondary)
+            DSSegmentedSwitch(options: [
+                DSSegmentOption(id: 1, title: SmsAttemptsText.period(1), icon: "sun.max.fill"),
+                DSSegmentOption(id: 7, title: SmsAttemptsText.period(7), icon: "calendar"),
+                DSSegmentOption(id: 30, title: SmsAttemptsText.period(30), icon: "calendar")
+            ], selection: Binding(get: { store.days }, set: { store.select($0) }), size: .regular, showsIcons: false)
+        }
     }
 }
 
@@ -447,50 +492,42 @@ private struct SmsAttemptsRows: View {
     }
 }
 
-/// صفّ رقم + سطر «اعرض الرمز» للمالك تحته (خارج رابط الصف حتى لا تبتلع الضغطةَ)
+/// A tap opens the SMS case, including the owner's current code, not the member record.
 private struct SmsAttemptRow: View {
     let item: SmsLoginAttempts.Item
     let days: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SmsAttemptRowMain(item: item, days: days)
-            if let e164 = item.phoneE164 {
-                SmsOwnerCodeLine(phoneE164: e164, name: item.name.map(PersonName.threeParts) ?? item.phone)
-            }
-        }
+        SmsAttemptRowMain(item: item, days: days)
     }
 }
 
-/// صفّ رقم: الاسم (أو «رقم غير مسجّل»)، الرقم وآخر وقت، ثم الشارات. العضو يفتح ملفه؛ للمالك نسخ/اتصال
+/// Recipient, time and explicit request counts. Opens SMS case details; owner phone actions stay in the context menu.
 private struct SmsAttemptRowMain: View {
     let item: SmsLoginAttempts.Item
     let days: Int
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.openURL) private var openURL
+    @State private var target: SmsAttemptCase?
 
     var body: some View {
-        let member = item.profileId.flatMap { memberVM.member(byId: $0) }
-        Group {
-            if let member {
-                NavigationLink { AdminLazyPage { AnyView(AdminMemberDetailSheet(member: member)) } } label: {
-                    content(name: member.shortFullName, navigates: true)
-                }
-                .buttonStyle(.plain)
-            } else if item.phoneE164 != nil {
-                // رقم بلا ملف: الضغط نفسه يفتح «نسخ الرقم / اتصال» (المالك)
-                Menu { phoneActions } label: { content(name: displayName, navigates: false) }
-                    .buttonStyle(.plain)
-            } else {
-                content(name: displayName, navigates: false)
-            }
+        Button { target = SmsAttemptCase(item: item, days: days) } label: {
+            content(name: displayName, navigates: true)
         }
-        .modifier(SmsPhoneContextMenu(enabled: item.phoneE164 != nil && member != nil) { phoneActions })
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("sms.attempt.\(item.id)")
+        .accessibilityHint(L10n.t("يفتح تفاصيل طلبات رمز الدخول وحالة الرسائل", "Opens sign-in code requests and SMS status"))
+        .contextMenu { if authVM.isOwner { phoneActions } }
+        .dsTallBox(item: $target) { target in
+            AnyView(SmsAttemptDetailsBox(item: target.item, days: target.days).environmentObject(authVM))
+        }
     }
 
     /// الاسم من الرد (ثلاثي) — أو «رقم غير مسجّل»
     private var displayName: String {
-        item.name.map(PersonName.threeParts) ?? L10n.t("رقم غير مسجّل", "Unregistered number")
+        item.profileId.flatMap { memberVM.member(byId: $0)?.shortFullName }
+            ?? item.name.map(PersonName.threeParts) ?? L10n.t("رقم غير مسجّل", "Unregistered number")
     }
 
     private func content(name: String, navigates: Bool) -> some View {
@@ -523,7 +560,8 @@ private struct SmsAttemptRowMain: View {
 
     /// «+965 50001234 · قبل 5 دقائق» — الرقم معزول بترتيبه داخل السطر العربي
     private var phoneLine: String {
-        var parts = [SmsAttemptsText.isolatedLTR(item.phone)]
+        let phone = authVM.isOwner ? item.phone : SmsAttemptsText.maskedPhone(item.phone)
+        var parts = [SmsAttemptsText.isolatedLTR(phone)]
         if let when = SmsAttemptsText.relative(item.lastAt) { parts.append(when) }
         return parts.joined(separator: " · ")
     }
@@ -533,13 +571,14 @@ private struct SmsAttemptRowMain: View {
             DSStatusChip(text: L10n.t("اليوم: \(item.attemptsToday)", "Today: \(item.attemptsToday)"),
                          icon: "clock.fill", tint: DS.Color.primary, size: .mini)
         }
-        DSStatusChip(text: "\(SmsAttemptsText.period(days)): \(days == 1 ? item.attemptsToday : item.attemptsInWindow)",
-                     icon: "calendar", tint: DS.Color.primary, size: .mini)
+        let n = days == 1 ? item.attemptsToday : item.attemptsInWindow
+        DSStatusChip(text: L10n.t("الطلبات: \(n) · \(SmsAttemptsText.period(days))", "Requests: \(n) · \(SmsAttemptsText.period(days))"),
+                     icon: "key.fill", tint: DS.Color.primary, size: .mini)
         if item.loggedIn {
             // «دخل ✓» — العلامة رمز النظام (حرف ✓ في خط Plex يظهر كـ V)
-            DSStatusChip(text: L10n.t("ناجحة", "Signed in"), icon: "checkmark", tint: DS.Color.success, size: .mini)
+            DSStatusChip(text: L10n.t("سجّل الدخول", "Signed in"), icon: "checkmark", tint: DS.Color.success, size: .mini)
         } else {
-            DSStatusChip(text: L10n.t("لم يسجّل الدخول", "Didn't sign in"), tint: DS.Color.slate, size: .mini)
+            DSStatusChip(text: L10n.t("لا دخول مسجّل بالفترة", "No sign-in in this period"), tint: DS.Color.slate, size: .mini)
         }
         if item.suspicious {
             DSStatusChip(text: L10n.t("مشبوهة", "Suspicious"), icon: "exclamationmark.triangle.fill",
@@ -568,164 +607,13 @@ private struct SmsAttemptRowMain: View {
     }
 }
 
-// MARK: - «اعرض الرمز» (المالك)
-
-/// للمالك: زر «اعرض الرمز» ما دام للرقم رمز صالح، وسطر «عرضت الرمز» بعد أي عرض — لا شيء غير ذلك
-private struct SmsOwnerCodeLine: View {
-    let phoneE164: String
-    let name: String
-    @ObservedObject private var store = SmsLoginAttemptsStore.shared
-    @State private var target: SmsRevealTarget?
-
-    var body: some View {
-        let expiry = store.ownerCodes.expiries[phoneE164]
-        let seen = store.ownerCodes.views[phoneE164]
-        if expiry != nil || seen != nil {
-            HStack(spacing: DS.Spacing.sm) {
-                if expiry != nil {
-                    DSChipButton(L10n.t("اعرض الرمز", "Show code"), icon: "key.fill", size: .small) {
-                        target = SmsRevealTarget(id: phoneE164, name: name)
-                    }
-                }
-                if let seen, let when = SmsAttemptsText.relative(seen.lastAt) {
-                    Text(verbatim: seen.count > 1
-                         ? L10n.t("عرضت الرمز \(when) · \(seen.count) مرات", "You viewed the code \(when) · \(seen.count) times")
-                         : L10n.t("عرضت الرمز \(when)", "You viewed the code \(when)"))
-                        .dsFont(.footnote)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.bottom, DS.Spacing.sm + 2)
-            .padding(.leading, DS.Icon.row + DS.Spacing.md)
-            .dsCenterBox(item: $target) { target in
-                AnyView(SmsRevealCodeBox(target: target))
-            }
-        }
-    }
-}
-
-struct SmsRevealTarget: Identifiable {
-    /// `phone_e164`
-    let id: String
-    let name: String
-}
-
-/// الرمز كبيراً + الوقت الباقي + «نسخ الرمز» — العرض نفسه يُسجَّل في السيرفر
-struct SmsRevealCodeBox: View {
-    let target: SmsRevealTarget
-    @Environment(\.dismiss) private var dismiss
-    @State private var reply: OwnerCodeReveal?
-    @State private var failed = false
-    @State private var copied = false
-
-    var body: some View {
-        DSComposer(title: L10n.t("رمز الدخول", "Sign-in code"),
-                   subtitle: "\(target.name) · \(SmsAttemptsText.isolatedLTR("+965 " + target.id.dropFirst(4)))",
-                   icon: "key.fill", tint: DS.Color.actionNavy,
-                   actionTitle: "", showsAction: false, cancelTitle: L10n.t("إغلاق", "Close"),
-                   canSubmit: false, onSubmit: {}, onCancel: { dismiss() }) {
-            if let reply, reply.status == "shown", let code = reply.code, let expiresAt = reply.expiresAt {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    codeSection(code: code, expiresAt: expiresAt, now: context.date)
-                }
-                DSNoteCard(L10n.t("أعطه لصاحب الرقم فقط إذا هو اللي تواصل معك. كل عرض ينكتب في السجل.",
-                                  "Give it only to the number's owner if they contacted you. Every view is logged."),
-                           icon: "hand.raised.fill", tint: DS.Color.warning)
-            } else if let reply {
-                DSNoteCard(statusText(reply.status), icon: "clock.badge.xmark", tint: DS.Color.slate)
-            } else if failed {
-                DSNoteCard(L10n.t("تعذّر جلب الرمز الآن — حاول مرة ثانية.", "Couldn't load the code — try again."),
-                           icon: "wifi.exclamationmark", tint: DS.Color.warning)
-            } else {
-                DSPageLoader(L10n.t("جاري جلب الرمز…", "Loading the code…"), size: DS.Icon.loaderArtInline, fillsSpace: false)
-            }
-        }
-        .task { if reply == nil { await load() } }
-    }
-
-    init(target: SmsRevealTarget, reply: OwnerCodeReveal? = nil) {
-        self.target = target
-        _reply = State(initialValue: reply)
-    }
-
-    private func codeSection(code: String, expiresAt: Date, now: Date) -> some View {
-        let left = max(0, Int(expiresAt.timeIntervalSince(now).rounded(.up)))
-        return DSComposerSection(title: L10n.t("الرمز", "Code"), icon: "key.fill", index: 0) {
-            if left > 0 {
-                Text(verbatim: code)
-                    .dsFont(.codeDigit)
-                    .monospacedDigit()
-                    .tracking(DS.Spacing.sm)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .environment(\.layoutDirection, .leftToRight)
-                    .frame(maxWidth: .infinity)
-                    .textSelection(.enabled)
-                    .accessibilityLabel(code.map(String.init).joined(separator: " "))
-                Text(L10n.t("ينتهي بعد \(left / 60):\(String(format: "%02d", left % 60))",
-                            "Expires in \(left / 60):\(String(format: "%02d", left % 60))"))
-                    .dsFont(.footnote)
-                    .monospacedDigit()
-                    .foregroundColor(left <= 60 ? DS.Color.warning.dsReadableGlyph : DS.Color.textSecondary)
-                    .frame(maxWidth: .infinity)
-                DSButton(copied ? L10n.t("تم النسخ", "Copied") : L10n.t("نسخ الرمز", "Copy code"),
-                         icon: copied ? "checkmark" : "doc.on.doc") {
-                    copy(code, until: expiresAt)
-                }
-            } else {
-                DSNoteCard(statusText("expired"), icon: "clock.badge.xmark", tint: DS.Color.slate)
-            }
-        }
-    }
-
-    private func statusText(_ status: String) -> String {
-        switch status {
-        case "used": return L10n.t("صاحب الرقم دخل بهذا الرمز — ما عاد يصلح.", "The number's owner already signed in — the code no longer works.")
-        case "expired": return L10n.t("انتهت صلاحية الرمز (5 دقائق). خلّه يطلب رمزاً جديداً.", "The code expired (5 minutes). Ask them to request a new one.")
-        default: return L10n.t("ما في رمز صالح لهذا الرقم الآن.", "There's no valid code for this number right now.")
-        }
-    }
-
-    /// للجهاز فقط (لا ينتقل لأجهزة آبل الأخرى) ويُمسح من الحافظة عند انتهاء الرمز
-    private func copy(_ code: String, until expiresAt: Date) {
-        UIPasteboard.general.setItems([[UTType.plainText.identifier: code]],
-                                      options: [.localOnly: true, .expirationDate: expiresAt])
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        copied = true
-    }
-
-    private func load() async {
-        do {
-            reply = try await SmsLoginAttemptsStore.shared.reveal(target.id)
-        } catch {
-            guard !ErrorHelper.isCancellation(error) else { return }
-            failed = true
-            Log.warning("[KWT SMS] تعذّر عرض رمز الدخول: \(error.localizedDescription)")
-        }
-    }
-}
-
-/// ضغطة مطوّلة «نسخ الرقم / اتصال» على صفّ العضو (المالك) — بلا قائمة فارغة لغيره
-private struct SmsPhoneContextMenu<Actions: View>: ViewModifier {
-    let enabled: Bool
-    @ViewBuilder var actions: () -> Actions
-
-    func body(content: Content) -> some View {
-        if enabled {
-            content.contextMenu { actions() }
-        } else {
-            content
-        }
-    }
-}
-
 // MARK: - الصفحة الكاملة
 
 /// كل الأرقام في الفترة مع بحث بالاسم أو الرقم
 struct SmsAttemptsListPage: View {
     @ObservedObject private var store = SmsLoginAttemptsStore.shared
     @State private var query = ""
+    @EnvironmentObject private var authVM: AuthViewModel
 
     var body: some View {
         AdminHubPage {
@@ -734,7 +622,10 @@ struct SmsAttemptsListPage: View {
             AnyView(SmsAttemptsListContent(store: store, query: query))
         }
         .refreshable { await store.refresh(force: true) }
-        .task { await store.refresh() }
+        .task(id: "\(authVM.currentUser?.id.uuidString ?? "none"):\(authVM.isOwner)") {
+            store.activate(user: authVM.currentUser?.id, isOwner: authVM.isOwner)
+            await store.refresh()
+        }
     }
 }
 
@@ -760,11 +651,12 @@ private struct SmsAttemptsListContent: View {
     @ObservedObject var store: SmsLoginAttemptsStore
     let query: String
     @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var authVM: AuthViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             SmsAttemptsPeriodSwitch(store: store)
-            if let result = store.current {
+            if store.matches(user: authVM.currentUser?.id, isOwner: authVM.isOwner), let result = store.current {
                 SmsAttemptsTotalsView(totals: result.totals)
                 let rows = filtered(result.items)
                 if result.items.isEmpty {

@@ -50,6 +50,8 @@ function fixture() {
   let reserveTimeout = false;
   // «محاولات الدخول»: ما يصل log_login_attempt، وطريقة فشله المصطنعة
   const logs: Record<string, unknown>[] = [];
+  const detailLogs: Record<string, unknown>[] = [];
+  let legacyAudit = false;
   let logMode: "ok" | "error" | "throw" | "hang" = "ok";
   // «اعرض الرمز» (20261021080000): ما يصل store_login_code، وطريقة فشله المصطنعة
   const codes: Record<string, unknown>[] = [];
@@ -78,12 +80,16 @@ function fixture() {
       if (String(url).endsWith("finish_kwtsms_send")) {
         return Response.json(null);
       }
-      if (String(url).endsWith("log_login_attempt")) {
+      if (String(url).endsWith("log_sms_login_attempt") || String(url).endsWith("log_login_attempt")) {
+        if (String(url).endsWith("log_sms_login_attempt")) {
+          detailLogs.push(body);
+          if (legacyAudit) return new Response(null, { status: 404 });
+        }
         equal(
           new Headers(options?.headers).get("apikey"),
           "synthetic-service-key",
         );
-        logs.push(body);
+        logs.push({ p_phone: body.p_phone, p_outcome: body.p_outcome });
         if (logMode === "error") {
           return new Response("private error", { status: 500 });
         }
@@ -136,6 +142,7 @@ function fixture() {
     config,
     requests,
     logs,
+    detailLogs,
     codes,
     handler,
     logFailure: (v: typeof logMode) => logMode = v,
@@ -145,6 +152,7 @@ function fixture() {
     networkFailure: () => transportError = true,
     storageFailure: () => storageError = true,
     legacy: () => legacyDb = true,
+    legacyAudit: () => legacyAudit = true,
     reserveHang: () => reserveTimeout = true,
   };
 }
@@ -342,7 +350,7 @@ Deno.test("login attempts: every outcome is logged once with the plaintext Kuwai
       if (r.url.includes("kwtsms.com")) continue;
       if (r.url.endsWith("store_login_code")) continue;
       equal([name, JSON.stringify(r.body).includes("123456")], [name, false]);
-      if (!r.url.endsWith("log_login_attempt")) {
+      if (!r.url.endsWith("log_login_attempt") && !r.url.endsWith("log_sms_login_attempt")) {
         equal([name, JSON.stringify(r.body).includes("50000000")], [
           name,
           false,
@@ -584,4 +592,53 @@ Deno.test("detailed reservation applies configured sender and text in one provid
   equal(sends.length, 1);
   equal(sends[0].body.message, "عائلة المحمدعلي: رمزك 123456");
   equal(sends[0].body.sender, "Family");
+});
+
+Deno.test("SMS audit records request time and provider metadata without the OTP", async () => {
+  const f = fixture();
+  const before = Date.now();
+  equal((await f.handler(signed(payload))).status, 200);
+  const audit = f.detailLogs[0];
+  const d = audit.p_details as Record<string, unknown>;
+  equal(audit.p_phone, "96550000000");
+  equal(audit.p_outcome, "sent");
+  equal(d.msgid, "test-id");
+  equal(d.sender, "Family");
+  equal(d.points, 1);
+  equal(d.balance_after, 90);
+  equal(d.http_status, 200);
+  equal(d.test_mode, false);
+  equal(Date.parse(String(d.requested_at)) >= before, true);
+  equal(JSON.stringify(audit).includes("123456"), false);
+});
+
+Deno.test("SMS audit keeps rate-limit waits and failed-provider reasons distinct", async () => {
+  const blocked = fixture();
+  blocked.reserve("blocked:120");
+  await blocked.handler(signed(payload));
+  equal((blocked.detailLogs[0].p_details as Record<string, unknown>).retry_after_seconds, 120);
+  equal(blocked.requests.some(r => r.url.includes("kwtsms.com")), false);
+  const rejected = fixture();
+  rejected.result({ result: "ERROR", code: "ERR003" });
+  await rejected.handler(signed(payload));
+  equal((rejected.detailLogs[0].p_details as Record<string, unknown>).error_code, "ERR003");
+  const transport = fixture();
+  transport.networkFailure();
+  await transport.handler(signed(payload));
+  equal((transport.detailLogs[0].p_details as Record<string, unknown>).error_code, "NETWORK");
+});
+
+Deno.test("only a missing audit RPC falls back to the old logger, with no extra SMS", async () => {
+  const f = fixture();
+  f.legacyAudit();
+  equal((await f.handler(signed(payload))).status, 200);
+  equal(f.requests.filter(r => r.url.endsWith("log_sms_login_attempt")).length, 1);
+  equal(f.requests.filter(r => r.url.endsWith("log_login_attempt")).length, 1);
+  equal(f.logs.length, 1);
+  equal(f.requests.filter(r => r.url === "https://www.kwtsms.com/API/send/").length, 1);
+  const broken = fixture();
+  broken.logFailure("error");
+  equal((await broken.handler(signed(payload))).status, 200);
+  equal(broken.requests.some(r => r.url.endsWith("log_login_attempt")), false);
+  equal(broken.codes.length, 1);
 });

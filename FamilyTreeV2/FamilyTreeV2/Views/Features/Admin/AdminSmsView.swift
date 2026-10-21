@@ -104,6 +104,7 @@ struct AdminSmsView: View {
     var backTitle: String = AdminArea.team.title
     @ObservedObject private var store = SmsBalanceStore.shared
     @StateObject private var actions = SmsPageActions()
+    @EnvironmentObject private var authVM: AuthViewModel
 
     var body: some View {
         AdminHubPage {
@@ -116,7 +117,13 @@ struct AdminSmsView: View {
             async let attempts: Void = SmsLoginAttemptsStore.shared.refresh(force: true)
             _ = await (overview, attempts)
         }
-        .task { await store.refresh() }
+        .task(id: "\(authVM.currentUser?.id.uuidString ?? "none"):\(authVM.isOwner)") {
+            let attempts = SmsLoginAttemptsStore.shared
+            attempts.activate(user: authVM.currentUser?.id, isOwner: authVM.isOwner)
+            async let balance: Void = store.refresh()
+            async let history: Void = attempts.refresh()
+            _ = await (balance, history)
+        }
         .modifier(SmsPagePresentations(actions: actions))
     }
 }
@@ -340,13 +347,17 @@ private struct SmsNumbersCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            AdminCardHeader(title: L10n.t("الإرسال", "Sending"))
+            AdminCardHeader(title: L10n.t("إحصاء رسائل الدخول", "Sign-in SMS statistics"))
             if typeSize.isAccessibilitySize {
                 VStack(spacing: DS.Spacing.sm) { tiles }
             } else {
                 HStack(alignment: .top, spacing: DS.Spacing.sm) { tiles }
             }
             SmsOutcomeBar(totals: overview.days30)
+            Text(L10n.t("كل مربع يجمع محاولات رموز الدخول خلال فترته. الاختبارات منفصلة، والنقاط تشمل كل إرسال مدفوع. الطلبات المحجوبة بالحدود تظهر في سجل الطلبات.",
+                        "Each tile totals code sending attempts in its period. Tests are separate; points include all charged sends. Rate-limited requests are counted in request history."))
+                .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 0) {
                 SmsKVRow(icon: "chart.line.downtrend.xyaxis", label: L10n.t("معدّل الاستهلاك اليومي (7 أيام)", "Daily use (7-day average)"),
                          value: L10n.t("\(SmsText.number(overview.avgDailyPoints7d)) نقطة", "\(SmsText.number(overview.avgDailyPoints7d)) pts"))
@@ -365,8 +376,8 @@ private struct SmsNumbersCard: View {
 
     @ViewBuilder private var tiles: some View {
         SmsTotalsTile(title: L10n.t("اليوم", "Today"), totals: overview.today)
-        SmsTotalsTile(title: L10n.t("7 أيام", "7 days"), totals: overview.days7)
-        SmsTotalsTile(title: L10n.t("30 يوماً", "30 days"), totals: overview.days30)
+        SmsTotalsTile(title: L10n.t("آخر 7 أيام", "Last 7 days"), totals: overview.days7)
+        SmsTotalsTile(title: L10n.t("آخر 30 يوماً", "Last 30 days"), totals: overview.days30)
     }
 }
 
@@ -386,17 +397,18 @@ private struct SmsTotalsTile: View {
             Text(title)
                 .dsFont(.caption)
                 .foregroundColor(DS.Color.textSecondary)
-            // «قبول 98%» بحلقة مصغّرة موحّدة (الدفعة ١٠)
-            HStack(spacing: DS.Spacing.xs) {
-                if let pct = totals.acceptancePct {
-                    DSRingValue(progress: pct / 100, tint: DS.Color.success)
-                }
-                Text(verbatim: acceptance)
-                    .dsFont(.caption)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .lineLimit(2)
+            Text(L10n.t("محاولات إرسال", "Sending attempts"))
+                .dsFont(.caption).foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if totals.testSends > 0 {
+                Text(L10n.t("اختبارات: \(totals.testSends)", "Tests: \(totals.testSends)"))
+                    .dsFont(.caption).foregroundColor(DS.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Text(verbatim: acceptance)
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
             Text(verbatim: points)
                 .dsFont(.caption)
                 .foregroundColor(DS.Color.textTertiary)
@@ -407,14 +419,14 @@ private struct SmsTotalsTile: View {
         .padding(DS.Hub.kpiPadding)
         .background(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous).fill(DS.Color.cardBackgroundSoft))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.t("\(title): \(totals.sends) رمز دخول، \(acceptance)، \(points)",
-                                   "\(title): \(totals.sends) codes, \(acceptance), \(points)"))
+        .accessibilityLabel(L10n.t("\(title): \(totals.sends) محاولة إرسال، \(totals.testSends) اختبارات، \(acceptance)، \(points)",
+                                   "\(title): \(totals.sends) sending attempts, \(totals.testSends) tests, \(acceptance), \(points)"))
     }
 
     /// «قبول 98%»
     private var acceptance: String {
         let pct = totals.acceptancePct.map { SmsText.percent($0) } ?? "—"
-        return L10n.t("قبول \(pct)", "\(pct) accepted")
+        return L10n.t("قبول المزوّد \(pct)", "\(pct) provider acceptance")
     }
 
     /// «12 نقطة»

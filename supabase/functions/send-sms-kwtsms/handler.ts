@@ -104,6 +104,7 @@ export function createHandler(
   send: typeof fetch = fetch,
 ) {
   return async (req: Request): Promise<Response> => {
+    const requestedAt = new Date().toISOString();
     if (req.method !== "POST") return fail(405, "Method not allowed");
     const c = config();
     if (
@@ -154,17 +155,27 @@ export function createHandler(
       if (!response.ok) throw Error("storage unavailable");
       return await response.json();
     };
-    // «محاولات الدخول» (20261020160000، طلب المالك ٢٠٢٦-١٠-٢٠): الرقم والنتيجة فقط — الرمز لا يصل هذا السجل.
+    // Request metadata never includes the OTP. The old RPC remains a 404-only
+    // fallback during rollout/rollback; ambiguous failures are never retried.
     // بأفضل جهد: نفس المهلة القصيرة، الأخطاء تُبلع، والرد لا يتغيّر. بعد الإرسال يجري بالتوازي مع finish
     // فلا يطوّل الطريق (مهلة Auth للخطّاف ٥ ثوانٍ). الوضع التجريبي ← «test» (إلا المحجوب فيبقى «blocked»).
     const logAttempt = async (
       outcome: "sent" | "failed" | "unknown" | "blocked",
+      details: Record<string, unknown> = {},
     ) => {
       try {
-        const response = await post("log_login_attempt", {
+        const args = {
           p_phone: mobile,
           p_outcome: c.test && outcome !== "blocked" ? "test" : outcome,
+        };
+        let response = await post("log_sms_login_attempt", {
+          ...args,
+          p_details: { ...details, requested_at: requestedAt, test_mode: c.test },
         });
+        if (response.status === 404) {
+          await response.body?.cancel();
+          response = await post("log_login_attempt", args);
+        }
         await response.body?.cancel();
         if (!response.ok) throw Error("log unavailable");
       } catch {
@@ -214,8 +225,8 @@ export function createHandler(
     const reply = typeof reservation === "string" ? reservation : "";
     const wait = /^blocked:([0-9]{1,6})$/.exec(reply);
     if (wait) {
-      await logAttempt("blocked");
       const seconds = Math.min(Math.max(Number(wait[1]), 1), 3600);
+      await logAttempt("blocked", { retry_after_seconds: seconds });
       return json({ error: { http_code: 429, message: waitMessage(seconds) } });
     }
     // p_format 3: {"action":"send","sender":…,"template":…,"template_en":…} — JSON تالف أو action آخر = رد غريب
@@ -301,7 +312,7 @@ export function createHandler(
         console.error("[kwtsms] rejected", response.status, code);
         await Promise.all([
           finish("failed", null, null, null, code),
-          logAttempt("failed"),
+          logAttempt("failed", { sender, error_code: code, http_status: response.status }),
         ]);
         return fail(503, "SMS provider could not accept the message");
       }
@@ -314,22 +325,29 @@ export function createHandler(
           number(result["points-charged"]),
           number(result["balance-after"]),
         ),
-        logAttempt("sent"),
+        logAttempt("sent", {
+          sender,
+          msgid: result["msg-id"],
+          points: number(result["points-charged"]),
+          balance_after: number(result["balance-after"]),
+          http_status: response.status,
+        }),
         storeCode(otp),
       ]);
       // No automatic retries: timeout/ambiguous result may already have incurred a send.
       return c.test ? fail(503, "SMS test mode is enabled") : json({});
     } catch (e) {
       console.error("[kwtsms] transport failure");
+      const errorCode = (e as Error)?.name === "TimeoutError" ? "TIMEOUT" : "NETWORK";
       await Promise.all([
         finish(
           "unknown",
           null,
           null,
           null,
-          (e as Error)?.name === "TimeoutError" ? "TIMEOUT" : "NETWORK",
+          errorCode,
         ),
-        logAttempt("unknown"),
+        logAttempt("unknown", { sender, error_code: errorCode }),
       ]);
       return fail(503, "SMS service is temporarily unavailable");
     }
