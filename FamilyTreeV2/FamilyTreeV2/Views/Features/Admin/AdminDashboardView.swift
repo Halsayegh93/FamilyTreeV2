@@ -681,37 +681,21 @@ struct AdminDashboardView: View {
         .accessibilityHint(hint.text)
     }
 
-    /// تلميح حيّ واحد لكل قسم
+    /// تلميح حيّ واحد لكل قسم — إلا ما يكرر «يحتاج انتباهك» و«حالة النظام» (الوارد، المناسبات، الفريق، التطبيق)
     private func areaHint(_ area: AdminArea) -> (text: String, warn: Bool) {
         if isInitialLoading { return (area.subtitle, false) }
         switch area {
-        case .inbox:
-            let msgs = adminRequestVM.pendingContactMessagesCount
-            return (L10n.t("\(inboxTotal) طلباً · \(msgs) رسائل", "\(inboxTotal) requests · \(msgs) messages"), false)
         case .family:
             if issueMembersCount > 0 {
                 return (L10n.t("\(issueMembersCount) بيانات ناقصة", "\(issueMembersCount) with missing data"), false)
             }
             return treeIssuesCount > 0 ? (L10n.t("\(treeIssuesCount) مشكلات الشجرة", "\(treeIssuesCount) tree problems"), false)
                                        : (area.subtitle, false)
-        case .occasions:
-            // إشعار مجدول (للمرسلين) أولاً، وإلا الذكرى القريبة
-            let n = authVM.canSendNotifications ? notificationVM.scheduledNotifications.count : 0
-            return n > 0 ? (L10n.t("\(n) إشعار مجدول", "\(n) scheduled"), false) : (memorial.dashboardCaption, false)
         case .metrics:
             if let now = activeNow { return (L10n.t("المستخدمون الآن \(now)", "\(now) using now"), false) }
             return (area.subtitle, false)
-        case .team:
-            // رصيد رسائل الدخول حين يحتاج شحناً (تحذير)، وإلا عدد الفريق
-            if authVM.canViewSystemSettings, sms.needsTopUp, let balance = sms.status?.balance {
-                return (L10n.t("رصيد الرسائل \(SmsBalanceText.points(balance))", "SMS balance \(SmsBalanceText.points(balance))"),
-                        true)
-            }
-            return (L10n.t("\(moderatorCount) في الفريق", "\(moderatorCount) on the team"), false)
-        case .app:
-            return appSettingsVM.settings.maintenanceMode
-                ? (L10n.t("وضع الصيانة يعمل", "Maintenance on"), true)
-                : (L10n.t("وضع الصيانة مطفأ", "Maintenance off"), false)
+        case .inbox, .occasions, .team, .app:
+            return (area.subtitle, false)
         }
     }
 }

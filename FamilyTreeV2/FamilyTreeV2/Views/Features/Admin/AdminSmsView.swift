@@ -207,10 +207,6 @@ private struct SmsHeroHeader: View {
                         title: L10n.t("رسائل رمز الدخول", "Sign-in code messages"),
                         subtitle: L10n.t("KWT SMS · رمز الدخول برسالة نصية", "KWT SMS · the sign-in code by text message"),
                         bottomPadding: DS.Spacing.xl) {
-            AdminGlassButton(symbol: "arrow.clockwise", label: L10n.t("تحديث الصفحة", "Refresh page")) {
-                Task { await store.refresh(force: true) }
-                Task { await SmsLoginAttemptsStore.shared.refresh(force: true) }
-            }
         } accessory: {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 SmsBalanceBlock(store: store)
@@ -346,7 +342,6 @@ private struct SmsNumbersCard: View {
             } else {
                 HStack(alignment: .top, spacing: DS.Spacing.sm) { tiles }
             }
-            SmsOutcomeBar(totals: overview.days30)
             VStack(alignment: .leading, spacing: 0) {
                 SmsKVRow(icon: "chart.line.downtrend.xyaxis", label: L10n.t("معدّل الاستهلاك اليومي (7 أيام)", "Daily use (7-day average)"),
                          value: L10n.t("\(SmsText.number(overview.avgDailyPoints7d)) نقطة", "\(SmsText.number(overview.avgDailyPoints7d)) pts"))
@@ -423,54 +418,6 @@ private struct SmsTotalsTile: View {
     }
 }
 
-/// نتائج آخر ٣٠ يوماً بالحلقة الموحّدة (الدفعة ١٠، كانت شريطاً): مقبول · غير معروف · فشل بألوان المعنى ونسبة القبول في
-/// وسطها، والمفتاح بجانبها (+ التجريبية)
-private struct SmsOutcomeBar: View {
-    let totals: SmsOverview.Totals
-
-    var body: some View {
-        if totals.sends > 0 || totals.testSends > 0 {
-            HStack(alignment: .center, spacing: DS.Spacing.md) {
-                DSRingGauge(parts: DSGaugePart.counts([("ok", totals.accepted, DS.Color.success),
-                                                       ("unknown", totals.unknown, DS.Color.warning),
-                                                       ("failed", totals.failed, DS.Color.error)]),
-                            size: DS.Ring.medium, track: DS.Ring.emptyTrack,
-                            center: .percent(totals.acceptancePct.map { Int($0.rounded(.down)) }),
-                            caption: L10n.t("قبول", "Accepted"))
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(L10n.t("آخر 30 يوماً", "Last 30 days"))
-                        .dsFont(.hubRow)
-                        .foregroundColor(DS.Color.textPrimary)
-                    DSGaugeLegend(items: legendItems, columns: 1)
-                }
-                Spacer(minLength: 0)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(L10n.t("آخر 30 يوماً: \(legend)", "Last 30 days: \(legend)"))
-        }
-    }
-
-    private var legendItems: [DSGaugeLegend.Item] {
-        var items = [DSGaugeLegend.Item("ok", L10n.t("مقبول", "Accepted"), "\(totals.accepted)", tint: DS.Color.success),
-                     DSGaugeLegend.Item("unknown", L10n.t("غير معروف", "Unknown"), "\(totals.unknown)", tint: DS.Color.warning),
-                     DSGaugeLegend.Item("failed", L10n.t("فشل", "Failed"), "\(totals.failed)", tint: DS.Color.error)]
-        if totals.testSends > 0 {
-            items.append(DSGaugeLegend.Item("test", L10n.t("تجريبي", "Test"), "\(totals.testSends)", tint: DS.Color.textTertiary))
-        }
-        return items
-    }
-
-    private var legend: String {
-        var parts = [L10n.t("مقبول \(totals.accepted)", "\(totals.accepted) accepted"),
-                     L10n.t("فشل \(totals.failed)", "\(totals.failed) failed"),
-                     L10n.t("غير معروف \(totals.unknown)", "\(totals.unknown) unknown")]
-        if totals.testSends > 0 {
-            parts.append(L10n.t("تجريبي \(totals.testSends)", "\(totals.testSends) test"))
-        }
-        return L10n.t("آخر 30 يوماً: ", "Last 30 days: ") + parts.joined(separator: " · ")
-    }
-}
-
 /// «هذه الساعة: ١٢ من ١٠٠» بشريط
 private struct SmsHourRow: View {
     let count: Int
@@ -492,12 +439,25 @@ private struct SmsHourRow: View {
 private struct SmsTrendCard: View {
     let overview: SmsOverview
 
+    /// مقبول · فشل · غير معروف (+ تجريبية) — سطر واحد بدل الحلقة المكررة
+    private func outcomeLine(_ t: SmsOverview.Totals) -> String {
+        var parts = [L10n.t("مقبول \(t.accepted)", "\(t.accepted) accepted"),
+                     L10n.t("فشل \(t.failed)", "\(t.failed) failed"),
+                     L10n.t("غير معروف \(t.unknown)", "\(t.unknown) unknown")]
+        if t.testSends > 0 { parts.append(L10n.t("تجريبي \(t.testSends)", "\(t.testSends) test")) }
+        return parts.joined(separator: " · ")
+    }
+
     var body: some View {
         let series = overview.series()
         let maxSends = max(1, series.map(\.sends).max() ?? 0)
         let total = series.reduce(0) { $0 + $1.sends }
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             AdminCardHeader(title: L10n.t("آخر 30 يوماً", "Last 30 days"))
+            Text(outcomeLine(overview.days30))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textSecondary)
+                .accessibilityLabel(L10n.t("آخر 30 يوماً: \(outcomeLine(overview.days30))", "Last 30 days: \(outcomeLine(overview.days30))"))
             if total == 0 && !series.contains(where: { $0.balance != nil }) {
                 Text(L10n.t("لا إرسال خلال آخر 30 يوماً بعد — يمتلئ الرسم مع أول رموز الدخول.",
                             "No sends in the last 30 days yet — the chart fills with the first sign-in codes."))
