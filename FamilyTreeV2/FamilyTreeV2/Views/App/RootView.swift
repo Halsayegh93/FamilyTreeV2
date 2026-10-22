@@ -4,6 +4,8 @@ struct RootView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
+    @StateObject private var remoteSettings = RemoteSettingsModel.shared
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var network = NetworkMonitor.shared
 
     var body: some View {
@@ -50,6 +52,10 @@ struct RootView: View {
                     MainTabView()
                 }
             }
+        }
+        .task(id: authVM.status) { await remoteSettings.refresh(publicOnly: authVM.status == .unauthenticated) }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { Task { await appSettingsVM.fetchSettings() } }
         }
         .animation(.default, value: authVM.status)
         // Alert مركزي لأي عملية كتابة بدون اتصال — ViewModels تستدعي

@@ -80,8 +80,38 @@ private struct AdminAppSettingsGroups: View {
     var body: some View {
         VStack(spacing: DS.Hub.stackSpacing) {
             group(L10n.t("الأقسام الظاهرة للأعضاء", "Sections members see")) { AnyView(sectionsRows) }
+            group(L10n.t("إعدادات السيرفر", "Server settings")) {
+                AnyView(NavigationLink { AdminRemoteSettingsView() } label: {
+                    Label(L10n.t("القيم والنصوص من السيرفر", "Server values and text"), systemImage: "slider.horizontal.3")
+                        .dsFont(.hubRow)
+                        .foregroundColor(DS.Color.textPrimary)
+                })
+            }
             group(L10n.t("القوائم", "Lists")) { AnyView(listsRows) }
             group(L10n.t("التعديلات الذاتية", "Self-edits")) { AnyView(selfEditRows) }
+            if let days = appSettingsVM.settings.deathAlertDays {
+                group(L10n.t("تنبيهات الإدارة", "Admin alerts")) {
+                    AnyView(VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        Text(L10n.t("مدة تنبيه وفاة لم يُعلن عنها", "Unannounced death alert window"))
+                            .dsFont(.hubRow)
+                        Picker(L10n.t("المدة بالأيام", "Days"), selection: Binding(
+                            get: { appSettingsVM.settings.deathAlertDays ?? days },
+                            set: { value in
+                                Task { await appSettingsVM.updateSetting("death_alert_days", value: value,
+                                                                        updatedBy: authVM.currentUser?.id) }
+                            })) {
+                            ForEach(1...30, id: \.self) { value in
+                                Text(L10n.t("\(value) يوم", "\(value) days")).tag(value)
+                            }
+                        }
+                        .disabled(!canEdit || appSettingsVM.isSaving)
+                        Text(L10n.t("يتحدث عند جلب الإعدادات بدون بناء جديد. مدة إتاحة إعلان الوفاة تبقى ٣٠ يومًا.",
+                                    "Updates when settings refresh without a new build. Death announcements remain available for 30 days."))
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.textSecondary)
+                    })
+                }
+            }
             group(L10n.t("التشغيل", "Operations")) { AnyView(operationRows) }
             group(L10n.t("النظام", "System")) { AnyView(systemRows) }
         }

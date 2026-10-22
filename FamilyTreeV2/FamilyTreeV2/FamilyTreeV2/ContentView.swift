@@ -9,10 +9,10 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        // بلا اتصال: شاشة البداية فوق كل شيء (`OfflineHold`) بدل شريطي الاتصال
-        NavigationStack {
-            RootView()
-        }
+        // Each main tab owns its NavigationStack. An outer stack can capture a
+        // tab's destination and push it outside TabView, losing its route scope.
+        // Auth screens switch through RootView and present their own sheets.
+        RootView()
     }
 }
 

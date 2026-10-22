@@ -49,6 +49,7 @@ struct AppSettings: Codable {
     var smsUrgentRepeatHours: Int?
     // حدود رسائل الدخول واسم المرسل (sms_wait_seconds…، ٢٠٢٦-١٠-٢٠) تُقرأ من `sms_admin_overview()` لا من هنا —
     // تحتاجها صفحة KWT SMS وحدها، وتكبير هذا النوع يكبّر كل نسخة منه في المكدس (حارس المكدس)
+    var deathAlertDays: Int?
     var updatedAt: String?
     var updatedBy: UUID?
 
@@ -82,6 +83,7 @@ struct AppSettings: Codable {
         case smsUrgentThreshold = "sms_urgent_threshold"
         case smsLowRepeatHours = "sms_low_repeat_hours"
         case smsUrgentRepeatHours = "sms_urgent_repeat_hours"
+        case deathAlertDays = "death_alert_days"
         case updatedAt = "updated_at"
         case updatedBy = "updated_by"
     }
@@ -113,6 +115,7 @@ class AppSettingsViewModel: ObservableObject {
 
     /// جلب الإعدادات من السيرفر
     func fetchSettings() async {
+        await RemoteSettingsModel.shared.refresh()
         do {
             let result: [AppSettings] = try await supabase
                 .from("app_settings")
@@ -123,6 +126,8 @@ class AppSettingsViewModel: ObservableObject {
 
             if let fetched = result.first {
                 self.settings = fetched
+                let days = fetched.deathAlertDays ?? 7
+                UserDefaults.standard.set((1...30).contains(days) ? days : 7, forKey: "server.deathAlertDays")
                 LanguageManager.shared.applyOfficialLanguage(fetched.defaultLanguage)
             }
         } catch {

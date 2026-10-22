@@ -45,7 +45,7 @@ struct AddNewsView: View {
     private var pollsEnabled: Bool { appSettingsVM.settings.pollsEnabled ?? true }
 
     private var canSubmit: Bool {
-        guard !isSubmitting else { return false }
+        guard !isSubmitting, selectedImages.count <= RemoteSettings.int("news_max_photos", 5, range: 1...10) else { return false }
         // التصويت يخفي نص الخبر، فالشرط خياراته لا النص
         if isPoll { return isPollValid }
         return !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -185,7 +185,7 @@ struct AddNewsView: View {
                                   tint: sectionTint, focused: $contentFocused)
 
                 if !selectedImages.isEmpty {
-                    DSComposerPhotoStrip(images: $selectedImages, limit: 5, tint: sectionTint)
+                    DSComposerPhotoStrip(images: $selectedImages, limit: RemoteSettings.int("news_max_photos", 5, range: 1...10), tint: sectionTint)
                         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
             }
@@ -193,7 +193,7 @@ struct AddNewsView: View {
             // أدوات المحتوى: الصور والتصويت داخل محتوى الخبر (طلب المالك)
             HStack(spacing: DS.Spacing.sm) {
                 if !isPoll && selectedImages.isEmpty {
-                    PhotosPicker(selection: $pickerItems, maxSelectionCount: 5, matching: .images) {
+                    PhotosPicker(selection: $pickerItems, maxSelectionCount: RemoteSettings.int("news_max_photos", 5, range: 1...10), matching: .images) {
                         // نفس وجه شريحة «تصويت» جنبها (DSExtraChip)
                         DSAddChipLabel(icon: "photo.on.rectangle.angled", title: L10n.t("صور", "Photos"),
                                        isLoading: isLoadingPhotos)

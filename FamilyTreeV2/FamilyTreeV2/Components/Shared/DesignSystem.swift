@@ -338,29 +338,24 @@ enum DS {
         /// يُطبَّق على العناوين الكبرى فقط؛ ويبقى نص المحتوى على خط النظام (SF Pro) لأقصى وضوح.
         static let displayDesign: SwiftUI.Font.Design = .rounded
 
-        // MARK: IBM Plex Sans Arabic — خط الهوية (تجربة)
+        // MARK: Cairo — خط الهوية (تجربة)
         /// أسماء PostScript للأوزان المضافة في Resources/Fonts
         enum Plex {
-            static let regular  = "IBMPlexSansArabic-Regular"
-            static let medium   = "IBMPlexSansArabic-Medium"
-            static let semibold = "IBMPlexSansArabic-SemiBold"
-            static let bold     = "IBMPlexSansArabic-Bold"
+            static let regular  = AppTypeface.regular
+            static let medium   = AppTypeface.medium
+            static let semibold = AppTypeface.semibold
+            static let bold     = AppTypeface.bold
 
             /// وزن الواجهة المطلوب ← ملف الخط (نفس `DS.Font.plexName`) — اسم main للتوافق
             static func name(for weight: SwiftUI.Font.Weight) -> String { DS.Font.plexName(weight) }
         }
 
-        /// اسم ملف الوزن (Plex فيه أربعة أوزان: الأثقل من العريض يُرسم عريضاً)
+        /// اسم الوزن من مصدر الخط الموحّد (الأوزان الأصلية المتاحة)
         static func plexName(_ weight: SwiftUI.Font.Weight) -> String {
-            switch weight {
-            case .black, .heavy, .bold: return Plex.bold
-            case .semibold:             return Plex.semibold
-            case .medium:               return Plex.medium
-            default:                    return Plex.regular
-            }
+            AppTypeface.name(for: weight)
         }
 
-        /// خط IBM Plex Sans Arabic مع دعم Dynamic Type — يكبر ويصغر مع «حجم النص» في إعدادات الجهاز
+        /// خط Cairo مع دعم Dynamic Type — يكبر ويصغر مع «حجم النص» في إعدادات الجهاز
         /// بنفس نسبة نمط Apple الأقرب لحجمه (`textStyle(for:)`)
         static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
             .custom(plexName(weight), size: size, relativeTo: textStyle(for: size))
@@ -428,8 +423,8 @@ enum DS {
         static var calloutBold: SwiftUI.Font { plex(DS.TextRole.callout.textSize, weight: .bold, relativeTo: .callout) }
         static var subheadline: SwiftUI.Font { role(.subtitle) }
         static var footnote: SwiftUI.Font    { role(.footnote) }
-        static var caption1: SwiftUI.Font    { plex(appleSize(.caption) * opticalScale, relativeTo: .caption) }
-        static var caption2: SwiftUI.Font    { plex(appleSize(.caption2) * opticalScale, relativeTo: .caption2) }
+        static var caption1: SwiftUI.Font    { plex(AppTypeface.interfaceSize(appleSize(.caption) * opticalScale), relativeTo: .caption) }
+        static var caption2: SwiftUI.Font    { plex(AppTypeface.interfaceSize(appleSize(.caption2) * opticalScale), relativeTo: .caption2) }
 
         /// خط مرن يدعم Dynamic Type — الحجم المطلوب نفسه مقيّداً بنمط Apple الأقرب (`textStyle(for:)`)؛
         /// الحجم الصحيح من مقاسات Apple (١١، ١٢، ١٣، ١٥، ١٦، ١٧، ٢٠، ٢٢، ٢٨، ٣٤) = النمط الافتراضي نفسه.
@@ -446,7 +441,7 @@ enum DS {
             scaled(size, weight: weight, design: displayDesign)
         }
 
-        /// IBM Plex Sans Arabic بحجم ثابت لا يتبع Dynamic Type — لنصوص لوحة الشجرة داخل عُقد بمقاس ثابت
+        /// Cairo بحجم ثابت لا يتبع Dynamic Type — لنصوص لوحة الشجرة داخل عُقد بمقاس ثابت
         /// (بدل .system(size:) في تلك الأماكن) — من main (الهوية)
         static func plexFixed(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
             .custom(plexName(weight), fixedSize: size)
@@ -689,7 +684,7 @@ enum DS {
 
 // MARK: - أدوار النص — «التعديل من مكان واحد» (طلب المالك ٢٠٢٦-١٠-٠٧)
 //
-// كل نص في التطبيق دوره واحد من هذا الجدول (خط IBM Plex Sans Arabic + نمط Apple + وزن). تغيير سطر هنا يغيّر
+// كل نص في التطبيق دوره واحد من هذا الجدول (خط Cairo + نمط Apple + وزن). تغيير سطر هنا يغيّر
 // كل مكان بنفس الدور. كانت الأحجام تُقرَّر في كل شاشة (~١٠٤٠ موضعاً بثلاثين تركيبة).
 // «حجم الخط الافتراضي في الآيفون» (طلب المالك ٢٠٢٦-١٠-٠٨): كل دور = نمط Apple بحجمه الافتراضي
 // (`DS.Font.appleSize`) ومقيّد به (`relativeTo:`)، فيتبع «حجم النص» في إعدادات الجهاز — لا أحجام خاصة بالتطبيق.
@@ -706,7 +701,7 @@ extension DS {
         let optical: Bool
 
         /// الحجم المرسوم فعلاً
-        var textSize: CGFloat { optical ? size * DS.Font.opticalScale : size }
+        var textSize: CGFloat { optical ? AppTypeface.interfaceSize(size * DS.Font.opticalScale) : size }
 
         /// دور نصّ = نمط Apple بحجمه الافتراضي + وزن
         init(_ style: SwiftUI.Font.TextStyle, weight: SwiftUI.Font.Weight = .regular) {
@@ -2249,6 +2244,8 @@ extension DS {
         /// سطر «حالة النظام» أسفل «يحتاج انتباهك»: نقطة اللون في صفوف لوحته، تعبئة السطر بلون حالته، وعرض اللوحة المنبثقة
         static let statusDot: CGFloat = 7
         static let statusLineFill: Double = 0.14
+        /// Compact system-status strip; Dynamic Type can grow beyond this minimum.
+        static let statusLineMinHeight: CGFloat = 36
         static let statusPanelWidth: CGFloat = 320
         /// عرض اللوحة من أحجام إمكانية الوصول (الإجراء تحت النص)
         static let statusPanelWidthLarge: CGFloat = 360

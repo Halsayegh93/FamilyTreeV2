@@ -609,7 +609,7 @@ enum SmsText {
         let s = raw.lowercased()
         if raw == "ERR029" { return L10n.t("غير موجودة عند المزوّد", "Not found at the provider") }
         if raw == "ERR030" { return L10n.t("عالقة في الطابور بخطأ", "Stuck in the queue with an error") }
-        if s.contains("deliver") { return L10n.t("وصلت", "Delivered") }
+        // KWT status is a gateway/queue result, not a Kuwait handset receipt.
         if s.contains("fail") || s.contains("reject") || s.contains("error") { return L10n.t("فشلت", "Failed") }
         if s.contains("queue") || s.contains("pending") { return L10n.t("في الطابور", "Queued") }
         if s.contains("sent") { return L10n.t("خرجت من المزوّد", "Sent by the provider") }

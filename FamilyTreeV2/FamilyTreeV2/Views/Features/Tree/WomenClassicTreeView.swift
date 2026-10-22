@@ -834,7 +834,7 @@ struct WomenClassicTreeView: View {
                         .dsTreeFont(.caption, k)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.5)
+                        .minimumScaleFactor(0.85)
                         .padding(.horizontal, DS.Spacing.xsm * k)
                         .frame(maxWidth: NODE_W)
                         .frame(height: PILL_H)
@@ -861,7 +861,7 @@ struct WomenClassicTreeView: View {
                     .dsTreeFont(.caption, k)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.5)   // تصغير أكبر → الاسم الطويل يظهر كاملاً بلا اقتطاع
+                    .minimumScaleFactor(0.85)   // الحفاظ على وضوح الاسم؛ التفاصيل تعرض الاسم الكامل
                     .padding(.horizontal, DS.Spacing.xsm * k)
                     .frame(maxWidth: NODE_W)
                     .frame(height: PILL_H)

@@ -86,7 +86,7 @@ import SwiftUI
     }
 
     static func greetingGlyph(hour: Int, tint: Color) -> AnyView {
-        let mood: FT5STimeOrb.Mood = (4..<12).contains(hour) ? .morning : ((12..<17).contains(hour) ? .afternoon : .evening)
+        let mood: FT5STimeOrb.Mood = (RemoteSettings.morning..<RemoteSettings.afternoon).contains(hour) ? .morning : ((RemoteSettings.afternoon..<RemoteSettings.evening).contains(hour) ? .afternoon : .evening)
         return AnyView(FT5STimeOrbView(mood: mood, size: 18))
     }
 

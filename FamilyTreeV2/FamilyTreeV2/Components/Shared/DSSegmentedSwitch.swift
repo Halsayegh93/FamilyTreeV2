@@ -27,16 +27,18 @@ struct DSSegmentedSwitch<ID: Hashable>: View {
     let options: [DSSegmentOption<ID>]
     @Binding var selection: ID
     var size: DSSegmentSize = .large
+    var showsIcons = true
     @Namespace private var ns
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     /// المختار بتدرّج القسم (DSActionFill) وظلّه بلونه
     @Environment(\.dsSection) private var section
 
-    init(options: [DSSegmentOption<ID>], selection: Binding<ID>, size: DSSegmentSize = .large) {
+    init(options: [DSSegmentOption<ID>], selection: Binding<ID>, size: DSSegmentSize = .large, showsIcons: Bool = true) {
         self.options = options
         self._selection = selection
         self.size = size
+        self.showsIcons = showsIcons
     }
 
     // المقاسات من `DSBox.segment*` و`DS.TextRole.segment*`
@@ -87,7 +89,7 @@ struct DSSegmentedSwitch<ID: Hashable>: View {
             }
         } label: {
             HStack(spacing: DS.Spacing.xsm) {
-                if size != .compact {
+                if size != .compact && showsIcons {
                     // رمز النظام أو المخصّص من الأصول (ن-١ فحص ٢٠٢٦-١٠-٠٧)
                     Image(dsSymbol: option.icon)
                         .dsGlyph(glyph)

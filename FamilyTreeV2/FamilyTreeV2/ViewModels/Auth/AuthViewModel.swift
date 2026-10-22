@@ -1302,6 +1302,7 @@ class AuthViewModel: ObservableObject {
     }
 
     func signOut() async {
+        RemoteSettingsModel.shared.clearSession()
         guard !isEndingSession else { return }
         isEndingSession = true
         defer { isEndingSession = false }

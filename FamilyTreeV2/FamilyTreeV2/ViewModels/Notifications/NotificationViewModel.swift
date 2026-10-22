@@ -1483,20 +1483,25 @@ class NotificationViewModel: ObservableObject {
                     .execute()
 
                 // إشعار للعضو بأنه تم قبوله
+                struct ApprovedName: Decodable { let full_name: String? }
+                let approvedName: [ApprovedName]? = try? await supabase.from("profiles")
+                    .select("full_name").eq("id", value: requestId.uuidString).limit(1).execute().value
+                let welcomeName = approvedName?.first?.full_name ?? ""
+                let welcomeBody = RemoteSettings.template("notify_join_approved_body",
+                    fallback: L10n.t("وافقت الإدارة على انضمامك — مرحباً في عائلة المحمدعلي",
+                                     "The administration approved your membership — Welcome to the Al-Mohammad Ali family"),
+                    name: welcomeName)
                 let approvedPayload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(requestId.uuidString),
-                    "title": AnyEncodable(L10n.t("تم قبول طلبك", "Your Request Was Approved")),
-                    "body": AnyEncodable(L10n.t(
-                        "وافقت الإدارة على انضمامك — مرحباً في عائلة المحمدعلي",
-                        "The administration approved your membership — Welcome to the Al-Mohammad Ali family"
-                    )),
+                    "title": AnyEncodable(RemoteSettings.text("notify_join_approved_title", L10n.t("تم قبول طلبك", "Your Request Was Approved"))),
+                    "body": AnyEncodable(welcomeBody),
                     "kind": AnyEncodable("join_approved"),
                     "created_by": AnyEncodable(currentUser?.id.uuidString ?? "")
                 ]
                 _ = try? await supabase.from("notifications").insert(approvedPayload).execute()
                 await sendPushToMembers(
-                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
-                    body: L10n.t("مرحباً في عائلة المحمدعلي", "Welcome to the Al-Mohammad Ali family"),
+                    title: RemoteSettings.text("notify_join_approved_title", L10n.t("تم قبول طلبك", "Your Request Was Approved")),
+                    body: welcomeBody,
                     kind: "join_approved",
                     targetMemberIds: [requestId]
                 )

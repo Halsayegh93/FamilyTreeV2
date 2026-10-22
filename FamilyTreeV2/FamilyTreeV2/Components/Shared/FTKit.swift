@@ -72,8 +72,8 @@ nonisolated enum FTKit {
     nonisolated enum Mood {
         case morning, afternoon, evening
         static func forHour(_ h: Int) -> Mood {
-            if (4..<12).contains(h) { return .morning }
-            if (12..<17).contains(h) { return .afternoon }
+            if (RemoteSettings.morning..<RemoteSettings.afternoon).contains(h) { return .morning }
+            if (RemoteSettings.afternoon..<RemoteSettings.evening).contains(h) { return .afternoon }
             return .evening
         }
     }

@@ -89,8 +89,8 @@ struct HomeGreetingRow: View {
     private var hour: Int { Calendar.current.component(.hour, from: Date()) }
 
     /// الصباح من ٤ الفجر — بعد منتصف الليل يبقى «مساء الخير» بالهلال (كان «صباح الخير» بشمس طالعة)
-    private var isMorning: Bool { (4..<12).contains(hour) }
-    private var isAfternoon: Bool { (12..<17).contains(hour) }
+    private var isMorning: Bool { (RemoteSettings.morning..<RemoteSettings.afternoon).contains(hour) }
+    private var isAfternoon: Bool { (RemoteSettings.afternoon..<RemoteSettings.evening).contains(hour) }
 
     private var timeAccent: Color {
         if isMorning { return DS.Color.secondary }
