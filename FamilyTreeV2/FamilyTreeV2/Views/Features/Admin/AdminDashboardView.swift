@@ -1109,15 +1109,16 @@ struct AdminSystemStatusPanel: View {
                 .foregroundColor(DS.Color.textTertiary)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, DS.Spacing.xxs)
-            // الحالات السليمة لا تُعرض (الصيانة مطفأة، لا مجدول، لا أجهزة فاشلة): تبقى الأرقام المهمة فقط
-            let flagged = pills.filter { $0.level != .ok }
-            if flagged.isEmpty {
+            // الحالات السليمة لا تُعرض (الصيانة مطفأة، لا مجدول، لا أجهزة فاشلة): تبقى الأرقام المهمة فقط.
+            // الرصيد يبقى ظاهراً دائماً (حتى وهو سليم)
+            let shown = pills.filter { $0.level != .ok || $0.home == .sms }
+            if shown.allSatisfy({ $0.level == .ok }) {
                 Text(verbatim: "✓ " + L10n.t("النظام سليم", "All systems OK"))
                     .dsFont(.hubRow)
                     .foregroundColor(Self.dot(.ok))
                     .padding(.vertical, DS.Spacing.sm)
             }
-            ForEach(Array(flagged.enumerated()), id: \.element.id) { index, pill in
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, pill in
                 if index > 0 { AdminRowDivider() }
                 row(pill)
             }

@@ -73,28 +73,12 @@ enum AdminToolCatalog {
                                title: L10n.t("الأعضاء", "Members"),
                                subtitle: L10n.t("بحث وشرائح، وورقة لكل عضو بكل أوامره", "Search, filters and one sheet per member"),
                                icon: "person.3.sequence.fill", tint: DS.Color.palm,
-                               keywords: ["أعضاء", "سجل", "فروع", "عضو", "إدارة السجل", "بيانات العضو"],
+                               // الشرائح الثلاث («المسجّلون» · «بيانات ناقصة» · «مشكلات الشجرة») تُفتح من داخل الصفحة نفسها
+                               keywords: ["أعضاء", "سجل", "فروع", "عضو", "إدارة السجل", "بيانات العضو",
+                                          "المسجّلون", "مسجلون", "الأعضاء المسجّلون", "حسابات", "استخدام", "مسجّل", "موقوف", "تفعيل",
+                                          "بيانات ناقصة", "نواقص", "جودة", "استكمال", "محطة",
+                                          "مشكلات الشجرة", "مشكلات", "صحة", "سلامة", "يتيم", "مكرر"],
                                kind: page { AdminMembersPage() }))
-            t.append(AdminTool(id: "family.registered", area: .family, group: members,
-                               title: L10n.t("الأعضاء المسجّلون", "Registered members"),
-                               subtitle: L10n.t("لهم حساب في التطبيق — ومن يستخدمه ومن لا تصله الإشعارات",
-                                                "With an app account — who uses it, who gets no notifications"),
-                               icon: "checkmark.seal.fill", tint: DS.Color.success,
-                               keywords: ["حسابات", "استخدام", "مسجّل", "موقوف", "تفعيل"],
-                               kind: page { AdminMembersPage(chip: .registered) }))
-            t.append(AdminTool(id: "family.gaps", area: .family, group: members,
-                               title: L10n.t("بيانات ناقصة", "Missing data"),
-                               subtitle: L10n.t("اكتمال البيانات واستكمالها عضواً عضواً", "Completeness, one member at a time"),
-                               icon: "checklist", tint: DS.Color.warning,
-                               keywords: ["نواقص", "جودة", "استكمال", "محطة"],
-                               kind: page { AdminMembersPage(chip: .gaps) }))
-            t.append(AdminTool(id: "family.problems", area: .family, group: members,
-                               title: L10n.t("مشكلات الشجرة", "Tree problems"),
-                               subtitle: L10n.t("غير مرتبط بأب، بلا اسم، ارتباط أب غير صالح، مخفي، رقم مكرر",
-                                                "Unlinked, unnamed, invalid link, hidden, duplicate"),
-                               icon: "stethoscope", tint: DS.Color.warning,
-                               keywords: ["صحة", "سلامة", "يتيم", "مكرر"],
-                               kind: page { AdminMembersPage(chip: .problems) }))
             if authVM.canRegisterMembers {
                 t.append(AdminTool(id: "family.register", area: .family, group: members,
                                    title: L10n.t("تسجيل عضو جديد", "Register a new member"),
@@ -120,33 +104,17 @@ enum AdminToolCatalog {
         if authVM.canModerate || authVM.canSendNotifications {
             let occasions = AdminArea.occasions.title
             t.append(AdminTool(id: "occasions.create", area: .occasions, group: occasions,
-                               title: L10n.t("إنشاء", "Create"),
+                               title: occasions,
                                subtitle: authVM.canSendNotifications
                                 ? L10n.t("إعلان · إعلان وفاة · بطاقة تهنئة أو تعزية · إعلان تحديث التطبيق",
                                          "Announcement · obituary · greeting or condolence card · app update notice")
                                 : L10n.t("بطاقة تهنئة أو تعزية", "Greeting or condolence card"),
                                icon: "plus.circle.fill", tint: DS.Color.sadu,
                                keywords: ["إعلان", "إعلانات", "إشعار", "إرسال", "جدولة", "وفاة", "عزاء", "تهنئة", "تعزية", "بطاقة",
-                                          "منشور", "مناسبة", "تحديث", "إصدار", "مستجدات"],
+                                          "منشور", "مناسبة", "تحديث", "إصدار", "مستجدات", "إنشاء",
+                                          "القادم", "ذكرى", "راحلين", "مجدول", "مجدولة", "تعديل الإشعار", "إلغاء الإشعار", "وفيات",
+                                          "المنشور", "أُعلن", "مرسلة"],
                                kind: page { AdminOccasionsPage() }))
-            t.append(AdminTool(id: "occasions.upcoming", area: .occasions, group: occasions,
-                               title: L10n.t("القادم", "Upcoming"),
-                               subtitle: authVM.isAdmin
-                                ? L10n.t("ذكرى الراحلين، الإشعارات المجدولة، ووفيات لم يُعلن عنها",
-                                         "Memorials, scheduled pushes and unannounced deaths")
-                                : L10n.t("ذكرى الراحلين خلال ٣٠ يوماً", "Memorials in the next 30 days"),
-                               icon: "calendar.badge.clock", tint: DS.Color.sadu,
-                               keywords: ["ذكرى", "راحلين", "مجدول", "مجدولة", "جدولة", "تعديل الإشعار", "إلغاء الإشعار", "وفيات"],
-                               kind: page { AdminOccasionsPage() }))
-            if authVM.isAdmin {
-                t.append(AdminTool(id: "occasions.published", area: .occasions, group: occasions,
-                                   title: L10n.t("المنشور", "Published"),
-                                   subtitle: L10n.t("الإعلانات وإعلانات الوفاة والتحديث والإشعارات المرسلة",
-                                                    "Announcements, obituaries, updates and sent pushes"),
-                                   icon: "checkmark.seal.fill", tint: DS.Color.sadu,
-                                   keywords: ["منشور", "أُعلن", "مرسلة"],
-                                   kind: page { AdminOccasionsPage() }))
-            }
         }
 
         // ٤ المؤشرات — ثلاثة مداخل للقراءة: العائلة · الاستخدام · الموافقات («سجل التعديلات» صار «نشاط الفريق» في
@@ -237,12 +205,15 @@ enum AdminToolCatalog {
         // (تفتح الصفحة أو قائمتها). «كل الإعدادات في صفحة واحدة» حُذفت — الصفحة نفسها صارت كل الإعدادات
         if authVM.canViewSystemSettings {
             let settings = L10n.t("التطبيق", "App")
+            // صفحة واحدة لكل إعدادات التطبيق (الأقسام الظاهرة، الصيانة، حدّ التعديلات، النظام) — المفاتيح في مكانها
             t.append(AdminTool(id: "app.sections", area: .app, group: settings,
-                               title: L10n.t("الأقسام الظاهرة للأعضاء", "Sections members see"),
-                               subtitle: L10n.t("لغة التطبيق، الديوانيات، شجرة النساء، المشاريع، الاستطلاعات، اعتماد الأخبار",
-                                                "Language, Diwaniyas, women's tree, projects, polls, news approval"),
+                               title: L10n.t("إعدادات التطبيق", "App settings"),
+                               subtitle: L10n.t("الأقسام الظاهرة · وضع الصيانة · حدّ التعديلات · النظام",
+                                                "Visible sections · Maintenance · Self-edit limit · System"),
                                icon: "switch.2", tint: DS.Color.primary,
-                               keywords: ["لغة", "ميزات", "ديوانيات", "مشاريع", "استطلاعات", "أخبار", "اعتماد"],
+                               keywords: ["لغة", "ميزات", "ديوانيات", "مشاريع", "استطلاعات", "أخبار", "اعتماد",
+                                          "الأقسام الظاهرة للأعضاء", "عداد", "تعديل", "حد", "حدّ التعديلات الذاتية",
+                                          "صيانة", "تشغيل", "وضع الصيانة", "النظام", "معلومات", "إعادة التعيين", "افتراضي", "استعادة"],
                                kind: page { AdminAppAreaPage() }))
             t.append(AdminTool(id: "app.categories", area: .app, group: settings,
                                title: L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"),
@@ -257,32 +228,12 @@ enum AdminToolCatalog {
                                icon: "person.2.crop.square.stack.fill", tint: DS.Color.accent,
                                keywords: ["عوائل", "عائلة", "فروع", "قوائم"],
                                kind: page { AdminFamilyNamesView() }))
-            t.append(AdminTool(id: "app.selfEdits", area: .app, group: settings,
-                               title: L10n.t("حدّ التعديلات الذاتية", "Self-edit limit"),
-                               subtitle: L10n.t("3 تعديلات ثم بموافقة الإدارة — إيقاف الحدّ أو إعادة ضبط العدّاد",
-                                                "3 edits then approval — pause or reset the counter"),
-                               icon: "timer", tint: DS.Color.info,
-                               keywords: ["عداد", "تعديل", "حد"],
-                               kind: page { AdminAppAreaPage() }))
-            t.append(AdminTool(id: "app.maintenance", area: .app, group: settings,
-                               title: L10n.t("وضع الصيانة", "Maintenance mode"),
-                               subtitle: L10n.t("إيقاف التطبيق مؤقتاً للأعضاء", "Pause the app for members"),
-                               icon: "wrench.and.screwdriver.fill", tint: DS.Color.warning,
-                               keywords: ["صيانة", "تشغيل"],
-                               kind: page { AdminAppAreaPage() }))
             t.append(AdminTool(id: "app.forceUpdate", area: .app, group: settings,
                                title: L10n.t("فرض التحديث", "Force update"),
                                subtitle: L10n.t("أقل إصدار مسموح للآيفون والأندرويد", "Minimum allowed version for iPhone and Android"),
                                icon: "arrow.down.app.fill", tint: DS.Color.primary,
                                keywords: ["تحديث", "إجباري", "إصدار"],
                                kind: page { AdminForceUpdateView() }))
-            t.append(AdminTool(id: "app.system", area: .app, group: settings,
-                               title: L10n.t("النظام", "System"),
-                               subtitle: L10n.t("الإصدار، آخر تعديل للإعدادات، استعادة الإعدادات الافتراضية",
-                                                "Version, last settings change, restore defaults"),
-                               icon: "info.circle.fill", tint: DS.Color.slate,
-                               keywords: ["معلومات", "إعادة التعيين", "افتراضي", "استعادة"],
-                               kind: page { AdminAppAreaPage() }))
         }
         return t
     }
