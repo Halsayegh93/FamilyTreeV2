@@ -59,7 +59,7 @@ cd supabase/tests/family_links
 node sms_request_details.test.mjs
 ```
 
-The isolated PostgreSQL suite checks 51 conditions covering role/column access,
+The isolated PostgreSQL suite checks 66 conditions covering role/column access,
 metadata validation, no OTP in history, code access auditing, used/expired
 codes, queue correlation, pagination, retention and rollback/reapply.
 `supabase/functions/send-sms-kwtsms/handler_test.ts` additionally checks the
@@ -68,3 +68,8 @@ Native UI checks cover recipient routing, masked admin details, pagination,
 role changes during code loading, code replacement/sign-in, large text, dark
 mode and error/expired/used states. Test fixtures are temporary and are not
 included in device builds.
+
+The server also records signed Auth origin and recipient-selection metadata for
+new requests. A recipient match identifies the destination number, not the
+human requesting a code. See `sms-recipient-routing.md` for the phone-change
+destination repair and the additional server checks.

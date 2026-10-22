@@ -421,6 +421,74 @@ Deno.test("owner code store: failing, missing (after rollback) or hanging never 
 // ── الحدود يعدّلها المالك واسم المرسل (20261020170000) ──
 const providerBody = (f: Fixture) =>
   f.requests.find((r) => r.url.includes("kwtsms.com"))?.body;
+Deno.test("explicit SMS recipient wins over the account phone during phone changes", async () => {
+  const f = fixture();
+  const response = await f.handler(signed({
+    user: { phone: "+96550000000", new_phone: "96550000001" },
+    sms: { phone: "96550000001", otp: "123456" },
+    metadata: { ip_address: "192.0.2.10", uuid: "ce96638c-fd94-477e-8c5b-5da1942de4c8" },
+  }));
+  equal(response.status, 200);
+  equal(providerBody(f)?.mobile, "96550000001");
+  equal(f.logs, [{ p_phone: "96550000001", p_outcome: "sent" }]);
+  equal(f.codes, []); // A phone-change code is not a sign-in code for either number.
+  const metadata = f.detailLogs[0].p_details as Record<string, unknown>;
+  equal(metadata.sms_kind, "phone_change");
+  equal(metadata.recipient_source, "sms_phone");
+  equal(metadata.source_ip, "192.0.2.10");
+  equal(metadata.hook_id, "ce96638c-fd94-477e-8c5b-5da1942de4c8");
+  equal(JSON.stringify(metadata).includes("123456"), false);
+  // Throttling and event records must use the actual destination as well.
+  const direct = fixture();
+  await direct.handler(signed({ user: { phone: "96550000001" }, sms: { phone: "+96550000001", otp: "123456" } }));
+  equal(f.requests[0].body.p_phone, direct.requests[0].body.p_phone);
+});
+Deno.test("an invalid explicit SMS destination never falls back to a valid account number", async () => {
+  for (const phone of [null, "", "bad", 96550000001, "+14155550100", "96550000001,96550000000", "965٥٠٠٠٠٠٠١"]) {
+    const f = fixture();
+    equal((await f.handler(signed({ ...payload, sms: { otp: "123456", phone } }))).status, 400);
+    equal(f.requests, []);
+  }
+});
+Deno.test("a legacy pending change fails closed; current sign-in can still target the original number", async () => {
+  for (const new_phone of ["96550000001", "+14155550100", "invalid", 123]) {
+    const f = fixture();
+    equal((await f.handler(signed({ ...payload, user: { ...payload.user, new_phone } }))).status, 400);
+    equal(f.requests, []);
+  }
+  const f = fixture();
+  equal((await f.handler(signed({ user: { ...payload.user, new_phone: "96550000001" },
+    sms: { phone: "96550000000", otp: "123456" } }))).status, 200);
+  equal(providerBody(f)?.mobile, "96550000000");
+  equal(f.codes, [{ p_phone: "96550000000", p_code: "123456" }]);
+  equal((f.detailLogs[0].p_details as Record<string, unknown>).sms_kind, "login_or_signup");
+});
+Deno.test("MFA, reauthentication and different destinations never overwrite the owner sign-in code", async () => {
+  for (const [sms_type, kind] of [["mfa", "mfa"], ["reauthentication", "reauthentication"], ["future_type", "verification"], ["phone_change", "phone_change"]]) {
+    const f = fixture();
+    equal((await f.handler(signed({ ...payload, sms: { phone: "96550000001", otp: "123456", sms_type } }))).status, 200);
+    equal(providerBody(f)?.mobile, "96550000001");
+    equal(f.codes, []);
+    equal((f.detailLogs[0].p_details as Record<string, unknown>).sms_kind, kind);
+  }
+  const f = fixture();
+  await f.handler(signed({ user: {}, sms: { phone: "96550000001", otp: "123456" } }));
+  equal(providerBody(f)?.mobile, "96550000001");
+  equal(f.codes, []);
+});
+Deno.test("legacy normal login is compatible and unsigned origin headers never enter the audit", async () => {
+  const f = fixture();
+  const req = signed(payload);
+  req.headers.set("x-forwarded-for", "198.51.100.55");
+  equal((await f.handler(req)).status, 200);
+  equal(providerBody(f)?.mobile, "96550000000");
+  const meta = f.detailLogs[0].p_details as Record<string, unknown>;
+  equal(meta.recipient_source, "legacy_user_phone");
+  equal(meta.sms_kind, "login_or_signup");
+  equal(meta.source_ip, undefined);
+  equal(meta.hook_id, undefined);
+  equal(f.codes, [{ p_phone: "96550000000", p_code: "123456" }]);
+});
 Deno.test("reservation asks for the detailed reply (p_format 3) with the same three hashed arguments", async () => {
   const f = fixture();
   equal((await f.handler(signed(payload))).status, 200);

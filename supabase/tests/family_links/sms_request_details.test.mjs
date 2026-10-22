@@ -13,6 +13,7 @@ await db.exec(`alter table public.app_settings drop column sms_wait_seconds;
 for(const f of ['20261019200000_kwtsms_delivery_guard','20261019210000_kwtsms_low_balance_alert','20261019220000_kwtsms_cooldown_one_minute','20261019230000_kwtsms_urgent_alert_12h','20261020150000_kwtsms_daily_stats','20261020151000_kwtsms_admin_overview','20261020160000_login_attempts','20261020170000_kwtsms_editable_limits','20261020180000_kwtsms_wait_min_30','20261020190000_kwtsms_daily_check_and_suspicious','20261021080000_owner_login_code']) await db.exec(read(`migrations/${f}.sql`));
 await db.exec(mig('config'));
 const source=read('migrations/20261021160000_sms_request_details.sql');
+const routingAudit=read('migrations/20261023010000_sms_recipient_routing_audit.sql');
 const oldLog=(await db.query(`select md5(prosrc) h from pg_proc where oid='public.log_login_attempt(text,text)'::regprocedure`)).rows[0].h;
 await db.exec(source);
 const details=async(who='O',phone='+96590000005',days=7,before=null)=>{const r=await as(db,who,'select public.owner_sms_login_details($1,$2,$3) j',[phone,days,before]);return r.ok?r.rows[0].j:{error:r.code};};
@@ -61,4 +62,26 @@ await db.exec(`update public.profiles set status='frozen' where id='${P.O}'`);ok
 ok((await db.query(`select md5(prosrc) h from pg_proc where oid='public.log_login_attempt(text,text)'::regprocedure`)).rows[0].h===oldLog,'existing logger unchanged');
 await db.exec(read('rollback/20261021160000_sms_request_details_rollback.sql'));ok((await db.query(`select count(*)::int n from public.login_attempts where sms_details<>'{}'`)).rows[0].n>0,'rollback keeps metadata');
 await db.exec(source);ok((await details()).total===111,'reapply preserves history');
+await db.exec(routingAudit);
+const auditMeta={source_ip:'192.0.2.10',hook_id:'ce96638c-fd94-477e-8c5b-5da1942de4c8',sms_kind:'phone_change',recipient_source:'sms_phone',otp:'998877',raw_body:'never-save'};
+await log('sent',auditMeta);d=await details();
+ok(d.items[0].details.source_ip==='192.0.2.10'&&d.items[0].details.hook_id===auditMeta.hook_id,'signed origin and hook correlation survive the allowlist');
+ok(d.items[0].details.sms_kind==='phone_change'&&d.items[0].details.recipient_source==='sms_phone','phone-change purpose and recipient source are explicit');
+ok(!JSON.stringify(d).includes('998877')&&!JSON.stringify(d).includes('never-save'),'new audit fields never permit OTP or raw payload storage');
+const masked=await as(db,'A','select public.sms_login_attempts(7) j');
+ok(!JSON.stringify(masked.rows[0].j).includes('192.0.2.10')&&!JSON.stringify(masked.rows[0].j).includes(auditMeta.hook_id),'signed origin stays owner-only');
+await log('blocked',{source_ip:'2001:db8::10',sms_kind:'mfa',recipient_source:'sms_phone'});d=await details();
+ok(d.items[0].details.source_ip==='2001:db8::10'&&d.items[0].details.sms_kind==='mfa','IPv6 and MFA audit are supported');
+for(const source_ip of ['not-an-ip','192.0.2.1/24','999.999.999.999','192.0.2.1:443']){
+ await log('failed',{source_ip,hook_id:'bad',sms_kind:'raw arbitrary type',recipient_source:'client-header'});d=await details();
+ ok(Object.keys(d.items[0].details).length===0,`malformed origin metadata discarded: ${source_ip}`);
+}
+for(const who of ['anon','O','A','M']){
+ const denied=await as(db,who,'select public.log_sms_login_attempt($1,$2,$3)',['96590000005','sent',auditMeta]);
+ ok(!denied.ok&&denied.code==='42501',`extended audit writer remains service-only: ${who}`);
+}
+await db.exec(read('rollback/20261023010000_sms_recipient_routing_audit_rollback.sql'));
+ok((await details()).items.some(x=>x.details.source_ip==='192.0.2.10'),'audit rollback retains captured origin');
+await db.exec(routingAudit);await log('sent',auditMeta);d=await details();
+ok(d.items[0].details.sms_kind==='phone_change','routing audit can be reapplied without losing history');
 await db.close();t.done();

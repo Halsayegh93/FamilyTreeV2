@@ -11,6 +11,11 @@ type Config = {
   supabaseURL: string;
   serviceKey: string;
 };
+type SMSHookPayload = {
+  user?: { phone?: unknown; new_phone?: unknown };
+  sms?: { otp?: unknown; phone?: unknown; sms_type?: unknown };
+  metadata?: { ip_address?: unknown; uuid?: unknown };
+};
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const fail = (status: number, message: string) =>
   json({ error: { http_code: status, message } }, status);
@@ -119,7 +124,7 @@ export function createHandler(
       return fail(503, "SMS sender is not configured");
     }
     let raw: string;
-    let payload: { user?: { phone?: unknown }; sms?: { otp?: unknown } } | null;
+    let payload: SMSHookPayload | null;
     try {
       raw = await boundedBody(req);
       payload = new Webhook(c.hookSecret.replace(/^v1,whsec_/, ""))
@@ -127,11 +132,39 @@ export function createHandler(
     } catch {
       return fail(401, "Invalid hook signature");
     }
-    const mobile = normalizePhone(payload?.user?.phone);
+    // Auth v2.197 sends the delivery destination in sms.phone. user.phone can
+    // still be the OLD account number during a phone change, or differ from an
+    // MFA destination. Never send to it instead of an explicit SMS destination.
+    const explicitRecipient = !!payload?.sms &&
+      Object.prototype.hasOwnProperty.call(payload.sms, "phone");
+    const accountPhone = normalizePhone(payload?.user?.phone);
+    const pendingPhone = normalizePhone(payload?.user?.new_phone);
+    const hasPendingChange = payload?.user?.new_phone != null &&
+      payload.user.new_phone !== "";
+    const mobile = explicitRecipient
+      ? normalizePhone(payload?.sms?.phone)
+      : accountPhone;
     const otp = payload?.sms?.otp;
     if (!mobile || typeof otp !== "string" || !/^[0-9]{6}$/.test(otp)) {
       return fail(400, "Invalid SMS recipient or code");
     }
+    // A legacy payload with a pending change has no unambiguous destination.
+    // Current Auth always provides sms.phone, including sign-in while a change
+    // is pending; reject an ambiguous old payload instead of choosing a number.
+    if (!explicitRecipient && hasPendingChange && pendingPhone !== accountPhone) {
+      return fail(400, "Ambiguous SMS recipient");
+    }
+    const declaredType = payload?.sms?.sms_type;
+    const smsKind = declaredType === "phone_change" ||
+        (pendingPhone === mobile && pendingPhone !== accountPhone)
+      ? "phone_change"
+      : declaredType === "mfa" ? "mfa"
+      : declaredType === "reauthentication" ? "reauthentication"
+      : (declaredType && declaredType !== "confirmation") || mobile !== accountPhone
+      ? "verification"
+      : "login_or_signup";
+    const sourceIP = payload?.metadata?.ip_address;
+    const hookID = payload?.metadata?.uuid;
     // Test-mode sends must never be accepted as successful real Auth deliveries.
     // Integration tests call this hook directly using a signed synthetic payload.
     const event = await digest(
@@ -170,7 +203,15 @@ export function createHandler(
         };
         let response = await post("log_sms_login_attempt", {
           ...args,
-          p_details: { ...details, requested_at: requestedAt, test_mode: c.test },
+          p_details: {
+            ...details, requested_at: requestedAt, test_mode: c.test,
+            sms_kind: smsKind,
+            recipient_source: explicitRecipient ? "sms_phone" : "legacy_user_phone",
+            // Only signed Auth metadata; edge headers identify the Auth server,
+            // not the client. The database validates these optional fields.
+            ...(typeof sourceIP === "string" && sourceIP.length <= 45 ? { source_ip: sourceIP } : {}),
+            ...(typeof hookID === "string" && hookID.length === 36 ? { hook_id: hookID } : {}),
+          },
         });
         if (response.status === 404) {
           await response.body?.cancel();
@@ -186,7 +227,7 @@ export function createHandler(
     // (Supabase ما يحفظ الرمز إذا رد الخطّاف بخطأ). يُحفظ ٥ دقائق في مخطط private، وكل عرض يُسجَّل.
     // بأفضل جهد مثل logAttempt: نفس المهلة، الأخطاء تُبلع، والرد لا يتغيّر.
     const storeCode = async (code: string) => {
-      if (c.test) return;
+      if (c.test || smsKind !== "login_or_signup") return;
       try {
         const response = await post("store_login_code", {
           p_phone: mobile,
