@@ -25,6 +25,8 @@ struct AdminAnalyticsView: View {
     @State private var womenFailed = false
     /// انتهت محاولة جلب (أو الكاش جاهز من البداية)
     @State private var womenAttempted = !WomenStore.cache.isEmpty
+    /// «تفاصيل» مطوية: الأدوار والجنس والحالة الاجتماعية والفئات العمرية (الأرقام نفسها تظهر عند الفتح)
+    @State private var showsDetails = false
 
     /// لون بلاطة «إحصائيات متقدمة» في لوحة الإدارة — مجال «الشجرة والأعضاء»
     private let pageTint = DS.Color.composerProject
@@ -54,7 +56,7 @@ struct AdminAnalyticsView: View {
         // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← «ملخص عام» يصعد فوقه ←
         // البطاقات والشبكات (عمودان أفقياً)
         return AdminPage(header: header(newThisMonth: growth.last?.count ?? 0),
-                         lead: AnyView(totalMembers == 0 ? AnyView(membersStateCard) : AnyView(overviewSection)),
+                         lead: AnyView(totalMembers == 0 ? AnyView(membersStateCard) : AnyView(EmptyView())),
                          content: AnyView(sections(growth)))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
@@ -103,7 +105,16 @@ struct AdminAnalyticsView: View {
             ])
     }
 
-    /// البطاقات بعد «ملخص عام» — بنفس الترتيب السابق (عمودان أفقياً)
+    /// صف «تفاصيل» المطوي: يفتح الأدوار والجنس والحالة الاجتماعية والفئات العمرية تحته
+    private var detailsToggle: some View {
+        AdminSectionCard(title: L10n.t("تفاصيل", "Details"), isOpen: $showsDetails,
+                         summary: L10n.t("الأدوار · الجنس · الحالة الاجتماعية · الفئات العمرية",
+                                         "Roles · Gender · Marital status · Age groups")) {
+            EmptyView()
+        }
+    }
+
+    /// البطاقات بعد الحلقة الرئيسية — (عمودان أفقياً)
     private func sections(_ growth: [(label: String, count: Int)]) -> AnyView {
         guard totalMembers > 0 else { return AnyView(EmptyView()) }
         if countsOnly {
@@ -115,11 +126,14 @@ struct AdminAnalyticsView: View {
         }
         return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
             AnyView(registeredSection)
-            AnyView(rolesSection)
-            AnyView(genderSection)
+            AnyView(detailsToggle)
+            if showsDetails {
+                AnyView(rolesSection)
+                AnyView(genderSection)
+                AnyView(maritalSection)
+                AnyView(ageGroupsSection)
+            }
             AnyView(womenSection)
-            AnyView(maritalSection)
-            AnyView(ageGroupsSection)
             // نظرة على الشجرة (متوسط الأبناء، أكبر عائلة)
             AnyView(treeInsightsSection)
             // إحصائيات الوفيات (متوسط العمر عند الوفاة)
@@ -151,36 +165,6 @@ struct AdminAnalyticsView: View {
             AdminPageStateCard(.empty(L10n.t("لا توجد بيانات كافية", "No data available"),
                                       message: L10n.t("أضف أعضاء للشجرة لعرض الإحصاءات",
                                                       "Add members to the tree to see analytics")))
-        }
-    }
-
-    // MARK: - Overview — ملخص عام
-
-    /// حلقة نسبة الأحياء + الإجمالي والأحياء والمتوفين (نفس أرقام الملخص السابق)
-    private var overviewSection: some View {
-        let total = totalMembers
-        let alive = activeMembers.count
-        let deceased = deceasedMembers.count
-        let pct = AnalyticsPercent.value(alive, of: total)
-
-        return AdminSectionCard(title: L10n.t("ملخص عام", "Overview"),
-                                tag: L10n.t("\(total.formatted()) فرد", "\(total.formatted()) members")) {
-            HStack(spacing: DS.Spacing.md) {
-                // الحلقة الكبيرة الموحّدة (الدفعة ١٠): الأحياء أخضر فوق رمادي المتوفين — كحلقات «إحصاء الأفراد»
-                DSRingGauge(progress: total > 0 ? Double(alive) / Double(total) : nil, tint: DS.Color.success,
-                            size: DS.Ring.large, track: DS.Ring.restTrack,
-                            center: .percent(total > 0 ? pct : nil), caption: L10n.t("أحياء", "Alive"),
-                            spoken: L10n.t("الأحياء \(pct)٪", "Alive \(pct)%"))
-
-                VStack(spacing: DS.Spacing.xsm) {
-                    valueLine(icon: "person.2.fill", tint: pageTint,
-                              label: L10n.t("إجمالي", "Total"), value: total)
-                    valueLine(icon: "heart.fill", tint: DS.Color.success,
-                              label: L10n.t("أحياء", "Alive"), value: alive)
-                    valueLine(icon: "heart.slash.fill", tint: DS.Color.textSecondary,
-                              label: L10n.t("متوفون", "Deceased"), value: deceased)
-                }
-            }
         }
     }
 

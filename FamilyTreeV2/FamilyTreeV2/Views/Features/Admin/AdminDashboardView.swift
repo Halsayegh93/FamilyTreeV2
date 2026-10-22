@@ -368,7 +368,7 @@ struct AdminDashboardView: View {
                 HStack(spacing: DS.Spacing.xsm) {
                     Image(systemName: "checkmark.shield")
                         .dsGlyph(DS.Glyph.md, weight: .semibold)
-                    Text(L10n.t("لوحة الإدارة · اليوم", "Admin · Today"))
+                    Text(verbatim: L10n.t("لوحة الإدارة", "Admin") + " · " + AdminTodayText.dayLine())
                         .dsFont(.sectionTitle)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -420,18 +420,6 @@ struct AdminDashboardView: View {
                 .animation(DSMotion.fade, value: smart == nil)
                 .padding(.top, DS.Spacing.xxs)
                 .accessibilityHidden(smart == nil)
-
-            HStack(spacing: DS.Spacing.sm) {
-                if let guide = roleGuide {
-                    AdminBandChip(text: guide.title)
-                }
-                Text(AdminTodayText.dayLine())
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Hub.onBandMuted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .padding(.top, DS.Spacing.xs)
 
             if let guide = scopeGuide {
                 NavigationLink { AdminMyScopeView(guide: guide) } label: {
@@ -495,7 +483,7 @@ struct AdminDashboardView: View {
                                                        open: openStatusHome)),
                 census: seesMemberCounts ? AnyView(AdminMemberCountsCard(counts: memberCounts)) : nil)
                 .dsCardCascade(0, appeared: appeared))
-            AnyView(areasSection(labeled: true).dsCardCascade(1, appeared: appeared))
+            AnyView(areasSection().dsCardCascade(1, appeared: appeared))
             AnyView(decisionCard(entries).dsCardCascade(2, appeared: appeared))
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -606,8 +594,7 @@ struct AdminDashboardView: View {
 
     private func decisionCard(_ entries: [AdminTodayEntry]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            AdminCardHeader(title: L10n.t("بانتظار قرارك", "Awaiting your decision"),
-                            badge: isInitialLoading ? nil : entries.count) {
+            AdminCardHeader(title: L10n.t("بانتظار قرارك", "Awaiting your decision")) {
                 if !isInitialLoading {
                     // «عرض الكل» = «الوارد» على «بانتظار قرارك» (صفحة «عرض الكل» حُذفت — D21؛ «المنجز اليوم» آخر الوارد)
                     NavigationLink {
@@ -639,15 +626,12 @@ struct AdminDashboardView: View {
     /// الأقسام الستة: ٣ أعمدة × صفّان — وعمودان مع الخط الكبير جداً، أو حين يرى الدور قسمين أو أربعة (المشرف ٢،
     /// المراقب ٤: صفوف كاملة بلا خانة فارغة). كل مربّع يحجز سطري الاسم وسطري التلميح فتتساوى المربّعات بلا قياس إضافي
     /// (حارس المكدس). كل مربّع يفتح صفحة القسم بقيمة في المسار، فيستبدلها شريط الأقسام بلا تراكم
-    private func areasSection(labeled: Bool) -> some View {
+    private func areasSection() -> some View {
         let shown = visibleAreas.count
         let narrow = (typeSize >= .xxxLarge && !landscape) || shown <= 2 || shown == 4
         let count = narrow ? DS.Hub.areaColumnsLargeText : DS.Hub.areaColumns
         let columns = Array(repeating: GridItem(.flexible(), spacing: AdminGrid.spacing), count: count)
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            if labeled {
-                AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
-            }
             LazyVGrid(columns: columns, spacing: AdminGrid.spacing) {
                 ForEach(visibleAreas) { area in
                     NavigationLink(value: AdminReviewDestination.area(area, 0)) {
@@ -1125,7 +1109,15 @@ struct AdminSystemStatusPanel: View {
                 .foregroundColor(DS.Color.textTertiary)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.bottom, DS.Spacing.xxs)
-            ForEach(Array(pills.enumerated()), id: \.element.id) { index, pill in
+            // الحالات السليمة لا تُعرض (الصيانة مطفأة، لا مجدول، لا أجهزة فاشلة): تبقى الأرقام المهمة فقط
+            let flagged = pills.filter { $0.level != .ok }
+            if flagged.isEmpty {
+                Text(verbatim: "✓ " + L10n.t("النظام سليم", "All systems OK"))
+                    .dsFont(.hubRow)
+                    .foregroundColor(Self.dot(.ok))
+                    .padding(.vertical, DS.Spacing.sm)
+            }
+            ForEach(Array(flagged.enumerated()), id: \.element.id) { index, pill in
                 if index > 0 { AdminRowDivider() }
                 row(pill)
             }

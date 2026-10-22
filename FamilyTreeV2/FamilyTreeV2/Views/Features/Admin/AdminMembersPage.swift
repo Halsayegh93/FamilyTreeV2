@@ -212,7 +212,7 @@ struct AdminMembersPage: View {
                 if !chip.subs.isEmpty && (chip != .all || sub != .all || index.count(.all, .newThisWeek) > 0) {
                     AnyView(subChips)
                 }
-                AnyView(AdminMembersSummary(chip: chip, sub: sub, index: index, accountsReady: accounts.loaded,
+                AnyView(AdminMembersSummary(chip: chip, sub: sub, index: index,
                                             start: { startWalk() },
                                             verifiedCount: chip == .verifyLiving ? index.count(.verifyLiving) - verifyCount : 0,
                                             resetVerified: { withAnimation(DS.Anim.snappy) { verified.reset() } }))
@@ -491,18 +491,18 @@ struct AdminMembersSummary: View {
     let chip: AdminMemberChip
     let sub: AdminMemberSub
     let index: AdminMembersIndex
-    let accountsReady: Bool
     let start: () -> Void
     /// «تحقق من الأحياء»: من راجعهم المستخدم «حي ✓» على جهازه، وإعادة إظهارهم
     var verifiedCount: Int = 0
     var resetVerified: () -> Void = {}
+    @State private var showsLivingHow = false
 
     var body: some View {
         switch chip {
         case .verifyLiving: AnyView(livingCard)
         case .gaps:       AnyView(gapsCard)
         case .problems:   AnyView(problemsCard)
-        case .registered: AnyView(registeredCard)
+        case .registered: AnyView(EmptyView()) // توزيعها في الشرائح الفرعية فوق القائمة
         case .treeOnly:   AnyView(note(L10n.t("أسماء في الشجرة بلا حساب في التطبيق. من له رقم يمكن دعوته، ويصير «عضواً مسجّلاً» حين يسجّل الدخول.",
                                               "Names in the tree with no app account. Anyone with a number can be invited; they become registered once they sign in."),
                                        icon: "person.crop.circle.badge.questionmark"))
@@ -523,14 +523,27 @@ struct AdminMembersSummary: View {
     /// شرح «تحقق من الأحياء» + «إعادة إظهار من راجعتهم» (المراجعة محلية على هذا الجهاز)
     private var livingCard: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(alignment: .top, spacing: DS.Spacing.md) {
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.md) {
                 AdminIconSquare(symbol: "person.fill.questionmark", tint: DS.Color.info)
-                Text(L10n.t("كبار السن بلا وفاة مسجّلة: بلا تاريخ ميلاد، ثم مواليد قبل \(AdminLivingCheck.oldBirthYear)، ثم الباقون — الأقدم أولاً. «متوفى» يسجّل الوفاة (التاريخ اختياري)، و«حي» يخفي الاسم من هذه القائمة على جهازك فقط.",
-                            "Elderly members with no recorded death: no birth date, then born before \(AdminLivingCheck.oldBirthYear), then the rest — oldest first. “Deceased” records the death (date optional); “Alive” hides the name from this list on this device only."))
+                Text(L10n.t("كبار السن بلا وفاة مسجّلة — راجعهم", "Elderly with no death recorded — review them"))
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: DS.Spacing.xs)
+                Button { showsLivingHow.toggle() } label: {
+                    Text(L10n.t("كيف يُحسب", "How it's counted"))
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.info.dsReadableGlyph)
+                }
+                .buttonStyle(.plain)
+            }
+            if showsLivingHow {
+                Text(L10n.t("بلا تاريخ ميلاد، ثم مواليد قبل \(AdminLivingCheck.oldBirthYear)، ثم الباقون — الأقدم أولاً. «متوفى» يسجّل الوفاة (التاريخ اختياري)، و«حي» يخفي الاسم من هذه القائمة على جهازك فقط.",
+                            "No birth date, then born before \(AdminLivingCheck.oldBirthYear), then the rest — oldest first. “Deceased” records the death (date optional); “Alive” hides the name from this list on this device only."))
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
             }
             if verifiedCount > 0 {
                 HStack(spacing: DS.Spacing.sm) {
@@ -607,40 +620,6 @@ struct AdminMembersSummary: View {
         .adminCard()
     }
 
-    /// الأعضاء المسجّلون: توزيعهم (يستخدم التطبيق · غير نشط · لا تصله الإشعارات · موقوف)
-    private var registeredCard: some View {
-        let parts: [(AdminMemberSub, Color)] = [(.usingApp, DS.Color.success), (.inactive, DS.Color.warning),
-                                                (.noPush, DS.Color.info), (.frozen, DS.Color.error)]
-        let total = index.count(.registered)
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(L10n.t("الأعضاء المسجّلون", "Registered members"))
-                    .dsFont(.headline)
-                    .foregroundColor(DS.Color.textPrimary)
-                Spacer(minLength: DS.Spacing.sm)
-                Text(verbatim: accountsReady ? "\(total)" : "—")
-                    .dsFont(.statValue)
-                    .monospacedDigit()
-                    .foregroundColor(DS.Color.success.dsReadableGlyph)
-            }
-            if accountsReady {
-                // ٤ أجزاء — الشريط الموحّد ومفتاحه (الحلقة للجزأين والثلاثة)
-                DSMeterBar(parts: DSGaugePart.counts(parts.map { ($0.0.rawValue, index.count(.registered, $0.0), $0.1) }),
-                           track: DS.Ring.emptyTrack)
-                DSGaugeLegend(items: parts.map { .init($0.0.rawValue, $0.0.title, "\(index.count(.registered, $0.0))", tint: $0.1) })
-            } else {
-                Text(L10n.t("جارٍ تحميل الحسابات…", "Loading accounts…"))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            Text(L10n.t("العضو المسجّل له حساب يدخل به التطبيق برقمه.", "A registered member has an account to sign in with their number."))
-                .dsFont(.caption)
-                .foregroundColor(DS.Color.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
-    }
 }
 
 /// شارة عدد رمادية بجانب اسم الفرع

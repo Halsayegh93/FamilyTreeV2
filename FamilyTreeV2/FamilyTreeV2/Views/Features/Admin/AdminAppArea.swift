@@ -22,7 +22,7 @@ struct AdminAppAreaPage: View {
 
     var body: some View {
         AdminHubPage {
-            AdminBandHeader(title: AdminArea.app.title, subtitle: statusLine,
+            AdminBandHeader(title: AdminArea.app.title,
                             badge: canEdit ? nil : AdminPageHeader.readOnlyText, isAreaRoot: true)
         } content: {
             AnyView(AdminAppSettingsGroups(canEdit: canEdit))
@@ -30,20 +30,6 @@ struct AdminAppAreaPage: View {
         // ما يُدفع من الصفوف يرجع باسم القسم
         .environment(\.adminPageTitle, AdminArea.app.title)
         .task { await appSettingsVM.fetchSettings() }
-    }
-
-    /// «الإصدار ٣٫٤ · وضع الصيانة مطفأ · آخر تعديل أمس»
-    private var statusLine: String {
-        let s = appSettingsVM.settings
-        var parts = [L10n.t("الإصدار \(AppVersionText.short)", "Version \(AppVersionText.short)")]
-        if s.updatedAt != nil {
-            parts.append(s.maintenanceMode ? L10n.t("وضع الصيانة يعمل", "Maintenance on")
-                                           : L10n.t("وضع الصيانة مطفأ", "Maintenance off"))
-            if let when = AdminDeviceReachStore.date(s.updatedAt) {
-                parts.append(L10n.t("آخر تعديل \(AppVersionText.relative(when))", "Last change \(AppVersionText.relative(when))"))
-            }
-        }
-        return parts.joined(separator: " · ")
     }
 }
 
@@ -205,8 +191,7 @@ private struct AdminAppSettingsGroups: View {
         AdminRowsCardBody {
             AdminControlRow(icon: "timer", tint: DS.Color.info,
                             title: L10n.t("حدّ التعديلات الذاتية", "Self-edit limit"),
-                            subtitle: L10n.t("3 تعديلات على الملف ثم بموافقة الإدارة — إيقاف الحدّ يسمح بلا عدد",
-                                             "3 profile edits, then admin approval — pausing it allows unlimited edits"),
+                            subtitle: L10n.t("3 تعديلات ثم بموافقة الإدارة", "3 edits, then admin approval"),
                             control: AnyView(
                                 Toggle("", isOn: Binding(get: { !cooldownDisabled }, set: { on in
                                     cooldownDisabled = !on

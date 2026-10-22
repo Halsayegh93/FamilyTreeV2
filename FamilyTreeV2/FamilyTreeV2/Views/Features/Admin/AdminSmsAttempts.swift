@@ -272,7 +272,7 @@ struct SmsAttemptsCard: View {
     /// قسم صفحة الرسائل — يُمرَّر لصفحة «الكل»
     @Environment(\.adminArea) private var area
     /// الصفوف الظاهرة قبل «الكل»
-    private static let collapsedCount = 8
+    private static let collapsedCount = 5
 
     var body: some View {
         let result = store.current
@@ -398,11 +398,10 @@ private struct SmsAttemptsStat: View {
     }
 }
 
-/// «ما في محاولات في هذه الفترة — العدّ بدأ من 20 أكتوبر»
+/// «ما في محاولات في هذه الفترة»
 private struct SmsAttemptsEmpty: View {
     var body: some View {
         DSEmptyView(L10n.t("لا طلبات في هذه الفترة", "No requests in this period"),
-                    message: L10n.t("العدّ بدأ من 20 أكتوبر", "Counting started on 20 October"),
                     icon: "person.badge.key.fill", style: .inline)
     }
 }

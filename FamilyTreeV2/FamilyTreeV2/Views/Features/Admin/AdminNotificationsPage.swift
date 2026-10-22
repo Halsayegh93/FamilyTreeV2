@@ -488,8 +488,6 @@ struct AdminNotificationsPage: View {
             }
         }
         return AdminPageHeader(back: opener ?? L10n.t("اليوم", "Today"), title: Self.title,
-                               subtitle: L10n.t("الطلبات ونشاط الفريق وتنبيهات النظام — الأحدث أولاً",
-                                                "Requests, team activity and system alerts — newest first"),
                                glyph: "bell.badge", actions: actions, chips: chips)
     }
 

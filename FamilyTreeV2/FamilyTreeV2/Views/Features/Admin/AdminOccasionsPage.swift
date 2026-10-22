@@ -105,19 +105,13 @@ struct AdminOccasionsPage: View {
 
     // MARK: الرأس
 
-    /// الأرقام الثلاثة (المالك والمدير) ثم «＋ إنشاء» — بيت كل ما يُرسل أو يُنشر
+    /// ذكرى الأسبوع (المالك والمدير) ثم «＋ إنشاء» — بيت كل ما يُرسل أو يُنشر. «وفاة لم يُعلن» و«المجدول» في قسم «القادم»
     private func headerAccessory(_ feed: AdminUpcomingFeed) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             if authVM.isAdmin {
                 HStack(spacing: DS.Spacing.sm) {
                     AdminKPITile(value: "\(feed.memorialWeek)", label: L10n.t("ذكرى هذا الأسبوع", "Memorials this week"),
                                  icon: "moon.stars", tint: DS.Hub.kpiMine)
-                    AdminKPITile(value: announced == nil ? "—" : "\(feed.deaths.count)",
-                                 label: L10n.t("وفاة لم يُعلن", "Not announced"),
-                                 icon: "megaphone", tint: feed.deaths.isEmpty ? DS.Color.textOnPrimary : DS.Hub.kpiHot)
-                    AdminKPITile(value: "\(notificationVM.scheduledNotifications.count)",
-                                 label: L10n.t("إشعار مجدول", "Scheduled"), icon: "clock",
-                                 tint: notificationVM.scheduledNotifications.isEmpty ? DS.Color.textOnPrimary : DS.Hub.kpiLate)
                 }
             }
             Button {

@@ -316,6 +316,8 @@ struct AdminToolCards: View {
     var hints: [String: String] = [:]
     /// تلميحات تحذير (بلون التحذير)
     var warnings: Set<String> = []
+    /// وصف الصف يظهر في البحث فقط (صفوف الأقسام تكتفي بالعنوان — الوصف يكرر عنوان الصفحة)
+    var showsSubtitle: Bool = false
 
     private var groups: [(title: String, tools: [AdminTool])] {
         var order: [String] = []
@@ -333,7 +335,7 @@ struct AdminToolCards: View {
                 AdminCardHeader(title: group.title)
                 ForEach(Array(group.tools.enumerated()), id: \.element.id) { index, tool in
                     if index > 0 { AdminRowDivider() }
-                    AdminToolRow(tool: tool, hint: hints[tool.id], warn: warnings.contains(tool.id))
+                    AdminToolRow(tool: tool, hint: hints[tool.id], warn: warnings.contains(tool.id), showsSubtitle: showsSubtitle)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -347,6 +349,7 @@ struct AdminToolRow: View {
     let tool: AdminTool
     var hint: String? = nil
     var warn: Bool = false
+    var showsSubtitle: Bool = true
 
     var body: some View {
         switch tool.kind {
@@ -361,7 +364,7 @@ struct AdminToolRow: View {
     }
 
     private var label: some View {
-        AdminListRow(icon: tool.icon, tint: tool.tint, title: tool.title, subtitle: tool.subtitle) {
+        AdminListRow(icon: tool.icon, tint: tool.tint, title: tool.title, subtitle: showsSubtitle ? tool.subtitle : nil) {
             if let hint {
                 Text(hint)
                     .dsFont(.caption)
@@ -500,7 +503,7 @@ struct AdminSearchView: View {
                         AdminTool(id: $0.id, area: $0.area, group: L10n.t("الأدوات", "Tools"), title: $0.title,
                                   subtitle: "\($0.place ?? $0.area.title) · \($0.subtitle)", icon: $0.icon, tint: $0.tint,
                                   keywords: $0.keywords, kind: $0.kind)
-                    })
+                    }, showsSubtitle: true)
                 }
                 if !members.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {

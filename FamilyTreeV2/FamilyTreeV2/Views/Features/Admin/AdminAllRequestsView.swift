@@ -671,17 +671,22 @@ struct AdminAllRequestsView: View {
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.xsm + 1) {
                 if showFlow {
-                    AdminBandFilterChip(title: L10n.t("بانتظار قرارك", "Awaiting you"), count: count(.waiting),
-                                        selected: approvalFilter == .waiting) { setApprovalFilter(.waiting) }
-                    if adminRequestVM.approvalsV2Seen {
+                    // شريحة صفرية تختفي (إلا المختارة حتى لا تضيع)
+                    if count(.waiting) > 0 || approvalFilter == .waiting {
+                        AdminBandFilterChip(title: L10n.t("بانتظار قرارك", "Awaiting you"), count: count(.waiting),
+                                            selected: approvalFilter == .waiting) { setApprovalFilter(.waiting) }
+                    }
+                    if adminRequestVM.approvalsV2Seen && (count(.urgent) > 0 || approvalFilter == .urgent) {
                         AdminBandFilterChip(title: L10n.t("عاجل", "Urgent"), count: count(.urgent), icon: "flame",
                                             iconTint: DS.Hub.kpiHot, selected: approvalFilter == .urgent) {
                             setApprovalFilter(.urgent)
                         }
                     }
-                    AdminBandFilterChip(title: L10n.t("متأخر", "Late"), count: count(.late), icon: "clock",
-                                        iconTint: DS.Hub.kpiLate, selected: approvalFilter == .late) {
-                        setApprovalFilter(.late)
+                    if count(.late) > 0 || approvalFilter == .late {
+                        AdminBandFilterChip(title: L10n.t("متأخر", "Late"), count: count(.late), icon: "clock",
+                                            iconTint: DS.Hub.kpiLate, selected: approvalFilter == .late) {
+                            setApprovalFilter(.late)
+                        }
                     }
                 }
                 AdminBandFilterChip(title: L10n.t("الكل", "All"), count: isInitialLoading ? nil : allCount,

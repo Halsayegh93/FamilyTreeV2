@@ -71,11 +71,6 @@ struct SmsSendingSettingsCard: View {
                 SmsKVRow(icon: "archivebox.fill", label: L10n.t("حفظ «طلبات رمز الدخول»", "Keep “Sign-in code requests”"),
                          value: SmsText.days(value.retentionDays), tint: DS.Color.slate)
             }
-            // ثابت في السيرفر (كان في بطاقة «الحدود» المكررة)
-            SmsKVRow(icon: "speedometer", label: L10n.t("رموز للجميع بالثانية", "Codes for everyone per second"),
-                     value: L10n.t("حتى \(overview?.limits.allPerSecond ?? SmsOverview.Limits().allPerSecond)",
-                                   "Up to \(overview?.limits.allPerSecond ?? SmsOverview.Limits().allPerSecond)"),
-                     note: L10n.t("ثابت في السيرفر", "Fixed on the server"), tint: DS.Color.slate)
             SmsSenderRow(sender: sender, canChange: authVM.isOwner) {
                 actions.box = authVM.isOwner ? .sender : .senders
             }
@@ -90,6 +85,8 @@ struct SmsSendingSettingsCard: View {
                 }
             }
             SmsMessagePreviewRow()
+            // تنبيهات الرصيد: مجموعة ثانية في البطاقة نفسها (كانت بطاقة منفصلة)
+            SmsAlertsRows(alerts: overview?.alerts)
         }
     }
 
@@ -108,9 +105,10 @@ struct SmsSendingSettingsCard: View {
             return L10n.t("تعذّر الحفظ — رجعت القيم المحفوظة. تأكد من الاتصال وجرّب مرة ثانية.",
                           "Couldn't save — the saved values are back. Check the connection and retry.")
         }
-        return canEdit ? L10n.t("تُحفظ تلقائياً بعد توقّف الضغط، وتسري على الطلب التالي.",
-                                "Saved automatically when you stop tapping; applies to the next request.")
-                       : AdminPageHeader.readOnlyText + "."
+        let perSecond = overview?.limits.allPerSecond ?? SmsOverview.Limits().allPerSecond
+        let fact = L10n.t("حدّ الثانية ثابت في السيرفر: حتى \(perSecond).", "The per-second limit is fixed on the server: up to \(perSecond).")
+        return canEdit ? L10n.t("تُحفظ تلقائياً وتسري على الطلب التالي. ", "Saved automatically; applies to the next request. ") + fact
+                       : AdminPageHeader.readOnlyText + ". " + fact
     }
 
     private func stepperRow(_ icon: String, _ tint: Color, _ label: String, note: String? = nil, _ value: Int,

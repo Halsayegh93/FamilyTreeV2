@@ -245,18 +245,10 @@ struct AdminPushHealthView: View {
                        spoken: L10n.t("تصل الإشعارات إلى \(s.reachPercent)٪ من الأجهزة، \(line)",
                                       "Notifications reach \(s.reachPercent)% of devices, \(line)"))
             AdminRowsCardBody {
-                AdminInfoRow(icon: "bell.badge.fill", tint: DS.Color.success,
-                             title: L10n.t("تصلها الإشعارات", "Notifications reach them"),
-                             trailing: AnyView(AdminRowValue(text: "\(s.reach)")))
                 AdminInfoRow(icon: "bell.slash.fill", tint: DS.Color.error,
                              title: L10n.t("لا تصلها الإشعارات", "Not reached"),
                              subtitle: L10n.t("تسجيل فاشل: رمز فارغ أو ناقص", "Failed registration: empty or truncated token"),
                              trailing: AnyView(AdminRowValue(text: "\(s.invalid)", tint: s.invalid > 0 ? DS.Color.error.dsReadableGlyph : DS.Color.textPrimary)))
-                AdminInfoRow(icon: "info.circle.fill", tint: DS.Color.info,
-                             title: L10n.t("لم يُفتح التطبيق منذ 30 يوماً", "App not opened in 30 days"),
-                             subtitle: L10n.t("للعلم فقط — الإشعارات تصلها ما دام تسجيلها صالحاً",
-                                              "For information only — notifications still reach them while the registration is valid"),
-                             trailing: AnyView(AdminRowValue(text: "\(s.stale)")))
             }
         }
     }

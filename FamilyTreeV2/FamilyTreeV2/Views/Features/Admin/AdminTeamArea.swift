@@ -134,10 +134,6 @@ struct AdminTeamCard: View {
                         .accessibilityLabel("\(cell.label): \(loaded ? "\(cell.count)" : "—")")
                     }
                 }
-                Text(L10n.t("وفيها صلاحيات الأدوار — المسموح وغير المسموح لكل دور", "With role permissions — what each role is and isn’t allowed"))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())

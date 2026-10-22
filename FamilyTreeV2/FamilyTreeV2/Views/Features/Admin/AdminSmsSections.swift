@@ -12,7 +12,7 @@ struct SmsRecentCard: View {
     @ObservedObject var actions: SmsPageActions
     @State private var showsAll = false
     /// الصفوف الظاهرة قبل «الكل»
-    private static let collapsedCount = 8
+    private static let collapsedCount = 5
 
     var body: some View {
         let all = overview.recent
@@ -39,8 +39,8 @@ struct SmsRecentCard: View {
                     if send.id != rows.last?.id { AdminRowDivider() }
                 }
             }
-            Text(L10n.t("السجل التفصيلي يبقى \(SmsText.days(overview.retentionDays)) ثم يُحذف، والأرقام اليومية تبقى. الرقم نفسه لا يُحفظ — الظاهر آخر 4 خانات من بصمته للتمييز فقط.",
-                        "Detailed rows are kept \(overview.retentionDays) days, daily numbers stay. The number itself is never stored — you see the last 4 characters of its fingerprint only."))
+            Text(L10n.t("السجل التفصيلي يبقى \(SmsText.days(overview.retentionDays))، والأرقام اليومية تبقى. الرقم لا يُحفظ — يظهر آخر 4 خانات من بصمته.",
+                        "Detailed rows are kept \(overview.retentionDays) days; daily numbers stay. Numbers are never stored — only the last 4 characters of a fingerprint show."))
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -153,45 +153,11 @@ private struct SmsOutcomeChips: View {
     }
 }
 
-// MARK: الأدوات
-
-struct SmsToolsCard: View {
-    @ObservedObject var actions: SmsPageActions
-    /// الرسالة التجريبية للمالك فقط (السيرفر يرفض غيره `owner_only`)
-    let isOwner: Bool
-
-    var body: some View {
-        // «اسم المرسل» و«الدول المتاحة» صارا صفّين في «إعدادات الإرسال» (كانا مكرّرين هنا وهناك — الدفعة ج)
-        AdminRowsCard(title: L10n.t("الأدوات", "Tools"),
-                      footnote: isOwner ? L10n.t("الرسالة التجريبية وحدها ترسل رسالة فعلية وتخصم نقطة.",
-                                                 "Only the test message is really sent and costs a point.") : nil) {
-            if isOwner {
-                let busy = actions.isBusy("test")
-                Button { actions.confirmTest = true } label: {
-                    AdminListRow(icon: "paperplane.fill", tint: DS.Color.sea,
-                                 title: L10n.t("إرسال رسالة تجريبية لرقمي", "Send a test message to my number"),
-                                 subtitle: busy ? L10n.t("جارٍ الإرسال…", "Sending…")
-                                                : L10n.t("رسالة لرقم ملفك · نقطة واحدة · مرة كل 10 دقائق",
-                                                         "To your profile number · 1 point · once every 10 minutes"))
-                }
-                .buttonStyle(.plain)
-                .disabled(busy)
-            }
-            Button { actions.box = .validate } label: {
-                AdminListRow(icon: "phone.fill", tint: DS.Color.sea,
-                             title: L10n.t("التحقق من رقم", "Check a number"),
-                             subtitle: L10n.t("هل يصل رمز الدخول لرقم كويتي؟", "Will a sign-in code reach a Kuwaiti number?"))
-            }
-            .buttonStyle(.plain)
-        }
-    }
-}
-
 // MARK: تنبيهات الرصيد
 
 /// عتبات تنبيه الرصيد وفواصله — المالك يعدّل (تُحفظ الأربعة معاً بعد توقّف الضغط)، المدير يقرأ. مكانها الوحيد
 /// (كانت تُشرح ثانيةً في «طريقة العمل»)، ومعها «آخر تنبيه»
-struct SmsAlertsCard: View {
+struct SmsAlertsRows: View {
     /// من النظرة (الأحدث من السيرفر) — احتياط إن لم تصل أعمدة `app_settings` بعد
     let alerts: SmsOverview.Alerts?
     @EnvironmentObject var authVM: AuthViewModel
@@ -209,7 +175,12 @@ struct SmsAlertsCard: View {
         let canEdit = authVM.canManageSettings && appSettingsVM.settings.smsLowThreshold != nil
         // حدود المبدّل صالحة دائماً (أدنى ≤ أعلى) ولو وصلت قيم غريبة
         let lowUpper = max(Self.lowMax, value.lowThreshold, value.urgentThreshold)
-        AdminRowsCard(title: L10n.t("تنبيهات الرصيد", "Balance alerts"), footnote: footnote(canEdit: canEdit)) {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(L10n.t("تنبيهات الرصيد", "Balance alerts"))
+                .dsFont(.hubRow)
+                .foregroundColor(DS.Color.textPrimary)
+                .padding(.top, DS.Spacing.md)
+            AdminRowsCardBody {
             if canEdit {
                 stepperRow("exclamationmark.triangle.fill", DS.Color.warning, L10n.t("منخفض تحت", "Low below"),
                            value.lowThreshold, min(value.urgentThreshold, lowUpper)...lowUpper, 10, .points) {
@@ -239,10 +210,15 @@ struct SmsAlertsCard: View {
                                                                     "Below \(value.urgentThreshold) · every \(value.urgentRepeatHours) h"),
                          tint: DS.Color.error)
             }
-            SmsKVRow(icon: "person.2.fill", label: L10n.t("يستلمها", "Sent to"), value: L10n.t("المالك والمدراء", "Owner and admins"))
             if let last = lastAlert.flatMap({ AdminTodayText.since($0) }) {
                 SmsKVRow(icon: "bell.badge.fill", label: L10n.t("آخر تنبيه", "Last alert"), value: last)
             }
+            }
+            Text(footnote(canEdit: canEdit))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, DS.Spacing.sm)
         }
     }
 

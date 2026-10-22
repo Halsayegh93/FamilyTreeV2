@@ -185,9 +185,7 @@ private struct SmsPageContent: View {
                     AnyView(SmsTrendCard(overview: overview))
                     AnyView(SmsRecentCard(overview: overview, actions: actions))
                 }
-                AnyView(SmsToolsCard(actions: actions, isOwner: authVM.isOwner))
                 AnyView(SmsSendingSettingsCard(overview: store.overview, actions: actions))
-                AnyView(SmsAlertsCard(alerts: store.overview?.alerts))
                 // «طريقة العمل» مطويّة (طلب المالك ٢٠٢٦-١٠-٢٠ «سجل التفاصيل الجديدة في القسم بالتطبيق كاملة»)
                 AnyView(SmsHowItWorksCard(overview: store.overview))
             }
@@ -201,12 +199,28 @@ private struct SmsHeroHeader: View {
     let backTitle: String
     @ObservedObject var store: SmsBalanceStore
     @ObservedObject var actions: SmsPageActions
+    @EnvironmentObject private var authVM: AuthViewModel
 
     var body: some View {
         AdminBandHeader(backTitle: backTitle,
                         title: L10n.t("رسائل رمز الدخول", "Sign-in code messages"),
                         subtitle: L10n.t("KWT SMS · رمز الدخول برسالة نصية", "KWT SMS · the sign-in code by text message"),
                         bottomPadding: DS.Spacing.xl) {
+            // الأدوات (رسالة تجريبية للمالك، فحص رقم) — في قائمة الرأس بدل بطاقة مستقلة
+            Menu {
+                if authVM.isOwner {
+                    Button { actions.confirmTest = true } label: {
+                        Label(L10n.t("إرسال رسالة تجريبية لرقمي", "Send a test message to my number"), systemImage: "paperplane.fill")
+                    }
+                    .disabled(actions.isBusy("test"))
+                }
+                Button { actions.box = .validate } label: {
+                    Label(L10n.t("التحقق من رقم", "Check a number"), systemImage: "phone.fill")
+                }
+            } label: {
+                AdminGlassCircle(symbol: "ellipsis")
+            }
+            .accessibilityLabel(L10n.t("الأدوات", "Tools"))
         } accessory: {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 SmsBalanceBlock(store: store)
