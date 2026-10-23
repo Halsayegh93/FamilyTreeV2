@@ -718,7 +718,14 @@ class AuthViewModel: ObservableObject {
         }
     }
 
+    /// طلب رمز جارٍ — ضغطتان سريعتان على «متابعة» أو «إعادة» ترسلان طلباً واحداً (طلب المالك ٢٠٢٦-١٠-٢٣)؛
+    /// السيرفر يحمي أيضاً: رمز واحد لكل دقيقتين (`sms_one_code_seconds`)
+    private var otpRequestInFlight = false
+
     func sendOTP(channel: OTPChannel = .sms) async {
+        guard !otpRequestInFlight else { return }
+        otpRequestInFlight = true
+        defer { otpRequestInFlight = false }
         otpRetryAfter = nil
         let cleanPhone = normalizePhoneDigits(phoneNumber)
         let cleanDialingCode = normalizeDialingCode(dialingCode)

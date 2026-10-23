@@ -351,8 +351,9 @@ struct LoginView: View {
                 useGradient: !isDisabled,
                 color: isDisabled ? DS.Color.inactive : DS.Color.primary
             ) {
+                guard !isDisabled else { return }
                 isFieldFocused = false
-                timeRemaining = 60
+                timeRemaining = 120   // = «رمز واحد لكل دقيقتين» في السيرفر
                 authVM.otpCode = ""; otpText = ""
                 Task {
                     await authVM.sendOTP()
@@ -504,7 +505,7 @@ struct LoginView: View {
                     authVM.otpErrorMessage = nil
                     authVM.otpStatusMessage = ""
                     otpTimeRemaining = 300
-                    timeRemaining = 60
+                    timeRemaining = 120
                     Task {
                         await authVM.sendOTP(channel: .sms)
                         // محجوب بمهلة معروفة (نفس الرقم): عدّاد «إعادة عبر SMS» يبدأ منها، وإلا ٣٠ ث كما كان
