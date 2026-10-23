@@ -252,18 +252,19 @@ enum DS {
         static let gridMessaging = sea
 
         // مربّعات الرئيسية — عائلة الكحلي والذهبي: كل قسم بلونه، ومن نفس العمق
-        static let tileTree     = palmFill  // أخضر
-        static let tileDiwaniya = navyFill  // كحلي
-        static let tileLibrary  = saduFill  // عنّابي
-        static let tileProjects = goldFill  // ذهبي
-        static let tileContact  = seaFill   // بترولي
+        // ألوان مربّعات الرئيسية كما كانت في النسخة ٤٤ (طلب المالك ٢٠٢٦-١٠-٢٣ «شوف الالوان من اصدار رقم ٤٤»)
+        static let tileTree     = SwiftUI.Color(hex: "#2E6B4F")  // أخضر غابي
+        static let tileDiwaniya = SwiftUI.Color(hex: "#1F4E79")  // كحلي
+        static let tileLibrary  = SwiftUI.Color(hex: "#7A2E3A")  // عنّابي
+        static let tileProjects = SwiftUI.Color(hex: "#A07A2C")  // ذهبي
+        static let tileContact  = SwiftUI.Color(hex: "#3D6670")  // رمادي مزرق
 
         // الطرف الغامق من تدرّج كل مربّع
-        static let tileTreeDeep     = palmDeep
-        static let tileDiwaniyaDeep = navyDeep
-        static let tileLibraryDeep  = saduDeep
-        static let tileProjectsDeep = goldDeep
-        static let tileContactDeep  = seaDeep
+        static let tileTreeDeep     = SwiftUI.Color(hex: "#1F4F39")
+        static let tileDiwaniyaDeep = SwiftUI.Color(hex: "#14365A")
+        static let tileLibraryDeep  = SwiftUI.Color(hex: "#561F29")
+        static let tileProjectsDeep = SwiftUI.Color(hex: "#7A5B1C")
+        static let tileContactDeep  = SwiftUI.Color(hex: "#284850")
 
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {
