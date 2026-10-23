@@ -150,9 +150,10 @@ enum SmsDetailsText {
     static let notDelivered = L10n.t("ما وصلت", "Not delivered")
     static let pending = L10n.t("قيد التحقق…", "Checking…")
 
-    /// «انرفض — انتظر 42 ث»
+    /// «انرفض — انتظر 42 ث» · «انرفض — حاول بعد ساعة» (حد الساعة/اليوم، طلب المالك ٢٠٢٦-١٠-٢٣)
     static func blocked(_ retryAfter: Int?) -> String? {
         guard let retryAfter, retryAfter > 0 else { return nil }
+        if retryAfter >= OTPWaitText.hourThreshold { return L10n.t("انرفض — حاول بعد ساعة", "Refused — try in an hour") }
         return L10n.t("انرفض — انتظر \(retryAfter) ث", "Refused — wait \(retryAfter) s")
     }
 

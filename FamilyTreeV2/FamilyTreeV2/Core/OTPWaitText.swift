@@ -33,8 +33,14 @@ enum OTPWaitText {
 
     /// الرسالة الكاملة لشاشة طلب الرمز
     static func message(seconds n: Int, arabic: Bool) -> String {
-        waitPhrase(seconds: n, arabic: arabic) + (arabic ? " قبل طلب رمز جديد." : " before requesting a new code.")
+        if n >= hourThreshold {
+            return arabic ? "وصلت الحد المسموح من الرموز. حاول بعد ساعة." : "Code limit reached. Try again in an hour."
+        }
+        return waitPhrase(seconds: n, arabic: arabic) + (arabic ? " قبل طلب رمز جديد." : " before requesting a new code.")
     }
+
+    /// من ٥٠ دقيقة فأكثر (حد الساعة أو اليوم — الدالة تقصّ الانتظار عند ٣٦٠٠) ← «حاول بعد ساعة» (طلب المالك ٢٠٢٦-١٠-٢٣)
+    static let hourThreshold = 3000
 
     /// من نص الخطأ مباشرة — nil = لا رقم (تبقى الرسالة العامة)
     static func message(from text: String, arabic: Bool) -> String? {
