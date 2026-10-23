@@ -318,6 +318,18 @@ struct FamilyProjectsView: View {
             } label: {
                 Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
             }
+            if project.approvalStatus == "approved" {
+                Button {
+                    Task { await projectsVM.togglePinned(id: project.id) }
+                } label: {
+                    Label(
+                        project.isPinned
+                            ? L10n.t("إلغاء التثبيت", "Unpin")
+                            : L10n.t("تثبيت في الأعلى", "Pin to top"),
+                        systemImage: project.isPinned ? "pin.slash.fill" : "pin.fill"
+                    )
+                }
+            }
             Button {
                 Task { await projectsVM.toggleHidden(id: project.id) }
             } label: {
@@ -557,7 +569,25 @@ struct ProjectGridCard: View {
                 statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.slateFill)
             }
         }
+        // شارة التثبيت: الزاوية المقابلة (يمين) أسفل زر ••• حتى لا تتزاحم معه ولا مع شارات الحالة
+        .overlay(alignment: .topTrailing) {
+            if project.isPinned && !isPending {
+                pinBadge
+                    .padding(.top, DS.Icon.discMini + DS.Spacing.sm)
+                    .padding(.trailing, DS.Spacing.sm)
+            }
+        }
         .opacity(isPending || project.isHidden ? DS.Opacity.dimmed : 1.0)
+    }
+
+    /// دبوس صغير ممتلئ بلون القسم — يدلّ على أن البطاقة مثبَّتة في الأعلى.
+    private var pinBadge: some View {
+        Image(systemName: "pin.fill")
+            .dsGlyph(DS.Glyph.micro)
+            .foregroundColor(DS.Color.textOnPrimary)
+            .padding(DS.Spacing.xs)
+            .background(Circle().fill(DS.Color.accent))
+            .accessibilityLabel(L10n.t("مثبّت", "Pinned"))
     }
 
     private func statusBadge(icon: String, text: String, color: Color) -> some View {

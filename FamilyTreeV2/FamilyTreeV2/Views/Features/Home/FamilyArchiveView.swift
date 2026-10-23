@@ -444,8 +444,18 @@ struct FamilyArchiveView: View {
                 }
                 Divider()
             }
-            // إجراءات الإخفاء — فقط للموافق عليها
+            // التثبيت والإخفاء — فقط للموافق عليها
             if item.approvalStatus == .approved {
+                Button {
+                    Task { await archiveVM.togglePinned(item) }
+                } label: {
+                    Label(
+                        item.isPinned
+                            ? L10n.t("إلغاء التثبيت", "Unpin")
+                            : L10n.t("تثبيت في الأعلى", "Pin to top"),
+                        systemImage: item.isPinned ? "pin.slash.fill" : "pin.fill"
+                    )
+                }
                 Button {
                     Task { await archiveVM.toggleHidden(item) }
                 } label: {
@@ -555,6 +565,19 @@ struct FamilyArchiveView: View {
                 .overlay(alignment: .topLeading) {
                     statusStack(for: item)
                         .padding(DS.Spacing.xs)
+                }
+                // شارة التثبيت: يمين أسفل زر ••• حتى لا تتزاحم معه ولا مع شارات الحالة
+                .overlay(alignment: .topTrailing) {
+                    if item.isPinned && item.approvalStatus == .approved {
+                        Image(systemName: "pin.fill")
+                            .dsGlyph(DS.Glyph.micro)
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .padding(DS.Spacing.xs)
+                            .background(Circle().fill(AppSection.library.fill))
+                            .padding(.top, DS.Icon.discMini + DS.Spacing.sm)
+                            .padding(.trailing, DS.Spacing.xs)
+                            .accessibilityLabel(L10n.t("مثبّت", "Pinned"))
+                    }
                 }
 
             Text(item.title)
