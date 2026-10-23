@@ -215,6 +215,17 @@ struct HomeNewsView: View {
             case .news: newsFullPage.dsSectionPage(.news)   // بلون قسم الأخبار مثل إضافة/تعديل الخبر والتعليقات
             }
         }
+        // جلسات الاستخدام: الصفحة تُحسب باسمها ما دامت ظاهرة («التواصل» يُحسب للرئيسية)
+        .appUsageScreen(usageScreen(for: page))
+    }
+
+    private func usageScreen(for page: HomeSubPage) -> AppUsageScreen? {
+        switch page {
+        case .archive: return .library
+        case .projects: return .projects
+        case .news: return .news
+        case .contact: return nil
+        }
     }
 
     // صفحة الأخبار الكاملة (تظهر عند الضغط على مربع الأخبار)

@@ -22,6 +22,8 @@ struct MainTabView: View {
                     UISelectionFeedbackGenerator().selectionChanged()
                 }
                 selectedTab = newValue
+                // جلسات الاستخدام: التبويب الجديد قبل ظهور صفحاته (`AppUsageTracker`)
+                AppUsageTracker.shared.setTab(newValue)
                 NotificationCenter.default.post(name: Notification.Name("TabChanged"), object: nil)
                 let tabs = ["home", "tree", "diwaniyas", "profile", "admin"]
                 if newValue < tabs.count {
@@ -173,10 +175,21 @@ struct MainTabView: View {
         // القسم المختار لما يُعرض في نافذة مستقلّة (الرسائل، مربّع التاريخ، النعي) — ولا قسم خارج
         // التبويبات: عند الخروج (الدخول، الانتظار، التجميد) يرجع كحلي العلامة. لا نصفّره إن اختفت
         // التبويبات تحت مربّع يغطي الشاشة فقط (الحساب ما زال داخلاً)
-        .onAppear { AppSection.current = selectedSection }
-        .onChange(of: selectedTab) { _ in AppSection.current = selectedSection }
+        // وجلسات الاستخدام (`AppUsageTracker` → `log_app_session`): للحساب المفعّل فقط — تبدأ مع التبويبات
+        // وتُترك بلا إرسال عند الخروج منها
+        .onAppear {
+            AppSection.current = selectedSection
+            AppUsageTracker.shared.start(tab: selectedTab)
+        }
+        .onChange(of: selectedTab) { tab in
+            AppSection.current = selectedSection
+            AppUsageTracker.shared.setTab(tab)
+        }
         .onDisappear {
-            if authVM.status != .fullyAuthenticated { AppSection.current = nil }
+            if authVM.status != .fullyAuthenticated {
+                AppSection.current = nil
+                AppUsageTracker.shared.stop()
+            }
         }
         // الحظر والموافقة على الشروط لكل مستخدم — تُربط بالحساب الحالي
         .onAppear { refreshUserSafetyState() }

@@ -113,6 +113,12 @@ struct MemberDetailsView: View {
     }
 
     var body: some View {
+        // جلسات الاستخدام: «صفحة العضو» ما دامت ظاهرة
+        panel.appUsageScreen(.memberDetails)
+    }
+
+    @ViewBuilder
+    private var panel: some View {
         if centered {
             DSExpandableCenterPanel(
                 isExpanded: Binding(

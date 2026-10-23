@@ -135,10 +135,10 @@ enum AdminToolCatalog {
         if isAdmin {
             t.append(AdminTool(id: "metrics.usage", area: .metrics, group: insights,
                                title: L10n.t("الاستخدام", "Usage"),
-                               subtitle: L10n.t("المستخدمون الآن، آخر 24 ساعة، آخر 30 يوماً — التطبيق والموقع",
-                                                "Using now, last 24 hours, last 30 days — app and web"),
+                               subtitle: L10n.t("المستخدمون الآن، النشطون واتجاههم، الجلسات وأكثر الشاشات — التطبيق والموقع",
+                                                "Using now, active members and trend, sessions and top screens — app and web"),
                                icon: "bolt.fill", tint: DS.Color.sea,
-                               keywords: ["نشاط", "نشط", "الآن", "مستخدمون"],
+                               keywords: ["نشاط", "نشط", "الآن", "مستخدمون", "جلسات", "شاشات", "اتجاه", "دقائق"],
                                kind: page { AdminActiveMembersView() }))
         }
         // تقرير الموافقات — بيته الواحد هنا (كان أيضاً في رأس «الوارد» وصفّه ومربّع «منجز هذا الأسبوع»)

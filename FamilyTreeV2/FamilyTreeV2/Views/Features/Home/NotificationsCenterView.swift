@@ -256,6 +256,8 @@ struct NotificationsCenterView: View {
             notificationVM.pendingJoinDeepLinkRequestId = nil
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        // جلسات الاستخدام: «الإشعارات» ما دام المركز ظاهراً
+        .appUsageScreen(.notifications)
         // تفاصيل الإشعار مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك) — للعرض فقط،
         // فيُغلق أيضاً بالضغط خارجه (بدل سحب الورقة للأسفل سابقاً)
         .dsCenterBox(item: $selectedNotification,

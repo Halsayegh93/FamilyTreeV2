@@ -35,14 +35,22 @@ struct AdminActiveMembersView: View {
 
     var body: some View {
         // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام وزرّ التحديث الزجاجي ←
-        // «النشطون الآن» يصعد فوقه ← «آخر 24 ساعة» ← «نشطون آخر 30 يوم» (عمودان أفقياً)
+        // «النشطون الآن» يصعد فوقه ← (٢٠٢٦-١٠-٢٢) النشطون والاتجاه والجلسات (`AdminUsageInsights`) ← «آخر 24 ساعة» ←
+        // «نشطون آخر 30 يوم» (عمودان أفقياً)
         AdminPage(header: header,
                   lead: AnyView(nowSection),
-                  content: AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
-                      AnyView(last24Section)
-                      AnyView(last30Section)
+                  content: AnyView(VStack(spacing: DS.Hub.stackSpacing) {
+                      AnyView(AdminUsageInsights())
+                      AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
+                          AnyView(last24Section)
+                          AnyView(last30Section)
+                      })
                   }))
-        .refreshable { await fetch() }
+        .refreshable {
+            async let lists: Void = fetch()
+            async let usage: Void = AdminUsageStore.shared.refresh(force: true)
+            _ = await (lists, usage)
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             // أبلغ إن المدير الحالي شاف "النشاط" — يبقيه ضمن النشطين
@@ -62,7 +70,9 @@ struct AdminActiveMembersView: View {
         Task {
             isRefreshing = true
             MemberActivityTracker.report("admin", force: true)
-            await fetch()
+            async let lists: Void = fetch()
+            async let usage: Void = AdminUsageStore.shared.refresh(force: true)
+            _ = await (lists, usage)
             isRefreshing = false
         }
     }
