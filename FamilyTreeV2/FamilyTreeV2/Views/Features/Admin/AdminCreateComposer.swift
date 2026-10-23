@@ -59,11 +59,11 @@ enum AdminCreateKind: String, CaseIterable, Identifiable {
     /// الأنواع المتاحة لدور المشاهد — بالترتيب
     @MainActor
     static func allowed(for authVM: AuthViewModel) -> [AdminCreateKind] {
+        // شريط «إنشاء»: الإعلان وبطاقات المناسبات فقط (طلب المالك ٢٠٢٦-١٠-٢٣) — «إعلان وفاة» يبقى من صفحة العضو ومن «القادم»،
+        // و«تحديث التطبيق» أُزيل من الشريط
         var list: [AdminCreateKind] = []
         if authVM.canSendNotifications { list.append(.announcement) }
-        if authVM.isAdmin { list.append(.death) }
         if authVM.canModerate { list.append(.card) }
-        if authVM.canSendNotifications { list.append(.appUpdate) }
         return list
     }
 }
