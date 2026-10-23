@@ -22,9 +22,9 @@ enum AdminCreateKind: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .announcement: return L10n.t("إعلان", "Announcement")
+        case .announcement: return L10n.t("إرسال إشعار", "Send a push")
         case .death:        return L10n.t("إعلان وفاة", "Obituary")
-        case .card:         return L10n.t("بطاقة تهنئة أو تعزية", "Greeting or condolence card")
+        case .card:         return L10n.t("تصميم بطاقة", "Design a card")
         case .appUpdate:    return L10n.t("إعلان تحديث التطبيق", "App update notice")
         }
     }
@@ -134,6 +134,7 @@ struct AdminCreateRoot: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     @State private var kind: AdminCreateKind
     @State private var cardOpen = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(allowed: [AdminCreateKind], start: AdminCreateKind, death: DeathAnnouncementTarget?,
          announce: AdminAnnounceDraft? = nil, onClose: @escaping () -> Void) {
@@ -151,7 +152,15 @@ struct AdminCreateRoot: View {
             if cardOnly {
                 Color.clear
             } else {
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { box }
+                // التبديل بين الأنواع بحركة: المربّع الجديد ينزلق ويظهر، والقديم يتلاشى (المالك ٢٠٢٦-١٠-٢٣ «نبي انميشن و حركات»)
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                    box
+                        .id(kind)
+                        .transition(reduceMotion ? .opacity : .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.96)),
+                            removal: .opacity))
+                }
+                .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82), value: kind)
             }
         }
         .fullScreenCover(isPresented: $cardOpen, onDismiss: { if cardOnly { onClose() } }) {
@@ -217,21 +226,19 @@ struct AdminCreateTypePicker: View {
             UISelectionFeedbackGenerator().selectionChanged()
             withAnimation(DS.Anim.snappy) { selection = kind }
         } label: {
-            VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
-                AdminIconSquare(symbol: kind.icon, tint: kind.tint, side: DS.Hub.miniIcon,
-                                radius: DS.Hub.miniIconRadius, filled: true, glyph: DS.Glyph.md)
+            // صفّ مضغوط: رمز صغير + الاسم، بلا السطر الوصفي (المالك ٢٠٢٦-١٠-٢٣ «قلل حجم مربعات ماذا ننشئ»)
+            HStack(spacing: DS.Spacing.sm) {
+                AdminIconSquare(symbol: kind.icon, tint: kind.tint, side: DS.Icon.row,
+                                radius: DS.Hub.miniIconRadius, filled: true, glyph: DS.Glyph.sm)
                 Text(kind.title)
                     .dsFont(.hubButton)
                     .foregroundColor(DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(kind.note)
-                    .dsFont(.caption)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
-            .padding(DS.Spacing.md)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .background(shape.fill(selected ? ink.opacity(DS.Opacity.tintFillSoft) : DS.Color.surface))
             .overlay(shape.strokeBorder(selected ? ink.opacity(DS.Opacity.selectedStroke)
                                                  : DS.Color.textTertiary.opacity(DS.Opacity.border),

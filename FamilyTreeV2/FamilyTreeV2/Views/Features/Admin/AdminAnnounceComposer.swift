@@ -29,7 +29,7 @@ struct AdminAnnounceLauncher: View {
             AdminGlassCircle(symbol: "megaphone")
         }
         .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(L10n.t("إعلان جديد", "New announcement"))
+        .accessibilityLabel(L10n.t("إرسال إشعار", "Send a push"))
         .accessibilityHint(L10n.t("إشعار للأعضاء", "Notify members"))
     }
 }
@@ -39,6 +39,8 @@ struct AdminAnnounceLauncher: View {
 enum AdminAnnounceKit {
     /// العنوان الثابت لكل إعلان
     static let defaultTitle = "عائلة المحمدعلي"
+    /// عناوين جاهزة تحت خانة العنوان (كما في «إرسال إشعار» القديمة — المالك ٢٠٢٦-١٠-٢٣ «وين اختيار اكثر من عنوان»)
+    static let presetTitles = ["عائلة المحمدعلي", "إعلان من الإدارة", "تذكير", "دعوة", "تهنئة", "تنبيه مهم"]
     private static let pinnedCountries = ["KW", "SA"]
 
     /// المستلمون المحتملون — نفس فلتر «إشعار للأعضاء»: بلا المعلّقين والمتوفّين والموقوفين
@@ -177,6 +179,8 @@ struct AdminAnnounceComposer: View {
 
     private enum AudienceKind: Hashable { case all, country, members }
     private enum WhenKind: Hashable { case now, scheduled }
+    /// «لمن» و«متى» بطاقتان جنب بعض — الضغط يفتح خياراتها تحتهما (واحدة فقط)، والثانية تبقى ملخّصاً
+    private enum Panel: Hashable { case to, when }
 
     /// تعديل إشعار مجدول (nil = جديد)
     private let editingId: UUID?
@@ -189,6 +193,9 @@ struct AdminAnnounceComposer: View {
     @State private var selected: Set<UUID>
     @State private var when: WhenKind
     @State private var customDate: Date
+    /// العجلة المفتوحة في الجدولة — nil = الاثنين مطويّان (المالك ٢٠٢٦-١٠-٢٣ «خلهم بشكل مخفي لمن ابي اغيرهم»)
+    @State private var openWheel: DatePickerComponents? = nil
+    @State private var openPanel: Panel? = nil
     /// المنتقي الموحّد مكان المربّع (اختيار «أعضاء») — وما كان محدّداً عند فتحه («إلغاء» يرجعه، وترتيبه ثابت)
     @State private var picking = false
     @State private var pickerSnapshot: Set<UUID> = []
@@ -339,7 +346,7 @@ struct AdminAnnounceComposer: View {
         let blocker = self.blocker(active)
         return DSComposer(
             title: isEditing ? L10n.t("تعديل الإشعار المجدول", "Edit scheduled push")
-                : (chooser == nil ? L10n.t("إعلان جديد", "New announcement") : L10n.t("ماذا تنشئ؟", "What to create?")),
+                : (chooser == nil ? L10n.t("إرسال إشعار", "Send a push") : L10n.t("ماذا تنشئ؟", "What to create?")),
             subtitle: isEditing ? L10n.t("يوصل في موعده الجديد", "Goes out at the new time")
                 : L10n.t("عنوان ونص — للكل أو لدولة أو لأعضاء", "Title and text — everyone, a country or people"),
             icon: isEditing ? "clock.arrow.circlepath" : "megaphone.fill",
@@ -350,7 +357,8 @@ struct AdminAnnounceComposer: View {
             isBusy: isSending,
             note: blocker,
             hasUnsavedChanges: !isEditing && !trimmed(text).isEmpty,
-            actionFullRow: true,
+            // «إرسال» و«إلغاء» جنب بعض (المالك ٢٠٢٦-١٠-٢٣)
+            actionFullRow: false,
             onSubmit: submit,
             onCancel: { onClose() }
         ) {
@@ -395,16 +403,93 @@ struct AdminAnnounceComposer: View {
     // MARK: الشاشة الواحدة: النص · لمن · أرسل الآن / جدولة
 
     private func formSection(_ active: [FamilyMember]) -> some View {
-        DSComposerSection(title: L10n.t("الإعلان", "Announcement"), icon: "megaphone.fill", tint: tint, index: 0) {
+        DSComposerSection(title: L10n.t("الإشعار", "Push"), icon: "bell.badge.fill", tint: tint, index: 0) {
             DSComposerField(icon: "textformat", label: L10n.t("العنوان", "Title"),
                             placeholder: AdminAnnounceKit.defaultTitle,
                             text: $title, tint: tint, limit: 60)
+            AnyView(titlePresets)
             DSComposerField(icon: "text.alignright", label: L10n.t("النص", "Text"),
                             placeholder: L10n.t("اكتب الإشعار…", "Write the message…"),
-                            text: $text, tint: tint, multiline: true, lines: 5...10, limit: 500)
-            AnyView(audienceBlock(active))
-            AnyView(whenBlock)
+                            text: $text, tint: tint, multiline: true, lines: 2...4, limit: 500)
+            AnyView(toWhenBlock(active))
         }
+    }
+
+    /// العناوين الجاهزة — قائمة منسدلة تكتب المختار في خانة العنوان (ويظل قابلاً للتعديل)
+    private var titlePresets: some View {
+        Menu {
+            Picker(selection: Binding(get: { trimmed(title) }, set: { preset in
+                UISelectionFeedbackGenerator().selectionChanged()
+                title = preset
+            })) {
+                ForEach(AdminAnnounceKit.presetTitles, id: \.self) { Text($0).tag($0) }
+            } label: {
+                Text(L10n.t("عناوين جاهزة", "Ready titles"))
+            }
+            .pickerStyle(.inline)
+        } label: {
+            AdminChoiceChip(title: L10n.t("اختر عنواناً جاهزاً", "Pick a ready title"), icon: "list.bullet",
+                            isSelected: false, expands: true)
+        }
+    }
+
+    // MARK: لمن · متى — بطاقتان جنب بعض، وخيارات المفتوحة تحتهما
+
+    private func toWhenBlock(_ active: [FamilyMember]) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                summaryTile(.to, label: L10n.t("لمن", "To"), value: audienceLabel(active), tint: DS.Color.sea,
+                            icon: audience == .all ? "person.3.fill" : (audience == .country ? "globe" : "person.crop.circle.badge.checkmark"))
+                summaryTile(.when, label: L10n.t("متى", "When"),
+                            value: when == .now ? L10n.t("الآن", "Now") : "\(Self.dayText(customDate)) · \(Self.timeText(customDate))",
+                            tint: DS.Color.accent,
+                            icon: when == .now ? "bolt.fill" : "calendar")
+            }
+            if openPanel == .to {
+                audienceBlock(active).transition(.opacity)
+            } else if openPanel == .when {
+                whenBlock.transition(.opacity)
+            }
+        }
+    }
+
+    /// كل بطاقة بلونها للتمييز (المالك ٢٠٢٦-١٠-٢٣ «حط الوان على الازرار»): «لمن» بترولي · «متى» ذهبي
+    private func summaryTile(_ panel: Panel, label: String, value: String, tint: Color, icon: String) -> some View {
+        let isOpen = openPanel == panel
+        let ink = tint.dsReadableGlyph
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+        return Button {
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(DS.Anim.snappy) { openPanel = isOpen ? nil : panel }
+        } label: {
+            HStack(alignment: .center, spacing: DS.Spacing.xs) {
+                AdminIconSquare(symbol: icon, tint: tint, side: DS.Icon.row,
+                                radius: DS.Hub.miniIconRadius, filled: true, glyph: DS.Glyph.sm)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(label).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+                    Text(verbatim: value)
+                        .dsFont(.chip)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(dsSymbol: "chevron.down")
+                    .dsGlyph(DS.Glyph.xs)
+                    .rotationEffect(.degrees(isOpen ? 180 : 0))
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xsm)
+            .frame(maxWidth: .infinity, minHeight: DSBox.chipHeight, alignment: .leading)
+            .background(shape.fill(ink.opacity(isOpen ? DS.Opacity.tintFill : DS.Opacity.tintFillSoft)))
+            .overlay(shape.strokeBorder(ink.opacity(isOpen ? DS.Opacity.selectedStroke : DS.Opacity.tintStroke),
+                                        lineWidth: isOpen ? DS.Border.widthBold : DS.Border.width))
+            .contentShape(shape)
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(isOpen ? L10n.t("يطوي الخيارات", "Hides the options") : L10n.t("يعرض الخيارات", "Shows the options"))
     }
 
     private func fieldLabel(_ title: String) -> some View {
@@ -417,7 +502,6 @@ struct AdminAnnounceComposer: View {
     private func audienceBlock(_ active: [FamilyMember]) -> some View {
         let countries = AdminAnnounceKit.countries(active)
         return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            fieldLabel(L10n.t("لمن", "To"))
             AdminChoiceRow {
                 Button { pickAudience(.all) } label: {
                     AdminChoiceChip(title: L10n.t("الكل", "Everyone"), icon: "person.3.fill", isSelected: audience == .all)
@@ -526,7 +610,6 @@ struct AdminAnnounceComposer: View {
 
     private var whenBlock: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            fieldLabel(L10n.t("متى", "When"))
             AdminChoiceRow {
                 whenChip(.now, title: L10n.t("أرسل الآن", "Send now"), icon: "bolt.fill")
                 whenChip(.scheduled, title: L10n.t("جدولة", "Schedule"), icon: "calendar", expands: true)
@@ -553,27 +636,67 @@ struct AdminAnnounceComposer: View {
 
     /// تاريخ ووقت في المستقبل فقط — مضغوط داخل المربّع (عمودي من أحجام إمكانية الوصول)
     private var customPicker: some View {
-        let picker = DatePicker(L10n.t("وقت الإرسال", "Send time"), selection: $customDate, in: Date()...,
-                                displayedComponents: [.date, .hourAndMinute])
-            .datePickerStyle(.compact)
-            .tint(DS.Color.primary.dsChrome(in: section))
-            .environment(\.locale, LanguageManager.shared.locale)
-        return Group {
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(L10n.t("وقت الإرسال", "Send time"))
-                        .dsFieldFont(.rowTitle)
-                        .foregroundColor(DS.Color.fieldLabel)
-                    picker.labelsHidden()
-                }
-            } else {
-                picker
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
-            }
+        // عجلة للتاريخ وعجلة للوقت، كل واحدة بسطرها (المالك ٢٠٢٦-١٠-٢٣ «خله التاريخ عجلة و حتى الوقت كل واحد سطر»)
+        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            wheel(L10n.t("التاريخ", "Date"), [.date], value: Self.dayText(customDate))
+            AdminRowDivider()
+            wheel(L10n.t("الوقت", "Time"), [.hourAndMinute], value: Self.timeText(customDate))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dsRowBox()
+    }
+
+    /// سطر مطويّ (الاسم + القيمة)؛ الضغط يفتح عجلته تحته ويطوي الأخرى
+    private func wheel(_ label: String, _ parts: DatePickerComponents, value: String) -> some View {
+        let isOpen = openWheel == parts
+        return VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            Button {
+                UISelectionFeedbackGenerator().selectionChanged()
+                withAnimation(DS.Anim.snappy) { openWheel = isOpen ? nil : parts }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Text(label)
+                        .dsFieldFont(.rowTitle)
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Spacer(minLength: DS.Spacing.sm)
+                    Text(verbatim: value)
+                        .dsFieldFont(.rowTitle)
+                        .monospacedDigit()
+                        .foregroundColor(isOpen ? DS.Color.primary.dsChrome(in: section) : DS.Color.textPrimary)
+                    Image(dsSymbol: "chevron.down")
+                        .dsGlyph(DS.Glyph.sm)
+                        .rotationEffect(.degrees(isOpen ? 180 : 0))
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .frame(minHeight: DSBox.chipHeight)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(value)
+            if isOpen {
+                DatePicker(label, selection: $customDate, in: Date()..., displayedComponents: parts)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
+                    .environment(\.locale, LanguageManager.shared.locale)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    /// «السبت ٢٥ أكتوبر» · «٩:٠٠ ص» — بلغة التطبيق وتوقيت الجهاز
+    private static func dayText(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.locale
+        f.setLocalizedDateFormatFromTemplate("EEEEdMMMM")
+        return f.string(from: d)
+    }
+
+    private static func timeText(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = LanguageManager.shared.locale
+        f.setLocalizedDateFormatFromTemplate("jmm")
+        return f.string(from: d)
     }
 
     // MARK: الإرسال — المسارات الموجودة كما هي (إشعار فقط)
