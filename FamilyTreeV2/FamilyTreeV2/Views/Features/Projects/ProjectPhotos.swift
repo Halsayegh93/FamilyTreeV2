@@ -123,6 +123,8 @@ struct ProjectPhotosCarousel: View {
     var maxHeight: CGFloat = 320
     @State private var page = 0
     @State private var viewerIndex: Int?
+    /// فُتح العارض مرة من هذا المربّع — تُخفى شارة «تكبير»
+    @State private var viewerOpened = false
     /// نسبة كل صورة (العرض ÷ الارتفاع) بعد تحميلها
     @State private var aspects: [String: CGFloat] = [:]
     @State private var width: CGFloat = 0
@@ -187,10 +189,12 @@ struct ProjectPhotosCarousel: View {
     }
 
     private func photoButton(_ photos: [String], _ idx: Int) -> some View {
-        Button { viewerIndex = idx } label: {
+        Button { viewerIndex = idx; viewerOpened = true } label: {
             CachedAsyncImage(url: URL(string: photos[idx])) { img in
                 img.resizable().scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                    // شارة «تكبير» في الوسط — تظهر فقط بعد وصول الصورة ثم تختفي
+                    .overlay { ZoomHintBadge(dismissed: viewerOpened) }
             } placeholder: {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.mutedBackground)
             }
@@ -199,6 +203,7 @@ struct ProjectPhotosCarousel: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.t("صورة \(idx + 1) من \(photos.count)", "Photo \(idx + 1) of \(photos.count)"))
+        .accessibilityHint(L10n.t("اضغط للتكبير", "Tap to enlarge"))
     }
 
     /// نقاط الصفحات — صغيرة تحت الصورة بلون القسم، الحالية كبسولة أعرض
@@ -217,6 +222,30 @@ struct ProjectPhotosCarousel: View {
 }
 
 struct ProjectPhotoIndex: Identifiable { let id: Int }
+
+/// شارة «تكبير» في وسط الصورة القابلة للتكبير (المشاريع والمكتبة — طلب المالك ٢٠٢٦-١٠-٢٣):
+/// دائرة داكنة شفّافة ~٣٦ نقطة برمز أبيض، تختفي تدريجياً بعد ثانيتين، أو فوراً بعد فتح العارض مرة
+struct ZoomHintBadge: View {
+    /// فُتح العارض من هذا المربّع — لا حاجة للتلميح بعدها
+    var dismissed: Bool = false
+    @State private var expired = false
+
+    var body: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white)
+            .frame(width: 36, height: 36)
+            .background(Circle().fill(Color.black.opacity(0.4)))
+            .opacity(dismissed || expired ? 0 : 1)
+            .animation(.easeOut(duration: 0.4), value: dismissed || expired)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .task {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                expired = true
+            }
+    }
+}
 
 /// عارض بملء الشاشة (يستعمله المشاريع والمكتبة): التكبير بالقرصة أو بضغطتين والتحريك وهي مكبّرة،
 /// والسحب بين الصور وهي غير مكبّرة — `ZoomablePhotoPager` (طلب المالك ٢٠٢٦-١٠-٢٣)
@@ -249,9 +278,13 @@ struct ProjectPhotoViewer: View {
                 .environment(\.layoutDirection, .leftToRight)
                 .ignoresSafeArea()
 
+            // دوّارة صغيرة محايدة تحت الصورة حتى تصل فقط — لا مجسّم القسم فوق الصورة
             if !loaded.contains(index) {
-                DSPageLoader(section: section)
+                ProgressView()
+                    .tint(DS.Color.overlayText)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
+                    .accessibilityLabel(L10n.t("جاري التحميل", "Loading"))
             }
 
             HStack {

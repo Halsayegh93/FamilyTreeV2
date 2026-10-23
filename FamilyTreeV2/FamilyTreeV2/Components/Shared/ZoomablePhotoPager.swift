@@ -39,7 +39,17 @@ struct ZoomablePhotoPager: UIViewRepresentable {
 /// المقلِّب: UIScrollView أفقي بالصفحات، وفي كل صفحة `PhotoZoomView`
 final class PhotoPagerView: UIView, UIScrollViewDelegate {
     var onIndexChange: ((Int) -> Void)?
-    var onLoadedChange: ((Set<Int>) -> Void)?
+    /// عند ربطه أول مرة يُبلَّغ فوراً بما وصل — الصفحة الأولى قد تصل من الكاش داخل `init`
+    /// قبل ربط الرد، فبدون هذا يبقى مؤشّر التحميل فوق الصورة للأبد (بلاغ المالك ٢٠٢٦-١٠-٢٣)
+    var onLoadedChange: ((Set<Int>) -> Void)? {
+        didSet {
+            guard oldValue == nil, onLoadedChange != nil else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.onLoadedChange?(self.loaded)
+            }
+        }
+    }
 
     private let urls: [String]
     private let isRTL: Bool

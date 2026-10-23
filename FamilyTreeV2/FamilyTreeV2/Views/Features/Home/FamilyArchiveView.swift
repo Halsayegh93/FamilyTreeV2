@@ -607,17 +607,20 @@ struct FamilyArchiveView: View {
             if item.isImage, let url = URL(string: item.fileUrl) {
                 // scaledToFill داخل إطار ثابت — كل الوثائق بنفس المساحة
                 // مهما اختلفت أبعاد الصورة (طلب المالك)
-                CachedAsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    DSPageLoader(section: .library, size: DS.Icon.state, fillsSpace: false)
+                // أثناء التحميل دوّارة صغيرة على خلفية البطاقة؛ عند الفشل رمز التصنيف (لا مجسّم المكتبة)
+                CachedAsyncPhaseImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image): image.resizable().scaledToFill()
+                    case .failure: categoryGlyph(for: item, accent: accent)
+                    case .empty: ProgressView().controlSize(.small)
+                    }
                 }
             } else if item.isPDF {
                 if let thumb = item.thumbnailUrl, let turl = URL(string: thumb) {
                     CachedAsyncImage(url: turl) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
-                        DSPageLoader(section: .library, size: DS.Icon.state, fillsSpace: false)
+                        ProgressView().controlSize(.small)
                     }
                 } else if let furl = URL(string: item.fileUrl) {
                     PDFThumbnailView(url: furl)
@@ -625,12 +628,16 @@ struct FamilyArchiveView: View {
                     pdfIconPlaceholder
                 }
             } else {
-                // رمز التصنيف قد يكون القبر المخصّص (ن-١ فحص ٢٠٢٦-١٠-٠٧)
-                Image(dsSymbol: item.categoryIcon)
-                    .dsGlyph(DS.Icon.sizeSm, weight: .light)
-                    .foregroundColor(accent)
+                categoryGlyph(for: item, accent: accent)
             }
         }
+    }
+
+    /// رمز التصنيف — للعنصر بلا صورة (أو صورة تعذّر تحميلها)؛ قد يكون القبر المخصّص (ن-١ فحص ٢٠٢٦-١٠-٠٧)
+    private func categoryGlyph(for item: ArchiveItem, accent: Color) -> some View {
+        Image(dsSymbol: item.categoryIcon)
+            .dsGlyph(DS.Icon.sizeSm, weight: .light)
+            .foregroundColor(accent)
     }
 
     /// شارة الحالة (الأولوية: بانتظار > مرفوض > مخفي)
@@ -1105,6 +1112,8 @@ struct ArchiveItemViewer: View {
     @State private var downloading = false
     /// الصورة مكبّرة بملء الشاشة (طلب المالك ٢٠٢٦-١٠-٢٣ «اضغط الصورة تكبر»)
     @State private var showFullImage = false
+    /// فُتح العارض مرة — تُخفى شارة «تكبير»
+    @State private var viewerOpened = false
     /// ارتفاع الرأس — المربّع بالمنتصف على قدر محتواه (`dsPanelContentHeight`)
     @State private var headerH: CGFloat = 0
     @Environment(\.verticalSizeClass) private var vSizeClass
@@ -1169,11 +1178,20 @@ struct ArchiveItemViewer: View {
                 ArchivePDFView(url: url)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
             } else if item.isImage, let url = URL(string: item.fileUrl) {
-                Button { showFullImage = true } label: {
-                    CachedAsyncImage(url: url) { image in
-                        image.resizable().scaledToFit()
-                    } placeholder: {
-                        DSPageLoader(section: .library)
+                Button { showFullImage = true; viewerOpened = true } label: {
+                    // نفس مصدر البطاقة وكاشها (`CachedImageLoader`) — دوّارة صغيرة حتى تصل، ورمز التصنيف إن تعذّرت
+                    CachedAsyncPhaseImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().scaledToFit()
+                                // شارة «تكبير» في الوسط — بعد وصول الصورة فقط، ثم تختفي
+                                .overlay { ZoomHintBadge(dismissed: viewerOpened) }
+                        case .failure:
+                            Image(dsSymbol: item.categoryIcon)
+                                .dsGlyph(DS.Icon.sizeSm, weight: .light)
+                                .foregroundColor(accent)
+                        case .empty: ProgressView().controlSize(.small)
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
@@ -1181,6 +1199,7 @@ struct ArchiveItemViewer: View {
                 .buttonStyle(DSScaleButtonStyle())
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
                 .accessibilityLabel(L10n.t("تكبير الصورة", "Enlarge image"))
+                .accessibilityHint(L10n.t("اضغط للتكبير", "Tap to enlarge"))
             } else {
                 // الحالة الموحّدة: مجسّم + عنوان + زرّ الحفظ
                 DSEmptyView(L10n.t("لا يمكن عرض هذا الملف داخل التطبيق", "This file can't be previewed in the app"),
