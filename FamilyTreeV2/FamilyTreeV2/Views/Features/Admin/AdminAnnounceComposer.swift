@@ -187,6 +187,8 @@ struct AdminAnnounceComposer: View {
 
     /// العنوان — مكتوب مسبقاً «عائلة المحمدعلي» ويتعدّل (المالك ٢٠٢٦-١٠-٢٣ «خل مساحة للنص و العنوان»)
     @State private var title: String
+    /// «أخرى» في قائمة العنوان — خانة يكتب فيها عنواناً من عنده (المالك ٢٠٢٦-١٠-٢٣)
+    @State private var customTitle: Bool
     @State private var text: String
     @State private var audience: AudienceKind
     @State private var country: String?
@@ -211,6 +213,7 @@ struct AdminAnnounceComposer: View {
         self.onClose = onClose
         editingId = draft.editingId
         _title = State(initialValue: draft.title)
+        _customTitle = State(initialValue: !AdminAnnounceKit.presetTitles.contains(draft.title))
         _text = State(initialValue: draft.text)
         switch draft.audience {
         case .all:
@@ -292,14 +295,10 @@ struct AdminAnnounceComposer: View {
     }
 
     /// نصّ الزرّ: بالضبط ما سيحدث
+    /// فعل فقط — «لمن» و«متى» ظاهرتان في بطاقتيهما (المالك ٢٠٢٦-١٠-٢٣ «في تكرر بالوقت بمتى و بالارسال»)
     private func actionTitle(_ active: [FamilyMember]) -> String {
-        let to = audienceLabel(active)
-        guard let date = sendDate else {
-            return L10n.t("أرسل الآن ← \(to)", "Send now → \(to)")
-        }
-        let at = AdminAnnounceKit.when(date)
-        return isEditing ? L10n.t("احفظ: \(at) ← \(to)", "Save: \(at) → \(to)")
-                         : L10n.t("جدول \(at) ← \(to)", "Schedule \(at) → \(to)")
+        if isEditing { return L10n.t("احفظ", "Save") }
+        return sendDate == nil ? L10n.t("أرسل الآن", "Send now") : L10n.t("جدولة", "Schedule")
     }
 
     // MARK: المربّع
@@ -404,10 +403,12 @@ struct AdminAnnounceComposer: View {
 
     private func formSection(_ active: [FamilyMember]) -> some View {
         DSComposerSection(title: L10n.t("الإشعار", "Push"), icon: "bell.badge.fill", tint: tint, index: 0) {
-            DSComposerField(icon: "textformat", label: L10n.t("العنوان", "Title"),
-                            placeholder: AdminAnnounceKit.defaultTitle,
-                            text: $title, tint: tint, limit: 60)
             AnyView(titlePresets)
+            if customTitle {
+                DSComposerField(icon: "pencil", label: L10n.t("عنوان آخر", "Other title"),
+                                placeholder: L10n.t("اكتب العنوان…", "Write the title…"),
+                                text: $title, tint: tint, limit: 60)
+            }
             DSComposerField(icon: "text.alignright", label: L10n.t("النص", "Text"),
                             placeholder: L10n.t("اكتب الإشعار…", "Write the message…"),
                             text: $text, tint: tint, multiline: true, lines: 2...4, limit: 500)
@@ -415,22 +416,56 @@ struct AdminAnnounceComposer: View {
         }
     }
 
-    /// العناوين الجاهزة — قائمة منسدلة تكتب المختار في خانة العنوان (ويظل قابلاً للتعديل)
+    /// العنوان نفسه قائمة منسدلة: العناوين الجاهزة + «أخرى…» تفتح خانة للكتابة
     private var titlePresets: some View {
-        Menu {
-            Picker(selection: Binding(get: { trimmed(title) }, set: { preset in
-                UISelectionFeedbackGenerator().selectionChanged()
-                title = preset
-            })) {
-                ForEach(AdminAnnounceKit.presetTitles, id: \.self) { Text($0).tag($0) }
-            } label: {
-                Text(L10n.t("عناوين جاهزة", "Ready titles"))
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+        let ink = tint.dsReadableGlyph
+        return Menu {
+            ForEach(AdminAnnounceKit.presetTitles, id: \.self) { preset in
+                Button {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(DS.Anim.snappy) { customTitle = false; title = preset }
+                } label: {
+                    if !customTitle && trimmed(title) == preset { Label(preset, systemImage: "checkmark") } else { Text(preset) }
+                }
             }
-            .pickerStyle(.inline)
+            Divider()
+            Button {
+                UISelectionFeedbackGenerator().selectionChanged()
+                withAnimation(DS.Anim.snappy) {
+                    if !customTitle { title = "" }
+                    customTitle = true
+                }
+            } label: {
+                if customTitle { Label(L10n.t("أخرى…", "Other…"), systemImage: "checkmark") }
+                else { Label(L10n.t("أخرى…", "Other…"), systemImage: "pencil") }
+            }
         } label: {
-            AdminChoiceChip(title: L10n.t("اختر عنواناً جاهزاً", "Pick a ready title"), icon: "list.bullet",
-                            isSelected: false, expands: true)
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "textformat", tint: tint)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(L10n.t("العنوان", "Title"))
+                        .dsFieldFont(.caption)
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Text(customTitle ? L10n.t("أخرى", "Other") : (trimmed(title).isEmpty ? AdminAnnounceKit.defaultTitle : trimmed(title)))
+                        .dsFieldFont(.rowTitle)
+                        .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: DS.Spacing.sm)
+                Image(dsSymbol: "chevron.up.chevron.down")
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(ink)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, minHeight: DSFieldMetrics.fieldHeight, alignment: .leading)
+            .background(shape.fill(DS.Color.surface))
+            .overlay(shape.strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
+            .contentShape(shape)
         }
+        .accessibilityLabel(L10n.t("العنوان", "Title"))
+        .accessibilityValue(customTitle ? L10n.t("أخرى", "Other") : trimmed(title))
     }
 
     // MARK: لمن · متى — بطاقتان جنب بعض، وخيارات المفتوحة تحتهما

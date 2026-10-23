@@ -134,6 +134,8 @@ struct AdminCreateRoot: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     @State private var kind: AdminCreateKind
     @State private var cardOpen = false
+    /// نوع البطاقة المختار في «تصميم بطاقة» — يفتح المصمّم عليه
+    @State private var cardTemplate: String? = OccasionTemplate.all.first?.id
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(allowed: [AdminCreateKind], start: AdminCreateKind, death: DeathAnnouncementTarget?,
@@ -164,7 +166,7 @@ struct AdminCreateRoot: View {
             }
         }
         .fullScreenCover(isPresented: $cardOpen, onDismiss: { if cardOnly { onClose() } }) {
-            NavigationStack { OccasionComposerView() }
+            NavigationStack { OccasionComposerView(startTemplateId: cardTemplate) }
                 .environmentObject(authVM)
                 .environmentObject(memberVM)
                 .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -185,7 +187,8 @@ struct AdminCreateRoot: View {
         case .death:
             return AnyView(AdminCreateDeathForm(chooser: chooser, preset: death, onClose: onClose))
         case .card:
-            return AnyView(AdminCreateCardForm(chooser: chooser, onOpen: { cardOpen = true }, onClose: onClose))
+            return AnyView(AdminCreateCardForm(chooser: chooser, selection: $cardTemplate,
+                                        onOpen: { cardOpen = true }, onClose: onClose))
         case .appUpdate:
             return AnyView(AdminAppUpdateComposer(chooser: chooser, onClose: onClose))
         }
@@ -378,10 +381,14 @@ struct AdminCreateDeathForm: View {
 /// يشرح البطاقة ثم «فتح مصمّم البطاقة» — المصمّم نفسه (`OccasionComposerView`) بملء الشاشة فوق المربّع
 struct AdminCreateCardForm: View {
     let chooser: AnyView
+    /// القالب المختار (المالك ٢٠٢٦-١٠-٢٣ «في تصميم اعلان خل اختيار نوع البطاقات»)
+    @Binding var selection: String?
     let onOpen: () -> Void
     let onClose: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
     private var tint: Color { DS.Color.actionNavy }
+    private var templates: [OccasionTemplate] { OccasionTemplate.all }
 
     var body: some View {
         DSComposer(
@@ -389,42 +396,65 @@ struct AdminCreateCardForm: View {
             subtitle: AdminCreateKind.card.title,
             icon: AdminCreateKind.card.icon,
             tint: tint,
-            actionTitle: L10n.t("فتح مصمّم البطاقة", "Open the card designer"),
+            actionTitle: L10n.t("صمّم البطاقة", "Design the card"),
             actionIcon: "paintbrush.pointed.fill",
-            canSubmit: true,
+            canSubmit: selection != nil,
             note: L10n.t("صورة تُحفظ في الصور أو تُشارك — لا تُرسل للأعضاء من هنا",
                          "An image to save or share — nothing is sent to members from here"),
             onSubmit: onOpen,
             onCancel: onClose
         ) {
             chooser
-            DSComposerSection(title: L10n.t("الأنواع", "Kinds"), icon: "photo.on.rectangle.angled", tint: tint, index: 1) {
-                row(icon: "gift.fill", title: L10n.t("تهنئة", "Congratulations"),
-                    note: L10n.t("زواج، مولود، تخرّج… بصورة أو بدونها", "Wedding, newborn, graduation… with or without a photo"))
-                row(icon: NewsTypeHelper.icon(for: "وفاة"), title: L10n.t("إعلان عزاء", "Condolence notice"),
-                    note: L10n.t("التشييع والعزاء والدعاء", "Funeral, condolences and prayer"))
-                row(icon: "hands.and.sparkles.fill", title: L10n.t("مشاركة عزاء", "Shared condolence"),
-                    note: L10n.t("بطاقة مواساة بلا صورة", "A sympathy card without a photo"))
+            DSComposerSection(title: L10n.t("نوع البطاقة", "Card type"), icon: "photo.on.rectangle.angled", tint: tint, index: 1) {
+                let cols = typeSize >= .accessibility1 ? 1 : 2
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(Array(stride(from: 0, to: templates.count, by: cols)), id: \.self) { start in
+                        let end = min(start + cols, templates.count)
+                        HStack(spacing: DS.Spacing.sm) {
+                            ForEach(templates[start..<end]) { tile($0) }
+                            ForEach(0..<(cols - (end - start)), id: \.self) { _ in
+                                Color.clear.frame(maxWidth: .infinity, maxHeight: DS.Border.width)
+                            }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
         }
     }
 
-    private func row(icon: String, title: String, note: String) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: icon, tint: tint)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(title)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
-                Text(note)
-                    .dsFieldFont(.subtitle)
-                    .foregroundColor(DS.Color.fieldValue)
+    /// التهاني ذهبية، والعزاء رمادي (لون معنى «وفاة»)
+    private func tile(_ t: OccasionTemplate) -> some View {
+        let selected = selection == t.id
+        let color = t.kind == .happy ? DS.Color.accent : DS.Color.newsDeath
+        let ink = color.dsReadableGlyph
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+        return Button {
+            guard !selected else { return }
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(DS.Anim.snappy) { selection = t.id }
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                AdminIconSquare(symbol: t.icon, tint: color, side: DS.Icon.row,
+                                radius: DS.Hub.miniIconRadius, filled: true, glyph: DS.Glyph.sm)
+                Text(t.title)
+                    .dsFont(.hubButton)
+                    .foregroundColor(DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background(shape.fill(selected ? ink.opacity(DS.Opacity.tintFillSoft) : DS.Color.surface))
+            .overlay(shape.strokeBorder(selected ? ink.opacity(DS.Opacity.selectedStroke)
+                                                 : DS.Color.textTertiary.opacity(DS.Opacity.border),
+                                        lineWidth: selected ? DS.Border.widthBold : DS.Border.width))
+            .contentShape(shape)
         }
-        .dsRowBox()
+        .buttonStyle(DSPressStyle())
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
