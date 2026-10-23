@@ -28,8 +28,6 @@ struct RegistrationView: View {
     @State private var hasAttemptedSubmit = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showConfirmSubmit = false
-    /// الموافقة على شروط الاستخدام (EULA — Guideline 1.2) — شرط لإرسال طلب الانضمام
-    @State private var termsAccepted = false
 
     var body: some View {
         ZStack {
@@ -49,7 +47,7 @@ struct RegistrationView: View {
                             .opacity(headerOpacity)
 
                         // الحقول — بطاقة القسم الواحدة وحقول المربّعات (نفس «تسجيل عضو جديد» في الإدارة)،
-                        // تدخل بعد الصورة: البيانات ← الشروط ← زر الإرسال
+                        // تدخل بعد الصورة: البيانات ← زر الإرسال
                         VStack(spacing: DS.Spacing.md) {
                             // بلا شارة «مطلوب» — الحقول المطلوبة عليها النجمة الحمراء
                             DSComposerSection(title: L10n.t("البيانات الأساسية", "Basic Info"),
@@ -61,11 +59,6 @@ struct RegistrationView: View {
                                 birthDateSection
                                 genderSection
                             }
-
-                            // الموافقة على الشروط — قبل زر الإرسال مباشرة
-                            TermsConsentRow(isAccepted: $termsAccepted,
-                                            showError: hasAttemptedSubmit)
-                                .dsStaggerIn(1)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
@@ -107,10 +100,6 @@ struct RegistrationView: View {
             familiesFetched = true
         }
         .onAppear {
-            // «تعديل البيانات» من شاشة الانتظار: وافق سابقاً فتبقى الموافقة محدّدة
-            if TermsAgreement.hasAccepted([AccountIdentity.authUserId, authVM.currentUser?.id]) {
-                termsAccepted = true
-            }
             Log.info("[REGISTRATION] RegistrationView ظهرت — البروفايل غير موجود. phone=\(Log.masked(authVM.phoneNumber))")
             // «تقليل الحركة»: الصورة تظهر بتلاشٍ فقط بلا تكبير
             guard !reduceMotion else {
@@ -329,7 +318,6 @@ struct RegistrationView: View {
             let isValid = trimmedFull.count >= 2 && trimmedFull.count <= 50 && fullLetterCount >= 2
                        && trimmedFamily.count >= 2 && trimmedFamily.count <= 50 && familyLetterCount >= 2
                        && !selectedGender.isEmpty
-                       && termsAccepted
             let isDisabled = !isValid || authVM.isLoading
 
             DSPrimaryButton(
@@ -356,8 +344,6 @@ struct RegistrationView: View {
             ) {
                 Button(L10n.t("مراجعة البيانات", "Review"), role: .cancel) {}
                 Button(L10n.t("إرسال", "Submit")) {
-                    // الموافقة على الشروط تُسجَّل لحساب الدخول الآن، ولملفه بعد إنشائه
-                    TermsAgreement.accept([AccountIdentity.authUserId])
                     Task {
                         await authVM.registerNewUser(
                             firstName: trimmedFull,
@@ -366,7 +352,6 @@ struct RegistrationView: View {
                             gender: selectedGender,
                             avatarImage: selectedImage
                         )
-                        TermsAgreement.accept([authVM.currentUser?.id])
                     }
                 }
             } message: {
