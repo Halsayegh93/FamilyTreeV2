@@ -132,11 +132,8 @@ struct AdminCreateRoot: View {
 
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var memberVM: MemberViewModel
-    @EnvironmentObject private var notificationVM: NotificationViewModel
     @State private var kind: AdminCreateKind
     @State private var cardOpen = false
-    /// «إرسال إشعار» القديمة بملء الشاشة (المالك ٢٠٢٦-١٠-٢٣: «ارسال الاشعارات خلها نفس قبل»)
-    @State private var notifyOpen = false
 
     init(allowed: [AdminCreateKind], start: AdminCreateKind, death: DeathAnnouncementTarget?,
          announce: AdminAnnounceDraft? = nil, onClose: @escaping () -> Void) {
@@ -148,12 +145,10 @@ struct AdminCreateRoot: View {
     }
 
     private var cardOnly: Bool { allowed == [.card] }
-    /// «إعلان» جديد = صفحة «إرسال إشعار»؛ تعديل إشعار مجدول يبقى على المربّع
-    private var opensNotifyPage: Bool { kind == .announcement && announce?.editingId == nil }
 
     var body: some View {
         Group {
-            if cardOnly || opensNotifyPage {
+            if cardOnly {
                 Color.clear
             } else {
                 DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { box }
@@ -165,17 +160,7 @@ struct AdminCreateRoot: View {
                 .environmentObject(memberVM)
                 .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
-        .fullScreenCover(isPresented: $notifyOpen, onDismiss: { onClose() }) {
-            AdminNotifyPage()
-                .environmentObject(authVM)
-                .environmentObject(memberVM)
-                .environmentObject(notificationVM)
-        }
-        .onAppear {
-            if cardOnly { cardOpen = true }
-            if opensNotifyPage { notifyOpen = true }
-        }
-        .onChange(of: kind) { _ in if opensNotifyPage { notifyOpen = true } }
+        .onAppear { if cardOnly { cardOpen = true } }
     }
 
     /// كل نوع منشئه الموجود خلف `AnyView` (نوع صغير لكل فرع)

@@ -9,7 +9,7 @@ import Supabase
 //
 // تبسيط ٢٠٢٦-١٠-٢٢ (موافقة المالك): شاشة واحدة بدل الأسئلة الثلاثة — النص، ثم «لمن» (الكل · دولة ⌄ · أعضاء ⌄ بالمنتقي
 // الموحّد `DSMemberPickerBox`)، ثم «أرسل الآن / جدولة» (تاريخ ووقت في المستقبل حين تُجدول)، وزرّ واحد يقول ما سيحدث.
-// العنوان ثابت «عائلة المحمدعلي» (لا عناوين جاهزة)، والإعلان إشعار فقط — لا يُنشر في الأخبار من هنا.
+// العنوان خانة مكتوبة مسبقاً «عائلة المحمدعلي» وتتعدّل، والنص خانة أكبر (المالك ٢٠٢٦-١٠-٢٣)؛ والإعلان إشعار فقط — لا يُنشر في الأخبار.
 // الإشعار = `NotificationViewModel.sendNotification` / `scheduleNotification` بنوع `admin_broadcast` — والدفع من مشغّل جدول
 // الإشعارات على السيرفر كما هو. تعديل المجدول (من «الإشعارات المجدولة») = نفس الشاشة بالمسودّة → `updateScheduledNotification`.
 // الصلاحية `canSendNotifications` (المالك والمدير)، وحارس السيرفر يبقى الحَكَم.
@@ -137,6 +137,7 @@ struct AdminAnnounceDraft {
     enum Audience: Hashable { case all, country(String), members(Set<UUID>) }
     enum When: Hashable { case now, custom(Date) }
 
+    var title = AdminAnnounceKit.defaultTitle
     var text = ""
     var audience: Audience = .all
     var when: When = .now
@@ -153,7 +154,7 @@ struct AdminAnnounceDraft {
     init(editing n: NotificationViewModel.ScheduledNotification, members: [FamilyMember]) {
         editingId = n.id
         let body = n.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        text = body.isEmpty ? n.title : n.body
+        if body.isEmpty { text = n.title } else { title = n.title; text = n.body }
         if let ids = n.targetMemberIds, !ids.isEmpty {
             audience = AdminAnnounceKit.countryCode(matching: ids, members: members).map { .country($0) } ?? .members(Set(ids))
         }
@@ -180,6 +181,8 @@ struct AdminAnnounceComposer: View {
     /// تعديل إشعار مجدول (nil = جديد)
     private let editingId: UUID?
 
+    /// العنوان — مكتوب مسبقاً «عائلة المحمدعلي» ويتعدّل (المالك ٢٠٢٦-١٠-٢٣ «خل مساحة للنص و العنوان»)
+    @State private var title: String
     @State private var text: String
     @State private var audience: AudienceKind
     @State private var country: String?
@@ -200,6 +203,7 @@ struct AdminAnnounceComposer: View {
         self.chooser = chooser
         self.onClose = onClose
         editingId = draft.editingId
+        _title = State(initialValue: draft.title)
         _text = State(initialValue: draft.text)
         switch draft.audience {
         case .all:
@@ -230,7 +234,8 @@ struct AdminAnnounceComposer: View {
     // MARK: مشتقات
 
     private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var noticeTitle: String { AdminAnnounceKit.defaultTitle }
+    /// فارغ ← العنوان الثابت
+    private var noticeTitle: String { trimmed(title).isEmpty ? AdminAnnounceKit.defaultTitle : trimmed(title) }
     private var noticeBody: String { trimmed(text) }
 
     private var active: [FamilyMember] { AdminAnnounceKit.activeMembers(memberVM.allMembers) }
@@ -336,7 +341,7 @@ struct AdminAnnounceComposer: View {
             title: isEditing ? L10n.t("تعديل الإشعار المجدول", "Edit scheduled push")
                 : (chooser == nil ? L10n.t("إعلان جديد", "New announcement") : L10n.t("ماذا تنشئ؟", "What to create?")),
             subtitle: isEditing ? L10n.t("يوصل في موعده الجديد", "Goes out at the new time")
-                : L10n.t("إشعار باسم «\(AdminAnnounceKit.defaultTitle)»", "A push titled “\(AdminAnnounceKit.defaultTitle)”"),
+                : L10n.t("عنوان ونص — للكل أو لدولة أو لأعضاء", "Title and text — everyone, a country or people"),
             icon: isEditing ? "clock.arrow.circlepath" : "megaphone.fill",
             tint: tint,
             actionTitle: actionTitle(active),
@@ -391,9 +396,12 @@ struct AdminAnnounceComposer: View {
 
     private func formSection(_ active: [FamilyMember]) -> some View {
         DSComposerSection(title: L10n.t("الإعلان", "Announcement"), icon: "megaphone.fill", tint: tint, index: 0) {
+            DSComposerField(icon: "textformat", label: L10n.t("العنوان", "Title"),
+                            placeholder: AdminAnnounceKit.defaultTitle,
+                            text: $title, tint: tint, limit: 60)
             DSComposerField(icon: "text.alignright", label: L10n.t("النص", "Text"),
                             placeholder: L10n.t("اكتب الإشعار…", "Write the message…"),
-                            text: $text, tint: tint, multiline: true, limit: 500)
+                            text: $text, tint: tint, multiline: true, lines: 5...10, limit: 500)
             AnyView(audienceBlock(active))
             AnyView(whenBlock)
         }

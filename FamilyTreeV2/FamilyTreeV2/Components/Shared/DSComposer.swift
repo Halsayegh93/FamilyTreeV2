@@ -837,6 +837,8 @@ struct DSComposerField: View {
     @Binding var text: String
     var tint: Color = DS.Color.primary
     var multiline: Bool = false
+    /// أسطر الحقل متعدد الأسطر (يكبر بالكتابة حتى الحد الأعلى)
+    var lines: ClosedRange<Int> = 1...4
     var limit: Int? = nil
     var keyboard: UIKeyboardType = .default
     var ltr: Bool = false
@@ -895,7 +897,7 @@ struct DSComposerField: View {
                 }
                 Group {
                     if multiline {
-                        TextField(placeholder, text: $text, axis: .vertical).lineLimit(1...4)
+                        TextField(placeholder, text: $text, axis: .vertical).lineLimit(lines)
                     } else {
                         TextField(placeholder, text: $text)
                     }
