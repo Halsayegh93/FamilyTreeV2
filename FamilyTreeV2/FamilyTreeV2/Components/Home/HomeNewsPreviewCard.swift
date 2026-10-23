@@ -57,8 +57,16 @@ struct HomeNewsPreviewCard: View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
             // لون قسم «الأخبار» في الرئيسية — من عائلة اللوحة (AppSection.HomeTile.news)
             // رسم بطاقة الأخبار للاتجاه المختار، وإلا الشارة الحالية
+            // «د — من الهوية» (٢٠٢٦-١٠-٢٢): مجسّم الأخبار فوق قرص ذهبي غامق داخل حلقة ذهبية رفيعة
             FT5STrial.newsCardArt(tint: AppSection.HomeTile.news.ink)
-                                .map { AnyView($0.frame(width: DS.Icon.sizeLg, height: DS.Icon.tapTarget)) }
+                .map { art in
+                    AnyView(
+                        art.frame(width: DS.Icon.sizeLg * 0.78, height: DS.Icon.sizeLg * 0.78)
+                            .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                            .background(Circle().fill(DS.Color.HomeTiles.news.fill))
+                            .overlay(Circle().strokeBorder(DS.Color.HomeTiles.news.ring, lineWidth: DS.Border.widthBold))
+                    )
+                }
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 HStack(spacing: DS.Spacing.xsm) {

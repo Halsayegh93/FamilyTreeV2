@@ -493,24 +493,32 @@ struct TrialCenteredTile: View {
     /// ترتيب المربّع (لتأخير اللمعة) وهل يُلعب الظهور الأول
     var stagger: Double = 0
     var entrance: Bool = true
+    /// لون الاسم وظلّه — مربّعات «د» تمرّر حبر كل مربّع
+    var titleColor: Color = DS.Color.tileTitle
+    var titleShadow: Color = DS.Color.tileTitleShadow
+    /// حلقة رفيعة حول المجسّم («د — من الهوية»: ذهبية) — nil بلا حلقة
+    var ring: Color? = nil
 
     var body: some View {
         let side = artSide ?? 48 * scale
+        // مع الحلقة يصغر المجسّم قليلاً داخلها فيبقى ارتفاع المربّع كما هو
+        let artSize = ring == nil ? side : side * 0.8
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 4) {
                 // المجسّم بشكله الأساسي: بلا ضوء خلفه (طلب المالك ٢٠٢٦-١٠-٠٧ «بدون وهج»)، مع لمعة الضوء العابرة
                 // عليه والظهور الأول والتنفّس البطيء («خل لمعة الضوء على المجسّم»)
-                art.frame(width: side, height: side)
-                    .modifier(TrialObjectMotion(side: side, stagger: stagger, entrance: entrance))
-                .frame(height: side + 2)
+                art.frame(width: artSize, height: artSize)
+                    .modifier(TrialObjectMotion(side: artSize, stagger: stagger, entrance: entrance))
+                    .frame(width: side + 2, height: side + 2)
+                    .overlay(Circle().strokeBorder(ring ?? .clear, lineWidth: DS.Border.width))
                 Text(title)
                     .dsFont(.tileTitle)
-                    .foregroundColor(DS.Color.tileTitle)
+                    .foregroundColor(titleColor)
                     .lineLimit(1)   // الاسم سطر واحد في كل المربّعات (يصغر قليلاً إن ضاق)
                     .minimumScaleFactor(0.7)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                    .shadow(color: DS.Color.tileTitleShadow, radius: 3, x: 0, y: 1)
+                    .shadow(color: titleShadow, radius: 3, x: 0, y: 1)
             }
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
