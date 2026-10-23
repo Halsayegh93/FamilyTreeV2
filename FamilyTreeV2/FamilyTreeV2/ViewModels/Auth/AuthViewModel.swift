@@ -722,6 +722,45 @@ class AuthViewModel: ObservableObject {
     /// السيرفر يحمي أيضاً: رمز واحد لكل دقيقتين (`sms_one_code_seconds`)
     private var otpRequestInFlight = false
 
+    // MARK: - رمز بانتظار الكتابة (المالك ٢٠٢٦-١٠-٢٤: «يذهب الى المسجات و يرجع الى التطبيق يعيد التطبيق من البداية»)
+    // آخر رمز أُرسل يُحفظ على الجهاز ٥ دقائق (صلاحية الرمز)، فلو أغلق النظام التطبيق وهو في «الرسائل» يرجع لخانة الرمز.
+
+    static let pendingOTPKey = "pendingOTP.v1"
+    static let pendingOTPLifetime: TimeInterval = 300
+
+    /// تعديل الرقم، الدخول، الخروج — لا رجوع لخانة الرمز بعدها. (`clearLocalSession` لا يلغيه: فحص الجلسة عند
+    /// الإقلاع بلا حساب يمرّ به، وكان يمسح الرمز المحفوظ قبل ما تظهر شاشة الدخول)
+    func cancelPendingOTP() {
+        UserDefaults.standard.removeObject(forKey: Self.pendingOTPKey)
+    }
+
+    private func savePendingOTP() {
+        UserDefaults.standard.set(["phone": phoneNumber, "dial": dialingCode, "at": Date().timeIntervalSince1970],
+                                  forKey: Self.pendingOTPKey)
+    }
+
+    /// يرجع لخانة الرمز إن أُرسل رمز خلال آخر ٥ دقائق — الثواني المنقضية منذ الإرسال، أو nil
+    @discardableResult
+    func restorePendingOTPIfAny() -> TimeInterval? {
+        guard status == .unauthenticated,
+              let saved = UserDefaults.standard.dictionary(forKey: Self.pendingOTPKey),
+              let phone = saved["phone"] as? String, let dial = saved["dial"] as? String,
+              let at = saved["at"] as? TimeInterval else { return nil }
+        let elapsed = Date().timeIntervalSince1970 - at
+        guard elapsed >= 0, elapsed < Self.pendingOTPLifetime, !phone.isEmpty else {
+            UserDefaults.standard.removeObject(forKey: Self.pendingOTPKey)
+            return nil
+        }
+        // الشاشة قد تُبنى من جديد والرمز ما زال ظاهراً — نرجع الوقت المنقضي فقط حتى تكمل العدّادات
+        if !isOtpSent {
+            phoneNumber = phone
+            dialingCode = dial
+            isOtpSent = true
+        }
+        Log.info("[OTP] رجوع لخانة الرمز بعد \(Int(elapsed)) ث")
+        return elapsed
+    }
+
     func sendOTP(channel: OTPChannel = .sms) async {
         guard !otpRequestInFlight else { return }
         otpRequestInFlight = true
@@ -776,6 +815,7 @@ class AuthViewModel: ObservableObject {
             withAnimation(.spring()) {
                 self.isOtpSent = true
             }
+            savePendingOTP()
             self.otpErrorMessage = nil
             self.otpStatusMessage = L10n.t(
                 "تم إرسال الرمز عبر \(channelAr)",
@@ -974,6 +1014,7 @@ class AuthViewModel: ObservableObject {
         do {
             user = try await supabase.auth.session.user
             guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
+            cancelPendingOTP()
             CacheManager.shared.beginAccount(user.id)
         } catch {
             guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
@@ -990,6 +1031,9 @@ class AuthViewModel: ObservableObject {
                 || authCode == ErrorCode.refreshTokenNotFound || authCode == ErrorCode.refreshTokenAlreadyUsed
 
             if isReallyNoSession {
+                // ما زال على شاشة الدخول (مثلاً رجع من «الرسائل» ليكتب الرمز): لا شيء يُمسح — المسح كان يرجّعه
+                // لخانة الرقم ويفرّغها (المالك ٢٠٢٦-١٠-٢٤)
+                if status == .unauthenticated && currentUser == nil { return }
                 Log.info("[AUTH] No session found → unauthenticated: \(error.localizedDescription)")
                 clearLocalSession()
             } else if currentUser == nil {
@@ -1313,6 +1357,7 @@ class AuthViewModel: ObservableObject {
         isEndingSession = true
         defer { isEndingSession = false }
         await notificationVM?.unregisterPushToken()
+        cancelPendingOTP()
         clearLocalSession()
         // هذا الجهاز فقط — الافتراضي .global كان يُخرج العضو من كل أجهزته
         // (الأندرويد والآيباد…) عند خروج واحد أو إزالة جهاز واحد من الإدارة.

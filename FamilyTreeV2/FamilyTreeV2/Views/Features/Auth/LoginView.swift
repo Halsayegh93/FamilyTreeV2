@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 struct LoginView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -81,6 +82,11 @@ struct LoginView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
         .onAppear {
+            // رجع للتطبيق بعد ما أغلقه النظام وهو في «الرسائل»: خانة الرمز من جديد بعدّاداتها
+            if let elapsed = authVM.restorePendingOTPIfAny() {
+                timeRemaining = max(0, Self.resendSeconds - Int(elapsed))
+                otpTimeRemaining = max(0, Int(AuthViewModel.pendingOTPLifetime - elapsed))
+            }
             // «تقليل الحركة»: الشعار يظهر بتلاشٍ فقط بلا تكبير
             guard !reduceMotion else {
                 logoScale = 1.0
@@ -93,6 +99,7 @@ struct LoginView: View {
                 logoOpacity = 1.0
             }
         }
+        .task { await Self.refreshResendSeconds() }
         .task(id: timeRemaining) {
             guard timeRemaining > 0 else { return }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -118,7 +125,7 @@ struct LoginView: View {
                         actionIcon: DSBackButton.symbol,   // سهم الرجوع الموحّد
                         action: {
                             withAnimation(DS.Anim.smooth) {
-                                authVM.isOtpSent = false
+                                authVM.isOtpSent = false; authVM.cancelPendingOTP()
                                 authVM.otpCode = ""; otpText = ""
                                 authVM.otpErrorMessage = nil
                                 authVM.otpStatusMessage = ""
@@ -324,6 +331,21 @@ struct LoginView: View {
         }
     }
 
+    /// بين رمز ورمز — يُقرأ من الإعدادات (`sms_resend_seconds()` = «حماية رسائل الدخول ← بين رمز ورمز»، المالك
+    /// ٢٠٢٦-١٠-٢٤)؛ آخر قيمة محفوظة على الجهاز، وبلا قيمة ٣ دقائق
+    static let resendSecondsKey = "smsResendSeconds.v1"
+    static var resendSeconds: Int {
+        let n = UserDefaults.standard.integer(forKey: resendSecondsKey)
+        return n > 0 ? n : 180
+    }
+
+    /// تحديث «بين رمز ورمز» من السيرفر (قبل الدخول) — أي خطأ يبقي القيمة السابقة
+    static func refreshResendSeconds() async {
+        guard let n: Int = try? await SupabaseConfig.client.rpc("sms_resend_seconds").execute().value,
+              (30...3600).contains(n) else { return }
+        UserDefaults.standard.set(n, forKey: resendSecondsKey)
+    }
+
     /// وقت الانتظار على الزر: «45ث» · «1:59» · «ساعة» (حد الساعة أو اليوم — `OTPWaitText.hourThreshold`)
     static func waitLabel(_ n: Int) -> String {
         if n >= OTPWaitText.hourThreshold { return L10n.t("ساعة", "an hour") }
@@ -360,7 +382,7 @@ struct LoginView: View {
             ) {
                 guard !isDisabled else { return }
                 isFieldFocused = false
-                timeRemaining = 120   // = «رمز واحد لكل دقيقتين» في السيرفر
+                timeRemaining = Self.resendSeconds
                 authVM.otpCode = ""; otpText = ""
                 Task {
                     await authVM.sendOTP()
@@ -406,7 +428,7 @@ struct LoginView: View {
 
                     Button(action: {
                         withAnimation(DS.Anim.smooth) {
-                            authVM.isOtpSent = false
+                            authVM.isOtpSent = false; authVM.cancelPendingOTP()
                             authVM.otpCode = ""; otpText = ""
                             authVM.otpErrorMessage = nil
                             authVM.otpStatusMessage = ""
@@ -420,21 +442,9 @@ struct LoginView: View {
                     .padding(.leading, DS.Spacing.xs)
                 }
 
-                // مؤقت الرمز — 5 دقائق
-                if otpTimeRemaining > 0 {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "timer")
-                            .dsGlyph(DS.Glyph.sm)
-                            .foregroundStyle(otpTimeRemaining <= 60 ? DS.Color.error : DS.Color.primary)
-                        Text(L10n.t(
-                            "ينتهي الرمز خلال \(otpTimeRemaining / 60):\(String(format: "%02d", otpTimeRemaining % 60))",
-                            "Code expires in \(otpTimeRemaining / 60):\(String(format: "%02d", otpTimeRemaining % 60))"
-                        ))
-                            .dsFont(.caption)
-                            .foregroundStyle(otpTimeRemaining <= 60 ? DS.Color.error : DS.Color.primary)
-                    }
-                    .padding(.top, DS.Spacing.xs)
-                } else {
+                // وقت واحد ظاهر = عدّاد «إعادة عبر SMS» (المالك ٢٠٢٦-١٠-٢٤ «في وقتين … نبي وقت واحد»)؛ صلاحية
+                // الرمز (٥ دقائق) تُحسب بصمت وتظهر سطراً فقط بعد ما تنتهي
+                if otpTimeRemaining == 0 {
                     Text(L10n.t("انتهت صلاحية الرمز", "Code has expired"))
                         .dsFont(.caption)
                         .foregroundStyle(DS.Color.error)
@@ -468,7 +478,8 @@ struct LoginView: View {
                     isFieldFocused = true
                     otpText = ""
                     authVM.otpCode = ""
-                    otpTimeRemaining = 300
+                    // الرجوع لخانة رمز محفوظ يبدأ من الوقت الباقي له (`restorePendingOTPIfAny`)
+                    if otpTimeRemaining == 0 { otpTimeRemaining = 300 }
                 }
                 .onChange(of: otpText) { newValue in
                     // يقبل الأرقام العربية والفارسية ويحوّلها إنجليزية — نفس حقل الهاتف
@@ -514,7 +525,7 @@ struct LoginView: View {
                     authVM.otpErrorMessage = nil
                     authVM.otpStatusMessage = ""
                     otpTimeRemaining = 300
-                    timeRemaining = 120
+                    timeRemaining = Self.resendSeconds
                     Task {
                         await authVM.sendOTP(channel: .sms)
                         // محجوب بمهلة معروفة (نفس الرقم): عدّاد «إعادة عبر SMS» يبدأ منها، وإلا ٣٠ ث كما كان
