@@ -24,7 +24,8 @@ enum AdminReviewDestination: Hashable {
 // الرأس الكحلي المختصر (التحية وتحتها التاريخ، ومكبّر صوت «إعلان جديد» بجانب البحث والجرس لمن يرسل للأعضاء) ← مربّع
 // ثابت واحد «يحتاج انتباهك»: الأرقام الأربعة بانتظار قرارك · عاجل · متأخر · رسائل، وتحتها في المربّع نفسه سطر «حالة النظام»
 // يفتح لوحة: الصيانة · الرصيد · المجدول · بلا إشعارات (الدفعة ٩؛ «إحصاء الأفراد» انتقل لأعلى «المؤشرات ← العائلة»،
-// ٢٠٢٦-١٠-٢٢) ← «الأقسام» الستة ٣×٢ أيقونة واسم فقط (اختيار المالك «٦ أقسام») ← «بانتظار قرارك» قائمة واحدة (القرارات والمهام معاً، أول ٣ و«عرض الكل»).
+// ٢٠٢٦-١٠-٢٢) ← «الأقسام» الستة ٣×٢ أيقونة واسم فقط (اختيار المالك «٦ أقسام»). بطاقة «بانتظار قرارك» حُذفت (طلب المالك
+// ٢٠٢٦-١٠-٢٢): الطلبات من «الوارد» ورقم «بانتظار قرارك» في «يحتاج انتباهك» الذي يفتحه.
 // بطاقة «تنبيهات» حُذفت: الأربعة صارت «حالة النظام»، والباقي (وفاة لم يُعلن عنها، مشكلات الشجرة للمراقب، خلل إعداد قاعدة
 // البيانات) «يحتاج إجراء» في «إشعارات الإدارة» التي يفتحها الجرس (`AdminNotificationsPage`). «اليوم في العائلة» انتقل لأعلى «المناسبات»،
 // و«نبض العائلة» لأعلى «المؤشرات»، وكل إجراء سريع لأعلى قسمه. كل دور يرى مجاله فقط والقسم الفارغ لا يُرسم (IA.md).
@@ -275,10 +276,6 @@ struct AdminDashboardView: View {
                              sms: sms, unannounced: unannounced)
     }
 
-    private func todayEntries(_ items: [AdminDecisionItem]) -> [AdminTodayEntry] {
-        AdminTodayFeed.entries(items: items, tasks: openTasks(items))
-    }
-
     /// ما يتغيّر في القائمة والمهام — لمزامنة «المنجز» وصفحة «عرض الكل»
     private struct TodaySnapshot: Equatable {
         var tasks: [String] = []
@@ -384,7 +381,6 @@ struct AdminDashboardView: View {
 
     private var todayContentStack: some View {
         let items = decisionItems
-        let entries = todayEntries(items)
         let pills = statusPills
         return VStack(spacing: DS.Hub.stackSpacing) {
             // «يحتاج انتباهك» مربّع ثابت واحد يصعد فوق حافة الرأس (طلب المالك ٢٠٢٦-١٠-٢٢: بلا سحب ولا نقاط؛ «إحصاء الأفراد»
@@ -395,9 +391,8 @@ struct AdminDashboardView: View {
                                         open: openStatusHome)
                 .dsCardCascade(0, appeared: appeared))
             AnyView(areasSection().dsCardCascade(1, appeared: appeared))
-            AnyView(decisionCard(entries).dsCardCascade(2, appeared: appeared))
             if let guide = scopeGuide {
-                AnyView(AdminScopeLink(guide: guide).dsCardCascade(3, appeared: appeared))
+                AnyView(AdminScopeLink(guide: guide).dsCardCascade(2, appeared: appeared))
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
@@ -502,39 +497,6 @@ struct AdminDashboardView: View {
         return list
     }
 
-    // MARK: يحتاج قرارك — قائمة واحدة (القرارات والمهام معاً)
-
-    private static let visibleEntryLimit = 3
-
-    private func decisionCard(_ entries: [AdminTodayEntry]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            AdminCardHeader(title: L10n.t("بانتظار قرارك", "Awaiting your decision")) {
-                if !isInitialLoading {
-                    // «عرض الكل» = «الوارد» على «بانتظار قرارك» (صفحة «عرض الكل» حُذفت — D21؛ «المنجز اليوم» آخر الوارد)
-                    NavigationLink {
-                        AdminLazyPage { AnyView(AdminAllRequestsView(initialFilter: .waiting).adminArea(.inbox)) }
-                    } label: {
-                        AdminCardLinkLabel(title: L10n.t("عرض الكل", "View all"))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            if isInitialLoading {
-                DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DS.Spacing.sm)
-            } else if entries.isEmpty {
-                AdminTodayCaughtUpRow()
-            } else {
-                ForEach(Array(entries.prefix(Self.visibleEntryLimit).enumerated()), id: \.element.id) { index, entry in
-                    if index > 0 { AdminRowDivider() }
-                    AdminTodayEntryLink(entry: entry)
-                }
-            }
-        }
-        .adminCard()
-    }
-
     // MARK: الأقسام
 
     /// الأقسام الستة: ٣ أعمدة × صفّان — وعمودان مع الخط الكبير جداً، أو حين يرى الدور قسمين أو أربعة (المشرف ٢،
@@ -581,83 +543,7 @@ struct AdminLazyPage: View {
     var body: some View { make() }
 }
 
-// MARK: - «بانتظار قرارك»: الصفّ، والرابط، و«المنجز اليوم»
-
-/// صفّ في «يحتاج قرارك»: دائرة الإنجاز لما عليك أنت (لمسة «ب» — تصير ✓ في «المنجز» حين يُحلّ ما خلفها)، أو مربّع
-/// النوع لما في مجالك عند غيرك؛ ثم العنوان وسطر الحالة وشارة المهلة
-struct AdminTodayEntryRow: View {
-    let entry: AdminTodayEntry
-
-    var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            if entry.isTask {
-                Circle()
-                    .strokeBorder(DS.Color.textTertiary, lineWidth: DS.Border.widthBold)
-                    .frame(width: DS.Hub.taskRing, height: DS.Hub.taskRing)
-                    .frame(width: DS.Hub.iconSquare)
-                    .accessibilityHidden(true)
-            } else {
-                AdminIconSquare(symbol: entry.icon, tint: entry.tint)
-            }
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                // نصّ عادي (لا مفتاح ترجمة): مفتاح بمتغيّرين يعزل كلاً منهما فيقلب ترتيبهما في العربية
-                Text(verbatim: entry.title)
-                    .dsFont(.hubRow)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .dsNameLines()
-                if !entry.subtitle.isEmpty {
-                    Text(verbatim: entry.subtitle)
-                        .dsFont(.footnote)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: DS.Spacing.xs)
-            if let chip = entry.chip {
-                DSStatusChip(text: chip.text, icon: chip.icon, tint: chip.tint)
-            }
-        }
-        .padding(.vertical, DS.Spacing.sm + 2)
-        .frame(minHeight: DS.Icon.tapTarget)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(entry.isTask ? L10n.t("عليك", "Yours to do") : L10n.t("بانتظار غيرك", "With someone else"))
-    }
-}
-
-/// الصفّ رابطاً: الطلب يفتح «الوارد» على مربّع تفاصيله، والرسالة تفتح «رسائل الأعضاء»
-struct AdminTodayEntryLink: View {
-    let entry: AdminTodayEntry
-
-    var body: some View {
-        NavigationLink { AdminLazyPage { Self.page(entry.target) } } label: {
-            AdminTodayEntryRow(entry: entry)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private static func page(_ target: AdminTodayEntry.Target) -> AnyView {
-        switch target {
-        case .inbox(let id): return AnyView(AdminAllRequestsView(focusId: id).adminArea(.inbox))
-        case .messages:      return AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox))
-        }
-    }
-}
-
-/// «كل شيء متابَع» — حين لا شيء ينتظر
-struct AdminTodayCaughtUpRow: View {
-    var body: some View {
-        HStack(spacing: DS.Spacing.md) {
-            AdminIconSquare(symbol: "checkmark.seal.fill", tint: DS.Color.success)
-            Text(L10n.t("لا توجد طلبات بانتظار قرارك", "No requests await your decision"))
-                .dsFont(.subtitle)
-                .foregroundColor(DS.Color.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, DS.Spacing.sm)
-    }
-}
+// MARK: - «المنجز اليوم»
 
 /// مهمة أُنجزت اليوم (سطر «المنجز اليوم» آخر «الوارد»)
 struct AdminTodayDoneRow: View {
