@@ -549,6 +549,8 @@ struct ProjectDetailView: View {
     @State private var showDeleteAlert = false
     @State private var showEditSheet = false
     @State private var didEdit = false
+    /// ارتفاع الرأس — المربّع بالمنتصف على قدر محتواه (`dsPanelContentHeight`)
+    @State private var headerH: CGFloat = 0
     
     private var isOwnerOrAdmin: Bool {
         guard let user = authVM.currentUser else { return false }
@@ -582,6 +584,7 @@ struct ProjectDetailView: View {
                     DSHeaderButton(symbol: "pencil", label: L10n.t("تعديل", "Edit")) { showEditSheet = true }
                 }
             }
+            .readHeight($headerH)
 
             ZStack {
                 DS.Color.background.ignoresSafeArea()
@@ -651,7 +654,9 @@ struct ProjectDetailView: View {
                         }
                     }
                     .padding(DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.xxxl)
+                    .padding(.bottom, DS.Spacing.md)
+                    // المربّع بالمنتصف يحتضن محتواه (والباقي يتمرّر داخله)
+                    .dsPanelContentHeight(extra: headerH)
                 }
             }
         }
@@ -691,9 +696,10 @@ struct ProjectDetailView: View {
     // الصورة صورة المشروع — وبلا صورة يظهر الشعار نفسه في وسطها. تحته الاسم وصاحب المشروع وأزرار الاتصال.
     private var projectHeader: some View {
         VStack(spacing: 0) {
+            // بعرض المربّع وارتفاع معتدل (طلب المالك ٢٠٢٦-١٠-٢٣): الاسم والنبذة تظهر بلا تمرير كثير
             Color.clear
-                .aspectRatio(ProjectHeroImage.aspect, contentMode: .fit)
                 .frame(maxWidth: .infinity)
+                .frame(height: heroHeight)
                 .overlay { ProjectHeroImage(project: project, markSize: logoSize) }
                 .clipShape(ProjectCoverArc(depth: arcDepth))
                 .overlay(alignment: .bottom) {
@@ -733,6 +739,8 @@ struct ProjectDetailView: View {
     }
 
     private var logoSize: CGFloat { 84 }
+    /// ارتفاع صورة الرأس — معتدل (≈ ١٦:٩ بعرض المربّع، بحدّ أقصى)
+    private var heroHeight: CGFloat { isLandscape ? 160 : 190 }
     /// عمق القوس في منتصف حافة الصورة
     private var arcDepth: CGFloat { 22 }
     /// الشعار على الحافة فقط حين تكون الصورة الكبيرة صورة المشروع (وإلا فالشعار في وسطها)

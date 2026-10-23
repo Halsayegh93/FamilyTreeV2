@@ -101,14 +101,14 @@ struct FamilyArchiveView: View {
                                 // زر قائمة ظاهر — كـ overlay على الزر نفسه حتى ما
                                 // يتعارض ضغطه مع ضغط البطاقة. الإدارة: تحكّم كامل،
                                 // غيرهم: إبلاغ فقط (لغير عناصرهم).
-                                .overlay(alignment: .topTrailing) {
+                                .overlay(alignment: Alignment(horizontal: .trailing, vertical: .archiveCardTop)) {
                                     if !selectionMode && menuHasActions(for: item) {
                                         Menu {
                                             archiveActionsMenu(for: item)
                                         } label: {
                                             cardMenuBadge
                                         }
-                                        .padding(DS.Spacing.md)   // داخل زاوية المعاينة
+                                        .padding(DS.Spacing.sm)   // داخل زاوية المعاينة
                                     }
                                 }
                                 .contextMenu {
@@ -175,8 +175,9 @@ struct FamilyArchiveView: View {
         .transaction { t in
             if showingUpload { t.disablesAnimations = true }
         }
-        // صفحة العنصر — المربّع الطويل الموحّد من الأسفل (بدل ورقة النظام)
-        .dsTallBox(item: $selectedItem) { item in
+        // تفاصيل العنصر — مربّع كبير بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٣، مثل تفاصيل العضو):
+        // يُغلق بـ× أو بالضغط خارجه
+        .dsCenterBox(item: $selectedItem, onBackgroundTap: { selectedItem = nil }) { item in
             ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item))
         }
         .fullScreenCover(item: $itemToEdit) { item in
@@ -492,11 +493,45 @@ struct FamilyArchiveView: View {
             .dsSubtleShadow()
     }
 
-    // MARK: - بطاقة المكتبة (طلب المالك ٢٠٢٦-١٠-٢٢ — بنمط بطاقة المشاريع)
+    // MARK: - بطاقة المكتبة (طلب المالك ٢٠٢٦-١٠-٢٢/٢٣ — مربّعة صغيرة بنمط بطاقة المشاريع)
     //
-    // معاينة الوثيقة كبيرة في الأعلى بزوايا ناعمة (ختم السنة وشارة PDF عليها)، وتحتها العنوان في
-    // الوسط وسطر التصنيف — بلا اسم من أضافها (يظهر داخل صفحة العنصر فقط).
+    // التصنيف «لسان» ملف بلون المكتبة فوق حافة البطاقة، ومعاينة الوثيقة كبيرة بزوايا ناعمة (ختم السنة
+    // البارز وشارة PDF عليها)، وتحتها العنوان في الوسط — بلا اسم من أضافها (يظهر داخل صفحة العنصر فقط).
     private func archiveCard(_ item: ArchiveItem) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            categoryTab(for: item)
+            archiveCardBody(item)
+                // زرّ القائمة يحاذي أعلى البطاقة نفسها لا أعلى اللسان
+                .alignmentGuide(.archiveCardTop) { $0[.top] }
+        }
+    }
+
+    /// لسان التصنيف — شكل لسان ملف بزاويتين علويّتين مدوّرتين، ملتصق بحافة البطاقة العليا (طلب المالك ٢٠٢٦-١٠-٢٣)
+    private func categoryTab(for item: ArchiveItem) -> some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            // رمز التصنيف قد يكون القبر المخصّص — `dsSymbol` يرسمه
+            Image(dsSymbol: item.categoryIcon)
+                .dsGlyph(DS.Glyph.micro)
+            Text(item.categoryDisplayName)
+                .dsFont(.micro)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .foregroundColor(DS.Color.textOnPrimary)
+        .padding(.horizontal, DS.Spacing.sm)
+        .frame(minHeight: DS.Icon.section)   // يطول مع «حجم النص» بدل قصّ الاسم
+        .background(
+            UnevenCorners(radius: DS.Radius.sm, topLeading: true, topTrailing: true,
+                          bottomLeading: false, bottomTrailing: false)
+                .fill(AppSection.library.fill)
+        )
+        .frame(maxWidth: (cardSide - DS.Spacing.md * 2), alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.leading, DS.Spacing.md)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func archiveCardBody(_ item: ArchiveItem) -> some View {
         let accent = item.categoryColor
         let inner = cardSide - DS.Spacing.sm * 2
         let imageRadius = max(DS.Card.radius - DS.Spacing.sm, DS.Radius.sm)
@@ -504,7 +539,7 @@ struct FamilyArchiveView: View {
         return VStack(spacing: DS.Spacing.sm) {
             // الوثيقة + ختم السنة
             preview(for: item, accent: accent)
-                .frame(width: inner, height: inner * 0.72)
+                .frame(width: inner, height: inner * 0.75)   // أكبر ما يمكن مع بقاء البطاقة مربّعة
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: imageRadius, style: .continuous))
                 .overlay(
@@ -518,28 +553,17 @@ struct FamilyArchiveView: View {
                         .padding(DS.Spacing.xs)
                 }
 
-            VStack(spacing: DS.Spacing.xxs) {
-                Text(item.title)
-                    .dsFont(.rowTitleCompact)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2, reservesSpace: true)
-                    .multilineTextAlignment(.center)
-
-                // سطر التصنيف — رمزه قد يكون القبر المخصّص (`dsSymbol`)
-                HStack(spacing: DS.Spacing.xxs) {
-                    Image(dsSymbol: item.categoryIcon)
-                        .dsGlyph(DS.Glyph.micro)
-                    Text(item.categoryDisplayName)
-                        .dsFont(.micro)
-                        .lineLimit(1)
-                }
-                .foregroundColor(accent)
-            }
-            .frame(maxWidth: .infinity)
+            Text(item.title)
+                .dsFont(.rowTitleCompact)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(2, reservesSpace: true)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
             .padding(.horizontal, DS.Spacing.xxs)
             .padding(.bottom, DS.Spacing.xxs)
         }
-        .frame(width: cardSide - DS.Spacing.sm * 2)
+        // شبه مربّعة صغيرة — بطاقتان في الصف (طلب المالك ٢٠٢٦-١٠-٢٣)؛ تطول فقط مع «حجم النص»
+        .frame(width: inner)
         // البطاقة الواحدة (`.dsCard`) + إطار الحالة (بانتظار/مرفوض/مخفي) فوقها
         .dsCard(padding: DS.Spacing.sm)
         .overlay(
@@ -554,7 +578,7 @@ struct FamilyArchiveView: View {
     @ViewBuilder
     private func yearStamp(for item: ArchiveItem, accent: Color) -> some View {
         if let year = item.year {
-            ArchiveYearStamp(year: year, accent: accent, filled: true)
+            ArchiveYearStamp(year: year, accent: accent, filled: true, prominent: true)
                 .padding(.horizontal, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xsm)
         }
@@ -1075,6 +1099,11 @@ struct ArchiveItemViewer: View {
     @State private var downloading = false
     /// تكبير الصورة بضغطتين
     @State private var zoomed = false
+    /// ارتفاع الرأس — المربّع بالمنتصف على قدر محتواه (`dsPanelContentHeight`)
+    @State private var headerH: CGFloat = 0
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// ارتفاع المعاينة — معتدل (طلب المالك ٢٠٢٦-١٠-٢٣) حتى تظهر بطاقة الفهرسة بلا تمرير كثير
+    private var previewHeight: CGFloat { vSizeClass == .compact ? 150 : 230 }
 
     private var accent: Color { item.categoryColor }
 
@@ -1093,17 +1122,24 @@ struct ArchiveItemViewer: View {
                 }
                 .disabled(downloading)
             }
+            .readHeight($headerH)
 
-            VStack(spacing: DS.Spacing.md) {
-                documentSheet
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.top, DS.Spacing.md)
+            // داخل المربّع بالمنتصف: معاينة بارتفاع معتدل ثم بطاقة الفهرسة — يتمرّر إن طال (نص كبير/أفقي)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: DS.Spacing.md) {
+                    documentSheet
+                        .frame(maxWidth: .infinity)
+                        .frame(height: previewHeight)
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.top, DS.Spacing.md)
 
-                indexCard
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.md)
+                    indexCard
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .padding(.bottom, DS.Spacing.md)
+                }
+                .dsPanelContentHeight(extra: headerH)
             }
+            .scrollDisabled(zoomed)
             .frame(maxHeight: .infinity)
             .background(
                 LinearGradient(colors: [accent.opacity(DS.Opacity.tintFill), DS.Color.background],
@@ -1394,18 +1430,28 @@ struct ArchiveCategoryChips: View {
 // MARK: - قطع «الملف الأرشيفي» المشتركة (البطاقة، صفحة العنصر، مربّع الإضافة)
 
 /// ختم السنة — مائل قليلاً بحدود متقطّعة مثل أختام الأرشيف
+/// أعلى بطاقة المكتبة نفسها (تحت لسان التصنيف) — يحاذي زرّ القائمة بها
+extension VerticalAlignment {
+    private enum ArchiveCardTop: AlignmentID {
+        static func defaultValue(in d: ViewDimensions) -> CGFloat { d[.top] }
+    }
+    static let archiveCardTop = VerticalAlignment(ArchiveCardTop.self)
+}
+
 struct ArchiveYearStamp: View {
     let year: Int
     let accent: Color
     /// على الصورة: بسطح يفصله عنها
     var filled: Bool = false
+    /// على بطاقة المكتبة: رقم أكبر وأثقل يُقرأ من بعيد (طلب المالك ٢٠٢٦-١٠-٢٣)
+    var prominent: Bool = false
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: DS.Icon.discRadiusSmall / 2, style: .continuous)
-        Text(String(year))
-            .dsFont(.badge)
+        Text(verbatim: String(year))
+            .dsFont(prominent ? .statValue : .badge)
             .foregroundColor(accent)
-            .padding(.horizontal, DS.Spacing.xsm)
+            .padding(.horizontal, prominent ? DS.Spacing.sm : DS.Spacing.xsm)
             .padding(.vertical, DS.Spacing.xxs)
             .background(shape.fill(filled ? DS.Color.surface : .clear))
             .overlay(shape.strokeBorder(accent.opacity(DS.Opacity.selectedStroke), style: DSAddChipLabel.dash))

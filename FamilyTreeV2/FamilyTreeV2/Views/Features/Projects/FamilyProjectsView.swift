@@ -35,8 +35,11 @@ struct FamilyProjectsView: View {
         if isLandscape {
             return [GridItem(.adaptive(minimum: DS.Landscape.gridCardMinWidth, maximum: .infinity), spacing: DS.Spacing.md, alignment: .top)]
         }
-        // عمود واحد: صورة المشروع بعرض الشاشة هي بطلة البطاقة (طلب المالك ٢٠٢٦-١٠-٢٢)
-        return [GridItem(.flexible(), spacing: DS.Spacing.md)]
+        // بطاقتان صغيرتان في الصف (طلب المالك ٢٠٢٦-١٠-٢٣ «مربعين يم بعض»)
+        return [
+            GridItem(.flexible(), spacing: DS.Spacing.md, alignment: .top),
+            GridItem(.flexible(), spacing: DS.Spacing.md, alignment: .top)
+        ]
     }
 
     enum ProjectsFilter: Hashable {
@@ -132,8 +135,9 @@ struct FamilyProjectsView: View {
                 "Your project has been submitted for review. It will appear after admin approval."
             ))
         }
-        // صفحة المشروع — المربّع الطويل الموحّد من الأسفل (بدل ورقة النظام)
-        .dsTallBox(item: $selectedProject) { project in
+        // تفاصيل المشروع — مربّع كبير بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٣، مثل تفاصيل العضو):
+        // يتمرّر داخله، يُغلق بـ× أو بالضغط خارجه
+        .dsCenterBox(item: $selectedProject, onBackgroundTap: { selectedProject = nil }) { project in
             ProjectDetailView(project: project)
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)
@@ -257,7 +261,7 @@ struct FamilyProjectsView: View {
                                 } label: {
                                     cardMenuBadge
                                 }
-                                .padding(DS.Spacing.md)   // داخل زاوية الصورة
+                                .padding(DS.Spacing.xsm)   // داخل زاوية الصورة
                             }
                         }
                         .contextMenu {
@@ -504,44 +508,37 @@ struct FamilyProjectsView: View {
     }
 }
 
-// MARK: - بطاقة المشروع في القائمة (طلب المالك ٢٠٢٦-١٠-٢٢)
-/// صورة المشروع كبيرة بعرض البطاقة (١٦:١٠)، وتحتها اسم المشروع في الوسط وسطر وصف (سطران بحدّ أقصى) —
-/// بلا اسم صاحب المشروع وبلا أيقونات الحسابات (تبقى في صفحة المشروع).
+// MARK: - بطاقة المشروع في القائمة (طلب المالك ٢٠٢٦-١٠-٢٢/٢٣)
+/// بطاقة صغيرة شبه مربّعة (بطاقتان في الصف): صورة المشروع تملأ أعلاها بزوايا ناعمة، وتحتها اسم المشروع
+/// في الوسط فقط — بلا اسم صاحب المشروع وبلا أيقونات الحسابات (تبقى في صفحة المشروع).
 struct ProjectGridCard: View {
     let project: Project
 
+    /// صورة البطاقة الصغيرة ٤:٣ — أكبر ما يمكن مع بقاء البطاقة شبه مربّعة
+    static let imageAspect: CGFloat = 4.0 / 3.0
+
     private var isPending: Bool { project.approvalStatus == "pending" }
-    private var imageRadius: CGFloat { max(DS.Card.radius - DS.Spacing.sm, DS.Radius.sm) }
+    private var imageRadius: CGFloat { max(DS.Card.radius - DS.Spacing.xs, DS.Radius.sm) }
 
     var body: some View {
-        VStack(spacing: DS.Spacing.sm) {
+        VStack(spacing: DS.Spacing.xsm) {
             Color.clear
-                .aspectRatio(ProjectHeroImage.aspect, contentMode: .fit)
+                .aspectRatio(Self.imageAspect, contentMode: .fit)
                 .frame(maxWidth: .infinity)
-                .overlay { ProjectHeroImage(project: project, markSize: DS.Icon.state + DS.Spacing.lg) }
+                .overlay { ProjectHeroImage(project: project, markSize: DS.Icon.state) }
                 .clipShape(RoundedRectangle(cornerRadius: imageRadius, style: .continuous))
 
-            VStack(spacing: DS.Spacing.xxs) {
-                Text(project.title)
-                    .dsFont(.rowTitle)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-
-                if let desc = project.description?.trimmingCharacters(in: .whitespacesAndNewlines), !desc.isEmpty {
-                    Text(desc)
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.bottom, DS.Spacing.xs)
+            Text(project.title)
+                .dsFont(.rowTitleCompact)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(2, reservesSpace: true)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, DS.Spacing.xxs)
+                .padding(.bottom, DS.Spacing.xxs)
         }
         // البطاقة الواحدة (`.dsCard`) + إطار «بانتظار» فوقها
-        .dsCard(padding: DS.Spacing.sm)
+        .dsCard(padding: DS.Spacing.xs)
         .overlay(
             RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
                 .strokeBorder(isPending ? DS.Color.warning.opacity(DS.Opacity.tintStroke) : .clear,
@@ -566,7 +563,7 @@ struct ProjectGridCard: View {
         .foregroundColor(DS.Color.textOnPrimary)
         .padding(.horizontal, DS.Spacing.xsm).padding(.vertical, DS.Spacing.xxs)
         .background(Capsule().fill(color))
-        .padding(DS.Spacing.md)
+        .padding(DS.Spacing.sm)
     }
 }
 
