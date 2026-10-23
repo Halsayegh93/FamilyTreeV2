@@ -265,39 +265,6 @@ enum DS {
         static let tileProjectsDeep = goldDeep
         static let tileContactDeep  = seaDeep
 
-        /// مربّعات الرئيسية «د — من الهوية» (اختيار المالك ٢٠٢٦-١٠-٢٢): كحلي #172536 وذهبي #B89A5A وكريمي #F2EBDD.
-        /// للرئيسية وحدها — صفحات المكتبة والمشاريع والتواصل تبقى على `tile*` أعلاه.
-        /// الداكن: نفس العائلة، والنص فوق كل سطح ≥ ٤٫٥:١ (الأرقام بجانب كل لون).
-        enum HomeTiles {
-            private static let navy  = SwiftUI.Color(hex: "#172536")
-            private static let cream = SwiftUI.Color(hex: "#F2EBDD")
-            /// حلقة الأيقونة وإطار المكتبة — ذهبي الهوية
-            static let gold = SwiftUI.Color(hex: "#B89A5A")
-
-            /// الشجرة: كحلي / كريمي ١٣٫٧:١ — الداكن كحلي أفتح قليلاً ليبان فوق الأسود (#1F3249، ١١٫٥:١)
-            static let tree = DSHomeTileStyle(
-                fill: .adaptive(light: "#172536", dark: "#1F3249"), ink: cream, ring: gold)
-            /// الأخبار: ذهبي غامق / أبيض ٥٫١:١ (الوضعان)
-            static let news = DSHomeTileStyle(
-                fill: SwiftUI.Color(hex: "#8A6A23"), ink: .white, ring: gold)
-            /// الديوانيات: أزرق / أبيض ٦٫١:١ (الوضعان)
-            static let diwaniya = DSHomeTileStyle(
-                fill: SwiftUI.Color(hex: "#2D63A8"), ink: .white, ring: gold)
-            /// المشاريع: ذهبي / كحلي ٥٫٨:١ (الوضعان) — الحلقة كحلية لأن الذهبي لا يبان فوق الذهبي
-            static let projects = DSHomeTileStyle(
-                fill: gold, ink: navy, ring: navy.opacity(0.55), titleShadow: .clear)
-            /// التواصل: كحلي أزرق / أبيض ٩٫٧:١ — الداكن #2A4F7F (٨٫٣:١) حتى لا يشبه مربّع الشجرة
-            static let contact = DSHomeTileStyle(
-                fill: .adaptive(light: "#24456F", dark: "#2A4F7F"), ink: .white, ring: gold)
-            /// المكتبة: كريمي بإطار ذهبي ١٫٥ / كحلي ١٣٫٧:١ — الداكن كريمي محروق #362F22 بنص كريمي (١١:١)
-            static let library = DSHomeTileStyle(
-                fill: .adaptive(light: "#F2EBDD", dark: "#362F22"),
-                ink: .adaptive(light: "#172536", dark: "#F2EBDD"),
-                ring: gold, border: gold, borderWidth: 1.5,
-                // ظلّ الاسم للنص الفاتح فقط (الداكن) — النص الكحلي بلا ظلّ
-                titleShadow: .adaptive(light: "#00000000", dark: "#59000000"))
-        }
-
         // Glass Effect Helpers — adaptive for light/dark mode
         static func glassBright(_ cs: ColorScheme) -> SwiftUI.Color {
             cs == .dark ? SwiftUI.Color.white.opacity(0.12) : SwiftUI.Color.white.opacity(0.8)
@@ -858,21 +825,6 @@ extension Color {
             traits.userInterfaceStyle == .dark ? UIColor(Color(hex: dark)) : UIColor(Color(hex: light))
         })
     }
-}
-
-/// ألوان مربّع واحد في الرئيسية («د — من الهوية») — القيم في `DS.Color.HomeTiles`
-struct DSHomeTileStyle {
-    /// سطح المربّع (مصمت بلا تدرّج — الهوية)
-    let fill: Color
-    /// اسم المربّع
-    let ink: Color
-    /// الحلقة الرفيعة حول الأيقونة
-    let ring: Color
-    /// إطار المربّع — nil = الإطار الموحّد `tileStroke`
-    var border: Color? = nil
-    var borderWidth: CGFloat = DS.Border.width
-    /// ظلّ الاسم — للنص الفاتح فوق اللون، شفاف فوق السطح الفاتح
-    var titleShadow: Color = Color.black.opacity(0.35)
 }
 
 // MARK: - View Extensions

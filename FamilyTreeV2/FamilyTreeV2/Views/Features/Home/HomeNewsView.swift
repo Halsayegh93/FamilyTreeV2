@@ -436,7 +436,6 @@ struct HomeNewsView: View {
                 icon: "tree.fill",
                 color: DS.Color.tileTree,
                 deep: DS.Color.tileTreeDeep,
-                style: DS.Color.HomeTiles.tree,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -449,7 +448,6 @@ struct HomeNewsView: View {
                     icon: AppSection.diwaniyas.symbol,   // «مجلس» الموحّد
                     color: DS.Color.tileDiwaniya,
                     deep: DS.Color.tileDiwaniyaDeep,
-                    style: DS.Color.HomeTiles.diwaniya,
                     imageURL: nil,
                     count: nil,
                     height: tileHeight,
@@ -479,7 +477,6 @@ struct HomeNewsView: View {
                 icon: "books.vertical.fill",
                 color: AppSection.HomeTile.library.fill,
                 deep: AppSection.HomeTile.library.deep,
-                style: DS.Color.HomeTiles.library,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -493,7 +490,6 @@ struct HomeNewsView: View {
                     icon: "storefront.fill",
                     color: AppSection.HomeTile.projects.fill,
                     deep: AppSection.HomeTile.projects.deep,
-                    style: DS.Color.HomeTiles.projects,
                     imageURL: projectImageURL,
                     count: projectsVM.projects.count,
                     height: tileHeight,
@@ -507,7 +503,6 @@ struct HomeNewsView: View {
                 icon: "envelope.fill",
                 color: DS.Color.tileContact,
                 deep: DS.Color.tileContactDeep,
-                style: DS.Color.HomeTiles.contact,
                 imageURL: nil,
                 count: nil,
                 height: tileHeight,
@@ -523,8 +518,6 @@ struct HomeNewsView: View {
         icon: String,
         color: Color,
         deep: Color,
-        /// ألوان «د — من الهوية» (سطح مصمت، اسم، حلقة الأيقونة، إطار) — «الهادئ» يبقى على `color`/`deep`
-        style: DSHomeTileStyle,
         imageURL: String?,
         count: Int?,
         height: CGFloat? = nil,
@@ -534,18 +527,16 @@ struct HomeNewsView: View {
         isNew: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        // «د»: السطح مصمت بلون المربّع واسمه بحبره (بلا غلالة) — صورة المشروع تبقى بالغلالة والاسم الأبيض
-        let styled = !DS.Theme.isCalm && imageURL == nil
-        return Button(action: {
+        Button(action: {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             action()
         }) {
             ZStack(alignment: .bottomLeading) {
-                tileBackground(color: color, deep: deep, flat: styled ? style.fill : nil,
-                               imageURL: imageURL, icon: icon, badge: (count ?? 0) > 0)
+                tileBackground(color: color, deep: deep, imageURL: imageURL, icon: icon,
+                               badge: (count ?? 0) > 0)
 
-                // تعتيم أسفل المربّع للاسم الأبيض — «الهادئ الفاتح» و«د» بلا تعتيم
-                if !DS.Theme.isCalm && !styled {
+                // تعتيم أسفل المربّع للاسم الأبيض — «الهادئ الفاتح» بلا تعتيم (الاسم داكن فوق اللون الخفيف)
+                if !DS.Theme.isCalm {
                 LinearGradient(
                     stops: [
                         .init(color: DS.Color.overlayFillSubtle, location: 0),
@@ -565,10 +556,7 @@ struct HomeNewsView: View {
                     // ضلع المجسّم يتبع ارتفاع المربّع: أكبر في الصفّ الأول، ويترك سطرين للاسم
                     TrialCenteredTile(art: centerArt, title: title, count: count, scale: layout.scale,
                                       artSide: 46 * layout.scale,   // حجم واحد لكل المجسّمات في المربّعات الخمسة (طلب المالك ٢٠٢٦-١٠-٠٧)
-                                      stagger: Double(cascade), entrance: !HomeTileEntrance.played,
-                                      titleColor: styled ? style.ink : DS.Color.tileTitle,
-                                      titleShadow: styled ? style.titleShadow : DS.Color.tileTitleShadow,
-                                      ring: styled ? style.ring : nil)
+                                      stagger: Double(cascade), entrance: !HomeTileEntrance.played)
                         .onAppear {
                             // الظهور الأول مرة لكل تشغيل — بعده المجسّمات تظهر مباشرة
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { HomeTileEntrance.played = true }
@@ -621,8 +609,7 @@ struct HomeNewsView: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(styled ? (style.border ?? DS.Color.tileStroke) : DS.Color.tileStroke,
-                                  lineWidth: styled ? style.borderWidth : DS.Border.width)
+                    .strokeBorder(DS.Color.tileStroke, lineWidth: DS.Border.width)
             )
             // الظلّ من شكل المربّع تحته — نفس الظلّ (المربّع مقصوص معتم)، يُرسم مرة بدل كل إطار (فحص «اللاق»)
             .dsCardShadow(in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
@@ -644,25 +631,22 @@ struct HomeNewsView: View {
 
     /// خلفية المربّع — صورة من رابط أو gradient بلون الفئة مع زخارف.
     @ViewBuilder
-    private func tileBackground(color: Color, deep: Color, flat: Color?, imageURL: String?, icon: String,
+    private func tileBackground(color: Color, deep: Color, imageURL: String?, icon: String,
                                 badge: Bool = false) -> some View {
         if let urlStr = imageURL, let url = URL(string: urlStr) {
             CachedAsyncImage(url: url) { img in
                 img.resizable().scaledToFill()
             } placeholder: {
-                gradientBackground(color: color, deep: deep, flat: flat, icon: icon, badge: badge)
+                gradientBackground(color: color, deep: deep, icon: icon, badge: badge)
             }
         } else {
-            gradientBackground(color: color, deep: deep, flat: flat, icon: icon, badge: badge)
+            gradientBackground(color: color, deep: deep, icon: icon, badge: badge)
         }
     }
 
-    /// `flat` = سطح «د» المصمت (بدل التدرّج)
-    private func gradientBackground(color: Color, deep: Color, flat: Color?, icon: String, badge: Bool = false) -> some View {
+    private func gradientBackground(color: Color, deep: Color, icon: String, badge: Bool = false) -> some View {
         ZStack {
-            if let flat {
-                flat
-            } else if DS.Theme.isCalm {
+            if DS.Theme.isCalm {
                 // «الهادئ الفاتح»: لون القسم الخفيف بدل التدرّج الغامق — المجسّم والنسخة الشفافة كما هما
                 color.dsCalmTint
             } else {
