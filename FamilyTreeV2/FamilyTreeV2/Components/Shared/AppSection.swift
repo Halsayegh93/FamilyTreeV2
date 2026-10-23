@@ -215,8 +215,9 @@ extension AppSection {
         /// أيقونات ونصوص بلون المربّع — مقروء في الوضعين
         var ink: Color {
             switch self {
-            case .library:  return DS.Color.sadu
-            case .projects: return DS.Color.accent
+            // أزرق المكتبة وفيروزي المشاريع (٢٠٢٦-١٠-٢٣ «ب») — أفتح في الداكن ليبقى مقروءاً
+            case .library:  return Color.adaptive(light: "#3F5FA8", dark: "#9DB4E8")
+            case .projects: return Color.adaptive(light: "#1F7A8C", dark: "#6FC3D1")
             case .news:     return DS.Color.primary
             }
         }

@@ -255,15 +255,15 @@ enum DS {
         // ألوان مربّعات الرئيسية كما كانت في النسخة ٤٤ (طلب المالك ٢٠٢٦-١٠-٢٣ «شوف الالوان من اصدار رقم ٤٤»)
         static let tileTree     = SwiftUI.Color(hex: "#2E6B4F")  // أخضر غابي
         static let tileDiwaniya = SwiftUI.Color(hex: "#1F4E79")  // كحلي
-        static let tileLibrary  = SwiftUI.Color(hex: "#7A2E3A")  // عنّابي
-        static let tileProjects = SwiftUI.Color(hex: "#A07A2C")  // ذهبي
+        static let tileLibrary  = SwiftUI.Color(hex: "#3F5FA8")  // أزرق ملكي (طلب المالك ٢٠٢٦-١٠-٢٣ «ب»)
+        static let tileProjects = SwiftUI.Color(hex: "#1F7A8C")  // فيروزي أزرق (طلب المالك ٢٠٢٦-١٠-٢٣ «ب»)
         static let tileContact  = SwiftUI.Color(hex: "#3D6670")  // رمادي مزرق
 
         // الطرف الغامق من تدرّج كل مربّع
         static let tileTreeDeep     = SwiftUI.Color(hex: "#1F4F39")
         static let tileDiwaniyaDeep = SwiftUI.Color(hex: "#14365A")
-        static let tileLibraryDeep  = SwiftUI.Color(hex: "#561F29")
-        static let tileProjectsDeep = SwiftUI.Color(hex: "#7A5B1C")
+        static let tileLibraryDeep  = SwiftUI.Color(hex: "#2B4580")
+        static let tileProjectsDeep = SwiftUI.Color(hex: "#145866")
         static let tileContactDeep  = SwiftUI.Color(hex: "#284850")
 
         // Glass Effect Helpers — adaptive for light/dark mode
