@@ -1459,6 +1459,7 @@ private struct DSCenterBoxItemModifier<Item: Identifiable, Box: View>: ViewModif
     @Binding var item: Item?
     var onDismiss: (() -> Void)?
     var onBackgroundTap: (() -> Void)?
+    var dim: Double = DSCenterPanelDim.standard
     let box: (Item) -> Box
     /// لون قسم الواجهة التي فتحت المربّع — يُعاد وضعه داخل المربّع
     @Environment(\.dsSection) private var section
@@ -1469,7 +1470,7 @@ private struct DSCenterBoxItemModifier<Item: Identifiable, Box: View>: ViewModif
             // حركة المجسّمات خلف المربّع المفتوح تسكن (كما في `dsCenterBox(isPresented:)`)
             .environment(\.ftAnimationsPaused, pausedAbove || item != nil)
             .fullScreenCover(item: $item, onDismiss: onDismiss) { value in
-                DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true) { box(value) }
+                DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true, dim: dim) { box(value) }
                     .dsSection(section ?? AppSection.current)
                     .background(ClearPresentationBackground())
             }
@@ -1491,9 +1492,10 @@ extension View {
     func dsCenterBox<Item: Identifiable, Box: View>(item: Binding<Item?>,
                                                     onDismiss: (() -> Void)? = nil,
                                                     onBackgroundTap: (() -> Void)? = nil,
+                                                    dim: Double = DSCenterPanelDim.standard,
                                                     @ViewBuilder content: @escaping (Item) -> Box) -> some View {
         modifier(DSCenterBoxItemModifier(item: item, onDismiss: onDismiss,
-                                         onBackgroundTap: onBackgroundTap, box: content))
+                                         onBackgroundTap: onBackgroundTap, dim: dim, box: content))
     }
 }
 

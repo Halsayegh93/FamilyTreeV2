@@ -137,7 +137,9 @@ struct FamilyProjectsView: View {
         }
         // تفاصيل المشروع — مربّع كبير بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٣، مثل تفاصيل العضو):
         // يتمرّر داخله، يُغلق بـ× أو بالضغط خارجه
-        .dsCenterBox(item: $selectedProject, onBackgroundTap: { selectedProject = nil }) { project in
+        // المربّع صلب (أبيض/سطح الداكن) وما خلفه أغمق (طلب المالك ٢٠٢٦-١٠-٢٣)
+        .dsCenterBox(item: $selectedProject, onBackgroundTap: { selectedProject = nil },
+                     dim: DSCenterPanelDim.strong) { project in
             ProjectDetailView(project: project)
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)

@@ -593,7 +593,8 @@ struct ProjectDetailView: View {
             .readHeight($headerH)
 
             ZStack {
-                DS.Color.background.ignoresSafeArea()
+                // سطح صلب — أبيض في الفاتح وسطح الداكن في الداكن؛ لا يظهر ما خلف المربّع (طلب المالك ٢٠٢٦-١٠-٢٣)
+                DS.Color.surface.ignoresSafeArea()
                 
                 ScrollView(showsIndicators: false) {
                     // الأقسام تدخل تباعاً بالترتيب الظاهر (dsStaggerIn): البطاقة ← النبذة ← الصور ← الحذف — «تقليل الحركة»: تلاشٍ فقط

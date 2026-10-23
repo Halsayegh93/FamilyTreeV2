@@ -177,7 +177,9 @@ struct FamilyArchiveView: View {
         }
         // تفاصيل العنصر — مربّع كبير بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٣، مثل تفاصيل العضو):
         // يُغلق بـ× أو بالضغط خارجه
-        .dsCenterBox(item: $selectedItem, onBackgroundTap: { selectedItem = nil }) { item in
+        // المربّع صلب (أبيض/سطح الداكن) وما خلفه أغمق (طلب المالك ٢٠٢٦-١٠-٢٣)
+        .dsCenterBox(item: $selectedItem, onBackgroundTap: { selectedItem = nil },
+                     dim: DSCenterPanelDim.strong) { item in
             ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item))
         }
         .fullScreenCover(item: $itemToEdit) { item in
@@ -1140,11 +1142,8 @@ struct ArchiveItemViewer: View {
                 .dsPanelContentHeight(extra: headerH)
             }
             .frame(maxHeight: .infinity)
-            .background(
-                LinearGradient(colors: [accent.opacity(DS.Opacity.tintFill), DS.Color.background],
-                               startPoint: .top, endPoint: .center)
-                .ignoresSafeArea()
-            )
+            // سطح صلب — لا يظهر ما خلفه ولا لون القسم (اللون في الرأس والتصنيف والأزرار فقط — طلب المالك ٢٠٢٦-١٠-٢٣)
+            .background(DS.Color.surface.ignoresSafeArea())
         }
         .fullScreenCover(isPresented: $showFullImage) {
             ProjectPhotoViewer(urls: [item.fileUrl], startIndex: 0, section: .library)
@@ -1208,7 +1207,7 @@ struct ArchiveItemViewer: View {
                 Spacer(minLength: 0)
 
                 if let year = item.year {
-                    ArchiveYearStamp(year: year, accent: accent)
+                    ArchiveYearStamp(year: year, accent: accent, large: true)
                 }
             }
 
@@ -1452,14 +1451,16 @@ struct ArchiveYearStamp: View {
     var filled: Bool = false
     /// على بطاقة المكتبة: رقم أكبر وأثقل يُقرأ من بعيد (طلب المالك ٢٠٢٦-١٠-٢٣)
     var prominent: Bool = false
+    /// في مربّع تفاصيل العنصر: أكبر من البطاقة — دور عنوان (`tabTitle` ٢٢) (طلب المالك ٢٠٢٦-١٠-٢٣)
+    var large: Bool = false
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: DS.Icon.discRadiusSmall / 2, style: .continuous)
         Text(verbatim: String(year))
-            .dsFont(prominent ? .statValue : .badge)
+            .dsFont(large ? .tabTitle : prominent ? .statValue : .badge)
             .foregroundColor(accent)
-            .padding(.horizontal, prominent ? DS.Spacing.sm : DS.Spacing.xsm)
-            .padding(.vertical, DS.Spacing.xxs)
+            .padding(.horizontal, large ? DS.Spacing.md : prominent ? DS.Spacing.sm : DS.Spacing.xsm)
+            .padding(.vertical, large ? DS.Spacing.xs : DS.Spacing.xxs)
             .background(shape.fill(filled ? DS.Color.surface : .clear))
             .overlay(shape.strokeBorder(accent.opacity(DS.Opacity.selectedStroke), style: DSAddChipLabel.dash))
             .rotationEffect(.degrees(-7))
