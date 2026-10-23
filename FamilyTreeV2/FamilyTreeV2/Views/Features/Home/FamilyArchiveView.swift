@@ -1097,8 +1097,8 @@ struct ArchiveItemViewer: View {
     @State private var showShare = false
     @State private var shareURL: URL? = nil
     @State private var downloading = false
-    /// تكبير الصورة بضغطتين
-    @State private var zoomed = false
+    /// الصورة مكبّرة بملء الشاشة (طلب المالك ٢٠٢٦-١٠-٢٣ «اضغط الصورة تكبر»)
+    @State private var showFullImage = false
     /// ارتفاع الرأس — المربّع بالمنتصف على قدر محتواه (`dsPanelContentHeight`)
     @State private var headerH: CGFloat = 0
     @Environment(\.verticalSizeClass) private var vSizeClass
@@ -1139,13 +1139,15 @@ struct ArchiveItemViewer: View {
                 }
                 .dsPanelContentHeight(extra: headerH)
             }
-            .scrollDisabled(zoomed)
             .frame(maxHeight: .infinity)
             .background(
                 LinearGradient(colors: [accent.opacity(DS.Opacity.tintFill), DS.Color.background],
                                startPoint: .top, endPoint: .center)
                 .ignoresSafeArea()
             )
+        }
+        .fullScreenCover(isPresented: $showFullImage) {
+            ProjectPhotoViewer(urls: [item.fileUrl], startIndex: 0, section: .library)
         }
         .sheet(isPresented: $showShare) {
             if let url = shareURL {
@@ -1156,22 +1158,25 @@ struct ArchiveItemViewer: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    /// الوثيقة مثبّتة على ورقة بظل — الصور تتكبّر بضغطتين
+    /// الوثيقة مثبّتة على ورقة بظل — الضغط على الصورة يفتحها مكبّرة بملء الشاشة (وفيها القرصة والضغطتان)
     private var documentSheet: some View {
         Group {
             if item.isPDF, let url = URL(string: item.fileUrl) {
                 ArchivePDFView(url: url)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
             } else if item.isImage, let url = URL(string: item.fileUrl) {
-                // تكبير بالقرصة أو بضغطتين + تحريك بالسحب (طلب المالك)
-                ZoomableImage(onZoomChange: { zoomed = $0 }) {
+                Button { showFullImage = true } label: {
                     CachedAsyncImage(url: url) { image in
                         image.resizable().scaledToFit()
                     } placeholder: {
                         DSPageLoader(section: .library)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(DSScaleButtonStyle())
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                .accessibilityLabel(L10n.t("تكبير الصورة", "Enlarge image"))
             } else {
                 // الحالة الموحّدة: مجسّم + عنوان + زرّ الحفظ
                 DSEmptyView(L10n.t("لا يمكن عرض هذا الملف داخل التطبيق", "This file can't be previewed in the app"),
@@ -1213,6 +1218,13 @@ struct ArchiveItemViewer: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            // تاريخ الإضافة تحت العنوان مباشرة (طلب المالك ٢٠٢٦-١٠-٢٣) — نفس عرض التواريخ في التطبيق
+            let added = DSDateText.display(item.createdAt)
+            Text(L10n.t("أُضيف: \(added)", "Added: \(added)"))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             if let desc = item.description, !desc.isEmpty {
                 Text(desc)
                     .dsFont(.callout)
@@ -1221,26 +1233,21 @@ struct ArchiveItemViewer: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Rectangle()
-                .fill(accent.opacity(DS.Opacity.tintStroke))
-                .frame(height: DS.Border.width)
+            // من أضاف العنصر — هنا فقط لا على البطاقة (طلب المالك ٢٠٢٦-١٠-٢٢)؛ التاريخ صار تحت العنوان
+            if let uploaderName, !uploaderName.isEmpty {
+                Rectangle()
+                    .fill(accent.opacity(DS.Opacity.tintStroke))
+                    .frame(height: DS.Border.width)
 
-            HStack(spacing: DS.Spacing.sm) {
-                if let uploaderName, !uploaderName.isEmpty {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "person.fill")
-                            .dsGlyph(DS.Glyph.micro)
-                        // من أضاف العنصر — هنا فقط لا على البطاقة (طلب المالك ٢٠٢٦-١٠-٢٢)
-                        Text(L10n.t("أضافه: \(uploaderName)", "Added by: \(uploaderName)"))
-                            .dsFont(.caption)
-                            .lineLimit(1)
-                    }
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "person.fill")
+                        .dsGlyph(DS.Glyph.micro)
+                    Text(L10n.t("أضافه: \(uploaderName)", "Added by: \(uploaderName)"))
+                        .dsFont(.caption)
+                        .lineLimit(1)
                 }
-                Spacer(minLength: 0)
-                Text(item.createdAt.formatted(date: .abbreviated, time: .omitted))
-                    .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
             }
-            .foregroundColor(DS.Color.textTertiary)
         }
         .padding(DS.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -218,10 +218,12 @@ struct ProjectPhotosCarousel: View {
 
 struct ProjectPhotoIndex: Identifiable { let id: Int }
 
-/// عارض بملء الشاشة بالسحب بين الصور
+/// عارض بملء الشاشة بالسحب بين الصور، والتكبير بالقرصة أو بضغطتين (يستعمله المشاريع والمكتبة)
 struct ProjectPhotoViewer: View {
     let urls: [String]
     let startIndex: Int
+    /// قسم مؤشّر التحميل — المشاريع، أو المكتبة حين يفتحه عارض الأرشيف
+    var section: AppSection = .projects
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
     @State private var zoomed = false
@@ -234,7 +236,7 @@ struct ProjectPhotoViewer: View {
                     ZoomableImage(onZoomChange: { zoomed = $0 }) {
                         CachedAsyncImage(url: URL(string: url)) { img in
                             img.resizable().scaledToFit()
-                        } placeholder: { DSPageLoader(section: .projects) }
+                        } placeholder: { DSPageLoader(section: section) }
                     }
                     .tag(idx)
                 }
