@@ -328,6 +328,70 @@ struct AdminToolRow: View {
     }
 }
 
+// MARK: - «صلاحياتي» (سطر «اليوم» للمراقب والمشرف)
+
+/// «صلاحياتي» (كان «نطاقي») — ما يقدر عليه دورك وما لا يقدر (البطاقة تصعد فوق الرأس). تُفتح من بطاقة «صلاحياتي» في
+/// «اليوم» للمراقب والمشرف (بيته الوحيد؛ للمالك والمدير «دورك» مميّز في فريق الإدارة ← صلاحيات الأدوار)
+struct AdminMyScopeView: View {
+    let guide: RoleGuide
+    @Environment(\.adminBackTitle) private var opener
+
+    var body: some View {
+        AdminPage(header: AdminPageHeader(back: opener ?? L10n.t("اليوم", "Today"),
+                                          title: L10n.t("صلاحياتي · \(guide.title)", "My permissions · \(guide.title)"),
+                                          subtitle: guide.mandate,
+                                          glyph: guide.icon),
+                  lead: AnyView(AdminRoleGuideCard(guide: guide, showsTitle: false)),
+                  content: AnyView(EmptyView()))
+    }
+}
+
+struct AdminRoleGuideCard: View {
+    let guide: RoleGuide
+    var showsTitle: Bool = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            if showsTitle {
+                HStack(spacing: DS.Spacing.md) {
+                    AdminIconSquare(symbol: guide.icon, tint: guide.color)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        Text(guide.title)
+                            .dsFont(.headline)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(guide.mandate)
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                AdminRowDivider()
+            }
+            ForEach(guide.can, id: \.self) { line($0, allowed: true) }
+            ForEach(guide.cannot, id: \.self) { line($0, allowed: false) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
+    }
+
+    private func line(_ text: String, allowed: Bool) -> some View {
+        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            Image(systemName: allowed ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .dsGlyph(DS.Glyph.md)
+                .foregroundColor(allowed ? DS.Color.success : DS.Color.textTertiary)
+                .padding(.top, DS.Spacing.xxs)
+                .accessibilityHidden(true)
+            Text(text)
+                .dsFont(.subtitle)
+                .foregroundColor(allowed ? DS.Color.textPrimary : DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(allowed ? text : L10n.t("غير مسموح: \(text)", "Can't: \(text)"))
+    }
+}
+
 // MARK: - البحث الشامل
 
 /// بحث في اللوحة: الأدوات والإعدادات بأسمائها، والأعضاء بالاسم أو الرقم، والطلبات (يفتح «الوارد» بالبحث)

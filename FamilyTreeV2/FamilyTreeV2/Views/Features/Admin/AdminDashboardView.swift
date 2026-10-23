@@ -367,6 +367,11 @@ struct AdminDashboardView: View {
         navigationPath.append(AdminReviewDestination.status(home))
     }
 
+    /// مجال المراقب والمشرف — بطاقة «صلاحياتي» (أُعيدت بطلب المالك ٢٠٢٦-١٠-٢٣؛ المالك والمدير لا يرونها)
+    private var scopeGuide: RoleGuide? {
+        authVM.isAdmin ? nil : authVM.currentUser.flatMap { RoleGuide.forRole($0.role) }
+    }
+
     private var helloLine: String {
         let name = authVM.currentUser?.firstName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let hello = AdminTodayText.greeting()
@@ -391,6 +396,9 @@ struct AdminDashboardView: View {
                 .dsCardCascade(0, appeared: appeared))
             AnyView(areasSection().dsCardCascade(1, appeared: appeared))
             AnyView(decisionCard(entries).dsCardCascade(2, appeared: appeared))
+            if let guide = scopeGuide {
+                AnyView(AdminScopeLink(guide: guide).dsCardCascade(3, appeared: appeared))
+            }
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.bottom, DS.Spacing.xxxl)
@@ -1407,5 +1415,33 @@ private struct AdminEstimateInfo: ViewModifier {
             .navigationDestination(isPresented: $open) {
                 AdminLazyPage { AnyView(AdminMembersPage(chip: .verifyLiving).adminArea(.family)) }
             }
+    }
+}
+
+/// «صلاحياتي» للمراقب والمشرف: ما يقدر عليه دورك وما لا يقدر — يفتح `AdminMyScopeView`
+private struct AdminScopeLink: View {
+    let guide: RoleGuide
+
+    var body: some View {
+        NavigationLink { AdminMyScopeView(guide: guide) } label: {
+            HStack(spacing: DS.Spacing.md) {
+                AdminIconSquare(symbol: guide.icon, tint: guide.color)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(L10n.t("صلاحياتي", "My permissions"))
+                        .dsFont(.hubRow)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(guide.mandate)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                DSChevron()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adminCard()
+        }
+        .buttonStyle(DSPressStyle())
     }
 }
