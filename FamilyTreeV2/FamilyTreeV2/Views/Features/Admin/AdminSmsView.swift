@@ -148,16 +148,23 @@ struct SmsSettingsPage: View {
     var body: some View {
         AdminHubPage {
             AdminBandHeader(backTitle: SmsText.pageTitle, title: L10n.t("إعدادات الإرسال", "Sending settings"),
-                            subtitle: L10n.t("الحدود · اسم المرسل · تنبيهات الرصيد", "Limits · sender name · balance alerts"))
+                            subtitle: L10n.t("الحدود · اسم المرسل · تنبيهات الرصيد · الحماية",
+                                             "Limits · sender name · balance alerts · protection"))
         } content: {
             if authVM.canViewSystemSettings {
                 AnyView(SmsSendingSettingsCard(overview: store.overview, actions: actions))
+                // «حماية رسائل الدخول» (`app_config` — AdminSmsLoginGuard.swift)
+                AnyView(SmsLoginGuardCard())
             } else {
                 DSNoteCard(L10n.t("رسائل رمز الدخول للمالك والمدير فقط.", "Sign-in code messages are for the owner and admins only."),
                            icon: "lock.fill", tint: DS.Color.warning)
             }
         }
-        .refreshable { await store.refresh(force: true) }
+        .refreshable {
+            async let overview: Void = store.refresh(force: true)
+            async let guardKeys: Void = SmsLoginGuardStore.shared.refresh()
+            _ = await (overview, guardKeys)
+        }
         .task { await store.refresh() }
         .modifier(SmsPagePresentations(actions: actions))
     }

@@ -165,7 +165,8 @@ struct ApprovalTemplatesBox: View {
 /// وبالثواني/العدد/الأيام لحدود رسائل الدخول (درجات ثابتة `ladder` بدل خطوة واحدة)
 struct ApprovalHoursStepper: View {
     /// وحدة الرقم المعروض: ساعات (المهلة، فواصل التنبيه) · نقاط (عتبات رصيد KWT SMS) · ثوانٍ · عدد · أيام (حدود الرسائل)
-    enum Unit { case hours, points, seconds, count, days }
+    /// · دقائق (حماية رسائل الدخول — الساعات الكاملة تظهر بالساعات)
+    enum Unit { case hours, points, seconds, count, days, minutes }
 
     let value: Int
     let range: ClosedRange<Int>
@@ -175,6 +176,8 @@ struct ApprovalHoursStepper: View {
     var unit: Unit = .hours
     /// درجات محددة (مرتّبة تصاعدياً) — «−/+» ينتقل للدرجة السابقة/التالية بدل `step`؛ قيمة خارج الدرجات تذهب لأقرب درجة
     var ladder: [Int]? = nil
+    /// نص القيمة صفر («مطفأ») بدل الرقم
+    var zeroText: String? = nil
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.dsSection) private var section
 
@@ -189,22 +192,30 @@ struct ApprovalHoursStepper: View {
     }
 
     private var shortText: String {
+        if value == 0, let zeroText { return zeroText }
         switch unit {
         case .hours:   return L10n.t("\(value) س", "\(value) h")
         case .points:  return L10n.t("\(value) نقطة", "\(value) pts")
         case .seconds: return L10n.t("\(value) ث", "\(value) s")
         case .count:   return "\(value)"
         case .days:    return L10n.t("\(value) يوم", "\(value) d")
+        case .minutes:
+            if value >= 60, value % 60 == 0 { return L10n.t("\(value / 60) س", "\(value / 60) h") }
+            return L10n.t("\(value) د", "\(value) min")
         }
     }
 
     private var spokenText: String {
+        if value == 0, let zeroText { return zeroText }
         switch unit {
         case .hours:   return L10n.t("\(value) ساعة", "\(value) hours")
         case .points:  return L10n.t("\(value) نقطة", "\(value) points")
         case .seconds: return L10n.t("\(value) ثانية", "\(value) seconds")
         case .count:   return "\(value)"
         case .days:    return L10n.t("\(value) يوم", "\(value) days")
+        case .minutes:
+            if value >= 60, value % 60 == 0 { return L10n.t("\(value / 60) ساعة", "\(value / 60) hours") }
+            return L10n.t("\(value) دقيقة", "\(value) minutes")
         }
     }
 

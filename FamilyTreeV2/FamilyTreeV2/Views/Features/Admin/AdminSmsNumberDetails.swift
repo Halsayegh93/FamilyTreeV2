@@ -7,6 +7,7 @@ import Combine
 // `owner_sms_login_details(p_phone, p_days, p_before)` (المالك، غيره 42501): كل طلب رمز دخول لرقم واحد، الأحدث أولاً،
 // ٥٠ في الصفحة (`next_before` للمزيد). لكل طلب مُرسَل: «انرسل بعد X ث من الطلب» (`recorded_at − details.requested_at`)
 // وحالة التسليم من `details.queue_status` (يملؤها السيرفر تلقائياً بعد ١–٣٠ دقيقة من الإرسال، ووقت الفحص `queue_checked_at`).
+// «فك القفل» (المالك، بعد التأكيد): `kwtsms-admin` `{action:"unlock", phone}` ← `{ok, was_locked, cleared_requests}`.
 // المدير لا يصل هنا أصلاً (صفوفه مخفية بلا `phone_e164`) — لا نداء جديد له.
 // حارس المكدس: الصفحة خلف `AdminLazyPage { AnyView(…) }`، والرأس والمحتوى خلف `AnyView`.
 
@@ -179,6 +180,10 @@ final class SmsNumberDetailsStore: ObservableObject {
     @Published private(set) var loadingMore = false
     @Published private(set) var failed = false
     @Published private(set) var denied = false
+    /// «فك القفل» (المالك): يعمل الآن · تأكيد قبل النداء · نتيجته أو خطأه
+    @Published private(set) var unlocking = false
+    @Published var confirmUnlock = false
+    @Published var unlockNotice: SmsNotice?
 
     init(phoneE164: String, days: Int) {
         self.phoneE164 = phoneE164
@@ -228,6 +233,41 @@ final class SmsNumberDetailsStore: ObservableObject {
         }
     }
 
+    /// رد `kwtsms-admin` `unlock`: `{ok, was_locked, cleared_requests}`
+    nonisolated struct UnlockReply: Decodable {
+        let wasLocked: Bool?
+        let clearedRequests: Int?
+        enum CodingKeys: String, CodingKey { case wasLocked = "was_locked"; case clearedRequests = "cleared_requests" }
+    }
+
+    /// «فك القفل» (المالك فقط، بعد التأكيد): يفك قفل الرقم ويمسح طلباته الأخيرة ثم تُعاد الصفحة
+    func unlock() {
+        guard !unlocking else { return }
+        unlocking = true
+        Task {
+            defer { unlocking = false }
+            do {
+                let reply = try await SmsBalanceStore.shared.call("unlock", phone: phoneE164, as: UnlockReply.self)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                unlockNotice = reply.wasLocked == true
+                    ? SmsNotice(title: L10n.t("انفك القفل", "Unlocked"),
+                                message: L10n.t("انفك القفل — يقدر يطلب رمز الحين", "Unlocked — they can request a code now"))
+                    : SmsNotice(title: L10n.t("تم", "Done"),
+                                message: L10n.t("الرقم ما كان مقفول — مسحنا طلباته الأخيرة",
+                                                "The number wasn't locked — its recent requests were cleared"))
+                await refresh()
+            } catch {
+                guard !ErrorHelper.isCancellation(error) else { return }
+                let e = error as? SmsAdminError ?? SmsAdminError(code: "network")
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                unlockNotice = SmsNotice(title: e.title,
+                                         message: e.code == "owner_only"
+                                            ? L10n.t("فك القفل للمالك فقط.", "Only the owner can unlock a number.")
+                                            : e.message)
+            }
+        }
+    }
+
     private func handle(_ error: Error) {
         if ErrorHelper.isCancellation(error) { return }
         if (error as? PostgrestError)?.code == "42501" { denied = true; return }
@@ -255,6 +295,32 @@ struct SmsNumberDetailsPage: View {
         }
         .refreshable { await store.refresh() }
         .task { if store.result == nil { await store.refresh() } }
+        .modifier(SmsUnlockAlerts(store: store))
+    }
+}
+
+/// تأكيد «فك القفل» ثم نتيجته
+private struct SmsUnlockAlerts: ViewModifier {
+    @ObservedObject var store: SmsNumberDetailsStore
+
+    func body(content: Content) -> some View {
+        content
+            .dsAlert(L10n.t("فك قفل هذا الرقم؟", "Unlock this number?"),
+                     isPresented: $store.confirmUnlock, icon: "lock.open.fill") {
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+                Button(L10n.t("فك القفل", "Unlock")) { store.unlock() }
+            } message: {
+                Text(L10n.t("يقدر صاحب الرقم يطلب رمز دخول فوراً، وتنمسح طلباته الأخيرة من عدّاد القفل.",
+                            "The number's owner can request a sign-in code right away, and its recent requests are cleared from the lock counter."))
+            }
+            .dsAlert(store.unlockNotice?.title ?? "", isPresented: Binding(
+                get: { store.unlockNotice != nil },
+                set: { if !$0 { store.unlockNotice = nil } }
+            ), presenting: store.unlockNotice) { _ in
+                Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+            } message: { notice in
+                Text(notice.message)
+            }
     }
 }
 
@@ -293,6 +359,7 @@ private struct SmsNumberDetailsContent: View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             if let result = store.result {
                 SmsNumberSummary(result: result)
+                SmsUnlockButton(store: store)
                 AdminCardHeader(title: L10n.t("الطلبات", "Requests"), badge: nil, badgeTint: DS.Color.primary) {
                     Text(verbatim: "\(result.items.count)/\(result.total)")
                         .dsFont(.caption)
@@ -335,6 +402,24 @@ private struct SmsNumberDetailsContent: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .adminCard()
+    }
+}
+
+/// «فك القفل» — المالك فقط (الصفحة أصلاً للمالك)
+private struct SmsUnlockButton: View {
+    @ObservedObject var store: SmsNumberDetailsStore
+    @EnvironmentObject var authVM: AuthViewModel
+
+    var body: some View {
+        if authVM.isOwner {
+            Button { store.confirmUnlock = true } label: {
+                AdminPillLabel(title: store.unlocking ? L10n.t("جاري فك القفل…", "Unlocking…") : L10n.t("فك القفل", "Unlock"),
+                               icon: "lock.open", style: .soft, height: DS.Hub.pillHeightCard, fullWidth: true)
+            }
+            .buttonStyle(DSPressStyle())
+            .disabled(store.unlocking)
+            .accessibilityHint(L10n.t("يسمح للرقم يطلب رمز دخول فوراً", "Lets this number request a sign-in code right away"))
+        }
     }
 }
 
