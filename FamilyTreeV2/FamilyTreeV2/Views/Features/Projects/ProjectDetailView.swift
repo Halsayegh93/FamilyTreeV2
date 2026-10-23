@@ -488,6 +488,57 @@ struct ProjectSectionBackdrop: View {
     }
 }
 
+/// صورة المشروع الكبيرة (طلب المالك ٢٠٢٦-١٠-٢٢ «صورة المشروع أكبر»): أول صورة من معرض المشروع
+/// تملأ المكان (`scaledToFill` مقصوصة)؛ بلا صورة ← خلفية القسم وعليها شعار المشروع أو مجسّم القسم.
+/// المقاس والقصّ من الحاوية (`Color.clear.aspectRatio(…).overlay { ProjectHeroImage }`).
+struct ProjectHeroImage: View {
+    let project: Project
+    /// ضلع الشعار/المجسّم حين لا توجد صورة
+    var markSize: CGFloat = DS.Icon.state
+
+    static let aspect: CGFloat = 16.0 / 10.0
+
+    private var photoURL: URL? {
+        guard let first = project.imageUrls.first, !first.isEmpty else { return nil }
+        return URL(string: first)
+    }
+
+    var body: some View {
+        ZStack {
+            ProjectSectionBackdrop(symbolSize: DS.Glyph.lg)
+            if let url = photoURL {
+                CachedAsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } placeholder: { mark }
+            } else {
+                mark
+            }
+        }
+        .clipped()
+        .accessibilityHidden(true)
+    }
+
+    /// البديل: شعار المشروع بزوايا ناعمة، أو مجسّم المشاريع
+    @ViewBuilder
+    private var mark: some View {
+        if let logo = project.logoUrl, let url = URL(string: logo) {
+            CachedAsyncImage(url: url) { img in
+                img.resizable().scaledToFill()
+            } placeholder: { DS.Color.mutedBackground }
+            .frame(width: markSize, height: markSize)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .strokeBorder(DS.Color.surface, lineWidth: DS.Spacing.xxs)
+            )
+            .dsSubtleShadow()
+        } else {
+            DSStateIcon("briefcase.fill", tint: AppSection.projects.ink, size: markSize)
+        }
+    }
+}
+
 struct ProjectDetailView: View {
     let project: Project
     @EnvironmentObject var authVM: AuthViewModel
@@ -634,16 +685,23 @@ struct ProjectDetailView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
     
-    // MARK: - Header — بطاقة المشروع (غلاف + شعار بارز + إجراءات سريعة)
+    // MARK: - Header — بطاقة المشروع (صورة كبيرة + شعار بارز + إجراءات سريعة)
     //
-    // الفكرة: أول صورة للمشروع تصير غلافاً، والشعار يجلس على حافته مثل بطاقة
-    // تعريف، وتحته الاسم وصاحب المشروع وأزرار الاتصال المباشرة (طلب المالك).
+    // الصورة الكبيرة بعرض البطاقة (١٦:١٠، طلب المالك ٢٠٢٦-١٠-٢٢)؛ الشعار يجلس على حافتها حين تكون
+    // الصورة صورة المشروع — وبلا صورة يظهر الشعار نفسه في وسطها. تحته الاسم وصاحب المشروع وأزرار الاتصال.
     private var projectHeader: some View {
         VStack(spacing: 0) {
-            cover
-                .frame(height: coverHeight)
+            Color.clear
+                .aspectRatio(ProjectHeroImage.aspect, contentMode: .fit)
                 .frame(maxWidth: .infinity)
+                .overlay { ProjectHeroImage(project: project, markSize: logoSize) }
                 .clipShape(ProjectCoverArc(depth: arcDepth))
+                .overlay(alignment: .bottom) {
+                    if showsLogoBadge {
+                        logoBadge.offset(y: logoSize / 2 - arcDepth / 2)
+                    }
+                }
+                .zIndex(1)
 
             VStack(spacing: DS.Spacing.sm) {
                 Text(project.title)
@@ -663,29 +721,26 @@ struct ProjectDetailView: View {
                     .padding(.top, DS.Spacing.xs)
                 }
             }
-            .padding(.top, logoSize / 2 + DS.Spacing.sm)
+            .padding(.top, showsLogoBadge ? logoSize / 2 - arcDepth / 2 + DS.Spacing.sm : DS.Spacing.xs)
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.lg)
             .frame(maxWidth: .infinity)
             .background(DS.Color.surface)
         }
         .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
-        // البطاقة الواحدة (`.dsCard`) — الشعار فوق حافة الغلاف
+        // البطاقة الواحدة (`.dsCard`)
         .dsCard(padding: nil)
-        .overlay(alignment: .top) { logoBadge.offset(y: coverHeight - logoSize / 2 + DS.Spacing.xs) }
     }
 
-    private var coverHeight: CGFloat { 150 }
-    private var logoSize: CGFloat { 92 }
-    /// عمق القوس في منتصف حافة الغلاف
-    private var arcDepth: CGFloat { 26 }
-
-    /// الغلاف: خلفية قسم المشاريع الموحّدة — صور المشروع تبقى في معرض الصور
-    private var cover: some View {
-        ProjectSectionBackdrop()
+    private var logoSize: CGFloat { 84 }
+    /// عمق القوس في منتصف حافة الصورة
+    private var arcDepth: CGFloat { 22 }
+    /// الشعار على الحافة فقط حين تكون الصورة الكبيرة صورة المشروع (وإلا فالشعار في وسطها)
+    private var showsLogoBadge: Bool {
+        !(project.imageUrls.first ?? "").isEmpty && !(project.logoUrl ?? "").isEmpty
     }
 
-    /// الشعار على حافة الغلاف — مربّع بزوايا ناعمة بإطار بلون البطاقة
+    /// الشعار على حافة الصورة — مربّع بزوايا ناعمة بإطار بلون البطاقة
     private var logoBadge: some View {
         Group {
             if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
@@ -695,7 +750,6 @@ struct ProjectDetailView: View {
                     DS.Color.mutedBackground
                 }
             } else {
-                // قرص «مجسّمات» الموحّد
                 DSStateIcon("briefcase.fill", tint: AppSection.projects.ink, size: logoSize)
             }
         }

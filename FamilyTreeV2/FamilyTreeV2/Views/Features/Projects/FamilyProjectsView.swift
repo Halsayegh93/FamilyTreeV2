@@ -35,10 +35,8 @@ struct FamilyProjectsView: View {
         if isLandscape {
             return [GridItem(.adaptive(minimum: DS.Landscape.gridCardMinWidth, maximum: .infinity), spacing: DS.Spacing.md, alignment: .top)]
         }
-        return [
-            GridItem(.flexible(), spacing: DS.Spacing.md),
-            GridItem(.flexible(), spacing: DS.Spacing.md)
-        ]
+        // عمود واحد: صورة المشروع بعرض الشاشة هي بطلة البطاقة (طلب المالك ٢٠٢٦-١٠-٢٢)
+        return [GridItem(.flexible(), spacing: DS.Spacing.md)]
     }
 
     enum ProjectsFilter: Hashable {
@@ -259,7 +257,7 @@ struct FamilyProjectsView: View {
                                 } label: {
                                     cardMenuBadge
                                 }
-                                .padding(DS.Spacing.xsm)
+                                .padding(DS.Spacing.md)   // داخل زاوية الصورة
                             }
                         }
                         .contextMenu {
@@ -456,117 +454,10 @@ struct FamilyProjectsView: View {
         )
     }
 
-    // MARK: - Project Card — بطاقة بغلاف مقوّس وشعار بارز (نفس روح صفحة المشروع)
+    // MARK: - Project Card — `ProjectGridCard` (نوع مستقل — حارس المكدس)
 
     private func projectCard(_ project: Project) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // غلاف صغير بخلفية قسم المشاريع — بحافة مقوّسة
-            ProjectSectionBackdrop(symbolSize: DS.Glyph.lg)
-            .frame(height: cardCoverHeight)
-            .frame(maxWidth: .infinity)
-            .clipShape(ProjectCoverArc(depth: 18))
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(project.title)
-                    .dsFont(.rowTitleCompact)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "person.fill")
-                        .dsGlyph(DS.Glyph.micro)
-                    Text(project.ownerName)
-                        .dsFont(.caption)
-                        .lineLimit(1)
-                }
-                .foregroundColor(DS.Color.textSecondary)
-
-                if project.hasSocialLinks {
-                    socialIndicators(project: project)
-                        .padding(.top, DS.Spacing.xxs)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.top, cardLogoSize / 2 + DS.Spacing.xxs)
-            .padding(.bottom, DS.Spacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
-        // البطاقة الواحدة (`.dsCard`) + إطار «بانتظار» فوقها
-        .dsCard(padding: nil)
-        .overlay(alignment: .top) { cardLogo(project).offset(y: cardCoverHeight - cardLogoSize / 2 + DS.Spacing.xxs) }
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
-                .strokeBorder(project.approvalStatus == "pending"
-                              ? DS.Color.warning.opacity(DS.Opacity.tintStroke) : .clear,
-                              lineWidth: DS.Border.width)
-        )
-        .overlay(alignment: .topLeading) {
-            if project.approvalStatus == "pending" {
-                statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warningFill)
-            } else if project.isHidden {
-                statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.slateFill)
-            }
-        }
-        .opacity(project.approvalStatus == "pending" || project.isHidden ? DS.Opacity.dimmed : 1.0)
-    }
-
-    private var cardCoverHeight: CGFloat { DS.Icon.sizeLg + DS.Spacing.lg }
-    private var cardLogoSize: CGFloat { DS.Icon.state }
-
-    /// شعار المشروع على حافة الغلاف — مربّع بزوايا ناعمة بإطار بلون البطاقة
-    private func cardLogo(_ project: Project) -> some View {
-        Group {
-            if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
-                CachedAsyncImage(url: url) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: { DS.Color.mutedBackground }
-            } else {
-                // قرص «مجسّمات» الموحّد
-                DSStateIcon("briefcase.fill", tint: AppSection.projects.ink, size: cardLogoSize)
-            }
-        }
-        .frame(width: cardLogoSize, height: cardLogoSize)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.surface, lineWidth: DS.Spacing.xxs)
-        )
-        .dsSubtleShadow()
-    }
-
-    private func statusBadge(icon: String, text: String, color: Color) -> some View {
-        // فوق الغلاف: ممتلئة بلون معناها حتى تُقرأ
-        HStack(spacing: DS.Spacing.xxs) {
-            Image(dsSymbol: icon).dsGlyph(DS.Glyph.micro)
-            Text(text).dsFont(.micro)
-        }
-        .foregroundColor(DS.Color.textOnPrimary)
-        .padding(.horizontal, DS.Spacing.xsm).padding(.vertical, DS.Spacing.xxs)
-        .background(Capsule().fill(color))
-        .padding(DS.Spacing.xs)
-    }
-
-    /// أيقونات المنصات اللي عنده روابط فيها — مؤشّر بصري سريع.
-    private func socialIndicators(project: Project) -> some View {
-        HStack(spacing: DS.Spacing.xs) {
-            if project.phoneNumber?.isEmpty == false    { socialDot(icon: "phone.fill", color: DS.Color.sea) }
-            if project.whatsappNumber?.isEmpty == false { socialDot(icon: "message.fill", color: DS.Color.Social.whatsapp) }
-            if project.instagramUrl?.isEmpty == false   { socialDot(icon: "camera.fill", color: DS.Color.Social.instagram) }
-            if project.twitterUrl?.isEmpty == false     { socialDot(icon: "xmark", color: DS.Color.Social.x) }
-            if project.websiteUrl?.isEmpty == false     { socialDot(icon: "globe", color: DS.Color.info) }
-            if project.locationUrl?.isEmpty == false    { socialDot(icon: "mappin.and.ellipse", color: DS.Color.Social.maps) }
-        }
-    }
-
-    private func socialDot(icon: String, color: Color) -> some View {
-        Image(dsSymbol: icon)
-            .dsGlyph(DS.Glyph.micro)
-            .foregroundColor(color)
-            .frame(width: DS.Icon.inline, height: DS.Icon.inline)
-            .background(Circle().fill(color.opacity(DS.Opacity.tintFill)))
+        ProjectGridCard(project: project)
     }
 
     // MARK: - Empty State
@@ -610,6 +501,72 @@ struct FamilyProjectsView: View {
             selectionMode = false
             selectedIDs = []
         }
+    }
+}
+
+// MARK: - بطاقة المشروع في القائمة (طلب المالك ٢٠٢٦-١٠-٢٢)
+/// صورة المشروع كبيرة بعرض البطاقة (١٦:١٠)، وتحتها اسم المشروع في الوسط وسطر وصف (سطران بحدّ أقصى) —
+/// بلا اسم صاحب المشروع وبلا أيقونات الحسابات (تبقى في صفحة المشروع).
+struct ProjectGridCard: View {
+    let project: Project
+
+    private var isPending: Bool { project.approvalStatus == "pending" }
+    private var imageRadius: CGFloat { max(DS.Card.radius - DS.Spacing.sm, DS.Radius.sm) }
+
+    var body: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            Color.clear
+                .aspectRatio(ProjectHeroImage.aspect, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .overlay { ProjectHeroImage(project: project, markSize: DS.Icon.state + DS.Spacing.lg) }
+                .clipShape(RoundedRectangle(cornerRadius: imageRadius, style: .continuous))
+
+            VStack(spacing: DS.Spacing.xxs) {
+                Text(project.title)
+                    .dsFont(.rowTitle)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+
+                if let desc = project.description?.trimmingCharacters(in: .whitespacesAndNewlines), !desc.isEmpty {
+                    Text(desc)
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.bottom, DS.Spacing.xs)
+        }
+        // البطاقة الواحدة (`.dsCard`) + إطار «بانتظار» فوقها
+        .dsCard(padding: DS.Spacing.sm)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                .strokeBorder(isPending ? DS.Color.warning.opacity(DS.Opacity.tintStroke) : .clear,
+                              lineWidth: DS.Border.width)
+        )
+        .overlay(alignment: .topLeading) {
+            if isPending {
+                statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warningFill)
+            } else if project.isHidden {
+                statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.slateFill)
+            }
+        }
+        .opacity(isPending || project.isHidden ? DS.Opacity.dimmed : 1.0)
+    }
+
+    private func statusBadge(icon: String, text: String, color: Color) -> some View {
+        // فوق الصورة: ممتلئة بلون معناها حتى تُقرأ
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(dsSymbol: icon).dsGlyph(DS.Glyph.micro)
+            Text(text).dsFont(.micro)
+        }
+        .foregroundColor(DS.Color.textOnPrimary)
+        .padding(.horizontal, DS.Spacing.xsm).padding(.vertical, DS.Spacing.xxs)
+        .background(Capsule().fill(color))
+        .padding(DS.Spacing.md)
     }
 }
 

@@ -108,8 +108,7 @@ struct FamilyArchiveView: View {
                                         } label: {
                                             cardMenuBadge
                                         }
-                                        .padding(.trailing, DS.Spacing.xs)
-                                        .padding(.top, DS.Spacing.xxs)
+                                        .padding(DS.Spacing.md)   // داخل زاوية المعاينة
                                     }
                                 }
                                 .contextMenu {
@@ -493,79 +492,56 @@ struct FamilyArchiveView: View {
             .dsSubtleShadow()
     }
 
-    // MARK: - بطاقة المكتبة — «ملف أرشيفي»
+    // MARK: - بطاقة المكتبة (طلب المالك ٢٠٢٦-١٠-٢٢ — بنمط بطاقة المشاريع)
     //
-    // الفكرة: كل عنصر ملف في أرشيف: لسان تصنيف ملوّن في الأعلى، الوثيقة
-    // مثبّتة داخل إطار ورقي، وختم السنة مائل على حافتها، وتحتها العنوان
-    // ومن أضافها — مربّع بأبعاد القسم (طلب المالك).
+    // معاينة الوثيقة كبيرة في الأعلى بزوايا ناعمة (ختم السنة وشارة PDF عليها)، وتحتها العنوان في
+    // الوسط وسطر التصنيف — بلا اسم من أضافها (يظهر داخل صفحة العنصر فقط).
     private func archiveCard(_ item: ArchiveItem) -> some View {
         let accent = item.categoryColor
+        let inner = cardSide - DS.Spacing.sm * 2
+        let imageRadius = max(DS.Card.radius - DS.Spacing.sm, DS.Radius.sm)
 
-        return VStack(alignment: .leading, spacing: 0) {
-            // لسان الملف
-            HStack(spacing: DS.Spacing.xs) {
-                // رمز التصنيف قد يكون القبر المخصّص — `dsSymbol` يرسمه (ن-١ فحص ٢٠٢٦-١٠-٠٧)
-                Image(dsSymbol: item.categoryIcon)
-                    .dsGlyph(DS.Glyph.micro)
-                Text(item.categoryDisplayName)
-                    .dsFont(.micro)
-                    .lineLimit(1)
-            }
-            .foregroundColor(DS.Color.textOnPrimary)
-            .padding(.horizontal, DS.Spacing.sm)
-            .frame(minHeight: DS.Icon.section)   // يطول مع «حجم النص» بدل قصّ الاسم
-            .background(
-                UnevenCorners(radius: DS.Radius.sm, bottomLeading: true, bottomTrailing: true)
-                    .fill(accent)
-            )
-            .padding(.leading, DS.Spacing.sm)
-
-            // الوثيقة داخل إطار ورقي + ختم السنة
+        return VStack(spacing: DS.Spacing.sm) {
+            // الوثيقة + ختم السنة
             preview(for: item, accent: accent)
-                .frame(width: cardSide - DS.Spacing.sm * 2, height: cardSide * 0.44)
+                .frame(width: inner, height: inner * 0.72)
                 .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: imageRadius, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                        .strokeBorder(accent.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width)
+                    RoundedRectangle(cornerRadius: imageRadius, style: .continuous)
+                        .strokeBorder(AppSection.library.ink.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width)
                 )
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.top, DS.Spacing.xs)
                 .overlay(alignment: .bottomTrailing) { yearStamp(for: item, accent: accent) }
                 .overlay(alignment: .bottomLeading) { fileKindBadge(for: item) }
                 .overlay(alignment: .topLeading) {
                     statusStack(for: item)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.top, DS.Spacing.sm)
+                        .padding(DS.Spacing.xs)
                 }
 
-            // خط فاصل رفيع ثم العنوان
-            Rectangle()
-                .fill(accent.opacity(DS.Opacity.tintStroke))
-                .frame(height: DS.Border.width)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.top, DS.Spacing.sm)
+            VStack(spacing: DS.Spacing.xxs) {
+                Text(item.title)
+                    .dsFont(.rowTitleCompact)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2, reservesSpace: true)
+                    .multilineTextAlignment(.center)
 
-            Text(item.title)
-                .dsFont(.sectionTitle)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, minHeight: DS.Icon.row, alignment: .topLeading)
-                .padding(.horizontal, DS.Spacing.sm)
-                .padding(.top, DS.Spacing.xs)
-
-            Spacer(minLength: 0)
-
-            uploaderStrip(for: item, accent: accent)
+                // سطر التصنيف — رمزه قد يكون القبر المخصّص (`dsSymbol`)
+                HStack(spacing: DS.Spacing.xxs) {
+                    Image(dsSymbol: item.categoryIcon)
+                        .dsGlyph(DS.Glyph.micro)
+                    Text(item.categoryDisplayName)
+                        .dsFont(.micro)
+                        .lineLimit(1)
+                }
+                .foregroundColor(accent)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, DS.Spacing.xxs)
+            .padding(.bottom, DS.Spacing.xxs)
         }
-        .frame(width: cardSide, height: cardSide, alignment: .top)
-        // ورقة: تدرّج خفيف بلون التصنيف من الأعلى
-        .background(LinearGradient(colors: [accent.opacity(DS.Opacity.tintFillSoft), .clear],
-                                   startPoint: .top, endPoint: .center))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
+        .frame(width: cardSide - DS.Spacing.sm * 2)
         // البطاقة الواحدة (`.dsCard`) + إطار الحالة (بانتظار/مرفوض/مخفي) فوقها
-        .dsCard(padding: nil)
+        .dsCard(padding: DS.Spacing.sm)
         .overlay(
             RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
                 .strokeBorder(borderColor(for: item), lineWidth: DS.Border.width)
@@ -574,34 +550,12 @@ struct FamilyArchiveView: View {
                  : (item.isHidden || item.approvalStatus == .pending ? DS.Opacity.dimmed : 1.0))
     }
 
-    /// شريط المُضيف أسفل البطاقة — صورة العضو + الاسم المختصر، والتاريخ على الطرف الثاني
-    private func uploaderStrip(for item: ArchiveItem, accent: Color) -> some View {
-        let member = memberVM.member(byId: item.uploadedBy)
-        return HStack(spacing: DS.Spacing.xs) {
-            // صورة العضو — الصورة الموحّدة (حرف أول إن لم تكن له صورة)
-            DSMemberAvatar(name: member?.firstName ?? "؟", avatarUrl: member?.avatarUrl,
-                           size: DS.Icon.inline, roleColor: accent)
-
-            Text(member?.displayName ?? uploaderName(for: item) ?? L10n.t("غير معروف", "Unknown"))
-                .dsFont(.micro)
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-        .frame(minHeight: DS.Icon.discSmall)   // يطول مع «حجم النص» بدل قصّ الاسم
-        .frame(maxWidth: .infinity)
-        .background(accent.opacity(DS.Opacity.tintFill))
-    }
-
     /// ختم السنة — مائل قليلاً بحدود متقطّعة مثل أختام الأرشيف
     @ViewBuilder
     private func yearStamp(for item: ArchiveItem, accent: Color) -> some View {
         if let year = item.year {
             ArchiveYearStamp(year: year, accent: accent, filled: true)
-                .padding(.horizontal, DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xsm)
         }
     }
@@ -611,7 +565,7 @@ struct FamilyArchiveView: View {
     private func fileKindBadge(for item: ArchiveItem) -> some View {
         if item.isPDF {
             ArchivePDFBadge()
-                .padding(.horizontal, DS.Spacing.md)
+                .padding(.horizontal, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xsm)
         }
     }
@@ -1240,7 +1194,8 @@ struct ArchiveItemViewer: View {
                     HStack(spacing: DS.Spacing.xs) {
                         Image(systemName: "person.fill")
                             .dsGlyph(DS.Glyph.micro)
-                        Text(uploaderName)
+                        // من أضاف العنصر — هنا فقط لا على البطاقة (طلب المالك ٢٠٢٦-١٠-٢٢)
+                        Text(L10n.t("أضافه: \(uploaderName)", "Added by: \(uploaderName)"))
                             .dsFont(.caption)
                             .lineLimit(1)
                     }

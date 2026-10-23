@@ -436,7 +436,6 @@ struct HomeNewsView: View {
                 icon: "tree.fill",
                 color: DS.Color.tileTree,
                 deep: DS.Color.tileTreeDeep,
-                imageURL: nil,
                 count: nil,
                 height: tileHeight,
                 cascade: 1,
@@ -448,7 +447,6 @@ struct HomeNewsView: View {
                     icon: AppSection.diwaniyas.symbol,   // «مجلس» الموحّد
                     color: DS.Color.tileDiwaniya,
                     deep: DS.Color.tileDiwaniyaDeep,
-                    imageURL: nil,
                     count: nil,
                     height: tileHeight,
                     cascade: 2,
@@ -463,7 +461,6 @@ struct HomeNewsView: View {
     /// المكتبة / المشاريع / التواصل — المشاريع تختفي إن عُطّلت من الإعدادات.
     private func quickAccessGrid(tileHeight: CGFloat) -> some View {
         let projectsOn = appSettingsVM.settings.projectsEnabled ?? true
-        let projectImageURL: String? = projectsVM.projects.first?.logoUrl
 
         return LazyVGrid(
             columns: Array(
@@ -477,7 +474,6 @@ struct HomeNewsView: View {
                 icon: "books.vertical.fill",
                 color: AppSection.HomeTile.library.fill,
                 deep: AppSection.HomeTile.library.deep,
-                imageURL: nil,
                 count: nil,
                 height: tileHeight,
                 cascade: 3,
@@ -490,7 +486,6 @@ struct HomeNewsView: View {
                     icon: "storefront.fill",
                     color: AppSection.HomeTile.projects.fill,
                     deep: AppSection.HomeTile.projects.deep,
-                    imageURL: projectImageURL,
                     count: projectsVM.projects.count,
                     height: tileHeight,
                     cascade: 4,
@@ -503,7 +498,6 @@ struct HomeNewsView: View {
                 icon: "envelope.fill",
                 color: DS.Color.tileContact,
                 deep: DS.Color.tileContactDeep,
-                imageURL: nil,
                 count: nil,
                 height: tileHeight,
                 cascade: 5,
@@ -518,7 +512,6 @@ struct HomeNewsView: View {
         icon: String,
         color: Color,
         deep: Color,
-        imageURL: String?,
         count: Int?,
         height: CGFloat? = nil,
         /// ترتيب المربّع في دخول الرئيسية (بعد الترحيب ٠، وقبل الأخبار ٦)
@@ -532,8 +525,8 @@ struct HomeNewsView: View {
             action()
         }) {
             ZStack(alignment: .bottomLeading) {
-                tileBackground(color: color, deep: deep, imageURL: imageURL, icon: icon,
-                               badge: (count ?? 0) > 0)
+                // لون المربّع ومجسّمه دائماً — بلا صورة مشروع (طلب المالك ٢٠٢٦-١٠-٢٢)
+                gradientBackground(color: color, deep: deep, icon: icon, badge: (count ?? 0) > 0)
 
                 // تعتيم أسفل المربّع للاسم الأبيض — «الهادئ الفاتح» بلا تعتيم (الاسم داكن فوق اللون الخفيف)
                 if !DS.Theme.isCalm {
@@ -627,21 +620,6 @@ struct HomeNewsView: View {
         .accessibilityValue(isNew ? L10n.t("فيه جديد", "New") : "")
         // المربّعات تتوالى واحداً بعد الآخر مع بقية بطاقات الرئيسية
         .dsCardCascade(cascade, appeared: appeared)
-    }
-
-    /// خلفية المربّع — صورة من رابط أو gradient بلون الفئة مع زخارف.
-    @ViewBuilder
-    private func tileBackground(color: Color, deep: Color, imageURL: String?, icon: String,
-                                badge: Bool = false) -> some View {
-        if let urlStr = imageURL, let url = URL(string: urlStr) {
-            CachedAsyncImage(url: url) { img in
-                img.resizable().scaledToFill()
-            } placeholder: {
-                gradientBackground(color: color, deep: deep, icon: icon, badge: badge)
-            }
-        } else {
-            gradientBackground(color: color, deep: deep, icon: icon, badge: badge)
-        }
     }
 
     private func gradientBackground(color: Color, deep: Color, icon: String, badge: Bool = false) -> some View {
