@@ -364,9 +364,9 @@ struct AdminDashboardView: View {
         navigationPath.append(AdminReviewDestination.status(home))
     }
 
-    /// بطاقة «صلاحياتي» للمالك والمدير فقط (طلب المالك ٢٠٢٦-١٠-٢٣ «خلها العكس»؛ المراقب والمشرف لا يرونها)
+    /// بطاقة «صلاحياتي» لكل أدوار لوحة الإدارة (طلب المالك ٢٠٢٦-١٠-٢٣ «ضيف صلاحياتي لكل في لوحة الادارة»)
     private var scopeGuide: RoleGuide? {
-        authVM.isAdmin ? authVM.currentUser.flatMap { RoleGuide.forRole($0.role) } : nil
+        authVM.currentUser.flatMap { RoleGuide.forRole($0.role) }
     }
 
     private var helloLine: String {
@@ -1304,7 +1304,7 @@ private struct AdminEstimateInfo: ViewModifier {
     }
 }
 
-/// «صلاحياتي» للمالك والمدير: ما يقدر عليه دورك وما لا يقدر — يفتح `AdminMyScopeView`
+/// «صلاحياتي» لكل أدوار الإدارة: ما يقدر عليه دورك وما لا يقدر — يفتح `AdminMyScopeView`
 private struct AdminScopeLink: View {
     let guide: RoleGuide
 
