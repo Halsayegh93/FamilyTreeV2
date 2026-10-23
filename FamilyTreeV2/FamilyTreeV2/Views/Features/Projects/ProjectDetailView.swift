@@ -442,11 +442,14 @@ struct ProjectCoverArc: Shape {
     }
 }
 
-/// خلفية قسم المشاريع — تدرّج ذهبي بلون التاب مع نقشة حقائب خفيفة.
-/// موحّدة لكل المشاريع (لا تُؤخذ من صور المشروع — طلب المالك).
+/// خلفية قسم المشاريع — تدرّج بلون التاب مع نقشة خفيفة من شعار العائلة «المحمدعلي»
+/// (كانت نقشة حقائب — طلب المالك ٢٠٢٦-١٠-٢٣). موحّدة لكل المشاريع (لا تُؤخذ من صور المشروع — طلب المالك).
 struct ProjectSectionBackdrop: View {
-    /// حجم أيقونات النقشة
+    /// ارتفاع الشعار في النقشة (العرض من نسبة الشعار)
     var symbolSize: CGFloat = 26
+
+    /// نسبة عرض شعار العائلة إلى ارتفاعه (من أصل `FamilyLogoCream`: ٧١٠ × ٥٢٩)
+    private static let logoAspect: CGFloat = 710.061 / 529.415
 
     var body: some View {
         ZStack {
@@ -456,22 +459,25 @@ struct ProjectSectionBackdrop: View {
                 endPoint: .bottomTrailing
             )
 
-            // نقشة مائلة من أيقونة القسم — خفيفة جداً حتى لا تزاحم الشعار
+            // نقشة مائلة من شعار العائلة (الكريمي على لون القسم) — خفيفة جداً حتى لا تزاحم شعار المشروع
             GeometryReader { geo in
-                let columns = Int(ceil(geo.size.width / (symbolSize * 2))) + 2
+                let logoW = symbolSize * Self.logoAspect
+                let columns = Int(ceil(geo.size.width / (logoW + symbolSize))) + 2
                 let rows = Int(ceil(geo.size.height / (symbolSize * 1.7))) + 2
                 VStack(spacing: symbolSize * 0.7) {
                     ForEach(0..<max(rows, 1), id: \.self) { row in
                         HStack(spacing: symbolSize) {
                             ForEach(0..<max(columns, 1), id: \.self) { _ in
-                                Image(systemName: "briefcase.fill")
-                                    .dsGlyph(symbolSize, weight: .light)
+                                Image("FamilyLogoCream")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: logoW, height: symbolSize)
                             }
                         }
-                        .offset(x: row.isMultiple(of: 2) ? 0 : symbolSize)
+                        .offset(x: row.isMultiple(of: 2) ? 0 : (logoW + symbolSize) / 2)
                     }
                 }
-                .foregroundColor(DS.Color.overlayFillSubtle)
+                .opacity(DS.Opacity.tintFillSoft)
                 .rotationEffect(.degrees(-18))
                 .frame(width: geo.size.width, height: geo.size.height)
                 .offset(x: -symbolSize, y: -symbolSize)
