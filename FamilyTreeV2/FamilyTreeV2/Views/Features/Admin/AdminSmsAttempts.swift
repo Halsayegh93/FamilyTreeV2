@@ -266,35 +266,45 @@ enum SmsAttemptsText {
 
 // MARK: - البطاقة
 
-/// «محاولات الدخول»: مبدّل الفترة، المجاميع، أول ٨ أرقام و«الكل»، وسطر الحفظ
+/// «طلبات رمز الدخول» في الصفحة (تبسيط ٢٠٢٦-١٠-٢٢): الأرقام المشبوهة + أحدث ٣ فقط، ثم «الكل (N)» ← الصفحة الكاملة
+/// (مبدّل الفترة، المجاميع، البحث، و«اعرض الرمز» للمالك كما هي)
 struct SmsAttemptsCard: View {
     @ObservedObject private var store = SmsLoginAttemptsStore.shared
     /// قسم صفحة الرسائل — يُمرَّر لصفحة «الكل»
     @Environment(\.adminArea) private var area
-    /// الصفوف الظاهرة قبل «الكل»
-    private static let collapsedCount = 5
+    /// أحدث الأرقام الظاهرة مع المشبوهة
+    private static let recentCount = 3
+
+    /// المشبوهة كلها + أحدث ٣ — بترتيب الرد (الأحدث أولاً)
+    static func preview(_ items: [SmsLoginAttempts.Item]) -> [SmsLoginAttempts.Item] {
+        let recent = Set(items.prefix(recentCount).map(\.id))
+        return items.filter { $0.suspicious || recent.contains($0.id) }
+    }
 
     var body: some View {
         let result = store.current
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             AdminCardHeader(title: L10n.t("طلبات رمز الدخول", "Sign-in code requests"),
                             badge: result?.totals.suspicious, badgeTint: DS.Color.warning) {
-                if let result, !result.items.isEmpty {
-                    NavigationLink { AdminLazyPage { AnyView(SmsAttemptsListPage().adminArea(area)) } } label: {
-                        AdminCardLinkLabel(title: L10n.t("الكل (\(result.items.count))", "All (\(result.items.count))"))
-                    }
-                    .buttonStyle(.plain)
+                if let result {
+                    Text(SmsAttemptsText.period(result.days))
+                        .dsFont(.caption)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .lineLimit(1)
                 }
             }
-            SmsAttemptsPeriodSwitch(store: store)
             if let result {
-                SmsAttemptsTotalsView(totals: result.totals)
                 if result.items.isEmpty {
                     SmsAttemptsEmpty()
                 } else {
-                    SmsAttemptsRows(items: Array(result.items.prefix(Self.collapsedCount)), days: result.days)
+                    SmsAttemptsRows(items: Self.preview(result.items), days: result.days)
+                    NavigationLink { AdminLazyPage { AnyView(SmsAttemptsListPage().adminArea(area)) } } label: {
+                        AdminPillLabel(title: L10n.t("الكل (\(result.items.count))", "All (\(result.items.count))"),
+                                       icon: "list.bullet", style: .soft, height: DS.Hub.pillHeightCard, fullWidth: true)
+                    }
+                    .buttonStyle(DSPressStyle())
+                    .padding(.top, DS.Spacing.xs)
                 }
-                SmsAttemptsNote(result: result)
             } else {
                 SmsAttemptsStatus(store: store)
             }
@@ -742,7 +752,7 @@ private struct SmsAttemptsListHeader: View {
     @ObservedObject var store: SmsLoginAttemptsStore
 
     var body: some View {
-        AdminBandHeader(backTitle: L10n.t("رسائل رمز الدخول", "Sign-in code messages"),
+        AdminBandHeader(backTitle: SmsText.pageTitle,
                         title: L10n.t("طلبات رمز الدخول", "Sign-in code requests"),
                         subtitle: L10n.t("من طلب رمز دخول، وكم مرة", "Who asked for a sign-in code, and how often")) {
             AdminGlassButton(symbol: "arrow.clockwise", label: L10n.t("تحديث", "Refresh")) {

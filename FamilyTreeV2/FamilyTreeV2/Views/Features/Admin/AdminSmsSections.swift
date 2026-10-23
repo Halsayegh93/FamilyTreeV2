@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - بطاقات صفحة «رسائل رمز الدخول (KWT SMS)» السفلى ومربّعات أدواتها
 //
-// آخر الإرسالات (فحص الحالة) · أدوات · التنبيهات (المالك يعدّل، المدير يقرأ) · الحدود · الإعداد، ومربّعات
+// آخر الإرسالات (فحص الحالة) · التنبيهات (المالك يعدّل، المدير يقرأ — في صفحة «إعدادات الإرسال») · طريقة العمل، ومربّعات
 // «فحص رقم» و«المرسلون» و«التغطية». كل بطاقة نوع مستقل يُرسم خلف `AnyView` في `AdminSmsView` (حارس المكدس).
 
 // MARK: آخر الإرسالات
@@ -276,21 +276,17 @@ struct SmsAlertsRows: View {
 
 // MARK: - طريقة العمل
 
-/// «طريقة العمل» (كانت «كيف تشتغل رسائل الدخول») — بطاقة مطويّة آخر الصفحة (سطر ملخّص وهي مطويّة): المسار، ما يُحفظ،
+/// «طريقة العمل» (كانت «كيف تشتغل رسائل الدخول») — بطاقة صفحتها `SmsHowItWorksPage` من ⋯ (تبسيط ٢٠٢٦-١٠-٢٢): المسار، ما يُحفظ،
 /// رمز الدخول (٥ دقائق للمالك وحده — 20261021080000)، من يرى ماذا، معنى «ناجحة» و«مشبوهة»، ورابط الشحن. الحدود والتنبيهات لم تعد تُشرح هنا ثانيةً — مكانهما
 /// «إعدادات الإرسال» و«تنبيهات الرصيد» (الدفعة ج). النص نفسه سيُنقل للأندرويد
 struct SmsHowItWorksCard: View {
     let overview: SmsOverview?
     @ObservedObject private var attempts = SmsLoginAttemptsStore.shared
-    @State private var open = false
 
     private var sender: SmsOverview.Sender { overview?.sender ?? SmsOverview.Sender() }
 
     var body: some View {
-        AdminSectionCard(title: L10n.t("طريقة العمل", "How it works"),
-                         isOpen: $open,
-                         summary: L10n.t("المسار · ما يُحفظ · رمز الدخول · من يرى ماذا",
-                                         "The path · what's kept · the sign-in code · who sees what")) {
+        AdminSectionCard {
             AdminRowsCardBody {
                 SmsHowRow(icon: "paperplane.fill", tint: DS.Color.sea,
                           title: L10n.t("المسار", "The path"),
