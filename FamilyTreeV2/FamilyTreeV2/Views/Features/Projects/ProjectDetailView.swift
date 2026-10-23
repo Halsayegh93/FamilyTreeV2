@@ -494,8 +494,8 @@ struct ProjectSectionBackdrop: View {
     }
 }
 
-/// صورة المشروع الكبيرة (طلب المالك ٢٠٢٦-١٠-٢٢ «صورة المشروع أكبر»): أول صورة من معرض المشروع
-/// تملأ المكان (`scaledToFill` مقصوصة)؛ بلا صورة ← خلفية القسم وعليها شعار المشروع أو مجسّم القسم.
+/// صورة بطاقة المشروع: خلفية القسم وعليها شعار المشروع أو مجسّم القسم — دائماً، ولو للمشروع صور
+/// (المالك ٢٠٢٦-١٠-٢٣: «ليش لمن احط صور للمشروع تصير صورة مكان الخلفية و الشعار» — الصور في «الصور» بصفحته).
 /// المقاس والقصّ من الحاوية (`Color.clear.aspectRatio(…).overlay { ProjectHeroImage }`).
 struct ProjectHeroImage: View {
     let project: Project
@@ -504,22 +504,10 @@ struct ProjectHeroImage: View {
 
     static let aspect: CGFloat = 16.0 / 10.0
 
-    private var photoURL: URL? {
-        guard let first = project.imageUrls.first, !first.isEmpty else { return nil }
-        return URL(string: first)
-    }
-
     var body: some View {
         ZStack {
             ProjectSectionBackdrop(symbolSize: DS.Glyph.lg)
-            if let url = photoURL {
-                CachedAsyncImage(url: url) { img in
-                    img.resizable().scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } placeholder: { mark }
-            } else {
-                mark
-            }
+            mark
         }
         .clipped()
         .accessibilityHidden(true)
