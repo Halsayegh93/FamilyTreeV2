@@ -3,9 +3,9 @@ import SwiftUI
 // MARK: - «إنشاء» — المنشئ الواحد في «المناسبات والإعلانات» (الدفعة ب من «نفّذ كل المقترح»، ٢٠٢٦-١٠-٢٠)
 //
 // مربّع واحد «ماذا تنشئ؟» بأربعة أنواع بدل أربعة منشئات متفرّقة (D7 · D8 · D9 · D10 في AUDIT.md):
-//   • إعلان — المنشئ المختصر نفسه (`AdminAnnounceComposer`، الدفعة ١١ «ثلاث أسئلة بس»: شنو تبي تقول؟ · لمن؟ · متى؟
-//     و☑ «ينشر بعد في الأخبار» مع «الكل»، وزرّ واحد يقول ما سيحدث) — كان أيضاً صفحة «إشعار للأعضاء» الكاملة. ويفتحه
-//     «تعديل» في «القادم» بمسودّة الإشعار المجدول (`AdminAnnounceDraft(editing:)`) بلا مربّع الأنواع.
+//   • إعلان — المنشئ المختصر نفسه (`AdminAnnounceComposer`، تبسيط ٢٠٢٦-١٠-٢٢: شاشة واحدة — النص · لمن · أرسل الآن/جدولة،
+//     إشعار فقط بعنوان ثابت، وزرّ واحد يقول ما سيحدث) — كان أيضاً صفحة «إشعار للأعضاء» الكاملة. ويفتحه «تعديل» في
+//     «الإشعارات المجدولة» بمسودّة الإشعار المجدول (`AdminAnnounceDraft(editing:)`) بلا مربّع الأنواع.
 //   • إعلان وفاة — اختيار المتوفى (وفيات آخر ٣٠ يوماً لم يُعلن عنها) ثم مربّع `DeathAnnouncementBox` نفسه (`announce_death`).
 //   • بطاقة تهنئة أو تعزية — مصمّم البطاقات نفسه (`OccasionComposerView`) يُفتح فوق المربّع.
 //   • إعلان تحديث التطبيق — ما الجديد في الإصدار (`sendNotification(kind: app_update)` كما كانت صفحته).
@@ -31,7 +31,7 @@ enum AdminCreateKind: String, CaseIterable, Identifiable {
 
     var note: String {
         switch self {
-        case .announcement: return L10n.t("إشعار للأعضاء — الحين أو بموعد", "A push — now or scheduled")
+        case .announcement: return L10n.t("إشعار للأعضاء — الآن أو بموعد", "A push — now or scheduled")
         case .death:        return L10n.t("نص معتمد + موعد الدفن", "Standard text + burial time")
         case .card:         return L10n.t("صورة للحفظ والمشاركة", "An image to save and share")
         case .appUpdate:    return L10n.t("ما الجديد في الإصدار", "What's new in the release")

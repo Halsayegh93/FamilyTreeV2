@@ -7,21 +7,12 @@ import Supabase
 // ← اختار «الاثنين مع بعض». منذ الدفعة ب المربّع جزء من «ماذا تنشئ؟»: يفتحه «إنشاء» في رأس «المناسبات والإعلانات» (بيته)
 // ومكبّر الصوت في رأس «اليوم» (طلب المالك).
 //
-// الدفعة ١١ (اختيار المالك «ثلاث أسئلة بس»): المربّع ثلاثة أسئلة وزرّ واحد يقول بالضبط ما سيحدث:
-//   ١) «شنو تبي تقول؟» — النص (أسطر)، والعنوان اختياري خلف «＋ عنوان» (فارغ = «عائلة المحمدعلي») ومعه العناوين الجاهزة.
-//   ٢) «لمن؟» — شرائح: الكل · دولة ⌄ (قائمة الدول بعدد أعضائها) · أعضاء ⌄ (المنتقي الموحّد `DSMemberPickerBox` باختيار
-//      متعدّد). ومع «الكل» وحده: ☑ «ينشر بعد في الأخبار» (مفعّل افتراضياً) — الخبر يراه الجميع، فلا معنى له لمستلمين بعينهم.
-//   ٣) «متى؟» — الحين · بكرة الصبح (٩:٠٠ بتوقيت الكويت) · اختر وقت ⌄ (تاريخ ووقت في المستقبل فقط).
-//   الزرّ: «أرسل الحين ← 32 عضو» / «جدول بكرة 9:00 ص ← الكل» / «جدول الخميس 7:30 م ← الكويت (210)» — تأكيد قصير لـ«الكل» فقط.
-// لا منطق جديد:
-//   • الخبر = `NewsViewModel.postNews(type: «إعلان»)` نفسه (مسار «خبر جديد»)، باسم «إدارة العائلة».
-//   • الإشعار = `NotificationViewModel.sendNotification` / `scheduleNotification` بنوع `admin_broadcast` — والدفع من
-//     مشغّل جدول الإشعارات على السيرفر كما هو (`fanout_broadcast_notification` للكل، `dispatch_due_scheduled_notifications` للمجدول).
-//   • تعديل المجدول (من «القادم») = نفس المربّع بالمسودّة → `updateScheduledNotification` (سياسة التعديل للمالك والمدير، والصف
-//     ما زال «pending»).
-// الإشعار المزدوج (الدفعة ب): نشر الخبر لا يُشعر الأعضاء (لا مشغّل على `news` غير `trg_content_force_pending`)؛ يُشعر الإدارة فقط
-// بـ«منشور جديد»، ويُترك هذا التنبيه حين يصلها الإعلان نفسه (للكل) — لا إشعاران لأحد. الصلاحية `canSendNotifications` (المالك
-// والمدير — نشرهما مباشر)، وحارس السيرفر يبقى الحَكَم.
+// تبسيط ٢٠٢٦-١٠-٢٢ (موافقة المالك): شاشة واحدة بدل الأسئلة الثلاثة — النص، ثم «لمن» (الكل · دولة ⌄ · أعضاء ⌄ بالمنتقي
+// الموحّد `DSMemberPickerBox`)، ثم «أرسل الآن / جدولة» (تاريخ ووقت في المستقبل حين تُجدول)، وزرّ واحد يقول ما سيحدث.
+// العنوان ثابت «عائلة المحمدعلي» (لا عناوين جاهزة)، والإعلان إشعار فقط — لا يُنشر في الأخبار من هنا.
+// الإشعار = `NotificationViewModel.sendNotification` / `scheduleNotification` بنوع `admin_broadcast` — والدفع من مشغّل جدول
+// الإشعارات على السيرفر كما هو. تعديل المجدول (من «الإشعارات المجدولة») = نفس الشاشة بالمسودّة → `updateScheduledNotification`.
+// الصلاحية `canSendNotifications` (المالك والمدير)، وحارس السيرفر يبقى الحَكَم.
 
 /// زرّ مكبّر الصوت الزجاجي في رأس «اليوم» (لمن يرسل للأعضاء فقط — يقرّر من يضعه): المنشئ الواحد على «إعلان»
 struct AdminAnnounceLauncher: View {
@@ -39,25 +30,15 @@ struct AdminAnnounceLauncher: View {
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(L10n.t("إعلان جديد", "New announcement"))
-        .accessibilityHint(L10n.t("إشعار للأعضاء، وينشر بعد في الأخبار", "Notify members, and post to News too"))
+        .accessibilityHint(L10n.t("إشعار للأعضاء", "Notify members"))
     }
 }
 
 // MARK: - مشترك بين المنشئ و«القادم»
 
 enum AdminAnnounceKit {
-    /// العناوين الجاهزة (من صفحة «إشعار للأعضاء» المحذوفة) — أولها العنوان حين يُترك فارغاً
-    static let presetTitles = [
-        "عائلة المحمدعلي",
-        "إعلان من الإدارة",
-        "تذكير",
-        "دعوة",
-        "تهنئة",
-        "تنبيه مهم"
-    ]
-    static let defaultTitle = presetTitles[0]
-    /// «بكرة الصبح» = الساعة ٩:٠٠ بتوقيت الكويت
-    static let morningHour = 9
+    /// العنوان الثابت لكل إعلان
+    static let defaultTitle = "عائلة المحمدعلي"
     private static let pinnedCountries = ["KW", "SA"]
 
     /// المستلمون المحتملون — نفس فلتر «إشعار للأعضاء»: بلا المعلّقين والمتوفّين والموقوفين
@@ -127,14 +108,6 @@ enum AdminAnnounceKit {
         return nil
     }
 
-    /// بكرة الساعة ٩:٠٠ صباحاً بتوقيت الكويت
-    static func tomorrowMorning(from now: Date = Date()) -> Date {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "Asia/Kuwait") ?? .current
-        let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now
-        return cal.date(bySettingHour: morningHour, minute: 0, second: 0, of: tomorrow) ?? tomorrow
-    }
-
     /// كلمة اليوم: «اليوم» · «بكرة» · اسم اليوم خلال أسبوع · «5 نوفمبر»
     static func dayWord(_ date: Date, now: Date = Date()) -> String {
         let cal = Calendar.current
@@ -162,39 +135,29 @@ enum AdminAnnounceKit {
 
 struct AdminAnnounceDraft {
     enum Audience: Hashable { case all, country(String), members(Set<UUID>) }
-    enum When: Hashable { case now, tomorrowMorning, custom(Date) }
+    enum When: Hashable { case now, custom(Date) }
 
-    var title = ""
     var text = ""
     var audience: Audience = .all
     var when: When = .now
-    /// ☑ «ينشر بعد في الأخبار» (مع «الكل» فقط)
-    var publishNews = true
     /// تعديل إشعار مجدول — معرّف صفّه (nil = جديد)
     var editingId: UUID? = nil
 
-    init(title: String = "", text: String = "", audience: Audience = .all, when: When = .now, publishNews: Bool = true) {
-        self.title = title
+    init(text: String = "", audience: Audience = .all, when: When = .now) {
         self.text = text
         self.audience = audience
         self.when = when
-        self.publishNews = publishNews
     }
 
-    /// إشعار مجدول ← مسودّة تعديل: نصّه وعنوانه، مستلموه (دولة إن طابقوا أعضاءها بالضبط)، وموعده
+    /// إشعار مجدول ← مسودّة تعديل: نصّه، مستلموه (دولة إن طابقوا أعضاءها بالضبط)، وموعده
     init(editing n: NotificationViewModel.ScheduledNotification, members: [FamilyMember]) {
         editingId = n.id
-        publishNews = false
-        title = n.title == AdminAnnounceKit.defaultTitle ? "" : n.title
-        text = n.body
+        let body = n.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = body.isEmpty ? n.title : n.body
         if let ids = n.targetMemberIds, !ids.isEmpty {
             audience = AdminAnnounceKit.countryCode(matching: ids, members: members).map { .country($0) } ?? .members(Set(ids))
         }
-        if let date = n.scheduledDate {
-            when = abs(date.timeIntervalSince(AdminAnnounceKit.tomorrowMorning())) < 60 ? .tomorrowMorning : .custom(date)
-        } else {
-            when = .custom(Date().addingTimeInterval(3600))
-        }
+        when = .custom(n.scheduledDate ?? Date().addingTimeInterval(3600))
     }
 }
 
@@ -206,28 +169,23 @@ struct AdminAnnounceComposer: View {
     /// إغلاق المربّع (الإلغاء، أو «حسناً» بعد النجاح)
     let onClose: () -> Void
 
-    @EnvironmentObject private var authVM: AuthViewModel
-    @EnvironmentObject private var newsVM: NewsViewModel
     @EnvironmentObject private var notificationVM: NotificationViewModel
     @EnvironmentObject private var memberVM: MemberViewModel
     @Environment(\.dsSection) private var section
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private enum AudienceKind: Hashable { case all, country, members }
-    private enum WhenKind: Hashable { case now, tomorrow, custom }
+    private enum WhenKind: Hashable { case now, scheduled }
 
     /// تعديل إشعار مجدول (nil = جديد)
     private let editingId: UUID?
 
-    @State private var title: String
     @State private var text: String
-    @State private var titleOpen: Bool
     @State private var audience: AudienceKind
     @State private var country: String?
     @State private var selected: Set<UUID>
     @State private var when: WhenKind
     @State private var customDate: Date
-    @State private var publishNews: Bool
     /// المنتقي الموحّد مكان المربّع (اختيار «أعضاء») — وما كان محدّداً عند فتحه («إلغاء» يرجعه، وترتيبه ثابت)
     @State private var picking = false
     @State private var pickerSnapshot: Set<UUID> = []
@@ -242,10 +200,7 @@ struct AdminAnnounceComposer: View {
         self.chooser = chooser
         self.onClose = onClose
         editingId = draft.editingId
-        _title = State(initialValue: draft.title)
         _text = State(initialValue: draft.text)
-        _titleOpen = State(initialValue: !draft.title.isEmpty)
-        _publishNews = State(initialValue: draft.publishNews)
         switch draft.audience {
         case .all:
             _audience = State(initialValue: .all); _country = State(initialValue: nil); _selected = State(initialValue: [])
@@ -257,17 +212,15 @@ struct AdminAnnounceComposer: View {
         switch draft.when {
         case .now:
             _when = State(initialValue: .now); _customDate = State(initialValue: Self.defaultCustomDate())
-        case .tomorrowMorning:
-            _when = State(initialValue: .tomorrow); _customDate = State(initialValue: Self.defaultCustomDate())
         case .custom(let date):
-            _when = State(initialValue: .custom); _customDate = State(initialValue: date)
+            _when = State(initialValue: .scheduled); _customDate = State(initialValue: date)
         }
     }
 
     private let tint = DS.Color.brandFill
     private var isEditing: Bool { editingId != nil }
 
-    /// «اختر وقت» يبدأ بعد ساعة، على أقرب ربع ساعة
+    /// «جدولة» تبدأ بعد ساعة، على أقرب ربع ساعة
     private static func defaultCustomDate() -> Date {
         let quarter: TimeInterval = 15 * 60
         let base = Date().addingTimeInterval(3600)
@@ -277,14 +230,8 @@ struct AdminAnnounceComposer: View {
     // MARK: مشتقات
 
     private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var noticeTitle: String { trimmed(title).isEmpty ? AdminAnnounceKit.defaultTitle : trimmed(title) }
-    private var noticeBody: String { trimmed(text).isEmpty ? noticeTitle : trimmed(text) }
-
-    /// نص الخبر: العنوان (إن كُتب) سطراً أول ثم النص
-    private var newsContent: String {
-        let t = trimmed(title)
-        return t.isEmpty ? trimmed(text) : t + "\n" + trimmed(text)
-    }
+    private var noticeTitle: String { AdminAnnounceKit.defaultTitle }
+    private var noticeBody: String { trimmed(text) }
 
     private var active: [FamilyMember] { AdminAnnounceKit.activeMembers(memberVM.allMembers) }
 
@@ -312,17 +259,8 @@ struct AdminAnnounceComposer: View {
         }
     }
 
-    /// موعد الإرسال — nil = الحين
-    private var sendDate: Date? {
-        switch when {
-        case .now:      return nil
-        case .tomorrow: return AdminAnnounceKit.tomorrowMorning()
-        case .custom:   return customDate
-        }
-    }
-
-    /// ينشر في الأخبار — مع «الكل» فقط، وليس في تعديل المجدول (الخبر نُشر يوم أُنشئ)
-    private var postsNews: Bool { audience == .all && publishNews && !isEditing }
+    /// موعد الإرسال — nil = الآن
+    private var sendDate: Date? { when == .now ? nil : customDate }
 
     /// ما يمنع الإرسال (سطر فوق الزرّ) — nil = جاهز
     private func blocker(_ active: [FamilyMember]) -> String? {
@@ -335,8 +273,8 @@ struct AdminAnnounceComposer: View {
         case .members:
             if selected.isEmpty { return L10n.t("اختر عضواً واحداً على الأقل", "Pick at least one member") }
         }
-        if when == .custom && customDate <= Date().addingTimeInterval(30) {
-            return L10n.t("اختر وقتاً بعد الحين", "Pick a time after now")
+        if when == .scheduled && customDate <= Date().addingTimeInterval(30) {
+            return L10n.t("اختر وقتاً بعد الآن", "Pick a time after now")
         }
         return nil
     }
@@ -345,7 +283,7 @@ struct AdminAnnounceComposer: View {
     private func actionTitle(_ active: [FamilyMember]) -> String {
         let to = audienceLabel(active)
         guard let date = sendDate else {
-            return L10n.t("أرسل الحين ← \(to)", "Send now → \(to)")
+            return L10n.t("أرسل الآن ← \(to)", "Send now → \(to)")
         }
         let at = AdminAnnounceKit.when(date)
         return isEditing ? L10n.t("احفظ: \(at) ← \(to)", "Save: \(at) → \(to)")
@@ -397,8 +335,8 @@ struct AdminAnnounceComposer: View {
         return DSComposer(
             title: isEditing ? L10n.t("تعديل الإشعار المجدول", "Edit scheduled push")
                 : (chooser == nil ? L10n.t("إعلان جديد", "New announcement") : L10n.t("ماذا تنشئ؟", "What to create?")),
-            subtitle: isEditing ? L10n.t("نفس الأسئلة — ويوصل في موعده الجديد", "Same questions — goes out at the new time")
-                : L10n.t("شنو تقول، لمن، ومتى — وترسل", "What, to whom, and when — then send"),
+            subtitle: isEditing ? L10n.t("يوصل في موعده الجديد", "Goes out at the new time")
+                : L10n.t("إشعار باسم «\(AdminAnnounceKit.defaultTitle)»", "A push titled “\(AdminAnnounceKit.defaultTitle)”"),
             icon: isEditing ? "clock.arrow.circlepath" : "megaphone.fill",
             tint: tint,
             actionTitle: actionTitle(active),
@@ -406,15 +344,13 @@ struct AdminAnnounceComposer: View {
             canSubmit: blocker == nil && !isSending,
             isBusy: isSending,
             note: blocker,
-            hasUnsavedChanges: !isEditing && (!trimmed(title).isEmpty || !trimmed(text).isEmpty),
+            hasUnsavedChanges: !isEditing && !trimmed(text).isEmpty,
             actionFullRow: true,
             onSubmit: submit,
             onCancel: { onClose() }
         ) {
             if let chooser { chooser }
-            AnyView(sayingSection)
-            AnyView(audienceSection(active))
-            AnyView(whenSection)
+            AnyView(formSection(active))
         }
     }
 
@@ -439,17 +375,11 @@ struct AdminAnnounceComposer: View {
     }
 
     private var confirmText: String {
-        var lines: [String] = []
         if let date = sendDate {
-            lines.append(L10n.t("يوصل الإشعار لكل الأعضاء \(AdminAnnounceKit.when(date)).",
-                                "The push reaches every member \(AdminAnnounceKit.when(date))."))
-        } else {
-            lines.append(L10n.t("يوصل الإشعار لكل الأعضاء الحين.", "The push reaches every member now."))
+            return L10n.t("يوصل الإشعار لكل الأعضاء \(AdminAnnounceKit.when(date)).",
+                          "The push reaches every member \(AdminAnnounceKit.when(date)).")
         }
-        if postsNews {
-            lines.append(L10n.t("وينشر الحين في الأخبار باسم «إدارة العائلة».", "And posts to News now as “Family Admin”."))
-        }
-        return lines.joined(separator: "\n")
+        return L10n.t("يوصل الإشعار لكل الأعضاء الآن.", "The push reaches every member now.")
     }
 
     private var doneTitle: String {
@@ -457,57 +387,29 @@ struct AdminAnnounceComposer: View {
         return sendDate == nil ? L10n.t("تم الإرسال", "Sent") : L10n.t("تمت الجدولة", "Scheduled")
     }
 
-    // MARK: ١) شنو تبي تقول؟
+    // MARK: الشاشة الواحدة: النص · لمن · أرسل الآن / جدولة
 
-    private var sayingSection: some View {
-        DSComposerSection(title: L10n.t("شنو تبي تقول؟", "What do you want to say?"), icon: "text.bubble.fill",
-                          tint: tint, index: 0) {
+    private func formSection(_ active: [FamilyMember]) -> some View {
+        DSComposerSection(title: L10n.t("الإعلان", "Announcement"), icon: "megaphone.fill", tint: tint, index: 0) {
             DSComposerField(icon: "text.alignright", label: L10n.t("النص", "Text"),
                             placeholder: L10n.t("اكتب الإشعار…", "Write the message…"),
                             text: $text, tint: tint, multiline: true, limit: 500)
-            if titleOpen {
-                DSComposerField(icon: "character.cursor.ibeam", label: L10n.t("العنوان (اختياري)", "Title (optional)"),
-                                placeholder: AdminAnnounceKit.defaultTitle, text: $title, tint: tint, limit: 100)
-                presetTitlesRow
-            } else {
-                HStack(spacing: DS.Spacing.sm) {
-                    Button {
-                        withAnimation(DS.Anim.snappy) { titleOpen = true }
-                    } label: {
-                        DSAddChipLabel(icon: "plus", title: L10n.t("عنوان", "Title"))
-                    }
-                    .buttonStyle(DSPressStyle())
-                    .accessibilityLabel(L10n.t("إضافة عنوان", "Add a title"))
-                    Text(L10n.t("بدونه: «\(AdminAnnounceKit.defaultTitle)»", "Default: “\(AdminAnnounceKit.defaultTitle)”"))
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-            }
+            AnyView(audienceBlock(active))
+            AnyView(whenBlock)
         }
     }
 
-    /// العناوين الجاهزة — ضغطة تضعها في «العنوان» (والمختار مميّز)
-    private var presetTitlesRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.xs) {
-                ForEach(AdminAnnounceKit.presetTitles, id: \.self) { preset in
-                    DSChipButton(preset, isSelected: trimmed(title) == preset, size: .small) {
-                        withAnimation(DS.Anim.quick) { title = trimmed(title) == preset ? "" : preset }
-                    }
-                }
-            }
-            .padding(.horizontal, DS.Border.width)
-        }
-        .accessibilityLabel(L10n.t("عناوين جاهزة", "Ready titles"))
+    private func fieldLabel(_ title: String) -> some View {
+        Text(title)
+            .dsFieldFont(.rowTitle)
+            .foregroundColor(DS.Color.fieldLabel)
+            .accessibilityAddTraits(.isHeader)
     }
 
-    // MARK: ٢) لمن؟
-
-    private func audienceSection(_ active: [FamilyMember]) -> some View {
+    private func audienceBlock(_ active: [FamilyMember]) -> some View {
         let countries = AdminAnnounceKit.countries(active)
-        return DSComposerSection(title: L10n.t("لمن؟", "To whom?"), icon: "person.2.fill", tint: tint, index: 1) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            fieldLabel(L10n.t("لمن", "To"))
             AdminChoiceRow {
                 Button { pickAudience(.all) } label: {
                     AdminChoiceChip(title: L10n.t("الكل", "Everyone"), icon: "person.3.fill", isSelected: audience == .all)
@@ -524,10 +426,6 @@ struct AdminAnnounceComposer: View {
                 .buttonStyle(DSPressStyle())
                 .accessibilityAddTraits(audience == .members ? .isSelected : [])
                 .accessibilityHint(L10n.t("يفتح قائمة الأعضاء — تقدر تختار أكثر من عضو", "Opens the member list — pick several"))
-            }
-            if audience == .all && !isEditing {
-                newsCheckbox
-                    .transition(.opacity)
             }
         }
     }
@@ -567,42 +465,6 @@ struct AdminAnnounceComposer: View {
         guard audience != kind else { return }
         UISelectionFeedbackGenerator().selectionChanged()
         withAnimation(DS.Anim.snappy) { audience = kind }
-    }
-
-    /// ☑ «ينشر بعد في الأخبار» — مع «الكل» فقط (الخبر يراه الجميع)
-    private var newsCheckbox: some View {
-        let ink = DS.Color.primary.dsChrome(in: section).dsReadableGlyph
-        let sub = sendDate == nil ? L10n.t("يراه الكل في الرئيسية", "Everyone sees it on Home")
-                                  : L10n.t("ينزل في الأخبار الحين، والإشعار في موعده", "Posts to News now; the push on schedule")
-        return Button {
-            UISelectionFeedbackGenerator().selectionChanged()
-            withAnimation(DS.Anim.quick) { publishNews.toggle() }
-        } label: {
-            HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                Image(systemName: publishNews ? "checkmark.square.fill" : "square")
-                    .dsGlyph(DS.Glyph.xl, weight: .semibold)
-                    .foregroundColor(publishNews ? ink : DS.Color.textTertiary)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(L10n.t("ينشر بعد في الأخبار", "Also post in News"))
-                        .dsFieldFont(.rowTitle)
-                        .foregroundColor(DS.Color.fieldLabel)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(sub)
-                        .dsFieldFont(.subtitle)
-                        .foregroundColor(DS.Color.fieldValue)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }
-            .dsRowBox()
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.t("ينشر بعد في الأخبار", "Also post in News"))
-        .accessibilityValue(publishNews ? L10n.t("محدّد", "Checked") : L10n.t("غير محدّد", "Unchecked"))
-        .accessibilityHint(sub)
-        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: المنتقي الموحّد (اختيار متعدّد)
@@ -652,16 +514,16 @@ struct AdminAnnounceComposer: View {
         }
     }
 
-    // MARK: ٣) متى؟
+    // MARK: أرسل الآن / جدولة
 
-    private var whenSection: some View {
-        DSComposerSection(title: L10n.t("متى؟", "When?"), icon: "clock.fill", tint: tint, index: 2) {
+    private var whenBlock: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            fieldLabel(L10n.t("متى", "When"))
             AdminChoiceRow {
-                whenChip(.now, title: L10n.t("الحين", "Now"), icon: "bolt.fill")
-                whenChip(.tomorrow, title: L10n.t("بكرة الصبح", "Tomorrow morning"), icon: "sunrise.fill")
-                whenChip(.custom, title: L10n.t("اختر وقت", "Pick a time"), icon: "calendar", expands: true)
+                whenChip(.now, title: L10n.t("أرسل الآن", "Send now"), icon: "bolt.fill")
+                whenChip(.scheduled, title: L10n.t("جدولة", "Schedule"), icon: "calendar", expands: true)
             }
-            if when == .custom {
+            if when == .scheduled {
                 customPicker
                     .transition(.opacity)
             }
@@ -672,15 +534,13 @@ struct AdminAnnounceComposer: View {
         Button {
             guard when != kind else { return }
             UISelectionFeedbackGenerator().selectionChanged()
-            if kind == .custom && customDate <= Date().addingTimeInterval(60) { customDate = Self.defaultCustomDate() }
+            if kind == .scheduled && customDate <= Date().addingTimeInterval(60) { customDate = Self.defaultCustomDate() }
             withAnimation(DS.Anim.snappy) { when = kind }
         } label: {
             AdminChoiceChip(title: title, icon: icon, isSelected: when == kind, expands: expands)
         }
         .buttonStyle(DSPressStyle())
         .accessibilityAddTraits(when == kind ? .isSelected : [])
-        .accessibilityHint(kind == .tomorrow
-            ? L10n.t("الساعة 9:00 الصبح بتوقيت الكويت", "9:00 AM Kuwait time") : "")
     }
 
     /// تاريخ ووقت في المستقبل فقط — مضغوط داخل المربّع (عمودي من أحجام إمكانية الوصول)
@@ -708,7 +568,7 @@ struct AdminAnnounceComposer: View {
         .dsRowBox()
     }
 
-    // MARK: الإرسال — المسارات الموجودة كما هي
+    // MARK: الإرسال — المسارات الموجودة كما هي (إشعار فقط)
 
     private func send() async {
         let active = self.active
@@ -718,7 +578,7 @@ struct AdminAnnounceComposer: View {
         let ids = targetIds(active)
         let to = audienceLabel(active)
 
-        // تعديل إشعار مجدول: الصف نفسه (ما زال «pending»)؛ «الحين» = موعده الآن فترسله المهمة خلال دقيقة
+        // تعديل إشعار مجدول: الصف نفسه (ما زال «pending»)؛ «الآن» = موعده الآن فترسله المهمة خلال دقيقة
         if let editingId {
             let result = await notificationVM.updateScheduledNotification(editingId, title: noticeTitle, body: noticeBody,
                                                                           targetMemberIds: ids, scheduledFor: sendDate ?? Date())
@@ -737,18 +597,6 @@ struct AdminAnnounceComposer: View {
             return
         }
 
-        var lines: [String] = []
-        if postsNews {
-            // تنبيه الإدارة «منشور جديد» يُترك حين يصلها الإعلان نفسه (للكل) — لا إشعاران
-            let ok = await newsVM.postNews(content: newsContent, type: "إعلان", asAdminIdentity: true,
-                                           notifyAdmins: ids != nil)
-            guard ok else {
-                failure = newsVM.newsPostErrorMessage ?? L10n.t("تعذّر نشر الإعلان. حاول مرة أخرى.", "Couldn't post. Try again.")
-                return
-            }
-            lines.append(L10n.t("نُشر في الأخبار.", "Posted to News."))
-        }
-
         let ok: Bool
         if let date = sendDate {
             ok = await notificationVM.scheduleNotification(title: noticeTitle, body: noticeBody, targetMemberIds: ids,
@@ -759,25 +607,17 @@ struct AdminAnnounceComposer: View {
                                                        kind: "admin_broadcast")
         }
         guard ok else {
-            if postsNews {
-                // الخبر نُشر — المحاولة التالية للإشعار وحده (لا خبر مكرّر)
-                publishNews = false
-                failure = L10n.t("نُشر في الأخبار، لكن تعذّر إرسال الإشعار. اضغط الزر لإعادة الإشعار وحده.",
-                                 "Posted to News, but the push failed. Tap the button to retry the push only.")
-            } else {
-                failure = L10n.t("تعذّر إرسال الإشعار. حاول مرة أخرى.", "Couldn't send the push. Try again.")
-            }
+            failure = L10n.t("تعذّر إرسال الإشعار. حاول مرة أخرى.", "Couldn't send the push. Try again.")
             return
         }
-        lines.append(sendDate.map { L10n.t("يوصل الإشعار \(AdminAnnounceKit.when($0)) ← \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
-                     ?? L10n.t("وصل الإشعار ← \(to).", "Push sent → \(to)."))
         // لحظة النجاح الموجودة (`dsAlert(…, moment: .success)`) + اهتزاز نجاح خفيف (الدفعة ١٠)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        done = lines.joined(separator: "\n")
+        done = sendDate.map { L10n.t("يوصل الإشعار \(AdminAnnounceKit.when($0)) ← \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
+            ?? L10n.t("وصل الإشعار ← \(to).", "Push sent → \(to).")
     }
 }
 
-// MARK: - شرائح الاختيار (الأسئلة الثلاثة)
+// MARK: - شرائح الاختيار
 
 /// شريحة اختيار بشكل `DSFilterChips` (المختار ممتلئ بتدرّج القسم، والباقي بإطار خفيف)، و⌄ لما يفتح قائمة أو منتقياً.
 /// وجه فقط — يُلبس `Button` أو `Menu`

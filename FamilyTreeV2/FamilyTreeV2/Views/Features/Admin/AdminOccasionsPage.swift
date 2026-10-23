@@ -6,9 +6,10 @@ import SwiftUI
 // الوفيات والإعلان وذكرى الراحلين ومنشورات المناسبات، صفحة «إشعار للأعضاء» وصفحة «رسالة تحديث التطبيق»): صفحة واحدة
 // تتمرّر بعناوين صغيرة — بلا تبويبات ولا مبدّلات (طلب المالك):
 //   الرأس: ‹ اليوم · العنوان قائمة الأقسام · ثلاثة أرقام (المالك والمدير) · «＋ إنشاء» ← المربّع الواحد (`AdminCreateWindow`).
+//   «الإشعارات المجدولة» (المالك والمدير؛ تبسيط ٢٠٢٦-١٠-٢٢): قائمة مسطّحة بالموعد — الوقت · النص · لمن، و«تعديل» يفتح المنشئ
+//     نفسه بمسودّته و«إلغاء» بتأكيد؛ بلا تجميع بالأيام، وبلا مجدول: «ما في إشعارات مجدولة».
 //   «القادم» — بالأيام (اليوم · بكرة · هذا الأسبوع · لاحقاً): وفيات لم يُعلن عنها («إعلان» ← المنشئ على «إعلان وفاة»
-//     جاهزاً)، الإشعارات المجدولة (الدفعة ١١: الوقت كبيراً + النص سطرين + لمن، و«تعديل» يفتح المنشئ نفسه بمسودّته و«إلغاء»
-//     بتأكيد؛ وبلا مجدول: «ما في إشعارات مجدولة»)، وذكرى الراحلين خلال ٣٠ يوماً (المراقب والمشرف: الذكرى فقط).
+//     جاهزاً) وذكرى الراحلين خلال ٣٠ يوماً (المراقب والمشرف: الذكرى فقط).
 //   «المنشور» (المالك والمدير) — الإعلانات وإعلانات الوفاة في الأخبار، إعلانات التحديث، والإشعارات المرسلة.
 //   أرقام فقط تفتح بيوتها: «تصل الإشعارات إلى N جهازاً» ← الفريق والأمان، و«N متوفى تاريخ وفاته غير مكتمل» ← العائلة.
 // لا قراءة جديدة على السيرفر: الأعضاء المحمّلون، `death_announcements`، `scheduled_notifications`، الأخبار، وإشعاراتك.
@@ -132,20 +133,24 @@ struct AdminOccasionsPage: View {
 
 // MARK: - «القادم»
 
-/// عناصر «القادم» مجمّعة بالأيام: اليوم · هذا الأسبوع · لاحقاً
+/// عناصر «القادم» مجمّعة بالأيام: اليوم · هذا الأسبوع · لاحقاً — والإشعارات المجدولة قائمة مسطّحة بالموعد
 struct AdminUpcomingFeed {
     enum Item: Identifiable {
         case death(FamilyMember)
-        case scheduled(NotificationViewModel.ScheduledNotification, Date?)
         case memorial(DeceasedMemorialBoard.Upcoming)
 
         var id: String {
             switch self {
             case .death(let m):        return "death-\(m.id)"
-            case .scheduled(let n, _): return "scheduled-\(n.id)"
             case .memorial(let u):     return "memorial-\(u.id)"
             }
         }
+    }
+
+    struct Scheduled: Identifiable {
+        let item: NotificationViewModel.ScheduledNotification
+        let date: Date?
+        var id: UUID { item.id }
     }
 
     enum Bucket: Int, CaseIterable, Identifiable {
@@ -163,9 +168,6 @@ struct AdminUpcomingFeed {
             case .later: return L10n.t("لاحقاً", "Later")
             }
         }
-
-        /// اليوم واضح من عنوان المجموعة في «اليوم» و«بكرة» — في غيرهما يُكتب اليوم فوق الوقت
-        var showsDay: Bool { self == .week || self == .later }
 
         static func of(days: Int) -> Bucket {
             switch days {
@@ -188,13 +190,15 @@ struct AdminUpcomingFeed {
     let groups: [DayGroup]
     /// ذكرى خلال ٧ أيام (رقم الرأس)
     let memorialWeek: Int
-    /// عدد الإشعارات المجدولة في القائمة (للحالة الفارغة «ما في إشعارات مجدولة»)
-    let scheduledCount: Int
+    /// الإشعارات المجدولة بالموعد (الأقرب أولاً) — بلا تجميع
+    let scheduled: [Scheduled]
 
     init(members: [FamilyMember], scheduled: [NotificationViewModel.ScheduledNotification], announced: Set<UUID>?) {
         let board = DeceasedMemorialBoard(members)
         memorialWeek = board.withinWeek
-        scheduledCount = scheduled.count
+        self.scheduled = scheduled
+            .map { Scheduled(item: $0, date: $0.scheduledDate) }
+            .sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
         if let announced {
             deaths = members
                 .filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate, within: DeathRecency.alertDays)
@@ -207,11 +211,6 @@ struct AdminUpcomingFeed {
         for m in deaths { map[.today, default: []].append((-1, .death(m))) }
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
-        for n in scheduled {
-            let date = n.scheduledDate
-            let days = date.map { cal.dateComponents([.day], from: today, to: cal.startOfDay(for: $0)).day ?? 0 } ?? 0
-            map[Bucket.of(days: days), default: []].append((date?.timeIntervalSince1970 ?? 0, .scheduled(n, date)))
-        }
         for u in board.upcoming {
             let when = cal.date(byAdding: .day, value: u.anniversary.daysUntil, to: today) ?? today
             map[Bucket.of(days: u.anniversary.daysUntil), default: []].append((when.timeIntervalSince1970 + 1, .memorial(u)))
@@ -240,21 +239,17 @@ struct AdminOccasionsUpcomingCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            if authVM.isAdmin && !loading {
+                AnyView(scheduledSection)
+            }
             AdminSectionLabel(title: L10n.t("القادم", "Upcoming"),
                               trailing: authVM.isAdmin ? nil : L10n.t("ذكرى الراحلين", "Memorials"))
             if loading {
                 AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…")))
             } else if feed.isEmpty {
-                AdminPageStateCard(.empty(authVM.isAdmin ? L10n.t("ما في إشعارات مجدولة", "No scheduled pushes")
-                                                          : L10n.t("لا شيء قادم", "Nothing upcoming"),
-                                          message: authVM.isAdmin
-                                            ? L10n.t("ولا ذكرى خلال ٣٠ يوماً — جدول إشعاراً من «إنشاء»", "And no memorial in 30 days — schedule one from Create")
-                                            : L10n.t("لا ذكرى خلال ٣٠ يوماً", "No memorial in the next 30 days")))
+                AdminPageStateCard(.empty(L10n.t("لا شيء قادم", "Nothing upcoming"),
+                                          message: L10n.t("لا ذكرى خلال ٣٠ يوماً", "No memorial in the next 30 days")))
             } else {
-                // بلا مجدول: سطر هادئ أول «القادم» (ظاهر بلا تمرير)
-                if authVM.isAdmin && feed.scheduledCount == 0 {
-                    AnyView(noScheduledLine)
-                }
                 ForEach(feed.groups) { group in
                     AnyView(groupCard(group.bucket, group.items))
                 }
@@ -292,14 +287,34 @@ struct AdminOccasionsUpcomingCard: View {
         return line.count > 40 ? String(line.prefix(40)) + "…" : line
     }
 
-    /// بلا مجدول (والقائمة فيها غيره): سطر هادئ واحد
-    private var noScheduledLine: some View {
-        AdminListRow(icon: "bell.slash", tint: DS.Color.textTertiary,
-                     title: L10n.t("ما في إشعارات مجدولة", "No scheduled pushes"),
-                     subtitle: L10n.t("«إنشاء» ← متى؟ ← بكرة الصبح أو اختر وقت", "Create → When? → tomorrow morning or pick a time"),
-                     showsChevron: false)
+    /// «الإشعارات المجدولة»: قائمة مسطّحة بالموعد (الوقت · النص · لمن) — أو سطر هادئ واحد بلا مجدول
+    private var scheduledSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            AdminSectionLabel(title: L10n.t("الإشعارات المجدولة", "Scheduled pushes"),
+                              trailing: feed.scheduled.isEmpty ? nil : "\(feed.scheduled.count)")
+            Group {
+                if feed.scheduled.isEmpty {
+                    AdminListRow(icon: "bell.slash", tint: DS.Color.textTertiary,
+                                 title: L10n.t("ما في إشعارات مجدولة", "No scheduled pushes"),
+                                 subtitle: L10n.t("«إنشاء» ← إعلان ← جدولة", "Create → Announcement → Schedule"),
+                                 showsChevron: false)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(feed.scheduled.enumerated()), id: \.element.id) { index, s in
+                            if index > 0 { AdminRowDivider() }
+                            AdminScheduledPushRow(item: s.item, date: s.date, showsDay: true,
+                                                  audience: AdminAnnounceKit.audienceLabel(ids: s.item.targetMemberIds,
+                                                                                           members: memberVM.allMembers),
+                                                  isBusy: cancellingId == s.item.id,
+                                                  onEdit: { edit(s.item) }, onCancel: { cancelTarget = s.item })
+                        }
+                    }
+                }
+            }
             .frame(maxWidth: .infinity, alignment: .leading)
             .adminCard()
+        }
+        .padding(.bottom, DS.Spacing.sm)
     }
 
     private func groupCard(_ bucket: AdminUpcomingFeed.Bucket, _ items: [AdminUpcomingFeed.Item]) -> some View {
@@ -311,7 +326,7 @@ struct AdminOccasionsUpcomingCard: View {
                 .accessibilityAddTraits(.isHeader)
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { AdminRowDivider() }
-                AnyView(row(item, showsDay: bucket.showsDay))
+                AnyView(row(item))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -319,7 +334,7 @@ struct AdminOccasionsUpcomingCard: View {
     }
 
     @ViewBuilder
-    private func row(_ item: AdminUpcomingFeed.Item, showsDay: Bool) -> some View {
+    private func row(_ item: AdminUpcomingFeed.Item) -> some View {
         switch item {
         case .death(let m):
             AdminListRow(icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.error,
@@ -329,11 +344,6 @@ struct AdminOccasionsUpcomingCard: View {
                 AdminPillButton(title: L10n.t("إعلان", "Announce"), style: .navy) { announce(m) }
             }
             .accessibilityAction(named: L10n.t("إعلان", "Announce")) { announce(m) }
-        case .scheduled(let n, let date):
-            AdminScheduledPushRow(item: n, date: date, showsDay: showsDay,
-                                  audience: AdminAnnounceKit.audienceLabel(ids: n.targetMemberIds, members: memberVM.allMembers),
-                                  isBusy: cancellingId == n.id,
-                                  onEdit: { edit(n) }, onCancel: { cancelTarget = n })
         case .memorial(let u):
             AdminListRow(icon: "moon.stars.fill", tint: DS.Color.sadu,
                          title: L10n.t("ذكرى \(AdminOccasionsText.late(u.member)) \(u.member.fullName)",
@@ -360,7 +370,7 @@ struct AdminOccasionsUpcomingCard: View {
     }
 }
 
-/// إشعار مجدول في «القادم» (الدفعة ١١): الوقت كبيراً في الطرف («الخميس» فوقه في «هذا الأسبوع» و«لاحقاً»)، النص سطرين،
+/// إشعار مجدول في «الإشعارات المجدولة»: الوقت كبيراً في الطرف واليوم فوقه («اليوم» · «بكرة» · «الخميس»)، النص سطرين،
 /// لمن، ثم «تعديل» و«إلغاء» صغيران — ومن أحجام إمكانية الوصول الوقت فوق النص
 struct AdminScheduledPushRow: View {
     let item: NotificationViewModel.ScheduledNotification
