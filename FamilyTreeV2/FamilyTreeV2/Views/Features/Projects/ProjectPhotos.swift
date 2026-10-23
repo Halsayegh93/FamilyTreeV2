@@ -111,25 +111,40 @@ struct ProjectPhotosEditor: View {
     }
 }
 
-/// صورة رأس المشروع في صفحته (طلب المالك ٢٠٢٦-١٠-٢٣ «الصور تنسحب»): صور كثيرة ← صفحات أفقية تُسحب
-/// بنقاط صغيرة أعلاها؛ صورة واحدة ← الصورة وحدها؛ بلا صورة ← `ProjectHeroImage` (الشعار أو المجسّم).
+/// قسم «الصور» في صفحة المشروع (طلب المالك ٢٠٢٦-١٠-٢٣ الخيار «ب»: الرأس للشعار والاسم فقط، والصور
+/// في قسمها تحت «نبذة عن المشروع» مباشرة): صور كثيرة ← صفحات أفقية تُسحب بزوايا مدوّرة ونقاط صغيرة
+/// تحتها؛ صورة واحدة ← الصورة وحدها بلا نقاط؛ بلا صور ← لا يُرسم القسم (يتحقّق المستدعي).
+/// كل صورة بنسبتها الطبيعية (`scaledToFit` بعرض البطاقة، بلا قصّ): ارتفاع الشريط = أطول الصور نسبةً
+/// حتى سقف `maxHeight` (٧٠٪ من ارتفاع المربّع)، والأقصر تتوسّط على أرضية البطاقة.
 /// الضغط على صورة يفتح العارض بملء الشاشة (`ProjectPhotoViewer`) من تلك الصورة.
-struct ProjectHeroCarousel: View {
-    let project: Project
-    var markSize: CGFloat = DS.Icon.state
+struct ProjectPhotosCarousel: View {
+    let urls: [String]
+    /// سقف ارتفاع الصورة — ٧٠٪ من ارتفاع المربّع (لا تأخذ الصورة الطويلة المربّع كله)
+    var maxHeight: CGFloat = 320
     @State private var page = 0
     @State private var viewerIndex: Int?
+    /// نسبة كل صورة (العرض ÷ الارتفاع) بعد تحميلها
+    @State private var aspects: [String: CGFloat] = [:]
+    @State private var width: CGFloat = 0
 
-    private var photos: [String] { project.imageUrls.filter { !$0.isEmpty } }
+    /// ارتفاع الشريط — أطول الصور نسبةً (أصغر عرض÷ارتفاع) بعرض البطاقة حتى السقف؛ قبل التحميل ١٦:١٠
+    private func stripHeight(_ photos: [String]) -> CGFloat {
+        let known = photos.compactMap { aspects[$0] }.filter { $0 > 0 }
+        let aspect = known.min() ?? 1.6
+        guard width > 0 else { return min(maxHeight, 200) }
+        return min(maxHeight, width / aspect)
+    }
+
+    private var photos: [String] { urls.filter { !$0.isEmpty } }
 
     var body: some View {
         let photos = photos
-        if photos.isEmpty {
-            ProjectHeroImage(project: project, markSize: markSize)
-        } else {
-            ZStack {
-                ProjectSectionBackdrop(symbolSize: DS.Glyph.lg)
-                    .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            // عنوان القسم الموحّد (قرص مجسّم + عنوان + العدد)
+            DSSectionTitle(title: L10n.t("الصور", "Photos"), icon: "photo.on.rectangle.angled",
+                           tint: AppSection.projects.ink, trailing: "\(photos.count)", iconSize: DS.Icon.inline)
+
+            Group {
                 if photos.count == 1 {
                     photoButton(photos, 0)
                 } else {
@@ -141,83 +156,17 @@ struct ProjectHeroCarousel: View {
                     .tabViewStyle(.page(indexDisplayMode: .never))
                 }
             }
-            .clipped()
-            .overlay(alignment: .top) {
-                if photos.count > 1 { pageDots(photos.count) }
-            }
-            .fullScreenCover(item: Binding(
-                get: { viewerIndex.map { ProjectPhotoIndex(id: $0) } },
-                set: { viewerIndex = $0?.id }
-            )) { start in
-                ProjectPhotoViewer(urls: photos, startIndex: start.id)
-            }
-        }
-    }
+            .frame(maxWidth: .infinity)
+            .frame(height: stripHeight(photos))
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { width = geo.size.width }
+                    .onChange(of: geo.size.width) { width = $0 }
+            })
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .animation(DS.Anim.quick, value: aspects.count)
 
-    private func photoButton(_ photos: [String], _ idx: Int) -> some View {
-        Button { viewerIndex = idx } label: {
-            CachedAsyncImage(url: URL(string: photos[idx])) { img in
-                img.resizable().scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } placeholder: { Color.clear }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.t("صورة \(idx + 1) من \(photos.count)", "Photo \(idx + 1) of \(photos.count)"))
-    }
-
-    /// نقاط الصفحات — صغيرة أعلى الصورة (أسفلها الشعار)، الحالية كبسولة أعرض
-    private func pageDots(_ count: Int) -> some View {
-        HStack(spacing: DS.Spacing.xs) {
-            ForEach(0..<count, id: \.self) { idx in
-                Capsule()
-                    .fill(DS.Color.textOnPrimary.opacity(idx == page ? 1 : DS.Opacity.selectedStroke))
-                    .frame(width: idx == page ? DS.Spacing.md : DS.Spacing.xsm, height: DS.Spacing.xsm)
-            }
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xs)
-        .background(Capsule().fill(DS.Color.shadowOverlay))
-        .padding(.top, DS.Spacing.sm)
-        .animation(DS.Anim.quick, value: page)
-        .accessibilityHidden(true)
-    }
-}
-
-/// معرض صور المشروع — فسيفساء: صورة كبيرة + مربّعات جانبية، وآخر مربّع يحمل «+N»
-struct ProjectPhotosMosaic: View {
-    let urls: [String]
-    @State private var viewerIndex: Int?
-
-    /// أقصى ما يُعرض قبل ظهور «+N» على آخر مربّع
-    private let visibleLimit = 3
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // عنوان القسم الموحّد (قرص مجسّم + عنوان + العدد)
-            DSSectionTitle(title: L10n.t("صور المشروع", "Project Photos"), icon: "photo.on.rectangle.angled",
-                           tint: AppSection.projects.ink, trailing: "\(urls.count)", iconSize: DS.Icon.inline)
-
-            if urls.count == 1 {
-                tile(0, height: 210)
-            } else if urls.count == 2 {
-                HStack(spacing: DS.Spacing.xs) {
-                    tile(0, height: 170)
-                    tile(1, height: 170)
-                }
-            } else {
-                HStack(spacing: DS.Spacing.xs) {
-                    tile(0, height: 210)
-                        .frame(maxWidth: .infinity)
-                    VStack(spacing: DS.Spacing.xs) {
-                        tile(1, height: 101)
-                        tile(2, height: 101, extra: urls.count - visibleLimit)
-                    }
-                    .frame(width: 104)
-                }
-            }
+            if photos.count > 1 { pageDots(photos.count) }
         }
         // البطاقة الواحدة (`.dsCard`)
         .dsCard(padding: DS.Spacing.lg)
@@ -225,35 +174,45 @@ struct ProjectPhotosMosaic: View {
             get: { viewerIndex.map { ProjectPhotoIndex(id: $0) } },
             set: { viewerIndex = $0?.id }
         )) { start in
-            ProjectPhotoViewer(urls: urls, startIndex: start.id)
+            ProjectPhotoViewer(urls: photos, startIndex: start.id)
+        }
+        // نِسَب الصور من نفس الكاش (لا تنزيل مكرّر — نفس ما تعرضه الصفحات)
+        .task(id: photos) {
+            for url in photos where aspects[url] == nil {
+                guard let u = URL(string: url),
+                      let img = try? await CachedImageLoader.load(u), img.size.height > 0 else { continue }
+                aspects[url] = img.size.width / img.size.height
+            }
         }
     }
 
-    /// مربّع صورة — `extra` أكبر من صفر يعني بقيّة الصور تحت «+N»
-    private func tile(_ index: Int, height: CGFloat, extra: Int = 0) -> some View {
-        Button { viewerIndex = index } label: {
-            CachedAsyncImage(url: URL(string: urls[index])) { img in
-                img.resizable().scaledToFill()
+    private func photoButton(_ photos: [String], _ idx: Int) -> some View {
+        Button { viewerIndex = idx } label: {
+            CachedAsyncImage(url: URL(string: photos[idx])) { img in
+                img.resizable().scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             } placeholder: {
-                DS.Color.mutedBackground
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.mutedBackground)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
-            .clipped()
-            .overlay {
-                if extra > 0 {
-                    ZStack {
-                        DS.Color.shadowHeavy
-                        Text("+\(extra)")
-                            .dsFont(.statValue)
-                            .foregroundColor(DS.Color.textOnPrimary)
-                    }
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(L10n.t("صورة \(index + 1)", "Photo \(index + 1)"))
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("صورة \(idx + 1) من \(photos.count)", "Photo \(idx + 1) of \(photos.count)"))
+    }
+
+    /// نقاط الصفحات — صغيرة تحت الصورة بلون القسم، الحالية كبسولة أعرض
+    private func pageDots(_ count: Int) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(0..<count, id: \.self) { idx in
+                Capsule()
+                    .fill(AppSection.projects.ink.opacity(idx == page ? 1 : DS.Opacity.tintStroke))
+                    .frame(width: idx == page ? DS.Spacing.md : DS.Spacing.xsm, height: DS.Spacing.xsm)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(DS.Anim.quick, value: page)
+        .accessibilityHidden(true)
     }
 }
 
