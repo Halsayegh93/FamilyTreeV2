@@ -690,47 +690,45 @@ struct ProjectDetailView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
     
-    // MARK: - Header — بطاقة المشروع (صورة كبيرة + شعار بارز + إجراءات سريعة)
+    // MARK: - Header — بطاقة المشروع (رأس واحد: الصور + الشعار + الاسم، ثم صاحب المشروع والإجراءات)
     //
-    // الصورة الكبيرة بعرض البطاقة (١٦:١٠، طلب المالك ٢٠٢٦-١٠-٢٢)؛ الشعار يجلس على حافتها حين تكون
-    // الصورة صورة المشروع — وبلا صورة يظهر الشعار نفسه في وسطها. تحته الاسم وصاحب المشروع وأزرار الاتصال.
+    // طلب المالك ٢٠٢٦-١٠-٢٣ «الخلفية تندمج مع الاسم»: الصور (تُسحب) أعلى الرأس وتذوب في لون القسم،
+    // والشعار والاسم يجلسان على هذا الذوبان — كتلة واحدة لا قطع مكدّسة. بلا صورة: خلفية القسم تحملهما.
+    // الاسم أبيض على تعتيم بلون القسم الغامق (`tileProjectsDeep` — تباين ≥ ٤٫٥:١)؛ طبقة الاسم لا تلتقط
+    // اللمس فيبقى سحب الصور وفتحها يعمل من تحتها.
     private var projectHeader: some View {
         VStack(spacing: 0) {
-            // بعرض المربّع وارتفاع معتدل (طلب المالك ٢٠٢٦-١٠-٢٣): الاسم والنبذة تظهر بلا تمرير كثير
-            Color.clear
-                .frame(maxWidth: .infinity)
-                .frame(height: heroHeight)
-                // بلا صورة: الشعار في وسطها بأكبر ما يسمح به القوس
-                .overlay { ProjectHeroImage(project: project, markSize: min(logoSize, heroHeight - 2 * arcDepth)) }
-                .clipShape(ProjectCoverArc(depth: arcDepth))
-                .overlay(alignment: .bottom) {
-                    if showsLogoBadge {
-                        logoBadge.offset(y: logoSize / 2 - arcDepth / 2)
-                    }
-                }
-                .zIndex(1)
-
             VStack(spacing: DS.Spacing.sm) {
+                logoBadge
                 Text(project.title)
                     .dsFont(.emptyTitle)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .shadow(color: DS.Color.shadowMediumDark, radius: DS.Spacing.xs, y: 1)
+            }
+            .padding(.top, logoTop)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.md + arcDepth)
+            .frame(maxWidth: .infinity)
+            .allowsHitTesting(false)
+            .background(alignment: .top) { headerBackdrop }
+            .clipShape(ProjectCoverArc(depth: arcDepth))
 
+            VStack(spacing: DS.Spacing.sm) {
                 ownerChip
 
                 if !quickActions.isEmpty {
-                    HStack(spacing: DS.Spacing.sm) {
+                    HStack(spacing: DS.Spacing.xs) {
                         ForEach(quickActions, id: \.platform) { action in
                             quickActionButton(action)
                         }
                     }
-                    .padding(.top, DS.Spacing.xs)
                 }
             }
-            .padding(.top, showsLogoBadge ? logoSize / 2 - arcDepth / 2 + DS.Spacing.sm : DS.Spacing.xs)
+            .padding(.top, DS.Spacing.xs)
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.md)
             .frame(maxWidth: .infinity)
             .background(DS.Color.surface)
         }
@@ -739,16 +737,42 @@ struct ProjectDetailView: View {
         .dsCard(padding: nil)
     }
 
-    /// الشعار أكبر (٨٤ ← ١٠٤) وإطاره أرفع (طلب المالك ٢٠٢٦-١٠-٢٣ «الشعار أكبر والمربّع خلفه أصغر»)
-    private var logoSize: CGFloat { isLandscape ? 96 : 104 }
-    /// ارتفاع صورة الرأس — أصغر (طلب المالك ٢٠٢٦-١٠-٢٣: ١٩٠ ← ١٤٠، والأفقي ١٦٠ ← ١٢٠)
-    private var heroHeight: CGFloat { isLandscape ? 120 : 140 }
-    /// عمق القوس في منتصف حافة الصورة
-    private var arcDepth: CGFloat { 22 }
-    /// الشعار على الحافة فقط حين تكون الصورة الكبيرة صورة المشروع (وإلا فالشعار في وسطها)
-    private var showsLogoBadge: Bool {
-        !(project.imageUrls.first ?? "").isEmpty && !(project.logoUrl ?? "").isEmpty
+    /// خلفية الرأس: لون القسم، والصور أعلاه تذوب فيه، ثم تعتيم بلون القسم الغامق تحت الشعار والاسم
+    private var headerBackdrop: some View {
+        ZStack(alignment: .top) {
+            ProjectSectionBackdrop(symbolSize: DS.Glyph.lg)
+                .accessibilityHidden(true)
+            if hasPhotos {
+                ProjectHeroCarousel(project: project)
+                    .frame(height: heroHeight)
+                    .mask(
+                        LinearGradient(stops: [.init(color: .black, location: 0),
+                                               .init(color: .black, location: 0.5),
+                                               .init(color: .clear, location: 1)],
+                                       startPoint: .top, endPoint: .bottom)
+                    )
+            }
+            // الذوبان إلى لون القسم الغامق — يبدأ عند منتصف الشعار
+            VStack(spacing: 0) {
+                Color.clear.frame(height: logoTop + logoSize / 2)
+                LinearGradient(colors: [DS.Color.tileProjectsDeep.opacity(0), DS.Color.tileProjectsDeep],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: logoSize / 2)
+                DS.Color.tileProjectsDeep
+            }
+            .allowsHitTesting(false)
+        }
     }
+
+    /// الشعار أكبر (٨٤ ← ١٠٤ ← ١١٦، والأفقي ٩٦ ← ١٠٦) وإطاره رفيع (طلب المالك ٢٠٢٦-١٠-٢٣)
+    private var logoSize: CGFloat { isLandscape ? 106 : 116 }
+    /// ارتفاع منطقة الصور — أصغر (طلب المالك ٢٠٢٦-١٠-٢٣: ١٩٠ ← ١٤٠ ← ١٢٠، والأفقي ١٦٠ ← ١٢٠ ← ١٠٠)
+    private var heroHeight: CGFloat { isLandscape ? 100 : 120 }
+    /// عمق القوس في منتصف حافة الرأس
+    private var arcDepth: CGFloat { 22 }
+    /// أعلى الشعار — نصفه السفلي على ذوبان الصورة (بلا صورة: هامش يُظهر خلفية القسم فوقه)
+    private var logoTop: CGFloat { hasPhotos ? heroHeight - logoSize * 0.6 : DS.Spacing.lg }
+    private var hasPhotos: Bool { project.imageUrls.contains { !$0.isEmpty } }
 
     /// الشعار على حافة الصورة — مربّع بزوايا ناعمة بإطار بلون البطاقة
     private var logoBadge: some View {
@@ -788,29 +812,32 @@ struct ProjectDetailView: View {
         let title: String
     }
 
-    /// أهم ثلاثة إجراءات — اتصال، واتساب، الموقع (ما يتوفّر منها)
+    /// الإجراءات السريعة — اتصال، إنستغرام (مكان واتساب — طلب المالك ٢٠٢٦-١٠-٢٣)، الموقع، واتساب،
+    /// الموقع الإلكتروني (ما يتوفّر منها). أزرار أيقونات صغيرة فيتّسع الصفّ لها كلها.
     private var quickActions: [QuickAction] {
         var actions: [QuickAction] = []
-        if let v = project.phoneNumber, !v.isEmpty {
-            actions.append(QuickAction(platform: .phone, value: v, title: L10n.t("اتصال", "Call")))
+        func add(_ platform: SocialPlatform, _ value: String?, _ title: String) {
+            guard let value, !value.isEmpty else { return }
+            actions.append(QuickAction(platform: platform, value: value, title: title))
         }
-        if let v = project.whatsappNumber, !v.isEmpty {
-            actions.append(QuickAction(platform: .whatsapp, value: v, title: L10n.t("واتساب", "WhatsApp")))
-        }
-        if let v = project.locationUrl, !v.isEmpty {
-            actions.append(QuickAction(platform: .location, value: v, title: L10n.t("الموقع", "Location")))
-        }
-        if actions.count < 3, let v = project.websiteUrl, !v.isEmpty {
-            actions.append(QuickAction(platform: .website, value: v, title: L10n.t("الموقع الإلكتروني", "Website")))
-        }
+        add(.phone, project.phoneNumber, L10n.t("اتصال", "Call"))
+        add(.instagram, project.instagramUrl, L10n.t("إنستغرام", "Instagram"))
+        add(.location, project.locationUrl, L10n.t("الموقع", "Location"))
+        add(.whatsapp, project.whatsappNumber, L10n.t("واتساب", "WhatsApp"))
+        add(.website, project.websiteUrl, L10n.t("الموقع الإلكتروني", "Website"))
         return actions
     }
 
-    /// إجراء سريع — الزرّ الواحد بلون المنصّة (معنى)
+    /// إجراء سريع — دائرة صغيرة بلون المنصّة (أيقونة المنصّة الموحّدة) ولمس ٤٤ (حدّ أبل)
     private func quickActionButton(_ action: QuickAction) -> some View {
-        DSButton(action.title, icon: action.platform.sfSymbol, tint: action.platform.brandColor) {
+        Button {
             openSocialLink(platform: action.platform, value: action.value)
+        } label: {
+            action.platform.iconView(size: DS.Icon.rowLarge)
+                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                .contentShape(Circle())
         }
+        .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(action.title)
     }
 

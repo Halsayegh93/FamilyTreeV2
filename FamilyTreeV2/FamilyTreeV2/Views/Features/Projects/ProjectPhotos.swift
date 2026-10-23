@@ -111,6 +111,81 @@ struct ProjectPhotosEditor: View {
     }
 }
 
+/// صورة رأس المشروع في صفحته (طلب المالك ٢٠٢٦-١٠-٢٣ «الصور تنسحب»): صور كثيرة ← صفحات أفقية تُسحب
+/// بنقاط صغيرة أعلاها؛ صورة واحدة ← الصورة وحدها؛ بلا صورة ← `ProjectHeroImage` (الشعار أو المجسّم).
+/// الضغط على صورة يفتح العارض بملء الشاشة (`ProjectPhotoViewer`) من تلك الصورة.
+struct ProjectHeroCarousel: View {
+    let project: Project
+    var markSize: CGFloat = DS.Icon.state
+    @State private var page = 0
+    @State private var viewerIndex: Int?
+
+    private var photos: [String] { project.imageUrls.filter { !$0.isEmpty } }
+
+    var body: some View {
+        let photos = photos
+        if photos.isEmpty {
+            ProjectHeroImage(project: project, markSize: markSize)
+        } else {
+            ZStack {
+                ProjectSectionBackdrop(symbolSize: DS.Glyph.lg)
+                    .accessibilityHidden(true)
+                if photos.count == 1 {
+                    photoButton(photos, 0)
+                } else {
+                    TabView(selection: $page) {
+                        ForEach(photos.indices, id: \.self) { idx in
+                            photoButton(photos, idx).tag(idx)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                }
+            }
+            .clipped()
+            .overlay(alignment: .top) {
+                if photos.count > 1 { pageDots(photos.count) }
+            }
+            .fullScreenCover(item: Binding(
+                get: { viewerIndex.map { ProjectPhotoIndex(id: $0) } },
+                set: { viewerIndex = $0?.id }
+            )) { start in
+                ProjectPhotoViewer(urls: photos, startIndex: start.id)
+            }
+        }
+    }
+
+    private func photoButton(_ photos: [String], _ idx: Int) -> some View {
+        Button { viewerIndex = idx } label: {
+            CachedAsyncImage(url: URL(string: photos[idx])) { img in
+                img.resizable().scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } placeholder: { Color.clear }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("صورة \(idx + 1) من \(photos.count)", "Photo \(idx + 1) of \(photos.count)"))
+    }
+
+    /// نقاط الصفحات — صغيرة أعلى الصورة (أسفلها الشعار)، الحالية كبسولة أعرض
+    private func pageDots(_ count: Int) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(0..<count, id: \.self) { idx in
+                Capsule()
+                    .fill(DS.Color.textOnPrimary.opacity(idx == page ? 1 : DS.Opacity.selectedStroke))
+                    .frame(width: idx == page ? DS.Spacing.md : DS.Spacing.xsm, height: DS.Spacing.xsm)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xs)
+        .background(Capsule().fill(DS.Color.shadowOverlay))
+        .padding(.top, DS.Spacing.sm)
+        .animation(DS.Anim.quick, value: page)
+        .accessibilityHidden(true)
+    }
+}
+
 /// معرض صور المشروع — فسيفساء: صورة كبيرة + مربّعات جانبية، وآخر مربّع يحمل «+N»
 struct ProjectPhotosMosaic: View {
     let urls: [String]
@@ -182,10 +257,10 @@ struct ProjectPhotosMosaic: View {
     }
 }
 
-private struct ProjectPhotoIndex: Identifiable { let id: Int }
+struct ProjectPhotoIndex: Identifiable { let id: Int }
 
 /// عارض بملء الشاشة بالسحب بين الصور
-private struct ProjectPhotoViewer: View {
+struct ProjectPhotoViewer: View {
     let urls: [String]
     let startIndex: Int
     @Environment(\.dismiss) private var dismiss
