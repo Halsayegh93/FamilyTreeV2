@@ -84,7 +84,7 @@ nonisolated enum AdminReportPDF {
     // MARK: الخط — IBM Plex Sans Arabic (خط النظام احتياطاً)
 
     private static func plex(_ weight: String, _ size: CGFloat) -> UIFont {
-        UIFont(name: "IBMPlexSansArabic-\(weight)", size: size)
+        UIFont(name: weight == "Bold" ? DS.Font.Plex.bold : weight == "SemiBold" ? DS.Font.Plex.semibold : weight == "Medium" ? DS.Font.Plex.medium : DS.Font.Plex.regular, size: size)
             ?? UIFont.systemFont(ofSize: size, weight: weight == "Bold" ? .bold : weight == "SemiBold" ? .semibold : .regular)
     }
     private static let fBody = plex("Regular", 9.5)

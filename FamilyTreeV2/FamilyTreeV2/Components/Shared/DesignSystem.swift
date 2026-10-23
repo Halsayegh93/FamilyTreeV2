@@ -342,10 +342,13 @@ enum DS {
         // MARK: IBM Plex Sans Arabic — خط الهوية (تجربة)
         /// أسماء PostScript للأوزان المضافة في Resources/Fonts
         enum Plex {
-            static let regular  = "IBMPlexSansArabic-Regular"
-            static let medium   = "IBMPlexSansArabic-Medium"
-            static let semibold = "IBMPlexSansArabic-SemiBold"
-            static let bold     = "IBMPlexSansArabic-Bold"
+            /// تجربة Cairo (٢٠٢٦-١٠-٢٣): للرجوع إلى IBM Plex غيّر هذا السطر إلى `false`
+            static let useCairo = true
+            // Cairo.ttf خط متغيّر — أسماء النسخ المسمّاة (named instances) للأوزان
+            static let regular  = useCairo ? "Cairo-Regular"          : "IBMPlexSansArabic-Regular"
+            static let medium   = useCairo ? "Cairo-Regular_Medium"   : "IBMPlexSansArabic-Medium"
+            static let semibold = useCairo ? "Cairo-Regular_SemiBold" : "IBMPlexSansArabic-SemiBold"
+            static let bold     = useCairo ? "Cairo-Regular_Bold"     : "IBMPlexSansArabic-Bold"
 
             /// وزن الواجهة المطلوب ← ملف الخط (نفس `DS.Font.plexName`) — اسم main للتوافق
             static func name(for weight: SwiftUI.Font.Weight) -> String { DS.Font.plexName(weight) }
