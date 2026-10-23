@@ -324,6 +324,13 @@ struct LoginView: View {
         }
     }
 
+    /// وقت الانتظار على الزر: «45ث» · «1:59» · «ساعة» (حد الساعة أو اليوم — `OTPWaitText.hourThreshold`)
+    static func waitLabel(_ n: Int) -> String {
+        if n >= OTPWaitText.hourThreshold { return L10n.t("ساعة", "an hour") }
+        if n < 60 { return L10n.t("\(n)ث", "\(n)s") }
+        return String(format: "%d:%02d", n / 60, n % 60)
+    }
+
     // MARK: - Phone Input — Compact Card
     @ViewBuilder
     var phoneInputSection: some View {
@@ -344,7 +351,7 @@ struct LoginView: View {
             // زر الإرسال — DSPrimaryButton
             DSPrimaryButton(
                 timeRemaining > 0
-                    ? L10n.t("إعادة الطلب بعد \(timeRemaining)ث", "Resend in \(timeRemaining)s")
+                    ? L10n.t("إعادة الطلب بعد \(Self.waitLabel(timeRemaining))", "Resend in \(Self.waitLabel(timeRemaining))")
                     : L10n.t("متابعة", "Continue"),
                 icon: timeRemaining > 0 ? nil : "arrow.forward",
                 isLoading: authVM.isLoading,
@@ -357,7 +364,9 @@ struct LoginView: View {
                 authVM.otpCode = ""; otpText = ""
                 Task {
                     await authVM.sendOTP()
-                    if !authVM.isOtpSent { timeRemaining = 0 }
+                    // رفض السيرفر بمهلة (حد الرقم أو «رمز واحد لكل دقيقتين») ← الزر يُقفل بوقت السيرفر نفسه،
+                    // وأي فشل آخر يفتحه (المالك ٢٠٢٦-١٠-٢٣: «ابى الزر يرتبط بالسيرفر»)
+                    if !authVM.isOtpSent { timeRemaining = authVM.otpRetryAfter ?? 0 }
                 }
             }
             .disabled(isDisabled)
@@ -497,7 +506,7 @@ struct LoginView: View {
             // إعادة الإرسال — الشريحة الواحدة (رمادية أثناء الانتظار)
             HStack(spacing: DS.Spacing.md) {
                 DSChipButton(timeRemaining > 0
-                             ? L10n.t("بعد \(timeRemaining)ث", "in \(timeRemaining)s")
+                             ? L10n.t("بعد \(Self.waitLabel(timeRemaining))", "in \(Self.waitLabel(timeRemaining))")
                              : L10n.t("إعادة عبر SMS", "Resend via SMS"),
                              icon: "message.fill",
                              tint: timeRemaining > 0 ? DS.Color.textTertiary : DS.Color.primary) {
