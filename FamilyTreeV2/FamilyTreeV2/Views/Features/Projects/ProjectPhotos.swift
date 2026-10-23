@@ -218,36 +218,52 @@ struct ProjectPhotosCarousel: View {
 
 struct ProjectPhotoIndex: Identifiable { let id: Int }
 
-/// عارض بملء الشاشة بالسحب بين الصور، والتكبير بالقرصة أو بضغطتين (يستعمله المشاريع والمكتبة)
+/// عارض بملء الشاشة (يستعمله المشاريع والمكتبة): التكبير بالقرصة أو بضغطتين والتحريك وهي مكبّرة،
+/// والسحب بين الصور وهي غير مكبّرة — `ZoomablePhotoPager` (طلب المالك ٢٠٢٦-١٠-٢٣)
 struct ProjectPhotoViewer: View {
     let urls: [String]
     let startIndex: Int
     /// قسم مؤشّر التحميل — المشاريع، أو المكتبة حين يفتحه عارض الأرشيف
     var section: AppSection = .projects
     @Environment(\.dismiss) private var dismiss
-    @State private var index = 0
-    @State private var zoomed = false
+    @Environment(\.layoutDirection) private var layoutDirection
+    @State private var index: Int
+    @State private var loaded: Set<Int> = []
+
+    init(urls: [String], startIndex: Int, section: AppSection = .projects) {
+        self.urls = urls
+        self.startIndex = startIndex
+        self.section = section
+        _index = State(initialValue: startIndex)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             DS.Color.overlayDark.ignoresSafeArea()
-            TabView(selection: $index) {
-                ForEach(Array(urls.enumerated()), id: \.offset) { idx, url in
-                    ZoomableImage(onZoomChange: { zoomed = $0 }) {
-                        CachedAsyncImage(url: URL(string: url)) { img in
-                            img.resizable().scaledToFit()
-                        } placeholder: { DSPageLoader(section: section) }
-                    }
-                    .tag(idx)
-                }
+
+            ZoomablePhotoPager(urls: urls, startIndex: startIndex,
+                               isRTL: layoutDirection == .rightToLeft,
+                               onIndexChange: { index = $0 },
+                               onLoadedChange: { loaded = $0 })
+                // إحداثيات فيزيائية ثابتة — اتجاه التقليب يحدّده `isRTL` نفسه
+                .environment(\.layoutDirection, .leftToRight)
+                .ignoresSafeArea()
+
+            if !loaded.contains(index) {
+                DSPageLoader(section: section)
+                    .allowsHitTesting(false)
             }
-            .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .automatic : .never))
-            .disabled(zoomed)
 
             HStack {
-                Text("\(index + 1) / \(urls.count)")
-                    .dsFont(.rowTitleCompact)
-                    .foregroundColor(DS.Color.overlayText)
+                // «2 من 5» — صورة واحدة بلا عدّاد
+                if urls.count > 1 {
+                    Text(verbatim: L10n.t("\(index + 1) من \(urls.count)", "\(index + 1) of \(urls.count)"))
+                        .dsFont(.rowTitleCompact)
+                        .foregroundColor(DS.Color.overlayText)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(Capsule().fill(DS.Color.overlayDark))
+                }
                 Spacer()
                 // زرّ الإغلاق الموحّد فوق الوسائط
                 DSCloseButton(context: .onMedia) { dismiss() }
@@ -255,7 +271,5 @@ struct ProjectPhotoViewer: View {
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.sm)
         }
-        .onAppear { index = startIndex }
-        .onChange(of: index) { _ in zoomed = false }
     }
 }

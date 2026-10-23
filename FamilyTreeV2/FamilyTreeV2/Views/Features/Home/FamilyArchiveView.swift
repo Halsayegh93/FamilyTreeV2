@@ -180,7 +180,9 @@ struct FamilyArchiveView: View {
         // المربّع صلب (أبيض/سطح الداكن) وما خلفه أغمق (طلب المالك ٢٠٢٦-١٠-٢٣)
         .dsCenterBox(item: $selectedItem, onBackgroundTap: { selectedItem = nil },
                      dim: DSCenterPanelDim.strong) { item in
-            ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item))
+            // العارض بملء الشاشة يقلّب بين صور القائمة المعروضة (نفس التصنيف المختار)
+            ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item),
+                              galleryUrls: archiveVM.items(in: selectedCategory).filter(\.isImage).map(\.fileUrl))
         }
         .fullScreenCover(item: $itemToEdit) { item in
             DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
@@ -1095,6 +1097,8 @@ struct ArchiveEditSheet: View {
 struct ArchiveItemViewer: View {
     let item: ArchiveItem
     var uploaderName: String? = nil
+    /// صور القائمة المعروضة — السحب بينها في العارض بملء الشاشة (فارغة = هذه الصورة وحدها)
+    var galleryUrls: [String] = []
     @Environment(\.dismiss) private var dismiss
     @State private var showShare = false
     @State private var shareURL: URL? = nil
@@ -1146,7 +1150,8 @@ struct ArchiveItemViewer: View {
             .background(DS.Color.surface.ignoresSafeArea())
         }
         .fullScreenCover(isPresented: $showFullImage) {
-            ProjectPhotoViewer(urls: [item.fileUrl], startIndex: 0, section: .library)
+            let urls = galleryUrls.contains(item.fileUrl) ? galleryUrls : [item.fileUrl]
+            ProjectPhotoViewer(urls: urls, startIndex: urls.firstIndex(of: item.fileUrl) ?? 0, section: .library)
         }
         .sheet(isPresented: $showShare) {
             if let url = shareURL {
