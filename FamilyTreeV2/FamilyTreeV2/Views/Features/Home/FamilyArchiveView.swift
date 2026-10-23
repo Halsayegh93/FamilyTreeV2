@@ -1102,8 +1102,8 @@ struct ArchiveItemViewer: View {
     /// ارتفاع الرأس — المربّع بالمنتصف على قدر محتواه (`dsPanelContentHeight`)
     @State private var headerH: CGFloat = 0
     @Environment(\.verticalSizeClass) private var vSizeClass
-    /// ارتفاع المعاينة — معتدل (طلب المالك ٢٠٢٦-١٠-٢٣) حتى تظهر بطاقة الفهرسة بلا تمرير كثير
-    private var previewHeight: CGFloat { vSizeClass == .compact ? 150 : 230 }
+    /// ارتفاع المعاينة — أصغر (طلب المالك ٢٠٢٦-١٠-٢٣: ٢٣٠ ← ١٧٠، والأفقي ١٥٠ ← ١١٠)
+    private var previewHeight: CGFloat { vSizeClass == .compact ? 110 : 170 }
 
     private var accent: Color { item.categoryColor }
 

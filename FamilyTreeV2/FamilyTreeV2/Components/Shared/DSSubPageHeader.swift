@@ -106,7 +106,7 @@ struct DSSubPageHeader<Trailing: View>: View {
                     if let subtitle, !subtitle.isEmpty {
                         Text(subtitle)
                             .font(DSBox.pageSubtitleFont)
-                            .foregroundColor(DS.Color.headerSubtitle)
+                            .foregroundColor(sec.headerSubtitle)
                             // الوصف الطويل سطران (الرأس يطول — `minHeight`) بدل «…» مع مقاسات Apple
                             .lineLimit(compact ? 1 : DSBox.pageSubtitleLines)
                             .minimumScaleFactor(0.8)

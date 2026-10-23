@@ -530,7 +530,7 @@ struct ProjectHeroImage: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(DS.Color.surface, lineWidth: DS.Spacing.xxs)
+                    .strokeBorder(DS.Color.surface, lineWidth: DS.Border.width)
             )
             .dsSubtleShadow()
         } else {
@@ -700,7 +700,8 @@ struct ProjectDetailView: View {
             Color.clear
                 .frame(maxWidth: .infinity)
                 .frame(height: heroHeight)
-                .overlay { ProjectHeroImage(project: project, markSize: logoSize) }
+                // بلا صورة: الشعار في وسطها بأكبر ما يسمح به القوس
+                .overlay { ProjectHeroImage(project: project, markSize: min(logoSize, heroHeight - 2 * arcDepth)) }
                 .clipShape(ProjectCoverArc(depth: arcDepth))
                 .overlay(alignment: .bottom) {
                     if showsLogoBadge {
@@ -738,9 +739,10 @@ struct ProjectDetailView: View {
         .dsCard(padding: nil)
     }
 
-    private var logoSize: CGFloat { 84 }
-    /// ارتفاع صورة الرأس — معتدل (≈ ١٦:٩ بعرض المربّع، بحدّ أقصى)
-    private var heroHeight: CGFloat { isLandscape ? 160 : 190 }
+    /// الشعار أكبر (٨٤ ← ١٠٤) وإطاره أرفع (طلب المالك ٢٠٢٦-١٠-٢٣ «الشعار أكبر والمربّع خلفه أصغر»)
+    private var logoSize: CGFloat { isLandscape ? 96 : 104 }
+    /// ارتفاع صورة الرأس — أصغر (طلب المالك ٢٠٢٦-١٠-٢٣: ١٩٠ ← ١٤٠، والأفقي ١٦٠ ← ١٢٠)
+    private var heroHeight: CGFloat { isLandscape ? 120 : 140 }
     /// عمق القوس في منتصف حافة الصورة
     private var arcDepth: CGFloat { 22 }
     /// الشعار على الحافة فقط حين تكون الصورة الكبيرة صورة المشروع (وإلا فالشعار في وسطها)
@@ -765,7 +767,7 @@ struct ProjectDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .strokeBorder(DS.Color.surface, lineWidth: DS.Spacing.xs)
+                .strokeBorder(DS.Color.surface, lineWidth: DS.Spacing.xxs)
         )
         .dsCardShadow()
         // الشعار يتفتّح بعد صعود بطاقته بقليل — نفس أيقونات أقسام المربّعات («تقليل الحركة»: تلاشٍ)

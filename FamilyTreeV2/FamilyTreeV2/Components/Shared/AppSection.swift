@@ -45,10 +45,22 @@ enum AppSection: Int, CaseIterable {
     /// الأيقونات والنصوص `primary`، بلون واحد بلا تدرّج. ألوان مربّعات الرئيسية والتصنيفات تبقى «عائلة الكحلي
     /// والذهبي» من main (`DS.Color.tile*` و`HomeTile` أدناه: أخضر، كحلي، عنّابي، ذهبي، بترولي) — لا تتبع هذا.
     /// (درجات «البحري الخفيف» لكل قسم قبل الدمج محفوظة في تاريخ الفرع wip/ios-2026-10-02.)
-    private static let swatches: [Swatch] = allCases.map { _ in
-        Swatch(deep: DS.Color.bandFill, fill: DS.Color.primaryFill, light: DS.Color.primaryFill,
-               ink: DS.Color.primary, control: DS.Color.headerControlFill,
-               gradient: DS.Color.gradientPrimary, header: DS.Color.gradientBand)
+    ///
+    /// استثناء (طلب المالك ٢٠٢٦-١٠-٢٢ «نفس لون مربّعها»): المشاريع والمكتبة تأخذ ألوان مربّعها في
+    /// الرئيسية (`HomeTile` — مصدر واحد)، فيكون المربّع ورأس القسم وبطاقاته عائلة واحدة: الرأس بتدرّج
+    /// المربّع (سطحه ← غامقه)، والأزرار والأسطح ذات النص الأبيض سطح المربّع (لون واحد)، والحبر حبر المربّع.
+    private static let swatches: [Swatch] = allCases.map { section in
+        if let tile = HomeTile.tile(for: section) {
+            return Swatch(deep: tile.deep, fill: tile.fill, light: tile.fill,
+                          ink: tile.ink, control: tile.deep,
+                          gradient: LinearGradient(colors: [tile.fill, tile.fill],
+                                                   startPoint: .bottomTrailing, endPoint: .topLeading),
+                          header: LinearGradient(colors: [tile.fill, tile.deep],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+        }
+        return Swatch(deep: DS.Color.bandFill, fill: DS.Color.primaryFill, light: DS.Color.primaryFill,
+                      ink: DS.Color.primary, control: DS.Color.headerControlFill,
+                      gradient: DS.Color.gradientPrimary, header: DS.Color.gradientBand)
     }
 
     private var swatch: Swatch { Self.swatches[rawValue] }
@@ -67,6 +79,10 @@ enum AppSection: Int, CaseIterable {
     var light: Color { swatch.light }
     /// خلفية أزرار الرأس الدائرية (زجاج بلون الرأس)
     var control: Color { swatch.control }
+    /// وصف رأس القسم — ذهبي الهوية على band، وكريمي العلامة فوق رأس بلون المربّع (الذهبي لا يُقرأ على الذهبي)
+    var headerSubtitle: Color {
+        HomeTile.tile(for: self) == nil ? DS.Color.headerSubtitle : DS.Color.headerSubtitleOnTile
+    }
 
     // MARK: - القسم الحالي
 
@@ -159,6 +175,15 @@ extension AppSection {
     /// سطح المربّع وغامقه وحبره هي نفس ألوان القسم (نفس النسخة)، فلا درجات مكرّرة.
     enum HomeTile: Int, CaseIterable {
         case library, projects, news
+
+        /// المربّع الذي يعطي قسمه ألوانه (المشاريع والمكتبة) — nil لغيرهما (الأخبار تبقى على الهوية)
+        static func tile(for section: AppSection) -> HomeTile? {
+            switch section {
+            case .projects: return .projects
+            case .library:  return .library
+            default:        return nil
+            }
+        }
 
         /// قسم المربّع — صفحاته ومربّعاته بلونه (`dsSectionPage`)
         var section: AppSection {
@@ -390,6 +415,9 @@ extension DS.Color {
     static let headerTitle: SwiftUI.Color = DS.Theme.isCalm ? textPrimary : textOnPrimary
     /// وصف رأس التبويب/الصفحة الفرعية — الهوية (main): النص الثانوي على band ذهبي `accentLight`
     static let headerSubtitle: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : accentLight
+    /// وصف رأس القسم الملوّن بلون مربّعه (المشاريع، المكتبة): كريمي العلامة #F2EBDD — ≥ ٤٫٥:١ فوق
+    /// الذهبي #806631 و٧٫٨:١ فوق العنّابي #693940. «الهادئ»: كما هو.
+    static let headerSubtitleOnTile: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : SwiftUI.Color(hex: "#F2EBDD")
     /// وصف رأس المربّع
     static let boxHeaderSubtitle: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : SwiftUI.Color.white.opacity(0.86)
     /// رموز أزرار الرأس (رجوع، إغلاق، جرس، إعدادات…)

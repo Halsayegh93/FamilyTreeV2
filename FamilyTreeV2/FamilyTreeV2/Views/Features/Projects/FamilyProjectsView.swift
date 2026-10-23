@@ -274,6 +274,8 @@ struct FamilyProjectsView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+                // البطاقات تبدأ تحت الرأس بمسافة (طلب المالك ٢٠٢٦-١٠-٢٣ — كانت ملاصقة له)، مثل المكتبة
+                .padding(.top, hasToolbarRow ? DS.Spacing.xs : DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxxxl)
                 .onAppear { appeared = true }
             }
@@ -514,8 +516,10 @@ struct FamilyProjectsView: View {
 struct ProjectGridCard: View {
     let project: Project
 
-    /// صورة البطاقة الصغيرة ٤:٣ — أكبر ما يمكن مع بقاء البطاقة شبه مربّعة
-    static let imageAspect: CGFloat = 4.0 / 3.0
+    /// صورة البطاقة الصغيرة ١٦:١٠ — أقصر من ٤:٣ السابقة (طلب المالك ٢٠٢٦-١٠-٢٣ «أصغر»)
+    static let imageAspect: CGFloat = 16.0 / 10.0
+    /// شعار المشروع حين لا صورة — أكبر (كان ٥٢) فيملأ أغلب ارتفاع الصورة بحاشية ضيّقة (طلب المالك ٢٠٢٦-١٠-٢٣)
+    static let logoSize: CGFloat = 76
 
     private var isPending: Bool { project.approvalStatus == "pending" }
     private var imageRadius: CGFloat { max(DS.Card.radius - DS.Spacing.xs, DS.Radius.sm) }
@@ -525,7 +529,7 @@ struct ProjectGridCard: View {
             Color.clear
                 .aspectRatio(Self.imageAspect, contentMode: .fit)
                 .frame(maxWidth: .infinity)
-                .overlay { ProjectHeroImage(project: project, markSize: DS.Icon.state) }
+                .overlay { ProjectHeroImage(project: project, markSize: Self.logoSize) }
                 .clipShape(RoundedRectangle(cornerRadius: imageRadius, style: .continuous))
 
             Text(project.title)
