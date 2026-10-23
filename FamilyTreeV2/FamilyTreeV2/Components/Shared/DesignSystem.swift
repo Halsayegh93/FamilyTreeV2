@@ -2259,7 +2259,6 @@ extension DS {
         static let tileIconRadius: CGFloat = 10
         static let typeIcon: CGFloat = 24
         static let typeIconRadius: CGFloat = 7
-        static let tileMinHeight: CGFloat = 96
         /// الحلقة الذهبية: قطرها، عرض الهالة، وكم تخرج من طرف الرأس
         static let ringSide: CGFloat = 260
         static let ringHaloWidth: CGFloat = 28
@@ -2387,19 +2386,9 @@ extension DS {
 }
 
 extension DS.Hub {
-    /// سطر «اليوم» الذكي تحت التحية (ذكرى اليوم، وفاة لم يُعلن عنها، الطلبات، الجدد، يوم هادئ)
+    /// سطر التاريخ تحت التحية في رأس «اليوم»
     static let greetingLine = SwiftUI.Color.white.opacity(0.86)
-    /// «المربّع اللي ينسحب» (`AdminTodaySwipeCard`): أقل سحب يبدأ به، المسافة التي تقلب الصفحة، المقاومة عند الطرفين،
-    /// ونقطتا الصفحة (العادية، الحالية كبسولة، وارتفاع شريطهما داخل المربّع في أسفله — الدفعة ١٣ «خلهم داخل المربع»)
-    static let swipeMinimum: CGFloat = 12
-    static let swipeDistance: CGFloat = 60
-    static let swipeResistance: CGFloat = 0.3
-    /// الرمية: السرعة × هذا = المسافة الإضافية المتوقّعة (ث)
-    static let swipeThrow: CGFloat = 0.2
-    static let pageDot: CGFloat = 6
-    static let pageDotActive: CGFloat = 16
-    static let pageDotsHeight: CGFloat = 20
-    /// حشوة صفحتي المربّع (الجانبان والأعلى، والأسفل بلا نقاط) والفراغ بين العنوان وما تحته — أضيق من بطاقات اللوحة
+    /// حشوة مربّعي «يحتاج انتباهك» و«إحصاء الأفراد» والفراغ بين العنوان وما تحته — أضيق من بطاقات اللوحة
     /// (الدفعة ١٣ «نصغره شوي»)
     static let swipePadding: CGFloat = DS.Spacing.md
     static let swipeGap: CGFloat = DS.Spacing.xs

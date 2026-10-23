@@ -56,7 +56,7 @@ struct AdminAnalyticsView: View {
         // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← «ملخص عام» يصعد فوقه ←
         // البطاقات والشبكات (عمودان أفقياً)
         return AdminPage(header: header(newThisMonth: growth.last?.count ?? 0),
-                         lead: AnyView(totalMembers == 0 ? AnyView(membersStateCard) : AnyView(EmptyView())),
+                         lead: AnyView(totalMembers == 0 ? AnyView(membersStateCard) : AnyView(censusCard)),
                          content: AnyView(sections(growth)))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
@@ -148,6 +148,18 @@ struct AdminAnalyticsView: View {
     /// «+١٢» — الإشارة قبل الرقم في السطر العربي أيضاً
     private func signed(_ n: Int) -> String {
         n > 0 ? "\u{2066}+\(n.formatted())\u{2069}" : "0"
+    }
+
+    // MARK: - «إحصاء الأفراد» (أول بطاقة — تصعد فوق الرأس)
+
+    /// الحلقات الثلاث (الإجمالي · الرجال · النساء) + المسجّلون — انتقلت من مربّع «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٢) فبيتها
+    /// هنا وحده. نفس الأعداد من البيانات المحمّلة في الصفحة (الأعضاء، شجرة النساء، «استخدام التطبيق») بلا جلب جديد
+    private var censusCard: some View {
+        var counts = AdminMemberCounts()
+        counts.setMen(from: memberVM.allMembers)
+        counts.setWomen(womenData)
+        counts.setUsage(usage)
+        return AdminMemberCountsCard(counts: counts)
     }
 
     // MARK: - حالة الأعضاء (قبل الأقسام)

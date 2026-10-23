@@ -311,47 +311,6 @@ enum AdminTodayText {
         }
     }
 
-    /// سطر «اليوم» الذكي تحت التحية (الدفعة ١٠): جملة واحدة من بيانات حقيقية بالأولوية — ذكرى وفاة اليوم › وفاة لم يُعلن عنها
-    /// (المالك والمدير) › طلبات بانتظار قرارك (مجال الدور) › انضمّوا هذا الأسبوع (من مجاله الشجرة) › يوم هادئ. نبرة محترمة للوفاة
-    /// بلا رموز. nil ما دام «اليوم» يحمّل
-    static func smartLine(memorialToday: [FamilyMember], unannounced: [FamilyMember], waiting: Int,
-                          joinedThisWeek: Int?, loading: Bool) -> String? {
-        guard !loading else { return nil }
-        if let first = memorialToday.first {
-            let name = first.shortFullName
-            switch memorialToday.count {
-            case 1: return L10n.t("اليوم ذكرى وفاة \(name)", "Today is the anniversary of \(name)'s passing")
-            case 2: return L10n.t("اليوم ذكرى وفاة \(name) و\(memorialToday[1].shortFullName)",
-                                  "Today is the anniversary of \(name) and \(memorialToday[1].shortFullName)")
-            default:
-                let others = memorialToday.count - 1
-                return L10n.t("اليوم ذكرى وفاة \(name) و\(others) آخرين",
-                              "Today is the anniversary of \(name) and \(others) others")
-            }
-        }
-        if let first = unannounced.first {
-            switch unannounced.count {
-            case 1: return L10n.t("لم يُعلَن بعد عن وفاة \(first.shortFullName)", "\(first.shortFullName)'s passing isn't announced yet")
-            case 2: return L10n.t("وفاتان لم يُعلَن عنهما بعد", "2 deaths not announced yet")
-            default:
-                return L10n.t("\(arabicCount(unannounced.count, one: "وفاة", two: "وفاتان", few: "وفيات", many: "وفاة", single: "وفاة")) لم يُعلَن عنها بعد",
-                              "\(unannounced.count) deaths not announced yet")
-            }
-        }
-        if waiting > 0 {
-            return L10n.isArabic
-                ? "\(arabicCount(waiting, one: "طلب واحد", two: "طلبان", few: "طلبات", many: "طلباً", single: "طلب")) بانتظار قرارك"
-                : (waiting == 1 ? "1 request awaits your decision" : "\(waiting) requests await your decision")
-        }
-        if let joined = joinedThisWeek, joined > 0 {
-            return L10n.isArabic
-                ? (joined == 1 ? "انضمّ عضو جديد هذا الأسبوع"
-                    : "انضمّ \(arabicCount(joined, one: "عضو", two: "عضوان", few: "أعضاء", many: "عضواً", single: "عضو")) هذا الأسبوع")
-                : (joined == 1 ? "1 member joined this week" : "\(joined) members joined this week")
-        }
-        return L10n.t("ما في طلبات — يوم هادئ", "No requests — a quiet day")
-    }
-
     /// «متأخر يومين» — من بداية مرحلته
     static func late(_ flow: ApprovalSnapshot?) -> String {
         guard let since = flow?.stageSince ?? flow?.createdAt else { return L10n.t("متأخر", "Late") }
