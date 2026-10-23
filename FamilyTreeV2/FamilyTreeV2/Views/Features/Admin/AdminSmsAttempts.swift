@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 // «اعرض الرمز» للمالك وحده (طلب المالك ٢٠٢٦-١٠-٢١ «اذا في خطا ممكن اعطيه لصاحب الرقم»، 20261021080000):
 // `owner_login_codes` = الأرقام التي لها رمز صالح الآن (بلا الرمز) + آخر عرض، و`owner_reveal_login_code` يرجع الرمز
 // ويُسجَّل كل نداء. الرمز يعيش ٥ دقائق في السيرفر ويبطل بالدخول؛ المدير يأخذ 42501 فلا يظهر له شيء.
+// للمالك: ضغط صفّ الرقم يفتح «تفاصيل الرقم» (`AdminSmsNumberDetails.swift`، وقت الإرسال وحالة التسليم لكل طلب).
 // حارس المكدس: البطاقة نوع مستقل خلف `AnyView` في `AdminSmsView`، والصفحة الكاملة خلف `AdminLazyPage`.
 
 /// ما ترجعه `sms_login_attempts(p_days)` — فكّ متسامح كالنظرة
@@ -297,7 +298,7 @@ struct SmsAttemptsCard: View {
                 if result.items.isEmpty {
                     SmsAttemptsEmpty()
                 } else {
-                    SmsAttemptsRows(items: Self.preview(result.items), days: result.days)
+                    SmsAttemptsRows(items: Self.preview(result.items), days: result.days, backTitle: SmsText.pageTitle)
                     NavigationLink { AdminLazyPage { AnyView(SmsAttemptsListPage().adminArea(area)) } } label: {
                         AdminPillLabel(title: L10n.t("الكل (\(result.items.count))", "All (\(result.items.count))"),
                                        icon: "list.bullet", style: .soft, height: DS.Hub.pillHeightCard, fullWidth: true)
@@ -445,11 +446,13 @@ private struct SmsAttemptsNote: View {
 private struct SmsAttemptsRows: View {
     let items: [SmsLoginAttempts.Item]
     let days: Int
+    /// رجوع «تفاصيل الرقم» (المالك) لما فُتحت منه
+    let backTitle: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(items) { item in
-                SmsAttemptRow(item: item, days: days)
+                SmsAttemptRow(item: item, days: days, backTitle: backTitle)
                 if item.id != items.last?.id { AdminRowDivider() }
             }
         }
@@ -460,10 +463,11 @@ private struct SmsAttemptsRows: View {
 private struct SmsAttemptRow: View {
     let item: SmsLoginAttempts.Item
     let days: Int
+    let backTitle: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SmsAttemptRowMain(item: item, days: days)
+            SmsAttemptRowMain(item: item, days: days, backTitle: backTitle)
             if let e164 = item.phoneE164 {
                 SmsOwnerCodeLine(phoneE164: e164, name: item.name.map(PersonName.threeParts) ?? item.phone)
             }
@@ -471,30 +475,40 @@ private struct SmsAttemptRow: View {
     }
 }
 
-/// صفّ رقم: الاسم (أو «رقم غير مسجّل»)، الرقم وآخر وقت، ثم الشارات. العضو يفتح ملفه؛ للمالك نسخ/اتصال
+/// صفّ رقم: الاسم (أو «رقم غير مسجّل»)، الرقم وآخر وقت، ثم الشارات.
+/// المالك (الرقم كاملاً): الضغط يفتح «تفاصيل الرقم» والضغطة المطوّلة نسخ/اتصال. المدير: العضو يفتح ملفه فقط
 private struct SmsAttemptRowMain: View {
     let item: SmsLoginAttempts.Item
     let days: Int
+    let backTitle: String
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.openURL) private var openURL
+    @Environment(\.adminArea) private var area
 
     var body: some View {
         let member = item.profileId.flatMap { memberVM.member(byId: $0) }
         Group {
-            if let member {
+            if let e164 = item.phoneE164 {
+                NavigationLink {
+                    AdminLazyPage {
+                        AnyView(SmsNumberDetailsPage(phoneE164: e164, days: days,
+                                                     name: member?.fullName ?? item.name)
+                            .adminArea(area).adminBackTitle(backTitle))
+                    }
+                } label: {
+                    content(name: member?.shortFullName ?? displayName, navigates: true)
+                }
+                .buttonStyle(.plain)
+            } else if let member {
                 NavigationLink { AdminLazyPage { AnyView(AdminMemberDetailSheet(member: member)) } } label: {
                     content(name: member.shortFullName, navigates: true)
                 }
                 .buttonStyle(.plain)
-            } else if item.phoneE164 != nil {
-                // رقم بلا ملف: الضغط نفسه يفتح «نسخ الرقم / اتصال» (المالك)
-                Menu { phoneActions } label: { content(name: displayName, navigates: false) }
-                    .buttonStyle(.plain)
             } else {
                 content(name: displayName, navigates: false)
             }
         }
-        .modifier(SmsPhoneContextMenu(enabled: item.phoneE164 != nil && member != nil) { phoneActions })
+        .modifier(SmsPhoneContextMenu(enabled: item.phoneE164 != nil) { phoneActions })
     }
 
     /// الاسم من الرد (ثلاثي) — أو «رقم غير مسجّل»
@@ -715,7 +729,7 @@ struct SmsRevealCodeBox: View {
     }
 }
 
-/// ضغطة مطوّلة «نسخ الرقم / اتصال» على صفّ العضو (المالك) — بلا قائمة فارغة لغيره
+/// ضغطة مطوّلة «نسخ الرقم / اتصال» على صفّ الرقم (المالك) — بلا قائمة فارغة لغيره
 private struct SmsPhoneContextMenu<Actions: View>: ViewModifier {
     let enabled: Bool
     @ViewBuilder var actions: () -> Actions
@@ -782,7 +796,8 @@ private struct SmsAttemptsListContent: View {
                     DSEmptyView(L10n.t("لا نتائج", "No results"), message: L10n.t("جرّب اسماً أو رقماً آخر", "Try another name or number"),
                                 icon: "magnifyingglass", style: .inline)
                 } else {
-                    SmsAttemptsRows(items: rows, days: result.days)
+                    SmsAttemptsRows(items: rows, days: result.days,
+                                    backTitle: L10n.t("طلبات رمز الدخول", "Sign-in code requests"))
                 }
                 SmsAttemptsNote(result: result)
             } else {
