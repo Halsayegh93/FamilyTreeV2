@@ -99,7 +99,8 @@ struct FamilyTreeSideTabs: View {
                 DSChipButton(option.title, isSelected: selection == option.id, size: .mini) {
                     guard selection != option.id else { return }
                     UISelectionFeedbackGenerator().selectionChanged()
-                    withAnimation(DS.Anim.snappy) { selection = option.id }
+                    // الشجرتان شاشتان — تذوب إحداهما في الأخرى (`DSScreenCrossfade`)
+                    DSScreenCrossfade.run { selection = option.id }
                 }
             }
         }

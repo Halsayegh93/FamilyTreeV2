@@ -148,7 +148,13 @@ struct AdminDashboardView: View {
         areaHops += 1
         var path = NavigationPath()
         path.append(AdminReviewDestination.area(area, areaHops))
-        navigationPath = path
+        // من «اليوم»: دفع عادي؛ من قسم إلى قسم (قائمة العنوان): تذوب الصفحة في الأخرى بلا انزلاق
+        guard !navigationPath.isEmpty else { navigationPath = path; return }
+        DSScreenCrossfade.run {
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { navigationPath = path }
+        }
     }
 
     // MARK: - التحميل

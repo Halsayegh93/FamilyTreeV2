@@ -201,6 +201,8 @@ struct DSCenterCard<Content: View>: View {
             .padding(.horizontal, DS.Spacing.xl)
             .padding(.vertical, landscape ? DS.Landscape.panelMargin : 0)
             .scaleEffect(appeared || reduceMotion ? 1 : DSMotion.panelScale)
+            // نفس فتح المربّعات: يصعد قليلاً إلى مكانه وهو يكبر
+            .offset(y: appeared || reduceMotion ? 0 : DSMotion.panelRise)
             .opacity(appeared ? 1 : 0)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -245,6 +247,8 @@ struct DSCenterPanel<Content: View>: View {
     @Environment(\.dsSection) private var section
     /// وضع العرض: المربّع أعرض ويأخذ الارتفاع كله تقريباً (الشاشة ~٤٠٠ نقطة)
     @Environment(\.dsLandscape) private var landscape
+    /// `dsCenterBox` يُغلق: المربّع يصغر وينزل قليلاً ويتلاشى التعتيم قبل إغلاق الغطاء
+    @Environment(\.dsPanelDismissing) private var dismissing
 
     /// ارتفاع اللوح: على قدر المحتوى (+ شريط العنوان) وبحدّ أقصى 86% من الشاشة
     /// (أفقياً: الارتفاع المتاح ناقص هامش صغير — يبقى الرأس والأزرار ظاهرين والوسط يتمرّر)
@@ -277,8 +281,10 @@ struct DSCenterPanel<Content: View>: View {
                     )
                     // الهيكل الموحّد: زوايا + إطار + ظلّ (أعمق للوح الكبير)
                     .dsBoxChrome(strong: true)
-                    // يكبر من ٠٫٩٤ مع تلاشٍ — ثم يبدأ تسلسل محتواه (DSMotion)
-                    .scaleEffect(appeared || reduceMotion ? 1 : DSMotion.panelScale)
+                    // يكبر من ٠٫٩٤ صاعداً قليلاً مع تلاشٍ — ثم يبدأ تسلسل محتواه (DSMotion)؛
+                    // وعند الإغلاق يصغر وينزل قليلاً
+                    .scaleEffect(appeared || reduceMotion ? 1 : (dismissing ? DSMotion.panelOutScale : DSMotion.panelScale))
+                    .offset(y: appeared || reduceMotion ? 0 : (dismissing ? DSMotion.panelOutDrop : DSMotion.panelRise))
                     .opacity(appeared ? 1 : 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -293,10 +299,17 @@ struct DSCenterPanel<Content: View>: View {
                 reveal()
             }
         }
+        .onChange(of: dismissing) { out in
+            if out {
+                withAnimation(reduceMotion ? DSMotion.fade : DSMotion.panelOut) { appeared = false }
+            } else {
+                reveal()
+            }
+        }
     }
 
     private func reveal() {
-        guard !appeared else { return }
+        guard !appeared, !dismissing else { return }
         withAnimation(reduceMotion ? DSMotion.fade : DSMotion.panel) { appeared = true }
     }
 }
@@ -320,6 +333,18 @@ extension EnvironmentValues {
     var dsPanelClose: (() -> Void)? {
         get { self[DSPanelCloseKey.self] }
         set { self[DSPanelCloseKey.self] = newValue }
+    }
+}
+
+/// `dsCenterBox` يُغلق — `DSCenterPanel` يؤدّي حركة الخروج قبل إغلاق الغطاء
+private struct DSPanelDismissingKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var dsPanelDismissing: Bool {
+        get { self[DSPanelDismissingKey.self] }
+        set { self[DSPanelDismissingKey.self] = newValue }
     }
 }
 
@@ -553,13 +578,19 @@ final class DSPopupPresenter {
         return .unspecified
     }
 
-    /// يُخفي النافذة إن كانت ما زالت تعرض المربّع صاحب هذا المعرّف
+    /// يُخفي النافذة إن كانت ما زالت تعرض المربّع صاحب هذا المعرّف — بتلاشٍ قصير (طلب المالك
+    /// ٢٠٢٦-١٠-٢٤ «حركات بالإغلاق»)؛ عرض جديد أثناء التلاشي يأخذ نافذة جديدة
     func hide(_ id: UUID) {
         guard id == token, let w = window else { return }
-        w.isHidden = true
-        w.rootViewController = nil
         window = nil
         previousKey?.makeKey()
+        w.isUserInteractionEnabled = false
+        UIView.animate(withDuration: DSMotion.popupOutDuration, delay: 0, options: [.curveEaseIn]) {
+            w.alpha = 0
+        } completion: { _ in
+            w.isHidden = true
+            w.rootViewController = nil
+        }
     }
 }
 
