@@ -337,7 +337,7 @@ class AuthViewModel: ObservableObject {
         armLaunchWatchdog()
         profileRecheckTask?.cancel()
         activeProfileCheckTask?.cancel()
-        let task = Task { [weak self] in await self?.checkUserProfile() }
+        let task = Task<Void, Never> { [weak self] in await self?.checkUserProfile() }
         activeProfileCheckTask = task
         await task.value
     }
