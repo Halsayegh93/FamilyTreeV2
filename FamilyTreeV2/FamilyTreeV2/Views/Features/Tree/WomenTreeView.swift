@@ -573,11 +573,10 @@ private struct WomanDetailSheet: View {
     /// «عرض التفاصيل» / «إخفاء التفاصيل» — يوسّع المربّع أو يصغّره
     private var detailsToggleButton: some View {
         let expanded = isExpanded
-        // الزرّ الواحد (٤٤، تعبئة القسم) بعرض محتواه
-        return DSButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
-                                 : L10n.t("عرض التفاصيل", "Show details"),
-                        icon: expanded ? "chevron.down" : "chevron.up",
-                        fullWidth: false) {
+        // زرّ ناعم (طلب المالك ٢٠٢٦-١٠-٢٤) — شريحة بتلوين القسم الخفيف، مثل تفاصيل العضو في شجرة العائلة
+        return DSChipButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
+                                     : L10n.t("عرض التفاصيل", "Show details"),
+                            icon: expanded ? "chevron.down" : "chevron.up") {
             withAnimation(DS.Anim.snappy) { isExpanded.toggle() }
         }
     }
@@ -1215,23 +1214,32 @@ private struct WomanDetailSheet: View {
         .accessibilityLabel(action.title)
     }
 
+    /// وجه المربّع (إعادة تصميم ٢٠٢٦-١٠-٢٤ «بغير تصميمها»): مسطّح ناعم بلون الإجراء — تعبئة خفيفة وإطار
+    /// رفيع منه، والأيقونة في قرص ملوّن صغير، والاسم تحتها. الحذف بالأحمر.
     private func adminTileFace(_ action: AdminAction) -> some View {
-        VStack(spacing: DS.Spacing.xsm) {
-            // قرص العُدّة المجسّم بمقاس مربّعات الأدوات (زخرفة — الاسم تحته يكفي)
-            DSStateIcon(action.icon, tint: action.color, size: DS.Icon.tile)
-                .accessibilityHidden(true)
+        let tint = action.destructive ? DS.Color.error : action.color
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+        return VStack(spacing: DS.Spacing.sm) {
+            ZStack {
+                Circle().fill(tint.opacity(DS.Opacity.tintFillStrong))
+                Image(systemName: action.icon)
+                    .dsGlyph(DS.Glyph.xl)
+                    .foregroundColor(tint)
+            }
+            .frame(width: DS.Icon.tile, height: DS.Icon.tile)
+            .accessibilityHidden(true)
             Text(action.title)
                 .dsFieldFont(.chip)
-                .foregroundColor(action.destructive ? DS.Color.error : DS.Color.fieldLabel)
+                .foregroundColor(action.destructive ? DS.Color.error : DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.75)
         }
-        .padding(.vertical, DS.Spacing.xs)
+        .padding(DS.Spacing.sm)
         .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, maxHeight: .infinity)
-        // صندوق صفوف المربّعات الموحّد (سطح + إطار شعري + لمسة الطين)
-        .dsRowBox()
-        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .background(shape.fill(tint.opacity(DS.Opacity.tintFillSoft)))
+        .overlay(shape.strokeBorder(tint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
+        .contentShape(shape)
     }
 
     // MARK: - «إدارة السجل» — نفس مربّع «إدارة السجل» في شجرة العائلة (`AdminMemberDetailSheet`)
