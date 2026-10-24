@@ -72,7 +72,7 @@ struct HomeNewsPreviewCard: View {
                 }
                 ForEach(Array(previewPosts.enumerated()), id: \.element.id) { idx, news in
                     if idx > 0 {
-                        // فاصل شعري بين الصفوف يبدأ بعد الختم
+                        // فاصل شعري بين الصفوف يبدأ بعد صورة الكاتب
                         Rectangle()
                             .fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
                             .frame(height: DS.Border.width)
@@ -81,6 +81,7 @@ struct HomeNewsPreviewCard: View {
                     Button { open(news) } label: {
                         HomeNewsPreviewRow(
                             news: news,
+                            member: news.author_id.flatMap { memberVM.member(byId: $0) },
                             likes: newsVM.likesCountByPost[news.id] ?? 0,
                             comments: newsVM.commentsCountByPost[news.id] ?? 0,
                             votes: (newsVM.pollVotesByPost[news.id] ?? [:]).values.reduce(0, +)
@@ -180,10 +181,13 @@ struct HomeNewsBoxHeader: View {
     }
 }
 
-/// صف معاينة خبر واحد بسطر — ختم النوع بلونه + النص + (النوع · الوقت · التفاعل) + صورة مصغّرة.
+/// صف معاينة خبر واحد بسطر — صورة الكاتب + النص + (النوع · الوقت · التفاعل) + صورة مصغّرة.
+/// (طلب المالك ٢٠٢٦-١٠-٢٥: صورة الكاتب لا ختم النوع؛ النوع يبقى بلونه في السطر الصغير)
 /// بنية مستقلة لإبقاء عمق النوع منخفضاً.
 struct HomeNewsPreviewRow: View {
     let news: NewsPost
+    /// الكاتب من الشجرة — لصورته ولون دوره (nil لمنشور الإدارة أو كاتب غير محمَّل)
+    let member: FamilyMember?
     let likes: Int
     let comments: Int
     /// مجموع أصوات التصويت (إن كان الخبر تصويتاً)
@@ -201,9 +205,23 @@ struct HomeNewsPreviewRow: View {
         return news.mediaURLs.isEmpty ? NewsTypeHelper.displayName(for: news.type) : L10n.t("صورة", "Photo")
     }
 
+    private var isAdminIdentity: Bool {
+        news.author_name == L10n.t("إدارة العائلة", "Family Admin")
+            || news.author_name == "إدارة العائلة"
+    }
+
+    private var roleColor: Color {
+        switch news.role_color {
+        case "purple": return DS.Color.adminRole
+        case "orange": return DS.Color.supervisorRole
+        case "green":  return DS.Color.monitorRole
+        default:       return DS.Color.brand   // دور العضو: كحلي ثابت (معنى)
+        }
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
-            NewsTypeSeal(type: news.type, size: NewsKit.sealRow, seed: Int(news.id.uuid.0))
+            avatar
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(previewText)
@@ -226,6 +244,26 @@ struct HomeNewsPreviewRow: View {
             }
         }
         .padding(.vertical, DS.Spacing.xsm)
+    }
+
+    /// صورة الكاتب بحلقة لون دوره — ومنشور الإدارة قرص كحلي بمكبّر الصوت
+    @ViewBuilder
+    private var avatar: some View {
+        if isAdminIdentity {
+            ZStack {
+                Circle().fill(DS.Color.gradientPrimary)
+                FTNewsBadge(type: "إعلان", tint: DS.Color.textOnPrimary, seed: Int(news.id.uuid.0), style: .onColor)
+            }
+            .frame(width: NewsKit.sealRow, height: NewsKit.sealRow)
+            .overlay(Circle().strokeBorder(DS.Color.headerBorder, lineWidth: DS.Border.width))
+        } else {
+            DSMemberAvatar(
+                name: news.author_name,
+                avatarUrl: member?.avatarUrl,
+                size: NewsKit.sealRow,
+                roleColor: roleColor
+            )
+        }
     }
 }
 

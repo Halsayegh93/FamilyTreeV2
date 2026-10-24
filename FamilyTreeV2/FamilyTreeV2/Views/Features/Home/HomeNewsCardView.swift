@@ -145,14 +145,6 @@ struct HomeNewsCardView: View {
         .padding(.horizontal, DS.Spacing.md)
         .padding(.top, DS.Spacing.md)
         .padding(.bottom, DS.Spacing.xs)
-        // حافّة رفيعة بلون النوع عند بداية البطاقة — تُعرف المناسبة من طرفها وأنت تمرّر
-        .overlay(alignment: .leading) {
-            Capsule()
-                .fill(typeColor)
-                .frame(width: NewsKit.spineWidth)
-                .padding(.vertical, DS.Card.radius)
-                .accessibilityHidden(true)
-        }
         // منشور الإدارة: لمسة ذهبية خفيفة تميّزه عن المنشورات الشخصية
         .background(isAdminIdentityPost ? DS.Color.accent.opacity(DS.Opacity.tintFillSoft) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))

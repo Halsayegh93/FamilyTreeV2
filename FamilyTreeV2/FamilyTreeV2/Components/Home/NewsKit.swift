@@ -32,8 +32,6 @@ enum NewsKit {
     // MARK: البطاقة
     /// صورة الكاتب في سطر التوقيع
     static let bylineAvatar: CGFloat = 24
-    /// حافّة البطاقة بلون النوع (عند بداية السطر)
-    static let spineWidth: CGFloat = 3
     /// «ختم» النوع يُطبع على البطاقة عند دخولها: يبدأ صغيراً مائلاً ثم يستقر
     static let stampFromScale: CGFloat = 0.45
     static let stampFromAngle: Double = -24
