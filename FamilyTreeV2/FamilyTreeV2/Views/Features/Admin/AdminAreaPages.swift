@@ -38,7 +38,6 @@ enum AdminToolCatalog {
     static func tools(authVM: AuthViewModel, adminRequestVM: AdminRequestViewModel) -> [AdminTool] {
         var t: [AdminTool] = []
         let isAdmin = authVM.isAdmin
-        let role = authVM.currentUser?.role
         func page(_ make: @escaping () -> some View) -> AdminTool.Kind { .page { AnyView(make()) } }
 
         // ١ الوارد — صفحة القسم هي «الطلبات» (`AdminAllRequestsView`)؛ هذه الصفوف للبحث الشامل: الطلبات · الرسائل · ⚙︎
@@ -120,13 +119,12 @@ enum AdminToolCatalog {
         // ٤ المؤشرات — ثلاثة مداخل للقراءة: العائلة · الاستخدام · الموافقات («سجل التعديلات» صار «نشاط الفريق» في
         // «إشعارات الإدارة» — الدفعة ٥). كل رقم في بيته هنا، و«اليوم» يعرض أرقاماً تفتحه فقط
         let insights = L10n.t("أرقام وسجل", "Numbers & history")
-        if isAdmin || role == .monitor {
-            // المراقب: الأعداد فقط (`AdminAnalyticsView` يقرأ الدور)
+        // «المؤشرات» للمالك والمدير (أُخفيت عن المراقب ٢٠٢٦-١٠-٢٤)
+        if authVM.canViewInsights {
             t.append(AdminTool(id: "metrics.family", area: .metrics, group: insights,
                                title: L10n.t("العائلة", "The family"),
-                               subtitle: isAdmin ? L10n.t("الأفراد والأحياء، المسجّلون، النمو والأعمار والأدوار",
-                                                          "Members, living, registered, growth, ages and roles")
-                                                 : L10n.t("أعداد الأفراد والأحياء والمسجّلين", "Members, living and registered counts"),
+                               subtitle: L10n.t("الأفراد والأحياء، المسجّلون، النمو والأعمار والأدوار",
+                                                "Members, living, registered, growth, ages and roles"),
                                icon: "person.3.fill", tint: DS.Color.palm,
                                keywords: ["إحصائيات", "إحصاءات", "إحصاء الأفراد", "أعداد الأعضاء", "أعمار", "أفراد", "نمو",
                                           "رجال", "نساء", "أحياء", "متوفون"],
@@ -142,7 +140,7 @@ enum AdminToolCatalog {
                                kind: page { AdminActiveMembersView() }))
         }
         // تقرير الموافقات — بيته الواحد هنا (كان أيضاً في رأس «الوارد» وصفّه ومربّع «منجز هذا الأسبوع»)
-        if adminRequestVM.approvalsWorkflowOn && (isAdmin || role == .monitor) {
+        if adminRequestVM.approvalsWorkflowOn && authVM.canViewInsights {
             t.append(AdminTool(id: "metrics.approvals", area: .metrics, group: insights,
                                title: L10n.t("الموافقات", "Approvals"),
                                subtitle: L10n.t("المنجز، وقت كل مرحلة، حسب النوع، أداء الإدارة", "Done, time per stage, by type, team"),
@@ -153,7 +151,7 @@ enum AdminToolCatalog {
         // «إشعارات الإدارة» — بيتها جرس «اليوم» (صفحة واحدة: الطلبات ونشاط الفريق والنظام، وفيها بحث «سجل التعديلات»).
         // صفّ للبحث الشامل فقط (لا يُرسم في صفحة قسم)؛ الكلمات القديمة تجد بيتها الجديد
         if authVM.canModerate {
-            t.append(AdminTool(id: "today.notices", area: .metrics, group: insights,
+            t.append(AdminTool(id: "today.notices", area: .inbox, group: insights,
                                title: L10n.t("إشعارات الإدارة", "Admin notifications"),
                                subtitle: L10n.t("الطلبات ونشاط الفريق (سجل التعديلات) وتنبيهات النظام",
                                                 "Requests, team activity (change log) and system alerts"),
@@ -165,8 +163,8 @@ enum AdminToolCatalog {
         }
 
         // ٥ الفريق والأمان — أربعة مداخل: فريق الإدارة · رسائل رمز الدخول · التسجيل والمنع · الأجهزة ووصول الإشعارات
-        // (صفحة القسم `AdminTeamAreaView` في `AdminTeamArea.swift`؛ «صلاحيات الأدوار» داخل فريق الإدارة)
-        if isAdmin {
+        // (صفحة القسم `AdminTeamAreaView` في `AdminTeamArea.swift`؛ «صلاحيات الأدوار» داخل فريق الإدارة) — للمالك فقط
+        if authVM.canViewSystemSettings {
             t.append(AdminTool(id: "team.members", area: .team, group: L10n.t("الفريق", "Team"),
                                title: L10n.t("فريق الإدارة", "Admin team"),
                                subtitle: authVM.canManageRoles ? L10n.t("الأعضاء حسب الدور، وصلاحيات الأدوار — إضافة وتغيير",
@@ -246,7 +244,8 @@ struct AdminAreaView: View {
     let area: AdminArea
 
     var body: some View {
-        page.adminArea(area)
+        // قسم ليس لدورك (مسار قديم، رابط، إشعار): رسالة بدل الصفحة
+        AdminAreaGate(area: area) { page }.adminArea(area)
     }
 
     private var page: AnyView {

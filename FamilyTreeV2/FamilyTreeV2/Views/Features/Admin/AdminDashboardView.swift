@@ -95,6 +95,8 @@ struct AdminDashboardView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onReceive(NotificationCenter.default.publisher(for: .openAdminReviewForKind)) { note in
             guard let kind = note.userInfo?["kind"] as? String else { return }
+            // صفحات رسائل الدخول للمالك فقط (٢٠٢٦-١٠-٢٤) — إشعارها عند غيره يبقيه على «اليوم»
+            guard authVM.canViewSystemSettings || !AdminNotices.smsKinds.contains(kind) else { return }
             // من الإشعار: «الوارد» نفسه (على الطلب إن عُرف)، أو طلبات الشجرة، أو صفحة رسائل الدخول (ومحاولات الدخول فوقها)
             let requestId = (note.userInfo?["request_id"] as? String).flatMap(UUID.init(uuidString:))
             let destinations: [AdminReviewDestination]
@@ -195,17 +197,17 @@ struct AdminDashboardView: View {
             group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
             group.addTask { @MainActor in await adminRequestVM.fetchJoinApprovalRequests() }
             group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
-            group.addTask { @MainActor in await authVM.fetchBannedPhones() }
             group.addTask { @MainActor in pendingArchiveCount = await FamilyArchiveViewModel.pendingCount() }
             if isSystem {
                 group.addTask { @MainActor in await SmsBalanceStore.shared.refresh(force: force) }
+                group.addTask { @MainActor in await authVM.fetchBannedPhones() }
+                group.addTask { @MainActor in await AdminDeviceReachStore.shared.refresh(force: force) }
             }
             if isAdmin {
                 group.addTask { @MainActor in await notificationVM.fetchScheduledNotifications() }
                 group.addTask { @MainActor in
                     if let ids = await AdminTodayFetch.announcedDeathIds() { announcedIds = ids }
                 }
-                group.addTask { @MainActor in await AdminDeviceReachStore.shared.refresh(force: force) }
             }
         }
         recalculate()
@@ -396,6 +398,8 @@ struct AdminDashboardView: View {
                                         status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
                                         open: openStatusHome)
                 .dsCardCascade(0, appeared: appeared))
+            // «إدارة تواريخ الوفاة» أثناء الحملة، و«ذكرى الراحلين» بعدها (DeathDatesSpot.swift — طلب المالك ٢٠٢٦-١٠-٢٤)
+            AnyView(AdminDeathDatesSpot().dsCardCascade(1, appeared: appeared))
             AnyView(areasSection().dsCardCascade(1, appeared: appeared))
             if let guide = scopeGuide {
                 AnyView(AdminScopeLink(guide: guide).dsCardCascade(2, appeared: appeared))
@@ -478,6 +482,8 @@ struct AdminDashboardView: View {
                               spoken: later > 0
                                 ? L10n.t("إشعارات مجدولة لاحقاً: \(later)", "Notifications scheduled later: \(later)")
                                 : L10n.t("لا إشعارات مجدولة", "No scheduled notifications")))
+        // الأجهزة من «الفريق والأمان» — للمالك فقط (٢٠٢٦-١٠-٢٤)
+        guard authVM.canViewSystemSettings else { return list }
         // أجهزة لا تصلها الإشعارات = التسجيلات الفاشلة فقط (الدفعة ١٤ «تم غير») — نفس رقم صفحتها. «لم يُفتح منذ 30 يوماً»
         // معلومة في صفحة الأجهزة لا تنبيه هنا
         if let reach = devices.stats {

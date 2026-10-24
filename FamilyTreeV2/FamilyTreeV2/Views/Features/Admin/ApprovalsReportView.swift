@@ -59,7 +59,8 @@ struct ApprovalsReportView: View {
         _vm = StateObject(wrappedValue: viewModel ?? ApprovalsReportViewModel())
     }
 
-    private var canSee: Bool { authVM.isAdmin || authVM.currentUser?.role == .monitor }
+    /// «المؤشرات» للمالك والمدير (أُخفيت عن المراقب ٢٠٢٦-١٠-٢٤)
+    private var canSee: Bool { authVM.canViewInsights }
 
     private var periodOptions: [DSSegmentOption<ApprovalsReportPeriod>] {
         [
@@ -125,9 +126,9 @@ struct ApprovalsReportView: View {
     /// أول بطاقة (تصعد فوق الرأس): الصلاحية، التحميل، الحالات، أو «ملخص الفترة»
     private var leadCard: AnyView {
         guard canSee else {
-            return AnyView(AdminPageStateCard(.empty(L10n.t("للمالك والمدير والمراقب", "For the owner, admins and monitors"),
-                                                     message: L10n.t("تقرير الموافقات لفريق الشجرة والأعضاء.",
-                                                                     "The approvals report is for the tree team."))))
+            return AnyView(AdminPageStateCard(.empty(L10n.t("للمالك والمدير", "For the owner and admins"),
+                                                     message: L10n.t("تقرير الموافقات من «المؤشرات».",
+                                                                     "The approvals report lives in Insights."))))
         }
         switch vm.state {
         case .idle:
