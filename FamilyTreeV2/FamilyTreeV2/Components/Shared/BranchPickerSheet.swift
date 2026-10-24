@@ -192,7 +192,7 @@ struct BranchPickerSheet: View {
             .map { m in
                 BranchNode(
                     member: m,
-                    displayName: m.fullName,
+                    displayName: m.displayFullName,
                     totalCount: (allDescendants[m.id] ?? 0) + 1,
                     children: []
                 )
@@ -434,7 +434,7 @@ struct BranchPickerSheet: View {
             }
             return BranchNode(
                 member: member,
-                displayName: member.fullName,
+                displayName: member.displayFullName,
                 totalCount: (descendants[member.id] ?? 0) + 1,
                 children: kids
             )

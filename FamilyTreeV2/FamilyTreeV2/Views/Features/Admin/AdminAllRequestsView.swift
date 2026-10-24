@@ -2668,7 +2668,7 @@ struct AdminAllRequestsView: View {
             requestRowHeader(icon: "newspaper.fill",
                              tint: tint,
                              title: L10n.t("خبر", "News"),
-                             subtitle: post.author_name) {
+                             subtitle: memberVM.displayName(id: post.author_id, stored: post.author_name, .full)) {
                 pendingChip(post.timestamp)
             }
 
@@ -2693,7 +2693,7 @@ struct AdminAllRequestsView: View {
             requestRowHeader(icon: "exclamationmark.triangle.fill",
                              tint: DS.Color.error,
                              title: L10n.t("بلاغ", "Report"),
-                             subtitle: request.member.map { L10n.t("عن: \($0.fullName)", "About: \($0.fullName)") }) {
+                             subtitle: request.member.map { L10n.t("عن: \($0.displayFullName)", "About: \($0.displayFullName)") }) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
@@ -2710,7 +2710,7 @@ struct AdminAllRequestsView: View {
     private func phoneRow(for request: PhoneChangeRequest) -> some View {
         let currentPhone = KuwaitPhone.display(request.member?.phoneNumber)
         let newPhone = KuwaitPhone.display(request.newValue)
-        let memberName = request.member?.fullName ?? "Member"
+        let memberName = request.member?.displayFullName ?? "Member"
 
         return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "phone.arrow.right",
@@ -2786,7 +2786,7 @@ struct AdminAllRequestsView: View {
                              tint: DS.Color.error,
                              title: L10n.t("تسجيل وفاة", "Deceased"),
                              subtitle: L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
-                                              "For: \(request.member?.fullName ?? "Member")")) {
+                                              "For: \(request.member?.displayFullName ?? "Member")")) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
@@ -2815,7 +2815,7 @@ struct AdminAllRequestsView: View {
                              tint: DS.Color.info,
                              title: L10n.t("إضافة ابن", "Child Add"),
                              subtitle: L10n.t("الأب: \(request.member?.displayFullName ?? "عضو")",
-                                              "Father: \(request.member?.fullName ?? "Member")")) {
+                                              "Father: \(request.member?.displayFullName ?? "Member")")) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
@@ -2844,7 +2844,7 @@ struct AdminAllRequestsView: View {
                              tint: DS.Color.neonBlue,
                              title: L10n.t("اقتراح صورة", "Photo Suggestion"),
                              subtitle: L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
-                                              "For: \(request.member?.fullName ?? "Member")")) {
+                                              "For: \(request.member?.displayFullName ?? "Member")")) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
@@ -3725,7 +3725,8 @@ struct AdminAllRequestsView: View {
 
         case .news(let post):
             infoCard(icon: "person.fill", label: L10n.t("الكاتب", "Author"),
-                     value: post.author_name, color: AppSection.admin.ink)
+                     value: memberVM.displayName(id: post.author_id, stored: post.author_name, .full),
+                     color: AppSection.admin.ink)
             infoCard(icon: "tag.fill", label: L10n.t("النوع", "Type"),
                      value: post.type, color: newsTypeColor(post.type))
             longTextCard(icon: "text.alignleft",
@@ -3737,14 +3738,14 @@ struct AdminAllRequestsView: View {
 
         case .report(let request):
             infoCard(icon: "person.fill", label: L10n.t("مقدم البلاغ", "Reporter"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             longTextCard(icon: "exclamationmark.bubble.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .phone(let request):
             infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             comparisonCard(
                 oldLabel: L10n.t("الرقم الحالي", "Current"),
                 oldValue: KuwaitPhone.display(request.member?.phoneNumber),
@@ -3790,21 +3791,21 @@ struct AdminAllRequestsView: View {
 
         case .deceased(let request):
             infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             longTextCard(icon: "doc.text.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .child(let request):
             infoCard(icon: "person.fill", label: L10n.t("الأب", "Father"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             longTextCard(icon: "doc.text.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .photo(let request):
             infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             if !(request.details ?? "").isEmpty {
                 longTextCard(icon: "text.bubble.fill",
                              label: L10n.t("ملاحظات", "Notes"),
@@ -3818,7 +3819,8 @@ struct AdminAllRequestsView: View {
             infoCard(icon: "briefcase.fill", label: L10n.t("اسم المشروع", "Project"),
                      value: project.title, color: DS.Color.accent)
             infoCard(icon: "person.fill", label: L10n.t("صاحب المشروع", "Owner"),
-                     value: project.ownerName, color: AppSection.admin.ink)
+                     value: memberVM.displayName(id: project.ownerId, stored: project.ownerName, .full),
+                     color: AppSection.admin.ink)
             if let desc = project.description, !desc.isEmpty {
                 longTextCard(icon: "doc.text.fill",
                              label: L10n.t("الوصف", "Description"),
@@ -3874,8 +3876,8 @@ struct AdminAllRequestsView: View {
 
         case .treeEdit(let request, let action):
             let payload = request.treeEditPayload
-            let memberName = payload?.targetMemberName
-                ?? request.member?.fullName
+            let memberName = memberVM.treeEditTargetName(payload)
+                ?? request.member?.displayFullName
                 ?? L10n.t("عضو", "Member")
             // مقدّم الطلب هو العضو نفسه (مقارنة كمعرّفات — الآيفون يرسل حروفاً كبيرة) → يظهر مرة
             // واحدة بعنوان «صاحب الطلب» بدل «العضو» + «مقدّم التعديل» (طلب المالك ٢٠٢٦-١٠-٠٧)
@@ -3947,7 +3949,7 @@ struct AdminAllRequestsView: View {
                let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                 infoCard(icon: "person.crop.circle.badge.checkmark",
                          label: selfRequest ? L10n.t("صاحب الطلب", "Requester") : L10n.t("مقدّم التعديل", "Requested by"),
-                         value: requester.fullName, color: DS.Color.info)
+                         value: requester.displayFullName, color: DS.Color.info)
             }
             // سبب داخلي من تعديل الملف الشخصي (profile_marital…) لا يُعرض كما هو — عنوانه في رأس المربّع
             if let reason = payload?.reason, !reason.isEmpty, Self.profileReasonTitle(reason) == nil {

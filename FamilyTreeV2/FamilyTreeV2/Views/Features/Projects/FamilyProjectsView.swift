@@ -143,12 +143,14 @@ struct FamilyProjectsView: View {
             ProjectDetailView(project: project)
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)
+                .environmentObject(memberVM)
         }
         .fullScreenCover(item: $projectToEdit) { project in
             DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
                 EditProjectView(project: project, didEdit: $didEditProject)
                     .environmentObject(projectsVM)
                     .environmentObject(authVM)
+                    .environmentObject(memberVM)
                     .dsSectionPage(.projects)
             }
             .background(ClearPresentationBackground())
@@ -700,7 +702,7 @@ struct AddProjectView: View {
 
         // المنشئ هو صاحب المشروع (تعيين صاحب آخر صار في تعديل المشروع للإدارة).
         let ownerId = currentUser.id
-        let ownerName = currentUser.fullName
+        let ownerName = currentUser.displayFullName   // بالعائلة المختارة (طلب المالك ٢٠٢٦-١٠-٢٤)
 
         // Upload logo if selected
         var uploadedLogoUrl: String? = nil

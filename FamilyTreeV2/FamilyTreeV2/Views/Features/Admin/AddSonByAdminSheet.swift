@@ -177,7 +177,7 @@ struct AddSonByAdminSheet: View {
                      : L10n.t("إضافة ابن لـ", "Adding child to"))
                     .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
-                Text(isEditMode ? (editingChild?.firstName ?? "") : parent.fullName)
+                Text(isEditMode ? (editingChild?.firstName ?? "") : parent.displayFullName)
                     .dsFont(.headlineCompact)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)

@@ -549,6 +549,7 @@ struct ProjectDetailView: View {
     let project: Project
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     
@@ -673,6 +674,7 @@ struct ProjectDetailView: View {
             EditProjectView(project: project, didEdit: $didEdit)
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)
+                .environmentObject(memberVM)
                 .dsSectionPage(.projects)
         }
         .dsAlert(
@@ -807,7 +809,9 @@ struct ProjectDetailView: View {
 
     /// صاحب المشروع — كبسولة تحت الاسم بدل بطاقة مستقلّة (الشارة الموحّدة)
     private var ownerChip: some View {
-        DSStatusChip(text: project.ownerName, icon: "person.fill", tint: AppSection.projects.ink)
+        // اسم صاحبه بالعائلة المختارة (المحفوظ نصّ وقت الإنشاء) — رباعي يتّسع للكبسولة
+        DSStatusChip(text: memberVM.displayName(id: project.ownerId, stored: project.ownerName, .four),
+                     icon: "person.fill", tint: AppSection.projects.ink)
     }
 
     // MARK: - إجراءات سريعة
@@ -1097,7 +1101,8 @@ struct EditProjectView: View {
                                   tint: tint, index: 0) {
                     // الصفّ الموحّد (`DSRow`) — قرص مجسّم + الاسم + سهم
                     Button { showOwnerPicker = true } label: {
-                        DSRow(icon: "person.fill", tint: tint, title: ownerName) { DSChevron() }
+                        DSRow(icon: "person.fill", tint: tint,
+                              title: memberVM.displayName(id: selectedOwnerId, stored: ownerName, .full)) { DSChevron() }
                     }
                     .buttonStyle(DSScaleButtonStyle())
                 }
@@ -1137,7 +1142,8 @@ struct EditProjectView: View {
         let q = ownerSearch.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidates = memberVM.allMembers
             .filter { $0.isCountable && $0.isDeceased != true }
-            .filter { q.isEmpty || $0.fullName.localizedCaseInsensitiveContains(q) }
+            .filter { q.isEmpty || $0.fullName.localizedCaseInsensitiveContains(q)
+                || $0.displayFullName.localizedCaseInsensitiveContains(q) }
             .sorted { $0.fullName < $1.fullName }
         return DSComposer(
             title: L10n.t("اختيار صاحب المشروع", "Select Owner"),
@@ -1190,7 +1196,7 @@ struct EditProjectView: View {
         let isSelected = selectedOwnerId == m.id
         return Button {
             selectedOwnerId = m.id
-            ownerName = m.fullName
+            ownerName = m.displayFullName
             ownerSearch = ""
             showOwnerPicker = false
         } label: {
@@ -1256,7 +1262,8 @@ struct EditProjectView: View {
         }
 
         // تغيير صاحب المشروع متاح للإدارة فقط.
-        let editedOwnerName = authVM.canModerate ? ownerName : nil
+        // يُحدَّث الاسم المحفوظ إلى اسم صاحبه الحالي بعائلته المختارة
+        let editedOwnerName = authVM.canModerate ? memberVM.displayName(id: selectedOwnerId, stored: ownerName, .full) : nil
         let editedOwnerId = authVM.canModerate ? selectedOwnerId?.uuidString : nil
 
         let success = await projectsVM.updateProject(

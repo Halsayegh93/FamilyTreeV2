@@ -619,7 +619,7 @@ private struct MessageDetailSheet: View {
         .dsCenterBox(isPresented: $showEmailComposer) {
             OfficialReplySheet(
                 to: ContactParser.preferredContact(from: message) ?? "",
-                memberName: message.member?.fullName ?? "",
+                memberName: message.member?.displayFullName ?? "",
                 category: ContactParser.category(of: message),
                 originalMessage: ContactParser.message(from: message)
             )

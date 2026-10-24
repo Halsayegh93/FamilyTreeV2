@@ -85,7 +85,7 @@ struct TreeEditRequestView: View {
         // أقسام تدخل تباعاً، و«إرسال الطلب» / «إلغاء» أسفل المربّع
         DSComposer(
             title: screenTitle,
-            subtitle: member.fullName,
+            subtitle: member.displayFullName,
             icon: action.iconName,
             tint: headerTint,
             actionTitle: L10n.t("إرسال الطلب", "Submit Request"),

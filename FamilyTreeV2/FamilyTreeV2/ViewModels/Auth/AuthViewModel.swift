@@ -1813,7 +1813,7 @@ class AuthViewModel: ObservableObject {
             let emailPayload: [String: AnyEncodable] = [
                 "category": AnyEncodable(category),
                 "message": AnyEncodable(cleanMessage),
-                "sender_name": AnyEncodable(user.fullName),
+                "sender_name": AnyEncodable(user.displayFullName),
                 "sender_phone": AnyEncodable(user.phoneNumber)
             ]
 
