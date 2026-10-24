@@ -718,7 +718,8 @@ struct AdminMembersIndex {
     }
 
     /// رأس فرع كل عضو: ابن مباشر لرأس الشجرة (`BranchPickerSheet.familyRoot`) — بالصعود في سلسلة الآباء مع حفظ النتائج
-    private static func branchHeads(_ all: [FamilyMember]) -> [UUID: UUID] {
+    /// (وتقرؤه «إدارة تواريخ الوفاة» لتجميعها بالفرع)
+    static func branchHeads(_ all: [FamilyMember]) -> [UUID: UUID] {
         guard let root = BranchPickerSheet.familyRoot(in: all) else { return [:] }
         var father: [UUID: UUID] = [:]
         for m in all { if let f = m.fatherId { father[m.id] = f } }

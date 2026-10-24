@@ -26,8 +26,10 @@ struct RoleGuide: Identifiable {
                 mandate: L10n.t("صاحب النظام — كل الصلاحيات", "System owner — full control"),
                 can: [
                     L10n.t("كل ما يقدر عليه المدير", "Everything an admin can do"),
+                    L10n.t("قسم «التطبيق»: كل إعدادات التطبيق والتشغيل", "The App section: every app and operations setting"),
+                    L10n.t("قسم «الفريق والأمان»: فريق الإدارة، ورسائل الدخول ومحاولاته، والأجهزة، والتسجيل والمنع",
+                          "The Team & security section: the admin team, sign-in messages and attempts, devices, sign-up and blocking"),
                     L10n.t("منح الأدوار وسحبها", "Assign and remove roles"),
-                    L10n.t("إعدادات النظام والأمان", "System and security settings"),
                     L10n.t("إدارة الأجهزة المرتبطة بالحسابات", "Manage linked devices"),
                     L10n.t("منع الأرقام من التسجيل", "Block numbers from signing up")
                 ],
@@ -55,14 +57,15 @@ struct RoleGuide: Identifiable {
                           "Delete any content: news, comments, photos, diwaniyas"),
                     L10n.t("إخفاء وإظهار عناصر المكتبة والمشاريع",
                           "Hide and show library items and projects"),
-                    L10n.t("الاطلاع على إعدادات النظام", "View system settings")
+                    L10n.t("رؤية «المؤشرات»: الأعداد والاستخدام وتقرير الموافقات",
+                          "View Insights: counts, usage and the approvals report")
                 ],
                 cannot: [
+                    L10n.t("قسم «التطبيق» (إعدادات التطبيق والتشغيل) — للمالك، ولا حتى للاطلاع",
+                          "The App section (app and operations settings) — owner only, not even to view"),
+                    L10n.t("قسم «الفريق والأمان» (فريق الإدارة، رسائل الدخول ومحاولاته، الأجهزة، التسجيل والمنع) — للمالك",
+                          "The Team & security section (admin team, sign-in messages and attempts, devices, sign-up and blocking) — owner only"),
                     L10n.t("منح الأدوار أو سحبها — للمالك", "Assign or remove roles — owner only"),
-                    L10n.t("تعديل إعدادات النظام والأمان — للمالك",
-                          "Change system and security settings — owner only"),
-                    L10n.t("إدارة الأجهزة المرتبطة — للمالك", "Manage linked devices — owner only"),
-                    L10n.t("منع الأرقام من التسجيل — للمالك", "Blocking numbers — owner only"),
                     L10n.t("تغيير دور المالك أو حذفه", "Change or delete the owner")
                 ]
             ),
@@ -77,7 +80,7 @@ struct RoleGuide: Identifiable {
                     L10n.t("تعديل بيانات الأعضاء", "Edit member data"),
                     L10n.t("معالجة مشاكل صحة الشجرة (بدون أب، بلا اسم، أرقام مكررة)",
                           "Fix tree health issues (no father, no name, duplicate phones)"),
-                    L10n.t("رؤية إحصاءات الأعضاء", "View member statistics")
+                    L10n.t("استكمال تواريخ الوفاة", "Complete death dates")
                 ],
                 cannot: [
                     L10n.t("اعتماد أو رفض الأخبار والمكتبة والمشاريع والديوانيات — للإدارة",
@@ -88,6 +91,8 @@ struct RoleGuide: Identifiable {
                     L10n.t("حذف الأعضاء أو إيقاف حساباتهم", "Delete members or suspend their accounts"),
                     L10n.t("تسجيل عضو جديد مباشرة", "Register a new member directly"),
                     L10n.t("إرسال الإشعارات", "Send notifications"),
+                    L10n.t("«المؤشرات» (الإحصاءات والاستخدام وتقرير الموافقات) — للمالك والمدير",
+                          "Insights (statistics, usage, approvals report) — owner and admins"),
                     L10n.t("منح الأدوار، الإعدادات، الأجهزة، منع الأرقام",
                           "Roles, settings, devices, blocked numbers")
                 ]

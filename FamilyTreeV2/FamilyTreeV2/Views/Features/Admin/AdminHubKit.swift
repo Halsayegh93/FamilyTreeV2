@@ -63,18 +63,16 @@ enum AdminArea: String, CaseIterable, Identifiable, Hashable {
     }
 
     /// يظهر هذا القسم لدور المشاهد — القسم الفارغ لدورك لا يُرسم (المبدأ ٥ في IA.md).
-    /// المدموجان: المناسبات (`canModerate`) ∪ الإعلانات (`canSendNotifications` ⊂ الإدارة)، والفريق (`isAdmin`) ∪
-    /// الدخول والأمان (`canViewSystemSettings`)
+    /// المناسبات (`canModerate`) ∪ الإعلانات (`canSendNotifications` ⊂ الإدارة). «الفريق والأمان» و«التطبيق» للمالك
+    /// فقط، و«المؤشرات» للمالك والمدير (طلب المالك ٢٠٢٦-١٠-٢٤) — كل مدخل لصفحاتهما يمرّ بهذا الشرط (`AdminAreaGate`)
     @MainActor
     func isVisible(for authVM: AuthViewModel) -> Bool {
-        let role = authVM.currentUser?.role
         switch self {
         case .inbox:     return authVM.canModerate
         case .family:    return authVM.canEditMembers
         case .occasions: return authVM.canModerate || authVM.canSendNotifications
-        case .metrics:   return authVM.isAdmin || role == .monitor
-        case .team:      return authVM.isAdmin || authVM.canViewSystemSettings
-        case .app:       return authVM.canViewSystemSettings
+        case .metrics:   return authVM.canViewInsights
+        case .team, .app: return authVM.canViewSystemSettings
         }
     }
 
