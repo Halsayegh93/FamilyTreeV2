@@ -1135,17 +1135,35 @@ struct MemberDetailsView: View {
         return nil
     }
 
-    /// زرّ التعديل داخل التفاصيل: «تعديل مباشر» للمالك والمدير والمراقب (`canEditMembers`)، وإلا
-    /// «طلب تعديل» لغير صاحب الملف — زرّ واحد لا الاثنان معاً (طلب المالك ٢٠٢٦-١٠-٢٤)
+    /// الإدارة ترى «طلب تعديل» أيضاً بجانب «تعديل مباشر» (طلب المالك ٢٠٢٦-١٠-٢٤ «حط الزرين للإدارة») —
+    /// لغير ملفها هي
+    private var showsBothEditButtons: Bool {
+        authVM.canEditMembers && !isViewingSelf && !member.isDeleted
+    }
+
+    /// زرّ التعديل داخل التفاصيل: «تعديل مباشر» للمالك والمدير والمراقب (`canEditMembers`) ومعه «طلب تعديل»
+    /// رمادياً، وإلا «طلب تعديل» وحده لغير صاحب الملف
     @ViewBuilder private var editEntryButton: some View {
         if let primary = primaryPanelAction {
             DSButton(primary.title, icon: primary.icon, fullWidth: false, action: primary.run)
         }
+        if showsBothEditButtons {
+            DSButton(L10n.t("طلب تعديل", "Request Edit"), icon: "pencil.and.list.clipboard",
+                     role: .cancel, fullWidth: false) {
+                showEditActions = true
+            }
+        }
     }
 
-    /// صفّ الرأس: زرّ التعديل + «عرض التفاصيل» (داخل المربّع) — سطران من «حجم النص» ٢× وأكبر
+    /// صفّ الرأس: زرّ التعديل + «عرض التفاصيل» (داخل المربّع) — سطران من «حجم النص» ٢× وأكبر،
+    /// ومع زرّي الإدارة: الزرّان في سطر و«عرض التفاصيل» تحتهما (لا تزدحم ثلاثة أزرار في سطر)
     @ViewBuilder private var headerButtons: some View {
-        if dynamicTypeSize >= .xxLarge {
+        if showsBothEditButtons && dynamicTypeSize < .xxLarge {
+            VStack(spacing: DSBox.buttonSpacing) {
+                HStack(spacing: DSBox.buttonSpacing) { editEntryButton }
+                if centered { detailsToggleButton }
+            }
+        } else if dynamicTypeSize >= .xxLarge {
             VStack(spacing: DSBox.buttonSpacing) {
                 editEntryButton
                 if centered { detailsToggleButton }
