@@ -125,6 +125,26 @@ struct WomenClassicTreeView: View {
         }
         return map
     }
+    /// بصمة ما يغيّر الرسم أو التخطيط — `onChange` يعيد بناء الكاش متى تغيّرت
+    private var membersSignature: Int {
+        var h = Hasher()
+        for m in members {
+            h.combine(m.id)
+            h.combine(m.fatherId)
+            h.combine(m.motherId)
+            h.combine(m.husbandId)
+            h.combine(m.isDeceased)
+            h.combine(m.deathDate)
+            h.combine(m.birthDate)
+            h.combine(m.fullName)
+            h.combine(m.firstName)
+            h.combine(m.sortOrder)
+            h.combine(m.isHiddenFromTree)
+            h.combine(m.gender)
+            h.combine(m.isMarried)
+        }
+        return h.finalize()
+    }
     private static let rootKey = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
 
     private var roots: [FamilyMember] { childrenOf[Self.rootKey] ?? [] }
@@ -514,6 +534,12 @@ struct WomenClassicTreeView: View {
                     initIfNeeded()
                     let L = rebuild()
                     if !userInteracted { fit(in: geo.size, layout: L) }
+                }
+                // تغيّر بلا تغيّر العدد (وفاة، ربط زوج/أم، اسم، ترتيب، إخفاء): الكاش (الأبناء، الزوجات، ارتفاع
+                // العقدة بسطر الوفاة) كان لا يُعاد إلا مع تغيّر العدد — فالمتوفّاة تبقى «حيّة» في الشجرة (طلب المالك
+                // ٢٠٢٦-١٠-٢٤ «أسجّل متوفّية ما يتغيّر على طول»)
+                .onChange(of: membersSignature) { _ in
+                    rebuild()
                 }
                 .onChange(of: collapsed) { _ in
                     // كل تغيّر التخطيط داخل الـ transaction — العقد والخطوط تتحرك بسلاسة
