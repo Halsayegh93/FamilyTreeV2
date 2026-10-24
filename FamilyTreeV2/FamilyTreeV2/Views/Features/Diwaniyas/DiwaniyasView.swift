@@ -1,9 +1,6 @@
 import SwiftUI
 
 // MARK: - DiwaniyasView
-/// صفحة الديوانيات — «أسبوع المجالس» (طلب المالك ٢٠٢٦-١٠-٢٤ «ابي ترتيب جديد للديوانيات»): بطاقة الأسبوع
-/// ثم المجالس مرتّبة بالأقرب (`DiwaniyaBoard` + `DiwaniyaOrganizer`). بلا شريط «ديوانيات/حسينيات» (طلب المالك
-/// «شيل شريط الديوانيات والحسينيات») — النوع وسم صغير على بطاقة الحسينية، ويُختار في مربّع الإضافة والتعديل.
 struct DiwaniyasView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
@@ -15,12 +12,14 @@ struct DiwaniyasView: View {
     @State private var diwaniyaToEdit: Diwaniya? = nil
     @State private var diwaniyaToDelete: Diwaniya? = nil
     @State private var diwaniyaToReport: Diwaniya? = nil
-    /// رفض طلب معلّق من القسم نفسه — بتأكيد (يُحذف الطلب ويصل لصاحبه إشعار)
-    @State private var diwaniyaToReject: Diwaniya? = nil
     @State private var reportReason = ""
     @State private var reportSent = false
-    /// الظاهرة للمستخدم: المعتمدة، والمعلّقة للإدارة ولصاحبها
+    @State private var appeared = false
+    @State private var cachedFilteredDiwaniyas: [Diwaniya] = []
+    /// كل الظاهرة قبل فلتر النوع — للعدّاد في الشريط
     @State private var cachedVisibleDiwaniyas: [Diwaniya] = []
+    /// ديوانيات / حسينيات (nil = الكل) — قسم الحسينيات (طلب المالك)
+    @State private var kindFilter: DiwaniyaKind? = nil
 
     var body: some View {
         NavigationStack {
@@ -39,15 +38,34 @@ struct DiwaniyasView: View {
                         section: .diwaniyas
                     )
 
-                    if viewModel.isLoading && cachedVisibleDiwaniyas.isEmpty {
+                    kindFilterBar
+
+                    if viewModel.isLoading && filteredDiwaniyas.isEmpty {
                         // التحميل الموحّد: مجسّم «المجلس» يتنفّس (بدل الدوّارة)
                         DSPageLoader(section: .diwaniyas)
-                    } else if cachedVisibleDiwaniyas.isEmpty {
+                    } else if filteredDiwaniyas.isEmpty {
                         emptyStateView
                     } else {
-                        // «أسبوع المجالس» — حدّ `AnyView` يفصل جسم القائمة عن جسم الصفحة (عمق المكدس على الآيفون)
-                        AnyView(DiwaniyaBoard(items: cachedVisibleDiwaniyas, actions: cardActions,
-                                              onRefresh: { await viewModel.fetchDiwaniyas() }))
+                        ScrollView(showsIndicators: false) {
+                            // عمودياً قائمة واحدة؛ أفقياً عمودان (`DS.Landscape.columnMinWidth`) — من المكان الواحد
+                            // نفس الدخول المتتالي — ويحترم «تقليل الحركة» (تلاشٍ فقط)
+                            AdaptiveLazyStack(spacing: DS.Spacing.md) {
+                                ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
+                                    diwaniyaCard(for: diwaniya)
+                                        .dsCardCascade(index, appeared: appeared)
+                                }
+                            }
+                            .padding(DS.Spacing.lg)
+                            .padding(.bottom, DS.Spacing.xxxl)
+                            .dsTabBarClearance()   // أفقياً: آخر بطاقة لا تختفي تحت شريط التبويبات العائم
+                            .onAppear {
+                                guard !appeared else { return }
+                                appeared = true
+                            }
+                        }
+                        .refreshable {
+                            await viewModel.fetchDiwaniyas()
+                        }
                     }
                 }
 
@@ -141,27 +159,6 @@ struct DiwaniyasView: View {
                     "Are you sure you want to delete \"\(diwaniyaToDelete?.title ?? "")\"?"
                 ))
             }
-            // رفض المعلّقة من القسم — نفس رفض «طلبات المراجعة» (يُحذف الطلب ويُشعَر صاحبه)
-            .dsAlert(
-                L10n.t("رفض الديوانية", "Reject Diwaniya"),
-                isPresented: .init(
-                    get: { diwaniyaToReject != nil },
-                    set: { if !$0 { diwaniyaToReject = nil } }
-                )
-            ) {
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { diwaniyaToReject = nil }
-                Button(L10n.t("رفض", "Reject"), role: .destructive) {
-                    if let d = diwaniyaToReject {
-                        Task { await viewModel.rejectFromSection(d) }
-                    }
-                    diwaniyaToReject = nil
-                }
-            } message: {
-                Text(L10n.t(
-                    "لن تُعرض «\(diwaniyaToReject?.title ?? "")» ويصل لصاحبها إشعار بعدم اعتمادها.",
-                    "«\(diwaniyaToReject?.title ?? "")» won't be shown, and its owner will be notified."
-                ))
-            }
             .task {
                 await viewModel.fetchDiwaniyas()
             }
@@ -170,10 +167,12 @@ struct DiwaniyasView: View {
                 viewModel.canModerate = authVM.canModerate
                 viewModel.authVM = authVM
                 viewModel.notificationVM = notificationVM
-                rebuildVisibleDiwaniyas(viewModel.diwaniyas, animated: false)
+                rebuildFilteredDiwaniyas()
             }
-            // كل تغيير في القائمة (جلب، تعديل، اعتماد، حذف) — لا العدد وحده (التعديل كان لا يظهر حتى الرجوع للصفحة)
-            .onReceive(viewModel.$diwaniyas) { rebuildVisibleDiwaniyas($0, animated: true) }
+            .onChange(of: viewModel.diwaniyas.count) { _ in rebuildFilteredDiwaniyas() }
+            .onChange(of: kindFilter) { _ in
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.4, dampingFraction: 0.85)) { rebuildFilteredDiwaniyas() }
+            }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .dsAlert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
@@ -192,62 +191,226 @@ struct DiwaniyasView: View {
 
 
 
-    // MARK: - الظاهرة للمستخدم
+    // MARK: - Filtered Diwaniyas
+    private var filteredDiwaniyas: [Diwaniya] { cachedFilteredDiwaniyas }
 
-    /// المعتمدة للجميع، والمعلّقة للإدارة ولصاحبها فقط
-    private func rebuildVisibleDiwaniyas(_ list: [Diwaniya], animated: Bool) {
+    private func rebuildFilteredDiwaniyas() {
         let userId = authVM.currentUser?.id
         let canModerate = authVM.canModerate
-        let visible = list.filter { diwaniya in
-            if diwaniya.approvalStatus == ApprovalStatus.approved.rawValue { return true }
-            if diwaniya.approvalStatus == ApprovalStatus.pending.rawValue {
+        cachedVisibleDiwaniyas = viewModel.diwaniyas.filter { diwaniya in
+            if diwaniya.approvalStatus == "approved" { return true }
+            if diwaniya.approvalStatus == "pending" {
                 return canModerate || diwaniya.ownerId == userId
             }
             return false
         }
-        // الاعتماد ينقل البطاقة لمكانها في الأسبوع بنابض هادئ — «تقليل الحركة»: تلاشٍ قصير
-        withAnimation(animated ? (reduceMotion ? DSMotion.fade : DS.Anim.smooth) : nil) {
-            cachedVisibleDiwaniyas = visible
-        }
-    }
-
-    // MARK: - إجراءات البطاقة
-
-    private var cardActions: DiwaniyaCardActions {
-        DiwaniyaCardActions(
-            currentUserId: authVM.currentUser?.id,
-            canDeleteAny: authVM.canDeleteDiwaniyas,
-            canApprove: authVM.canApproveContent,
-            edit: { diwaniyaToEdit = $0 },
-            delete: { diwaniyaToDelete = $0 },
-            report: { diwaniyaToReport = $0 },
-            approve: { approve($0) },
-            reject: { diwaniyaToReject = $0 }
-        )
-    }
-
-    /// الاعتماد من البطاقة مباشرة (بلا تأكيد — مثل المشاريع)، ثم لحظة «تم الاعتماد»
-    private func approve(_ diwaniya: Diwaniya) {
-        guard let adminId = authVM.currentUser?.id else { return }
-        Task {
-            if await viewModel.approveFromSection(diwaniya, adminId: adminId) {
-                DSMomentToast.show(L10n.t("تم الاعتماد", "Approved"), moment: .approved, section: .diwaniyas)
+        cachedFilteredDiwaniyas = cachedVisibleDiwaniyas.filter { d in
+            switch kindFilter {
+            case nil: return true
+            case .husseiniya?: return d.isHusseiniya
+            case .diwaniya?: return !d.isHusseiniya
             }
         }
     }
 
+    // MARK: - شريط الأقسام: الكل / ديوانيات / حسينيات
+
+    /// الفلاتر الموحّدة (`DSFilterChips`) — نفس شريط المكتبة والإدارة: المختار بتعبئة القسم، والعدد لكل قسم
+    private var kindFilterBar: some View {
+        DSFilterChips(options: kindFilterOptions, selection: $kindFilter)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.top, DS.Spacing.md)
+    }
+
+    /// «الكل» ثم الأنواع برمزها الموحّد (`DiwaniyaKind.icon`: «مجلس» / «راية»)
+    private var kindFilterOptions: [DSFilterOption<DiwaniyaKind?>] {
+        let all = DSFilterOption<DiwaniyaKind?>(id: nil, title: L10n.t("الكل", "All"),
+                                                icon: "square.grid.2x2.fill",
+                                                count: cachedVisibleDiwaniyas.count)
+        let kinds = DiwaniyaKind.allCases.map { k in
+            DSFilterOption<DiwaniyaKind?>(id: k, title: k.plural, icon: k.icon,
+                                          count: cachedVisibleDiwaniyas.filter { k == .husseiniya ? $0.isHusseiniya : !$0.isHusseiniya }.count)
+        }
+        return [all] + kinds
+    }
+
     // MARK: - Empty State
     private var emptyStateView: some View {
-        // الصفحة الفاضية الموحّدة: مجسّم «المجلس» + عنوان + سطر + زرّ الإضافة
-        DSEmptyView(L10n.t("لا توجد ديوانيات", "No Diwaniyas Yet"),
-                    message: authVM.canApproveContent
-                        ? L10n.t("أضف ديوانية ليعرف الأهل مواعيدها.", "Add a diwaniya so family know when it meets.")
-                        : L10n.t("أضف ديوانيتك ليعرف الأهل مواعيدها.\nتُعرض بعد موافقة الإدارة.",
-                                 "Add your diwaniya so family know when it meets.\nIt appears after admin approval."),
-                    section: .diwaniyas,
-                    actionTitle: L10n.t("إضافة ديوانية", "Add Diwaniya"), actionIcon: "plus") {
-            showingAddRequest = true
+        // الصفحة الفاضية الموحّدة: مجسّم «المجلس» + عنوان + سطر
+        DSEmptyView(kindFilter == .husseiniya ? L10n.t("لا توجد حسينيات", "No Husseiniyas Yet")
+                                              : L10n.t("لا توجد ديوانيات", "No Diwaniyas Yet"),
+                    message: L10n.t("اضغط + لإضافة ديوانيتك.\nتُعرض بعد موافقة الإدارة.",
+                                    "Tap + to add your diwaniya.\nIt appears after admin approval."),
+                    section: .diwaniyas)
+    }
+
+    // MARK: - Diwaniya Card
+    private func diwaniyaCard(for item: Diwaniya) -> some View {
+        let isClosed = item.isClosed == true
+        let isPending = item.approvalStatus == "pending"
+        // الديوانية بلون تبويبها (حبر القسم)، والحسينية بأخضرها الثابت
+        let kindTint = item.isHusseiniya ? DS.Color.composerHusseiniya : AppSection.diwaniyas.ink
+        let cardColor = isPending ? DS.Color.warning : (isClosed ? DS.Color.textTertiary : kindTint)
+        // رمز النوع الموحّد في كل مكان: «مجلس» للديوانية و«راية» للحسينية
+        let kind: DiwaniyaKind = item.isHusseiniya ? .husseiniya : .diwaniya
+
+        return VStack(spacing: 0) {
+            // badge تحت المراجعة
+            if isPending {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: "clock.badge.questionmark")
+                        .dsGlyph(DS.Glyph.sm)
+                    Text(L10n.t("تحت المراجعة", "Under Review"))
+                        .dsFont(.chip)
+                }
+                .foregroundColor(DS.Color.warning)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.Spacing.sm)
+                .background(DS.Color.warning.opacity(DS.Opacity.tintFillSoft))
+            }
+
+            // شريط علوي ملون
+            HStack(spacing: DS.Spacing.md) {
+                // قرص «مجسّمات» الموحّد برمز النوع
+                DSStateIcon(kind.icon, tint: cardColor, size: DS.Icon.size)
+
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        Text(item.title)
+                            .dsFont(.headline)
+                            .foregroundColor(isPending ? DS.Color.textSecondary : (isClosed ? DS.Color.textTertiary : DS.Color.textPrimary))
+
+                        // شارات الحالة الموحّدة (`DSStatusChip`)
+                        if item.isHusseiniya {
+                            DSStatusChip(text: DiwaniyaKind.husseiniya.title, tint: DS.Color.composerHusseiniya, size: .mini)
+                        }
+
+                        if isClosed && !isPending {
+                            DSStatusChip(text: L10n.t("مغلقة", "Closed"), icon: "lock.fill", tint: DS.Color.error)
+                        }
+                    }
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "person.fill")
+                            .dsGlyph(DS.Glyph.xs)
+                            .foregroundColor(DS.Color.textTertiary)
+                        Text(item.ownerName)
+                            .dsFont(.callout)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                }
+
+                Spacer()
+
+                let canManageThis = authVM.canDeleteDiwaniyas || authVM.currentUser?.id == item.ownerId
+                let canReportThis = authVM.currentUser?.id != item.ownerId
+                if canManageThis || canReportThis {
+                    Menu {
+                        if canManageThis {
+                            Button(action: { diwaniyaToEdit = item }) {
+                                Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+                            }
+                            Button(role: .destructive, action: { diwaniyaToDelete = item }) {
+                                Label(L10n.t("حذف", "Delete"), systemImage: "trash")
+                            }
+                        }
+                        // إبلاغ متاح للجميع (أعضاء وإدارة) لغير ديوانياتهم — سياسة Apple
+                        if canReportThis {
+                            if canManageThis { Divider() }
+                            Button(action: { diwaniyaToReport = item }) {
+                                Label(L10n.t("إبلاغ", "Report"), systemImage: "exclamationmark.bubble")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .dsGlyph(DS.Glyph.lg)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
+                            .background(Circle().fill(DS.Color.textTertiary.opacity(DS.Opacity.tintFillSoft)))
+                            // القرص ٣٨ ← مساحة ضغط ٤٤ بلا تغيير في التخطيط
+                            .tapArea(top: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2,
+                                     leading: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2,
+                                     bottom: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2,
+                                     trailing: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2)
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+
+            // ═══ شرائح المعلومات — أفقية متمرّرة بدل الصفوف الطويلة ═══
+            let infoItems = buildDiwaniyaInfoItems(item)
+            if !infoItems.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DS.Spacing.sm) {
+                        ForEach(Array(infoItems.enumerated()), id: \.offset) { _, info in
+                            HStack(spacing: DS.Spacing.xsm) {
+                                Image(systemName: info.icon)
+                                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                                    .foregroundColor(info.color)
+                                Text(info.text)
+                                    .dsFont(.subtitle)
+                                    .foregroundColor(DS.Color.textSecondary)
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, DSBox.chipPadding)
+                            .padding(.vertical, DS.Spacing.xsm)
+                            .background(info.color.opacity(DS.Opacity.tintFillSoft), in: Capsule())
+                            .overlay(Capsule().strokeBorder(info.color.opacity(DS.Opacity.tintStroke),
+                                                            lineWidth: DS.Border.width))
+                        }
+                    }
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.bottom, DS.Spacing.md)
+                }
+            }
+
+            // ═══ إجراءات صغيرة — الشريحة الموحّدة (`DSChipButton`) ═══
+            let hasLocation = item.mapsUrl?.isEmpty == false
+            let hasPhone = item.contactPhone?.isEmpty == false
+            if hasLocation || hasPhone {
+                HStack(spacing: DS.Spacing.sm) {
+                    if let mapsStr = item.mapsUrl, !mapsStr.isEmpty, let url = URL(string: mapsStr) {
+                        DSChipButton(L10n.t("الموقع", "Location"), icon: "location.fill", size: .small) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+
+                    if let phone = item.contactPhone, !phone.isEmpty, let callURL = KuwaitPhone.telURL(phone) {
+                        DSChipButton(L10n.t("اتصال", "Call"), icon: "phone.fill", tint: DS.Color.sea, size: .small) {
+                            UIApplication.shared.open(callURL)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, DS.Spacing.lg)
+                // الشريحة تحمل مساحة ضغطها (٥ فوق وتحت) — الهامش الظاهر يبقى ≈ ١٢
+                .padding(.bottom, DS.Spacing.xsm)
+            }
         }
+        // البطاقة الواحدة (`.dsCard`) — شريط «تحت المراجعة» مقصوص على حوافها
+        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
+        .dsCard(padding: nil)
+    }
+    
+    private struct DiwaniyaInfoItem {
+        let icon: String
+        let color: Color
+        let text: String
+    }
+    
+    private func buildDiwaniyaInfoItems(_ item: Diwaniya) -> [DiwaniyaInfoItem] {
+        var items: [DiwaniyaInfoItem] = []
+        if let schedule = item.scheduleText, !schedule.isEmpty {
+            items.append(DiwaniyaInfoItem(icon: "clock.fill", color: DS.Color.primary, text: schedule))
+        }
+        if let addr = item.address, !addr.isEmpty {
+            items.append(DiwaniyaInfoItem(icon: "mappin.and.ellipse", color: DS.Color.accent, text: addr))
+        }
+        if let phone = item.contactPhone, !phone.isEmpty {
+            items.append(DiwaniyaInfoItem(icon: "phone.fill", color: DS.Color.sea, text: KuwaitPhone.display(phone)))
+        }
+        return items
     }
 }
 
@@ -683,13 +846,7 @@ private struct AddDiwaniyaRequestView: View {
             kind: kind,
             autoApprove: canAutoApprove
         )
-        if success {
-            dismiss()
-            // طلب العضو يظهر له فوراً في «بانتظار الاعتماد» (المعتمَد يُجلب داخل الإضافة نفسها)
-            if !canAutoApprove { Task { await viewModel.fetchDiwaniyas() } }
-        } else {
-            showError = true
-        }
+        if success { dismiss() } else { showError = true }
     }
 }
 
