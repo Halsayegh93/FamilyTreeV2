@@ -519,6 +519,9 @@ enum DS {
         static let tintStroke: Double     = 0.30
         /// إطار الخيار المختار بلونه
         static let selectedStroke: Double = 0.55
+        /// تعتيم أسود فوق خلفية المشاريع (`ProjectSectionBackdrop`) — بطاقة القائمة ورأس صفحة المشروع
+        /// معاً (طلب المالك ٢٠٢٦-١٠-٢٤ «نغمق الخلفية اكثر»). الأبيض عليها ≈ ٧٫٦:١
+        static let projectBackdropVeil: Double = 0.25
     }
 
     // MARK: Border

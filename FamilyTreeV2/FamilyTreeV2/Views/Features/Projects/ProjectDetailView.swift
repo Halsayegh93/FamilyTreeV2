@@ -447,6 +447,9 @@ struct ProjectCoverArc: Shape {
 struct ProjectSectionBackdrop: View {
     /// ارتفاع الشعار في النقشة (العرض من نسبة الشعار)
     var symbolSize: CGFloat = 26
+    /// التعتيم الموحّد (`DS.Opacity.projectBackdropVeil`) — false حين يضعه الحاوي فوق طبقات أخرى معها
+    /// (رأس صفحة المشروع: الخلفية + الذوبان للغامق تحت تعتيم واحد)
+    var veiled: Bool = true
 
     /// نسبة عرض شعار العائلة إلى ارتفاعه (من أصل `FamilyLogoCream`: ٧١٠ × ٥٢٩)
     private static let logoAspect: CGFloat = 710.061 / 529.415
@@ -490,7 +493,18 @@ struct ProjectSectionBackdrop: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+
+            if veiled { ProjectBackdropVeil() }
         }
+    }
+}
+
+/// التعتيم الواحد فوق خلفية المشاريع — نفس الدرجة في البطاقة ورأس صفحة المشروع
+struct ProjectBackdropVeil: View {
+    var body: some View {
+        Color.black.opacity(DS.Opacity.projectBackdropVeil)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -745,7 +759,7 @@ struct ProjectDetailView: View {
     /// خلفية الرأس: لون القسم، ثم تعتيم بلون القسم الغامق تحت الشعار والاسم
     private var headerBackdrop: some View {
         ZStack(alignment: .top) {
-            ProjectSectionBackdrop(symbolSize: DS.Glyph.lg)
+            ProjectSectionBackdrop(symbolSize: DS.Glyph.lg, veiled: false)
                 .accessibilityHidden(true)
             // الذوبان إلى لون القسم الغامق — يبدأ عند منتصف الشعار
             VStack(spacing: 0) {
@@ -755,6 +769,8 @@ struct ProjectDetailView: View {
                     .frame(height: logoSize / 2)
                 DS.Color.tileProjectsDeep
             }
+            // تعتيم واحد فوق الخلفية والذوبان معاً — نفس درجة البطاقة في القائمة
+            ProjectBackdropVeil()
         }
     }
 
