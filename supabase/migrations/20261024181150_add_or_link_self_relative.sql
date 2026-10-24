@@ -10,7 +10,7 @@
 -- إشعار الإدارة يصل من مشغّل شجرة النساء نفسه (log_women_change_to_activity: «أُضيفت بنت»/تعديل الزوج)،
 -- وكل تغيير رابط يُسجَّل في family_link_history.
 -- أخطاؤها بـ hint: not_allowed · bad_kind · no_father · no_own_father · not_daughter · already_married · name_required
--- التراجع: rollback/20261024140000_add_or_link_self_relative_rollback.sql
+-- التراجع: rollback/20261024181150_add_or_link_self_relative_rollback.sql
 -- تجربة: cd supabase/tests/family_links && node add_or_link_self_relative.test.mjs
 
 create or replace function public.add_or_link_self_relative(

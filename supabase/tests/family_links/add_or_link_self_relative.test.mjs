@@ -1,4 +1,4 @@
-// تجربة 20261024140000_add_or_link_self_relative على قاعدة محلية معزولة (لا تلمس السيرفر):
+// تجربة 20261024181150_add_or_link_self_relative على قاعدة محلية معزولة (لا تلمس السيرفر):
 //   الزوجة/الأم من بنات أب في الشجرة — ربط بنت موجودة أو إضافتها تحته، للعضو المفعّل عن نفسه، ثم التراجع.
 // التشغيل: cd supabase/tests/family_links && node add_or_link_self_relative.test.mjs
 import { PGlite } from '@electric-sql/pglite';
@@ -12,8 +12,8 @@ const baseTriggers = rest.slice(rest.indexOf('\n') + 1);
 const grab = (src, name) => { const i = src.indexOf(`create or replace function public.${name}(`); return src.slice(i, src.indexOf('$function$;', i) + '$function$;'.length); };
 const preFns = ['adopt_tree_profile', 'merge_member_into_tree', 'women_auto_merge_wife']
   .map(n => grab(readFileSync(`${REPO}/rollback/20261001150000_protect_family_links_rollback.sql`, 'utf8'), n)).join('\n\n');
-const fix = readFileSync(`${REPO}/migrations/20261024140000_add_or_link_self_relative.sql`, 'utf8');
-const undo = readFileSync(`${REPO}/rollback/20261024140000_add_or_link_self_relative_rollback.sql`, 'utf8');
+const fix = readFileSync(`${REPO}/migrations/20261024181150_add_or_link_self_relative.sql`, 'utf8');
+const undo = readFileSync(`${REPO}/rollback/20261024181150_add_or_link_self_relative_rollback.sql`, 'utf8');
 
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 // GF جد · F أبو المتصل · ME المتصل · X رجل آخر (أبو البنات) · D1 بنت X عزباء · D2 بنت X متزوجة · FR مجمّد
