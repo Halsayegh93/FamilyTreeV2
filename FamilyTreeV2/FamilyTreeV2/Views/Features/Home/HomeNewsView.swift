@@ -397,22 +397,23 @@ struct HomeNewsView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingRow
-                        primaryTilesRow(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim))
-                        quickAccessGrid(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim))
+                        AnyView(primaryTilesRow(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
+                        AnyView(quickAccessGrid(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
                         Spacer(minLength: 0)
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
 
-                    newsBentoCard
+                    AnyView(newsBentoCard)
                         .frame(maxWidth: max(DS.Landscape.homeNewsMinWidth, UIScreen.main.bounds.width * DS.Landscape.homeNewsShare), alignment: .top)
                 }
             } else {
                 // فراغات أقل بين المربّعات (طلب المالك)
+                // حدود AnyView: تُبقي عمق مكدس الرئيسية تحت الحد (كان ٨٠١ ك.ب بعد دمج ٢٠٢٦-١٠-٢٥ — iOS 16 أحوج)
                 VStack(spacing: DS.Spacing.sm) {
                     greetingRow
-                    primaryTilesRow(tileHeight: layout.tileHeight + 12)
-                    quickAccessGrid(tileHeight: layout.tileHeight + 6)
-                    newsBentoCard
+                    AnyView(primaryTilesRow(tileHeight: layout.tileHeight + 12))
+                    AnyView(quickAccessGrid(tileHeight: layout.tileHeight + 6))
+                    AnyView(newsBentoCard)
                 }
             }
         }
