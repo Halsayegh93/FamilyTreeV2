@@ -158,6 +158,10 @@ struct MemberDetailsView: View {
 
                                     quickActionsRow
                                         .padding(.horizontal, DS.Spacing.lg)
+
+                                    // «تعديل مباشر» / «طلب تعديل» داخل التفاصيل نفسها
+                                    editEntryButton
+                                        .padding(.horizontal, DS.Spacing.lg)
                                 }
                                 .frame(maxWidth: .infinity)
 
@@ -200,10 +204,11 @@ struct MemberDetailsView: View {
                                     .padding(.horizontal, DS.Spacing.lg)
                                     .dsStaggerIn(1)
 
-                                if centered {
-                                    detailsToggleButton
-                                        .dsStaggerIn(2)
-                                }
+                                // الإجراء («تعديل مباشر» / «طلب تعديل») بجانب «عرض التفاصيل» — داخل التفاصيل
+                                // نفسها، ظاهر مصغّراً وموسّعاً (طلب المالك ٢٠٢٦-١٠-٢٤؛ كان في الشريط السفلي وحده)
+                                headerButtons
+                                    .padding(.horizontal, DS.Spacing.lg)
+                                    .dsStaggerIn(2)
                             }
                             .id("detailsTop")
                             .background(
@@ -922,14 +927,9 @@ struct MemberDetailsView: View {
         if !member.isDeleted {
             VStack(spacing: DS.Spacing.lg) {
                 HStack(alignment: .top, spacing: DS.Spacing.xxl) {
+                    // «طلب تعديل» / «تعديل مباشر» صارا زرّاً واحداً تحت الاسم (`editEntryButton`) —
+                    // كان الإداري يرى الاثنين هنا معاً
                     if !isViewingSelf {
-                        circleActionButton(
-                            icon: "pencil.and.list.clipboard",
-                            label: L10n.t("طلب تعديل", "Request Edit"),
-                            tint: chromeInk,
-                            filled: true
-                        ) { showEditActions = true }
-
                         // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
                         circleActionButton(
                             icon: "exclamationmark.bubble",
@@ -946,14 +946,6 @@ struct MemberDetailsView: View {
                                 tint: isMemberBlocked ? DS.Color.textSecondary : DS.Color.error
                             ) { requestBlockToggle() }
                         }
-                    }
-
-                    if authVM.canEditMembers {
-                        circleActionButton(
-                            icon: "pencil",
-                            label: L10n.t("تعديل مباشر", "Direct Edit"),
-                            tint: chromeInk
-                        ) { showAdminControl = true }
                     }
 
                     if showsDeathAnnounce {
@@ -1143,25 +1135,36 @@ struct MemberDetailsView: View {
         return nil
     }
 
-    /// شريط ثابت أسفل المربّع: الإجراء كحلي يمين، «إبلاغ» صغير، «إغلاق» يسار
+    /// زرّ التعديل داخل التفاصيل: «تعديل مباشر» للمالك والمدير والمراقب (`canEditMembers`)، وإلا
+    /// «طلب تعديل» لغير صاحب الملف — زرّ واحد لا الاثنان معاً (طلب المالك ٢٠٢٦-١٠-٢٤)
+    @ViewBuilder private var editEntryButton: some View {
+        if let primary = primaryPanelAction {
+            DSButton(primary.title, icon: primary.icon, fullWidth: false, action: primary.run)
+        }
+    }
+
+    /// صفّ الرأس: زرّ التعديل + «عرض التفاصيل» (داخل المربّع) — سطران من «حجم النص» ٢× وأكبر
+    @ViewBuilder private var headerButtons: some View {
+        if dynamicTypeSize >= .xxLarge {
+            VStack(spacing: DSBox.buttonSpacing) {
+                editEntryButton
+                if centered { detailsToggleButton }
+            }
+        } else {
+            HStack(spacing: DSBox.buttonSpacing) {
+                editEntryButton
+                if centered { detailsToggleButton }
+            }
+        }
+    }
+
+    /// شريط ثابت أسفل المربّع: «إبلاغ» و«حظر» صغيران، «إغلاق» — زرّ التعديل صار داخل التفاصيل (`headerButtons`)
     private var panelFooter: some View {
         VStack(spacing: DS.Spacing.sm) {
             // إعلان وفاة — للمتوفى الذي لم يُعلن عنه، لمن يعتمد الوفيات
             if showsDeathAnnounce { deathAnnounceButton }
-        // صفّ الأزرار بمواصفة `DSBox` الواحدة (الإجراء بلون القسم، «إغلاق» رمادي، الأيقونات مربّعة بنفس الارتفاع).
-        // من «حجم النص» ٢× وأكبر لا يتّسع الصفّ → الإجراء سطر كامل وحده فوق الأيقونات و«إغلاق» (كان يُقصّ «تعديل مباشر»)؛
-        // بالحجم الافتراضي يبقى الصفّ كما هو
-        if dynamicTypeSize >= .xxLarge {
-            VStack(spacing: DSBox.buttonSpacing) {
-                panelPrimaryButton
-                HStack(spacing: DSBox.buttonSpacing) { panelSecondaryButtons }
-            }
-        } else {
-            HStack(spacing: DSBox.buttonSpacing) {
-                panelPrimaryButton
-                panelSecondaryButtons
-            }
-        }
+            // صفّ الأزرار بمواصفة `DSBox` الواحدة («إغلاق» رمادي، الأيقونات مربّعة بنفس الارتفاع)
+            HStack(spacing: DSBox.buttonSpacing) { panelSecondaryButtons }
         }
         // نفس شريط أزرار مربّعات العمل (`DSComposer`): هوامشه وخطّه الشعري من `DSBox`
         .padding(.horizontal, DSBox.footerHorizontal)
@@ -1173,12 +1176,6 @@ struct MemberDetailsView: View {
                     Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke)).frame(height: DS.Border.width)
                 }
         )
-    }
-
-    @ViewBuilder private var panelPrimaryButton: some View {
-        if let primary = primaryPanelAction {
-            DSButton(primary.title, icon: primary.icon, action: primary.run)
-        }
     }
 
     /// إبلاغ، حظر، إغلاق

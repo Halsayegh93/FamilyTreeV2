@@ -560,6 +560,16 @@ struct AdminMemberDataSection: View {
         }
     }
 
+    /// «تحديد» لمن بلا جنس (المربّع الصغير)، و«تغيير» لمن له جنس ← «بيانات العضو» (النقل بين الشجرتين)
+    private var genderAction: (String, () -> Void)? {
+        guard canEdit else { return nil }
+        let m = member
+        if AdminMemberFacts.isBlank(m.gender) {
+            return (L10n.t("تحديد", "Set"), { open(.gender(m)) })
+        }
+        return (L10n.t("تغيير", "Change"), { openTall(.editAll(m)) })
+    }
+
     private var photoText: String {
         if !AdminMemberFacts.isBlank(member.avatarUrl) { return L10n.t("موجودة", "Added") }
         return member.avatarUnavailable == true ? L10n.t("لا توجد صورة لهذا العضو", "No photo exists") : L10n.t("لا توجد صورة", "No photo")
@@ -586,9 +596,11 @@ struct AdminMemberDataSection: View {
                 AdminSheetRow(icon: "calendar", tint: DS.Color.palm, title: L10n.t("تاريخ الميلاد", "Birth date"),
                               value: birth ?? L10n.t("غير مسجّل", "Not recorded"),
                               action: canEdit ? (birth == nil ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"), { open(.birth(member)) }) : nil)
+                // جنس محدّد: تغييره نقل بين الشجرتين — في «بيانات العضو» (`move_child_gender` بتأكيد)؛
+                // بلا جنس: «تحديد» كما كان
                 AdminSheetRow(icon: "person.fill.questionmark", tint: DS.Color.male, title: L10n.t("الجنس", "Gender"),
                               value: genderText,
-                              action: canEdit ? (L10n.t("تحديد", "Set"), { open(.gender(member)) }) : nil)
+                              action: genderAction)
                 AdminSheetRow(icon: "photo.fill", tint: DS.Color.sadu, title: L10n.t("الصورة", "Photo"), value: photoText,
                               action: canEdit ? (AdminMemberFacts.isBlank(member.avatarUrl) ? L10n.t("إضافة", "Add") : L10n.t("تغيير", "Change"),
                                                  { open(.photo(member)) }) : nil)

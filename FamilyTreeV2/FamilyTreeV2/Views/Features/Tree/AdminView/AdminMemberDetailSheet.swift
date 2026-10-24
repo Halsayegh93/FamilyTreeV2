@@ -80,6 +80,16 @@ struct AdminMemberDetailSheet: View {
     /// سبب الفشل إن عُرف (مثل تفعيل حساب بلا أب) — وإلا رسالة الاتصال العامة
     @State private var accountErrorText: String?
 
+    // تغيير الجنس = نقل بين شجرة الرجال وشجرة النساء (`move_child_gender`، طلب المالك ٢٠٢٦-١٠-٢٤)
+    /// تأكيد النقل قبل الحفظ
+    @State private var showGenderMoveConfirm = false
+    /// نُقل إلى «ذكر» على السيرفر — الحفظ العادي يكمل بلا كتابة عمود الجنس
+    @State private var genderMoved = false
+    /// له حساب في التطبيق (أو دور إداري) — لا يُنقل: النقل يحذف ملفه من شجرة الرجال
+    @State private var genderLockedByAccount = false
+    /// السجل نُقل لشجرة النساء وتعذّر حفظ الباقي — «حسناً» يغلق المربّع (السجل القديم لم يعد موجوداً)
+    @State private var dismissAfterError = false
+
     // MARK: - تغييرات لم تُحفظ (توصية أبل)
     // ما يُحفظ بزر «حفظ» فقط يُقارن بما فُتح عليه السجل — الصورة والأبناء (إضافة/تعديل/حذف)
     // تُحفظ فوراً فلا تُحسب.
@@ -248,7 +258,17 @@ struct AdminMemberDetailSheet: View {
                 }
             }
             .onAppear { setupLocalChildren() }
-            .task { await refreshAccount() }
+            .task {
+                await refreshAccount()
+                await refreshGenderLock()
+            }
+            // تأكيد تغيير الجنس — ينقل السجل بين الشجرتين قبل حفظ بقية الحقول
+            .dsAlert(L10n.t("تغيير الجنس", "Change gender"), isPresented: $showGenderMoveConfirm) {
+                Button(L10n.t("نقل وحفظ", "Move and save")) { performGenderMove() }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+            } message: {
+                Text(genderMoveMessage)
+            }
             // تأكيد التجميد / الحظر وإلغائهما — المربّع الوسطي الموحّد
             .dsAlert(pendingAccountAction.map(accountActionTitle) ?? "",
                      isPresented: Binding(get: { pendingAccountAction != nil },
@@ -263,7 +283,10 @@ struct AdminMemberDetailSheet: View {
                 Text(accountActionMessage(action))
             }
             .dsAlert(L10n.t("تعذّر التنفيذ", "Couldn't Complete"), isPresented: $accountError) {
-                Button(L10n.t("حسناً", "OK")) { accountErrorText = nil }
+                Button(L10n.t("حسناً", "OK")) {
+                    accountErrorText = nil
+                    if dismissAfterError { closeAfterMoveToWomen() }
+                }
             } message: {
                 Text(accountErrorText ?? L10n.t("تأكد من الاتصال ثم حاول مرة أخرى.", "Check your connection and try again."))
             }
@@ -547,7 +570,16 @@ struct AdminMemberDetailSheet: View {
                 }
             }
 
-            DSGenderPicker(selection: $selectedGender)
+            // الجنس — تغييره ينقل العضو بين شجرة الرجال وشجرة النساء (`move_child_gender`)؛
+            // من له حساب في التطبيق لا يُنقل (النقل يحذف ملفه) فيُعرض للقراءة
+            if genderLockedByAccount {
+                DSGenderReadOnlyRow(gender: member.gender ?? "male")
+                Text(L10n.t("له حساب في التطبيق — لا يُنقل", "Has an app account — can't be moved"))
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+            } else {
+                DSGenderPicker(selection: $selectedGender)
+            }
         }
     }
 
@@ -1094,28 +1126,8 @@ struct AdminMemberDetailSheet: View {
         }
     }
 
-    // MARK: - Save Action (unchanged logic)
-    private func saveAction() {
-        guard !isSaving else { return }
-        guard NetworkMonitor.shared.isConnected else {
-            showOfflineAlert = true
-            return
-        }
-        // «تسجيل الوفاة» لا يعرض الاسم ولا الرقم ولا يحفظهما (التواريخ فقط)
-        guard deathOnly || isPhoneValid else { return }
-        isSaving = true
-
-        let capturedMemberId = member.id
-        let capturedPhoneCountry = selectedPhoneCountry
-        let capturedPhone = phoneNumber
-        let capturedFatherId = selectedFatherId
-        let capturedBirthDate = hasBirthDate ? birthDate : nil
-        let capturedIsDeceased = isDeceased
-        let capturedDeathDate = (isDeceased && hasDeathDate) ? deathDate : nil
-        let capturedChildren = localChildren
-        let capturedGender = selectedGender
-        let capturedBioStations = bioStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
-
+    /// الاسم الكامل كما يُحفظ: الحقل + اسم العائلة الجديد إن كُتب
+    private func composedFullName() -> String {
         let cleanFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
         var finalFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         let originalFamily = member.fullName
@@ -1138,7 +1150,173 @@ struct AdminMemberDetailSheet: View {
             }
             finalFullName = nameParts.joined(separator: " ")
         }
-        let capturedFullName = finalFullName
+        return finalFullName
+    }
+
+    // MARK: - تغيير الجنس (نقل بين الشجرتين)
+
+    /// له حساب دخول مؤكَّد من بياناته: هو نفسه، أو دور إداري، أو حساب موقوف
+    private var memberHasAccountByRole: Bool {
+        member.id == authVM.currentUser?.id
+            || [.owner, .admin, .monitor, .supervisor].contains(member.role)
+            || accountStatus == .frozen
+    }
+
+    /// يقفل الجنس لمن له حساب في التطبيق (`AdminAccountsStore` — نفس «عضو مسجّل»)
+    private func refreshGenderLock(force: Bool = false) async {
+        guard !deathOnly, authVM.canEditMembers else { return }
+        if memberHasAccountByRole {
+            genderLockedByAccount = true
+            selectedGender = member.gender ?? "male"
+            return
+        }
+        await AdminAccountsStore.shared.refresh(force: force)
+        guard AdminAccountsStore.shared.loaded else { return }
+        let locked = AdminAccountsStore.shared.info(member.id) != nil
+        withAnimation(DS.Anim.snappy) {
+            genderLockedByAccount = locked
+            if locked { selectedGender = member.gender ?? "male" }
+        }
+    }
+
+    private var genderMoveMessage: String {
+        if selectedGender == "female" {
+            return L10n.t("سيُنقل «\(member.firstName)» إلى شجرة النساء مع روابطه. أفراد شجرة النساء بلا رقم ولا صورة ولا سيرة، فتُحذف هذه من سجله.",
+                          "«\(member.firstName)» will move to the women's tree with their links. Women's tree entries have no phone, photo or biography, so these are removed.")
+        }
+        return L10n.t("سيُنقل «\(member.firstName)» إلى شجرة الرجال ويُسجَّل ذكراً.",
+                      "«\(member.firstName)» will move to the men's tree as male.")
+    }
+
+    /// بعد التأكيد: التحقق من الحساب ← النقل على السيرفر (`moveChildGender`) ← بقية الحقول على السجل
+    /// بعد النقل (ترتيب EditChildSheet). ذكر: السجل نفسه فيكمل الحفظ العادي؛ أنثى: السجل صار في شجرة
+    /// النساء — الاسم والتواريخ فقط
+    private func performGenderMove() {
+        guard !isSaving else { return }
+        guard NetworkMonitor.shared.isConnected else {
+            showOfflineAlert = true
+            return
+        }
+        let toFemale = selectedGender == "female"
+        isSaving = true
+        Task {
+            // من له حساب لا يُنقل — السيرفر لا يمنعه والنقل يحذف ملفه
+            await refreshGenderLock(force: true)
+            guard memberHasAccountByRole || AdminAccountsStore.shared.loaded else {
+                failGenderMove(L10n.t("تعذّر التحقق من حساب العضو. حاول مرة أخرى.",
+                                      "Couldn't check the member's account. Try again."))
+                return
+            }
+            guard !genderLockedByAccount else {
+                failGenderMove(L10n.t("له حساب في التطبيق — لا يُنقل بين الشجرتين.",
+                                      "Has an app account — can't be moved between trees."))
+                return
+            }
+
+            memberVM.errorMessage = nil
+            guard let newId = await memberVM.moveChildGender(childId: member.id,
+                                                             toGender: toFemale ? "female" : "male") else {
+                failGenderMove(memberVM.errorMessage
+                               ?? L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again."))
+                return
+            }
+            Log.info("[AdminEdit] ⚧ نقل بين الشجرتين → \(toFemale ? "female" : "male")")
+
+            guard toFemale else {
+                // ذكر: السجل نفسه في شجرة الرجال — بقية الحقول بالحفظ العادي (بلا كتابة الجنس مرة ثانية)
+                isSaving = false
+                genderMoved = true
+                if newId != member.id {
+                    Log.warning("[AdminEdit] النقل لذكر غيّر المعرّف — يُغلق المربّع")
+                    closeAfterMoveToWomen()
+                    return
+                }
+                saveAction()
+                return
+            }
+
+            // أنثى: الاسم والتواريخ على سجلها الجديد في شجرة النساء
+            let fullNameToSave = composedFullName()
+            let deathToSave: Date? = (isDeceased && hasDeathDate) ? deathDate : nil
+            let deceasedJustMarked = isDeceased && !(member.isDeceased ?? false)
+            let saved = await memberVM.updateWomanMember(
+                id: newId,
+                firstName: PersonName.clean(firstName),
+                birthDate: hasBirthDate ? birthDate : nil,
+                isDeceased: isDeceased,
+                deathDate: deathToSave,
+                gender: "female",
+                fullName: fullNameToSave.isEmpty ? nil : fullNameToSave
+            )
+            // تخرج من «الأبناء» في شجرة الرجال
+            if let fatherId = member.fatherId { await memberVM.fetchChildren(for: fatherId) }
+
+            let adminName = authVM.currentUser?.firstName ?? "مدير"
+            await memberVM.notificationVM?.notifyAdminsWithChangesAndPush(
+                title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
+                body: L10n.t("\(adminName) نقل «\(member.fullName)» إلى شجرة النساء",
+                             "\(adminName) moved «\(member.fullName)» to the women's tree"),
+                kind: "admin_edit",
+                changes: [.init(field: "gender", before: member.gender, after: "female")]
+            )
+            if saved, deceasedJustMarked {
+                let target = DeathAnnouncementTarget(
+                    id: newId, name: fullNameToSave.isEmpty ? member.fullName : fullNameToSave,
+                    isFemale: true, deathDate: DeathRecency.string(from: deathToSave))
+                let canAnnounce = authVM.isAdmin
+                Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
+            }
+
+            isSaving = false
+            guard saved else {
+                // نُقلت ولم يُحفظ الباقي — السجل القديم لم يعد في شجرة الرجال، فالمربّع يُغلق بعد «حسناً»
+                dismissAfterError = true
+                failGenderMove(L10n.t("نُقل إلى شجرة النساء، لكن تعذّر حفظ بقية التعديلات. عدّلها من شجرة النساء.",
+                                      "Moved to the women's tree, but the other changes couldn't be saved. Edit them from the women's tree."))
+                return
+            }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            closeAfterMoveToWomen()
+        }
+    }
+
+    private func failGenderMove(_ text: String) {
+        isSaving = false
+        accountErrorText = text
+        accountError = true
+    }
+
+    /// السجل خرج من شجرة الرجال: يُغلق المربّع وتُغلق تفاصيله (نفس إشعار الحذف)
+    private func closeAfterMoveToWomen() {
+        dismissAfterError = false
+        let oldId = member.id
+        dismiss()
+        NotificationCenter.default.post(name: .memberDeleted, object: oldId)
+    }
+
+    // MARK: - Save Action (unchanged logic)
+    private func saveAction() {
+        guard !isSaving else { return }
+        guard NetworkMonitor.shared.isConnected else {
+            showOfflineAlert = true
+            return
+        }
+        // «تسجيل الوفاة» لا يعرض الاسم ولا الرقم ولا يحفظهما (التواريخ فقط)
+        guard deathOnly || isPhoneValid else { return }
+        isSaving = true
+
+        let capturedMemberId = member.id
+        let capturedPhoneCountry = selectedPhoneCountry
+        let capturedPhone = phoneNumber
+        let capturedFatherId = selectedFatherId
+        let capturedBirthDate = hasBirthDate ? birthDate : nil
+        let capturedIsDeceased = isDeceased
+        let capturedDeathDate = (isDeceased && hasDeathDate) ? deathDate : nil
+        let capturedChildren = localChildren
+        let capturedGender = selectedGender
+        let capturedBioStations = bioStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
+
+        let capturedFullName = composedFullName()
 
         guard deathOnly || !capturedFullName.isEmpty else {
             isSaving = false
@@ -1205,6 +1383,25 @@ struct AdminMemberDetailSheet: View {
         guard nameChanged || phoneChanged || fatherChanged || datesChanged || genderChanged || childrenOrderChanged || bioChanged else {
             isSaving = false
             dismiss()
+            return
+        }
+
+        // تغيير الجنس = نقل بين الشجرتين على السيرفر أولاً (بعد التأكيد)، ثم بقية الحقول (`performGenderMove`)
+        let genderAlreadyMoved = genderMoved
+        if genderChanged && !genderAlreadyMoved {
+            isSaving = false
+            guard !genderLockedByAccount else {
+                selectedGender = member.gender ?? "male"
+                return
+            }
+            // الأب يُحفظ قبل النقل لشجرة النساء — لا الاثنان في حفظة واحدة
+            if capturedGender == "female" && fatherChanged {
+                accountErrorText = L10n.t("احفظ تغيير الأب أولاً، ثم غيّر الجنس.",
+                                          "Save the father change first, then change the gender.")
+                accountError = true
+                return
+            }
+            showGenderMoveConfirm = true
             return
         }
 
@@ -1303,7 +1500,8 @@ struct AdminMemberDetailSheet: View {
                 await memberVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId, silent: true)
                 if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الأب: \(err)") }
             }
-            if genderChanged {
+            // الجنس نُقل على السيرفر قبل هذا الحفظ (`moveChildGender`) — لا يُكتب العمود مرة ثانية
+            if genderChanged && !genderAlreadyMoved {
                 Log.info("[AdminEdit] ⚧ تعديل الجنس: \(capturedGender)")
                 await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender, silent: true)
                 if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الجنس: \(err)") }
