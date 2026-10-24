@@ -135,20 +135,13 @@ struct TreeEditRequestView: View {
     /// نقطة البداية — تُلتقط مرة واحدة بعد prefillFromMember
     @State private var startDraft: Draft? = nil
 
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f
-    }()
-
     private var currentDraft: Draft {
         Draft(
             primaryText: primaryText.trimmingCharacters(in: .whitespacesAndNewlines),
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
             phone: localPhoneDigits.isEmpty ? "" : "\(phoneCountry.id)|\(localPhoneDigits)",
-            birthDay: Self.dayFormatter.string(from: birthDate),
-            deathDay: Self.dayFormatter.string(from: deathDate)
+            birthDay: DateHelper.format(birthDate),
+            deathDay: DateHelper.format(deathDate)
         )
     }
 
@@ -328,13 +321,12 @@ struct TreeEditRequestView: View {
             )
 
         case .deceased:
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withFullDate]
+            // يوم التقويم المحلي — ISO8601 بـ withFullDate كان بتوقيت غرينتش (يوم قبل بين ١٢–٣ فجراً)
             payload = TreeEditPayload.make(
                 action: .deceased,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
-                deathDate: formatter.string(from: deathDate),
+                deathDate: DateHelper.format(deathDate),
                 notes: cleanNotes.isEmpty ? nil : cleanNotes
             )
 
@@ -347,24 +339,22 @@ struct TreeEditRequestView: View {
             )
 
         case .editBirth:
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withFullDate]
+            // يوم التقويم المحلي — ISO8601 بـ withFullDate كان بتوقيت غرينتش (يوم قبل بين ١٢–٣ فجراً)
             payload = TreeEditPayload.make(
                 action: .editBirth,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
-                newBirthDate: formatter.string(from: birthDate),
+                newBirthDate: DateHelper.format(birthDate),
                 notes: cleanNotes.isEmpty ? nil : cleanNotes
             )
 
         case .addDeathDate:
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withFullDate]
+            // يوم التقويم المحلي — ISO8601 بـ withFullDate كان بتوقيت غرينتش (يوم قبل بين ١٢–٣ فجراً)
             payload = TreeEditPayload.make(
                 action: .addDeathDate,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
-                deathDate: formatter.string(from: deathDate),
+                deathDate: DateHelper.format(deathDate),
                 notes: cleanNotes.isEmpty ? nil : cleanNotes
             )
 

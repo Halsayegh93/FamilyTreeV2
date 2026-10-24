@@ -376,9 +376,20 @@ class ProjectsViewModel: ObservableObject {
 
     // MARK: - Delete
 
-    func deleteProject(id: UUID) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
-        guard authVM?.isAdmin == true else { Log.warning("حذف المشروع مرفوض: الصلاحية للمدير فقط"); return }
+    /// الحذف للمالك/المدير أو صاحب المشروع (السيرفر يسمح لصاحبه — `projects_delete`).
+    /// كان الحارس للمدير فقط فيرجع بصمت وتُغلق الشاشة كأن الحذف تم.
+    @discardableResult
+    func deleteProject(id: UUID, ownerId: UUID? = nil) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let owner = ownerId
+            ?? (projects + pendingProjects + myPendingProjects).first(where: { $0.id == id })?.ownerId
+        let isProjectOwner = owner != nil && owner == authVM?.currentUser?.id
+        guard authVM?.isAdmin == true || isProjectOwner else {
+            Log.warning("حذف المشروع مرفوض: للإدارة أو صاحب المشروع فقط")
+            self.errorMessage = L10n.t("لا تملك صلاحية حذف هذا المشروع.",
+                                       "You don't have permission to delete this project.")
+            return false
+        }
         do {
             try await supabase
                 .from("projects")
@@ -387,10 +398,14 @@ class ProjectsViewModel: ObservableObject {
                 .execute()
             
             projects.removeAll { $0.id == id }
+            pendingProjects.removeAll { $0.id == id }
+            myPendingProjects.removeAll { $0.id == id }
+            return true
         } catch {
             self.errorMessage = L10n.t("تعذر حذف المشروع.",
                                        "Failed to delete project.")
             Log.error("خطأ حذف المشروع: \(error.localizedDescription)")
+            return false
         }
     }
     

@@ -943,20 +943,41 @@ struct ArchiveUploadSheet: View {
     // MARK: - Actions
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
-        do {
-            guard let url = try result.get().first else { return }
-            // الوصول الآمن للملف
-            let didStart = url.startAccessingSecurityScopedResource()
-            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-            let data = try Data(contentsOf: url)
+        guard case .success(let urls) = result, let url = urls.first else {
+            if case .failure = result { errorBanner = L10n.t("تعذّر قراءة الملف.", "Failed to read file.") }
+            return
+        }
+        let limit = FamilyArchiveViewModel.maxUploadBytes
+        Task {
+            // الحجم من خصائص الملف قبل القراءة، والقراءة خارج الخيط الرئيسي — كان ملف ضخم
+            // يُقرأ كاملاً على الخيط الرئيسي ثم يُرفض عند الرفع
+            let outcome = await Task.detached(priority: .userInitiated, operation: { () -> (data: Data?, tooLarge: Bool) in
+                // الوصول الآمن للملف
+                let didStart = url.startAccessingSecurityScopedResource()
+                defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+                if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > limit {
+                    return (nil, true)
+                }
+                guard let data = try? Data(contentsOf: url) else { return (nil, false) }
+                if data.count > limit { return (nil, true) }
+                return (data, false)
+            }).value
+            if outcome.tooLarge {
+                errorBanner = L10n.t("الملف أكبر من ٢٥ ميغابايت — اختر ملفاً أصغر أو صورة مضغوطة.",
+                                     "The file is larger than 25 MB — choose a smaller file or a compressed photo.")
+                return
+            }
+            guard let data = outcome.data else {
+                errorBanner = L10n.t("تعذّر قراءة الملف.", "Failed to read file.")
+                return
+            }
+            errorBanner = nil
             pickedFileData = data
             pickedFileName = url.lastPathComponent
             pickedMimeType = "application/pdf"
             if title.isEmpty {
                 title = url.deletingPathExtension().lastPathComponent
             }
-        } catch {
-            errorBanner = L10n.t("تعذّر قراءة الملف.", "Failed to read file.")
         }
     }
 
@@ -964,21 +985,22 @@ struct ArchiveUploadSheet: View {
         guard let item else { return }
         Task {
             do {
-                guard let data = try await item.loadTransferable(type: Data.self) else { return }
+                guard let raw = try await item.loadTransferable(type: Data.self) else { return }
+                // إعادة ترميز JPEG عبر ImageProcessor — تُزال البيانات الوصفية (الموقع GPS) قبل
+                // الرفع للمستودع العام، ويصير النوع image/jpeg صحيحاً لكل الصيغ
+                let jpeg = await Task.detached(priority: .userInitiated, operation: { () -> Data? in
+                    guard let image = ImageProcessor.downsampled(raw) else { return nil }
+                    return ImageProcessor.process(image, for: .news)
+                }).value
                 await MainActor.run {
-                    pickedFileData = data
-                    // نخمّن النوع — PhotosPicker يعطي JPEG/HEIC غالباً
-                    let utType = item.supportedContentTypes.first
-                    if utType?.conforms(to: .png) == true {
-                        pickedMimeType = "image/png"
-                        pickedFileName = "image.png"
-                    } else if utType?.conforms(to: .heic) == true {
-                        pickedMimeType = "image/heic"
-                        pickedFileName = "image.heic"
-                    } else {
-                        pickedMimeType = "image/jpeg"
-                        pickedFileName = "image.jpg"
+                    guard let jpeg else {
+                        errorBanner = L10n.t("تعذّر تحميل الصورة.", "Failed to load image.")
+                        return
                     }
+                    errorBanner = nil
+                    pickedFileData = jpeg
+                    pickedMimeType = "image/jpeg"
+                    pickedFileName = "image.jpg"
                 }
             } catch {
                 await MainActor.run {

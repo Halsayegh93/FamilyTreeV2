@@ -539,6 +539,7 @@ struct ProjectDetailView: View {
     @Environment(\.openURL) private var openURL
     
     @State private var showDeleteAlert = false
+    @State private var showDeleteError = false
     @State private var showEditSheet = false
     @State private var didEdit = false
     /// ارتفاع الرأس — المربّع بالمنتصف على قدر محتواه (`dsPanelContentHeight`)
@@ -667,8 +668,12 @@ struct ProjectDetailView: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 Task {
-                    await projectsVM.deleteProject(id: project.id)
-                    dismiss()
+                    // الإغلاق بعد نجاح الحذف فقط — وإلا رسالة خطأ
+                    if await projectsVM.deleteProject(id: project.id, ownerId: project.ownerId) {
+                        dismiss()
+                    } else {
+                        showDeleteError = true
+                    }
                 }
             }
         } message: {
@@ -676,6 +681,11 @@ struct ProjectDetailView: View {
                 "هل أنت متأكد من حذف \"\(project.title)\"؟",
                 "Are you sure you want to delete \"\(project.title)\"?"
             ))
+        }
+        .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showDeleteError) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(projectsVM.errorMessage ?? L10n.t("تعذر حذف المشروع.", "Failed to delete project."))
         }
         .dsSectionPage(.projects)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)

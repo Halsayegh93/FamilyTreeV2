@@ -664,14 +664,14 @@ struct EditProfileView: View {
         self.isDeceased = member.isDeceased ?? false
         // تحميل المحطات الحياتية
         self.bioStations = member.bio ?? []
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        if let b = member.birthDate, let date = f.date(from: b) {
+        // DateHelper: ميلادي بأرقام لاتينية — كان formatter الجهاز يقرأ التاريخ خطأ بالتقويم الهجري
+        if let date = DateHelper.parse(member.birthDate) {
             self.birthDate = date
             self.birthDateProvided = true
         } else {
             self.birthDateProvided = false
         }
-        if let d = member.deathDate, let date = f.date(from: d) { self.deathDate = date }
+        if let date = DateHelper.parse(member.deathDate) { self.deathDate = date }
         self.isPhoneHidden = member.isPhoneHidden ?? false
         self.email = member.email ?? ""
     }
@@ -919,12 +919,11 @@ struct EditProfileView: View {
         if pendingPhoneVerified != nil || pendingPhoneForAdmins != nil
             || pendingNameRequest != nil || pendingFamilyRequest != nil
             || pendingAvatarDelete { return true }
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         if isMarried != (member.isMarried ?? false) { return true }
         if isPhoneHidden != (member.isPhoneHidden ?? false) { return true }
         if isDeceased && !(member.isDeceased ?? false) { return true }
         let oldBirthStr = member.birthDate ?? ""
-        if birthDateProvided && f.string(from: birthDate) != oldBirthStr { return true }
+        if birthDateProvided && DateHelper.format(birthDate) != oldBirthStr { return true }
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let oldEmail = (member.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if trimmedEmail != oldEmail { return true }
@@ -939,10 +938,9 @@ struct EditProfileView: View {
     }
 
     private func detectChangedFields(normalizedPhone: String) -> ChangedFields {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         let oldStoredPhone = KuwaitPhone.normalizeForStorageFromInput(member.phoneNumber) ?? ""
         let oldBirthStr = member.birthDate ?? ""
-        let newBirthStr = f.string(from: birthDate)
+        let newBirthStr = DateHelper.format(birthDate)
 
         // مقارنة المحطات بمحتواها
         let oldBioKey = (member.bio ?? []).map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
@@ -1005,13 +1003,11 @@ struct EditProfileView: View {
             ))
         }
         if changes.birthNeedsApproval {
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            f.locale = Locale(identifier: "en_US_POSIX")
             _ = await adminRequestVM.submitTreeEditRequest(payload: .make(
                 action: .editBirth,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
-                newBirthDate: f.string(from: birthDate),
+                newBirthDate: DateHelper.format(birthDate),
                 notes: L10n.t("تعديل بعد تجاوز حد التعديلات", "Edit after reaching the edit limit")
             ))
         }
@@ -1040,7 +1036,8 @@ struct EditProfileView: View {
             // تجاوز الحد → تبقى القيمة القديمة حتى موافقة الإدارة
             isMarried: changes.marriedNeedsApproval ? (member.isMarried ?? false) : isMarried,
             isDeceased: member.isDeceased ?? false,
-            deathDate: member.isDeceased ?? false ? deathDate : nil,
+            // التاريخ المحفوظ فقط — كان الافتراضي (اليوم) يُكتب لمتوفى بلا تاريخ
+            deathDate: member.isDeceased ?? false ? DateHelper.parse(member.deathDate) : nil,
             // تجاوز الحد → تبقى القيمة القديمة حتى موافقة الإدارة
             isPhoneHidden: changes.phoneHiddenNeedsApproval ? (member.isPhoneHidden ?? false) : isPhoneHidden
         )

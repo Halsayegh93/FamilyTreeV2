@@ -425,6 +425,10 @@ struct NotificationsAndPrivacyView: View {
     @State private var badgeEnabled: Bool = true
     @State private var isPhoneHidden: Bool = false
     @State private var isBirthDateHidden: Bool = false
+    /// تغيير برمجي (التعبئة من الملف أو التراجع بعد فشل) — لا يُكتب للسيرفر.
+    /// كان كل فتح يكتب، والتراجع يُطلق onChange من جديد (حلقة قد تُظهر رقماً مخفياً)
+    @State private var skipPhoneHiddenWrite = false
+    @State private var skipBirthHiddenWrite = false
     @State private var showUpdateError: Bool = false
     /// أنواع الإشعارات — محفوظة بالسيرفر ويقرأها مُطلِق الدفع (طلب المالك)
     @State private var prefs: [String: Bool] = [:]
@@ -523,8 +527,8 @@ struct NotificationsAndPrivacyView: View {
         .environment(\.layoutDirection, langManager.layoutDirection)
         .onAppear {
             badgeEnabled = authVM.currentUser?.badgeEnabled ?? true
-            isPhoneHidden = authVM.currentUser?.isPhoneHidden ?? false
-            isBirthDateHidden = authVM.currentUser?.isBirthDateHidden ?? false
+            setPhoneHiddenSilently(authVM.currentUser?.isPhoneHidden ?? false)
+            setBirthHiddenSilently(authVM.currentUser?.isBirthDateHidden ?? false)
         }
         .task {
             // أنواع الإشعارات وحالة الجهاز لجزء الإشعارات فقط
@@ -551,15 +555,33 @@ struct NotificationsAndPrivacyView: View {
             }
         }
         .onChange(of: isPhoneHidden) { newValue in
+            if skipPhoneHiddenWrite { skipPhoneHiddenWrite = false; return }
+            // بلا اتصال: يرجع المفتاح بلا كتابة (requireOnline يعرض تنبيه الاتصال)
+            guard NetworkMonitor.shared.requireOnline() else {
+                setPhoneHiddenSilently(!newValue)
+                return
+            }
             Task {
                 let success = await memberVM.updatePhoneHidden(newValue)
-                if !success { isPhoneHidden = !newValue; showUpdateError = true }
+                if !success {
+                    // التراجع للقيمة المحفوظة لا يُعاد كتابته
+                    if isPhoneHidden == newValue { setPhoneHiddenSilently(!newValue) }
+                    showUpdateError = true
+                }
             }
         }
         .onChange(of: isBirthDateHidden) { newValue in
+            if skipBirthHiddenWrite { skipBirthHiddenWrite = false; return }
+            guard NetworkMonitor.shared.requireOnline() else {
+                setBirthHiddenSilently(!newValue)
+                return
+            }
             Task {
                 let success = await memberVM.updateBirthDateHidden(newValue)
-                if !success { isBirthDateHidden = !newValue; showUpdateError = true }
+                if !success {
+                    if isBirthDateHidden == newValue { setBirthHiddenSilently(!newValue) }
+                    showUpdateError = true
+                }
             }
         }
         .dsAlert(t("خطأ", "Error"), isPresented: $showUpdateError) {
@@ -603,6 +625,19 @@ struct NotificationsAndPrivacyView: View {
                       subtitle: t("عدد غير المقروء على أيقونة التطبيق", "Unread count on the app icon"),
                       isOn: $badgeEnabled)
         }
+    }
+
+    /// يضبط المفتاح بلا كتابة للسيرفر — العلامة تُرفع فقط لو تغيّرت القيمة فعلاً (وإلا لا onChange يمسحها)
+    private func setPhoneHiddenSilently(_ value: Bool) {
+        guard isPhoneHidden != value else { return }
+        skipPhoneHiddenWrite = true
+        isPhoneHidden = value
+    }
+
+    private func setBirthHiddenSilently(_ value: Bool) {
+        guard isBirthDateHidden != value else { return }
+        skipBirthHiddenWrite = true
+        isBirthDateHidden = value
     }
 
     private var privacySection: some View {

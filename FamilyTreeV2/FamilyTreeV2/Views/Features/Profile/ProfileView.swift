@@ -1377,8 +1377,8 @@ struct WomanMemberEditSheet: View {
         _isDeceased = State(initialValue: entry.member.isDeceased)
         _isHidden = State(initialValue: entry.member.isHiddenFromTree)
         _selectedGender = State(initialValue: entry.member.gender)
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        if let b = entry.member.birthDate, let d = f.date(from: b) {
+        // DateHelper: ميلادي بأرقام لاتينية — formatter الجهاز يقرأ التاريخ خطأ بالتقويم الهجري
+        if let d = DateHelper.parse(entry.member.birthDate) {
             _hasBirthDate = State(initialValue: true)
             _birthDate = State(initialValue: d)
             startBirthKey = Self.dayKey(d)
@@ -1387,7 +1387,7 @@ struct WomanMemberEditSheet: View {
             _birthDate = State(initialValue: Date())
             startBirthKey = nil
         }
-        if let dd = entry.member.deathDate, let d = f.date(from: dd) {
+        if let d = DateHelper.parse(entry.member.deathDate) {
             _hasDeathDate = State(initialValue: true)
             _deathDate = State(initialValue: d)
             startDeathKey = Self.dayKey(d)
@@ -1398,14 +1398,7 @@ struct WomanMemberEditSheet: View {
         }
     }
 
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f
-    }()
-
-    private static func dayKey(_ date: Date) -> String { dayFormatter.string(from: date) }
+    private static func dayKey(_ date: Date) -> String { DateHelper.format(date) }
 
     /// أي حقل يختلف عمّا فُتح عليه المربّع (أو صورة جديدة) — «إلغاء» يسأل قبل التجاهل
     private var hasUnsavedChanges: Bool {
