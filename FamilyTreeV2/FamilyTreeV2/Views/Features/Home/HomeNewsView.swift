@@ -49,6 +49,8 @@ struct HomeNewsView: View {
     /// خبر ضُغط عليه في مربّع الرئيسية — تنزل إليه صفحة الأخبار وتبرزه لحظة (طلب المالك)
     @State private var focusNewsId: UUID?
     @State private var highlightedNewsId: UUID?
+    /// صور خبر مفتوحة بملء الشاشة (التكبير والتقليب) — نفس عارض المشاريع والمكتبة
+    @State private var mediaViewer: NewsMediaViewerItem?
 
     private enum HomeSubPage: Hashable {
         case archive, projects, contact, news
@@ -335,6 +337,10 @@ struct HomeNewsView: View {
         .transaction { t in
             // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
             if selectedMemberForDetails != nil { t.disablesAnimations = true }
+        }
+        // صورة الخبر بملء الشاشة — تكبير بالقرصة والتقليب بين صور الخبر
+        .fullScreenCover(item: $mediaViewer) { item in
+            ProjectPhotoViewer(urls: item.urls, startIndex: item.start, section: .news)
         }
     }
 
@@ -862,7 +868,7 @@ struct HomeNewsView: View {
                     spacing: DS.Spacing.lg
                 ) {
                     ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
-                        newsCard(for: news)
+                        newsCard(for: news, index: index)
                             .newsSwipeActions(
                                         id: news.id,
                                         canDelete: canDelete(news),
@@ -879,7 +885,7 @@ struct HomeNewsView: View {
                 // قائمة واحدة بلا عناوين «اليوم / أمس / … / أقدم» ولا عدّاد (طلب المالك)
                 LazyVStack(spacing: DS.Spacing.md) {
                     ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
-                        newsCard(for: news)
+                        newsCard(for: news, index: index)
                             .newsSwipeActions(
                                 id: news.id,
                                 canDelete: canDelete(news),
@@ -915,7 +921,7 @@ struct HomeNewsView: View {
         authVM.canDeleteNews || (news.ownerId != nil && authVM.currentUser?.id == news.ownerId)
     }
 
-    private func newsCard(for news: NewsPost) -> some View {
+    private func newsCard(for news: NewsPost, index: Int) -> some View {
         HomeNewsCardView(
             postId: news.id,
             authorName: news.author_name,
@@ -955,7 +961,13 @@ struct HomeNewsView: View {
                 if let authorId = news.author_id {
                     blockTarget = BlockTarget(id: authorId, name: news.author_name)
                 }
-            }
+            },
+            onMediaTap: { photo in
+                mediaViewer = NewsMediaViewerItem(urls: news.mediaURLs, start: photo)
+            },
+            // الختم يُطبع مع دخول البطاقات (نفس توقيت `dsCardCascade`)
+            appeared: newsAppeared,
+            cascadeIndex: index
         )
     }
 
