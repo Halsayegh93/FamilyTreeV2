@@ -49,14 +49,14 @@ struct MainTabView: View {
             TabView(selection: tabSelection) {
                 // كل تبويب يلوّن ما بداخله بلونه (البيئة + tint) — حتى الصفحات المدفوعة والمربّعات
                 Tab(value: 0) {
-                    HomeNewsView(selectedTab: $selectedTab)
+                    AnyView(HomeNewsView(selectedTab: $selectedTab))
                         .dsSection(.home)
                 } label: {
                     Label(tabTitle("الرئيسية", "Home"), systemImage: AppSection.home.symbol)
                 }
 
                 Tab(value: 1) {
-                    TreeTabContainer(selectedTab: $selectedTab)
+                    AnyView(TreeTabContainer(selectedTab: $selectedTab))
                         .dsSection(.tree)
                 } label: {
                     Label(tabTitle("الشجرة", "Tree"), systemImage: AppSection.tree.symbol)
@@ -64,7 +64,7 @@ struct MainTabView: View {
 
                 if appSettingsVM.settings.diwaniyasEnabled ?? true {
                     Tab(value: 2) {
-                        DiwaniyasView(selectedTab: $selectedTab)
+                        AnyView(DiwaniyasView(selectedTab: $selectedTab))
                             .dsSection(.diwaniyas)
                     } label: {
                         Label(tabTitle("الديوانيات", "Diwaniyas"), systemImage: AppSection.diwaniyas.symbol)
@@ -72,7 +72,7 @@ struct MainTabView: View {
                 }
 
                 Tab(value: 3) {
-                    ProfileView(selectedTab: $selectedTab)
+                    AnyView(ProfileView(selectedTab: $selectedTab))
                         .dsSection(.profile)
                 } label: {
                     Label(tabTitle("حسابي", "Profile"), systemImage: AppSection.profile.symbol)
@@ -80,7 +80,7 @@ struct MainTabView: View {
 
                 if authVM.canModerate {
                     Tab(value: 4) {
-                        AdminDashboardView(selectedTab: $selectedTab)
+                        AnyView(AdminDashboardView(selectedTab: $selectedTab))
                             .dsSection(.admin)
                     } label: {
                         Label(tabTitle("الإدارة", "Admin"), systemImage: AppSection.admin.symbol)
@@ -89,7 +89,7 @@ struct MainTabView: View {
             }
         } else {
         TabView(selection: tabSelection) {
-            HomeNewsView(selectedTab: $selectedTab)
+            AnyView(HomeNewsView(selectedTab: $selectedTab))
                 .dsSection(.home)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? AppSection.home.symbol : AppSection.home.symbolOutline)
@@ -98,7 +98,7 @@ struct MainTabView: View {
                 .tag(0)
 
             // مغلّف يسمح بالتبديل بين الواجهة الكلاسيكية والتجربة الجديدة
-            TreeTabContainer(selectedTab: $selectedTab)
+            AnyView(TreeTabContainer(selectedTab: $selectedTab))
                 .dsSection(.tree)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? AppSection.tree.symbol : AppSection.tree.symbolOutline)
@@ -107,7 +107,7 @@ struct MainTabView: View {
                 .tag(1)
 
             if appSettingsVM.settings.diwaniyasEnabled ?? true {
-                DiwaniyasView(selectedTab: $selectedTab)
+                AnyView(DiwaniyasView(selectedTab: $selectedTab))
                     .dsSection(.diwaniyas)
                     .tabItem {
                         Image(systemName: selectedTab == 2 ? AppSection.diwaniyas.symbol : AppSection.diwaniyas.symbolOutline)
@@ -116,7 +116,7 @@ struct MainTabView: View {
                     .tag(2)
             }
 
-            ProfileView(selectedTab: $selectedTab)
+            AnyView(ProfileView(selectedTab: $selectedTab))
                 .dsSection(.profile)
                 .tabItem {
                     Image(systemName: selectedTab == 3 ? AppSection.profile.symbol : AppSection.profile.symbolOutline)
@@ -125,7 +125,7 @@ struct MainTabView: View {
                 .tag(3)
 
             if authVM.canModerate {
-                AdminDashboardView(selectedTab: $selectedTab)
+                AnyView(AdminDashboardView(selectedTab: $selectedTab))
                     .dsSection(.admin)
                     .tabItem {
                         Image(systemName: selectedTab == 4 ? AppSection.admin.symbol : AppSection.admin.symbolOutline)
