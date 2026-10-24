@@ -159,7 +159,7 @@ struct MemberDetailsView: View {
                                     quickActionsRow
                                         .padding(.horizontal, DS.Spacing.lg)
 
-                                    // «تعديل مباشر» / «طلب تعديل» داخل التفاصيل نفسها
+                                    // «تعديل مباشر» داخل التفاصيل نفسها — «طلب تعديل» في الشريط السفلي
                                     editEntryButton
                                         .padding(.horizontal, DS.Spacing.lg)
                                 }
@@ -1135,35 +1135,22 @@ struct MemberDetailsView: View {
         return nil
     }
 
-    /// الإدارة ترى «طلب تعديل» أيضاً بجانب «تعديل مباشر» (طلب المالك ٢٠٢٦-١٠-٢٤ «حط الزرين للإدارة») —
-    /// لغير ملفها هي
-    private var showsBothEditButtons: Bool {
-        authVM.canEditMembers && !isViewingSelf && !member.isDeleted
-    }
+    /// «طلب تعديل» لغير صاحب الملف — في الشريط السفلي بجانب «إغلاق» كما كان (طلب المالك ٢٠٢٦-١٠-٢٤)،
+    /// للأعضاء والإدارة
+    private var showsRequestEdit: Bool { !isViewingSelf && !member.isDeleted }
 
-    /// زرّ التعديل داخل التفاصيل: «تعديل مباشر» للمالك والمدير والمراقب (`canEditMembers`) ومعه «طلب تعديل»
-    /// رمادياً، وإلا «طلب تعديل» وحده لغير صاحب الملف
+    /// «تعديل مباشر» داخل التفاصيل تحت الاسم — للمالك والمدير والمراقب (`canEditMembers`) فقط
     @ViewBuilder private var editEntryButton: some View {
-        if let primary = primaryPanelAction {
-            DSButton(primary.title, icon: primary.icon, fullWidth: false, action: primary.run)
-        }
-        if showsBothEditButtons {
-            DSButton(L10n.t("طلب تعديل", "Request Edit"), icon: "pencil.and.list.clipboard",
-                     role: .cancel, fullWidth: false) {
-                showEditActions = true
+        if authVM.canEditMembers && !member.isDeleted {
+            DSButton(L10n.t("تعديل مباشر", "Direct Edit"), icon: "pencil", fullWidth: false) {
+                showAdminControl = true
             }
         }
     }
 
-    /// صفّ الرأس: زرّ التعديل + «عرض التفاصيل» (داخل المربّع) — سطران من «حجم النص» ٢× وأكبر،
-    /// ومع زرّي الإدارة: الزرّان في سطر و«عرض التفاصيل» تحتهما (لا تزدحم ثلاثة أزرار في سطر)
+    /// صفّ الرأس: «تعديل مباشر» + «عرض التفاصيل» (داخل المربّع) — سطران من «حجم النص» ٢× وأكبر
     @ViewBuilder private var headerButtons: some View {
-        if showsBothEditButtons && dynamicTypeSize < .xxLarge {
-            VStack(spacing: DSBox.buttonSpacing) {
-                HStack(spacing: DSBox.buttonSpacing) { editEntryButton }
-                if centered { detailsToggleButton }
-            }
-        } else if dynamicTypeSize >= .xxLarge {
+        if dynamicTypeSize >= .xxLarge {
             VStack(spacing: DSBox.buttonSpacing) {
                 editEntryButton
                 if centered { detailsToggleButton }
@@ -1176,13 +1163,33 @@ struct MemberDetailsView: View {
         }
     }
 
+    /// «طلب تعديل» في الشريط السفلي
+    @ViewBuilder private var requestEditButton: some View {
+        if showsRequestEdit {
+            DSButton(L10n.t("طلب تعديل", "Request Edit"), icon: "pencil.and.list.clipboard") {
+                showEditActions = true
+            }
+        }
+    }
+
     /// شريط ثابت أسفل المربّع: «إبلاغ» و«حظر» صغيران، «إغلاق» — زرّ التعديل صار داخل التفاصيل (`headerButtons`)
     private var panelFooter: some View {
         VStack(spacing: DS.Spacing.sm) {
             // إعلان وفاة — للمتوفى الذي لم يُعلن عنه، لمن يعتمد الوفيات
             if showsDeathAnnounce { deathAnnounceButton }
-            // صفّ الأزرار بمواصفة `DSBox` الواحدة («إغلاق» رمادي، الأيقونات مربّعة بنفس الارتفاع)
-            HStack(spacing: DSBox.buttonSpacing) { panelSecondaryButtons }
+            // صفّ الأزرار بمواصفة `DSBox` الواحدة («طلب تعديل» بلون القسم، «إغلاق» رمادي، الأيقونات مربّعة بنفس
+            // الارتفاع) — من «حجم النص» ٢× وأكبر «طلب تعديل» سطر كامل وحده فوقها (لا يُقصّ)
+            if dynamicTypeSize >= .xxLarge {
+                VStack(spacing: DSBox.buttonSpacing) {
+                    requestEditButton
+                    HStack(spacing: DSBox.buttonSpacing) { panelSecondaryButtons }
+                }
+            } else {
+                HStack(spacing: DSBox.buttonSpacing) {
+                    requestEditButton
+                    panelSecondaryButtons
+                }
+            }
         }
         // نفس شريط أزرار مربّعات العمل (`DSComposer`): هوامشه وخطّه الشعري من `DSBox`
         .padding(.horizontal, DSBox.footerHorizontal)
