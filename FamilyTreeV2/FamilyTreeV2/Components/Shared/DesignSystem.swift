@@ -342,8 +342,11 @@ enum DS {
         // MARK: IBM Plex Sans Arabic — خط الهوية (تجربة)
         /// أسماء PostScript للأوزان المضافة في Resources/Fonts
         enum Plex {
-            /// تجربة Cairo (٢٠٢٦-١٠-٢٣): للرجوع إلى IBM Plex غيّر هذا السطر إلى `false`
-            static let useCairo = true
+            /// خط الآيفون نفسه (SF Arabic) لكل نصوص التطبيق — طلب المالك ٢٠٢٦-١٠-٢٤ «الخط يصير طبيعي افتراضي».
+            /// `false` يرجع خط الهوية أدناه (Cairo أو IBM Plex). ملفات PDF وما يُرسم بـ UIKit تبقى على خط الهوية.
+            static let useSystem = true
+            /// تجربة Cairo (٢٠٢٦-١٠-٢٣) — لم تعجب المالك؛ خط الهوية لملفات PDF = IBM Plex
+            static let useCairo = false
             // Cairo.ttf خط متغيّر — أسماء النسخ المسمّاة (named instances) للأوزان
             static let regular  = useCairo ? "Cairo-Regular"          : "IBMPlexSansArabic-Regular"
             static let medium   = useCairo ? "Cairo-Regular_Medium"   : "IBMPlexSansArabic-Medium"
@@ -367,21 +370,42 @@ enum DS {
         /// خط IBM Plex Sans Arabic مع دعم Dynamic Type — يكبر ويصغر مع «حجم النص» في إعدادات الجهاز
         /// بنفس نسبة نمط Apple الأقرب لحجمه (`textStyle(for:)`)
         static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
-            .custom(plexName(weight), size: size, relativeTo: textStyle(for: size))
+            plex(size, weight: weight, relativeTo: textStyle(for: size))
         }
 
         /// نفس الخط مقيّداً بنمط Apple معيّن (أدوار النص) — الحجم الأساسي ثم يتبع إعداد الجهاز
         static func plex(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular,
                          relativeTo style: SwiftUI.Font.TextStyle) -> SwiftUI.Font {
-            .custom(plexName(weight), size: size, relativeTo: style)
+            guard Plex.useSystem else { return .custom(plexName(weight), size: size, relativeTo: style) }
+            // حجم Apple الافتراضي للنمط = خط النمط نفسه (يتبع «حجم النص» مباشرة)؛ غيره يُكبَّر بمنحنى النمط
+            if size == appleSize(style) { return .system(style, weight: weight) }
+            return .system(size: UIFontMetrics(forTextStyle: uiTextStyle(style)).scaledValue(for: size), weight: weight)
+        }
+
+        /// نمط UIKit المقابل — لتكبير الأحجام الحرّة بمنحنى Dynamic Type نفسه
+        static func uiTextStyle(_ style: SwiftUI.Font.TextStyle) -> UIFont.TextStyle {
+            switch style {
+            case .largeTitle:  return .largeTitle
+            case .title:       return .title1
+            case .title2:      return .title2
+            case .title3:      return .title3
+            case .headline:    return .headline
+            case .callout:     return .callout
+            case .subheadline: return .subheadline
+            case .footnote:    return .footnote
+            case .caption:     return .caption1
+            case .caption2:    return .caption2
+            default:           return .body
+            }
         }
 
         /// مطابقة خط الآيفون بالعين (طلب المالك ٢٠٢٦-١٠-٠٨ «يطابق شكل خط الآيفون»): خط الهوية أكبر بصرياً من
         /// خط النظام بنفس الرقم (قياس: الحروف أطول ١١٪ والسطر ١٤٪) — فكل دور نصّ يُرسم بحجمه × هذا المعامل.
         /// المعامل الواحد لحجم النص في التطبيق كله؛ مقاسات الرسم الثابتة (`TextRole(size:)`) مستثناة.
         /// مع خط Cairo (تجربة ٢٠٢٦-١٠-٢٢) = ١: Cairo لا يكبر بصرياً عن خط النظام كما يكبر Plex، فكان ٠٫٩ يصغّر
-        /// كل نصوص التطبيق ١٠٪ تحت حجم الآيفون الافتراضي (طلب المالك ٢٠٢٦-١٠-٢٤ «احس الخط صغير»)
-        static let opticalScale: CGFloat = Plex.useCairo ? 1.0 : 0.9
+        /// كل نصوص التطبيق ١٠٪ تحت حجم الآيفون الافتراضي (طلب المالك ٢٠٢٦-١٠-٢٤ «احس الخط صغير»).
+        /// مع خط النظام (`Plex.useSystem`) = ١: أحجام Apple نفسها بلا تعديل
+        static let opticalScale: CGFloat = (Plex.useSystem || Plex.useCairo) ? 1.0 : 0.9
 
         // MARK: مقاسات Apple الافتراضية (حجم النص «كبير» — الافتراضي في الآيفون)
         // طلب المالك ٢٠٢٦-١٠-٠٨: «حجم الخط في التطبيق وجميع النصوص … على حجم الخط الافتراضي في الآيفون».
@@ -455,7 +479,7 @@ enum DS {
         /// IBM Plex Sans Arabic بحجم ثابت لا يتبع Dynamic Type — لنصوص لوحة الشجرة داخل عُقد بمقاس ثابت
         /// (بدل .system(size:) في تلك الأماكن) — من main (الهوية)
         static func plexFixed(_ size: CGFloat, weight: SwiftUI.Font.Weight = .regular) -> SwiftUI.Font {
-            .custom(plexName(weight), fixedSize: size)
+            Plex.useSystem ? .system(size: size, weight: weight) : .custom(plexName(weight), fixedSize: size)
         }
 
         /// نمط النص المقابل للحجم — يحدّد منحنى Dynamic Type لـ icon() (من main).
@@ -2018,7 +2042,7 @@ extension DS {
         /// مقرَّب لنقطة كاملة كما يقرّب Dynamic Type (`relativeTo:`) — فعند «كبير» يطابق الرسم السابق بكسلاً بكسلاً
         /// (الاسم ١٥٫٣ كان يُرسم ١٥)
         static func font(_ role: DS.TextRole, _ k: CGFloat) -> SwiftUI.Font {
-            .custom(DS.Font.plexName(role.weight), fixedSize: (role.textSize * k).rounded())
+            DS.Font.plexFixed((role.textSize * k).rounded(), weight: role.weight)
         }
     }
 }
