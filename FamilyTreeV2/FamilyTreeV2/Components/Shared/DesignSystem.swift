@@ -764,14 +764,15 @@ extension DS.TextRole {
     static let label        = DS.TextRole(.footnote, weight: .heavy)
     /// الشرائح والأزرار الصغيرة — Subheadline (١٥)
     static let chip         = DS.TextRole(.subheadline, weight: .semibold)
-    /// نص جانبي وتلميح (طرف عنوان القسم) — Caption 1 (١٢)
-    static let caption      = DS.TextRole(.caption, weight: .semibold)
+    /// نص جانبي وتلميح (طرف عنوان القسم) — Footnote (١٣)؛ كان Caption 1 (١٢) — كبّره المالك ٢٠٢٦-١٠-٢٤ «كبّر الثانوي»
+    static let caption      = DS.TextRole(.footnote, weight: .semibold)
     /// شارة حالة — Caption 2 (١١)
     static let badge        = DS.TextRole(.caption2, weight: .bold)
     /// عنوان قسم داخل المربّع (`DSComposerSection`) — Footnote (١٣)
     static let boxSectionTitle = DS.TextRole(.footnote, weight: .bold)
-    /// ملاحظة صغيرة (فوق أزرار المربّع) — Footnote (١٣)
-    static let footnote     = DS.TextRole(.footnote)
+    /// النص الثانوي (ملاحظة، سطر تحت الصف، فوق أزرار المربّع) — Subheadline (١٥)؛ كان Footnote (١٣) —
+    /// كبّره المالك ٢٠٢٦-١٠-٢٤ «كبّر الثانوي»
+    static let footnote     = DS.TextRole(.subheadline)
     /// عدّاد ورقم صغير — Caption 2 (١١)
     static let micro        = DS.TextRole(.caption2, weight: .semibold)
     /// نص الزرّ الواحد (٤٤ في المربّعات والصفحات) — Body (١٧) شبه عريض كأزرار iOS
@@ -2091,9 +2092,9 @@ extension DS.TextRole {
     static let rowTitleCompact = DS.TextRole(.body, weight: .semibold)
     static let calloutCompact  = DS.TextRole(.callout)
     static let chipCompact     = DS.TextRole(.footnote, weight: .semibold)
-    static let captionCompact  = DS.TextRole(.caption, weight: .semibold)
+    static let captionCompact  = DS.TextRole(.footnote, weight: .semibold)
     static let badgeCompact    = DS.TextRole(.caption2, weight: .bold)
-    static let footnoteCompact = DS.TextRole(.footnote)
+    static let footnoteCompact = DS.TextRole(.subheadline)
     static let microCompact    = DS.TextRole(.caption2, weight: .semibold)
 }
 
