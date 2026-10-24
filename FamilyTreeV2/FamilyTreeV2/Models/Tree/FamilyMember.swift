@@ -324,8 +324,17 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         if role == .pending { return false }
         if status == .frozen { return false }
         if isHiddenFromTree { return false }
-        if fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        if !hasName { return false }
         return true
+    }
+
+    /// للسجلّ اسم حقيقي — سجلّ بلا اسم (فارغ أو «بدون اسم») ينشئه الدخول بالرمز تلقائياً: رقم/حساب دخول بلا اسم ولا أب.
+    /// ليس فرداً في العائلة: لا يُعدّ في «إحصاء الأفراد» ولا صفحة الأعضاء ولا الإحصاءات ولا التقارير
+    /// (طلب المالك ٢٠٢٦-١٠-٢٤ «ارقام مو مرتبط فيهم اسماء لا تحط الرقم متصلين بعدد العائلة») — يظهر للإدارة في
+    /// «مشكلات الشجرة ← بلا اسم» فقط.
+    var hasName: Bool {
+        let name = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !name.isEmpty && name != "بدون اسم"
     }
 
     enum CodingKeys: String, CodingKey {

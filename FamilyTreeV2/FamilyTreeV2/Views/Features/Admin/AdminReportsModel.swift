@@ -194,7 +194,8 @@ nonisolated struct AdminReportInput: Sendable {
                      branchName: (UUID) -> String?, generatedBy: String, date: Date = Date()) -> AdminReportInput {
         var people: [AdminReportPerson] = []
         people.reserveCapacity(members.count)
-        for m in members where m.role != .pending {
+        // سجلّ بلا اسم (رقم دخول بلا اسم) ليس فرداً في العائلة — `displayFullName` يلحق به اسم العائلة فلا يُكتشف بعده
+        for m in members where m.role != .pending && m.hasName {
             let name = m.displayFullName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { continue }
             let raw = (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -214,7 +215,7 @@ nonisolated struct AdminReportInput: Sendable {
             }
         }
         let womenFacts = women.map { list in
-            list.filter(\.isFemale).map { AdminReportWoman(deceased: $0.isDeceased == true, birth: $0.birthDate) }
+            list.filter { $0.isFemale && $0.hasName }.map { AdminReportWoman(deceased: $0.isDeceased == true, birth: $0.birthDate) }
         }
         return AdminReportInput(people: people, rootId: root?.id, women: womenFacts, registered: registered,
                                 branchNames: names, generatedBy: generatedBy, date: date)

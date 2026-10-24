@@ -226,7 +226,8 @@ struct AdminMemberCounts: Equatable {
     mutating func setMen(from all: [FamilyMember]) {
         guard !all.isEmpty else { return }
         var total = 0, alive = 0
-        for m in all where m.role != .pending {
+        // سجلّ بلا اسم (رقم دخول بلا اسم) ليس فرداً في العائلة — `FamilyMember.hasName`
+        for m in all where m.role != .pending && m.hasName {
             total += 1
             if m.isDeceased != true { alive += 1 }
         }
@@ -239,7 +240,7 @@ struct AdminMemberCounts: Equatable {
 
     mutating func setWomen(_ rows: [FamilyMember]) {
         guard !rows.isEmpty else { return }
-        let females = rows.filter(\.isFemale)
+        let females = rows.filter { $0.isFemale && $0.hasName }
         women = females.count
         womenAlive = females.filter { $0.isDeceased != true }.count
     }

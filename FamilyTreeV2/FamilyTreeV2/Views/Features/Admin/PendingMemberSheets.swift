@@ -35,6 +35,7 @@ struct LinkToExistingMemberSheet: View {
     private var candidates: [FamilyMember] {
         let all = memberVM.allMembers.filter {
             $0.role != .pending &&
+            $0.hasName &&
             $0.id != pendingMember.id &&
             $0.isDeceased != true
         }
@@ -48,7 +49,7 @@ struct LinkToExistingMemberSheet: View {
 
     /// المقترحون الأحياء غير المعلّقين فقط
     private var visibleSuggestions: [FamilyMember] {
-        suggested.filter { $0.role != .pending && $0.isDeceased != true && $0.id != pendingMember.id }
+        suggested.filter { $0.role != .pending && $0.hasName && $0.isDeceased != true && $0.id != pendingMember.id }
     }
 
     var body: some View {

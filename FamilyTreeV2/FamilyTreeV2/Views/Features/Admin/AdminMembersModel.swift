@@ -376,6 +376,9 @@ final class AdminAccountsStore: ObservableObject {
     @Published private(set) var accounts: [UUID: AdminAccountInfo] = [:]
     /// وصلت القوائم مرة على الأقل (قبلها لا تُعرض حالة «مسجّل/مقيّد»)
     @Published private(set) var loaded = false
+    /// سجلّات بلا اسم (رقم دخول بلا اسم) في كل فئة — تُطرح من أرقام `app_usage_stats` (`AppUsageStats.excludingNameless`)
+    /// لأنها ليست أفراداً في العائلة. بعد أن يستبعدها السيرفر نفسه تصير أصفاراً فلا يتغيّر شيء
+    private(set) var namelessByCategory: [AppUsageCategory: Int] = [:]
     private var lastFetch: Date?
 
     static let categories: [AppUsageCategory] = [.active, .idle, .loginNoDevice]
@@ -396,11 +399,16 @@ final class AdminAccountsStore: ObservableObject {
     /// يبني الخريطة من القوائم (يستعملها التحميل)
     func apply(_ lists: [AppUsageCategory: [AppUsageMember]]) {
         var map: [UUID: AdminAccountInfo] = [:]
+        var nameless: [AppUsageCategory: Int] = [:]
         for category in Self.categories {
             for row in lists[category] ?? [] {
                 map[row.memberId] = AdminAccountInfo(usage: category, lastSeen: row.lastSeen, created: row.accountCreated)
+                if AdminMemberFacts.isBlank(row.fullName) || row.fullName?.trimmingCharacters(in: .whitespacesAndNewlines) == "بدون اسم" {
+                    nameless[category, default: 0] += 1
+                }
             }
         }
+        namelessByCategory = nameless
         if map != accounts { accounts = map }
         loaded = true
     }
@@ -591,6 +599,27 @@ struct AdminMembersIndex {
                                  branch: heads[m.id], living: oldLiving[m.id],
                                  needle: ArabicTextNormalizer.normalizeForSearch(m.fullName),
                                  digits: AdminMemberFacts.asciiDigits(m.phoneNumber ?? "")))
+            func addProblems() {
+                guard !problems.isEmpty else { return }
+                withProblems += 1
+                add(.problems, .all, i)
+                for p in problems {
+                    switch p {
+                    case .orphan: add(.problems, .orphan, i)
+                    case .noName: add(.problems, .noName, i)
+                    case .brokenParent: add(.problems, .brokenParent, i)
+                    case .hidden: add(.problems, .hidden, i)
+                    case .dupPhone: add(.problems, .dupPhone, i)
+                    }
+                }
+            }
+            // سجلّ بلا اسم (رقم دخول بلا اسم — `FamilyMember.hasName`) ليس فرداً في العائلة: لا يدخل «الكل» ولا الحالات
+            // ولا النواقص ولا الفروع — بيته الوحيد «مشكلات الشجرة ← بلا اسم»
+            guard m.hasName else {
+                if m.status != .frozen { checked += 1 }
+                addProblems()
+                continue
+            }
             add(.all, .all, i)
             if oldLiving[m.id] != nil { add(.verifyLiving, .all, i) }
             switch status {
@@ -633,19 +662,7 @@ struct AdminMembersIndex {
                 }
             }
             if m.status != .frozen { checked += 1 }
-            if !problems.isEmpty {
-                withProblems += 1
-                add(.problems, .all, i)
-                for p in problems {
-                    switch p {
-                    case .orphan: add(.problems, .orphan, i)
-                    case .noName: add(.problems, .noName, i)
-                    case .brokenParent: add(.problems, .brokenParent, i)
-                    case .hidden: add(.problems, .hidden, i)
-                    case .dupPhone: add(.problems, .dupPhone, i)
-                    }
-                }
-            }
+            addProblems()
         }
         // «تحقق من الأحياء»: بأقسام الميلاد، الأقدم أولاً في كلٍّ (ترتيب الاسم يبقى عند التساوي — `pool` مرتّب بالاسم)
         if let rows = lists[Key(chip: .verifyLiving, sub: .all)] {
@@ -664,7 +681,7 @@ struct AdminMembersIndex {
 
         // الفروع: أبناء رأس الشجرة المباشرون، ثم «خارج الفروع» (الرأس نفسه ومن لا يتصل به)
         var byBranch: [UUID?: [Int]] = [:]
-        for (i, e) in entries.enumerated() { byBranch[e.branch, default: []].append(i) }
+        for (i, e) in entries.enumerated() where e.member.hasName { byBranch[e.branch, default: []].append(i) }
         let headMembers = Set(heads.values).compactMap { id in all.first { $0.id == id } }
             .sorted { ($0.sortOrder, $0.firstName) < ($1.sortOrder, $1.firstName) }
         var branches: [Branch] = headMembers.compactMap { head in

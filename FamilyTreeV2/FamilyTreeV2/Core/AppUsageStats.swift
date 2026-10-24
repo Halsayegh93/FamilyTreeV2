@@ -35,6 +35,14 @@ struct AppUsageStats: Decodable, Equatable {
         }
     }
 
+    /// الأرقام بعد طرح السجلّات بلا اسم (رقم دخول بلا اسم — ليست أفراداً في العائلة، `FamilyMember.hasName`)
+    func excludingNameless(_ nameless: [AppUsageCategory: Int]) -> AppUsageStats {
+        func minus(_ value: Int, _ category: AppUsageCategory) -> Int { max(0, value - (nameless[category] ?? 0)) }
+        return AppUsageStats(active: minus(active, .active), idle: minus(idle, .idle),
+                             loginNoDevice: minus(loginNoDevice, .loginNoDevice),
+                             neverLogged: minus(neverLogged, .neverLogged), noPhone: minus(noPhone, .noPhone))
+    }
+
     /// آخر قيمة — تُعرض فوراً في الشاشات ثم تتحدّث
     @MainActor static var cached: AppUsageStats?
 
@@ -45,8 +53,12 @@ struct AppUsageStats: Decodable, Equatable {
                 .rpc("app_usage_stats")
                 .execute()
                 .value
-            if let first = rows.first { cached = first }
-            return rows.first
+            // السجلّات بلا اسم من قوائم الحسابات (نفس فئات السيرفر) — تُطرح فلا تُعدّ «مسجّلين» في العائلة
+            let accounts = AdminAccountsStore.shared
+            await accounts.refresh()
+            let first = rows.first.map { $0.excludingNameless(accounts.namelessByCategory) }
+            if let first { cached = first }
+            return first
         } catch {
             Log.fetchError("تعذر جلب أرقام استخدام التطبيق", error)
             return cached

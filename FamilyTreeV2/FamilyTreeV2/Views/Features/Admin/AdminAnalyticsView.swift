@@ -524,7 +524,8 @@ struct AdminAnalyticsView: View {
 
         // عدد المضافين لكل (سنة، شهر)
         var perMonth: [Int: Int] = [:]
-        for member in memberVM.allMembers {
+        // سجلّ بلا اسم (رقم دخول بلا اسم) ليس فرداً في العائلة — لا يُعدّ في النمو
+        for member in memberVM.allMembers where member.hasName {
             guard let created = member.createdAt else { continue }
             // محاولة عدة أشكال
             let cleanDate = created.prefix(19)

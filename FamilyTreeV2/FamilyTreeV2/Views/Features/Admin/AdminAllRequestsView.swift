@@ -2278,7 +2278,9 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Join Request Row
 
-    private typealias JoinMatch = (member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)
+    /// مطابقة في الشجرة (`NameMatcher`): `score` النسبة ٠…١٠٠، `total` أجزاء اسم المتقدّم، `fuzzy` منها بفرق حرف
+    typealias JoinMatch = (member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool,
+                           score: Int, total: Int, fuzzy: Int)
 
     /// صف طلب الانضمام — أنيق ومحترم (طلب المالك ٢٠٢٦-١٠-٠١): صورة بأول حرف بحلقة لون الحالة،
     /// الاسم عنواناً، سطر حالة هادئ (مطابقة/اسم جديد · من الموقع)، عمر الطلب نصاً خفيفاً،
@@ -2456,13 +2458,10 @@ struct AdminAllRequestsView: View {
         return formatter.string(from: date)
     }
 
-    private func joinMatchRow(match: (member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool), pendingMember: FamilyMember) -> some View {
-        let totalParts = max(
-            pendingMember.fullName.split(whereSeparator: \.isWhitespace).count,
-            match.member.fullName.split(whereSeparator: \.isWhitespace).count
-        )
-        let hasNameMatch = match.matchCount >= 2
-        let matchPercent = hasNameMatch ? Int(Double(match.matchCount) / Double(max(totalParts, 1)) * 100) : 0
+    private func joinMatchRow(match: JoinMatch, pendingMember: FamilyMember) -> some View {
+        // النتيجة الموزونة من `NameMatcher` (الأول أثقل ثم الأب ثم الجد…) — بلا اسم العائلة والروابط
+        let totalParts = max(match.total, 1)
+        let matchPercent = min(100, max(0, match.score))
 
         return HStack(spacing: DS.Spacing.sm) {
             // نسبة التطابق — الحلقة الصغيرة الموحّدة (الدفعة ١٠)
@@ -2476,10 +2475,11 @@ struct AdminAllRequestsView: View {
                     .dsNameLines()
 
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(L10n.t(
-                        "\(match.matchCount) من \(totalParts) أسماء متطابقة",
-                        "\(match.matchCount) of \(totalParts) names match"
-                    ))
+                    Text(match.fuzzy > 0
+                         ? L10n.t("\(match.matchCount) من \(totalParts) أسماء متطابقة · \(match.fuzzy) بفرق حرف",
+                                  "\(match.matchCount) of \(totalParts) names match · \(match.fuzzy) one letter off")
+                         : L10n.t("\(match.matchCount) من \(totalParts) أسماء متطابقة",
+                                  "\(match.matchCount) of \(totalParts) names match"))
                     .dsFieldFont(.footnote)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
@@ -2541,33 +2541,6 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// المطابقات المدمجة: مطابقات التسجيل (من السيرفر) + المطابقات المحلية بالاسم
-    private func combinedMatches(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)] {
-        let localMatches = findNameMatches(for: member)
-        let serverIds = registrationMatches[member.id] ?? []
-
-        // جمع الأعضاء المتطابقين من السيرفر اللي مو موجودين بالمطابقة المحلية
-        let localMatchIds = Set(localMatches.map(\.member.id))
-        let serverOnlyMembers = serverIds
-            .filter { !localMatchIds.contains($0) }
-            .compactMap { id in memberVM.allMembers.first(where: { $0.id == id }) }
-
-        var combined: [(member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)] = []
-
-        // مطابقات السيرفر أولاً (الأهم)
-        for serverMember in serverOnlyMembers {
-            combined.append((member: serverMember, matchCount: 0, matchedParts: [], isRegistrationMatch: true))
-        }
-
-        // ثم المطابقات المحلية اللي أيضاً من السيرفر
-        for match in localMatches {
-            let isAlsoServer = serverIds.contains(match.member.id)
-            combined.append((member: match.member, matchCount: match.matchCount, matchedParts: match.matchedParts, isRegistrationMatch: isAlsoServer))
-        }
-
-        return combined
-    }
-
     // MARK: - Name Matching
 
     /// تطبيع اسم عربي: إزالة التشكيل والتطويل + توحيد الألف/الهمزة/التاء المربوطة/الألف المقصورة.
@@ -2611,107 +2584,45 @@ struct AdminAllRequestsView: View {
         return editDistance(Array(na), Array(nb)) <= 1
     }
 
-    private func findNameMatches(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String])] {
-        let newParts = member.fullName
-            .split(whereSeparator: \.isWhitespace)
-            .map { String($0).trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+    /// لستة مرتبة بالأقرب (طلب المالك ٢٠٢٦-١٠-٢٤ «تقريب الاسم اكثر نظم الالية») — `NameMatcher`:
+    /// تطبيع عربي، «عبد الله» = «عبدالله»، بلا اسم العائلة والروابط، مقارنة بالترتيب بوزن أعلى للأول ثم الأب ثم الجد،
+    /// وفرق حرف واحد مقبول. يُعرض من تطابقت أول ٣ أجزاء من اسمه بالترتيب (أو كلها إن كانت أقل)، ومطابقات السيرفر
+    /// (`search_members_by_name` + لقطة التسجيل) تُدمج بلا تكرار متى تطابق الاسم الأول — ثم الكل بالنتيجة.
+    func orderedMatchList(for member: FamilyMember) -> [JoinMatch] {
+        let families = NameMatcher.familyKeys()
+        let applicant = NameMatcher.chain(member.fullName, families: families)
+        guard !applicant.isEmpty else { return [] }
 
-        guard !newParts.isEmpty else { return [] }
-
-        let existingMembers = memberVM.allMembers.filter { $0.role != .pending && $0.id != member.id }
-
-        var matches: [(member: FamilyMember, matchCount: Int, matchedParts: [String])] = []
-
-        for existing in existingMembers {
-            let existingParts = existing.fullName
-                .split(whereSeparator: \.isWhitespace)
-                .map { String($0).trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-
-            // تحقق: هل الاسم الأول للعضو الموجود يطابق/يشابه أي جزء من اسم المنضم؟
-            guard let existingFirst = existingParts.first else { continue }
-            let firstNameMatch = newParts.contains { Self.namesSimilar($0, existingFirst) }
-            guard firstNameMatch else { continue }
-
-            // عد كل الأجزاء المتطابقة
-            var matchedParts: [String] = []
-            var usedIndices: Set<Int> = []
-
-            for newPart in newParts {
-                for (idx, existingPart) in existingParts.enumerated() {
-                    if !usedIndices.contains(idx) && Self.namesSimilar(newPart, existingPart) {
-                        matchedParts.append(newPart)
-                        usedIndices.insert(idx)
-                        break
-                    }
-                }
-            }
-
-            if matchedParts.count >= 1 {
-                matches.append((member: existing, matchCount: matchedParts.count, matchedParts: matchedParts))
-            }
-        }
-
-        return matches.sorted { $0.matchCount > $1.matchCount }
-    }
-
-    /// لستة مرتبة: الأكثر تطابقاً أول — يبحث بالاسم الأول ثم الأول+الثاني ثم الأول+الثاني+الثالث...
-    func orderedMatchList(for member: FamilyMember) -> [(member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)] {
-        let newParts = member.fullName
-            .split(whereSeparator: \.isWhitespace)
-            .map { String($0).trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-
-        guard !newParts.isEmpty else { return [] }
-
-        // لازم تطابق أول 3 أسماء بالترتيب (أو كل الأسماء لو المنضم أقل من 3).
-        // مثال: «علي طارق علي حسين» → يُعرض فقط من يطابق «علي طارق علي»،
-        // ويُستبعد «علي طارق موسى» و«علي جعفر موسى».
-        let requiredPrefix = min(3, newParts.count)
-
-        // فقط الأعضاء: بدون هاتف + أحياء + مو pending
+        // فقط سجلات الشجرة: بدون هاتف + أحياء + لها اسم + مو pending
         let existingMembers = memberVM.allMembers.filter { m in
-            m.role != .pending && m.id != member.id &&
+            m.role != .pending && m.id != member.id && m.hasName &&
             (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
             m.isDeceased != true
         }
         let serverIds = Set(registrationMatches[member.id] ?? [])
 
-        // لكل عضو موجود — كم اسم يطابق بالترتيب من البداية
-        var results: [(member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool)] = []
-
+        var scored: [(member: FamilyMember, result: NameMatcher.Result, isServer: Bool)] = []
         for existing in existingMembers {
-            let existingParts = existing.fullName
-                .split(whereSeparator: \.isWhitespace)
-                .map { String($0).trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-
-            // عد الأسماء المتطابقة بالترتيب من البداية
-            var matchedParts: [String] = []
-            let minCount = min(newParts.count, existingParts.count)
-            for i in 0..<minCount {
-                // تطابق أو تشابه (فرق حرف واحد) — يعرض الأسماء المشابهة لو فيه اختلاف بسيط بالإملاء
-                if Self.namesSimilar(newParts[i], existingParts[i]) {
-                    matchedParts.append(newParts[i])
-                } else {
-                    break
-                }
-            }
-
-            // لازم تطابق أول 3 أسماء بالترتيب (أو كل الأسماء لو أقل من 3)
-            if matchedParts.count >= requiredPrefix {
-                results.append((
-                    member: existing,
-                    matchCount: matchedParts.count,
-                    matchedParts: matchedParts,
-                    isRegistrationMatch: serverIds.contains(existing.id)
-                ))
-            }
+            let isServer = serverIds.contains(existing.id)
+            let result = NameMatcher.compare(applicant, NameMatcher.chain(existing.fullName, families: families))
+            // المحلي: أول ٣ أجزاء بالترتيب · السيرفر: يكفي الاسم الأول (السيرفر وجده بمنطقه)
+            guard result.isStrong || (isServer && result.prefix >= 1) else { continue }
+            scored.append((member: existing, result: result, isServer: isServer))
         }
 
-        // رتب: الأكثر تطابقاً أول
-        return results.sorted { $0.matchCount > $1.matchCount }.prefix(20).map { $0 }
+        scored.sort { a, b in
+            if a.result.score != b.result.score || a.result.prefix != b.result.prefix {
+                return NameMatcher.ranksBefore(a.result, b.result)
+            }
+            if a.isServer != b.isServer { return a.isServer }
+            return a.member.fullName.localizedStandardCompare(b.member.fullName) == .orderedAscending
+        }
+
+        return scored.prefix(20).map { item in
+            (member: item.member, matchCount: item.result.matched.count, matchedParts: item.result.matched,
+             isRegistrationMatch: item.isServer, score: item.result.percent, total: item.result.total,
+             fuzzy: item.result.fuzzy)
+        }
     }
 
     /// (غير مستخدم) تجميع التطابقات حسب اسم البحث
