@@ -2108,17 +2108,20 @@ class MemberViewModel: ObservableObject {
     
     // MARK: - Update Member Phone
     
-    func updateMemberPhone(memberId: UUID, newPhone: String) async {
+    @discardableResult
+    func updateMemberPhone(memberId: UUID, newPhone: String) async -> Bool {
         await updateMemberPhone(memberId: memberId, country: KuwaitPhone.defaultCountry, localPhone: newPhone)
     }
 
-    func updateMemberPhone(memberId: UUID, country: KuwaitPhone.Country, localPhone: String, silent: Bool = false) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
+    /// يرجع نجاح حفظ الرقم — كانت الأخطاء (الحظر، رقم لعضو آخر، الشبكة) تُسجَّل فقط فتقول الشاشة «تغيّر الرقم»
+    @discardableResult
+    func updateMemberPhone(memberId: UUID, country: KuwaitPhone.Country, localPhone: String, silent: Bool = false) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         self.isLoading = true
         guard let normalizedPhone = KuwaitPhone.normalizedForStorage(country: country, rawLocalDigits: localPhone) else {
             Log.error("رقم الهاتف غير صالح للدولة المختارة.")
             self.isLoading = false
-            return
+            return false
         }
         // التقط الرقم القديم قبل التحديث
         let oldPhone = _memberById[memberId]?.phoneNumber
@@ -2190,8 +2193,11 @@ class MemberViewModel: ObservableObject {
             Log.info("تم تحديث الهاتف وتفعيل العضو للدخول المباشر")
         } catch {
             Log.error("خطأ تحديث الهاتف: \(error.localizedDescription)")
+            self.isLoading = false
+            return false
         }
         self.isLoading = false
+        return true
     }
 
     // MARK: - Clear Member Phone

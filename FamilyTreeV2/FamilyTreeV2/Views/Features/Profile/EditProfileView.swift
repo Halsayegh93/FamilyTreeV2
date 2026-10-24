@@ -851,12 +851,16 @@ struct EditProfileView: View {
         // 4) الرقم — أول ٣ مرات يُحفظ مباشرة بعد رمز التحقق، وبعدها طلب للإدارة
         if let verified = pendingPhoneVerified {
             if cooldown.canEdit(.phoneNumber) {
-                await memberVM.updateMemberPhone(memberId: member.id,
-                                                 country: verified.country,
-                                                 localPhone: verified.digits)
-                cooldown.recordEdit(.phoneNumber)
-                appliedPhoneDisplay = verified.display
-                savedItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                // يُحسب التعديل ويظهر «تغيّر» فقط لو حُفظ فعلاً (رقم محظور/لعضو آخر/انقطاع = خطأ)
+                if await memberVM.updateMemberPhone(memberId: member.id,
+                                                    country: verified.country,
+                                                    localPhone: verified.digits) {
+                    cooldown.recordEdit(.phoneNumber)
+                    appliedPhoneDisplay = verified.display
+                    savedItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                } else {
+                    showSaveError = true
+                }
             } else {
                 await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
                                                               newPhoneNumber: verified.e164)
