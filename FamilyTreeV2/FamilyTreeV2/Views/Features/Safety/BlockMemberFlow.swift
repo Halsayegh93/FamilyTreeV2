@@ -47,8 +47,8 @@ private struct BlockMemberFlowModifier: ViewModifier {
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { target = nil }
             } message: { t in
                 Text(L10n.t(
-                    "لن تظهر لك أخبار «\(t.name)» ولا تعليقاته، وسيصل بلاغ للإدارة لمراجعة حسابه. لا يُبلَّغ العضو بأنك حظرته، وتقدر تلغي الحظر من الإعدادات ← الإشعارات والخصوصية.",
-                    "You won't see posts or comments from “\(t.name)”, and the admins will get a report to review their account. They won't be notified. You can unblock them from Settings → Notifications & Privacy."
+                    "لن تظهر لك أخبار «\(t.name)» ولا تعليقاته. لا يُبلَّغ العضو بأنك حظرته، وتقدر تلغي الحظر من الإعدادات ← الإشعارات والخصوصية.",
+                    "You won't see posts or comments from “\(t.name)”. They won't be notified. You can unblock them from Settings → Notifications & Privacy."
                 ))
             }
             .dsAlert(L10n.t("إلغاء الحظر", "Unblock Member"),
@@ -67,8 +67,8 @@ private struct BlockMemberFlowModifier: ViewModifier {
                 Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t(
-                    "لن يظهر لك محتوى «\(blockedName ?? "")» بعد الآن، ووصل بلاغ للإدارة لمراجعته خلال ٢٤ ساعة.",
-                    "You won't see content from “\(blockedName ?? "")” anymore, and the admins will review the report within 24 hours."
+                    "لن يظهر لك محتوى «\(blockedName ?? "")» بعد الآن. تقدر تلغي الحظر من الإعدادات ← الإشعارات والخصوصية.",
+                    "You won't see content from “\(blockedName ?? "")” anymore. You can unblock them from Settings → Notifications & Privacy."
                 ))
             }
     }
@@ -107,7 +107,8 @@ private struct BlockMemberFlowModifier: ViewModifier {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         let name = t.name
         let contentId = t.id
-        // بلاغ تلقائي للإدارة — الحظر يعني غالباً إساءة تحتاج مراجعة
+        // بلاغ صامت للإدارة بالخلفية — شرط أبل ١.٢ (الحظر يُبلغ المطوّر)؛ الحظر نفسه فوري بلا موافقة،
+        // ورسائل العضو لا تذكر الإدارة (طلب المالك ٢٠٢٦-١٠-٠٩ «بلاغ صامت»)
         Task {
             _ = await notificationVM.reportContent(
                 contentKind: L10n.t("عضو محظور", "blocked member"),

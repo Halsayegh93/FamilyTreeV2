@@ -1172,32 +1172,41 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - Banned Phones (حظر الأرقام)
 
-    /// فحص هل الرقم محظور — يبحث بالرقم المحلي والدولي
+    /// فحص هل الرقم محظور — بنفس مطابقة السيرفر (`KuwaitPhone.banKey`: الرقم كاملاً برمز دولته)
     func isPhoneBanned(_ phone: String) async -> Bool {
-        let local = KuwaitPhone.localEightDigits(phone)
-        let candidates = Set([phone, local, "+965\(local)"].filter { !$0.isEmpty })
-
-        for candidate in candidates {
-            do {
-                let result: [BannedPhone] = try await supabase
-                    .from("banned_phones")
-                    .select()
-                    .eq("phone_number", value: candidate)
-                    .eq("is_active", value: true)
-                    .limit(1)
-                    .execute()
-                    .value
-                if !result.isEmpty {
-                    Log.info("[BAN] الرقم محظور: \(candidate)")
-                    return true
-                }
-            } catch {
-                // لو الجدول ما موجود بعد — نتجاهل الخطأ ونسمح بالدخول
-                Log.warning("[BAN] خطأ في فحص الحظر: \(error.localizedDescription)")
-                return false
-            }
+        do {
+            let banned = try await activeBans(matching: phone)
+            if !banned.isEmpty { Log.info("[BAN] الرقم محظور: \(Log.masked(phone))") }
+            return !banned.isEmpty
+        } catch {
+            // لو الجدول ما موجود بعد — نتجاهل الخطأ ونسمح بالدخول (السيرفر يفرض الحظر بنفسه)
+            Log.warning("[BAN] خطأ في فحص الحظر: \(error.localizedDescription)")
+            return false
         }
-        return false
+    }
+
+    /// الحظر الفعّال لرقم — لزرّ «حظر الرقم / إلغاء الحظر» في «إدارة السجل»
+    func activeBan(for phone: String) async -> BannedPhone? {
+        do {
+            return try await activeBans(matching: phone).first
+        } catch {
+            Log.warning("[BAN] خطأ في فحص حظر الرقم: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// الأرقام المحظورة الفعّالة المطابقة لرقم — قائمة الحظر صغيرة فتُقارن هنا بمفتاح السيرفر نفسه
+    /// (المحلي والدولي والأجنبي بأي صيغة حُفظ)
+    private func activeBans(matching phone: String) async throws -> [BannedPhone] {
+        let key = KuwaitPhone.banKey(phone)
+        guard key.count >= 8 else { return [] }
+        let active: [BannedPhone] = try await supabase
+            .from("banned_phones")
+            .select()
+            .eq("is_active", value: true)
+            .execute()
+            .value
+        return active.filter { KuwaitPhone.banKey($0.phoneNumber) == key }
     }
 
     /// جلب جميع الأرقام المحظورة
@@ -1219,8 +1228,11 @@ class AuthViewModel: ObservableObject {
     /// حظر رقم هاتف
     func banPhone(_ phone: String, reason: String?) async -> Bool {
         guard let adminId = currentUser?.id else { return false }
-        let local = KuwaitPhone.localEightDigits(phone)
-        let normalizedPhone = local.count >= 6 ? local : phone
+        // الكويتي يُحفظ محلياً (٨ أرقام) كما كان، والأجنبي كاملاً برمز دولته — ليطابقه السيرفر
+        // (كان يُحفظ أول ٨ أرقام من الأجنبي فلا يُجمَّد صاحبه ولا يُمنع تسجيله)
+        let key = KuwaitPhone.banKey(phone)
+        guard key.count >= 8 else { return false }
+        let normalizedPhone = key.count == 11 && key.hasPrefix("965") ? String(key.dropFirst(3)) : "+" + key
 
         do {
             try await supabase

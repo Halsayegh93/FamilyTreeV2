@@ -438,6 +438,27 @@ struct DSGenderPicker: View {
     }
 }
 
+/// الجنس للقراءة فقط — حين يكون تغييره ليس لصاحب المربّع (تغيير جنس الابن ينقله بين
+/// الشجرة العامة وشجرة النساء، فهو لمن يعدّل الشجرة فقط، مثل أندرويد)
+struct DSGenderReadOnlyRow: View {
+    let gender: String
+
+    var body: some View {
+        let female = gender.lowercased() == "female"
+        DSRow(icon: female ? "figure.stand.dress" : "figure.stand",
+              tint: female ? DS.Color.likeAction : DS.Color.male,
+              title: L10n.t("الجنس", "Gender"),
+              subtitle: female ? L10n.t("أنثى", "Female") : L10n.t("ذكر", "Male")) {
+            Image(systemName: "lock.fill")
+                .dsGlyph(DS.Glyph.sm)
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(L10n.t("تغيير الجنس للإدارة فقط", "Only the administration can change gender"))
+    }
+}
+
 // MARK: - تعبئة أزرار الإجراء (طلب المالك)
 
 /// نفس تدرّج زر «طلب تعديل» — كحلي عميق في الوضع الداكن بدل الأزرق الفاتح.

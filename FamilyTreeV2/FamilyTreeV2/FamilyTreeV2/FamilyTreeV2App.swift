@@ -29,6 +29,15 @@ struct FamilyTreeV2App: App {
         }
     }
 
+    /// تاب الإدارة ثم «طلبات المراجعة» — نفس «فتح» الطلب من الإشعار («مسار الموافقات»)
+    private static func openAdminReview() {
+        NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil,
+                                            userInfo: ["kind": NotificationKind.adminRequest.rawValue])
+        }
+    }
+
     /// يفرض النمط على UIWindow — يضمن تطبيقه على الشيتات والتنبيهات أيضاً
     private func applyWindowStyle() {
         // المكان الواحد لتطبيق الوضع على كل النوافذ (`AppAppearance`)
@@ -60,6 +69,8 @@ struct FamilyTreeV2App: App {
                     applyWindowStyle()
                     // الضغط في أي مكان يُخفي لوحة المفاتيح (طلب المالك)
                     KeyboardDismisser.shared.install()
+                    // لمسة إصبع من قرصة الشجرة على صورة شخص لا تُحسب ضغطة (طلب المالك ٢٠٢٦-١٠-٠٩)
+                    TreeTapGuard.install()
                     // بلا اتصال: شاشة البداية فوق التطبيق حتى يرجع (طلب المالك ٢٠٢٦-١٠-٠٨)
                     OfflineHold.shared.install(authVM: appState.authVM)
                 }
@@ -103,6 +114,14 @@ struct FamilyTreeV2App: App {
                           let requestId   = UUID(uuidString: idString),
                           let requestType = userInfo["request_type"] as? String else { return }
 
+                    // «مسار الموافقات» شغّال: لا قبول سريع من الإشعار لأنواع المسار (الانضمام كان يتجاوز
+                    // حارس السيرفر) — يُفتح الطلب في «طلبات المراجعة» ليمشي بخطوات دوره
+                    if self.appState.adminRequestVM.approvalsWorkflowOn,
+                       ApprovalWorkflow.specialistRole(for: requestType) != nil {
+                        Self.openAdminReview()
+                        return
+                    }
+
                     // طلبات الانضمام/الربط: ما نوافق مباشرة — نفتح شيت التطابقات
                     // عشان المدير يقرر: ربط بعضو موجود أو موافقة كعضو جديد.
                     let isJoinOrLink = requestType == "join_request" || requestType == "link_request"
@@ -136,8 +155,10 @@ struct FamilyTreeV2App: App {
                     let requestType = userInfo["request_type"] as? String
                     let requestIdString = userInfo["request_id"] as? String
                     let isJoinOrLink = requestType == "join_request" || requestType == "link_request"
+                    // «مسار الموافقات» شغّال: الانضمام أيضاً يُفتح في «طلبات المراجعة» (لا ربط مباشر من الإشعار)
+                    let workflowOn = self.appState.adminRequestVM.approvalsWorkflowOn
 
-                    if isJoinOrLink, let rid = requestIdString.flatMap(UUID.init(uuidString:)) {
+                    if isJoinOrLink, !workflowOn, let rid = requestIdString.flatMap(UUID.init(uuidString:)) {
                         // خزّن الـ requestId عشان NotificationsCenterView يفتح الشيت تلقائياً
                         self.appState.notificationVM.pendingJoinDeepLinkRequestId = rid
                         NotificationCenter.default.post(name: .openHomeNotificationsCenter, object: nil)

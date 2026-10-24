@@ -127,12 +127,22 @@ struct AdminMembersDirectoryView: View {
         }
     }
 
+    /// المجمّدون: خارج العدّ والتصفّح الشجري (المعيار القانوني)، لكن البحث يجدهم ليُفعَّلوا بالسحب —
+    /// كان زرّ «تفعيل» موجوداً ولا يُوصل إليه لأن المجمّد لا يظهر في السجل أصلاً (طلب المالك ٢٠٢٦-١٠-٠٩)
+    private var frozenMembers: [FamilyMember] {
+        memberVM.allMembers.filter {
+            $0.status == .frozen && $0.role != .pending && !$0.isHiddenFromTree
+                && !$0.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
     private var filteredMembers: [FamilyMember] {
+        let pool = searchText.isEmpty ? baseMembers : baseMembers + frozenMembers
         var members: [FamilyMember]
         switch selectedFilter {
-        case .all:      members = baseMembers
-        case .living:   members = baseMembers.filter { $0.isDeceased != true }
-        case .deceased: members = baseMembers.filter { $0.isDeceased == true }
+        case .all:      members = pool
+        case .living:   members = pool.filter { $0.isDeceased != true }
+        case .deceased: members = pool.filter { $0.isDeceased == true }
         }
         // حصر على فرع معيّن (إذا اختار)
         if let rootId = branchRootId {

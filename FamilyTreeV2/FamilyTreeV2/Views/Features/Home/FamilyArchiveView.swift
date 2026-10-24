@@ -150,6 +150,7 @@ struct FamilyArchiveView: View {
             }
         }
         .animation(DS.Anim.snappy, value: selectionMode)
+        .onAppear { NewContentTracker.shared.markSeen(.library) }   // «النقاط الصفراء»: فُتح القسم
         .task {
             archiveVM.configure(authVM: authVM, notificationVM: notificationVM)
             // التصنيفات بأحدث أسمائها (قد تكون تغيّرت من جهاز آخر) — بالتوازي مع العناصر

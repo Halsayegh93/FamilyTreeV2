@@ -547,7 +547,7 @@ struct DSComposerHeader: View {
             FT5STrial.headerIcon(icon: icon, tint: tint)
                 .frame(width: dense ? DS.Landscape.boxWatermark : 118, height: dense ? DS.Landscape.boxWatermark : 118)
                 .rotationEffect(.degrees(-18))
-                .opacity(dense ? DSBox.compactWatermarkOpacity : 0.22)
+                .opacity(DS.Theme.isCalm ? DS.Theme.calmWatermarkOpacity : (dense ? DSBox.compactWatermarkOpacity : 0.22))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                 .offset(x: dense ? 12 : 18, y: dense ? 10 : 14)
                 .allowsHitTesting(false)
@@ -557,6 +557,11 @@ struct DSComposerHeader: View {
         }
         .clipped()
         .background {
+            if DS.Theme.isCalm {
+                // «الهادئ الفاتح»: لون المربّع خفيفاً (قسمه أو معناه) بنص داكن — بلا تعتيم ولا هالة
+                tint.dsCalmTint
+                    .ignoresSafeArea(edges: .horizontal)
+            } else {
             // Color.clear بمقاس الرأس تماماً — الطبقات فوقه لا تغيّر مقاسه (الهالة ١٥٠ أطول من الرأس)
             Color.clear
                 .overlay {
@@ -570,6 +575,7 @@ struct DSComposerHeader: View {
                 .clipped()
             // المربّع الطويل (ورقة بعرض الشاشة) أفقياً: اللون يمتدّ تحت النوتش — داخل المربّع الوسطي لا أثر له
             .ignoresSafeArea(edges: .horizontal)
+            }
         }
         // القارئ الصوتي: الرأس يُقرأ عنواناً واحداً (العنوان ثم الوصف)، والزخارف تُتجاهل
         .accessibilityElement(children: .ignore)
@@ -601,7 +607,7 @@ struct DSComposerHeader: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(compact ? DSBox.alertTitleFont : DSBox.titleFont)
-                .foregroundColor(.white)
+                .foregroundColor(DS.Color.headerTitle)
                 // المضغوط: عنوان التنبيه قد يطول — سطران ثم يصغر قليلاً
                 .lineLimit(compact ? 2 : nil)
                 .minimumScaleFactor(compact ? 0.85 : 1)
@@ -612,7 +618,7 @@ struct DSComposerHeader: View {
             if !(compact && subtitle.isEmpty) {
                 Text(subtitle)
                     .font(DSBox.subtitleFont)
-                    .foregroundColor(.white.opacity(0.86))
+                    .foregroundColor(DS.Color.boxHeaderSubtitle)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .dsEntrance(delay: DSMotion.subtitleDelay, x: -DSMotion.textShift, animation: DSMotion.text)

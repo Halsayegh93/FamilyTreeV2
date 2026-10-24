@@ -17,6 +17,8 @@ struct AdminTreeEditRequestsView: View {
     @State private var rejectingRequest: AdminRequest? = nil
     @State private var rejectReasonText: String = ""
     @State private var showRejectAlert: Bool = false
+    /// «مسار الموافقات»: الطلب المفتوح في مربّع المسار
+    @State private var approvalRequest: AdminRequest? = nil
     /// اكتمل أول جلب — قبله «—» في الأرقام وبطاقة تحميل (إن لم تكن هناك طلبات محمّلة أصلاً)
     @State private var hasLoaded = false
     /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل «لا توجد طلبات» المضلِّلة
@@ -54,7 +56,9 @@ struct AdminTreeEditRequestsView: View {
     }
 
     private var filteredRequests: [AdminRequest] {
-        adminRequestVM.treeEditRequests.filter { $0.treeEditPayload?.resolvedAction == selectedAction }
+        // «مسار الموافقات»: ما ينتظرك أولاً (مطفأ = الترتيب كما كان)
+        adminRequestVM.approvalOrdered(
+            adminRequestVM.treeEditRequests.filter { $0.treeEditPayload?.resolvedAction == selectedAction })
     }
 
     /// الأدوار مجالات (٢٠٢٦-٠٩-٢١، CLAUDE.md): قبول طلبات الشجرة للمالك والمدير والمراقب —
@@ -114,7 +118,12 @@ struct AdminTreeEditRequestsView: View {
                 Text(L10n.t("سيظهر السبب في إشعار للمستخدم.", "The reason will appear in a notification to the user."))
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+            // «مسار الموافقات»: مربّع المسار — التنفيذ والرفض بمساري الموافقة/الرفض نفسيهما
+            .dsCenterBox(item: $approvalRequest) { request in
+                approvalBox(for: request)
+            }
             .task {
+                await adminRequestVM.refreshApprovalsFlag()
                 await fetchRequests()
                 withAnimation(reduceMotion ? nil : DS.Anim.smooth) { hasLoaded = true }
             }
@@ -288,8 +297,10 @@ struct AdminTreeEditRequestsView: View {
         let tint = color(for: action)
         let requesterName = memberVM.member(byId: request.requesterId)?.fullName ?? L10n.t("غير معروف", "Unknown")
         let targetName = payload?.targetMemberName ?? request.member?.displayFullName ?? "—"
-        let showApprove = canApprove(action)
-        let showReject = authVM.canRejectRequests
+        // «مسار الموافقات» شغّال: شارة المرحلة وزرّ المسار بدل «موافقة / رفض»
+        let flow = adminRequestVM.approvalSnapshot(for: request)
+        let showApprove = flow == nil && canApprove(action)
+        let showReject = flow == nil && authVM.canRejectRequests
         // مقدّم الطلب هو العضو نفسه (مقارنة كمعرّفات) → اسمه في العنوان مرة واحدة فقط (طلب المالك ٢٠٢٦-١٠-٠٧)
         let targetId = payload?.targetMemberId.flatMap { UUID(uuidString: $0) } ?? request.memberId
         let selfRequest = targetId == request.requesterId
@@ -349,6 +360,20 @@ struct AdminTreeEditRequestsView: View {
             .padding(.leading, DS.Icon.row + DS.Spacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            if let flow {
+                let waiting = adminRequestVM.isApprovalWaitingForMe(flow)
+                ApprovalStageChips(snapshot: flow, waitingForMe: waiting,
+                                   holderLabel: adminRequestVM.approvalHolderLabel(flow))
+                    .padding(.leading, DS.Icon.row + DS.Spacing.sm)
+                // ينتظرك = الزرّ بتعبئة القسم، وإلا للاطّلاع (رمادي)
+                DSButton(waiting ? L10n.t("المسار والقرار", "Path & decision") : L10n.t("عرض المسار", "View path"),
+                         icon: "point.topleft.down.to.point.bottomright.curvepath.fill",
+                         role: waiting ? nil : .cancel) {
+                    approvalRequest = request
+                }
+                .padding(.top, DS.Spacing.xxs)
+            }
+
             // القرار — نفس الصلاحيات تماماً، بالزرّ الواحد (الموافقة بتعبئة القسم، الرفض أحمر)
             if showApprove || showReject {
                 HStack(spacing: DSBox.buttonSpacing) {
@@ -373,6 +398,42 @@ struct AdminTreeEditRequestsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dsRowBox()
+    }
+
+    // MARK: - «مسار الموافقات» (طلب المالك ٢٠٢٦-١٠-١٥)
+
+    /// مربّع المسار لطلب شجرة: المسار ← تفاصيل الطلب ← السجل ← القرار
+    @ViewBuilder
+    private func approvalBox(for request: AdminRequest) -> some View {
+        if let flow = adminRequestVM.approvalSnapshot(for: request) {
+            let payload = request.treeEditPayload
+            let action = payload?.resolvedAction ?? selectedAction
+            ApprovalRequestBox(
+                adminRequestVM: adminRequestVM,
+                memberVM: memberVM,
+                snapshot: flow,
+                title: L10n.t(action.arabicLabel, action.englishLabel),
+                subtitle: payload?.targetMemberName ?? request.member?.displayFullName ?? L10n.t("طلب الشجرة", "Tree request"),
+                icon: action.iconName,
+                onExecute: {
+                    approvalRequest = nil
+                    Task { await adminRequestVM.approveTreeEditRequest(request: request) }
+                },
+                onReject: { reason in
+                    approvalRequest = nil
+                    Task { await adminRequestVM.rejectTreeEditRequest(request: request, reason: reason) }
+                },
+                onClose: { approvalRequest = nil }
+            ) {
+                DSComposerSection(title: L10n.t("بيانات الطلب", "Request Info"), icon: "doc.text.fill",
+                                  tint: AppSection.admin.ink, index: 1) {
+                    detailLines(for: request, payload: payload, action: action)
+                }
+            }
+        } else {
+            // المسار أُطفئ أو أُغلق الطلب أثناء الفتح
+            Color.clear.onAppear { approvalRequest = nil }
+        }
     }
 
     // MARK: - تفاصيل الطلب حسب النوع

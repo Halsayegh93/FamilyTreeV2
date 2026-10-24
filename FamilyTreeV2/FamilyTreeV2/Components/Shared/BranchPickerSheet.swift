@@ -1,16 +1,29 @@
 import SwiftUI
 
-/// مربّع اختيار فرع — شجري متوسّع، بمنتصف الشاشة بتصميم المربّعات الموحّد
-/// (رأس ملوّن + بحث + الفروع صفوفاً + «إلغاء»): الضغط على الاسم يختار الفرع،
-/// والسهم يعرض أبناءه تحته. يُفتح بـ `.dsCenterBox(isPresented:)`.
+/// مربّع اختيار فرع — شجري متوسّع بتصميم المربّعات الموحّد (رأس ملوّن + الفروع صفوفاً + «إلغاء»):
+/// الضغط على الاسم يختار الفرع، والسهم يعرض أبناءه تحته. يُفتح بـ `.dsTallBox(isPresented:)`.
+/// القائمة نفسها في كل مكان (طلب المالك ٢٠٢٦-١٠-٠٩): بحث الشجرة، مركز التقارير، سجل الأعضاء —
+/// بلا حقل بحث، بعدد أفراد كل فرع، وبالاسم المخصّص للفرع إن وُجد (`app_settings.branch_names`،
+/// يُقرأ من `AppSettingsViewModel` في البيئة — يصل للورقة لأنها تحمل بيئة من فتحها).
+/// وضع التسمية (`renamesBranches`، «إعدادات التطبيق ← أسماء الفروع»): الضغط على فرع يفتح مربّع اسمه.
 /// المستوى الأول: أبناء عبدالله المباشرين (يخفي عبدالله نفسه)
 /// كل ابن يتوسّع ليبين أحفاده (مستوى ثاني)
 struct BranchPickerSheet: View {
     @Environment(\.dsSection) private var dsSectionEnv
+    /// أسماء الفروع المخصّصة (للعرض في صفوف القائمة فقط)
+    @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
     let allMembers: [FamilyMember]
     /// الفرع المختار حالياً — عليه علامة ✓ (اختياري؛ الاستدعاء بدونه يبقى كما هو)
     var selectedId: UUID? = nil
-    let onSelect: (UUID) -> Void
+    /// حقل البحث داخل المربّع — مخفي افتراضياً في كل الاستدعاءات (طلب المالك ٢٠٢٦-١٠-٠٩): الفروع فقط
+    var showsSearch: Bool = false
+    /// وضع التسمية: الضغط على فرع يفتح مربّع اسمه المخصّص بدل اختياره
+    var renamesBranches: Bool = false
+    /// في وضع التسمية: false = للقراءة فقط (غير المالك)
+    var canRename: Bool = false
+    /// حفظ الاسم (nil = حذفه والرجوع للاسم الافتراضي) — المُستدعي يحفظه على السيرفر
+    var onRename: (UUID, String?) -> Void = { _, _ in }
+    var onSelect: (UUID) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
@@ -18,6 +31,10 @@ struct BranchPickerSheet: View {
     @State private var expanded: Set<UUID> = []
     @State private var isLoading = true
     @State private var allDescendants: [UUID: Int] = [:]
+    /// مربّع تسمية الفرع
+    @State private var renameTarget: BranchNode? = nil
+    @State private var renameDraft = ""
+    @State private var showRename = false
 
     /// نتائج البحث (من كل الأعضاء — قد تكون آلافاً) فوق هذا العدد تُبنى كسولةً؛
     /// دونه صفوف عادية حتى يُقاس ارتفاع المربّع بدقّة (الكسولة تُبلِّغ ارتفاعاً ناقصاً للقصيرة)
@@ -36,19 +53,35 @@ struct BranchPickerSheet: View {
         let searching = !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         // الاختيار بالضغط على الاسم (المُستدعي يغلق المربّع كالسابق) — لا زر إجراء، «إلغاء» وحده
         return DSComposer(
-            title: L10n.t("البحث بالفرع", "Search by branch"),
-            subtitle: L10n.t("اختر فرعاً لحصر النتائج عليه", "Pick a branch to narrow the results"),
+            title: renamesBranches ? L10n.t("أسماء الفروع", "Branch names")
+                                   : L10n.t("البحث بالفرع", "Search by branch"),
+            subtitle: renamesBranches
+                ? (canRename ? L10n.t("اضغط فرعاً لتسميته", "Tap a branch to name it")
+                             : L10n.t("وضع القراءة فقط — التسمية للمالك", "Read-only — the owner names branches"))
+                : L10n.t("اختر فرعاً لحصر النتائج عليه", "Pick a branch to narrow the results"),
             icon: "tree.fill",
             tint: DS.Color.actionNavy,
             actionTitle: "",
             showsAction: false,
-            cancelTitle: L10n.t("إلغاء", "Cancel"),
+            cancelTitle: renamesBranches ? L10n.t("إغلاق", "Close") : L10n.t("إلغاء", "Cancel"),
             canSubmit: false,
             onSubmit: {},
             onCancel: { dismiss() }
         ) {
-            searchField
-                .dsStaggerIn(0)
+            if renamesBranches {
+                DSNoteCard(canRename
+                           ? L10n.t("الاسم يظهر في قائمة «اختر فرعاً» فقط، ولا يغيّر أسماء الأعضاء.",
+                                    "The name shows only in the «Pick branch» list; member names stay as they are.")
+                           : L10n.t("تقدر تتصفّح الأسماء. التسمية متاحة للمالك فقط.",
+                                    "You can browse the names. Only the owner can rename."),
+                           icon: canRename ? "info.circle.fill" : "eye.fill")
+                    .dsStaggerIn(0)
+            }
+
+            if showsSearch {
+                searchField
+                    .dsStaggerIn(0)
+            }
 
             DSComposerSection(
                 title: searching ? L10n.t("نتائج البحث", "Search results")
@@ -64,6 +97,32 @@ struct BranchPickerSheet: View {
         .task {
             await computeTree()
         }
+        .modifier(renameAlert)
+    }
+
+    // MARK: - تسمية الفرع (وضع التسمية)
+
+    /// مربّع الاسم — حقل مُعبّأ بالاسم الحالي، «حفظ»، «الاسم الافتراضي» (إن كان له اسم)، «إلغاء»
+    private var renameAlert: BranchRenameAlert {
+        let target = renameTarget
+        let hasCustom = target.map { appSettingsVM.branchName(for: $0.id) != nil } ?? false
+        return BranchRenameAlert(
+            isPresented: $showRename,
+            draft: $renameDraft,
+            defaultName: target?.displayName ?? "",
+            hasCustom: hasCustom,
+            onSave: { name in
+                guard let target else { return }
+                onRename(target.id, name)
+            }
+        )
+    }
+
+    private func openRename(_ node: BranchNode) {
+        guard canRename else { return }
+        renameTarget = node
+        renameDraft = appSettingsVM.branchName(for: node.id) ?? ""
+        showRename = true
     }
 
     // MARK: - أجزاء المربّع
@@ -176,8 +235,16 @@ struct BranchPickerSheet: View {
         let isSelected = node.id == selectedId
         let isTop = depth == 0
         let canExpand = !node.children.isEmpty
+        // الاسم المخصّص لصفوف الفروع فقط (لا لنتائج البحث بالاسم)
+        let searching = !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let customName = searching ? nil : appSettingsVM.branchName(for: node.id)
+        let shownName = customName ?? node.displayName
         return Button {
-            onSelect(node.member.id)
+            if renamesBranches {
+                openRename(node)
+            } else {
+                onSelect(node.member.id)
+            }
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 DSMemberAvatar(
@@ -191,11 +258,29 @@ struct BranchPickerSheet: View {
                         .dsGlyph(DS.Glyph.smCompact, weight: .regular)
                         .foregroundColor(DS.Color.textTertiary)
                 }
-                Text(node.displayName)
-                    .dsFont(isTop ? .headlineCompact : isSelected ? .bodyStrong : .body)
-                    .foregroundColor((isTop || isSelected) ? DS.Color.fieldLabel : DS.Color.fieldValue)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(shownName)
+                        .dsFont(isTop ? .headlineCompact : isSelected ? .bodyStrong : .body)
+                        .foregroundColor((isTop || isSelected) ? DS.Color.fieldLabel : DS.Color.fieldValue)
+                        .lineLimit(1)
+                    // وضع التسمية: الاسم الأصلي تحت الاسم المخصّص (ليُعرف أي فرع هو)
+                    if renamesBranches, customName != nil {
+                        Text(node.displayName)
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 0)
+                if renamesBranches && canRename {
+                    Image(systemName: "pencil")
+                        .dsGlyph(DS.Glyph.smCompact)
+                        .foregroundColor(DS.Color.primary.dsChrome(in: dsSectionEnv))
+                        .accessibilityHidden(true)
+                }
+                // عدد أفراد الفرع (هو + ذرّيته) — طلب المالك ٢٠٢٦-١٠-٠٩
+                DSStatusChip(text: "\(node.totalCount)", tint: DS.Color.primary.dsChrome(in: dsSectionEnv), size: .mini)
+                    .accessibilityLabel(L10n.t("\(node.totalCount) فرد", "\(node.totalCount) members"))
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .dsGlyph(DS.Glyph.xl, weight: .regular)
@@ -211,8 +296,9 @@ struct BranchPickerSheet: View {
         }
         .buttonStyle(.plain)
         // القارئ الصوتي: اسم الفرع (+ «متوفى») بلا حرف الصورة البديلة ولا أسماء الرموز
-        .accessibilityLabel(node.displayName
+        .accessibilityLabel(shownName
                             + (node.member.isDeceased == true ? L10n.t("، متوفى", ", deceased") : ""))
+        .accessibilityHint(renamesBranches && canRename ? L10n.t("يفتح مربّع اسم الفرع", "Opens the branch name box") : "")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .overlay(alignment: .trailing) {
             if canExpand {
@@ -439,6 +525,38 @@ struct BranchPickerSheet: View {
         let lastQC = compressName(lastQ)
         guard !restQC.isEmpty, !lastQC.isEmpty else { return false }
         return fnC.hasPrefix(restQC) && fnC.hasSuffix(lastQC)
+    }
+}
+
+/// مربّع اسم الفرع — `dsAlert` بحقل واحد (نمط «سبب الإبلاغ»): حفظ / الاسم الافتراضي / إلغاء.
+/// الحفظ بنص فارغ = الرجوع للاسم الافتراضي.
+private struct BranchRenameAlert: ViewModifier {
+    @Binding var isPresented: Bool
+    @Binding var draft: String
+    let defaultName: String
+    let hasCustom: Bool
+    let onSave: (String?) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .dsAlert(L10n.t("اسم الفرع", "Branch name"), isPresented: $isPresented, icon: "pencil") {
+                TextField(L10n.t("اكتب اسم الفرع", "Type the branch name"), text: $draft)
+                    .dsAlertField()
+                    .submitLabel(.done)
+                Button(L10n.t("حفظ", "Save")) {
+                    let name = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    onSave(name.isEmpty ? nil : name)
+                }
+                if hasCustom {
+                    Button(L10n.t("الاسم الافتراضي", "Default name"), role: .destructive) {
+                        onSave(nil)
+                    }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("«\(defaultName)» — اتركه فارغاً للاسم الافتراضي.",
+                            "«\(defaultName)» — leave empty for the default name."))
+            }
     }
 }
 

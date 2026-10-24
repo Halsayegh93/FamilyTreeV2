@@ -1346,7 +1346,9 @@ nonisolated enum FT5SScene {
     }
 
     /// أيقونة الرأس: المجسّم يملأ الإطار (هامش صغير) على السطح الملوّن، أو الرمز نفسه مجسّماً صقيلاً
-    static func icon(_ kind: FT5SKind?, icon: String, tint: Color, in ctx: inout GraphicsContext, size: CGSize, dark: Bool) {
+    /// `onLight`: فوق سطح فاتح («الهادئ الفاتح» — رأس ومربّع بلون القسم الخفيف) — الدرجات تنزل خطوة
+    static func icon(_ kind: FT5SKind?, icon: String, tint: Color, in ctx: inout GraphicsContext, size: CGSize, dark: Bool,
+                     onLight: Bool = false) {
         let side = min(size.width, size.height)
         guard side > 1 else { return }
         let p = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -1357,13 +1359,13 @@ nonisolated enum FT5SScene {
                 var g = c
                 g.translateBy(x: p.x - side / 2, y: p.y - side / 2)
                 g.scaleBy(x: side / 100, y: side / 100)
-                FT5SArt.drawObject(kind, in: &g, ink: FT5SInk(dark: dark), mirrored: isLTR(ctx))
+                FT5SArt.drawObject(kind, in: &g, ink: FT5SInk(dark: dark, onLight: onLight), mirrored: isLTR(ctx))
             } else {
                 object(kind, in: &c, target: CGRect(x: p.x - side * 0.46, y: p.y - side * 0.46, width: side * 0.92, height: side * 0.92),
-                       bottom: true, ink: FT5SInk(dark: dark), mirrored: isLTR(ctx))
+                       bottom: true, ink: FT5SInk(dark: dark, onLight: onLight), mirrored: isLTR(ctx))
             }
         } else {
-            FT5SGlyph.polished(&ctx, symbol: icon, at: p, size: side * 0.62, tint: tint, onLight: false, dark: dark)
+            FT5SGlyph.polished(&ctx, symbol: icon, at: p, size: side * 0.62, tint: tint, onLight: onLight, dark: dark)
         }
     }
 
@@ -1485,7 +1487,9 @@ struct FT5SIconArt: View {
     var body: some View {
         let dark = scheme == .dark
         let kind = self.kind, icon = self.icon, tint = self.tint
-        Canvas { ctx, size in FT5SScene.icon(kind, icon: icon, tint: tint, in: &ctx, size: size, dark: dark) }
+        // «الهادئ الفاتح»: الرؤوس ومربّعات الرئيسية فاتحة — المجسّم بدرجات «فوق سطح فاتح»
+        let onLight = DS.Theme.isCalm
+        Canvas { ctx, size in FT5SScene.icon(kind, icon: icon, tint: tint, in: &ctx, size: size, dark: dark, onLight: onLight) }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }

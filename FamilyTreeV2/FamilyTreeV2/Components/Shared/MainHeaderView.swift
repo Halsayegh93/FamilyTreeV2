@@ -17,12 +17,16 @@ struct MainHeaderView<TrailingContent: View>: View {
     private var isLandscape: Bool { false }
     /// أفقي فعلاً — للهوامش الجانبية فقط (النوتش)
     private var physicallyLandscape: Bool { vSizeClass == .compact }
+    /// قسم الرأس: الممرَّر صراحةً، وإلا قسم البيئة
+    private var headerSection: AppSection? { explicitSection ?? section }
 
     // Customization properties
     let customTitle: String?
     let customSubtitle: String?
     let customIcon: String?
     let backgroundGradient: LinearGradient?
+    /// قسم الرأس صراحةً (لونه في «الهادئ الفاتح» وتدرّجه في الأصلي) — nil = قسم البيئة
+    let explicitSection: AppSection?
     let hasDropShadow: Bool
     let showNotificationBell: Bool
     /// إخفاء الجرس صراحةً حتى لو كان الهيدر بلا عنوان مخصّص (البروفايل)
@@ -39,6 +43,7 @@ struct MainHeaderView<TrailingContent: View>: View {
         subtitle: String? = nil,
         icon: String? = nil,
         backgroundGradient: LinearGradient? = nil,
+        section: AppSection? = nil,
         hasDropShadow: Bool = true,
         showNotificationBell: Bool = false,
         hideNotificationBell: Bool = false,
@@ -52,6 +57,7 @@ struct MainHeaderView<TrailingContent: View>: View {
         self.customSubtitle = subtitle
         self.customIcon = icon
         self.backgroundGradient = backgroundGradient
+        self.explicitSection = section
         self.hasDropShadow = hasDropShadow
         self.showNotificationBell = showNotificationBell
         self.hideNotificationBell = hideNotificationBell
@@ -76,7 +82,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                             HStack(spacing: DS.Spacing.sm) {
                                 Text(customTitle)
                                     .dsFont(.title)
-                                    .foregroundColor(DS.Color.textOnPrimary)
+                                    .foregroundColor(DS.Color.headerTitle)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.6)
 
@@ -84,16 +90,16 @@ struct MainHeaderView<TrailingContent: View>: View {
                                     if subtitleChip {
                                         Text(customSubtitle)
                                             .dsFont(.badge)
-                                            .foregroundColor(DS.Color.textOnPrimary)
+                                            .foregroundColor(DS.Color.headerTitle)
                                             .lineLimit(1)
                                             .padding(.horizontal, DS.Spacing.sm)
                                             .padding(.vertical, 2)
-                                            .background(DS.Color.overlayIcon, in: Capsule())
-                                            .overlay(Capsule().stroke(DS.Color.overlayIconBorder, lineWidth: 1))
+                                            .background(DS.Color.headerChipFill, in: Capsule())
+                                            .overlay(Capsule().stroke(DS.Color.headerChipStroke, lineWidth: 1))
                                     } else {
                                         Text(customSubtitle)
                                             .dsFont(.micro)
-                                            .foregroundColor(DS.Color.overlayText)
+                                            .foregroundColor(DS.Color.headerSubtitle)
                                             .lineLimit(1)
                                             .minimumScaleFactor(0.7)
                                     }
@@ -106,11 +112,11 @@ struct MainHeaderView<TrailingContent: View>: View {
                             if subtitleAbove, let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
                                 Text(customSubtitle)
                                     .dsFont(.bodySemibold)
-                                    .foregroundColor(DS.Color.overlayText)
+                                    .foregroundColor(DS.Color.headerSubtitle)
                             }
                             Text(customTitle)
                                 .dsFont(.tabTitle)
-                                .foregroundColor(DS.Color.textOnPrimary)
+                                .foregroundColor(DS.Color.headerTitle)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                             if !subtitleAbove, let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
@@ -118,16 +124,16 @@ struct MainHeaderView<TrailingContent: View>: View {
                                     // كبسولة زجاجية بنفس لغة أيقونات الهيدر (خلفية شفافة + إطار خفيف)
                                     Text(customSubtitle)
                                         .dsFont(.chip)
-                                        .foregroundColor(DS.Color.textOnPrimary)
+                                        .foregroundColor(DS.Color.headerTitle)
                                         .padding(.horizontal, DS.Spacing.sm + 2)
                                         .padding(.vertical, 3)
-                                        .background(DS.Color.overlayIcon, in: Capsule())
-                                        .overlay(Capsule().stroke(DS.Color.overlayIconBorder, lineWidth: 1))
+                                        .background(DS.Color.headerChipFill, in: Capsule())
+                                        .overlay(Capsule().stroke(DS.Color.headerChipStroke, lineWidth: 1))
                                         .padding(.top, 2)
                                 } else {
                                     Text(customSubtitle)
                                         .dsFont(.calloutMedium)
-                                        .foregroundColor(DS.Color.overlayText)
+                                        .foregroundColor(DS.Color.headerSubtitle)
                                 }
                             }
                         }
@@ -145,10 +151,10 @@ struct MainHeaderView<TrailingContent: View>: View {
                             VStack(alignment: .leading, spacing: isLandscape ? 0 : 3) {
                                 Text(L10n.t("مرحباً بك", "Welcome Back"))
                                     .dsFont(isLandscape ? .micro : .tabGreeting)
-                                    .foregroundColor(DS.Color.overlayText)
+                                    .foregroundColor(DS.Color.headerSubtitle)
                                 Text(authVM.currentUser?.displayName ?? "Member")
                                     .dsFont(isLandscape ? .title : .tabTitle)
-                                    .foregroundColor(DS.Color.textOnPrimary)
+                                    .foregroundColor(DS.Color.headerTitle)
                                     .lineLimit(1)
                                     .minimumScaleFactor(isLandscape ? 0.7 : 1.0)
                             }
@@ -209,8 +215,8 @@ struct MainHeaderView<TrailingContent: View>: View {
             .frame(minHeight: isLandscape ? DSBox.pageHeaderHeightCompact : DSBox.pageHeaderHeight, alignment: .bottom)
 
             // زخرفة «مجسّمات» تحت رأس التبويب بلون قسمه — ساكنة وخفيفة
-            if let ornament = FT5STrial.tabHeaderOrnament(section: "\(section ?? .home)",
-                                                          tint: (section ?? .home).fill) {
+            if let ornament = FT5STrial.tabHeaderOrnament(section: "\(headerSection ?? .home)",
+                                                          tint: (headerSection ?? .home).fill) {
                 ornament
                     .padding(.horizontal, DS.Spacing.xl)
                     .padding(.bottom, DS.Spacing.xs)
@@ -241,10 +247,8 @@ struct MainHeaderView<TrailingContent: View>: View {
     }
 
     private var headerBackground: some View {
-        ZStack {
-            (backgroundGradient ?? section?.gradient ?? DS.Color.gradientPrimary)
-            DS.Color.headerVeil
-        }
+        // تدرّج القسم + طبقة الرأس — «الهادئ الفاتح»: لون القسم الخفيف (مكان واحد: `DSHeaderBackground`)
+        DSHeaderBackground(section: headerSection, gradient: backgroundGradient)
         // أفقياً: يمتد من أول الشاشة لآخرها (يتجاوز حواف الأمان الجانبية)
         .ignoresSafeArea(edges: physicallyLandscape ? [.top, .horizontal] : .top)
         .shadow(color: hasDropShadow ? DS.Shadow.card.color : .clear, radius: DS.Shadow.card.radius, x: DS.Shadow.card.x, y: DS.Shadow.card.y)
@@ -253,28 +257,28 @@ struct MainHeaderView<TrailingContent: View>: View {
     private var leadingInitial: some View {
         ZStack {
             Circle()
-                .fill(DS.Color.overlayIcon)
+                .fill(DS.Color.headerChipFill)
                 .frame(width: isLandscape ? 38 : 52, height: isLandscape ? 38 : 52)
                 .overlay(
-                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
+                    Circle().stroke(DS.Color.headerChipStroke, lineWidth: 1.5)
                 )
             Text(String(authVM.currentUser?.fullName.first ?? "U"))
                 .font(DS.Font.scaled(isLandscape ? 16 : 20, weight: .bold))
-                .foregroundColor(DS.Color.textOnPrimary)
+                .foregroundColor(AppSection.headerInk(for: headerSection))
         }
     }
 
     private func leadingIcon(symbol: String) -> some View {
         ZStack {
             Circle()
-                .fill(DS.Color.overlayIcon)
+                .fill(DS.Color.headerChipFill)
                 .frame(width: isLandscape ? 38 : 52, height: isLandscape ? 38 : 52)
                 .overlay(
-                    Circle().stroke(DS.Color.overlayIconBorder, lineWidth: 1.5)
+                    Circle().stroke(DS.Color.headerChipStroke, lineWidth: 1.5)
                 )
             Image(systemName: symbol)
                 .font(DS.Font.scaled(isLandscape ? 16 : 20, weight: .bold))
-                .foregroundColor(DS.Color.textOnPrimary)
+                .foregroundColor(AppSection.headerInk(for: headerSection))
         }
     }
 
@@ -282,7 +286,7 @@ struct MainHeaderView<TrailingContent: View>: View {
     private func headerIconView(icon: String) -> some View {
         Image(dsSymbol: icon)
             .font(DS.Font.scaled(isLandscape ? DSBox.navGlyphCompact : DSBox.navGlyph, weight: .bold))
-            .foregroundColor(DS.Color.textOnPrimary)
+            .foregroundColor(DS.Color.headerGlyph)
             .frame(width: isLandscape ? DSBox.navButtonCompact : DSBox.navButtonOnColor,
                    height: isLandscape ? DSBox.navButtonCompact : DSBox.navButtonOnColor)
             .dsHeaderGlassCircle()

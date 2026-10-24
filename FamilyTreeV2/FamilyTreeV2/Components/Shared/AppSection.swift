@@ -295,10 +295,13 @@ extension View {
     }
 
     /// نص شريط الحالة أبيض فوق الرؤوس الملوّنة في الوضعين (iOS 27+). كان «الشجرة» يظهر
-    /// بوقت أسود في الفاتح وباقي التبويبات بأبيض — والأقدم يبقى على سلوك النظام.
+    /// بوقت أسود في الفاتح وباقي التبويبات بأبيض — والأقدم يبقى على سلوك النظام. «الهادئ»: سلوك النظام.
     @ViewBuilder
     func dsLightStatusBar() -> some View {
-        if #available(iOS 27.0, *) {
+        if DS.Theme.isCalm {
+            // «الهادئ»: الرأس فاتح — شريط الحالة يتبع النظام (داكن في الفاتح، فاتح في الداكن)
+            self
+        } else if #available(iOS 27.0, *) {
             self.toolbarColorScheme(.dark, for: .statusBar)
         } else {
             self
@@ -363,5 +366,144 @@ nonisolated private func dsHeroEndColor(_ base: UIColor) -> UIColor {
             t -= 0.02
         }
         return UIColor(red: r * 0.9, green: g * 0.9, blue: b * 0.9, alpha: a)
+    }
+}
+
+// MARK: - «الهادئ الفاتح» — تجربة المالك ٢٠٢٦-١٠-١٠ (مفتاح واحد، الافتراضي الشكل الحالي)
+//
+// طلب المالك «خنجرب شي جديد بالألوان والتنسيق، المربعات ونسوي جديد» — اختار «ب — الهادئ الفاتح» برأس
+// «خفيف»: بدل التدرّج الغامق في الرؤوس، لون القسم خفيفاً (~١٣٪ فوق الخلفية الفاتحة، ١٨٪ من حبره فوق
+// الداكنة) ونص داكن (فاتح في الداكن)؛ المجسّمات والأيقونات بلون القسم، وأزرار الإجراء ممتلئة بلونه كما هي،
+// وألوان المعاني لا تتغيّر. الخلفية أبيض مكسور / أسود قريب.
+// كل من يرسم رأساً أو مربّعاً يسأل التوكنات هنا — لا قيم في الشاشات:
+//  • `DS.Theme.isCalm` المفتاح الوحيد — يُقرأ مرة عند التشغيل من `UserDefaults` بالمفتاح `tmpTheme`
+//    (`-tmpTheme calm` عند التشغيل، أو `defaults write Hasan.FamilyTreeV2 tmpTheme calm`) في DEBUG والإصدار.
+//  • خلفية الرأس: `DSHeaderBackground(section:)` (رأس التبويب، الصفحة الفرعية، بانر الشجرة)؛
+//    لون أي رأس/مربّع: `AppSection.headerTint`، ولأي لون (معنى، رمادي المتوفى): `Color.dsCalmTint`.
+//  • النص والأزرار فوق الرأس: `DS.Color.headerTitle` / `headerSubtitle` / `boxHeaderSubtitle` / `headerGlyph`
+//    / `headerChipFill` / `headerChipStroke` / `headerControlCalm`؛ أيقونة الرأس: `AppSection.headerInk(for:)`.
+//  • مربّعات الرئيسية: `DS.Color.tileTitle` / `tileTitleShadow` / `tileStroke` + `color.dsCalmTint`.
+// التباين (محسوب للأقسام الثمانية + الرمادي + الأحمر): النص الأساسي ≥ ١٢٫٦:١ والوصف ≥ ٥٫٩:١ في الوضعين،
+// وحبر القسم (الأيقونات) ≥ ٤٫٧:١.
+
+extension DS {
+    /// مظهر التطبيق — مفتاح التجربة الواحد (انظر أعلاه)
+    enum Theme {
+        /// «الهادئ الفاتح» — يُقرأ مرة واحدة عند التشغيل؛ الافتراضي false = الشكل الحالي
+        static let isCalm: Bool = UserDefaults.standard.string(forKey: "tmpTheme") == "calm"
+
+        /// نسبة لون القسم فوق الخلفية الفاتحة (لون القسم) والداكنة (حبره الفاتح)
+        static let calmTintLight: CGFloat = 0.13
+        static let calmTintDark: CGFloat = 0.18
+        /// الخلفية في «الهادئ»: أبيض مكسور / أسود قريب (فاتح، داكن)
+        static let calmBackgroundHex: (String, String) = ("#FAFAF8", "#0C0C0E")
+        /// شفافية المجسّم المائل في طرف رأس المربّع — أخفّ فوق اللون الفاتح
+        static let calmWatermarkOpacity: Double = 0.16
+    }
+}
+
+extension DS.Color {
+    /// وصف الرأس في «الهادئ» — ≥ ٥٫٩:١ فوق لون كل قسم الخفيف في الوضعين
+    private static let calmHeaderSubtitle = SwiftUI.Color.adaptive(light: "#4E5464", dark: "#A3A9B8")
+
+    /// عنوان الرأس (رأس التبويب، الصفحة الفرعية، المربّع): أبيض فوق التدرّج — «الهادئ» نص داكن
+    static let headerTitle: SwiftUI.Color = DS.Theme.isCalm ? textPrimary : textOnPrimary
+    /// وصف رأس التبويب/الصفحة الفرعية
+    static let headerSubtitle: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : overlayText
+    /// وصف رأس المربّع
+    static let boxHeaderSubtitle: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : SwiftUI.Color.white.opacity(0.86)
+    /// رموز أزرار الرأس (رجوع، إغلاق، جرس، إعدادات…)
+    static let headerGlyph: SwiftUI.Color = DS.Theme.isCalm ? textPrimary : textOnPrimary
+    /// كبسولة/دائرة زجاجية فوق الرأس (عدد الأفراد، أيقونة الرأس)
+    static let headerChipFill: SwiftUI.Color = DS.Theme.isCalm ? headerControlCalm : overlayIcon
+    static let headerChipStroke: SwiftUI.Color = DS.Theme.isCalm ? cardBorder : overlayIconBorder
+    /// دائرة أزرار الرأس في «الهادئ» — أبيض فوق اللون الخفيف (رمادي مرتفع في الداكن)
+    static let headerControlCalm = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#2A2C31")
+
+    /// اسم مربّع الرئيسية
+    static let tileTitle: SwiftUI.Color = DS.Theme.isCalm ? textPrimary : SwiftUI.Color.white
+    /// ظلّ الاسم (فوق التدرّج فقط)
+    static let tileTitleShadow: SwiftUI.Color = DS.Theme.isCalm ? SwiftUI.Color.clear : SwiftUI.Color.black.opacity(0.35)
+    /// إطار مربّع الرئيسية
+    static let tileStroke: SwiftUI.Color = DS.Theme.isCalm ? cardBorder : overlayIcon
+}
+
+extension AppSection {
+    /// لون القسم الخفيف (مصمت) — خلفية الرأس ومربّع الرئيسية في «الهادئ»: لون القسم ١٣٪ فوق الخلفية
+    /// الفاتحة، وحبره ١٨٪ فوق الداكنة
+    var headerTint: Color { Self.calmTints[rawValue] }
+
+    private static let calmTints: [Color] = allCases.map { s in
+        let t = s.tones
+        return dsCalmTintColor(Color.adaptive(light: t.base.0, dark: t.ink.1))
+    }
+
+    /// كحلي العلامة الخفيف — رأس بلا قسم (الدخول، البداية)
+    static let brandHeaderTint: Color = dsCalmTintColor(DS.Color.brand)
+
+    /// أيقونة رأس التبويب (الدائرة بجانب العنوان): بيضاء فوق التدرّج — «الهادئ» بحبر القسم
+    static func headerInk(for section: AppSection?) -> Color {
+        guard DS.Theme.isCalm else { return DS.Color.textOnPrimary }
+        return section?.ink ?? DS.Color.brand
+    }
+}
+
+extension Color {
+    /// «الهادئ»: هذا اللون خفيفاً فوق الخلفية (لون مصمت) — رأس المربّع بلون قسمه أو بلون معناه
+    /// (الأحمر، رمادي المتوفى…): ألوان الأقسام بدرجتها المعتمدة، والكحلي بكحلي العلامة، وغيرها بنفس النسبة
+    var dsCalmTint: Color {
+        if let section = dsSectionOfFill { return section.headerTint }
+        if self == DS.Color.actionNavy || self == DS.Color.brandFill || self == DS.Color.primary {
+            return AppSection.brandHeaderTint
+        }
+        return dsCalmTintColor(self)
+    }
+}
+
+/// لون مصمت = اللون بنسبة «الهادئ» فوق خلفيته (حسب الوضع). في الداكن: اللون الغامق جداً يُفتَّح أولاً
+/// (تعبئات الأزرار الغامقة) حتى يبقى الرأس مميّزاً عن الخلفية
+private func dsCalmTintColor(_ color: Color) -> Color {
+    let base = UIColor(color)
+    let bg = UIColor(Color.adaptive(light: DS.Theme.calmBackgroundHex.0, dark: DS.Theme.calmBackgroundHex.1))
+    let aLight = DS.Theme.calmTintLight, aDark = DS.Theme.calmTintDark
+    return Color(uiColor: dsCalmMix(base, over: bg, light: aLight, dark: aDark))
+}
+
+nonisolated private func dsCalmMix(_ base: UIColor, over background: UIColor, light aLight: CGFloat, dark aDark: CGFloat) -> UIColor {
+    UIColor { traits in
+        let dark = traits.userInterfaceStyle == .dark
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        var br: CGFloat = 0, bgG: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        guard base.resolvedColor(with: traits).getRed(&r, green: &g, blue: &b, alpha: &a),
+              background.resolvedColor(with: traits).getRed(&br, green: &bgG, blue: &bb, alpha: &ba)
+        else { return background.resolvedColor(with: traits) }
+        if dark, 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.35 {
+            // تعبئة غامقة في الداكن ← نحو الأبيض قبل الخلط
+            r += (1 - r) * 0.45; g += (1 - g) * 0.45; b += (1 - b) * 0.45
+        }
+        let t = dark ? aDark : aLight
+        return UIColor(red: br + (r - br) * t, green: bgG + (g - bgG) * t, blue: bb + (b - bb) * t, alpha: 1)
+    }
+}
+
+/// خلفية رأس القسم الواحدة — رأس التبويب (`MainHeaderView`)، الصفحة الفرعية (`DSSubPageHeader`)، بانر الشجرة:
+/// الأصلي تدرّج القسم (+ طبقة الرأس)، و«الهادئ» لون القسم الخفيف
+struct DSHeaderBackground: View {
+    /// nil = كحلي العلامة (خارج الأقسام)
+    var section: AppSection?
+    /// تدرّج صريح للأصلي (يتقدّم على تدرّج القسم)
+    var gradient: LinearGradient? = nil
+    /// طبقة الرأس البيضاء الخفيفة فوق التدرّج (الأصلي)
+    var veil: Bool = true
+
+    var body: some View {
+        if DS.Theme.isCalm {
+            section?.headerTint ?? AppSection.brandHeaderTint
+        } else {
+            ZStack {
+                gradient ?? section?.gradient ?? DS.Color.gradientPrimary
+                if veil { DS.Color.headerVeil }
+            }
+        }
     }
 }

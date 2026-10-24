@@ -24,6 +24,21 @@ class AdminRequestViewModel: ObservableObject {
     @Published var contactMessages: [AdminRequest] = []
     /// طلبات العضو الحالي المعلّقة — يتابعها ويلغيها من «حسابي» (طلباتي).
     @Published var myPendingRequests: [AdminRequest] = []
+    /// «مسار الموافقات»: صفوف طلبات الانضمام/الربط المعلّقة (مرحلتها) — تُجلب والمفتاح شغّال فقط
+    @Published var joinApprovalRequests: [AdminRequest] = []
+    /// «مسار الموافقات»: سجل خطوات كل طلب فُتحت تفاصيله (`admin_request_steps`)
+    @Published var approvalSteps: [UUID: [AdminRequestStep]] = [:]
+    /// «مسار الموافقات ٢» (طلب المالك ٢٠٢٦-١٠-١٦): الردود الجاهزة — nil في «متاح» = لم تُجلب بعد،
+    /// false = الجدول غير موجود على السيرفر (تختفي الشرائح والإعداد)
+    @Published var approvalTemplates: [ApprovalTemplate] = []
+    @Published var approvalTemplatesAvailable: Bool? = nil
+    /// ملاحظات الإدارة الداخلية لكل طلب فُتح (لا يراها العضو) — false = الجدول غير موجود (يختفي القسم)
+    @Published var approvalNotes: [UUID: [AdminRequestNote]] = [:]
+    @Published var approvalNotesAvailable: Bool? = nil
+    /// مفتاح «مسار الموافقات» من «إعدادات التطبيق» — منشور هنا لتُعاد رسم الشاشات فور تبديله.
+    /// العمود غير موجود (السيرفر لم يُرحَّل) = false = الطريقة القديمة تماماً
+    @Published private(set) var approvalsWorkflowOn: Bool = false
+    private var approvalsFlagSink: AnyCancellable?
     @Published var isLoading: Bool = false
     @Published var mergeResult: MergeResult? = nil
     @Published var errorMessage: String? = nil
@@ -152,6 +167,10 @@ class AdminRequestViewModel: ObservableObject {
         self.memberVM = memberVM
         self.notificationVM = notificationVM
         self.newsVM = newsVM
+        approvalsFlagSink = authVM.appSettingsVM?.$settings
+            .map { $0.approvalsWorkflow == true }
+            .removeDuplicates()
+            .sink { [weak self] isOn in self?.approvalsWorkflowOn = isOn }
     }
 
     // MARK: - Private Helpers
@@ -289,6 +308,18 @@ class AdminRequestViewModel: ObservableObject {
             return L10n.t("هذا النوع من الطلبات لا يُعالج من هنا.", "This request type can't be handled here.")
         case "family_links_protected":
             return serverMessage ?? L10n.t("لا يمكن الحذف: مرتبط بأفراد في العائلة.", "Can't delete: linked to family members.")
+        // «مسار الموافقات» (advance_admin_request، والموافقة المباشرة والمفتاح شغّال)
+        case "approval_needs_manager":
+            return L10n.t("الطلب يحتاج اعتماد المدير قبل التنفيذ", "The request needs the manager's approval before it's carried out")
+        case "workflow_off":
+            return L10n.t("مسار الموافقات مطفأ الحين — حدّث الصفحة.", "The approvals path is off now — refresh the page.")
+        case "wrong_stage":
+            return L10n.t("الطلب انتقل لمرحلة ثانية — حدّث الصفحة وشوف وين وصل.",
+                          "The request has moved to another stage — refresh to see where it is.")
+        case "note_required":
+            return L10n.t("اكتب الملاحظة أولاً.", "Write the note first.")
+        case "bad_action":
+            return L10n.t("إجراء غير معروف — حدّث التطبيق وحاول مرة أخرى.", "Unknown action — update the app and try again.")
         default:
             return L10n.t("تعذّر تنفيذ القرار — لم يُطبَّق شيء. حاول مرة أخرى.",
                           "Couldn't complete the decision — nothing was applied. Please try again.")
@@ -446,6 +477,14 @@ class AdminRequestViewModel: ObservableObject {
         RequestType.childAdd.rawValue
     ]
 
+    /// ما يُضاف لـ«طلباتي» والمسار شغّال: باقي أنواع المسار التي يرسلها عضو مفعّل
+    private static let myApprovalExtraTypes: [String] = [
+        RequestType.familyChange.rawValue,
+        RequestType.photoSuggestion.rawValue,
+        RequestType.newsReport.rawValue,
+        RequestType.contentReport.rawValue
+    ]
+
     /// جلب طلبات العضو الحالي المعلّقة — يقرأ صفوفه فقط (RLS: requester_id = auth.uid()).
     func fetchMyPendingRequests(force: Bool = false) async {
         guard let uid = currentUser?.id else {
@@ -454,19 +493,42 @@ class AdminRequestViewModel: ObservableObject {
         }
         guard throttler.canFetch(key: "myRequests", interval: 20, force: force) || myPendingRequests.isEmpty else { return }
         throttler.didFetch(key: "myRequests")
+        // مفتاح «مسار الموافقات» قد يتبدّل أثناء الجلسة — يُقرأ طازجاً مع «طلباتي» (عمود واحد)
+        await refreshApprovalsFlag()
         do {
+            // «مسار الموافقات»: كل طلب في المسار قد يسأل عنه المختص — فيُتابَع هنا ليُرَد عليه. الأنواع الإضافية
+            // تُجلب دائماً وتبقى إذا كان المفتاح شغّالاً أو الصف نفسه يحمل مرحلة من السيرفر (لا يعتمد على المفتاح
+            // المحلي وحده — بلاغ المالك ٢٠٢٦-١٠-١٥)؛ مطفأ وبلا مرحلة = «طلباتي» كما كانت
             let requests: [AdminRequest] = try await supabase
                 .from("admin_requests")
                 .select("*, member:members_masked!member_id(*)")
                 .eq("requester_id", value: uid.uuidString)
                 .eq("status", value: ApprovalStatus.pending.rawValue)
-                .in("request_type", values: Self.myTrackedRequestTypes)
+                .in("request_type", values: Self.myTrackedRequestTypes + Self.myApprovalExtraTypes)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            self.myPendingRequests = requests
+            let workflowOn = approvalsWorkflowOn
+            self.myPendingRequests = requests.filter {
+                Self.myTrackedRequestTypes.contains($0.requestType) || workflowOn || $0.stage != nil
+            }
         } catch {
             Log.fetchError("فشل جلب طلباتي المعلّقة", error)
+        }
+    }
+
+    /// طلبات «إضافة ابن» المعلّقة عن ابن حُذف — تُحذف معه حتى لا يبقى طلب يشير لسجل غير موجود (المالك والمدير)
+    func deleteChildAddRequests(childId: UUID) async {
+        do {
+            try await supabase
+                .from("admin_requests")
+                .delete()
+                .eq("request_type", value: RequestType.childAdd.rawValue)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
+                .in("new_value", values: [childId.uuidString, childId.uuidString.lowercased()])
+                .execute()
+        } catch {
+            Log.error("[ChildAdd] تعذّر حذف طلب الإضافة بعد حذف الابن: \(error.localizedDescription)")
         }
     }
 
@@ -490,6 +552,25 @@ class AdminRequestViewModel: ObservableObject {
                 .eq("requester_id", value: uid.uuidString)
                 .execute()
             Log.info("[MyRequests] تم إلغاء الطلب: \(request.id)")
+            // سحب «إضافة ابن» = إلغاء الإضافة: الابن المضاف يُحذف معه — لكل عضو عبر remove_self_child
+            // (أبناؤه هو فقط، بلا حساب دخول)؛ قبل رفع الدالة للسيرفر: المالك والمدير بالحذف المباشر.
+            // فشل الحذف لا يُعرض (الطلب نفسه سُحب) — يُسجَّل فقط
+            if request.requestType == RequestType.childAdd.rawValue,
+               let raw = request.newValue, let childId = UUID(uuidString: raw), let memberVM {
+                switch await memberVM.removeSelfChild(id: childId) {
+                case .deleted:
+                    break   // removeSelfChild يُنعش الأبناء وعائلة شجرة النساء
+                case .serverMissing where authVM?.canDeleteMembers == true:
+                    if await memberVM.deleteMember(memberId: childId) {
+                        await memberVM.fetchChildren(for: uid)   // يُنعش شجرة النساء معه
+                    } else {
+                        Log.warning("[MyRequests] تعذّر حذف الابن بعد سحب طلب إضافته: \(memberVM.errorMessage ?? "")")
+                    }
+                case .serverMissing, .failed:
+                    Log.warning("[MyRequests] لم يُحذف الابن بعد سحب طلب إضافته: \(memberVM.errorMessage ?? "")")
+                }
+                memberVM.errorMessage = nil
+            }
         } catch {
             Log.error("[MyRequests] فشل إلغاء الطلب: \(error.localizedDescription)")
             // فشل الحذف → أعد التحميل لاستعادة الحالة الصحيحة
@@ -622,6 +703,11 @@ class AdminRequestViewModel: ObservableObject {
                 .execute()
                 .value
             guard let request = rows.first else { return false }
+            // «مسار الموافقات»: قبول الإشعار = تنفيذ، فقط للمختص والطلب معتمد — وإلا يبقى للمسار في الشاشة
+            if let flow = approvalSnapshot(for: request), !canExecuteApproval(flow) {
+                Log.info("[PushApprove] الطلب في مسار الموافقات (\(flow.stage.rawValue)) — يبقى للمراجعة من الشاشة")
+                return false
+            }
             switch request.requestType {
             case RequestType.treeEdit.rawValue where tree:
                 await approveTreeEditRequest(request: request)

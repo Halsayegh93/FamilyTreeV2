@@ -377,6 +377,18 @@ deno_version = 2
 [functions.push-notify]
 verify_jwt = false
 
+# Send SMS Hook (Supabase Auth) — التوقيع يتحقق داخل الدالة
+[functions.send-sms-whatsapp]
+verify_jwt = false
+
+# Supabase Auth webhook signature is verified inside the handler.
+[functions.send-sms-kwtsms]
+verify_jwt = false
+
+# فحص رصيد KWT اليومي — تستدعيه قاعدة البيانات (pg_cron) بترويسة x-webhook-secret، يُفحص داخل الدالة
+[functions.kwtsms-cron]
+verify_jwt = false
+
 [functions.push-on-notification]
 verify_jwt = false
 

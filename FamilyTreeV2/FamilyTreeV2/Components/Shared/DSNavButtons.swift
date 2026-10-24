@@ -5,6 +5,7 @@ import SwiftUI
 // طلب المالك ٢٠٢٦-١٠-٠٥: «ازرار الرجوع و الالغاء علامة X مو متناسقة الالوان».
 // شكل واحد لكل سياق — لا ألوان تُختار في كل شاشة:
 // • `.onColor` فوق رأس ملوّن (تدرّج القسم، رأس المربّع): رمز أبيض ١٨ عريض على دائرة الهيدر
+//   («الهادئ الفاتح» `DS.Theme.isCalm`: الرأس فاتح ← رمز `DS.Color.headerGlyph` الداكن على دائرة بيضاء)
 //   الزجاجية `dsHeaderGlassCircle()` قطرها ٤٤ — نفس أزرار `MainHeaderView` (المضغوط ٣٦/١٥ للأفقي).
 // • `.surface` فوق سطح فاتح/داكن (مربّعات، أوراق، صفحات): رمز بلون النص ١٤ عريض على دائرة رمادية
 //   خافتة زجاجية قطرها ٣٨ بإطار شعري.
@@ -26,7 +27,7 @@ enum DSNavButtonContext {
 enum DSNavButtonSize {
     /// المقاس الأساسي: فوق الرأس الملوّن ٤٤ (المضغوط ٣٦)، وفوق السطح ٣٨ — داخل إطار ٤٤×٤٤
     case regular
-    /// شريط أدوات فوق السطح (شريط الشجرة العلوي): دائرة ٣٤ ورمز ١٤
+    /// شريط أدوات فوق السطح (شريط الشجرة العلوي): دائرة ٣٥ ورمز ١٤٫٥
     case toolbar
     /// الأصغر: الشريط الجانبي للشجرة (الأفقي) ٢٧ ورمز ١٢؛ وفوق سطح ملوّن «×» صغير بلا قرص (بانر صلة القرابة)
     case mini
@@ -91,7 +92,8 @@ struct DSNavButtonLabel: View {
     private var glyph: some View {
         Image(systemName: symbol)
             .font(DS.Font.scaled(glyphSize, weight: .bold))
-            .foregroundColor(context == .surface ? (tint ?? DS.Color.textPrimary) : DS.Color.textOnPrimary)
+            .foregroundColor(context == .surface ? (tint ?? DS.Color.textPrimary)
+                             : (context == .onColor ? DS.Color.headerGlyph : DS.Color.textOnPrimary))
             // الدائرة ثابتة المقاس — الرمز لا يتجاوزها مع الخطوط الكبيرة جداً
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
@@ -115,7 +117,7 @@ struct DSNavButtonLabel: View {
                 // «×» صغير داخل دائرة ممتلئة شفافة فوق اللون (كان `xmark.circle.fill` ١٨ في بانر صلة القرابة)
                 Image(systemName: Self.filledCircle(symbol))
                     .font(DS.Font.scaled(glyphSize, weight: .bold))
-                    .foregroundColor(DS.Color.textOnPrimary.opacity(DSBox.navGlyphMiniOnColorOpacity))
+                    .foregroundColor(DS.Color.headerGlyph.opacity(DSBox.navGlyphMiniOnColorOpacity))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .dsTapArea(width: glyphSize, height: glyphSize)
             } else {

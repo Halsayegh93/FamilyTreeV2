@@ -36,7 +36,7 @@ struct WomenTreeView: View {
                             title: L10n.t("النساء", "Women"),
                             subtitle: nil,
                             icon: AppSection.tree.symbol,
-                            backgroundGradient: AppSection.tree.gradient,
+                            section: .tree,
                             subtitleChip: true
                         )
                     }
@@ -60,7 +60,7 @@ struct WomenTreeView: View {
                             title: L10n.t("النساء", "Women"),
                             subtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
                             icon: AppSection.tree.symbol,
-                            backgroundGradient: AppSection.tree.gradient,
+                            section: .tree,
                             subtitleChip: true
                         )
                     }

@@ -24,6 +24,9 @@ struct EditChildSheet: View {
     @State private var deathRequestSent = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
+    /// حذف الابن من «عائلتي» — لكل عضو يعدّل ابنه هو (طلب المالك ٢٠٢٦-١٠-١٦ «حط زر حذف للكل»)
+    @State private var showDeleteConfirm = false
+    @State private var isDeleting = false
 
     var body: some View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
@@ -39,6 +42,7 @@ struct EditChildSheet: View {
             canSubmit: !(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving),
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
+            extraActions: deleteActions,
             onSubmit: saveChanges,
             onCancel: { dismiss() }
         ) {
@@ -61,6 +65,72 @@ struct EditChildSheet: View {
         } message: {
             Text(errorMessage)
         }
+        .dsAlert(L10n.t("حذف الابن؟", "Delete this son?"), isPresented: $showDeleteConfirm) {
+            Button(L10n.t("حذف نهائي", "Delete permanently"), role: .destructive) { deleteChild() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("يُحذف «\(member.firstName)» من الشجرة ومن عائلتك، ويُلغى طلب إضافته إن كان معلّقاً. لا يمكن التراجع.",
+                        "«\(member.firstName)» is removed from the tree and your family, and a pending add request is cancelled. This can't be undone."))
+        }
+    }
+
+    // MARK: - حذف الابن (لكل أب — طلب المالك ٢٠٢٦-١٠-١٦ «حط زر حذف للكل»)
+
+    /// ابنه هو (أبوه = المستخدم) — يحذفه أي عضو مفعّل عبر remove_self_child (أبناؤه فقط، بلا حساب دخول،
+    /// والمتوفى للمالك والمدير — السيرفر يرفض غير ذلك برسالة عربية)
+    private var isOwnSon: Bool {
+        guard let me = authVM.currentUser?.id else { return false }
+        return member.fatherId == me
+    }
+
+    /// زرّ الحذف بأسفل المربّع — لكل من يعدّل ابنه هو، وللمالك والمدير كما كان
+    private var deleteActions: [DSComposerAction] {
+        guard isOwnSon || authVM.canDeleteMembers else { return [] }
+        return [DSComposerAction(id: "delete-child", title: L10n.t("حذف الابن", "Delete son"), icon: "trash",
+                                 role: .destructive, isEnabled: !isDeleting && !isSaving, fullRow: true) {
+            showDeleteConfirm = true
+        }]
+    }
+
+    private func deleteChild() {
+        isDeleting = true
+        Task {
+            let ok: Bool
+            if isOwnSon {
+                switch await memberVM.removeSelfChild(id: member.id) {
+                case .deleted:
+                    ok = true
+                case .serverMissing where authVM.canDeleteMembers:
+                    // الدالة لم تُرفع للسيرفر بعد — المالك والمدير بالمسار المباشر القديم
+                    ok = await deleteDirectly()
+                case .serverMissing, .failed:
+                    ok = false
+                }
+            } else {
+                ok = await deleteDirectly()
+            }
+            if ok {
+                await adminRequestVM.fetchMyPendingRequests(force: true)
+                isDeleting = false
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                dismiss()
+            } else {
+                isDeleting = false
+                errorMessage = memberVM.errorMessage ?? L10n.t("تعذّر حذف الابن.", "Couldn't delete the son.")
+                showErrorAlert = true
+            }
+        }
+    }
+
+    /// المسار المباشر (المالك والمدير): حذف السجل، ثم طلب «إضافة ابن» المعلّق عنه، وتحديث العائلة
+    /// (السيرفر يحذف نسخته في شجرة النساء)
+    private func deleteDirectly() async -> Bool {
+        guard await memberVM.deleteMember(memberId: member.id) else { return false }
+        await adminRequestVM.deleteChildAddRequests(childId: member.id)
+        if let uid = authVM.currentUser?.id {
+            await memberVM.fetchChildren(for: uid)   // يُنعش شجرة النساء معه (fetchWomenFamily)
+        }
+        return true
     }
 
     // MARK: - تغييرات لم تُحفظ (توصية أبل)
@@ -133,8 +203,13 @@ struct EditChildSheet: View {
                             placeholder: L10n.t("اسم الابن", "Child's name"),
                             text: $firstName, tint: DS.Color.primary, limit: 50)
 
-            // اختيار الجنس — ذكر/أنثى (نفس واجهة الإضافة)
-            DSGenderPicker(selection: $selectedGender)
+            // الجنس — تغييره ينقل الابن بين الشجرة العامة وشجرة النساء (`move_child_gender`)،
+            // فهو لمن يعدّل الشجرة فقط (`canEditMembers`، مثل أندرويد)؛ لغيرهم للقراءة
+            if authVM.canEditMembers {
+                DSGenderPicker(selection: $selectedGender)
+            } else {
+                DSGenderReadOnlyRow(gender: originalGender)
+            }
 
             // الهاتف — للذكر فقط
             if selectedGender == "male" {
@@ -203,9 +278,14 @@ struct EditChildSheet: View {
         .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
     }
 
+    /// الجنس كما فُتح عليه المربّع (بلا قيمة = ذكر)
+    private var originalGender: String {
+        (member.gender ?? "male").lowercased() == "female" ? "female" : "male"
+    }
+
     private func setupData() {
         firstName = member.firstName
-        selectedGender = member.gender ?? "male"
+        selectedGender = originalGender
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         selectedPhoneCountry = detectedPhone.country
         phoneNumber = detectedPhone.localDigits
@@ -250,9 +330,12 @@ struct EditChildSheet: View {
                 ? ([cleanFirst] + originalParts.dropFirst()).joined(separator: " ")
                 : cleanFirst
 
-            var updatedMember = member
-            updatedMember.fullName = finalFullName
-            updatedMember.firstName = cleanFirst
+            // تغيير الجنس (نقل بين الشجرتين) لمن يعدّل الشجرة فقط؛ لغيرهم يبقى الجنس الأصلي
+            // (مثل أندرويد — كان الآيفون يكتب عمود gender مباشرة فيبقى الابن في الجدول الخطأ)
+            let canEditGender = authVM.canEditMembers
+            let wasFemale = originalGender == "female"
+            let nowFemale = canEditGender ? (selectedGender == "female") : wasFemale
+            let genderChanged = canEditGender && nowFemale != wasFemale
 
             // وفاة الابن يسجّلها الأب (من غير الإدارة) = طلب للإدارة (طلب المالك):
             // بقية التعديلات تُحفظ مباشرة، والوفاة تنتظر القبول ثم يطلع «إعلان وفاة» للإدارة
@@ -263,7 +346,7 @@ struct EditChildSheet: View {
             // الرقم يُرسل فقط إذا تغيّر فعلاً (فحص الثغرات ب-٢): رقم الابن المخفي يصل هنا
             // فارغاً، فكان كل حفظ يمسحه وينقفل الدخول على الابن. لا يُكتب فوقه فراغ أبداً.
             var phoneToSend: String? = nil
-            if selectedGender == "male" {
+            if !nowFemale {
                 let entered = KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry,
                                                                rawLocalDigits: phoneNumber)
                 // رقم مكتوب لكنه غير صالح — لا نحوّله إلى «حذف الرقم» بصمت
@@ -280,15 +363,49 @@ struct EditChildSheet: View {
                 if (entered ?? "") != original { phoneToSend = entered ?? "" }
             }
 
-            let success = await memberVM.updateChildData(
-                member: updatedMember,
-                firstName: cleanFirst,
-                phoneNumber: phoneToSend,
-                birthDate: birthDateString,
-                isDeceased: deathNeedsApproval ? wasDeceased : isDeceased,
-                deathDate: deathNeedsApproval ? member.deathDate : deathDateString,
-                gender: selectedGender
-            )
+            // تغيير الجنس: ننقل السجل بين الشجرتين أولاً عبر السيرفر (يحفظ الروابط)، ثم تُحفظ
+            // بقية الحقول على السجل بعد النقل — نفس ترتيب أندرويد
+            var targetId = member.id
+            if genderChanged {
+                guard let movedId = await memberVM.moveChildGender(childId: member.id,
+                                                                   toGender: nowFemale ? "female" : "male") else {
+                    isSaving = false
+                    errorMessage = memberVM.errorMessage
+                        ?? L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
+                    showErrorAlert = true
+                    return
+                }
+                targetId = movedId
+            }
+
+            let success: Bool
+            if genderChanged && nowFemale {
+                // صار في شجرة النساء — لا هاتف ولا صورة للأنثى
+                success = await memberVM.updateWomanMember(
+                    id: targetId,
+                    firstName: cleanFirst,
+                    birthDate: birthDateProvided ? birthDate : nil,
+                    isDeceased: isDeceased,
+                    deathDate: isDeceased ? deathDate : nil,
+                    gender: "female",
+                    fullName: finalFullName
+                )
+                // يخرج من «الأبناء» في الشجرة العامة
+                if let fatherId = member.fatherId { await memberVM.fetchChildren(for: fatherId) }
+            } else {
+                success = await memberVM.updateChildRow(
+                    id: targetId,
+                    fatherId: member.fatherId,
+                    fullName: finalFullName,
+                    firstName: cleanFirst,
+                    phoneNumber: phoneToSend,
+                    birthDate: birthDateString,
+                    isDeceased: deathNeedsApproval ? wasDeceased : isDeceased,
+                    deathDate: deathNeedsApproval ? member.deathDate : deathDateString,
+                    // الجنس لا يُكتب مباشرة أبداً — تغييره عبر النقل أعلاه فقط
+                    gender: nil
+                )
+            }
 
             var requestFailed = false
             if success, deathNeedsApproval {
@@ -301,8 +418,9 @@ struct EditChildSheet: View {
                 requestFailed = !sent
             }
 
-            if let image = selectedUIImage {
-                await memberVM.uploadAvatar(image: image, for: member.id)
+            // الصورة للذكر فقط (الأنثى بلا صورة)
+            if !nowFemale, let image = selectedUIImage {
+                await memberVM.uploadAvatar(image: image, for: targetId)
             }
 
             isSaving = false
@@ -315,8 +433,8 @@ struct EditChildSheet: View {
                 showSuccessAlert = true
                 // الإدارة سجّلت الوفاة مباشرة → مربّع «إعلان وفاة»
                 if newlyDeceased, !deathNeedsApproval {
-                    let target = DeathAnnouncementTarget(id: member.id, name: finalFullName,
-                                                         isFemale: selectedGender == "female",
+                    let target = DeathAnnouncementTarget(id: targetId, name: finalFullName,
+                                                         isFemale: nowFemale,
                                                          deathDate: deathDateString)
                     let canAnnounce = authVM.canApproveTreeRequests
                     Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }

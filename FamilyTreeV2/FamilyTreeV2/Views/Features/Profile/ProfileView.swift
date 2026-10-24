@@ -48,6 +48,8 @@ struct ProfileView: View {
     @State private var isLoadingChildren = true
     /// الطلب المُختار للإلغاء — يشغّل حوار تأكيد السحب في «طلباتي».
     @State private var requestToCancel: AdminRequest? = nil
+    /// «مسار الموافقات»: تأكيد «وصل ردّك للإدارة» بعد الرد من «طلباتي»
+    @State private var showApprovalReplySent = false
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — الأقسام تتوزع على عمودين
     private var isLandscape: Bool { vSizeClass == .compact }
@@ -72,7 +74,7 @@ struct ProfileView: View {
                             title: L10n.t("حسابي", "My Profile"),
                             subtitle: L10n.t("الملف الشخصي والإعدادات", "Profile and settings"),
                             icon: "person.fill",
-                            backgroundGradient: AppSection.profile.gradient,
+                            section: .profile,
                             hideNotificationBell: true
                         ) {
                             // زر الإعدادات — يفتح كل تفضيلات التطبيق
@@ -80,7 +82,7 @@ struct ProfileView: View {
                             // الإشعارات في الرئيسية، فيتّسق زرّا الهيدر.
                             DSIconButton(icon: "gearshape.fill",
                                          iconSize: 22,
-                                         iconColor: DS.Color.textOnPrimary,
+                                         iconColor: DS.Color.headerGlyph,
                                          fillColor: .clear,
                                          borderColor: .clear) {
                                 showSettings = true
@@ -165,6 +167,12 @@ struct ProfileView: View {
                             await adminRequestVM.fetchMyPendingRequests()
                         }
                         .onAppear {
+                            // «مسار الموافقات»: المفتاح يُقرأ طازجاً كلما ظهر الملف (قد يتبدّل أثناء الجلسة)،
+                            // و«طلباتي» تتحدّث (بمهلتها) — بلاغ المالك ٢٠٢٦-١٠-١٥: طلبه ظهر بلا شريط المسار
+                            Task {
+                                await adminRequestVM.refreshApprovalsFlag()
+                                await adminRequestVM.fetchMyPendingRequests()
+                            }
                             // الحركة نفسها داخل dsCardCascade (توقيت كل قسم + «تقليل الحركة»)
                             guard !appeared else { return }
                             appeared = true
@@ -243,6 +251,13 @@ struct ProfileView: View {
                     "This request will be cancelled and won't be sent to the admins."
                 ))
             }
+            // «مسار الموافقات»: تأكيد وصول ردّ العضو للإدارة (الرد نفسه داخل «طلباتي»)
+            .dsAlert(L10n.t("تم إرسال ردّك", "Reply sent"), isPresented: $showApprovalReplySent, moment: .sentForApproval) {
+                Button(L10n.t("حسناً", "OK")) {}
+            } message: {
+                Text(L10n.t("وصل ردّك للإدارة، ويكمل طلبك مراجعته.",
+                            "Your reply reached the administration, and your request continues its review."))
+            }
             .fullScreenCover(item: $editingChild) { child in
                 DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { EditChildSheet(member: child) }
                     .background(ClearPresentationBackground())
@@ -250,7 +265,8 @@ struct ProfileView: View {
             .transaction { t in if editingChild != nil { t.disablesAnimations = true } }
             // تعديل فرد من «عائلتي» — مربّع بمنتصف الشاشة بتصميم مربّعات الإضافة (طلب المالك)
             .dsCenterBox(item: $editingFamilyMember) { entry in
-                WomanMemberEditSheet(memberVM: memberVM, entry: entry)
+                WomanMemberEditSheet(memberVM: memberVM, entry: entry,
+                                     canEditGender: authVM.canEditMembers)
             }
             // إضافة زوجة واختيارها — مربّعات بمنتصف الشاشة (طلب المالك)
             .dsCenterBox(isPresented: $showAddWife) { addWifeSheet }
@@ -537,7 +553,59 @@ struct ProfileView: View {
         }
     }
 
+    /// المسار شغّال (أو الطلب نفسه يحمل مرحلة من السيرفر) → صفّ بمرحلة الطلب ومتتبّعه (وما تطلبه الإدارة)،
+    /// وإلا الصفّ كما كان
+    @ViewBuilder
     private func myRequestRow(_ request: AdminRequest) -> some View {
+        if let flow = adminRequestVM.memberApprovalSnapshot(for: request) {
+            myApprovalRequestRow(request, flow: flow)
+        } else {
+            myClassicRequestRow(request)
+        }
+    }
+
+    /// «مسار الموافقات» (طلب المالك ٢٠٢٦-١٠-١٥): العنوان وشارة المرحلة ← متتبّع الخطوات ← وإن طلبت
+    /// الإدارة معلومات: ما تطلبه وحقل لكل مطلوب و«إرسال للإدارة» — العضو يُخاطَب بـ«الإدارة» لا بالأدوار
+    private func myApprovalRequestRow(_ request: AdminRequest, flow: ApprovalSnapshot) -> some View {
+        let info = myRequestDisplay(for: request)
+        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            HStack(spacing: DS.Spacing.md) {
+                DSStateIcon(info.icon, tint: info.color, size: DS.Icon.rowLarge)
+
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(info.title)
+                        .dsFont(.rowTitle)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                    if let target = info.target, !target.isEmpty {
+                        Text(target)
+                            .dsFont(.subtitle)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                    }
+                    ApprovalStageChips(snapshot: flow, audience: .member)
+                }
+
+                Spacer(minLength: DS.Spacing.sm)
+
+                DSChipButton(L10n.t("سحب", "Withdraw"), tint: DS.Color.error, size: .small) { requestToCancel = request }
+                    .accessibilityLabel(L10n.t("سحب الطلب", "Withdraw request"))
+            }
+
+            ApprovalTracker(stage: flow.stage, audience: .member)
+
+            if flow.stage == .info {
+                ApprovalMemberReplyCard(adminRequestVM: adminRequestVM, snapshot: flow) {
+                    showApprovalReplySent = true
+                }
+                // سؤال جديد = مسودة جديدة (لا تبقى قيم ردّ سابق)
+                .id("\(flow.requestId)-\(flow.stageSince?.timeIntervalSince1970 ?? 0)")
+            }
+        }
+        .profileCell()
+    }
+
+    private func myClassicRequestRow(_ request: AdminRequest) -> some View {
         let info = myRequestDisplay(for: request)
         return HStack(spacing: DS.Spacing.md) {
             DSStateIcon(info.icon, tint: info.color, size: DS.Icon.rowLarge)
@@ -610,6 +678,16 @@ struct ProfileView: View {
         case RequestType.childAdd.rawValue:
             return .init(icon: "person.badge.plus", color: DS.Color.success,
                          title: L10n.t("إضافة ابن", "Add child"), target: targetName)
+        // أنواع تظهر في «طلباتي» والمسار شغّال فقط (ليُرد على سؤال المختص)
+        case RequestType.familyChange.rawValue:
+            return .init(icon: "person.2.fill", color: DS.Color.info,
+                         title: L10n.t("تغيير العائلة", "Family change"), target: request.newValue ?? targetName)
+        case RequestType.photoSuggestion.rawValue:
+            return .init(icon: "camera.badge.ellipsis", color: AppSection.profile.ink,
+                         title: L10n.t("اقتراح صورة", "Photo suggestion"), target: targetName)
+        case RequestType.newsReport.rawValue, RequestType.contentReport.rawValue:
+            return .init(icon: "exclamationmark.bubble.fill", color: DS.Color.error,
+                         title: L10n.t("بلاغ", "Report"), target: nil)
         default:
             return .init(icon: "clock", color: DS.Color.warning,
                          title: L10n.t("طلب", "Request"), target: targetName)
@@ -708,7 +786,7 @@ struct ProfileView: View {
     private var childrenGridView: some View {
         let columns = [GridItem(.flexible()), GridItem(.flexible())]
         let parents = memberVM.currentMemberWomenFamily.filter { $0.role == .mother || $0.role == .wife }
-        let womenKids = memberVM.currentMemberWomenFamily.filter { $0.role == .child }
+        let womenKids = womenOnlyChildren
         let motherEntry = parents.first { $0.role == .mother }
         let wifeEntries = parents.filter { $0.role == .wife }
         // صف الأم/الزوجة (وخانات الإضافة) يظهر لأي عضو متزوّج — الإضافة/الاختيار مقيّدة على النفس.
@@ -998,7 +1076,18 @@ struct ProfileView: View {
     }
 
     private var womenChildrenList: [WomanMember] {
-        memberVM.currentMemberWomenFamily.filter { $0.role == .child }.map { $0.member }
+        womenOnlyChildren.map { $0.member }
+    }
+
+    /// أبناء شجرة النساء بدون الأبناء الذكور المنسوخين لها بنفس المعرّف — كان الابن يظهر مرتين
+    /// في «عائلتي» و«ترتيب» (مرة من الأبناء ومرة من شجرة النساء). طلب المالك ٢٠٢٦-١٠-١٥.
+    /// والابن المنسوخ يُستبعد بجنسه أيضاً — لو لم تُحدَّث قائمة الأبناء بعد إضافته كان يظهر كابنة،
+    /// وحذفه من هناك يحذف النسخة فقط ويبقى الابن (طلب المالك ٢٠٢٦-١٠-١٥ «علي حذفته ليش موجود»).
+    private var womenOnlyChildren: [WomenFamilyEntry] {
+        let sonIds = Set(memberVM.currentMemberChildren.map(\.id))
+        return memberVM.currentMemberWomenFamily.filter {
+            $0.role == .child && !sonIds.contains($0.member.id) && $0.member.gender != "male"
+        }
     }
 
     /// نقل ابن/ابنة أعلى/أسفل في الترتيب.
@@ -1229,10 +1318,11 @@ struct ProfileView: View {
     }
 
     // MARK: - General Section (Privacy, Settings)
-    /// تسجيل الخروج — الزرّ الواحد بدور الحذف (أحمر)
+    /// تسجيل الخروج — زرّ عريض رمادي هادئ (إجراء عادي يرجع منه بالدخول مجدداً) أسفل «حسابي»؛
+    /// «حذف الحساب» نصّ أحمر صغير آخر «الإعدادات» — يختلفان شكلاً وحجماً ومكاناً (طلب المالك ٢٠٢٦-١٠-١٠)
     private var signOutButton: some View {
         DSButton(L10n.t("تسجيل الخروج", "Sign Out"), icon: "rectangle.portrait.and.arrow.right",
-                 role: .destructive) {
+                 role: .cancel, size: .large) {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             showSignOutConfirm = true
         }
@@ -1262,6 +1352,8 @@ private extension View {
 struct WomanMemberEditSheet: View {
     @ObservedObject var memberVM: MemberViewModel
     let entry: WomenFamilyEntry
+    /// تغيير جنس الابن/الابنة (نقل بين الشجرتين) لمن يعدّل الشجرة فقط — مثل أندرويد
+    var canEditGender: Bool = false
     @Environment(\.dismiss) private var dismiss
 
     @State private var name: String
@@ -1276,14 +1368,17 @@ struct WomanMemberEditSheet: View {
     @State private var isSaving = false
     @State private var showDeleteConfirm = false
     @State private var errorBanner: String? = nil
+    /// نُقل بين الشجرتين بتغيير الجنس — رسالة «تم الحفظ» ثم إغلاق (مثل أندرويد)
+    @State private var showMovedAlert = false
 
     /// تاريخا الميلاد والوفاة كما فُتح المربّع («yyyy-MM-dd» أو nil) — لمقارنة التغييرات
     private let startBirthKey: String?
     private let startDeathKey: String?
 
-    init(memberVM: MemberViewModel, entry: WomenFamilyEntry) {
+    init(memberVM: MemberViewModel, entry: WomenFamilyEntry, canEditGender: Bool = false) {
         self.memberVM = memberVM
         self.entry = entry
+        self.canEditGender = canEditGender
         _name = State(initialValue: entry.member.firstName)
         _isDeceased = State(initialValue: entry.member.isDeceased)
         _isHidden = State(initialValue: entry.member.isHiddenFromTree)
@@ -1410,6 +1505,11 @@ struct WomanMemberEditSheet: View {
                  ? L10n.t("إزالة الأم «\(name)» من عائلتك؟ (لن تُحذف من الشجرة)", "Unlink mother “\(name)”?")
                  : L10n.t("حذف «\(name)» من عائلتك؟", "Remove “\(name)” from your family?"))
         }
+        .dsAlert(L10n.t("تم الحفظ", "Saved"), isPresented: $showMovedAlert) {
+            Button(L10n.t("موافق", "OK")) { dismiss() }
+        } message: {
+            Text(L10n.t("تم تحديث بيانات الابن بنجاح.", "Child info updated successfully."))
+        }
     }
 
     /// الاسم (+ الجنس للأبناء، + الإخفاء للزوجة)
@@ -1422,9 +1522,14 @@ struct WomanMemberEditSheet: View {
                             label: L10n.t("الاسم", "Name"),
                             placeholder: L10n.t("الاسم", "Name"),
                             text: $name)
-            // اختيار الجنس — للأبناء فقط (الأم/الزوجة أنثى دائمًا)
+            // الجنس — للأبناء فقط (الأم/الزوجة أنثى دائمًا). تغييره ينقل بين الشجرتين
+            // (`move_child_gender`) فهو لمن يعدّل الشجرة؛ لغيرهم للقراءة (مثل أندرويد)
             if entry.role == .child {
-                DSGenderPicker(selection: $selectedGender)
+                if canEditGender {
+                    DSGenderPicker(selection: $selectedGender)
+                } else {
+                    DSGenderReadOnlyRow(gender: entry.member.gender)
+                }
             }
             // الإخفاء — للزوجة فقط، وهي إعداد ذاتي عبر RPC مقيّد.
             if entry.role == .wife {
@@ -1469,6 +1574,15 @@ struct WomanMemberEditSheet: View {
     private func save() {
         Task {
             isSaving = true
+            // تغيير جنس الابن/الابنة = نقل بين الشجرتين عبر السيرفر ثم حفظ بقية الحقول على
+            // السجل بعد النقل (مثل أندرويد) — لمن يعدّل الشجرة فقط
+            let wasMale = entry.member.gender.lowercased() == "male"
+            let picked = selectedGender.lowercased()
+            if entry.role == .child, canEditGender,
+               (picked == "male" && !wasMale) || (picked == "female" && wasMale) {
+                await saveMovingGender(toFemale: picked == "female")
+                return
+            }
             let ok: Bool
             if entry.role == .child {
                 // ابنة العضو نفسه — RPC مقيّد على النفس (يعمل لأي دور). تغيير الجنس
@@ -1499,6 +1613,49 @@ struct WomanMemberEditSheet: View {
             }
             isSaving = false
             if ok { dismiss() } else { errorBanner = memberVM.errorMessage }
+        }
+    }
+
+    /// النقل بين الشجرتين ثم حفظ الاسم/التواريخ على السجل الجديد: ذكر → `profiles`
+    /// (+ الصورة)، أنثى → `women_members`. أي فشل يظهر في شريط الخطأ (رسالة حماية الروابط كما هي).
+    private func saveMovingGender(toFemale: Bool) async {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        // نستبدل الاسم الأول فقط ونحافظ على باقي السلسلة
+        let parts = entry.member.fullName.split(whereSeparator: \.isWhitespace).map(String.init)
+        let finalFullName = parts.count > 1 ? ([cleanName] + parts.dropFirst()).joined(separator: " ") : cleanName
+
+        guard let newId = await memberVM.moveChildGender(childId: entry.member.id,
+                                                         toGender: toFemale ? "female" : "male") else {
+            isSaving = false
+            errorBanner = memberVM.errorMessage
+                ?? L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
+            return
+        }
+        let ok: Bool
+        if toFemale {
+            ok = await memberVM.updateWomanMember(
+                id: newId, firstName: cleanName,
+                birthDate: hasBirthDate ? birthDate : nil,
+                isDeceased: isDeceased,
+                deathDate: hasDeathDate ? deathDate : nil,
+                gender: "female", fullName: finalFullName)
+            // يخرج من «الأبناء» في الشجرة العامة
+            if let fatherId = entry.member.parentId { await memberVM.fetchChildren(for: fatherId) }
+        } else {
+            ok = await memberVM.updateChildRow(
+                id: newId, fatherId: entry.member.parentId, fullName: finalFullName,
+                firstName: cleanName, phoneNumber: nil,
+                birthDate: hasBirthDate ? DateHelper.format(birthDate) : nil,
+                isDeceased: isDeceased,
+                deathDate: isDeceased && hasDeathDate ? DateHelper.format(deathDate) : nil,
+                gender: nil)
+            if let img = selectedUIImage { await memberVM.uploadAvatar(image: img, for: newId) }
+        }
+        isSaving = false
+        if ok {
+            showMovedAlert = true
+        } else {
+            errorBanner = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
         }
     }
 }

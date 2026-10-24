@@ -30,6 +30,7 @@ struct AdminDashboardView: View {
     @Binding var selectedTab: Int
     @State private var navigationPath = NavigationPath()
     @State private var showingNotifications = false
+    @State private var showingFamilyDetails = false
     @State private var pendingCount: Int = 0
     @State private var moderatorCount: Int = 0
     @State private var totalReviewRequestsCount: Int = 0
@@ -143,6 +144,8 @@ struct AdminDashboardView: View {
             + adminRequestVM.deceasedRequests.count
             + adminRequestVM.childAddRequests.count
             + adminRequestVM.treeEditRequests.count
+            // «مسار الموافقات»: الصور المقترحة ضمن مجال الشجرة (مختصّها المراقب) — ليست «صحة الشجرة»
+            + (adminRequestVM.approvalsWorkflowOn ? adminRequestVM.photoSuggestionRequests.count : 0)
         let healthInReview = max(0, treeScopeTotal - treeKnown)
         let recentDeaths = all.filter {
             $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate)
@@ -187,7 +190,7 @@ struct AdminDashboardView: View {
                         title: L10n.t("الإدارة", "Admin Dashboard"),
                         subtitle: L10n.t("المراجعة والإعدادات والتقارير", "Review, settings and reports"),
                         icon: "shield.lefthalf.filled",
-                        backgroundGradient: AppSection.admin.gradient,
+                        section: .admin,
                         hasDropShadow: false
                     )
 
@@ -279,9 +282,15 @@ struct AdminDashboardView: View {
                 schemaWarningCard
             }
 
+            // «بوستات المناسبات» أول اللوحة (طلب المالك ٢٠٢٦-١٠-١٢) — لكل الإدارة والمشرفين
+            if authVM.canModerate {
+                occasionsCard
+                    .dsStaggerIn(1)
+            }
+
             VStack(spacing: DS.Spacing.md) {
                 DSSegmentedSwitch(options: sectionOptions, selection: sectionBinding)
-                    .dsStaggerIn(1)
+                    .dsStaggerIn(2)
                 sectionContent
             }
         }
@@ -324,29 +333,59 @@ struct AdminDashboardView: View {
 
     // MARK: - مربّع «أفراد العائلة»
 
-    /// «أسلوب واحد» (دفعة 3-B): البطاقة الواحدة `.dsCard()` بعنوان قسم مجسّم — كانت بطاقة تدرّج يدوية
-    /// (قرص SF أبيض، دائرتان زخرفيتان، ظلّ ملوّن) بجانب بطاقات العُدّة
     private var familyHero: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.sm) {
-                DSSectionTitle(title: L10n.t("أفراد العائلة", "Family members"), icon: "person.3.fill",
-                               tint: domainTint)
-                // الدور للمالك والمدير (المراقب يراه في «مجالك» — بلا تكرار)
-                if authVM.isAdmin, let guide = viewerGuide {
-                    DSStatusChip(text: guide.title, tint: domainTint)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Button {
+                withAnimation(reduceMotion ? nil : DS.Anim.snappy) {
+                    showingFamilyDetails.toggle()
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "person.3.fill")
+                        .foregroundColor(domainTint)
+                        .accessibilityHidden(true)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: DS.Spacing.sm) { familySummary }
+                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) { familySummary }
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(showingFamilyDetails ? 180 : 0))
+                        .foregroundColor(DS.Color.textTertiary)
+                        .accessibilityHidden(true)
+                }
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.fieldLabel)
+                .frame(minHeight: DS.Icon.tapTarget)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(showingFamilyDetails ? L10n.t("موسّع", "Expanded") : L10n.t("مختصر", "Collapsed"))
+            .accessibilityHint(L10n.t("إظهار أو إخفاء تفاصيل العائلة", "Show or hide family details"))
+
+            if showingFamilyDetails {
+                HStack(spacing: DS.Spacing.sm) {
+                    GenderRingPanel(title: L10n.t("الرجال", "Men"), dot: DS.Color.male,
+                                    total: totalMembersCount, alive: aliveMembersCount,
+                                    deceased: deceasedMembersCount, loading: isInitialLoading)
+                    GenderRingPanel(title: L10n.t("النساء", "Women"), dot: DS.Color.female,
+                                    total: womenTotalCount, alive: womenAliveCount,
+                                    deceased: womenDeceasedCount, loading: isInitialLoading)
                 }
             }
-
-            HStack(spacing: DS.Spacing.sm) {
-                GenderRingPanel(title: L10n.t("الرجال", "Men"), dot: DS.Color.male,
-                                total: totalMembersCount, alive: aliveMembersCount,
-                                deceased: deceasedMembersCount, loading: isInitialLoading)
-                GenderRingPanel(title: L10n.t("النساء", "Women"), dot: DS.Color.female,
-                                total: womenTotalCount, alive: womenAliveCount,
-                                deceased: womenDeceasedCount, loading: isInitialLoading)
-            }
         }
-        .dsCard(padding: DS.Spacing.md)
+        .dsCard(padding: DS.Spacing.sm)
+    }
+
+    @ViewBuilder
+    private var familySummary: some View {
+        Text(L10n.t("العائلة: \(isInitialLoading ? "—" : "\(totalMembersCount + womenTotalCount)")",
+                    "Family: \(isInitialLoading ? "—" : "\(totalMembersCount + womenTotalCount)")"))
+            .monospacedDigit()
+        Text(L10n.t("الرجال: \(isInitialLoading ? "—" : "\(totalMembersCount)") · النساء: \(isInitialLoading ? "—" : "\(womenTotalCount)")",
+                    "Men: \(isInitialLoading ? "—" : "\(totalMembersCount)") · Women: \(isInitialLoading ? "—" : "\(womenTotalCount)")"))
+            .monospacedDigit()
+            .foregroundColor(DS.Color.fieldValue)
     }
 
     // MARK: - الأقسام
@@ -355,10 +394,12 @@ struct AdminDashboardView: View {
 
     /// وجهة كل بطاقة
     private enum DashTarget {
-        case requests, inbox, members, activity, analytics, pdfReports, deaths
+        case requests, inbox, members, activity, analytics, pdfReports, deaths, occasions
         case usage(AppUsageCategory)
         // «النظام» — كل مربّع يفتح صفحته مباشرة (كانت داخل صفحة «إعدادات النظام» الوسطية)
         case team, liveActivity, devices, bannedPhones, messaging, pushHealth, appSettings, forceUpdate
+        /// «تقرير الموافقات» («مسار الموافقات ٢»، طلب المالك ٢٠٢٦-١٠-١٦)
+        case approvalsReport
     }
 
     /// وجهات اللوحة — كل صفحة في صندوق (AnyView) وتُبنى عند فتحها فقط (LazyAdminPage):
@@ -377,6 +418,7 @@ struct AdminDashboardView: View {
         case .pdfReports: return AnyView(AdminReportsView())
         case .usage(let category): return AnyView(AppUsageMembersView(category: category))
         case .deaths: return AnyView(DeathAnnouncementsPage())
+        case .occasions: return AnyView(OccasionComposerView())
         case .team: return AnyView(AdminModeratorsView())
         case .liveActivity: return AnyView(AdminActiveMembersView())
         case .devices: return AnyView(AdminDevicesView())
@@ -385,6 +427,7 @@ struct AdminDashboardView: View {
         case .pushHealth: return AnyView(AdminPushHealthView())
         case .appSettings: return AnyView(AdminAppSettingsView())
         case .forceUpdate: return AnyView(AdminForceUpdateView())
+        case .approvalsReport: return AnyView(ApprovalsReportView())
         }
     }
 
@@ -393,7 +436,7 @@ struct AdminDashboardView: View {
     private var visibleSections: [DashSection] {
         var sections: [DashSection] = [.pending]
         if !memberTiles.isEmpty || canSeeStats { sections.append(.members) }
-        if !systemGroups.isEmpty { sections.append(.system) }
+        if !systemTiles.isEmpty { sections.append(.system) }
         return sections
     }
 
@@ -430,10 +473,8 @@ struct AdminDashboardView: View {
             switch effectiveSection {
             case .pending:
                 AdaptiveCardStack(spacing: DS.Spacing.md) {
-                    reviewCard
+                    attentionCard
                         .dsCardCascade(0, appeared: tilesAppeared)
-                    messagesCard
-                        .dsCardCascade(1, appeared: tilesAppeared)
                     // «مجالك» — للمراقب والمشرف فقط (المالك والمدير مجالهما كامل)
                     if let guide = scopeGuide {
                         scopeRow(guide)
@@ -451,18 +492,15 @@ struct AdminDashboardView: View {
                 }
                 .transition(sectionSwap)
             case .system:
-                // المربّعات نفسها بمجموعات — كل مربّع يفتح صفحته (بلا صفحة وسطية)
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    ForEach(systemGroups) { group in
-                        VStack(alignment: .leading, spacing: 0) {
-                            DSSectionTitle(title: group.title, icon: group.icon, tint: group.tint,
-                                           trailing: group.trailing)
-                                .padding(.top, DS.Spacing.md)
-                                .padding(.bottom, DS.Spacing.sm)
-                                .dsCardCascade(group.start, appeared: tilesAppeared)
-                            tilesGrid(group.tiles, columns: 2, startIndex: group.start + 1)
-                        }
+                // شبكة واحدة بلا مجموعات، ٣ بالسطر، من الأكثر استخداماً للأقل (طلب المالك ٢٠٢٦-١٠-٠٩ «ج»)
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    if !authVM.canManageSettings && authVM.canViewSystemSettings {
+                        // المدير: ما يعدّله المالك وحده للقراءة (كان بطرف المجموعات)
+                        DSSectionTitle(title: L10n.t("الإعدادات للقراءة — يعدّلها المالك", "Settings are read-only — the owner edits them"),
+                                       icon: "eye.fill", tint: AppSection.admin.fill)
+                            .padding(.top, DS.Spacing.sm)
                     }
+                    tilesGrid(systemTiles, columns: 3, startIndex: 0)
                 }
                 .transition(sectionSwap)
             }
@@ -517,6 +555,22 @@ struct AdminDashboardView: View {
         return chips
     }
 
+    private var attentionCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSSectionTitle(title: L10n.t("يحتاج انتباهك", "Needs your attention"),
+                           icon: "bell.badge.fill", tint: DS.Color.warning)
+                .padding(DS.Spacing.md)
+            Divider().padding(.horizontal, DS.Spacing.md)
+            reviewCard
+            Divider().padding(.horizontal, DS.Spacing.md)
+            messagesCard
+        }
+        .dsCard(padding: nil)
+        .overlay(cardBorder(highlight: !isInitialLoading &&
+            (totalReviewRequestsCount > 0 || adminRequestVM.unreadContactMessagesCount > 0 ||
+             adminRequestVM.pendingContactMessagesCount > 0)))
+    }
+
     private var reviewCard: some View {
         let reviews = isInitialLoading ? 0 : totalReviewRequestsCount
         let tint = DS.Color.warning
@@ -546,9 +600,8 @@ struct AdminDashboardView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .dsCard(padding: DS.Spacing.md)
-            .overlay(cardBorder(highlight: reviews > 0))
-            .contentShape(DSBox.sectionShape)
+            .padding(DS.Spacing.md)
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSPressStyle())
         .accessibilityLabel(reviews > 0
@@ -578,6 +631,32 @@ struct AdminDashboardView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// بطاقة «بوستات المناسبات» العريضة أعلى اللوحة — تهنئة ووفاة وعزاء جاهزة للنشر
+    private var occasionsCard: some View {
+        let tint = DS.Color.accent
+        return NavigationLink { destinationView(.occasions) } label: {
+            HStack(spacing: DS.Spacing.md) {
+                DSStateIcon("photo.on.rectangle.angled", tint: tint, size: DS.Icon.tile)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(L10n.t("الإعلانات والمناسبات", "Announcements & occasions"))
+                        .dsFont(.headline)
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Text(L10n.t("تهنئة، وفاة، عزاء — جاهزة للنشر", "Congrats, obituaries, condolences"))
+                        .dsFieldFont(.subtitle)
+                        .foregroundColor(DS.Color.fieldValue)
+                }
+                Spacer(minLength: DS.Spacing.sm)
+                DSChevron()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dsCard(padding: DS.Spacing.md)
+            .overlay(cardBorder(highlight: false))
+            .contentShape(DSBox.sectionShape)
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityLabel(L10n.t("الإعلانات والمناسبات", "Announcements & occasions"))
+    }
+
     private var messagesCard: some View {
         let unread = adminRequestVM.unreadContactMessagesCount
         let awaiting = adminRequestVM.pendingContactMessagesCount
@@ -597,13 +676,12 @@ struct AdminDashboardView: View {
                         .foregroundColor(DS.Color.fieldValue)
                 }
                 Spacer(minLength: DS.Spacing.sm)
-                statusBadge(alert: unread, loading: false)
+                statusBadge(alert: unread > 0 ? unread : awaiting, loading: isInitialLoading)
                 DSChevron()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .dsCard(padding: DS.Spacing.md)
-            .overlay(cardBorder(highlight: unread > 0))
-            .contentShape(DSBox.sectionShape)
+            .padding(DS.Spacing.md)
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSPressStyle())
         .accessibilityLabel(L10n.t("الرسائل، \(caption)", "Messages, \(caption)"))
@@ -768,99 +846,70 @@ struct AdminDashboardView: View {
     // و«استخدام التطبيق» في «الأعضاء» وحده. الصلاحيات كما كانت: الإعدادات للمالك والمدير
     // (المدير للقراءة فيما يعدّله المالك وحده)، والإحصائيات والتقارير لهما.
 
-    private struct SystemGroup: Identifiable {
-        let id: String
-        let title: String
-        let icon: String
-        let tint: Color
-        /// تلميح بطرف العنوان — «للقراءة» للمدير فيما يعدّله المالك وحده
-        var trailing: String? = nil
-        let tiles: [DashTile]
-        /// ترتيب أول عنصر في دخول المربّعات تباعاً عبر التبويب كله
-        var start = 0
-    }
-
-    private var systemGroups: [SystemGroup] {
-        var groups: [SystemGroup] = []
-        let readOnly = authVM.canManageSettings ? nil : L10n.t("للقراءة", "Read-only")
+    /// مربّعات «النظام» بترتيب الاستخدام (الأكثر أولاً) — الصلاحيات كما كانت: الإعدادات للمالك والمدير
+    /// (المدير للقراءة فيما يعدّله المالك وحده)، والإحصائيات والتقارير لهما
+    private var systemTiles: [DashTile] {
+        var t: [String: DashTile] = [:]
         if authVM.canViewSystemSettings {
-            groups.append(SystemGroup(
-                id: "group.team", title: L10n.t("الفريق والأمان", "Team & security"),
-                icon: "person.badge.shield.checkmark.fill", tint: AppSection.admin.fill, trailing: readOnly,
-                tiles: [
-                    // عدد الفريق هنا وحده — نص هادئ لا شارة حمراء (ليس شيئاً ينتظرك)
-                    DashTile(id: "system.team",
-                             title: L10n.t("فريق الإدارة", "Admin team"),
-                             caption: isInitialLoading
-                                 ? L10n.t("الأدوار والصلاحيات", "Roles & permissions")
-                                 : L10n.t("\(moderatorCount) في الفريق", "\(moderatorCount) on the team"),
-                             icon: "person.3.fill", tint: AppSection.admin.fill, target: .team),
-                    // «النشاط الآن» جنب «فريق الإدارة» (طلب المالك)
-                    DashTile(id: "system.live",
-                             title: L10n.t("النشاط الآن", "Live activity"),
-                             caption: L10n.t("الدخول وآخر نشاط", "Sign-ins & activity"),
-                             icon: "person.2.fill", tint: DS.Color.composerProject, target: .liveActivity),
-                    DashTile(id: "system.devices",
-                             title: L10n.t("الأجهزة", "Devices"),
-                             caption: L10n.t("المرتبطة بالحسابات", "Linked to accounts"),
-                             icon: "iphone.gen3", tint: AppSection.admin.fill, target: .devices),
-                    DashTile(id: "system.banned",
-                             title: L10n.t("الأرقام المحظورة", "Banned numbers"),
-                             caption: L10n.t("منع التسجيل برقم", "Block sign-up by number"),
-                             icon: "phone.down.fill", tint: DS.Color.error, target: .bannedPhones)
-                ]))
-            groups.append(SystemGroup(
-                id: "group.notify", title: L10n.t("الإشعارات", "Notifications"),
-                icon: "bell.badge.fill", tint: DS.Color.composerDiwaniya,
-                tiles: [
-                    // «إرسال إشعارات» + «تحديثات التطبيق» صفحة واحدة
-                    DashTile(id: "system.messaging",
-                             title: L10n.t("الإشعارات والتحديثات", "Notifications & updates"),
-                             caption: L10n.t("إشعار للأعضاء أو تحديث", "Notify members or announce"),
-                             icon: "bell.badge.fill", tint: DS.Color.composerDiwaniya, target: .messaging),
-                    DashTile(id: "system.push",
-                             title: L10n.t("حالة الإشعارات", "Push status"),
-                             caption: L10n.t("جاهزية الإرسال والاختبار", "Readiness & testing"),
-                             icon: "bell.and.waves.left.and.right.fill", tint: DS.Color.composerDiwaniya,
-                             target: .pushHealth)
-                ]))
-            groups.append(SystemGroup(
-                id: "group.app", title: L10n.t("التطبيق", "App"),
-                icon: "gearshape.fill", tint: AppSection.admin.fill, trailing: readOnly,
-                tiles: [
-                    DashTile(id: "system.settings",
-                             title: L10n.t("إعدادات التطبيق", "App settings"),
-                             caption: L10n.t("اللغة · التسجيل · الميزات", "Language · sign-up · features"),
-                             icon: "gearshape.fill", tint: AppSection.admin.fill, target: .appSettings),
-                    DashTile(id: "system.forceUpdate",
-                             title: L10n.t("التحديث الإجباري", "Force update"),
-                             caption: L10n.t("إيقاف النسخ القديمة", "Block old versions"),
-                             icon: "arrow.down.app.fill", tint: AppSection.admin.fill, target: .forceUpdate)
-                ]))
+            t["live"] = DashTile(id: "system.live",
+                                 title: L10n.t("النشاط الآن", "Live activity"),
+                                 caption: L10n.t("الدخول وآخر نشاط", "Sign-ins & activity"),
+                                 icon: "person.2.fill", tint: DS.Color.composerProject, target: .liveActivity)
+            // «إرسال إشعارات» + «تحديثات التطبيق» صفحة واحدة
+            t["messaging"] = DashTile(id: "system.messaging",
+                                      title: L10n.t("الإشعارات والتحديثات", "Notifications & updates"),
+                                      caption: L10n.t("إشعار للأعضاء أو تحديث", "Notify members or announce"),
+                                      icon: "bell.badge.fill", tint: DS.Color.composerDiwaniya, target: .messaging)
+            // عدد الفريق هنا وحده — نص هادئ لا شارة حمراء (ليس شيئاً ينتظرك)
+            t["team"] = DashTile(id: "system.team",
+                                 title: L10n.t("فريق الإدارة", "Admin team"),
+                                 caption: isInitialLoading
+                                     ? L10n.t("الأدوار والصلاحيات", "Roles & permissions")
+                                     : L10n.t("\(moderatorCount) في الفريق", "\(moderatorCount) on the team"),
+                                 icon: "person.3.fill", tint: AppSection.admin.fill, target: .team)
+            t["settings"] = DashTile(id: "system.settings",
+                                     title: L10n.t("إعدادات التطبيق", "App settings"),
+                                     caption: L10n.t("اللغة · التسجيل · الميزات", "Language · sign-up · features"),
+                                     icon: "gearshape.fill", tint: AppSection.admin.fill, target: .appSettings)
+            t["devices"] = DashTile(id: "system.devices",
+                                    title: L10n.t("الأجهزة", "Devices"),
+                                    caption: L10n.t("المرتبطة بالحسابات", "Linked to accounts"),
+                                    icon: "iphone.gen3", tint: AppSection.admin.fill, target: .devices)
+            t["banned"] = DashTile(id: "system.banned",
+                                   title: L10n.t("الأرقام المحظورة", "Banned numbers"),
+                                   caption: L10n.t("منع التسجيل برقم", "Block sign-up by number"),
+                                   icon: "phone.down.fill", tint: DS.Color.error, target: .bannedPhones)
+            t["push"] = DashTile(id: "system.push",
+                                 title: L10n.t("حالة الإشعارات", "Push status"),
+                                 caption: L10n.t("جاهزية الإرسال والاختبار", "Readiness & testing"),
+                                 icon: "bell.and.waves.left.and.right.fill", tint: DS.Color.composerDiwaniya,
+                                 target: .pushHealth)
+            t["forceUpdate"] = DashTile(id: "system.forceUpdate",
+                                        title: L10n.t("التحديث الإجباري", "Force update"),
+                                        caption: L10n.t("إيقاف النسخ القديمة", "Block old versions"),
+                                        icon: "arrow.down.app.fill", tint: AppSection.admin.fill, target: .forceUpdate)
         }
         if authVM.isAdmin {
-            groups.append(SystemGroup(
-                id: "group.reports", title: L10n.t("التقارير", "Reports"),
-                icon: "doc.text.fill", tint: DS.Color.composerLibrary,
-                tiles: [
-                    DashTile(id: "system.analytics",
-                             title: L10n.t("الإحصائيات", "Analytics"),
-                             caption: L10n.t("الأعمار والنمو", "Ages & growth"),
-                             icon: "chart.bar.xaxis", tint: DS.Color.composerProject,
-                             target: .analytics),
-                    DashTile(id: "system.reports",
-                             title: L10n.t("مركز التقارير", "Reports center"),
-                             caption: L10n.t("ملفات للطباعة", "Printable files"),
-                             icon: "doc.text.fill", tint: DS.Color.composerLibrary,
-                             target: .pdfReports)
-                ]))
+            t["analytics"] = DashTile(id: "system.analytics",
+                                      title: L10n.t("الإحصائيات", "Analytics"),
+                                      caption: L10n.t("الأعمار والنمو", "Ages & growth"),
+                                      icon: "chart.bar.xaxis", tint: DS.Color.composerProject, target: .analytics)
+            t["reports"] = DashTile(id: "system.reports",
+                                    title: L10n.t("مركز التقارير", "Reports center"),
+                                    caption: L10n.t("ملفات للطباعة", "Printable files"),
+                                    icon: "doc.text.fill", tint: DS.Color.composerLibrary, target: .pdfReports)
         }
-        var next = 0
-        for i in groups.indices {
-            groups[i].start = next
-            next += groups[i].tiles.count + 1
+        // «تقرير الموافقات» والمسار شغّال (طلب المالك ٢٠٢٦-١٠-١٦ مسار الموافقات ٢)
+        if authVM.isAdmin && adminRequestVM.approvalsWorkflowOn {
+            t["approvals"] = DashTile(id: "system.approvals",
+                                      title: L10n.t("تقرير الموافقات", "Approvals report"),
+                                      caption: L10n.t("المراحل والأداء", "Stages & performance"),
+                                      icon: "chart.bar.xaxis", tint: DS.Color.warning, target: .approvalsReport)
         }
-        return groups
+        // من الأكثر استخداماً للأقل
+        let order = ["live", "messaging", "analytics", "team", "settings", "devices",
+                     "banned", "reports", "approvals", "push", "forceUpdate"]
+        return order.compactMap { t[$0] }
     }
 
     // MARK: - مربّعات صغيرة (شكل واحد)

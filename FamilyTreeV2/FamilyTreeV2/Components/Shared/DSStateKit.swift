@@ -503,8 +503,13 @@ struct DSChipButton: View {
     /// وهو لا يعمل (ن-١١ فحص ٢٠٢٦-١٠-٠٧)
     @Environment(\.isEnabled) private var isEnabled
 
+    /// يتمدّد بعرض المساحة (شرائح بحث الشجرة الواسعة — طلب المالك ٢٠٢٦-١٠-٠٩)
+    var fillsWidth: Bool = false
+
     init(_ title: String, icon: String? = nil, tint: Color = DS.Color.primary, isSelected: Bool = false,
-         count: Int? = nil, size: DSChipSize = .regular, isLoading: Bool = false, action: @escaping () -> Void) {
+         count: Int? = nil, size: DSChipSize = .regular, isLoading: Bool = false, fillsWidth: Bool = false,
+         action: @escaping () -> Void) {
+        self.fillsWidth = fillsWidth
         self.title = title
         self.icon = icon
         self.tint = tint
@@ -555,7 +560,7 @@ struct DSChipButton: View {
             }
             .foregroundColor(isSelected ? .white : ink)
             .padding(.horizontal, padding)
-            .frame(minHeight: height)
+            .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: height)
             .background {
                 if isSelected {
                     Capsule().fill(chrome ? DSActionFill.style() : AnyShapeStyle(tint.dsChromeFill(in: section).dsSolidFill))
@@ -883,5 +888,41 @@ extension AppSection {
         case .projects:  return .projects
         default:         return nil
         }
+    }
+}
+
+
+// MARK: - زرّ الإجراء الخطِر النادر (نصّي صغير)
+
+/// إجراء خطِر نادر لا رجعة فيه («حذف الحساب»): نصّ أحمر صغير بأيقونة، بلا تعبئة ولا إطار — يختلف شكلاً
+/// وحجماً ومكاناً عن الأزرار الممتلئة مثل «تسجيل الخروج» (طلب المالك ٢٠٢٦-١٠-١٠). مساحة ضغط ٤٤.
+struct DSDangerTextButton: View {
+    let title: String
+    var icon: String = "trash"
+    let action: () -> Void
+
+    init(_ title: String, icon: String = "trash", action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xsm) {
+                Image(systemName: icon)
+                    .dsGlyph(DS.Glyph.sm)
+                Text(title)
+                    .dsFont(.callout)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundColor(DS.Color.error)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSPressStyle())
     }
 }

@@ -128,6 +128,7 @@ struct TreeSearchOverlay: View {
             BranchPickerSheet(
                 allMembers: memberVM.allMembers,
                 selectedId: branchRootId,
+                showsSearch: false,
                 onSelect: { id in
                     branchRootId = id
                     branchPickerOpen = false
@@ -219,14 +220,21 @@ struct TreeSearchOverlay: View {
     @ViewBuilder
     private var filtersBar: some View {
         if usesFullHeight || showFiltersWhenEmpty || !searchText.isEmpty {
-            HStack(spacing: DS.Spacing.sm) {
-                // المبدّل الواحد بدل منتقي النظام المقسّم
-                DSSegmentedSwitch(options: StatusFilter.allCases.map {
-                    DSSegmentOption(id: $0, title: $0.label, icon: $0.icon)
-                }, selection: $statusFilter, size: .regular)
-
-                branchPill
+            // طلب المالك ٢٠٢٦-١٠-٠٩: الحالة شرائح صغيرة بسطر الفرع، والفرع المختار باسمه وعدده
+            // (بلا «آخر عمليات البحث» ولا فروع جاهزة — طلبه)
+            // الشرائح بمنتصف عرض الشاشة (طلب المالك ٢٠٢٦-١٠-٠٩)؛ إن ضاقت (خط كبير) تتمرّر أفقياً
+            ViewThatFits(in: .horizontal) {
+                // شرائح واسعة تملأ عرض البطاقة (طلب المالك «خلها وسيعة»)
+                filterChipsRow(fill: true)
+                    .padding(.horizontal, DS.Spacing.sm)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    filterChipsRow(fill: false)
+                        .padding(.horizontal, DS.Spacing.sm)
+                }
             }
+            .padding(.vertical, DS.Spacing.xs)
+            // فوق الكانفس: بطاقة الأدوات الزجاجية الواحدة (لا تظهر العُقد من خلف الشرائح)
+            .treeToolbarCard()
             .padding(.horizontal, DS.Spacing.md)
             .padding(.top, DS.Spacing.sm)
             .padding(.bottom, DS.Spacing.xs)
@@ -468,14 +476,36 @@ struct TreeSearchOverlay: View {
         return parts.joined(separator: " ")
     }
 
+    /// شرائح الحالة + فاصل + شريحة الفرع — `fill`: تتمدّد بعرض البطاقة، وإلا بعرض نصّها (للتمرير)
+    @ViewBuilder
+    private func filterChipsRow(fill: Bool) -> some View {
+        let row = HStack(spacing: DS.Spacing.xs) {
+            ForEach(StatusFilter.allCases, id: \.self) { f in
+                DSChipButton(f.label, isSelected: statusFilter == f, size: .small, fillsWidth: fill) {
+                    withAnimation(DS.Anim.snappy) { statusFilter = f }
+                }
+            }
+            Capsule()
+                .fill(DS.Color.textTertiary.opacity(DS.Opacity.divider))
+                .frame(width: DS.Border.width, height: DSBox.chipHeightSmall * 0.6)
+                .padding(.horizontal, DS.Spacing.xxs)
+            // الفرع بعرض نصّه كاملاً (لا يُقصّ) — الشرائح الثلاث تتقاسم الباقي
+            branchPill(fill: false)
+                .fixedSize()
+        }
+        if fill { row } else { row.fixedSize() }
+    }
+
     // MARK: - Branch Pill (مدمج داخل صف الفلاتر)
 
-    /// شريحة الفرع (`DSChipButton`) — مختارة: ممتلئة باسم الفرع و× بجانبها يلغيه. مدمجة بجانب فلتر الحالة.
+    /// شريحة الفرع (`DSChipButton`) — مختارة: ممتلئة بـ«فرع <الاسم>» وعدد أفراده، و× بجانبها يلغيه.
     @ViewBuilder
-    private var branchPill: some View {
+    private func branchPill(fill: Bool) -> some View {
         if let m = branchRootMember {
             HStack(spacing: DS.Spacing.xxs) {
-                DSChipButton(m.firstName, icon: "tree.fill", isSelected: true, size: .small) { branchPickerOpen = true }
+                DSChipButton(L10n.t("فرع \(m.firstName)", "\(m.firstName)'s branch"), icon: "tree.fill",
+                             isSelected: true, count: branchDescendantIds?.count, size: .small,
+                             fillsWidth: fill) { branchPickerOpen = true }
                 Button {
                     branchRootId = nil
                 } label: {
@@ -486,7 +516,8 @@ struct TreeSearchOverlay: View {
                 .accessibilityLabel(L10n.t("إلغاء الفرع", "Clear branch"))
             }
         } else {
-            DSChipButton(L10n.t("الفرع", "Branch"), icon: "tree", size: .small) { branchPickerOpen = true }
+            DSChipButton(L10n.t("اختر فرعاً", "Pick branch"), icon: "tree", size: .small,
+                         fillsWidth: fill) { branchPickerOpen = true }
         }
     }
 

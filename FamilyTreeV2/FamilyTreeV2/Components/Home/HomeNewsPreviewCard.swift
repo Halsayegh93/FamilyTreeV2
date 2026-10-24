@@ -13,6 +13,8 @@ struct HomeNewsPreviewCard: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     /// أخبار من حظرهم المستخدم لا تظهر في المعاينة (Guideline 1.2)
     @ObservedObject private var blockedStore = BlockedMembersStore.shared
+    /// نقطة «جديد» بجانب العنوان إذا فيه خبر لم يُفتح
+    @ObservedObject private var newDots = NewContentTracker.shared
 
     /// يُستدعى عند الضغط على البطاقة لفتح صفحة الأخبار
     let onTap: () -> Void
@@ -59,9 +61,13 @@ struct HomeNewsPreviewCard: View {
                                 .map { AnyView($0.frame(width: DS.Icon.sizeLg, height: DS.Icon.tapTarget)) }
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(L10n.t("الأخبار والمناسبات", "News & Events"))
-                    .dsFont(.title)
-                    .foregroundColor(DS.Color.textPrimary)
+                HStack(spacing: DS.Spacing.xsm) {
+                    Text(L10n.t("الأخبار والمناسبات", "News & Events"))
+                        .dsFont(.title)
+                        .foregroundColor(DS.Color.textPrimary)
+                    if newDots.hasNew(.news) { DSNewDot(size: 9) }
+                }
+                .animation(DS.Anim.snappy, value: newDots.hasNew(.news))
                 if !newsVM.allNews.isEmpty {
                     // الإجمالي من السيرفر — لا عدد المحمَّل فقط
                     Text("\(max(newsVM.totalNewsCount, newsVM.allNews.count)) " + L10n.t("منشور", "posts"))

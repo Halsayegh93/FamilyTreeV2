@@ -109,8 +109,7 @@ serve(async (req) => {
 
     for (const entry of tokenEntries) {
       const { token, env } = entry;
-      const host = apnsHostFor(env);
-      const res = await fetch(`${host}/3/device/${token}`, {
+      const sendApns = (host: string) => fetch(`${host}/3/device/${token}`, {
         method: "POST",
         headers: {
           authorization: `bearer ${jwt}`,
@@ -129,13 +128,29 @@ serve(async (req) => {
           ...(typeof record.notification_id === "string" ? { notification_id: record.notification_id } : {}),
         }),
       });
+      const res = await sendApns(apnsHostFor(env));
       if (res.ok) {
         sent++;
-      } else {
-        const reason = await res.text();
-        failures.push({ token: token.substring(0, 8) + "...", status: res.status, reason, env });
-        if (res.status === 410) {
-          await supabase.from("device_tokens").delete().eq("token", token);
+        continue;
+      }
+      const reason = await res.text();
+      failures.push({ token: token.substring(0, 8) + "...", status: res.status, reason, env });
+      if (res.status === 410) {
+        await supabase.from("device_tokens").delete().eq("token", token);
+      } else if (res.status === 400 && reason.includes("BadDeviceToken")) {
+        // ٢٠٢٦-١٠-٢١ (موافقة المالك): BadDeviceToken = التوكن لبيئة Apple الثانية (نسخة تجريبية ↔ متجر) أو ميت.
+        // محاولة واحدة على البيئة الثانية: قبلته ← وصل الإشعار ونصحّح العمود؛ رفضته كذلك ← التوكن ميت فيُحذف.
+        const otherEnv = env === "sandbox" ? "production" : "sandbox";
+        const retry = await sendApns(apnsHostFor(otherEnv));
+        if (retry.ok) {
+          sent++;
+          failures.pop();
+          await supabase.from("device_tokens").update({ environment: otherEnv }).eq("token", token);
+        } else {
+          const retryReason = await retry.text();
+          if (retry.status === 410 || (retry.status === 400 && retryReason.includes("BadDeviceToken"))) {
+            await supabase.from("device_tokens").delete().eq("token", token);
+          }
         }
       }
     }

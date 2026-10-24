@@ -35,7 +35,7 @@ struct DiwaniyasView: View {
                         subtitle: L10n.t("ديوانيات وحسينيات · \(cachedVisibleDiwaniyas.count)",
                                          "Diwaniyas & husseiniyas · \(cachedVisibleDiwaniyas.count)"),
                         icon: AppSection.diwaniyas.symbol,   // «مجلس»
-                        backgroundGradient: AppSection.diwaniyas.gradient
+                        section: .diwaniyas
                     )
 
                     kindFilterBar
@@ -163,6 +163,7 @@ struct DiwaniyasView: View {
                 await viewModel.fetchDiwaniyas()
             }
             .onAppear {
+                NewContentTracker.shared.markSeen(.diwaniyas)   // «النقاط الصفراء»: فُتح القسم
                 viewModel.canModerate = authVM.canModerate
                 viewModel.authVM = authVM
                 viewModel.notificationVM = notificationVM

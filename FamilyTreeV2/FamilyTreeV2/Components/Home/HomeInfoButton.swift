@@ -13,7 +13,7 @@ struct HomeInfoButton: View {
             // نفس حجم الجرس (22) وعرض أضيق ليقترب منه
             Image(systemName: "info.circle")
                 .dsGlyph(DS.Glyph.xxl, weight: .semibold)
-                .foregroundStyle(DS.Color.textOnPrimary)
+                .foregroundStyle(DS.Color.headerGlyph)
                 .frame(width: DS.Icon.row, height: DS.Icon.tapTarget)
         }
         .buttonStyle(BounceButtonStyle())

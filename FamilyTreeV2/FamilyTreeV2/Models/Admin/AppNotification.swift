@@ -110,11 +110,17 @@ extension AppNotification {
         let type: String?
         let memberId: String?
         let newsId: String?
+        /// «مسار الموافقات» (`type = approval_workflow`): الطلب ومرحلته — عمودا الطلب في الإشعار فارغان عمداً
+        /// (حتى لا تُظهر النسخ القديمة «قبول» سريعاً)
+        let workflowRequestId: String?
+        let workflowStage: String?
 
         enum CodingKeys: String, CodingKey {
             case v, changes, type
             case memberId = "member_id"
             case newsId = "news_id"
+            case workflowRequestId = "request_id"
+            case workflowStage = "stage"
         }
 
         nonisolated struct ChangeEntry: Codable, Sendable, Equatable, Identifiable {
@@ -131,6 +137,8 @@ extension AppNotification {
             self.type = nil
             self.memberId = nil
             self.newsId = nil
+            self.workflowRequestId = nil
+            self.workflowStage = nil
         }
 
         /// حمولة «ما الذي تغيّر» أو حمولة نوع خاص (إعلان وفاة) — الغائب يأخذ قيمة فارغة
@@ -139,6 +147,8 @@ extension AppNotification {
             type = try? c.decodeIfPresent(String.self, forKey: .type)
             memberId = try? c.decodeIfPresent(String.self, forKey: .memberId)
             newsId = try? c.decodeIfPresent(String.self, forKey: .newsId)
+            workflowRequestId = try? c.decodeIfPresent(String.self, forKey: .workflowRequestId)
+            workflowStage = try? c.decodeIfPresent(String.self, forKey: .workflowStage)
             changes = (try? c.decodeIfPresent([ChangeEntry].self, forKey: .changes)) ?? []
             if let version = try? c.decodeIfPresent(Int.self, forKey: .v) {
                 v = version

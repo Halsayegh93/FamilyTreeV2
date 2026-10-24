@@ -54,6 +54,17 @@ struct AdminMemberDetailSheet: View {
     @State private var showEmptyNameAlert = false
     @State private var showAvatarUploadError = false
 
+    // «حالة الحساب»: تجميد / حظر الرقم وإلغاؤهما من هنا (طلب المالك ٢٠٢٦-١٠-١٠)
+    private enum AccountAction: Identifiable { case activate, freeze, unfreeze, ban, unban; var id: Self { self } }
+    @State private var pendingAccountAction: AccountAction?
+    @State private var accountBusy: AccountAction?
+    /// حالة الحساب هنا — المجمّد قد لا يكون في قائمة الأعضاء المحمّلة، فلا يُقرأ منها
+    @State private var accountStatus: FamilyMember.MemberStatus?
+    @State private var activeBan: BannedPhone?
+    @State private var accountError = false
+    /// سبب الفشل إن عُرف (مثل تفعيل حساب بلا أب) — وإلا رسالة الاتصال العامة
+    @State private var accountErrorText: String?
+
     // MARK: - تغييرات لم تُحفظ (توصية أبل)
     // ما يُحفظ بزر «حفظ» فقط يُقارن بما فُتح عليه السجل — الصورة والأبناء (إضافة/تعديل/حذف)
     // تُحفظ فوراً فلا تُحسب.
@@ -107,6 +118,7 @@ struct AdminMemberDetailSheet: View {
     init(member: FamilyMember) {
         self.member = member
         self._currentAvatarURL = State(initialValue: member.avatarUrl)
+        self._accountStatus = State(initialValue: member.status)
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         self._selectedPhoneCountry = State(initialValue: detectedPhone.country)
         self._phoneNumber = State(initialValue: detectedPhone.localDigits)
@@ -168,7 +180,8 @@ struct AdminMemberDetailSheet: View {
             datesCard.dsStaggerIn(2)
             if !isMonitorOnly { lineageCard.dsStaggerIn(3) }
             bioCard.dsStaggerIn(4)
-            if !isMonitorOnly, canDeleteMember { deleteButton.dsStaggerIn(5) }
+            if showsAccountCard { accountCard.dsStaggerIn(5) }
+            if !isMonitorOnly, canDeleteMember { deleteButton.dsStaggerIn(6) }
         }
             // كل نوافذ التعديل المباشر ألواح بمنتصف الشاشة (طلب المالك)
             // قائمة أعضاء طويلة — مربّع طويل من الأسفل يُغلق بالسحب (توصية أبل)
@@ -206,6 +219,25 @@ struct AdminMemberDetailSheet: View {
                 }
             }
             .onAppear { setupLocalChildren() }
+            .task { await refreshAccount() }
+            // تأكيد التجميد / الحظر وإلغائهما — المربّع الوسطي الموحّد
+            .dsAlert(pendingAccountAction.map(accountActionTitle) ?? "",
+                     isPresented: Binding(get: { pendingAccountAction != nil },
+                                          set: { if !$0 { pendingAccountAction = nil } }),
+                     presenting: pendingAccountAction) { action in
+                Button(accountActionButton(action),
+                       role: action == .freeze || action == .ban ? .destructive : nil) {
+                    performAccountAction(action)
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { pendingAccountAction = nil }
+            } message: { action in
+                Text(accountActionMessage(action))
+            }
+            .dsAlert(L10n.t("تعذّر التنفيذ", "Couldn't Complete"), isPresented: $accountError) {
+                Button(L10n.t("حسناً", "OK")) { accountErrorText = nil }
+            } message: {
+                Text(accountErrorText ?? L10n.t("تأكد من الاتصال ثم حاول مرة أخرى.", "Check your connection and try again."))
+            }
             .onChange(of: showAddSonSheet) { isShowing in
                 if !isShowing { setupLocalChildren() }
             }
@@ -695,12 +727,225 @@ struct AdminMemberDetailSheet: View {
     /// السيرة: مربّع عمل بمنتصف الشاشة (`dsCenterBox`) — نفس مربّع تعديل البيانات
     private func openBioPopup() { showBioBox = true }
 
-    // MARK: - حذف السجل
-    /// الزرّ الواحد بالأحمر (حذف) — التأكيد كما هو
-    private var deleteButton: some View {
-        DSButton(L10n.t("حذف السجل نهائياً", "Permanently Delete"), icon: "trash.fill", role: .destructive) {
-            showDeleteConfirmation = true
+    // MARK: - حالة الحساب: التفعيل والتجميد وحظر الرقم (طلب المالك ٢٠٢٦-١٠-١٠)
+    /// لكل عضو مفعّلاً كان أو غير مفعّل («ابي حالة الحساب في السجل كامل») — للإدارة والمراقب
+    /// (نفس صلاحية التجميد في السجل)، لا على المالك ولا على النفس ولا على المتوفى
+    private var showsAccountCard: Bool {
+        authVM.canEditMembers && member.role != .owner
+            && member.id != authVM.currentUser?.id && member.isDeceased != true
+    }
+    /// مفعّل = حالته فعّالة وله رقم يدخل به (نفس تعريف «تفعيل الحسابات»)
+    private var isActivated: Bool { accountStatus == .active && !savedPhone.isEmpty }
+    /// زرّ «تفعيل الحساب»: بانتظار التفعيل وله رقم — طلبات الانضمام تُعتمد من «الطلبات»
+    private var canActivate: Bool {
+        (accountStatus == nil || accountStatus == .pending) && !savedPhone.isEmpty && member.role != .pending
+    }
+
+    /// شارة الحالة في رأس البطاقة
+    private var accountChip: (text: String, tint: Color) {
+        if isFrozen { return (L10n.t("مجمّد", "Frozen"), DS.Color.info) }
+        if isActivated { return (L10n.t("مفعّل", "Active"), DS.Color.success) }
+        return (L10n.t("غير مفعّل", "Not active"), DS.Color.warning)
+    }
+
+    /// سطر التفعيل لغير المفعّل: لماذا، وما المطلوب
+    private var activationNote: String {
+        if savedPhone.isEmpty {
+            return L10n.t("لا يوجد رقم يدخل به — أضف رقمه في «البيانات الأساسية» واحفظ.",
+                          "No number to sign in with — add it under Basic Info and save.")
         }
+        if member.role == .pending {
+            return L10n.t("طلب انضمام بانتظار الموافقة من «الطلبات».", "A join request awaiting approval in Requests.")
+        }
+        return L10n.t("الحساب بانتظار التفعيل — بعد التفعيل يدخل للتطبيق برقمه.",
+                      "Awaiting activation — once active they can sign in with their number.")
+    }
+    /// حظر الأرقام للمالك وحده (نفس صفحة «الأرقام المحظورة» وصلاحية السيرفر)
+    private var canBan: Bool { authVM.canManageBannedPhones }
+    private var isFrozen: Bool { accountStatus == .frozen }
+    private var savedPhone: String {
+        (memberVM.member(byId: member.id)?.phoneNumber ?? member.phoneNumber ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// زرّان بالصفّ ونصّ الزرّ نفسه يقول الحالة، وتحتهما سطر يشرح فائدة كلٍّ منهما
+    /// (طلب المالك ٢٠٢٦-١٠-١٠ «بسّط الأزرار» — بدل مربّع لكل إجراء بشارة ووصف طويل)
+    private var accountCard: some View {
+        adminCard(L10n.t("حالة الحساب", "Account Status"), icon: "lock.shield.fill", color: DS.Color.error,
+                  trailing: {
+                      DSStatusChip(text: accountChip.text, tint: accountChip.tint)
+                          .id(accountChip.text)
+                          .transition(.scale(scale: 0.8).combined(with: .opacity))
+                  }) {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                // غير المفعّل (وغير المجمّد): سبب عدم التفعيل، وزرّ «تفعيل الحساب» إن أمكن
+                if !isActivated && !isFrozen {
+                    accountNote(L10n.t("التفعيل", "Activation"), activationNote)
+                    if canActivate {
+                        DSButton(L10n.t("تفعيل الحساب", "Activate Account"), icon: "checkmark.seal.fill",
+                                 tint: DS.Color.success, isLoading: accountBusy == .activate) {
+                            pendingAccountAction = .activate
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    }
+                }
+                HStack(spacing: DSBox.buttonSpacing) {
+                    if isFrozen {
+                        DSButton(L10n.t("إلغاء التجميد", "Unfreeze"), icon: "checkmark.circle.fill",
+                                 tint: DS.Color.success, isLoading: accountBusy == .unfreeze) {
+                            pendingAccountAction = .unfreeze
+                        }
+                    } else {
+                        DSButton(L10n.t("تجميد", "Freeze"), icon: "snowflake",
+                                 tint: DS.Color.info, isLoading: accountBusy == .freeze) {
+                            pendingAccountAction = .freeze
+                        }
+                    }
+                    if canBan {
+                        if activeBan != nil {
+                            DSButton(L10n.t("إلغاء الحظر", "Lift Ban"), icon: "checkmark.circle.fill",
+                                     tint: DS.Color.success, isLoading: accountBusy == .unban) {
+                                pendingAccountAction = .unban
+                            }
+                        } else {
+                            // برتقالي «الرفض» لا أحمر الحذف — يتميّز عن «حذف السجل نهائياً» (طلب المالك ٢٠٢٦-١٠-١١)
+                            DSButton(L10n.t("حظر الرقم", "Ban Number"), icon: "phone.down.fill",
+                                     tint: DS.Color.reject, isLoading: accountBusy == .ban) {
+                                pendingAccountAction = .ban
+                            }
+                            .disabled(savedPhone.isEmpty)
+                        }
+                    }
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+                accountNote(L10n.t("التجميد", "Freeze"),
+                            L10n.t("يوقف الحساب مؤقتاً ويخفيه من الشجرة، وبياناته محفوظة.",
+                                   "Pauses the account and hides it from the tree; data is kept."))
+                if canBan {
+                    accountNote(L10n.t("الحظر", "Ban"),
+                                savedPhone.isEmpty
+                                ? L10n.t("لا يوجد رقم محفوظ لهذا العضو.", "No saved number for this member.")
+                                : L10n.t("يمنع الرقم من التسجيل نهائياً ويجمّد حساب صاحبه. إلغاء الحظر لا يلغي التجميد.",
+                                         "Blocks the number from signing up and freezes its account. Lifting the ban doesn't unfreeze."))
+                }
+            }
+            .animation(DS.Anim.snappy, value: accountStatus)
+            .animation(DS.Anim.snappy, value: activeBan?.id)
+        }
+    }
+
+    /// سطر الشرح: اسم الإجراء بخطّ أثقل ثم فائدته
+    private func accountNote(_ title: String, _ text: String) -> some View {
+        (Text(title + ": ").fontWeight(.semibold) + Text(text))
+            .dsFont(.footnote)
+            .foregroundColor(DS.Color.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func accountActionTitle(_ action: AccountAction) -> String {
+        switch action {
+        case .activate: return L10n.t("تفعيل حساب \(member.firstName)؟", "Activate \(member.firstName)'s account?")
+        case .freeze: return L10n.t("تجميد حساب \(member.firstName)؟", "Freeze \(member.firstName)'s account?")
+        case .unfreeze: return L10n.t("إلغاء تجميد \(member.firstName)؟", "Unfreeze \(member.firstName)?")
+        case .ban: return L10n.t("حظر رقم \(member.firstName)؟", "Ban \(member.firstName)'s number?")
+        case .unban: return L10n.t("إلغاء حظر رقم \(member.firstName)؟", "Lift the ban on \(member.firstName)'s number?")
+        }
+    }
+
+    private func accountActionButton(_ action: AccountAction) -> String {
+        switch action {
+        case .activate: return L10n.t("تفعيل الحساب", "Activate Account")
+        case .freeze: return L10n.t("تجميد الحساب", "Freeze Account")
+        case .unfreeze: return L10n.t("إلغاء التجميد", "Unfreeze")
+        case .ban: return L10n.t("حظر الرقم", "Ban Number")
+        case .unban: return L10n.t("إلغاء الحظر", "Lift Ban")
+        }
+    }
+
+    private func accountActionMessage(_ action: AccountAction) -> String {
+        switch action {
+        case .activate: return L10n.t("سيتمكن من الدخول للتطبيق برقمه.", "They will be able to sign in with their number.")
+        case .freeze: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُلغى التجميد.",
+                                    "They won't be able to use the app until unfrozen.")
+        case .unfreeze: return L10n.t("سيتمكن من الدخول للتطبيق مجدداً.", "They will be able to use the app again.")
+        case .ban: return L10n.t("لن يتمكن هذا الرقم من التسجيل، ويُجمَّد حساب صاحبه.",
+                                 "This number won't be able to sign up, and its account will be frozen.")
+        case .unban: return L10n.t("سيتمكن هذا الرقم من التسجيل مجدداً. الحساب يبقى مجمّداً حتى تلغي تجميده.",
+                                   "This number can sign up again. The account stays frozen until you unfreeze it.")
+        }
+    }
+
+    private func performAccountAction(_ action: AccountAction) {
+        pendingAccountAction = nil
+        accountBusy = action
+        Task {
+            var ok = true
+            switch action {
+            case .activate:
+                adminRequestVM.errorMessage = nil
+                await adminRequestVM.activateAccount(memberId: member.id)
+                // يرفض تفعيل حساب بلا أب في الشجرة ويشرح السبب
+                if let reason = adminRequestVM.errorMessage {
+                    adminRequestVM.errorMessage = nil
+                    accountErrorText = reason
+                    ok = false
+                }
+                await refreshStatus()
+            case .freeze, .unfreeze:
+                let target: FamilyMember.MemberStatus = action == .freeze ? .frozen : .active
+                ok = await memberVM.setMemberStatus(memberId: member.id, status: target)
+                if ok { withAnimation(DS.Anim.snappy) { accountStatus = target } }
+            case .ban:
+                ok = await authVM.banPhone(savedPhone, reason: L10n.t("من «إدارة السجل»: \(member.fullName)",
+                                                                      "From Member Admin: \(member.fullName)"))
+                await refreshBan()
+                await refreshStatus()   // السيرفر يجمّد صاحب الرقم المحظور
+            case .unban:
+                if let ban = activeBan { ok = await authVM.unbanPhone(ban.id) }
+                await refreshBan()
+            }
+            accountBusy = nil
+            if !ok { accountError = true }
+        }
+    }
+
+    /// الحالة والحظر من السيرفر عند الفتح — العضو المعروض قد يكون قديماً
+    private func refreshAccount() async {
+        guard showsAccountCard else { return }
+        await refreshStatus()
+        await refreshBan()
+    }
+
+    private func refreshStatus() async {
+        guard let status = await memberVM.fetchMemberStatus(memberId: member.id) else { return }
+        withAnimation(DS.Anim.snappy) { accountStatus = status }
+    }
+
+    private func refreshBan() async {
+        guard canBan, showsAccountCard, !savedPhone.isEmpty else { return }
+        let ban = await authVM.activeBan(for: savedPhone)
+        withAnimation(DS.Anim.snappy) { activeBan = ban }
+    }
+
+    // MARK: - حذف السجل
+    /// نصّ أحمر صغير في آخر المربّع مع تنبيه تحته — يختلف بالشكل والحجم والمكان عن «حظر الرقم»
+    /// (طلب المالك ٢٠٢٦-١٠-١١، نفس تفريق «حذف الحساب» في الإعدادات) — التأكيد كما هو
+    private var deleteButton: some View {
+        VStack(spacing: DS.Spacing.xs) {
+            DSDangerTextButton(L10n.t("حذف السجل نهائياً", "Permanently Delete")) {
+                showDeleteConfirmation = true
+            }
+            Text(L10n.t("يحذف العضو وكل بياناته من الشجرة، ولا يمكن التراجع عنه.",
+                        "Removes the member and all their data from the tree. This can't be undone."))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, DS.Spacing.md)
     }
 
     // MARK: - Setup / Validation Helpers

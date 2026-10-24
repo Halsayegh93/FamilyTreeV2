@@ -19,15 +19,37 @@ enum AppAppearance {
     static func apply(_ mode: String? = UserDefaults.standard.string(forKey: storageKey), animated: Bool = true) {
         let style = style(for: mode)
         for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
-            for window in scene.windows where window.overrideUserInterfaceStyle != style {
-                if animated {
-                    UIView.transition(with: window, duration: 0.25, options: .transitionCrossDissolve) {
-                        window.overrideUserInterfaceStyle = style
-                    }
-                } else {
+            // المربّعات المفتوحة فوق النافذة (الإعدادات ← المظهر) لا ترث تغيير النافذة: تبقى على وضعها
+            // القديم (الجهاز داكن واختار «فاتح» ⇒ بقيت داكنة — بلاغ المالك ٢٠٢٦-١٠-١٠). فيُضبط كلٌّ منها
+            // صراحةً — و«حسب الجهاز» يُضبط على وضع الجهاز الفعلي (ترك الضبط فارغاً أبقاها على القديم)
+            let boxStyle = style == .unspecified ? scene.traitCollection.userInterfaceStyle : style
+            for window in scene.windows {
+                let presented = presentedChain(of: window)
+                guard window.overrideUserInterfaceStyle != style
+                        || presented.contains(where: { $0.overrideUserInterfaceStyle != boxStyle }) else { continue }
+                let change = {
                     window.overrideUserInterfaceStyle = style
+                    presented.forEach { $0.overrideUserInterfaceStyle = boxStyle }
+                }
+                if animated {
+                    UIView.transition(with: window, duration: 0.25, options: .transitionCrossDissolve,
+                                      animations: change)
+                } else {
+                    change()
                 }
             }
         }
+    }
+
+    /// سلسلة المربّعات المعروضة فوق النافذة (مربّع فوق مربّع)
+    @MainActor
+    private static func presentedChain(of window: UIWindow) -> [UIViewController] {
+        var chain: [UIViewController] = []
+        var next = window.rootViewController?.presentedViewController
+        while let vc = next {
+            chain.append(vc)
+            next = vc.presentedViewController
+        }
+        return chain
     }
 }

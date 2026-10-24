@@ -142,6 +142,10 @@ struct NotificationsCenterView: View {
     @State private var joinMatchesLoaded: Bool = false
     /// confirmation dialog لخيارات الموافقة على طلب الانضمام (ربط أو إنشاء جديد)
     @State private var joinApproveDialog: AppNotification? = nil
+    /// «مسار الموافقات»: طلب العضو الذي يرد فيه على سؤال المختص من الإشعار نفسه
+    @State private var approvalReplyRequest: AdminRequest? = nil
+    /// تأكيد «وصل ردّك للإدارة» بعد الرد من الإشعار
+    @State private var approvalReplySent = false
     /// alert تأكيد قبل ربط طلب انضمام بعضو موجود (من قائمة المطابقات المحتملة)
     @State private var linkConfirmTarget: LinkConfirmation? = nil
 
@@ -821,6 +825,31 @@ struct NotificationsCenterView: View {
             joinMatchesLoaded = false
             await loadJoinMatchCandidates(for: notification)
             joinMatchesLoaded = true
+            // «مسار الموافقات»: طلبات العضو لزرّ «الرد على الإدارة» (إشعار المسار فقط) — لا يعتمد على المفتاح
+            // المحلي؛ الطلب المذكور غير موجود في «طلباتي» بعد → جلب فوري بلا مهلة
+            if notification.details?.type == "approval_workflow" {
+                let known = myWorkflowRequest(notification) != nil
+                await adminRequestVM.fetchMyPendingRequests(force: !known)
+            }
+        }
+        .dsCenterBox(item: $approvalReplyRequest) { request in
+            if let flow = adminRequestVM.memberApprovalSnapshot(for: request) {
+                ApprovalReplyBox(adminRequestVM: adminRequestVM, snapshot: flow,
+                                 requestTitle: notification.title,
+                                 onClose: { approvalReplyRequest = nil },
+                                 onSent: {
+                                     approvalReplyRequest = nil
+                                     approvalReplySent = true
+                                 })
+            } else {
+                Color.clear.onAppear { approvalReplyRequest = nil }
+            }
+        }
+        .dsAlert(L10n.t("تم إرسال ردّك", "Reply sent"), isPresented: $approvalReplySent, moment: .sentForApproval) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("وصل ردّك للإدارة، ويكمل طلبك مراجعته.",
+                        "Your reply reached the administration, and your request continues its review."))
         }
         .confirmationDialog(
             L10n.t("اختر طريقة الموافقة", "Choose approval method"),
@@ -942,10 +971,58 @@ struct NotificationsCenterView: View {
 
         detailBodyCard(notification: notification, iconInfo: iconInfo, index: bodyIndex)
 
+        // «مسار الموافقات»: فتح الطلب من إشعاره — صاحب الطلب يرى طلبه إن كان يحمل مرحلة من السيرفر،
+        // والطاقم «فتح في طلبات المراجعة» والمسار شغّال (داخل approvalLinkSection)
+        if notification.details?.type == "approval_workflow" {
+            approvalLinkSection(notification, index: bodyIndex + 1)
+        }
+
         if authVM.isAdmin,
            let details = notification.details,
            !details.changes.isEmpty {
             detailChangesSection(details, index: bodyIndex + 1)
+        }
+    }
+
+    // MARK: - «مسار الموافقات» (طلب المالك ٢٠٢٦-١٠-١٥)
+
+    /// طلب العضو نفسه المذكور في إشعار المسار (من «طلباتي»)
+    private func myWorkflowRequest(_ notification: AppNotification) -> AdminRequest? {
+        guard let rid = notification.details?.workflowRequestId.flatMap(UUID.init(uuidString:)) else { return nil }
+        return adminRequestVM.myPendingRequests.first { $0.id == rid }
+    }
+
+    /// صاحب الطلب والإدارة تطلب منه → «الرد على الإدارة» (بلا أدوار)؛ الطاقم → «فتح في طلبات المراجعة»
+    @ViewBuilder
+    private func approvalLinkSection(_ notification: AppNotification, index: Int) -> some View {
+        let mine = myWorkflowRequest(notification)
+        let flow = mine.flatMap(adminRequestVM.memberApprovalSnapshot(for:))
+        if let mine, let flow, flow.stage == .info {
+            DSComposerSection(title: L10n.t("طلبك", "Your request"), icon: "questionmark.bubble.fill",
+                              tint: DS.Color.composerDiwaniya, index: index) {
+                ApprovalTracker(stage: flow.stage, audience: .member)
+                ApprovalStageChips(snapshot: flow, audience: .member)
+                DSButton(L10n.t("الرد على الإدارة", "Reply to the administration"), icon: "arrowshape.turn.up.left.fill") {
+                    approvalReplyRequest = mine
+                }
+            }
+        } else if let flow {
+            DSComposerSection(title: L10n.t("طلبك", "Your request"), icon: "point.topleft.down.to.point.bottomright.curvepath.fill",
+                              tint: DS.Color.actionNavy, index: index) {
+                ApprovalTracker(stage: flow.stage, audience: .member)
+                ApprovalStageChips(snapshot: flow, audience: .member)
+            }
+        } else if authVM.canModerate && adminRequestVM.approvalsWorkflowOn {
+            DSButton(L10n.t("فتح في طلبات المراجعة", "Open in Review Requests"),
+                     icon: "point.topleft.down.to.point.bottomright.curvepath.fill") {
+                selectedNotification = nil
+                NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil,
+                                                    userInfo: ["kind": NotificationKind.adminRequest.rawValue])
+                }
+            }
+            .dsStaggerIn(index)
         }
     }
 
@@ -1613,15 +1690,18 @@ struct NotificationsCenterView: View {
 
             Spacer(minLength: 0)
 
-            // زر ربط/دمج (الشريحة الموحّدة) — يفتح alert تأكيد قبل الدمج (لا يربط مباشرة)
-            DSChipButton(L10n.t("ربط", "Link"), icon: "link", tint: DS.Color.secondary, size: .small) {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                guard let nid = selectedNotification?.id else { return }
-                linkConfirmTarget = LinkConfirmation(
-                    notificationId: nid,
-                    requesterId: requesterId,
-                    candidate: candidate
-                )
+            // زر ربط/دمج (الشريحة الموحّدة) — يفتح alert تأكيد قبل الدمج (لا يربط مباشرة).
+            // «مسار الموافقات» شغّال: الربط تنفيذٌ يأتي بعد اعتماد المدير من «طلبات المراجعة» — فلا زرّ هنا
+            if !adminRequestVM.approvalsWorkflowOn {
+                DSChipButton(L10n.t("ربط", "Link"), icon: "link", tint: DS.Color.secondary, size: .small) {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    guard let nid = selectedNotification?.id else { return }
+                    linkConfirmTarget = LinkConfirmation(
+                        notificationId: nid,
+                        requesterId: requesterId,
+                        candidate: candidate
+                    )
+                }
             }
         }
         .dsRowBox()

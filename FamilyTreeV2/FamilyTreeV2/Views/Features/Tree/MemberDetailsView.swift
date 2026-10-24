@@ -100,6 +100,7 @@ struct MemberDetailsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// ارتفاع شريط الأزرار السفلي (والرأس إن وُجد) — يدخل في ارتفاع المربّع المصغّر والموسّع
     @State private var panelFooterH: CGFloat = 0
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// أُعلن عن وفاته؟ nil = لم يُتحقق بعد (لا يظهر زر «إعلان وفاة»)
     @State private var deathAnnounced: Bool? = nil
     @State private var panelHeaderH: CGFloat = 0
@@ -1141,11 +1142,41 @@ struct MemberDetailsView: View {
         VStack(spacing: DS.Spacing.sm) {
             // إعلان وفاة — للمتوفى الذي لم يُعلن عنه، لمن يعتمد الوفيات
             if showsDeathAnnounce { deathAnnounceButton }
-        // صفّ الأزرار بمواصفة `DSBox` الواحدة (الإجراء بلون القسم، «إغلاق» رمادي، الأيقونات مربّعة بنفس الارتفاع)
-        HStack(spacing: DSBox.buttonSpacing) {
-            if let primary = primaryPanelAction {
-                DSButton(primary.title, icon: primary.icon, action: primary.run)
+        // صفّ الأزرار بمواصفة `DSBox` الواحدة (الإجراء بلون القسم، «إغلاق» رمادي، الأيقونات مربّعة بنفس الارتفاع).
+        // من «حجم النص» ٢× وأكبر لا يتّسع الصفّ → الإجراء سطر كامل وحده فوق الأيقونات و«إغلاق» (كان يُقصّ «تعديل مباشر»)؛
+        // بالحجم الافتراضي يبقى الصفّ كما هو
+        if dynamicTypeSize >= .xxLarge {
+            VStack(spacing: DSBox.buttonSpacing) {
+                panelPrimaryButton
+                HStack(spacing: DSBox.buttonSpacing) { panelSecondaryButtons }
             }
+        } else {
+            HStack(spacing: DSBox.buttonSpacing) {
+                panelPrimaryButton
+                panelSecondaryButtons
+            }
+        }
+        }
+        // نفس شريط أزرار مربّعات العمل (`DSComposer`): هوامشه وخطّه الشعري من `DSBox`
+        .padding(.horizontal, DSBox.footerHorizontal)
+        .padding(.top, DSBox.footerTop)
+        .padding(.bottom, DSBox.footerBottom)
+        .background(
+            DS.Color.background
+                .overlay(alignment: .top) {
+                    Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke)).frame(height: DS.Border.width)
+                }
+        )
+    }
+
+    @ViewBuilder private var panelPrimaryButton: some View {
+        if let primary = primaryPanelAction {
+            DSButton(primary.title, icon: primary.icon, action: primary.run)
+        }
+    }
+
+    /// إبلاغ، حظر، إغلاق
+    @ViewBuilder private var panelSecondaryButtons: some View {
             // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
             if !isViewingSelf && !member.isDeleted {
                 Button { showReportConfirm = true } label: {
@@ -1165,18 +1196,6 @@ struct MemberDetailsView: View {
                                                     : L10n.t("حظر العضو", "Block member"))
             }
             PanelCloseButton()
-        }
-        }
-        // نفس شريط أزرار مربّعات العمل (`DSComposer`): هوامشه وخطّه الشعري من `DSBox`
-        .padding(.horizontal, DSBox.footerHorizontal)
-        .padding(.top, DSBox.footerTop)
-        .padding(.bottom, DSBox.footerBottom)
-        .background(
-            DS.Color.background
-                .overlay(alignment: .top) {
-                    Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke)).frame(height: DS.Border.width)
-                }
-        )
     }
 
     /// زرّ أيقونة مربّع بارتفاع الزرّ الواحد (إبلاغ، حظر) بلون معناه الخفيف

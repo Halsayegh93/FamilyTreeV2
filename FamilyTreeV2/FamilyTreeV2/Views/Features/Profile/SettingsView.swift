@@ -25,8 +25,6 @@ struct SettingsView: View {
     @State private var showPrivacy = false
     @State private var showAppearance = false
     @State private var showLanguage = false
-    @State private var showGuide = false
-    @State private var showContactForm = false
     @State private var showAbout = false
     @State private var showTerms = false
     @State private var showDeleteConfirmation = false
@@ -51,30 +49,30 @@ struct SettingsView: View {
 
                 // الحركة (طلب المالك ٢٠٢٦-٠٩-٢٧): عنوان المجموعة ثم مربّعاتها واحداً بعد الآخر
                 // — نفس إيقاع المربّعات. «تقليل الحركة»: تلاشٍ فقط
-                tileGroup(t("التفضيلات", "Preferences"), icon: "slider.horizontal.3",
-                          tiles: preferenceTiles, startIndex: preferencesStart)
-                tileGroup(t("الحساب", "Account"), icon: "person.crop.circle.fill",
-                          tiles: accountTiles, startIndex: accountStart)
-                tileGroup(t("المساعدة", "Help"), icon: "questionmark.circle.fill",
-                          tiles: helpTiles, startIndex: helpStart)
+                // شبكة واحدة بلا مجموعات، ٣ بالسطر، من الأكثر استخداماً للأقل (طلب المالك ٢٠٢٦-١٠-١٠؛
+                // «دليل الاستخدام» أُزيل من هنا — يُفتح من زرّ (i) في الرئيسية)
+                tileGrid(allTiles, startIndex: 1)
+
+                // حذف الحساب — آخر الصفحة بعيداً عن الاستعمال اليومي: نصّ أحمر صغير بلا تعبئة مع سطر تحذير،
+                // لا زرّ أحمر عريض مثبّت (كان يشبه «تسجيل الخروج» — طلب المالك ٢٠٢٦-١٠-١٠ «نفرّق بالشكل والحجم والمكان»)
+                VStack(spacing: DS.Spacing.xxs) {
+                    DSDangerTextButton(t("حذف الحساب", "Delete Account")) {
+                        showDeleteConfirmation = true
+                    }
+                    Text(t("حذف نهائي لبياناتك ولا يمكن التراجع عنه.", "Permanently deletes your data — this can't be undone."))
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .multilineTextAlignment(.center)
+                    versionLabel
+                        .padding(.top, DS.Spacing.sm)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, DS.Spacing.lg)
+                .dsStaggerIn(allTiles.count + 1)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxl)
-        }
-        // حذف الحساب — زر عريض مثبّت أسفل الشاشة (طلب المالك) + رقم الإصدار — الزرّ الواحد بدور الحذف
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: DS.Spacing.xs) {
-                DSButton(t("حذف الحساب", "Delete Account"), icon: "trash", role: .destructive) {
-                    showDeleteConfirmation = true
-                }
-                versionLabel
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(DS.Color.background)
-            // الشريط السفلي آخر التسلسل (بعد آخر مربّع)
-            .dsStaggerIn(helpStart + helpTiles.count + 1)
         }
         // الرأس الملوّن الموحّد للصفحات الفرعية (بدل بطاقة الرأس و«إغلاق») — × في الطرف لأنها ورقة
         .dsSubPageHeader(t("الإعدادات", "Settings"), nav: .close)
@@ -104,14 +102,6 @@ struct SettingsView: View {
         }
         .dsCenterBox(isPresented: $showLanguage, onBackgroundTap: { showLanguage = false }) {
             AppearanceSettingsView(focus: .language).environmentObject(appSettingsVM)
-        }
-        // «دليل الاستخدام» — نفس مربّع علامة المعلومات في الرئيسية، مفتوحاً على الدليل
-        .dsCenterBox(isPresented: $showGuide, onBackgroundTap: { showGuide = false }) {
-            AppGuideBox(startOn: .guide).environmentObject(authVM)
-        }
-        // التواصل مع الإدارة — نفس مربّع «التواصل» في الرئيسية
-        .dsCenterBox(isPresented: $showContactForm) {
-            MemberContactFormView().environmentObject(authVM)
         }
         .dsCenterBox(isPresented: $showAbout, onBackgroundTap: { showAbout = false }) { AboutView() }
         .dsTallBox(isPresented: $showTerms) { PrivacyPolicyView() }   // قراءة طويلة — مربّع طويل (توصية أبل)
@@ -235,12 +225,6 @@ struct SettingsView: View {
     @State private var heroAppeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// عنوان مجموعة — عنوان القسم المشترك (نفس عناوين أقسام المربّعات)
-    private func groupTitle(_ title: String, icon: String) -> some View {
-        DSSectionTitle(title: title, icon: icon, tint: DS.Color.primary)
-            .padding(.bottom, -DS.Spacing.sm)
-    }
-
     // MARK: - المجموعات: عنوان + شبكة مربّعات
 
     /// مربّع إعداد واحد في مجموعة
@@ -255,12 +239,8 @@ struct SettingsView: View {
         let action: () -> Void
     }
 
-    /// عنوان المجموعة ثم مربّعاتها الصغيرة — عمودياً ثلاثة في الصف، وأفقياً شبكة تكيّفية أكثف
-    /// (`DS.Landscape.compactTileMinWidth`). المربّعات في الصف بارتفاع واحد (أطولها) — بلا رقم ثابت.
-    @ViewBuilder
-    private func tileGroup(_ title: String, icon: String, tiles: [SettingsTile], startIndex: Int) -> some View {
-        groupTitle(title, icon: icon)
-            .dsStaggerIn(startIndex)
+    /// شبكة المربّعات وحدها (بلا عنوان مجموعة) — نفس مقاس وأسلوب مربّعات المجموعات
+    private func tileGrid(_ tiles: [SettingsTile], startIndex: Int) -> some View {
         LazyVGrid(columns: landscape
                     ? [GridItem(.adaptive(minimum: DS.Landscape.compactTileMinWidth), spacing: DS.Spacing.sm)]
                     : Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: Self.portraitColumns),
@@ -271,15 +251,18 @@ struct SettingsView: View {
                               liveNumber: tile.liveNumber)
                 }
                 .buttonStyle(DSScaleButtonStyle())
-                .dsStaggerIn(startIndex + 1 + index)
+                .dsStaggerIn(startIndex + index)
             }
         }
     }
 
-    /// تسلسل الدخول: كل مجموعة تبدأ بعد آخر مربّع في التي قبلها
-    private var preferencesStart: Int { 1 }
-    private var accountStart: Int { preferencesStart + preferenceTiles.count + 1 }
-    private var helpStart: Int { accountStart + accountTiles.count + 1 }
+    /// كل المربّعات بترتيب الاستعمال (طلب المالك ٢٠٢٦-١٠-١٠ «بدون مجموعات»)
+    private var allTiles: [SettingsTile] {
+        let byId = Dictionary(uniqueKeysWithValues: (preferenceTiles + accountTiles + helpTiles).map { ($0.id, $0) })
+        // «تعديل الملف» أُزيل ٢٠٢٦-١٠-١٠ — يبقى من قلم بطاقة الهوية أعلى الإعدادات
+        let order = ["notifications", "privacy", "appearance", "language", "devices", "terms", "about"]
+        return order.compactMap { byId[$0] }
+    }
 
     /// «التفضيلات»: الإشعارات · الخصوصية · المظهر · اللغة — كلٌّ يفتح جزءه من مربّعه
     private var preferenceTiles: [SettingsTile] {
@@ -294,27 +277,19 @@ struct SettingsView: View {
                       title: t("اللغة", "Language"), value: languageLabel) { showLanguage = true }]
     }
 
-    /// «الحساب»: تعديل الملف (نفس مربّع القلم) · الأجهزة المرتبطة
+    /// «الحساب»: الأجهزة المرتبطة («تعديل الملف» من قلم بطاقة الهوية)
     private var accountTiles: [SettingsTile] {
-        [SettingsTile(id: "editProfile", icon: "square.and.pencil", color: chromeInk,
-                      title: t("تعديل الملف", "Edit Profile"),
-                      value: t("الصورة والبيانات والسيرة", "Photo, details & bio")) { showEditProfile = true },
-         SettingsTile(id: "devices", icon: "iphone.gen3", color: DS.Color.info,
+        [SettingsTile(id: "devices", icon: "iphone.gen3", color: DS.Color.info,
                       title: t("الأجهزة المرتبطة", "Linked Devices"),
                       value: t("\(notificationVM.linkedDevices.count) جهاز", "\(notificationVM.linkedDevices.count) devices"),
                       // العدد يصل بعد الجلب — يتبدّل بلفّة أرقام بدل القفز
                       liveNumber: true) { showLinkedDevices = true }]
     }
 
-    /// «المساعدة»: دليل الاستخدام · تواصل مع الإدارة · عن التطبيق · الخصوصية والشروط
+    /// عن التطبيق · الخصوصية والشروط («دليل الاستخدام» و«تواصل مع الإدارة» أُزيلا ٢٠٢٦-١٠-١٠ —
+    /// الدليل من زرّ (i) والتواصل من مربّع «التواصل» في الرئيسية)
     private var helpTiles: [SettingsTile] {
-        [SettingsTile(id: "guide", icon: "book.pages.fill", color: DS.Color.accent,
-                      title: t("دليل الاستخدام", "User Guide"),
-                      value: t("تعرّف على التطبيق", "Learn the app")) { showGuide = true },
-         SettingsTile(id: "contact", icon: "envelope.fill", color: DS.Color.info,
-                      title: t("تواصل مع الإدارة", "Contact the Admins"),
-                      value: t("راسلنا ويصلك الرد", "You'll get a reply")) { showContactForm = true },
-         SettingsTile(id: "about", icon: "app.badge.fill", color: DS.Color.secondary,
+        [SettingsTile(id: "about", icon: "app.badge.fill", color: DS.Color.secondary,
                       title: t("عن التطبيق", "About"), value: AppVersion.string) { showAbout = true },
          SettingsTile(id: "terms", icon: "doc.text.fill", color: chromeInk,
                       title: t("الخصوصية والشروط", "Privacy & Terms"),
@@ -843,14 +818,36 @@ struct AppearanceSettingsView: View {
         }
     }
 
-    private var boxIcon: String { focus == .language ? "character.bubble.fill" : "paintbrush.fill" }
+    private var boxIcon: String {
+        switch focus {
+        case .language: return "character.bubble.fill"
+        case .all: return "paintbrush.fill"
+        // مربّع «المظهر» وحده: المجسّم يتبع الاختيار — شمس / هلال / نصف دائرة
+        case .appearance:
+            switch appearanceMode {
+            case "light": return "sun.max.fill"
+            case "dark": return "moon.stars.fill"
+            default: return "circle.lefthalf.filled"
+            }
+        }
+    }
+
+    /// لون المربّع — مربّع «المظهر» يتلوّن بالاختيار (طلب المالك ٢٠٢٦-١٠-١٠): أزرق الصباح للفاتح،
+    /// نيلي الليل للداكن، بنفسجي الغسق لـ«حسب الجهاز»
+    private var boxTint: Color {
+        focus == .appearance ? AppearanceSkyScene.tint(for: appearanceMode) : DS.Color.composerLibrary
+    }
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
     private var appearanceOptions: [DSOptionTile<String>] {
-        [DSOptionTile("system", title: t("حسب الجهاز", "System"), icon: "iphone", tint: DS.Color.accent),
-         DSOptionTile("light", title: t("فاتح", "Light"), icon: "sun.max.fill", tint: DS.Color.accent),
-         DSOptionTile("dark", title: t("داكن", "Dark"), icon: "moon.stars.fill", tint: DS.Color.accent)]
+        // كل خيار بلون مشهده (نفس لون المربّع حين يُختار)
+        [DSOptionTile("system", title: t("حسب الجهاز", "System"), icon: "iphone",
+                      tint: AppearanceSkyScene.tint(for: "system")),
+         DSOptionTile("light", title: t("فاتح", "Light"), icon: "sun.max.fill",
+                      tint: AppearanceSkyScene.tint(for: "light")),
+         DSOptionTile("dark", title: t("داكن", "Dark"), icon: "moon.stars.fill",
+                      tint: AppearanceSkyScene.tint(for: "dark"))]
     }
 
     private var languageOptions: [DSOptionTile<String>] {
@@ -870,7 +867,7 @@ struct AppearanceSettingsView: View {
             title: boxTitle,
             subtitle: boxSubtitle,
             icon: boxIcon,
-            tint: DS.Color.composerLibrary,
+            tint: boxTint,
             actionTitle: "",
             showsAction: false,
             cancelTitle: t("إغلاق", "Close"),
@@ -880,8 +877,10 @@ struct AppearanceSettingsView: View {
         ) {
             if showsAppearance {
                 DSComposerSection(title: t("المظهر", "Appearance"), icon: "circle.lefthalf.filled",
-                                  tint: DS.Color.accent, index: 0) {
+                                  tint: boxTint, index: 0) {
                     VStack(spacing: DS.Spacing.sm) {
+                        // مشهد صباح / ليل متحرّك يتبع الاختيار (طلب المالك ٢٠٢٦-١٠-١٠)
+                        AppearanceSkyScene(mode: appearanceMode)
                         // مربّعات الاختيار الواحد المشتركة
                         DSOptionTiles(appearanceOptions, selection: $appearanceMode, columns: 3)
                             // التغيير لحظي على كل النوافذ — لا ينتظر إغلاق المربّع (طلب المالك ٢٠٢٦-١٠-٠٧)
@@ -929,6 +928,216 @@ struct AppearanceSettingsView: View {
         case "light": return t("الوضع الفاتح يبقى مفعّل دائماً.", "Light mode is always active.")
         case "dark": return t("الوضع الداكن يبقى مفعّل دائماً.", "Dark mode is always active.")
         default: return t("يتغيّر تلقائياً حسب إعدادات جهازك.", "Changes automatically with your device settings.")
+        }
+    }
+}
+
+// MARK: - مشهد «المظهر» المتحرّك
+/// سماء أعلى مربّع «المظهر» (طلب المالك ٢٠٢٦-١٠-١٠ «حط شكل الصباح أو الليل مع أنميشن»):
+/// فاتح = صباح (شمس تدور أشعتها وغيوم تسير)، داكن = ليل (هلال يتمايل ونجوم تلمع وشبّاك البيت يضيء)،
+/// «حسب الجهاز» = دورة نهار ↔ ليل متواصلة. التبديل بين الأوضاع غروب/شروق ناعم.
+/// «تقليل الحركة» (توصية أبل): المشهد ثابت على حالته.
+struct AppearanceSkyScene: View {
+    let mode: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.ftAnimationsPaused) private var animationsPaused
+
+    /// الوضع المرسوم الآن، ومستوى الليل لحظة آخر تبديل — منه ينتقل المشهد للهدف الجديد
+    @State private var shownMode: String?
+    @State private var fromLevel: Double = 0
+    @State private var changedAt = Date.distantPast
+
+    private static let transition: TimeInterval = 1.4
+    /// دورة «حسب الجهاز»: نهار ← ليل ← نهار
+    private static let cyclePeriod: TimeInterval = 9
+
+    /// لون كل وضع — للمربّع وخياره
+    static func tint(for mode: String) -> Color {
+        switch mode {
+        case "light": return Color(red: 0.17, green: 0.48, blue: 0.75)   // أزرق الصباح
+        case "dark": return Color(red: 0.29, green: 0.31, blue: 0.66)    // نيلي الليل
+        default: return Color(red: 0.48, green: 0.31, blue: 0.63)        // بنفسجي الغسق
+        }
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: nil, paused: reduceMotion || animationsPaused)) { timeline in
+            let now = timeline.date
+            Canvas { ctx, size in
+                draw(&ctx, size: size, night: level(at: now), time: now.timeIntervalSinceReferenceDate)
+            }
+        }
+        .frame(height: 112)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+        .accessibilityHidden(true)
+        .onAppear {
+            guard shownMode == nil else { return }
+            shownMode = mode
+            fromLevel = target(mode, at: Date().timeIntervalSinceReferenceDate)
+        }
+        .onChange(of: mode) { newMode in
+            // يبدأ الانتقال من حيث المشهد الآن (ولو في منتصف دورة أو انتقال سابق)
+            let now = Date()
+            fromLevel = level(at: now)
+            shownMode = newMode
+            changedAt = now
+        }
+    }
+
+    // MARK: مستوى الليل (٠ نهار … ١ ليل)
+
+    private func target(_ m: String?, at t: TimeInterval) -> Double {
+        switch m {
+        case "light": return 0
+        case "dark": return 1
+        default:
+            if reduceMotion { return 0.5 }   // غسق ثابت
+            return (1 - cos(t / Self.cyclePeriod * 2 * .pi)) / 2
+        }
+    }
+
+    private func level(at date: Date) -> Double {
+        let goal = target(shownMode ?? mode, at: date.timeIntervalSinceReferenceDate)
+        let k = min(1, max(0, date.timeIntervalSince(changedAt) / Self.transition))
+        let eased = k * k * (3 - 2 * k)
+        return fromLevel + (goal - fromLevel) * eased
+    }
+
+    // MARK: الرسم
+
+    private struct RGB {
+        var r, g, b: Double
+        func mix(_ o: RGB, _ k: Double) -> RGB { RGB(r: r + (o.r - r) * k, g: g + (o.g - g) * k, b: b + (o.b - b) * k) }
+        var color: Color { Color(red: r, green: g, blue: b) }
+    }
+
+    private static let dayTop = RGB(r: 0.43, g: 0.73, b: 0.96), dayBottom = RGB(r: 1.00, g: 0.87, b: 0.64)
+    private static let nightTop = RGB(r: 0.04, g: 0.07, b: 0.22), nightBottom = RGB(r: 0.21, g: 0.18, b: 0.45)
+    private static let farHillDay = RGB(r: 0.55, g: 0.76, b: 0.52), farHillNight = RGB(r: 0.14, g: 0.15, b: 0.34)
+    private static let nearHillDay = RGB(r: 0.36, g: 0.64, b: 0.40), nearHillNight = RGB(r: 0.08, g: 0.09, b: 0.22)
+    private static let sunCore = RGB(r: 1.00, g: 0.93, b: 0.55), sunEdge = RGB(r: 1.00, g: 0.70, b: 0.20)
+    private static let moonColor = RGB(r: 0.99, g: 0.95, b: 0.80)
+
+    /// النجوم: موضع نسبي ونصف قطر
+    private static let stars: [(x: Double, y: Double, r: Double)] = [
+        (0.06, 0.14, 1.2), (0.14, 0.38, 0.9), (0.21, 0.10, 1.5), (0.33, 0.27, 1.0), (0.41, 0.08, 1.1),
+        (0.47, 0.42, 0.8), (0.56, 0.18, 1.4), (0.63, 0.34, 0.9), (0.69, 0.07, 1.0), (0.80, 0.24, 1.3),
+        (0.87, 0.45, 0.8), (0.93, 0.12, 1.1), (0.26, 0.52, 0.8), (0.75, 0.50, 0.9)
+    ]
+    /// الغيوم: موضع البداية النسبي، الارتفاع، الحجم، والسرعة (نقطة/ثانية)
+    private static let clouds: [(x: Double, y: Double, scale: Double, speed: Double)] = [
+        (0.05, 0.30, 1.0, 7), (0.50, 0.17, 0.72, 4.5), (0.82, 0.44, 0.6, 10)
+    ]
+
+    private func draw(_ ctx: inout GraphicsContext, size: CGSize, night n: Double, time t: TimeInterval) {
+        let w = size.width, h = size.height
+        // ١) السماء
+        ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .linearGradient(
+            Gradient(colors: [Self.dayTop.mix(Self.nightTop, n).color, Self.dayBottom.mix(Self.nightBottom, n).color]),
+            startPoint: .zero, endPoint: CGPoint(x: 0, y: h)))
+
+        // ٢) النجوم — تظهر مع الليل، وكلٌّ يلمع بإيقاعه
+        for (i, s) in Self.stars.enumerated() {
+            let twinkle = 0.5 + 0.5 * sin(t * (1.2 + Double(i % 4) * 0.45) + Double(i) * 1.7)
+            let a = n * (0.35 + 0.65 * twinkle)
+            guard a > 0.02 else { continue }
+            let r = s.r * (0.85 + 0.3 * twinkle)
+            ctx.fill(Path(ellipseIn: CGRect(x: s.x * w - r, y: s.y * h - r, width: r * 2, height: r * 2)),
+                     with: .color(.white.opacity(a)))
+        }
+
+        // ٣) الشمس تغيب نزولاً مع الليل، و٤) الهلال يشرق صعوداً
+        if n < 0.99 {
+            drawSun(&ctx, at: CGPoint(x: w * 0.74, y: h * (0.34 + 0.95 * n)), radius: 16, spin: t * 0.4)
+        }
+        if n > 0.01 {
+            drawMoon(&ctx, at: CGPoint(x: w * 0.27, y: h * (1.3 - 0.96 * n) + sin(t * 0.8) * 2), radius: 14, glow: n)
+        }
+
+        // ٥) الغيوم تسير، وتخفت ليلاً
+        let cloudAlpha = 0.92 - 0.72 * n
+        let span = w + 120
+        for c in Self.clouds {
+            let x = (c.x * span + t * c.speed).truncatingRemainder(dividingBy: span) - 60
+            drawCloud(&ctx, at: CGPoint(x: x, y: c.y * h), scale: c.scale, alpha: cloudAlpha)
+        }
+
+        // ٦) التلال والبيت — شبّاكه يضيء ليلاً
+        var far = Path()
+        far.move(to: CGPoint(x: 0, y: h * 0.78))
+        far.addQuadCurve(to: CGPoint(x: w * 0.52, y: h * 0.76), control: CGPoint(x: w * 0.24, y: h * 0.56))
+        far.addQuadCurve(to: CGPoint(x: w, y: h * 0.70), control: CGPoint(x: w * 0.80, y: h * 0.94))
+        far.addLine(to: CGPoint(x: w, y: h)); far.addLine(to: CGPoint(x: 0, y: h)); far.closeSubpath()
+        ctx.fill(far, with: .color(Self.farHillDay.mix(Self.farHillNight, n).color))
+
+        let houseX = w * 0.60, ground = h * 0.86
+        drawHouse(&ctx, x: houseX, ground: ground, night: n)
+
+        var near = Path()
+        near.move(to: CGPoint(x: 0, y: h * 0.90))
+        near.addQuadCurve(to: CGPoint(x: w, y: h * 0.88), control: CGPoint(x: w * 0.5, y: h * 0.74))
+        near.addLine(to: CGPoint(x: w, y: h)); near.addLine(to: CGPoint(x: 0, y: h)); near.closeSubpath()
+        ctx.fill(near, with: .color(Self.nearHillDay.mix(Self.nearHillNight, n).color))
+    }
+
+    private func circle(_ c: CGPoint, _ r: CGFloat) -> Path {
+        Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
+    }
+
+    private func drawSun(_ ctx: inout GraphicsContext, at c: CGPoint, radius r: CGFloat, spin: Double) {
+        ctx.fill(circle(c, r * 2.3), with: .color(Self.sunCore.color.opacity(0.14)))
+        ctx.fill(circle(c, r * 1.6), with: .color(Self.sunCore.color.opacity(0.22)))
+        var rays = ctx
+        rays.translateBy(x: c.x, y: c.y)
+        rays.rotate(by: .radians(spin))
+        var p = Path()
+        for i in 0..<10 {
+            let a = Double(i) / 10 * 2 * .pi
+            p.move(to: CGPoint(x: cos(a) * r * 1.3, y: sin(a) * r * 1.3))
+            p.addLine(to: CGPoint(x: cos(a) * r * 1.72, y: sin(a) * r * 1.72))
+        }
+        rays.stroke(p, with: .color(Self.sunEdge.color), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+        ctx.fill(circle(c, r), with: .radialGradient(
+            Gradient(colors: [Self.sunCore.color, Self.sunEdge.color]),
+            center: CGPoint(x: c.x - r * 0.3, y: c.y - r * 0.3), startRadius: 0, endRadius: r * 1.3))
+    }
+
+    private func drawMoon(_ ctx: inout GraphicsContext, at c: CGPoint, radius r: CGFloat, glow: Double) {
+        ctx.fill(circle(c, r * 2.2), with: .color(.white.opacity(0.07 * glow)))
+        ctx.drawLayer { layer in
+            layer.fill(circle(c, r), with: .color(Self.moonColor.color))
+            layer.blendMode = .destinationOut
+            layer.fill(circle(CGPoint(x: c.x + r * 0.55, y: c.y - r * 0.32), r * 0.9), with: .color(.black))
+        }
+    }
+
+    private func drawCloud(_ ctx: inout GraphicsContext, at p: CGPoint, scale s: Double, alpha: Double) {
+        var cloud = Path()
+        cloud.addEllipse(in: CGRect(x: p.x - 22 * s, y: p.y - 5 * s, width: 46 * s, height: 15 * s))
+        cloud.addEllipse(in: CGRect(x: p.x - 13 * s, y: p.y - 13 * s, width: 20 * s, height: 19 * s))
+        cloud.addEllipse(in: CGRect(x: p.x - 1 * s, y: p.y - 10 * s, width: 18 * s, height: 15 * s))
+        ctx.fill(cloud, with: .color(.white.opacity(alpha)))
+    }
+
+    private func drawHouse(_ ctx: inout GraphicsContext, x: CGFloat, ground: CGFloat, night n: Double) {
+        let wall = CGRect(x: x - 11, y: ground - 15, width: 22, height: 15)
+        let wallColor = RGB(r: 0.98, g: 0.94, b: 0.86).mix(RGB(r: 0.18, g: 0.19, b: 0.36), n)
+        let roofColor = RGB(r: 0.80, g: 0.36, b: 0.27).mix(RGB(r: 0.12, g: 0.12, b: 0.26), n)
+        ctx.fill(Path(wall), with: .color(wallColor.color))
+        var roof = Path()
+        roof.move(to: CGPoint(x: x - 14, y: ground - 14))
+        roof.addLine(to: CGPoint(x: x, y: ground - 26))
+        roof.addLine(to: CGPoint(x: x + 14, y: ground - 14))
+        roof.closeSubpath()
+        ctx.fill(roof, with: .color(roofColor.color))
+        // الشبّاك: داكن نهاراً، دافئ مضيء ليلاً بهالة خفيفة
+        let window = CGRect(x: x - 4, y: ground - 11, width: 8, height: 7)
+        let lit = RGB(r: 1.0, g: 0.82, b: 0.38)
+        ctx.fill(Path(window), with: .color(RGB(r: 0.55, g: 0.70, b: 0.85).mix(lit, n).color))
+        if n > 0.05 {
+            ctx.fill(circle(CGPoint(x: window.midX, y: window.midY), 9), with: .color(lit.color.opacity(0.18 * n)))
         }
     }
 }

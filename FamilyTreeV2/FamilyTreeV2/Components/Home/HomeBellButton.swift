@@ -13,7 +13,7 @@ struct HomeBellButton: View {
                     // palette: اللون الأول للشارة (أحمر) والثاني للجرس (أبيض)
                     let bell = Image(systemName: "bell.badge.fill")
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(DS.Color.error, DS.Color.textOnPrimary)
+                        .foregroundStyle(DS.Color.error, DS.Color.headerGlyph)
                     if #available(iOS 17.0, *) {
                         bell.symbolEffect(.bounce, value: notificationVM.unreadNotificationsCount)
                     } else {
@@ -22,7 +22,7 @@ struct HomeBellButton: View {
                 } else {
                     Image(systemName: "bell")
                         .symbolRenderingMode(.monochrome)
-                        .foregroundStyle(DS.Color.textOnPrimary)
+                        .foregroundStyle(DS.Color.headerGlyph)
                 }
             }
             .dsGlyph(DS.Glyph.xxl, weight: .semibold)

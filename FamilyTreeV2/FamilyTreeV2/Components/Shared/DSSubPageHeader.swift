@@ -100,13 +100,13 @@ struct DSSubPageHeader<Trailing: View>: View {
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(title)
                         .font(DSBox.pageTitleFont)
-                        .foregroundColor(DS.Color.textOnPrimary)
+                        .foregroundColor(DS.Color.headerTitle)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     if let subtitle, !subtitle.isEmpty {
                         Text(subtitle)
                             .font(DSBox.pageSubtitleFont)
-                            .foregroundColor(DS.Color.overlayText)
+                            .foregroundColor(DS.Color.headerSubtitle)
                             // الوصف الطويل سطران (الرأس يطول — `minHeight`) بدل «…» مع مقاسات Apple
                             .lineLimit(compact ? 1 : DSBox.pageSubtitleLines)
                             .minimumScaleFactor(0.8)
@@ -144,9 +144,8 @@ struct DSSubPageHeader<Trailing: View>: View {
 
     private var background: some View {
         ZStack {
-            sec.gradient
-            // نفس طبقة MainHeaderView — بدونها يطلع الرأس أفتح
-            DS.Color.headerVeil
+            // تدرّج القسم + نفس طبقة MainHeaderView (بدونها يطلع الرأس أفتح) — «الهادئ»: لون القسم الخفيف
+            DSHeaderBackground(section: sec)
             if watermark, !artIcon.isEmpty {
                 // المجسّم نفسه كبيراً مائلاً شفافاً في الطرف الآخر (مثل رأس مربّع العمل) — زخرفة تُقصّ بحدود الرأس
                 // يخرج قليلاً من الطرف ويُقصّ — ويتنحّى عن أزرار الطرف إن وُجدت (الهوامش تتبع اتجاه اللغة)

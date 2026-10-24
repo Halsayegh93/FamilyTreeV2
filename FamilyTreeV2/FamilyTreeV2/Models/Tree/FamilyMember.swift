@@ -498,6 +498,15 @@ enum KuwaitPhone {
         return digits
     }
 
+    /// مفتاح مطابقة الحظر — نفس `phones_match_suffix` في السيرفر: أرقام فقط بلا 00 في البداية،
+    /// والرقم المحلي (٨ خانات) يُسبق بـ965، والأجنبي يبقى كاملاً برمز دولته
+    /// (كان الحظر يحفظ أول ٨ أرقام من الرقم الأجنبي فلا يطابقه السيرفر — ٢٠٢٦-١٠-١٠)
+    static func banKey(_ raw: String) -> String {
+        var digits = normalizeDigits(raw).filter(\.isNumber)
+        if digits.hasPrefix("00") { digits = String(digits.dropFirst(2)) }
+        return digits.count == 8 ? "965" + digits : digits
+    }
+
     static func isValidLocal(_ raw: String) -> Bool {
         localEightDigits(raw).count == 8
     }

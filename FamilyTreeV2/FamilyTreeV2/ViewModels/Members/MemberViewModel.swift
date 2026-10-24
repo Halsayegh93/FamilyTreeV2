@@ -561,6 +561,69 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// نتيجة حذف ابن المستخدم نفسه — `serverMissing` = الدالة لم تُرفع للسيرفر بعد
+    /// (المالك والمدير يرجعان لمسار الحذف المباشر القديم، والعضو يرى «تحتاج تحديث السيرفر»)
+    enum SelfChildRemoval { case deleted, failed, serverMissing }
+
+    /// حذف ابن أضافه المستخدم بالخطأ (RPC remove_self_child — طلب المالك ٢٠٢٦-١٠-١٦ «حط زر حذف للكل»).
+    /// لكل عضو مفعّل، لأبنائه هو فقط، بلا حساب دخول، والمتوفى للمالك والمدير. السيرفر يحذف معه طلب
+    /// «إضافة ابن» المعلّق ونسخته في شجرة النساء، ويُشعر المالك والمدراء.
+    @discardableResult
+    func removeSelfChild(id: UUID) async -> SelfChildRemoval {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return .failed }
+        struct P: Encodable { let p_child_id: String }
+        errorMessage = nil
+        do {
+            _ = try await supabase.rpc("remove_self_child", params: P(p_child_id: id.uuidString)).execute()
+            // إزالة الابن محلياً من الشجرة العامة (مثل deleteMember)
+            allMembers.removeAll { $0.id == id }
+            membersVersion += 1
+            scheduleMembersCacheSave()
+            Log.info("[Family] حذف ابن من «عائلتي»: \(id)")
+            // fetchChildren يُنعش الأبناء ثم عائلة شجرة النساء (fetchWomenFamily) معاً
+            await fetchChildren(for: uid)
+            return .deleted
+        } catch {
+            let pg = error as? PostgrestError
+            let raw = ErrorHelper.description(error)
+            Log.error("[Family] removeSelfChild: \(raw)")
+            if pg?.code == "PGRST202" || raw.localizedCaseInsensitiveContains("could not find the function") {
+                errorMessage = L10n.t("هذه الميزة تحتاج تحديث السيرفر", "This feature needs a server update")
+                return .serverMissing
+            }
+            errorMessage = Self.removeSelfChildMessage(hint: pg?.hint, serverMessage: pg?.message,
+                                                       canDeleteMembers: authVM?.canDeleteMembers == true)
+            return .failed
+        }
+    }
+
+    /// رسائل رفض remove_self_child بالعربي حسب `hint` — حماية الروابط برسالة السيرفر نفسها (تسمّي الابن والعدد)
+    private static func removeSelfChildMessage(hint: String?, serverMessage: String?, canDeleteMembers: Bool) -> String {
+        switch hint {
+        case "has_account" where canDeleteMembers:
+            // المالك والمدير: عضو بحساب دخول يُحذف من صفحته في لوحة الإدارة لا من «عائلتي»
+            return L10n.t("لهذا الابن حساب دخول — احذفه من صفحته في لوحة الإدارة",
+                          "This son has a login account — delete him from his page in the admin panel")
+        case "has_account":
+            return L10n.t("لهذا الابن حساب دخول — يحذفه المالك أو المدير",
+                          "This son has a login account — the owner or an admin can delete him")
+        case "deceased_protected":
+            return L10n.t("سجل متوفى — يحذفه المالك أو المدير",
+                          "A deceased record — the owner or an admin can delete it")
+        case "family_links_protected":
+            return serverMessage ?? L10n.t("لا يمكن حذفه — مرتبط به أبناء أو بنات. انقلهم أو افصلهم أولاً.",
+                                           "Can't delete — children are linked to him. Move or unlink them first.")
+        case "not_your_child":
+            return L10n.t("هذا الابن ليس من أبنائك — لا يمكن حذفه من هنا",
+                          "This isn't your son — he can't be deleted from here")
+        case "not_allowed":
+            return L10n.t("حسابك غير مفعّل — لا يمكنك حذف الأبناء الآن",
+                          "Your account isn't active — you can't delete children now")
+        default:
+            return L10n.t("تعذّر حذف الابن. حاول مرة أخرى.", "Couldn't delete the son. Try again.")
+        }
+    }
+
     /// ترتيب بنات المستخدم نفسه (RPC reorder_self_women_children).
     func reorderSelfWomenChildren(_ orderedIds: [UUID]) async {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return }
@@ -625,7 +688,8 @@ class MemberViewModel: ObservableObject {
     /// حسب RLS. يُحدّث الصف ثم يُنعش عائلة المستخدم الحالي.
     @discardableResult
     func updateWomanMember(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool,
-                           deathDate: Date? = nil, gender: String? = nil) async -> Bool {
+                           deathDate: Date? = nil, gender: String? = nil,
+                           fullName: String? = nil) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         let trimmed = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
@@ -638,6 +702,10 @@ class MemberViewModel: ObservableObject {
             "death_date":  AnyEncodable(isDeceased ? deathDate.map { DateHelper.format($0) } : Optional<String>.none)
         ]
         if let gender { payload["gender"] = AnyEncodable(gender) }
+        // النسب الكامل يُكتب فقط إن مرّره المتصل كاملاً (الاسم الأول مستبدَل والسلسلة كما هي)
+        if let fullName, !fullName.trimmingCharacters(in: .whitespaces).isEmpty {
+            payload["full_name"] = AnyEncodable(fullName.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
         do {
             try await supabase.from("women_members")
                 .update(payload).eq("id", value: id.uuidString).execute()
@@ -1923,10 +1991,11 @@ class MemberViewModel: ObservableObject {
     // MARK: - Set Member Status (freeze / activate)
 
     /// تجميد حساب عضو أو إعادة تفعيله — يمنع/يسمح بالدخول للتطبيق
-    func setMemberStatus(memberId: UUID, status: FamilyMember.MemberStatus) async {
+    @discardableResult
+    func setMemberStatus(memberId: UUID, status: FamilyMember.MemberStatus) async -> Bool {
         guard authVM?.canEditMembers == true else {
             Log.error("[MEMBER] تم رفض تغيير الحالة: لا توجد صلاحية")
-            return
+            return false
         }
         let oldStatus = _memberById[memberId]?.status
         let memberName = _memberById[memberId]?.fourPartName ?? L10n.t("عضو", "member")
@@ -1958,9 +2027,27 @@ class MemberViewModel: ObservableObject {
                 }
                 await authVM?.sendEventEmail(payload: emailPayload)
             }
+            return true
         } catch {
             Log.error("[MEMBER] فشل تغيير الحالة: \(error.localizedDescription)")
+            return false
         }
+    }
+
+    /// حالة العضو من السيرفر مباشرة — قد تتغيّر من السيرفر نفسه (حظر رقمه يجمّده: trg_freeze_member_on_ban)
+    func fetchMemberStatus(memberId: UUID) async -> FamilyMember.MemberStatus? {
+        struct Row: Decodable { let status: FamilyMember.MemberStatus? }
+        guard let row: Row = try? await supabase
+            .from("profiles")
+            .select("status")
+            .eq("id", value: memberId.uuidString)
+            .single()
+            .execute()
+            .value else { return nil }
+        if let status = row.status, let index = allMembers.firstIndex(where: { $0.id == memberId }) {
+            allMembers[index].status = status
+        }
+        return row.status
     }
 
     // MARK: - Update Children Order
@@ -2386,10 +2473,29 @@ class MemberViewModel: ObservableObject {
         deathDate: String?,
         gender: String?
     ) async -> Bool {
+        await updateChildRow(id: member.id, fatherId: member.fatherId, fullName: member.fullName,
+                             firstName: firstName, phoneNumber: phoneNumber, birthDate: birthDate,
+                             isDeceased: isDeceased, deathDate: deathDate, gender: gender)
+    }
+
+    /// نفس `updateChildData` بمعرّف الصف صراحةً — بعد نقل الابن بين الشجرتين
+    /// (`moveChildGender`) يصير له معرّف جديد في `profiles`.
+    @discardableResult
+    func updateChildRow(
+        id rowId: UUID,
+        fatherId: UUID?,
+        fullName: String,
+        firstName: String,
+        phoneNumber: String?,
+        birthDate: String?,
+        isDeceased: Bool,
+        deathDate: String?,
+        gender: String?
+    ) async -> Bool {
         self.isLoading = true
 
         let safeFirstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let finalFullName = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         var payload: [String: AnyEncodable] = [
             "first_name": AnyEncodable(safeFirstName),
@@ -2408,13 +2514,13 @@ class MemberViewModel: ObservableObject {
         }
 
         // تتبع المدير إذا كان يعدل بيانات عضو آخر
-        payload.merge(adminAuditFields(for: member.id)) { _, new in new }
+        payload.merge(adminAuditFields(for: rowId)) { _, new in new }
 
         do {
             try await supabase
                 .from("profiles")
                 .update(payload)
-                .eq("id", value: member.id.uuidString)
+                .eq("id", value: rowId.uuidString)
                 .execute()
         } catch {
             Log.error("خطأ تعديل بيانات الابن: \(error.localizedDescription)")
@@ -2425,26 +2531,67 @@ class MemberViewModel: ObservableObject {
         // تحديث الجنس بشكل منفصل (العمود قد لا يكون في schema cache)
         if let gender, !gender.isEmpty {
             var genderPayload: [String: AnyEncodable] = ["gender": AnyEncodable(gender)]
-            genderPayload.merge(adminAuditFields(for: member.id)) { _, new in new }
+            genderPayload.merge(adminAuditFields(for: rowId)) { _, new in new }
 
             do {
                 try await supabase
                     .from("profiles")
                     .update(genderPayload)
-                    .eq("id", value: member.id.uuidString)
+                    .eq("id", value: rowId.uuidString)
                     .execute()
             } catch {
                 Log.warning("عمود gender غير متوفر: \(error.localizedDescription)")
             }
         }
 
-        await fetchSingleMember(id: member.id)
-        if let fatherId = member.fatherId {
+        await fetchSingleMember(id: rowId)
+        if let fatherId {
             await fetchChildren(for: fatherId)
         }
 
         self.isLoading = false
         return true
+    }
+
+    // MARK: - Move Child Gender (نقل بين الشجرتين)
+
+    /// تغيير جنس ابن/ابنة = نقله بين الشجرة العامة وشجرة النساء عبر RPC السيرفر
+    /// `move_child_gender(p_child_id uuid, p_to_gender text) → uuid` (مثل أندرويد):
+    /// أنثى → صف جديد في `women_members` ويُحذف من `profiles` · ذكر → صف جديد في `profiles`
+    /// (ينعكس لشجرة النساء تلقائياً)، والروابط يحفظها السيرفر. السيرفر يشترط `is_moderator()`
+    /// والتطبيق يقصره على من يعدّل الشجرة (`canEditMembers`).
+    /// يرجّع المعرّف بعد النقل (أو نفسه إن لم يتغيّر الجدول)، أو nil مع `errorMessage` —
+    /// رسالة حماية روابط العائلة كما هي إن رفض السيرفر حذف من له أبناء/زوجة.
+    func moveChildGender(childId: UUID, toGender: String) async -> UUID? {
+        guard NetworkMonitor.shared.requireOnline() else { return nil }
+        guard authVM?.canEditMembers == true else {
+            errorMessage = L10n.t("تغيير الجنس للإدارة فقط.", "Only the administration can change gender.")
+            return nil
+        }
+        struct Params: Encodable { let p_child_id: String; let p_to_gender: String }
+        do {
+            let newId: UUID = try await supabase
+                .rpc("move_child_gender", params: Params(p_child_id: childId.uuidString, p_to_gender: toGender))
+                .execute()
+                .value
+            Log.info("[Family] نقل ابن بين الشجرتين → \(toGender)")
+            // انتقل لشجرة النساء → خرج من الشجرة العامة: إزالة محلية فورية ثم تحديث من السيرفر
+            if toGender == "female", newId != childId {
+                allMembers.removeAll { $0.id == childId }
+                currentMemberChildren.removeAll { $0.id == childId }
+                membersVersion += 1
+            }
+            await fetchAllMembers(force: true)
+            return newId
+        } catch {
+            Log.error("[Family] خطأ نقل ابن بين الشجرتين: \(error.localizedDescription)")
+            if let pg = error as? PostgrestError, pg.hint == "family_links_protected" {
+                errorMessage = pg.message
+            } else {
+                errorMessage = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
+            }
+            return nil
+        }
     }
 
     // MARK: - Bulk Gender Update

@@ -28,6 +28,8 @@ struct HomeNewsView: View {
     /// حظر ناشر الخبر (Guideline 1.2) — أخبار المحظورين لا تظهر للحاظر
     @State private var blockTarget: BlockTarget? = nil
     @ObservedObject private var blockedStore = BlockedMembersStore.shared
+    /// «النقاط الصفراء» على مربّعات الأقسام إذا فيها جديد
+    @ObservedObject private var newDots = NewContentTracker.shared
     @State private var postToEdit: NewsPost? = nil
     @State private var showNewNewsAlert = false
     @State private var newNewsCount = 0
@@ -102,7 +104,10 @@ struct HomeNewsView: View {
                         }
                         // بلا ارتداد مطّاطي عند السحب باليد (متاح من iOS 16.4)
                         .modifier(NoBounceIfAvailable())
-                        .refreshable { await refreshNews(notifyIfNew: true, force: true) }
+                        .refreshable {
+                            await refreshNews(notifyIfNew: true, force: true)
+                            await newDots.refresh(userId: authVM.currentUser?.id, force: true)
+                        }
                     }
                 }
             }
@@ -157,6 +162,8 @@ struct HomeNewsView: View {
             if selectedTab != 0, activeSubPage != nil {
                 activeSubPage = nil
             }
+            // الرجوع للرئيسية — فحص الجديد (مرة كل دقيقة على الأكثر)
+            if selectedTab == 0 { Task { await newDots.refresh(userId: authVM.currentUser?.id) } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReselectTab)) { notification in
             if let tab = notification.userInfo?["tab"] as? Int, tab == 0, activeSubPage != nil {
@@ -185,6 +192,9 @@ struct HomeNewsView: View {
         // التواصل مع الإدارة — مربّع بمنتصف الشاشة لا صفحة فرعية (طلب المالك)
         .dsCenterBox(isPresented: $showingContactForm) {
             MemberContactFormView()
+        }
+        .task {
+            await newDots.refresh(userId: authVM.currentUser?.id)
         }
         .task {
             // جلب المشاريع لعرض البطاقة الفاخرة بأحدث مشروع (مع كاش داخلي)
@@ -226,7 +236,10 @@ struct HomeNewsView: View {
                                 scrollToFocusedNews(proxy)
                             }
                     }
-                    .refreshable { await refreshNews(notifyIfNew: true, force: true) }
+                    .refreshable {
+                            await refreshNews(notifyIfNew: true, force: true)
+                            await newDots.refresh(userId: authVM.currentUser?.id, force: true)
+                        }
                     .onChange(of: focusNewsId) { _ in scrollToFocusedNews(proxy) }
                 }
             }
@@ -430,6 +443,7 @@ struct HomeNewsView: View {
                     count: nil,
                     height: tileHeight,
                     cascade: 2,
+                    isNew: newDots.hasNew(.diwaniyas),
                     action: { selectedTab = 2 }
                 )
             }
@@ -458,6 +472,7 @@ struct HomeNewsView: View {
                 count: nil,
                 height: tileHeight,
                 cascade: 3,
+                isNew: newDots.hasNew(.library),
                 action: { activeSubPage = .archive }
             )
             if projectsOn {
@@ -470,6 +485,7 @@ struct HomeNewsView: View {
                     count: projectsVM.projects.count,
                     height: tileHeight,
                     cascade: 4,
+                    isNew: newDots.hasNew(.projects),
                     action: { activeSubPage = .projects }
                 )
             }
@@ -498,6 +514,8 @@ struct HomeNewsView: View {
         height: CGFloat? = nil,
         /// ترتيب المربّع في دخول الرئيسية (بعد الترحيب ٠، وقبل الأخبار ٦)
         cascade: Int,
+        /// فيه جديد لم يُفتح بعد — نقطة صفراء في زاوية المربّع
+        isNew: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: {
@@ -508,6 +526,8 @@ struct HomeNewsView: View {
                 tileBackground(color: color, deep: deep, imageURL: imageURL, icon: icon,
                                badge: (count ?? 0) > 0)
 
+                // تعتيم أسفل المربّع للاسم الأبيض — «الهادئ الفاتح» بلا تعتيم (الاسم داكن فوق اللون الخفيف)
+                if !DS.Theme.isCalm {
                 LinearGradient(
                     stops: [
                         .init(color: DS.Color.overlayFillSubtle, location: 0),
@@ -517,6 +537,7 @@ struct HomeNewsView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
+                }
 
                 // «مجسّمات» — تكوين بالوسط (طلب المالك ٢٠٢٦-١٠-٠٥ «بالنص بشكل مرتب و ابداعي»):
                 // المجسّم في وسط المربّع وتحته الاسم، ضوء ناعم خلفه ونسخة شفافة منه في الخلفية، بلا عدد
@@ -562,12 +583,12 @@ struct HomeNewsView: View {
                     // العنوان أسفل — سطر واحد لضمان تساوي الأحجام
                     Text(title)
                         .dsFont(.rowTitleCompact)
-                        .foregroundColor(DS.Color.textOnPrimary)
+                        .foregroundColor(DS.Color.tileTitle)
                         .lineLimit(2)
                         .minimumScaleFactor(0.7)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                        .shadow(color: DS.Color.hierarchicalSecondary, radius: 3, x: 0, y: 1)
+                        .shadow(color: DS.Theme.isCalm ? DS.Color.tileTitleShadow : DS.Color.hierarchicalSecondary, radius: 3, x: 0, y: 1)
                         .padding(DS.Spacing.sm)
                 }
             }
@@ -578,13 +599,22 @@ struct HomeNewsView: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(DS.Color.overlayIcon, lineWidth: DS.Border.width)
+                    .strokeBorder(DS.Color.tileStroke, lineWidth: DS.Border.width)
             )
             // الظلّ من شكل المربّع تحته — نفس الظلّ (المربّع مقصوص معتم)، يُرسم مرة بدل كل إطار (فحص «اللاق»)
             .dsCardShadow(in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            // جديد لم يُفتح — النقطة الصفراء في زاوية البداية
+            .overlay(alignment: .topLeading) {
+                if isNew {
+                    DSNewDot()
+                        .padding(DS.Spacing.sm + 2)
+                }
+            }
+            .animation(DS.Anim.snappy, value: isNew)
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(title)
+        .accessibilityValue(isNew ? L10n.t("فيه جديد", "New") : "")
         // المربّعات تتوالى واحداً بعد الآخر مع بقية بطاقات الرئيسية
         .dsCardCascade(cascade, appeared: appeared)
     }
@@ -606,11 +636,16 @@ struct HomeNewsView: View {
 
     private func gradientBackground(color: Color, deep: Color, icon: String, badge: Bool = false) -> some View {
         ZStack {
+            if DS.Theme.isCalm {
+                // «الهادئ الفاتح»: لون القسم الخفيف بدل التدرّج الغامق — المجسّم والنسخة الشفافة كما هما
+                color.dsCalmTint
+            } else {
             LinearGradient(
                 colors: [color.opacity(0.92), color, deep],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
+            }
             // «مجسّمات»: نفس مجسّم المربّع كبير شفاف في خلفيته عند الطرف
             // (طلب المالك ٢٠٢٦-١٠-٠٥ «حط خلفيات ور الايقونات بنفس المجسمات بس شفافة بالرئيسية»)
             if let place = FTArtPlace.place(for: icon),
@@ -688,7 +723,7 @@ struct HomeNewsView: View {
             title: L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali"),
             subtitle: L10n.t("تطبيق العائلة", "Family App"),
             icon: "tree.fill",
-            backgroundGradient: AppSection.home.gradient,
+            section: .home,
             hideNotificationBell: true
         ) {
             // الجرس ثم علامة «عن التطبيق» بعده (طلب المالك)
@@ -722,6 +757,7 @@ struct HomeNewsView: View {
         // تصفير دخول بطاقات الصفحة قبل فتحها (الصفحة غير ظاهرة بعد) — فتتوالى مع كل فتح
         if activeSubPage != .news { newsAppeared = false }
         activeSubPage = .news
+        newDots.markSeen(.news)
     }
 
     /// ينزل للخبر المختار من مربّع الرئيسية بعد دخول البطاقات، ويبرزه لحظة

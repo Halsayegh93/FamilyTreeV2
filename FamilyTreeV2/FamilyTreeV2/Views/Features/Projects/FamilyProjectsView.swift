@@ -98,6 +98,7 @@ struct FamilyProjectsView: View {
                 selectedIDs = []
             }
         }
+        .onAppear { NewContentTracker.shared.markSeen(.projects) }   // «النقاط الصفراء»: فُتح القسم
         .task {
             await projectsVM.fetchProjects()
             if let userId = authVM.currentUser?.id {

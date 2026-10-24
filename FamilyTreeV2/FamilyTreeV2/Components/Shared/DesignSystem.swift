@@ -115,7 +115,10 @@ enum DS {
         static var tintAdmin: SwiftUI.Color    { AppSection.admin.ink }
 
         // Surfaces — الكروت لازم تبان فوق الخلفية
-        static let background       = SwiftUI.Color(.systemBackground)
+        /// «الهادئ الفاتح» (`DS.Theme.isCalm`): أبيض مكسور / أسود قريب
+        static let background       = DS.Theme.isCalm
+            ? SwiftUI.Color.adaptive(light: DS.Theme.calmBackgroundHex.0, dark: DS.Theme.calmBackgroundHex.1)
+            : SwiftUI.Color(.systemBackground)
         static let surface          = SwiftUI.Color(.secondarySystemBackground)
         static let surfaceElevated  = SwiftUI.Color(.tertiarySystemBackground)
         static let cardBackground   = SwiftUI.Color(.secondarySystemBackground)
@@ -823,7 +826,12 @@ private struct DSHeaderGlassCircle: ViewModifier {
 
     func body(content: Content) -> some View {
         let fill = section?.control ?? DS.Color.headerControlFill
-        if #available(iOS 26.0, *) {
+        if DS.Theme.isCalm {
+            // «الهادئ»: دائرة بيضاء بإطار شعري فوق لون القسم الخفيف (رمادي مرتفع في الداكن)
+            content
+                .background(Circle().fill(DS.Color.headerControlCalm))
+                .overlay(Circle().strokeBorder(DS.Color.cardBorder, lineWidth: DS.Border.width))
+        } else if #available(iOS 26.0, *) {
             content.glassEffect(.clear.tint(fill.opacity(0.55)).interactive(), in: Circle())
         } else {
             content
@@ -1664,6 +1672,32 @@ struct DSGoldDot: View {
     }
 }
 
+/// نقطة «جديد» الصفراء (طلب المالك ٢٠٢٦-١٠-١٠ «نقاط صفراء صغيرة إذا شي جديد»): النقطة الذهبية بحلقة
+/// بيضاء رفيعة تُرى على المربّعات الملوّنة، وهالة تنبض بهدوء — «تقليل الحركة»: ساكنة
+struct DSNewDot: View {
+    var size: CGFloat = 10
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulse = false
+
+    var body: some View {
+        DSGoldDot(size: size)
+            .padding(1.5)
+            .background(Circle().fill(Color.white))
+            .background(
+                Circle()
+                    .fill(DS.Color.goldDot.opacity(0.5))
+                    .scaleEffect(pulse ? 2.3 : 1)
+                    .opacity(pulse ? 0 : 0.9)
+            )
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(0.4)) { pulse = true }
+            }
+            .accessibilityHidden(true)
+            .transition(.scale.combined(with: .opacity))
+    }
+}
+
 // MARK: - دفعة 2-B «أسلوب واحد» (٢٠٢٦-١٠-٠٧): مقاسات صور الأعضاء في صفوف صفحات الإدارة
 extension DS.Icon {
     /// صورة العضو في صفّ قائمة (السجل، الطلبات، الفريق، النشاط) — كانت `size: 40` في كل شاشة
@@ -1846,8 +1880,8 @@ extension EnvironmentValues {
 }
 
 // MARK: - دفعة 4-W «أسلوب واحد» (٢٠٢٦-١٠-٠٧): شجرة النساء
-// العقدة المصغّرة في شجرة النساء (مربّع ٤٤، مربّع الزوجة ٢٤) أصغر من أصغر دور (`micro` ١١) — مقاسات رسم ثابتة
-// داخل لوحة الشجرة (لا تتبع مقاسات Apple: تكبيرها يكسر العقد)
+// العقدة المصغّرة في شجرة النساء (مربّع ٤٤، مربّع الزوجة ٢٤) أصغر من أصغر دور (`micro` ١١) — مقاسات رسم
+// داخل لوحة الشجرة: تكبر مع العقدة كلها بمعامل `DS.TreeScale` (لا بنمط Apple وحده — كان يكسر العقد)
 extension DS.TextRole {
     /// سنوات المتوفّى في شريطه، وعدد الأبناء في شارة العقدة
     static let treeNodeMicro = DS.TextRole(size: 8.5, weight: .heavy)
@@ -1862,15 +1896,56 @@ extension DS.Glyph {
 
 // MARK: - دفعة 4 «أسلوب واحد» (٢٠٢٦-١٠-٠٧): الشجرة
 extension DS.TextRole {
-    /// عدد الأبناء على شارة عقدة شجرة العائلة — مقاس رسم ثابت داخل العقدة
+    /// عدد الأبناء على شارة عقدة شجرة العائلة — مقاس رسم داخل العقدة (× `DS.TreeScale`)
     static let nodeCount = DS.TextRole(size: 16, weight: .heavy)
 }
 
-extension DynamicTypeSize {
-    /// نصوص عقد الشجرتين (العائلة والنساء) بمقاس رسم ثابت — الكانفس يُكبَّر بالقرص لا بـ«حجم النص» في الجهاز:
-    /// أبعاد العقدة وفجواتها أرقام ثابتة (`NODE_W`/`NAME_H`)، فالاسم الأكبر كان يخرج من عقدته ويركب جارتها
-    /// (فحص ٢٠٢٦-١٠-٠٨ — كانت شجرة النساء وحدها مثبّتة)
-    static let dsTreeNode: DynamicTypeSize = .large
+// MARK: - عقد الشجرتين تكبر مع «حجم النص» (طلب المالك ٢٠٢٦-١٠-٠٨ «بشي منظم»)
+// العقدة كلها تكبر وتصغر بمعامل واحد: الاسم، الصورة، الصندوق، الشارات، الفجوات بين العقد وخطوط الربط —
+// فتبقى الشجرة منتظمة بلا تراكب، وتكبر الشجرة مع الخط الأكبر (سحب أكثر). مقاسات الرسم الحقيقية × المعامل
+// (لا `scaleEffect` — الرسم يبقى حاداً). المعامل يُقرأ مرة في الشجرة (`@Environment(\.dsTreeScale)`) ويُخزَّن مع
+// التخطيط ويُمرَّر للعقد؛ نصوص العقدة بحجم ثابت (`dsTreeFont`) فلا تكبر مرتين مع Dynamic Type.
+// الزوم (الملاءمة، القرابة، «موقعي») بوحدات العقدة الافتراضية فتظهر الشجرة أكبر فعلاً؛ حدود القرص على الشاشة كما كانت.
+extension DS {
+    enum TreeScale {
+        /// السقف — «كبير جداً جداً» وكل مقاسات «تسهيلات الوصول» تقف عنده (عقدة العائلة ١٢٤ → ١٦١ نقطة)
+        static let cap: CGFloat = 1.3
+
+        /// معامل العقدة لإعداد «حجم النص» — «كبير» (الافتراضي) = ١ تماماً، فالشجرة كما كانت
+        static func factor(for size: DynamicTypeSize) -> CGFloat {
+            switch size {
+            case .xSmall:   return 0.88
+            case .small:    return 0.92
+            case .medium:   return 0.96
+            case .large:    return 1
+            case .xLarge:   return 1.1
+            case .xxLarge:  return 1.2
+            case .xxxLarge: return cap
+            default:        return size.isAccessibilitySize ? cap : 1
+            }
+        }
+
+        /// خط نص العقدة: حجم الدور (× `DS.Font.opticalScale` للأدوار) × المعامل — حجم ثابت لا يتبع Dynamic Type ثانية.
+        /// مقرَّب لنقطة كاملة كما يقرّب Dynamic Type (`relativeTo:`) — فعند «كبير» يطابق الرسم السابق بكسلاً بكسلاً
+        /// (الاسم ١٥٫٣ كان يُرسم ١٥)
+        static func font(_ role: DS.TextRole, _ k: CGFloat) -> SwiftUI.Font {
+            .custom(DS.Font.plexName(role.weight), fixedSize: (role.textSize * k).rounded())
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// معامل عقد الشجرة من «حجم النص» في الجهاز (`DS.TreeScale`)
+    var dsTreeScale: CGFloat { DS.TreeScale.factor(for: dynamicTypeSize) }
+}
+
+extension View {
+    /// نص داخل عقدة شجرة — الدور × معامل الشجرة
+    func dsTreeFont(_ role: DS.TextRole, _ k: CGFloat) -> some View { font(DS.TreeScale.font(role, k)) }
+    /// رمز SF داخل عقدة شجرة — مقاس `DS.Glyph` × معامل الشجرة
+    func dsTreeGlyph(_ size: CGFloat, _ k: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> some View {
+        font(DS.Glyph.font(size * k, weight: weight))
+    }
 }
 
 extension DSBox {
@@ -1889,8 +1964,11 @@ extension DS.Icon {
 // ودرجات نصف النقطة للنص والرموز حيث كانت الشاشة أصغر بنصف/نقطة من الدور الأقرب.
 extension DSBox {
     // أزرار الرأس فوق السطح (`DSNavButtonSize`): شريط أدوات الشجرة ٣٤ ورمز ١٤، وشريطها الجانبي (الأفقي) ٢٧ ورمز ١٢
-    static let navButtonToolbar: CGFloat = 34
-    static let navGlyphToolbar: CGFloat = 14
+    /// شريط أدوات الشجرة (طلب المالك ٢٠٢٦-١٠-٠٩: البطاقة أكبر والأزرار أصغر حبّة — كانت ٣٤ ثم ٣٧)
+    static let navButtonToolbar: CGFloat = 35
+    static let navGlyphToolbar: CGFloat = 14.5
+    /// حشوة بطاقة أدوات الشجرة الرأسية (كانت ٢) — البطاقة أطول والأزرار داخلها أصغر
+    static let treeToolbarPadV: CGFloat = 6
     static let navButtonMini: CGFloat = 27
     static let navGlyphMini: CGFloat = 12
     /// الإغلاق الصغير فوق سطح ملوّن (بانر صلة القرابة): رمز «×» داخل دائرة ممتلئة بلا قرص زجاجي
@@ -1901,7 +1979,7 @@ extension DSBox {
     // المدمّج ٣٠ (تبويب الشجرة) — والحشوة حول الأزرار
     static let segmentHeight: CGFloat = 44
     static let segmentHeightRegular: CGFloat = 32
-    static let segmentHeightCompact: CGFloat = 30
+    static let segmentHeightCompact: CGFloat = 33   // تبويب الشجرة [العائلة/النساء] — كان ٣٠ (٢٠٢٦-١٠-٠٩)
     static let segmentPadding: CGFloat = 4
     static let segmentPaddingSmall: CGFloat = 3
 

@@ -36,9 +36,10 @@ struct AddNewsView: View {
 
     private var isPoll: Bool { selectedType == "تصويت" }
 
-    /// الأنواع بلا «خبر» (طلب المالك) وبلا «تصويت» — التصويت من زره جنب الصور
+    /// الأنواع كما فعّلتها الإدارة في «التصنيفات» (المصدر الواحد — كان «خبر» مُستثنى هنا يدوياً فلا يظهر
+    /// وهو مفعّل في اللوحة، ٢٠٢٦-١٠-٠٩)، بلا «تصويت» — التصويت من زره جنب الصور
     private var availableTypes: [String] {
-        NewsTypeHelper.mainTypes.filter { $0 != "تصويت" && $0 != "خبر" }
+        NewsTypeHelper.mainTypes.filter { $0 != "تصويت" }
     }
 
     private var pollsEnabled: Bool { appSettingsVM.settings.pollsEnabled ?? true }
