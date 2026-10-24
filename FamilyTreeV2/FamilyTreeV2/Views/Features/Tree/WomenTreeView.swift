@@ -171,8 +171,10 @@ struct WomenTreeView: View {
 /// (MemberDetailsView، طلب المالك):
 /// المصغّر: صورة + اسم + صلة القرابة + العمر.
 /// «عرض التفاصيل» يوسّعه: العائلة (الأم/الزوج/الأبناء).
-/// شريط أزرار ثابت أسفله: «الإدارة» كحلي يمين (يفتح مربّع الإدارة) و«إغلاق» يسار.
-private struct WomanDetailSheet: View {
+/// شريط أزرار ثابت أسفله: زرّ الدور يمين («الإدارة» ذهبي، «عائلتي»/«طلب إضافة» أخضر — يفتح مربّع الإجراءات)
+/// و«إغلاق» يسار، بمقاس واحد.
+/// (داخلي لا خاص — تفتحه أداة التصوير أيضاً بعيّنة، فيُفحص المربّع نفسه بلا شجرة)
+struct WomanDetailSheet: View {
     let woman: FamilyMember
     let allWomen: [FamilyMember]
     /// المستخدم الحالي — لحساب صلة القرابة.
@@ -194,8 +196,6 @@ private struct WomanDetailSheet: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     /// «طلب إضافة» يصل للإدارة (tree_edit)
     @EnvironmentObject private var adminRequestVM: AdminRequestViewModel
-    /// مربّعات الإجراءات: ٣ بالسطر، و٢ من أحجام إمكانية الوصول
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// حجم المربّع: مصغّر = صورة+اسم+قرابة+عمر فقط، موسّع = كل المعلومات.
     @State private var isExpanded = false
@@ -545,6 +545,21 @@ private struct WomanDetailSheet: View {
             icon: "person.text.rectangle.fill",
             tint: woman.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy
         )
+        // علم دولة الرقم (غير الكويت) في زاوية الرأس — نفس تفاصيل العضو في شجرة العائلة
+        .overlay(alignment: .trailing) {
+            DSPhoneCountryBadge(phone: visiblePhone)
+                .padding(.horizontal, DS.Spacing.lg)
+        }
+        // السحب لأسفل على الرأس يصغّر المربّع الموسّع
+        .dsDetailsSwipe(collapses: isExpanded) { _ in setExpanded(false) }
+    }
+
+    /// رقم صاحب العقدة إن كان يحقّ للمشاهد رؤيته — من الشجرة العامة: الرجل بمعرّفه، والمرأة بحسابها المربوط
+    /// (سجلّات شجرة النساء بلا أرقام)
+    private var visiblePhone: String? {
+        let profile = memberVM.member(byId: woman.id)
+            ?? WomenStore.linkedUserByWoman[woman.id].flatMap { memberVM.member(byId: $0) }
+        return profile?.dsVisiblePhone(viewerId: me?.id, viewerCanModerate: canModerate)
     }
 
     /// الجزء الظاهر في المربّع المصغّر
@@ -565,20 +580,24 @@ private struct WomanDetailSheet: View {
 
             if hasDetails {
                 detailsToggleButton
+                    .padding(.horizontal, DS.Spacing.lg)
                     .dsStaggerIn(2)
             }
         }
+        // السحب لأعلى يوسّع المربّع (مع الزرّ لا بدله) — مثل تفاصيل العضو في شجرة العائلة
+        .dsDetailsSwipe(expands: hasDetails && !isExpanded) { _ in setExpanded(true) }
     }
 
-    /// «عرض التفاصيل» / «إخفاء التفاصيل» — يوسّع المربّع أو يصغّره
+    /// «عرض التفاصيل» / «إخفاء التفاصيل» — الزرّ نفسه في الشجرتين (`DSDetailsToggle`، طلب المالك ٢٠٢٦-١٠-٢٤
+    /// «شنو سويت عرض التفاصيل؟»): زرّ واضح بسهم يدور مع التوسيع
     private var detailsToggleButton: some View {
-        let expanded = isExpanded
-        // رابط نصّي بسهم بلا خلفية — مثل تفاصيل العضو في شجرة العائلة (طلب المالك ٢٠٢٦-١٠-٢٤)
-        return DSTextLinkButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
-                                         : L10n.t("عرض التفاصيل", "Show details"),
-                                icon: expanded ? "chevron.down" : "chevron.up") {
-            withAnimation(DS.Anim.snappy) { isExpanded.toggle() }
-        }
+        DSDetailsToggle(isExpanded: isExpanded) { setExpanded(!isExpanded) }
+    }
+
+    /// التوسيع والتصغير بنابض ارتفاع المربّع نفسه — «تقليل الحركة»: مباشرة
+    private func setExpanded(_ on: Bool) {
+        guard on != isExpanded else { return }
+        withAnimation(reduceMotion ? nil : DS.Anim.smooth) { isExpanded = on }
     }
 
     /// جسم التفاصيل: العائلة (تدخل عند «عرض التفاصيل») — بلا تواريخ كما كان شيت النساء
@@ -655,7 +674,7 @@ private struct WomanDetailSheet: View {
                 // شريحة العُدّة (٣٤، ومساحة ضغط ٤٤ داخلها)
                 DSChipButton(L10n.t("صلة القرابة", "Kinship"),
                              icon: "point.3.connected.trianglepath.dotted",
-                             tint: DS.Color.warning,
+                             tint: DS.Color.palm,   // الهوية: القرابة أخضر العائلة (لا لون حالة) — مثل شجرة العائلة
                              size: .small, action: computeKinship)
             }
             agePill
@@ -699,7 +718,7 @@ private struct WomanDetailSheet: View {
         DSNoteCard(text,
                    title: L10n.t("صلة القرابة", "Kinship"),
                    icon: "point.3.connected.trianglepath.dotted",
-                   tint: DS.Color.warning)
+                   tint: DS.Color.palm)
     }
 
     private func computeKinship() {
@@ -720,7 +739,7 @@ private struct WomanDetailSheet: View {
             DSComposerSection(
                 title: L10n.t("العائلة", "Family"),
                 icon: "person.2.fill",
-                tint: DS.Color.success,
+                tint: DS.Color.palm,   // الهوية: العائلة أخضر العائلة — مثل شجرة العائلة
                 trailing: familySummary(children: kids.count),
                 isOpen: $familyOpen
             ) {
@@ -944,12 +963,10 @@ private struct WomanDetailSheet: View {
         let id: String
         let title: String
         let icon: String
-        let color: Color
-        /// إجراء لا رجعة فيه — اسمه بالأحمر
-        var destructive: Bool = false
         let run: () -> Void
 
-        /// مجموعة الإجراء في المربّع (طلب المالك ٢٠٢٦-١٠-٢٤ «مو مرتبة») — من المعرّف فلا يتغيّر كل إجراء
+        /// مجموعة الإجراء في المربّع (طلب المالك ٢٠٢٦-١٠-٢٤ «مو مرتبة») — من المعرّف فلا يتغيّر كل إجراء.
+        /// اللون للمجموعة لا للإجراء («منسقة»): كل مربّعات المجموعة بلونها
         var group: ActionGroup {
             switch id {
             case "child", "wife", "addMother", "sister": return .add
@@ -972,13 +989,32 @@ private struct WomanDetailSheet: View {
             case .danger: return ""
             }
         }
+        /// سطر جانبي بجانب العنوان — ما الذي في المجموعة
+        var hint: String? {
+            switch self {
+            case .add: return L10n.t("فرد جديد", "New person")
+            case .link: return L10n.t("من الشجرة", "From the tree")
+            case .record: return L10n.t("بيانات العضو", "Member record")
+            case .danger: return nil
+            }
+        }
         var icon: String {
             switch self {
             case .add: return "plus.circle.fill"
             case .link: return "link"
-            case .record: return "pencil"
+            case .record: return "person.text.rectangle.fill"
             case .danger: return "trash"
             }
+        }
+    }
+
+    /// لون المجموعة (ألوان العائلة — `DSMemberKit`): الإضافة أخضر، الربط بترولي، السجل كحلي القسم
+    private func groupTint(_ group: ActionGroup) -> Color {
+        switch group {
+        case .add: return DSMemberKit.addTint
+        case .link: return DSMemberKit.linkTint
+        case .record: return chromeInk
+        case .danger: return DS.Color.error
         }
     }
 
@@ -1001,55 +1037,53 @@ private struct WomanDetailSheet: View {
     private var directActions: [AdminAction] {
         var list: [AdminAction] = [
             AdminAction(id: "child", title: L10n.t("إضافة ابن أو ابنة", "Add son or daughter"),
-                        icon: "person.badge.plus", color: DS.Color.male) { startAdd(.child) }
+                        icon: "person.badge.plus") { startAdd(.child) }
         ]
         // على عقدة أبيه هو: «إضافة أخت» للإدارة أيضاً (طلب المالك ٢٠٢٦-١٠-٢٤)
         if isMyFatherNode {
             list.append(AdminAction(id: "sister", title: L10n.t("إضافة أخت", "Add sister"),
-                                    icon: "figure.stand.dress", color: DS.Color.female) { startAdd(.sister) })
+                                    icon: "figure.stand.dress") { startAdd(.sister) })
         }
         if !woman.isFemale {
             list.append(AdminAction(id: "wife", title: L10n.t("إضافة زوجة", "Add wife"),
-                                    icon: "heart.fill", color: DS.Color.female) { startAdd(.wife) })
+                                    icon: "heart.fill") { startAdd(.wife) })
             list.append(AdminAction(id: "linkWife", title: L10n.t("ربط زوجة", "Link wife"),
-                                    icon: "link", color: DS.Color.female) { openWifePicker() })
+                                    icon: "link") { openWifePicker() })
         } else {
             list.append(AdminAction(id: "husband",
                                     title: woman.husbandId == nil ? L10n.t("ربط زوج", "Link husband")
                                                                   : L10n.t("تغيير الزوج", "Change husband"),
-                                    icon: "link", color: DS.Color.male) { openHusbandPicker() })
+                                    icon: "link") { openHusbandPicker() })
         }
         if canPickMother {
             list.append(AdminAction(id: "mother", title: L10n.t("اختيار الأم", "Choose mother"),
-                                    icon: "figure.and.child.holdinghands", color: DS.Color.accent) {
+                                    icon: "figure.and.child.holdinghands") {
                 openMotherPicker()
             })
         }
         // الأم الجديدة زوجةٌ للأب — بلا أب في الشجرة كانت تظهر جذراً مستقلاً
         if mother == nil, woman.fatherId != nil {
             list.append(AdminAction(id: "addMother", title: L10n.t("إضافة أم", "Add mother"),
-                                    icon: "figure.stand.dress", color: DS.Color.accent) { startAdd(.mother) })
+                                    icon: "figure.stand.dress") { startAdd(.mother) })
         }
         if !children.isEmpty {
-            // neonBlue = كحلي primaryDark نفسه في الفاتح، وأزرق فاتح يُقرأ في الداكن
             list.append(AdminAction(id: "reorder", title: L10n.t("ترتيب الأبناء", "Reorder"),
-                                    icon: "arrow.up.arrow.down", color: DS.Color.neonBlue) { openReorderBox() })
+                                    icon: "arrow.up.arrow.down") { openReorderBox() })
         }
         list.append(AdminAction(id: "deceased", title: deathActionTitle,
-                                icon: "heart.slash", color: DS.Color.warning) { openDeathBox() })
+                                icon: "heart.slash") { openDeathBox() })
         list.append(AdminAction(id: "edit", title: L10n.t("تعديل البيانات", "Edit details"),
-                                icon: "pencil", color: DS.Color.primary) { openEditBox() })
+                                icon: "pencil") { openEditBox() })
         if genderTarget != nil {
             list.append(AdminAction(id: "gender", title: genderChangeTitle,
-                                    icon: "arrow.left.arrow.right",
-                                    color: genderTarget == "male" ? DS.Color.male : DS.Color.female) {
+                                    icon: "arrow.left.arrow.right") {
                 draft.showGender = true
             })
         }
         // الحذف للمالك والمدير فقط (م-٣)، ومن المدخل الواحد `requestDelete`
         if canDelete {
             list.append(AdminAction(id: "delete", title: L10n.t("حذف", "Delete"),
-                                    icon: "trash", color: DS.Color.error, destructive: true) { requestDelete() })
+                                    icon: "trash") { requestDelete() })
         }
         return list
     }
@@ -1058,23 +1092,23 @@ private struct WomanDetailSheet: View {
     private var selfActions: [AdminAction] {
         var list: [AdminAction] = [
             AdminAction(id: "child", title: L10n.t("إضافة ابن أو ابنة", "Add son or daughter"),
-                        icon: "person.badge.plus", color: DS.Color.male) { startAdd(.child) }
+                        icon: "person.badge.plus") { startAdd(.child) }
         ]
         if !woman.isFemale {
             list.append(AdminAction(id: "wife", title: L10n.t("إضافة زوجة", "Add wife"),
-                                    icon: "heart.fill", color: DS.Color.female) { startAdd(.wife) })
+                                    icon: "heart.fill") { startAdd(.wife) })
             list.append(AdminAction(id: "linkWife", title: L10n.t("ربط زوجة", "Link wife"),
-                                    icon: "link", color: DS.Color.female) { openWifePicker() })
+                                    icon: "link") { openWifePicker() })
         }
         if !fatherWives.isEmpty {
             list.append(AdminAction(id: "mother", title: L10n.t("اختيار الأم", "Choose mother"),
-                                    icon: "figure.and.child.holdinghands", color: DS.Color.accent) {
+                                    icon: "figure.and.child.holdinghands") {
                 openMotherPicker()
             })
         }
         if mother == nil {
             list.append(AdminAction(id: "addMother", title: L10n.t("إضافة أم", "Add mother"),
-                                    icon: "figure.stand.dress", color: DS.Color.accent) { startAdd(.mother) })
+                                    icon: "figure.stand.dress") { startAdd(.mother) })
         }
         return list
     }
@@ -1084,22 +1118,22 @@ private struct WomanDetailSheet: View {
         var list: [AdminAction] = []
         if isMyFatherNode {
             list.append(AdminAction(id: "sister", title: L10n.t("إضافة أخت", "Add sister"),
-                                    icon: "figure.stand.dress", color: DS.Color.female) { startAdd(.sister) })
+                                    icon: "figure.stand.dress") { startAdd(.sister) })
         }
         list.append(AdminAction(id: "child", title: L10n.t("طلب ابن أو ابنة", "Request a child"),
-                                icon: "person.badge.plus", color: DS.Color.male) { startAdd(.child) })
+                                icon: "person.badge.plus") { startAdd(.child) })
         if !woman.isFemale {
             list.append(AdminAction(id: "wife", title: L10n.t("طلب إضافة زوجة", "Request a wife"),
-                                    icon: "heart.fill", color: DS.Color.female) { startAdd(.wife) })
+                                    icon: "heart.fill") { startAdd(.wife) })
             list.append(AdminAction(id: "linkWife", title: L10n.t("طلب ربط زوجة", "Request wife link"),
-                                    icon: "link", color: DS.Color.female) { openWifePicker() })
+                                    icon: "link") { openWifePicker() })
         } else if woman.husbandId == nil {
             list.append(AdminAction(id: "husband", title: L10n.t("طلب ربط زوج", "Request husband link"),
-                                    icon: "link", color: DS.Color.male) { openHusbandPicker() })
+                                    icon: "link") { openHusbandPicker() })
         }
         if mother == nil {
             list.append(AdminAction(id: "addMother", title: L10n.t("طلب إضافة أم", "Request a mother"),
-                                    icon: "figure.stand.dress", color: DS.Color.accent) { startAdd(.mother) })
+                                    icon: "figure.stand.dress") { startAdd(.mother) })
         }
         return list
     }
@@ -1132,6 +1166,15 @@ private struct WomanDetailSheet: View {
         case .request, .viewOnly: return "paperplane.fill"
         }
     }
+    /// ما يفعله زرّ الشريط — للقارئ الصوتي
+    private var actionsBoxHint: String {
+        switch mode {
+        case .direct: return L10n.t("يفتح الإضافة والربط وإدارة السجل", "Opens add, link and record actions")
+        case .selfFamily: return L10n.t("يضيف لعائلتك", "Adds to your family")
+        case .request, .viewOnly: return L10n.t("يرسل طلب إضافة للإدارة", "Sends an addition request to the admins")
+        }
+    }
+
     /// ملاحظة فوق الأزرار — ما الذي يحدث بعد الضغط
     private var actionsBoxNote: String? {
         switch mode {
@@ -1145,13 +1188,11 @@ private struct WomanDetailSheet: View {
         }
     }
 
-    /// مربّعات في السطر — ٢ من أحجام إمكانية الوصول (الاسم أكبر من أن يُقرأ في ثلث العرض)
-    private var tilesPerRow: Int { typeSize.isAccessibilitySize ? 2 : 3 }
-
-    /// مربّع الإجراءات: رأس ملوّن + «الإجراءات» مربّعات + «إغلاق» — بلا زر إجراء
+    /// مربّع الإجراءات (طلب المالك ٢٠٢٦-١٠-٢٤ «ورني مربعات اكثر ترتيب و منسقة»): رأس ملوّن، ثم أقسام مرتّبة
+    /// إضافة · ربط · السجل — كل قسم بلونه، ومربّعاته كلها بمقاس واحد في شبكة بلا يتيم (`DSActionTileGrid`)،
+    /// ثم الحذف زرّاً أحمر وحده، و«إغلاق» — بلا زر إجراء
     private var actionsBox: some View {
         let actions = adminActions
-        let perRow = tilesPerRow
         return withAdminPresentations(
             DSComposer(
                 title: actionsBoxTitle,
@@ -1168,12 +1209,19 @@ private struct WomanDetailSheet: View {
                 onSubmit: {},
                 onCancel: { showAdminBox = false }
             ) {
-                // أقسام مرتّبة: إضافة · ربط · السجل (مربّعات)، ثم الحذف زرّاً أحمر عريضاً وحده
                 let groups = ActionGroup.allCases.filter { g in g != .danger && actions.contains { $0.group == g } }
                 ForEach(Array(groups.enumerated()), id: \.element) { index, group in
-                    DSComposerSection(title: group.title, icon: group.icon, tint: DS.Color.primary, index: index) {
-                        tileRows(actions.filter { $0.group == group }, perRow: perRow)
+                    let tint = groupTint(group)
+                    DSComposerSection(title: group.title, icon: group.icon, tint: tint,
+                                      trailing: group.hint, index: index) {
+                        DSActionTileGrid {
+                            ForEach(actions.filter { $0.group == group }) { action in
+                                DSActionTile(action.title, icon: action.icon, tint: tint, action: action.run)
+                            }
+                        }
                     }
+                    // عنوان القسم بلون مجموعته (لا بلون المربّع)
+                    .environment(\.dsBoxTint, nil)
                     .disabled(draft.busy)
                 }
                 ForEach(actions.filter { $0.group == .danger }) { action in
@@ -1182,64 +1230,6 @@ private struct WomanDetailSheet: View {
                 }
             }
         )
-    }
-
-    /// صفوف المربّعات — عادية لا LazyVGrid (الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً فيُقصّ آخر صف)
-    private func tileRows(_ items: [AdminAction], perRow: Int) -> some View {
-        VStack(spacing: DS.Spacing.sm) {
-            ForEach(Array(stride(from: 0, to: items.count, by: perRow)), id: \.self) { start in
-                let end = min(start + perRow, items.count)
-                HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                    ForEach(items[start..<end]) { adminTile($0) }
-                    ForEach(0..<(perRow - (end - start)), id: \.self) { _ in
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: DS.Border.width)
-                    }
-                }
-            }
-        }
-    }
-
-    /// مربّع إجراء مربّع الشكل (طلب المالك ٢٠٢٦-١٠-٢٤ «أزرار مربعة»): الأيقونة المجسّمة فوق واسم الإجراء
-    /// تحتها، والحذف اسمه أحمر. من أحجام إمكانية الوصول يطول بنصّه بدل أن يُقصّ داخل المربّع.
-    private func adminTile(_ action: AdminAction) -> some View {
-        let square = !typeSize.isAccessibilitySize
-        return Button(action: action.run) {
-            if square {
-                adminTileFace(action).aspectRatio(1, contentMode: .fit)
-            } else {
-                adminTileFace(action)
-            }
-        }
-        .buttonStyle(DSPressStyle())
-        .accessibilityLabel(action.title)
-    }
-
-    /// وجه المربّع (إعادة تصميم ٢٠٢٦-١٠-٢٤ «بغير تصميمها»): مسطّح ناعم بلون الإجراء — تعبئة خفيفة وإطار
-    /// رفيع منه، والأيقونة في قرص ملوّن صغير، والاسم تحتها. الحذف بالأحمر.
-    private func adminTileFace(_ action: AdminAction) -> some View {
-        let tint = action.destructive ? DS.Color.error : action.color
-        let shape = RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-        return VStack(spacing: DS.Spacing.sm) {
-            ZStack {
-                Circle().fill(tint.opacity(DS.Opacity.tintFillStrong))
-                Image(systemName: action.icon)
-                    .dsGlyph(DS.Glyph.xl)
-                    .foregroundColor(tint)
-            }
-            .frame(width: DS.Icon.tile, height: DS.Icon.tile)
-            .accessibilityHidden(true)
-            Text(action.title)
-                .dsFieldFont(.chip)
-                .foregroundColor(action.destructive ? DS.Color.error : DS.Color.textPrimary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.75)
-        }
-        .padding(DS.Spacing.sm)
-        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, maxHeight: .infinity)
-        .background(shape.fill(tint.opacity(DS.Opacity.tintFillSoft)))
-        .overlay(shape.strokeBorder(tint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
-        .contentShape(shape)
     }
 
     // MARK: - «إدارة السجل» — نفس مربّع «إدارة السجل» في شجرة العائلة (`AdminMemberDetailSheet`)
@@ -1577,17 +1567,21 @@ private struct WomanDetailSheet: View {
 
     // MARK: - الشريط السفلي (نفس شريط تفاصيل العضو)
 
-    /// شريط ثابت أسفل المربّع: «الإدارة» كحلي يمين (يفتح مربّع الإجراءات)، «إغلاق» يسار
+    /// شريط ثابت أسفل المربّع: زرّ الدور يمين (يفتح مربّع الإجراءات)، «إغلاق» يسار — بمقاس واحد
     private var panelFooter: some View {
         // صفّ الأزرار بمواصفة `DSBox` الواحدة
         HStack(spacing: DSBox.buttonSpacing) {
             // الإدارة «الإدارة»، والعضو على عقدته «عائلتي»، وغيره «طلب إضافة» — كلها تفتح مربّع الإجراءات
             // (كان الزرّ للإدارة وحدها، فالعضو لا يجد طريقاً للإضافة من شجرة النساء)
             if mode != .viewOnly {
-                // الزرّ الواحد (تعبئة القسم) — دوّارته أثناء العمل
-                DSButton(actionsBoxTitle,
-                         icon: actionsBoxIcon,
-                         isLoading: draft.busy) { showAdminBox = true }
+                // الزرّ الواحد بلون دوره (`DSMemberKit`): «الإدارة» ذهبي، و«عائلتي»/«طلب إضافة» أخضر العائلة —
+                // نفس مقاس «إغلاق» وخطّه، ورمزه يقفز مرة عند الظهور؛ دوّارته أثناء العمل
+                DSLiveButton(actionsBoxTitle,
+                             icon: actionsBoxIcon,
+                             tint: mode == .direct ? DSMemberKit.directTint : DSMemberKit.addTint,
+                             motion: .pop,
+                             isLoading: draft.busy,
+                             hint: actionsBoxHint) { showAdminBox = true }
                     // نفس تعطيل بطاقة الإدارة أثناء العمل
                     .disabled(draft.busy)
             }

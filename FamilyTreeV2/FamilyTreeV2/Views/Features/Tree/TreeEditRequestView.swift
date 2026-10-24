@@ -1,7 +1,54 @@
 import SwiftUI
 
+/// من يُطلب إضافته مع «طلب إضافة» في تفاصيل العضو (طلب المالك ٢٠٢٦-١٠-٢٤ «اذا يبي يسوي طلبات اضافة؟»):
+/// الابن يُضاف تلقائياً عند القبول (`newMemberName`)، والابنة والزوجة مكانهما شجرة النساء فتُضيفهما الإدارة
+/// يدوياً ثم تقبل الطلب — نفس طلب «طلب إضافة» في شجرة النساء
+enum TreeAddKind: String, CaseIterable, Identifiable {
+    case son, daughter, wife
+    var id: String { rawValue }
+
+    /// اسم المربّع في «طلب إضافة»
+    var tileTitle: String {
+        switch self {
+        case .son: return L10n.t("ابن", "Son")
+        case .daughter: return L10n.t("ابنة", "Daughter")
+        case .wife: return L10n.t("زوجة", "Wife")
+        }
+    }
+    var icon: String {
+        switch self {
+        case .son: return "person.badge.plus"
+        // "figure.dress" ليس رمزاً في SF Symbols
+        case .daughter: return "figure.stand.dress"
+        case .wife: return "heart.fill"
+        }
+    }
+    /// عنوان النموذج
+    var requestTitle: String {
+        switch self {
+        case .son: return L10n.t("طلب إضافة ابن", "Add Son Request")
+        case .daughter: return L10n.t("طلب إضافة ابنة", "Add Daughter Request")
+        case .wife: return L10n.t("طلب إضافة زوجة", "Add Wife Request")
+        }
+    }
+    var fieldLabel: String {
+        switch self {
+        case .son: return L10n.t("اسم الابن الجديد", "New Son Name")
+        case .daughter: return L10n.t("اسم الابنة", "Daughter's Name")
+        case .wife: return L10n.t("اسم الزوجة", "Wife's Name")
+        }
+    }
+    var placeholder: String {
+        switch self {
+        case .son: return L10n.t("اكتب اسم الابن...", "Enter son's name...")
+        case .daughter: return L10n.t("اكتب اسم الابنة...", "Enter daughter's name...")
+        case .wife: return L10n.t("اكتب اسم الزوجة الكامل...", "Enter wife's full name...")
+        }
+    }
+}
+
 /// شاشة طلب تعديل الشجرة — تستقبل عضو + إجراء محددين مسبقاً.
-/// تدعم: إضافة ابن / تعديل اسم / تعديل رقم / تسجيل وفاة / حذف.
+/// تدعم: إضافة ابن أو ابنة أو زوجة / تعديل اسم / تعديل رقم / تسجيل وفاة / حذف.
 struct TreeEditRequestView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +58,8 @@ struct TreeEditRequestView: View {
 
     let member: FamilyMember
     let action: TreeEditAction
+    /// مع `.add`: ابن (افتراضياً) أو ابنة أو زوجة
+    var addKind: TreeAddKind = .son
 
     @State private var primaryText: String = ""
     @State private var notes: String = ""
@@ -40,7 +89,7 @@ struct TreeEditRequestView: View {
 
     private var screenTitle: String {
         switch action {
-        case .add: return L10n.t("طلب إضافة ابن", "Add Son Request")
+        case .add: return addKind.requestTitle
         case .editName: return L10n.t("طلب تعديل اسم", "Edit Name Request")
         case .editPhone: return L10n.t("طلب تعديل رقم", "Edit Phone Request")
         case .editBirth: return L10n.t("طلب تعديل تاريخ الميلاد", "Edit Birth Date Request")
@@ -170,8 +219,8 @@ struct TreeEditRequestView: View {
     private var primaryField: some View {
         switch action {
         case .add:
-            DSComposerField(icon: "person.badge.plus", label: L10n.t("اسم الابن الجديد", "New Son Name"),
-                            placeholder: L10n.t("اكتب اسم الابن...", "Enter son's name..."),
+            DSComposerField(icon: addKind.icon, label: addKind.fieldLabel,
+                            placeholder: addKind.placeholder,
                             text: $primaryText, tint: actionColor)
         case .editName:
             DSComposerField(icon: "pencil", label: L10n.t("الاسم الجديد", "New Name"),
@@ -286,6 +335,25 @@ struct TreeEditRequestView: View {
         let payload: TreeEditPayload
 
         switch action {
+        case .add where addKind != .son:
+            // الابنة والزوجة: الاسم في الملاحظات (بلا `newMemberName` فلا يُنشئ القبول ابناً) — تُضيفها الإدارة
+            // في شجرة النساء ثم تقبل الطلب، بنفس صيغة «طلب إضافة» في شجرة النساء
+            let name = primaryText.trimmingCharacters(in: .whitespacesAndNewlines)
+            var lines = [L10n.t("شجرة النساء — ", "Women's tree — ") + addKind.requestTitle,
+                         L10n.t("الاسم: ", "Name: ") + name,
+                         L10n.t("لـ: ", "For: ") + member.displayFullName]
+            if !cleanNotes.isEmpty { lines.append(L10n.t("ملاحظات: ", "Notes: ") + cleanNotes) }
+            lines.append(L10n.t("التنفيذ يدوي: تُضاف من شجرة النساء (تفاصيل العضو ← الإدارة) ثم يُقبل الطلب.",
+                                "Manual: add it from the women's tree (member details → Manage), then approve."))
+            payload = TreeEditPayload.make(
+                action: .add,
+                targetMemberId: member.id.uuidString,
+                targetMemberName: member.fullName,
+                parentMemberId: member.id.uuidString,
+                parentMemberName: member.fullName,
+                notes: lines.joined(separator: "\n")
+            )
+
         case .add:
             payload = TreeEditPayload.make(
                 action: .add,
