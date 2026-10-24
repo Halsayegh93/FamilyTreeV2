@@ -51,13 +51,33 @@ final class OfflineHold {
             return
         }
         guard window == nil else { return }
-        guard everOnline else { show(); return }
+        // لا تغطية قبل التأكد أن الخادم لا يرد فعلاً — مراقب الشبكة قد يخطئ فيبقى التطبيق مغطّى والإنترنت شغّال
+        // (طلب المالك ٢٠٢٦-١٠-٢٤ «لا يعلق ولا يثبت بصفحة»)
+        let grace = everOnline ? Self.graceSeconds : 0
         pending = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.graceSeconds * 1_000_000_000))
+            if grace > 0 { try? await Task.sleep(nanoseconds: UInt64(grace * 1_000_000_000)) }
+            guard !Task.isCancelled, !NetworkMonitor.shared.isConnected else { return }
+            if await NetworkMonitor.shared.confirmReachable() { return }
             guard !Task.isCancelled, !NetworkMonitor.shared.isConnected else { return }
             self?.show()
+            self?.keepProbing()
         }
     }
+
+    /// والشاشة مغطّاة: تأكيد كل لحظات — يرجع التطبيق وحده ولو لم يبلّغ مراقب الشبكة بعودة الاتصال
+    private func keepProbing() {
+        probing?.cancel()
+        probing = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(Self.probeEverySeconds * 1_000_000_000))
+                guard !Task.isCancelled, self?.window != nil else { return }
+                // النجاح يصحّح `isConnected` فيصل للمشترك أعلاه ويُخفي الشاشة
+                await NetworkMonitor.shared.confirmReachable()
+            }
+        }
+    }
+    private var probing: Task<Void, Never>?
+    static let probeEverySeconds: Double = 5
 
     private func show() {
         guard window == nil, let authVM,
@@ -87,6 +107,8 @@ final class OfflineHold {
     }
 
     private func hide() {
+        probing?.cancel()
+        probing = nil
         guard let w = window else { return }
         window = nil
         UIView.animate(withDuration: Self.fade, animations: { w.alpha = 0 }) { [weak self] _ in

@@ -330,10 +330,16 @@ class AuthViewModel: ObservableObject {
     }
 
     /// «إعادة المحاولة» من شاشة البداية العالقة
+    /// يلغي الفحص الجاري (قد يكون عالقاً على طلب بلا رد) ويبدأ واحداً جديداً — كانت الضغطة تضيف فحصاً
+    /// موازياً فوق العالق بدل أن تحلّ محلّه
     func retryLaunchCheck() async {
         launchCheckStalled = false
         armLaunchWatchdog()
-        await checkUserProfile()
+        profileRecheckTask?.cancel()
+        activeProfileCheckTask?.cancel()
+        let task = Task { [weak self] in await self?.checkUserProfile() }
+        activeProfileCheckTask = task
+        await task.value
     }
 
     /// بلا اتصال ولا نسخة محفوظة للعضو: «تعذّر الاتصال» على شاشة البداية ومحاولة تلقائية كل
@@ -504,6 +510,16 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    /// رقم ملف العضو نفسه من السيرفر (`get_member_phone`: يرجع رقمك ولو مخفياً، بهوية `current_profile_id()`)
+    private func ownPhoneFromServer(_ id: UUID) async -> String? {
+        let phone: String? = try? await supabase
+            .rpc("get_member_phone", params: ["p_id": id.uuidString])
+            .execute()
+            .value
+        let trimmed = phone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     /// معرّف ملف هذا الحساب كما يراه السيرفر: `current_profile_id()` = app_metadata.profile_id
     /// وإلا auth.uid() — مصدر الهوية الوحيد بعد إزالة الربط القديم على الجهاز (فحص الثغرات ب-٦).
     private func serverProfileId() async -> UUID? {
@@ -610,6 +626,15 @@ class AuthViewModel: ObservableObject {
     private func applyAuthenticatedProfile(_ profile: FamilyMember, normalizedPhone: String?) async {
         guard !isEndingSession, !Task.isCancelled, let authUser = supabase.auth.currentUser else { return }
         let generation = sessionGeneration
+        var profile = profile
+        // حساب مربوط بملف شجرة بمعرّف آخر (app_metadata.profile_id) ورقمه مخفي: `members_masked` يقارن بـ auth.uid
+        // فيصل رقمه فارغاً، فكان يُرسَل لشاشة التسجيل كأن الإدارة حذفت رقمه. الرقم من السيرفر بهويته الصحيحة.
+        if profile.id != authUser.id, profile.role != .owner,
+           (profile.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let phone = await ownPhoneFromServer(profile.id) {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
+            profile.phoneNumber = phone
+        }
         CacheManager.shared.beginAccount(authUser.id)
         var access = self.resolveAuthAccess(for: profile)
 
@@ -1010,6 +1035,13 @@ class AuthViewModel: ObservableObject {
             return
         }
 
+        // فتح التطبيق: العضو المفعّل محفوظ على الجهاز → يدخل فوراً والتحقق يكمل بالخلفية — لا انتظار على شاشة
+        // البداية لتجديد الجلسة وثلاثة طلبات للخادم (طلب المالك ٢٠٢٦-١٠-٢٤ «لا يعلق عند الدخول»). إن تغيّر شيء
+        // (جُمّد، حُذف رقمه، انتهت الجلسة) ينقله التحقق للشاشة الصحيحة، والسيرفر يحمي البيانات بنفسه.
+        if status == .checking, currentUser == nil {
+            restoreActiveMemberFromCache()
+        }
+
         let user: Supabase.User
         do {
             user = try await supabase.auth.session.user
@@ -1059,8 +1091,10 @@ class AuthViewModel: ObservableObject {
             return
         }
 
-        // بدون نت بعد قراءة الجلسة — نستعيد من الكاش بدل جلب من السيرفر
-        if !NetworkMonitor.shared.isConnected {
+        // بدون نت بعد قراءة الجلسة — نستعيد من الكاش بدل جلب من السيرفر (بعد التأكد أن الخادم لا يرد فعلاً:
+        // مراقب الشبكة قد يخطئ فيبقى الفحص متوقفاً والإنترنت شغّال)
+        if !NetworkMonitor.shared.isConnected, !(await NetworkMonitor.shared.confirmReachable()) {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             if let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
                let profile = cached.first(where: { $0.id == user.id }) {
                 Log.info("[AUTH] استعادة المستخدم من الكاش (cold start بدون نت): \(profile.fullName)")
@@ -1107,7 +1141,8 @@ class AuthViewModel: ObservableObject {
         }
 
         // بدون نت — لا نحاول جلب البروفايل من السيرفر
-        if !NetworkMonitor.shared.isConnected {
+        if !NetworkMonitor.shared.isConnected, !(await NetworkMonitor.shared.confirmReachable()) {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             Log.info("[AUTH] بدون اتصال — تخطي جلب البروفايل من السيرفر")
             showLaunchConnectionProblem(generation: generation)   // لا دوران بلا نهاية (ج-٦)
             return
@@ -1219,6 +1254,20 @@ class AuthViewModel: ObservableObject {
 
         Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(Log.masked(normalizedSessionPhone)), UUID: \(userIdString)")
         self.status = .authenticatedNoProfile
+    }
+
+    /// العضو المفعّل من كاش حسابه (جلسة محفوظة على الجهاز، بلا شبكة) — للدخول الفوري عند فتح التطبيق.
+    /// غير المفعّل (معلّق، مجمّد، بلا رقم…) ينتظر التحقق من الخادم كما كان.
+    private func restoreActiveMemberFromCache() {
+        guard let storedUser = supabase.auth.currentUser else { return }
+        CacheManager.shared.beginAccount(storedUser.id)
+        guard let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
+              let profile = cached.first(where: { $0.id == storedUser.id }),
+              resolveAuthAccess(for: profile) == .fullyAuthenticated else { return }
+        Log.info("[AUTH] دخول فوري من الكاش — التحقق يكمل بالخلفية")
+        currentUser = profile
+        isAuthenticated = true
+        status = .fullyAuthenticated
     }
 
     /// إعادة فحص البروفايل بعد خطأ مؤقت (بلا كاش) — ما دامت الجلسة نفسها على شاشة البداية
