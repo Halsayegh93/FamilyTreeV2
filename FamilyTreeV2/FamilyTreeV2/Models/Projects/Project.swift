@@ -21,6 +21,8 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
     var isHidden: Bool
     /// صور المشروع (معرض) — روابط عامة في bucket الأفاتار
     var imageUrls: [String] = []
+    /// وقت التثبيت (ISO) — nil = غير مثبَّت. المثبَّتة تظهر أولاً، والأحدث تثبيتاً قبل الأقدم.
+    var pinnedAt: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -41,6 +43,7 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         case createdAt = "created_at"
         case isHidden = "is_hidden"
         case imageUrls = "image_urls"
+        case pinnedAt = "pinned_at"
     }
 
     init(from decoder: Decoder) throws {
@@ -64,6 +67,8 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
         // العمود قد لا يكون موجوداً بعد — يبقى فارغاً بلا فشل
         imageUrls = (try? container.decodeIfPresent([String].self, forKey: .imageUrls)) ?? []
+        // نفس الأمر: عمود التثبيت قد لا يكون موجوداً قبل تطبيق الـmigration
+        pinnedAt = try? container.decodeIfPresent(String.self, forKey: .pinnedAt)
     }
 
     init(id: UUID = UUID(), ownerId: UUID, ownerName: String, title: String,
@@ -92,6 +97,32 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
         self.approvedBy = approvedBy
         self.createdAt = createdAt
         self.isHidden = isHidden
+    }
+
+    var isPinned: Bool { pinnedAt != nil }
+
+    /// ترتيب القائمة: المثبَّتة أولاً (الأحدث تثبيتاً أولاً) ثم الترتيب الحالي كما هو (ترتيب مستقر).
+    static func pinnedFirst(_ list: [Project]) -> [Project] {
+        let pinned = list.filter { $0.pinnedAt != nil }
+            .sorted { Self.pinDate($0.pinnedAt) > Self.pinDate($1.pinnedAt) }
+        return pinned + list.filter { $0.pinnedAt == nil }
+    }
+
+    /// وقت التثبيت كنص ISO بكسور الثواني (يطابق ما يعيده السيرفر فيصحّ الترتيب بعد التحديث التفاؤلي).
+    static func pinTimestampNow(at date: Date = Date()) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.string(from: date)
+    }
+
+    /// يقرأ نص التثبيت سواء جاء بكسور ثوانٍ أو بدونها.
+    private static func pinDate(_ s: String?) -> Date {
+        guard let s else { return .distantPast }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: s) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: s) ?? .distantPast
     }
 
     /// Whether this project has any social media links

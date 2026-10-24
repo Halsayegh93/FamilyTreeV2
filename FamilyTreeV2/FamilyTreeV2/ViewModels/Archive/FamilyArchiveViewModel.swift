@@ -59,7 +59,8 @@ final class FamilyArchiveViewModel: ObservableObject {
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            self.items = response
+            // المثبَّتة أولاً (الأحدث تثبيتاً أولاً) ثم الأحدث إضافة
+            self.items = ArchiveItem.pinnedFirst(response)
             Log.info("[Archive] جلب \(response.count) عنصر")
         } catch {
             // قد يكون الجدول غير موجود بعد (قبل تشغيل migration)
@@ -348,6 +349,40 @@ final class FamilyArchiveViewModel: ObservableObject {
             self.errorMessage = L10n.t("تعذّر تغيير حالة الإخفاء.",
                                        "Failed to toggle visibility.")
             Log.error("[Archive] خطأ toggleHidden: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Toggle Pinned (تثبيت في الأعلى)
+
+    /// تثبيت/إلغاء تثبيت عنصر. متاح لـ owner + admin فقط (والسيرفر يرفض غيرهم).
+    func togglePinned(_ item: ArchiveItem) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true else {
+            errorMessage = L10n.t("التثبيت متاح للمدراء فقط.", "Pinning is restricted to admins.")
+            return
+        }
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+
+        let oldList = items
+        let newDate: Date? = items[idx].pinnedAt == nil ? Date() : nil
+        // تحديث تفاؤلي
+        items[idx].pinnedAt = newDate
+        items = ArchiveItem.pinnedFirst(items)
+
+        do {
+            let value = newDate.map { AnyEncodable(Project.pinTimestampNow(at: $0)) }
+                ?? AnyEncodable(Optional<String>.none)
+            try await supabase
+                .from(tableName)
+                .update(["pinned_at": value])
+                .eq("id", value: item.id.uuidString)
+                .execute()
+            Log.info("[Archive] \(newDate != nil ? "تثبيت" : "إلغاء تثبيت"): \(item.title)")
+        } catch {
+            // استرجاع عند الفشل
+            items = oldList
+            self.errorMessage = L10n.t("تعذّر تغيير حالة التثبيت.", "Failed to change pin state.")
+            Log.error("[Archive] خطأ togglePinned: \(error.localizedDescription)")
         }
     }
 

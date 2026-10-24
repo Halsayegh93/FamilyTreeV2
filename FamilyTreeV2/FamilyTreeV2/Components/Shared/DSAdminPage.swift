@@ -32,6 +32,8 @@ struct DSStatTile: View {
     /// شارة تنبيه صغيرة (مثل «جديد») — nil = بلا شارة
     var badge: String? = nil
     var action: (() -> Void)? = nil
+    /// نسبة (٠…١) — حلقة مصغّرة موحّدة مكان الأيقونة (`DSRingValue`، الدفعة ١٠: كل نسبة بحلقة)
+    var ring: Double? = nil
     @Environment(\.dsSection) private var section
 
     var body: some View {
@@ -50,7 +52,12 @@ struct DSStatTile: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack {
-                DSFieldIcon(name: icon, tint: tint)
+                if let ring {
+                    DSRingValue(progress: ring, tint: tint)
+                        .frame(minWidth: DS.Icon.section, minHeight: DS.Icon.section, alignment: .leading)
+                } else {
+                    DSFieldIcon(name: icon, tint: tint)
+                }
                 Spacer(minLength: 0)
                 if let badge {
                     let glyph = tint.dsChrome(in: section).dsReadableGlyph

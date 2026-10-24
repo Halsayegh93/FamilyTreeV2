@@ -10,6 +10,33 @@ struct PhoneNumberTextField: UIViewRepresentable {
     var keyboardType: UIKeyboardType = .numberPad
     var textAlignment: NSTextAlignment = .left
     var maxLength: Int = 15
+    /// الدولة المختارة — يُحذف رمزها (+/00) والصفر الأول من اللصق/التعبئة التلقائية قبل القصّ
+    var country: KuwaitPhone.Country? = nil
+
+    /// دول رقمها المحلي يُكتب بصفر أول يسقط مع رمز الدولة (05xxxxxxxx → 5xxxxxxxx)
+    private static let trunkZeroCountries: Set<String> = ["SA", "AE", "EG", "JO", "IQ", "GB"]
+
+    /// النص المكتوب/الملصوق → الأرقام المحلية فقط. كان «+965 5123 4567» أو «0096551234567»
+    /// أو «05xxxxxxxx» يُقصّ من أوله فيبقى أرقام خطأ.
+    static func localDigits(from raw: String, country: KuwaitPhone.Country?, maxLength: Int) -> String {
+        let normalized = KuwaitPhone.normalizeDigits(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        var digits = normalized.filter(\.isNumber)
+        if let country {
+            let code = country.dialingCode.filter(\.isNumber)
+            // دولي صريح: «+» أو «00» في أوله
+            let international = normalized.hasPrefix("+") || digits.hasPrefix("00")
+            if digits.hasPrefix("00") { digits = String(digits.dropFirst(2)) }
+            if !code.isEmpty, digits.hasPrefix(code),
+               international || digits.count > maxLength {
+                digits = String(digits.dropFirst(code.count))
+            }
+            // الصفر الأول المحلي — فقط لو الرقم أطول من المسموح (الكتابة العادية لا تتأثر)
+            if trunkZeroCountries.contains(country.isoCode), digits.count > maxLength, digits.hasPrefix("0") {
+                digits = String(digits.dropFirst())
+            }
+        }
+        return String(digits.prefix(maxLength))
+    }
 
     func makeUIView(context: Context) -> UITextField {
         let tf = UITextField()
@@ -57,9 +84,9 @@ struct PhoneNumberTextField: UIViewRepresentable {
             guard let range = Range(range, in: current) else { return false }
             let updated = current.replacingCharacters(in: range, with: string)
 
-            // تنظيف: بس أرقام
-            let digits = KuwaitPhone.normalizeDigits(updated).filter(\.isNumber)
-            let limited = String(digits.prefix(parent.maxLength))
+            // تنظيف: أرقام لاتينية فقط، بلا رمز الدولة ولا الصفر الأول، ثم القصّ
+            let limited = PhoneNumberTextField.localDigits(from: updated, country: parent.country,
+                                                           maxLength: parent.maxLength)
 
             parent.text = limited
             textField.text = limited
@@ -137,7 +164,8 @@ struct DSPhoneField: View {
                 placeholder: placeholder,
                 font: .systemFont(ofSize: numberFontSize, weight: .semibold),
                 keyboardType: .numberPad,
-                maxLength: country.maxDigits
+                maxLength: country.maxDigits,
+                country: country
             )
             .frame(maxWidth: .infinity)
             .frame(height: innerHeight)

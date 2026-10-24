@@ -664,14 +664,14 @@ struct EditProfileView: View {
         self.isDeceased = member.isDeceased ?? false
         // تحميل المحطات الحياتية
         self.bioStations = member.bio ?? []
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        if let b = member.birthDate, let date = f.date(from: b) {
+        // DateHelper: ميلادي بأرقام لاتينية — كان formatter الجهاز يقرأ التاريخ خطأ بالتقويم الهجري
+        if let date = DateHelper.parse(member.birthDate) {
             self.birthDate = date
             self.birthDateProvided = true
         } else {
             self.birthDateProvided = false
         }
-        if let d = member.deathDate, let date = f.date(from: d) { self.deathDate = date }
+        if let date = DateHelper.parse(member.deathDate) { self.deathDate = date }
         self.isPhoneHidden = member.isPhoneHidden ?? false
         self.email = member.email ?? ""
     }
@@ -755,6 +755,9 @@ struct EditProfileView: View {
                 recordCooldowns(changes: changes)
                 collectSummary(changes: changes)
                 if changes.anyNeedsApproval { requestsDueToLimit = true }
+                // طلب الاسم/الرقم فشل (applyPendingChanges رفع الخطأ) — تبقى الشاشة مفتوحة برسالة الخطأ،
+                // لا إغلاق ولا ملخّص يخفيها
+                if showSaveError { return }
                 // بعد التأكيد لا رسالة ثانية؛ غير ذلك ملخّص ما تغيّر (طلب المالك)
                 if !confirmed && (!savedItems.isEmpty || !sentItems.isEmpty) {
                     showRequestSentAlert = true
@@ -834,10 +837,13 @@ struct EditProfileView: View {
 
         // 2) الاسم — طلب دائماً
         if let newName = pendingNameRequest {
-            await adminRequestVM.requestNameChange(memberId: member.id, newName: newName)
-            requestsSent = true
-            sentItems.append(L10n.t("الاسم", "Name"))
-            pendingNameRequest = nil
+            if await adminRequestVM.requestNameChange(memberId: member.id, newName: newName) {
+                requestsSent = true
+                sentItems.append(L10n.t("الاسم", "Name"))
+                pendingNameRequest = nil
+            } else {
+                showSaveError = true
+            }
         }
 
         // 3) العائلة — طلب دائماً
@@ -851,31 +857,41 @@ struct EditProfileView: View {
         // 4) الرقم — أول ٣ مرات يُحفظ مباشرة بعد رمز التحقق، وبعدها طلب للإدارة
         if let verified = pendingPhoneVerified {
             if cooldown.canEdit(.phoneNumber) {
-                await memberVM.updateMemberPhone(memberId: member.id,
-                                                 country: verified.country,
-                                                 localPhone: verified.digits)
-                cooldown.recordEdit(.phoneNumber)
-                appliedPhoneDisplay = verified.display
-                savedItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                // يُحسب التعديل ويظهر «تغيّر» فقط لو حُفظ فعلاً (رقم محظور/لعضو آخر/انقطاع = خطأ)
+                if await memberVM.updateMemberPhone(memberId: member.id,
+                                                    country: verified.country,
+                                                    localPhone: verified.digits) {
+                    cooldown.recordEdit(.phoneNumber)
+                    appliedPhoneDisplay = verified.display
+                    savedItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                } else {
+                    showSaveError = true
+                }
             } else {
-                await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
-                                                              newPhoneNumber: verified.e164)
-                pendingPhoneRequest = verified.display
-                requestsSent = true
-                requestsDueToLimit = true
-                sentItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                if await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
+                                                                 newPhoneNumber: verified.e164) {
+                    pendingPhoneRequest = verified.display
+                    requestsSent = true
+                    requestsDueToLimit = true
+                    sentItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                } else {
+                    showSaveError = true
+                }
             }
             pendingPhoneVerified = nil
         }
 
         // 5) رقم عليه حساب آخر — لا يُحفظ ذاتياً، يُرسل للإدارة دائماً
         if let pending = pendingPhoneForAdmins {
-            await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
-                                                          newPhoneNumber: pending.storage)
-            pendingPhoneRequest = pending.display
-            requestsSent = true
-            sentItems.append(L10n.t("رقم الهاتف", "Phone number"))
-            pendingPhoneForAdmins = nil
+            if await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
+                                                             newPhoneNumber: pending.storage) {
+                pendingPhoneRequest = pending.display
+                requestsSent = true
+                sentItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                pendingPhoneForAdmins = nil
+            } else {
+                showSaveError = true
+            }
         }
     }
 
@@ -919,12 +935,11 @@ struct EditProfileView: View {
         if pendingPhoneVerified != nil || pendingPhoneForAdmins != nil
             || pendingNameRequest != nil || pendingFamilyRequest != nil
             || pendingAvatarDelete { return true }
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         if isMarried != (member.isMarried ?? false) { return true }
         if isPhoneHidden != (member.isPhoneHidden ?? false) { return true }
         if isDeceased && !(member.isDeceased ?? false) { return true }
         let oldBirthStr = member.birthDate ?? ""
-        if birthDateProvided && f.string(from: birthDate) != oldBirthStr { return true }
+        if birthDateProvided && DateHelper.format(birthDate) != oldBirthStr { return true }
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let oldEmail = (member.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if trimmedEmail != oldEmail { return true }
@@ -939,10 +954,9 @@ struct EditProfileView: View {
     }
 
     private func detectChangedFields(normalizedPhone: String) -> ChangedFields {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
         let oldStoredPhone = KuwaitPhone.normalizeForStorageFromInput(member.phoneNumber) ?? ""
         let oldBirthStr = member.birthDate ?? ""
-        let newBirthStr = f.string(from: birthDate)
+        let newBirthStr = DateHelper.format(birthDate)
 
         // مقارنة المحطات بمحتواها
         let oldBioKey = (member.bio ?? []).map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
@@ -1005,13 +1019,11 @@ struct EditProfileView: View {
             ))
         }
         if changes.birthNeedsApproval {
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            f.locale = Locale(identifier: "en_US_POSIX")
             _ = await adminRequestVM.submitTreeEditRequest(payload: .make(
                 action: .editBirth,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
-                newBirthDate: f.string(from: birthDate),
+                newBirthDate: DateHelper.format(birthDate),
                 notes: L10n.t("تعديل بعد تجاوز حد التعديلات", "Edit after reaching the edit limit")
             ))
         }
@@ -1040,7 +1052,8 @@ struct EditProfileView: View {
             // تجاوز الحد → تبقى القيمة القديمة حتى موافقة الإدارة
             isMarried: changes.marriedNeedsApproval ? (member.isMarried ?? false) : isMarried,
             isDeceased: member.isDeceased ?? false,
-            deathDate: member.isDeceased ?? false ? deathDate : nil,
+            // التاريخ المحفوظ فقط — كان الافتراضي (اليوم) يُكتب لمتوفى بلا تاريخ
+            deathDate: member.isDeceased ?? false ? DateHelper.parse(member.deathDate) : nil,
             // تجاوز الحد → تبقى القيمة القديمة حتى موافقة الإدارة
             isPhoneHidden: changes.phoneHiddenNeedsApproval ? (member.isPhoneHidden ?? false) : isPhoneHidden
         )
@@ -1393,11 +1406,16 @@ private struct PhoneRequestCard: View {
         } catch {
             Log.error("[PhoneChange] إرسال الرمز: \(error.localizedDescription)")
             let reason = error.localizedDescription.lowercased()
+            let waitSeconds = OTPWaitText.seconds(in: "\(error) \(error.localizedDescription)")
             if reason.contains("already been registered") || reason.contains("already registered")
                 || reason.contains("phone_exists") {
                 // الرقم على حساب دخول آخر: السيرفر يحرّره إن كان حساباً يتيماً (بلا عضو)،
                 // ثم نطلب الرمز من جديد — الرقم لا ينتقل إلا بعد التحقق (طلب المالك)
                 await releaseAndRetry(authNumber: authNumber)
+            } else if let waitSeconds {
+                // «انتظر N ثانية» من نص الحجب (٢٠٢٦-١٠-٢٠) — وعدّاد إعادة الإرسال يبدأ منها
+                self.error = OTPWaitText.message(seconds: waitSeconds, arabic: L10n.isArabic)
+                if codeSent { secondsLeft = waitSeconds }
             } else if reason.contains("security purposes") || reason.contains("rate limit")
                         || reason.contains("too many") {
                 self.error = t("محاولات كثيرة — انتظر دقيقة ثم أعد المحاولة.",

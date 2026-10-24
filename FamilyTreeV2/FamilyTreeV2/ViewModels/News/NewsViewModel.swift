@@ -565,7 +565,10 @@ class NewsViewModel: ObservableObject {
         pollQuestion: String? = nil,
         pollOptions: [String] = [],
         /// نشر باسم الإدارة بدل اسم الكاتب (للإدارة فقط — طلب المالك)
-        asAdminIdentity: Bool = false
+        asAdminIdentity: Bool = false,
+        /// تنبيه الإدارة «منشور جديد» بعد النشر المباشر — false حين يصلهم إشعار الإعلان نفسه للجميع
+        /// («إعلان جديد» في لوحة الإدارة بخياري الأخبار والإشعار معاً — لا إشعاران للإدارة)
+        notifyAdmins: Bool = true
     ) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else {
@@ -620,7 +623,7 @@ class NewsViewModel: ObservableObject {
                     subjectMemberId: user.id
                 )
             }
-            if shouldAutoApprove {
+            if shouldAutoApprove && notifyAdmins {
                 await notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("منشور جديد", "New Post"),
                     body: L10n.t(
@@ -869,7 +872,7 @@ class NewsViewModel: ObservableObject {
                 )
             }
 
-            // حركة إدارية — مكانها «سجل النشاط»، مربوطة بصاحب المنشور
+            // حركة إدارية — مكانها «إشعارات الإدارة»، مربوطة بصاحب المنشور
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("حذف منشور", "Post Deleted"),
                 body: L10n.t("تم حذف منشور من الأخبار", "A news post has been deleted"),

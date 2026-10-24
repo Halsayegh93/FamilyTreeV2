@@ -29,7 +29,7 @@ struct RoleGuide: Identifiable {
                     L10n.t("منح الأدوار وسحبها", "Assign and remove roles"),
                     L10n.t("إعدادات النظام والأمان", "System and security settings"),
                     L10n.t("إدارة الأجهزة المرتبطة بالحسابات", "Manage linked devices"),
-                    L10n.t("الأرقام المحظورة", "Banned phone numbers")
+                    L10n.t("منع الأرقام من التسجيل", "Block numbers from signing up")
                 ],
                 cannot: [
                     L10n.t("لا شيء — كل صلاحيات التطبيق متاحة له", "Nothing — has every permission")
@@ -48,21 +48,21 @@ struct RoleGuide: Identifiable {
                           "Approve and reject all tree and member requests"),
                     L10n.t("تعديل بيانات الأعضاء ومعالجة مشاكل صحة الشجرة",
                           "Edit member data and fix tree health issues"),
-                    L10n.t("تسجيل عضو جديد، حذف الأعضاء، تجميد الحسابات",
+                    L10n.t("تسجيل عضو جديد، حذف الأعضاء، إيقاف الحسابات",
                           "Register, delete and freeze members"),
                     L10n.t("إرسال الإشعارات للأعضاء", "Send notifications to members"),
                     L10n.t("حذف أي محتوى: أخبار، تعليقات، صور، ديوانيات",
                           "Delete any content: news, comments, photos, diwaniyas"),
                     L10n.t("إخفاء وإظهار عناصر المكتبة والمشاريع",
                           "Hide and show library items and projects"),
-                    L10n.t("تصفّح «إعدادات النظام» للقراءة", "Browse system settings (read-only)")
+                    L10n.t("الاطلاع على إعدادات النظام", "View system settings")
                 ],
                 cannot: [
                     L10n.t("منح الأدوار أو سحبها — للمالك", "Assign or remove roles — owner only"),
                     L10n.t("تعديل إعدادات النظام والأمان — للمالك",
                           "Change system and security settings — owner only"),
                     L10n.t("إدارة الأجهزة المرتبطة — للمالك", "Manage linked devices — owner only"),
-                    L10n.t("الأرقام المحظورة — للمالك", "Banned numbers — owner only"),
+                    L10n.t("منع الأرقام من التسجيل — للمالك", "Blocking numbers — owner only"),
                     L10n.t("تغيير دور المالك أو حذفه", "Change or delete the owner")
                 ]
             ),
@@ -77,7 +77,7 @@ struct RoleGuide: Identifiable {
                     L10n.t("تعديل بيانات الأعضاء", "Edit member data"),
                     L10n.t("معالجة مشاكل صحة الشجرة (بدون أب، بلا اسم، أرقام مكررة)",
                           "Fix tree health issues (no father, no name, duplicate phones)"),
-                    L10n.t("رؤية إحصائيات الأعضاء", "View member statistics")
+                    L10n.t("رؤية إحصاءات الأعضاء", "View member statistics")
                 ],
                 cannot: [
                     L10n.t("اعتماد أو رفض الأخبار والمكتبة والمشاريع والديوانيات — للإدارة",
@@ -85,11 +85,11 @@ struct RoleGuide: Identifiable {
                     L10n.t("حذف المحتوى أو إخفاؤه (أخبار، تعليقات، صور) — مجال المشرف",
                           "Delete or hide content (news, comments, photos) — supervisor scope"),
                     L10n.t("التعامل مع البلاغات — مجال المشرف", "Handle reports — supervisor scope"),
-                    L10n.t("حذف الأعضاء أو تجميد حساباتهم", "Delete or freeze members"),
+                    L10n.t("حذف الأعضاء أو إيقاف حساباتهم", "Delete members or suspend their accounts"),
                     L10n.t("تسجيل عضو جديد مباشرة", "Register a new member directly"),
                     L10n.t("إرسال الإشعارات", "Send notifications"),
-                    L10n.t("منح الأدوار، الإعدادات، الأجهزة، الأرقام المحظورة",
-                          "Roles, settings, devices, banned numbers")
+                    L10n.t("منح الأدوار، الإعدادات، الأجهزة، منع الأرقام",
+                          "Roles, settings, devices, blocked numbers")
                 ]
             ),
             RoleGuide(
@@ -111,13 +111,13 @@ struct RoleGuide: Identifiable {
                     L10n.t("قبول أو رفض طلبات الشجرة والأعضاء — مجال المراقب",
                           "Approve or reject tree and member requests — monitor scope"),
                     L10n.t("تعديل بيانات الأعضاء", "Edit member data"),
-                    L10n.t("حذف الأعضاء أو تجميدهم أو تسجيل عضو جديد",
+                    L10n.t("حذف الأعضاء أو إيقاف حساباتهم أو تسجيل عضو جديد",
                           "Delete, freeze or register members"),
                     L10n.t("حذف الديوانيات", "Delete diwaniyas"),
                     L10n.t("إرسال الإشعارات", "Send notifications"),
-                    L10n.t("رؤية إحصائيات الأعضاء", "View member statistics"),
-                    L10n.t("منح الأدوار، الإعدادات، الأجهزة، الأرقام المحظورة",
-                          "Roles, settings, devices, banned numbers")
+                    L10n.t("رؤية إحصاءات الأعضاء", "View member statistics"),
+                    L10n.t("منح الأدوار، الإعدادات، الأجهزة، منع الأرقام",
+                          "Roles, settings, devices, blocked numbers")
                 ]
             ),
             RoleGuide(
@@ -145,8 +145,8 @@ struct RoleGuide: Identifiable {
                           "Edit others' data or delete their content"),
                     L10n.t("رؤية أرقام الأعضاء الذين أخفوا أرقامهم",
                           "See phone numbers members chose to hide"),
-                    L10n.t("رؤية الإحصائيات أو سجل النشاط أو الطلبات",
-                          "See statistics, activity log or requests")
+                    L10n.t("رؤية الإحصاءات أو إشعارات الإدارة أو الطلبات",
+                          "See statistics, admin notifications or requests")
                 ]
             )
         ]

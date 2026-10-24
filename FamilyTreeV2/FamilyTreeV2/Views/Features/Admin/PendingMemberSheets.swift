@@ -26,6 +26,8 @@ struct LinkToExistingMemberSheet: View {
     let pendingMember: FamilyMember
     /// الأقرب لاسمه (مطابقات الشجرة من «طلبات المراجعة») — تظهر أولاً، وتُستبعد من «كل الأعضاء»
     var suggested: [FamilyMember] = []
+    /// بعد ربط حساب أنثى بشجرة النساء (المربّع نفسه يحوّلها) — لتحديث القوائم
+    var onWomanLinked: (() -> Void)? = nil
 
     @State private var searchText = ""
     @State private var selectedMember: FamilyMember? = nil
@@ -35,6 +37,7 @@ struct LinkToExistingMemberSheet: View {
     private var candidates: [FamilyMember] {
         let all = memberVM.allMembers.filter {
             $0.role != .pending &&
+            $0.hasName &&
             $0.id != pendingMember.id &&
             $0.isDeceased != true
         }
@@ -48,10 +51,20 @@ struct LinkToExistingMemberSheet: View {
 
     /// المقترحون الأحياء غير المعلّقين فقط
     private var visibleSuggestions: [FamilyMember] {
-        suggested.filter { $0.role != .pending && $0.isDeceased != true && $0.id != pendingMember.id }
+        suggested.filter { $0.role != .pending && $0.hasName && $0.isDeceased != true && $0.id != pendingMember.id }
     }
 
     var body: some View {
+        // دخول النساء (٢٠٢٦-١٠-٢٤): «ربط بالشجرة» (merge_member_into_tree) لملفات الرجال فقط —
+        // طلب الأنثى يُربط بعقدتها في شجرة النساء، أياً كان من فتح المربّع
+        if pendingMember.isFemale {
+            LinkWomanAccountSheet(pendingMember: pendingMember, onLinked: onWomanLinked)
+        } else {
+            menBody
+        }
+    }
+
+    private var menBody: some View {
         DSComposer(
             title: L10n.t("ربط بالشجرة", "Link to Tree"),
             subtitle: pendingMember.displayFullName,
@@ -443,6 +456,423 @@ struct PendingMemberPhoneSheet: View {
             } else {
                 errorBanner = adminRequestVM.errorMessage
                 adminRequestVM.errorMessage = nil
+            }
+        }
+    }
+}
+
+// MARK: - ربط حساب أنثى بشجرة النساء (دخول النساء — طلب المالك ٢٠٢٦-١٠-٢٤)
+
+/// «ربط بشجرة النساء»: الأب (من طلبها أو يُختار من شجرة الرجال) ← بناته في شجرة النساء أولاً ثم الأقرب لاسمها
+/// (`NameMatcher`) ← «ربط بهذه» أو «إضافة بنت جديدة تحت الأب». التنفيذ كله في السيرفر (`link_woman_account`):
+/// الحساب يتفعّل مخفياً من شجرة الرجال، والطلب يُغلق، وإشعار «مرحباً بك في العائلة».
+struct LinkWomanAccountSheet: View {
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let pendingMember: FamilyMember
+    var onLinked: (() -> Void)? = nil
+
+    /// الاختيار: عقدة موجودة أو بنت جديدة تحت الأب
+    private enum Choice: Equatable {
+        case woman(UUID)
+        case newDaughter
+    }
+
+    @State private var loaded = false
+    @State private var requestInfo: AdminRequestViewModel.WomanJoinRequestInfo? = nil
+    @State private var women: [FamilyMember] = []
+    @State private var father: FamilyMember? = nil
+    @State private var fatherFromRequest = false
+    @State private var choice: Choice? = nil
+    @State private var newName = ""
+    @State private var pickingFather = false
+    @State private var fatherSearch = ""
+    @State private var fatherCandidates: [FamilyMember] = []
+    @State private var errorText: String? = nil
+    @State private var showConfirm = false
+
+    /// المرشّحات بالاسم خارج بنات الأب — أول هذا العدد
+    private static let otherMatchesLimit = 15
+
+    var body: some View {
+        Group {
+            if pickingFather {
+                fatherPicker
+            } else {
+                mainBox
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .task { await load() }
+    }
+
+    // MARK: التحميل — الطلب (والأب منه) + شجرة النساء
+
+    private func load() async {
+        guard !loaded else { return }
+        let info = await adminRequestVM.fetchWomanJoinRequest(for: pendingMember.id)
+        let fetched = (try? await WomenStore.fetch()) ?? WomenStore.cache
+        requestInfo = info
+        women = fetched
+        if father == nil, let fid = info?.fatherId {
+            father = memberVM.member(byId: fid)
+                ?? FamilyMember(id: fid, firstName: info?.fatherName ?? "", fullName: info?.fatherName ?? "")
+            fatherFromRequest = true
+        }
+        if newName.isEmpty { newName = firstWord(pendingMember.firstName.isEmpty ? pendingMember.fullName : pendingMember.firstName) }
+        loaded = true
+    }
+
+    private func firstWord(_ s: String) -> String {
+        s.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
+    }
+
+    // MARK: المرشّحات
+
+    private var applicantChain: [String] {
+        NameMatcher.chain(pendingMember.fullName, families: NameMatcher.familyKeys())
+    }
+
+    /// بنات الأب في شجرة النساء (أبوها في شجرة النساء = معرّف ملفه في شجرة الرجال)
+    private var daughters: [FamilyMember] {
+        guard let fid = father?.id else { return [] }
+        return women.filter { $0.isFemale && $0.fatherId == fid }
+    }
+
+    /// باقي نساء الشجرة الأقرب لاسمها — بالترتيب الموزون
+    private var otherMatches: [FamilyMember] {
+        let families = NameMatcher.familyKeys()
+        let applicant = applicantChain
+        guard !applicant.isEmpty else { return [] }
+        let skip = Set(daughters.map(\.id))
+        let scored: [(member: FamilyMember, result: NameMatcher.Result)] = women.compactMap { w in
+            guard w.isFemale, !skip.contains(w.id) else { return nil }
+            let r = NameMatcher.compare(applicant, NameMatcher.chain(w.fullName, families: families))
+            return r.isStrong ? (member: w, result: r) : nil
+        }
+        return scored
+            .sorted { NameMatcher.ranksBefore($0.result, $1.result) }
+            .prefix(Self.otherMatchesLimit)
+            .map { $0.member }
+    }
+
+    /// رجال الشجرة للأب — الأقرب لاسمها بلا الاسم الأول (اسم أبيها) أولاً
+    private func buildFatherCandidates() -> [FamilyMember] {
+        let families = NameMatcher.familyKeys()
+        let men = memberVM.allMembers.filter {
+            !$0.isFemale && $0.role != .pending && $0.hasName && $0.id != pendingMember.id
+        }
+        let fatherChain = Array(applicantChain.dropFirst())
+        guard !fatherChain.isEmpty else { return men }
+        let scored = men.map { m in (member: m, result: NameMatcher.compare(fatherChain, NameMatcher.chain(m.fullName, families: families))) }
+        return scored
+            .sorted { NameMatcher.ranksBefore($0.result, $1.result) }
+            .map { $0.member }
+    }
+
+    private var fatherDisplayName: String {
+        guard let father else { return "" }
+        let name = father.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? (requestInfo?.fatherName ?? "") : father.displayFullName
+    }
+
+    private func isTaken(_ w: FamilyMember) -> Bool {
+        guard let linked = WomenStore.linkedUserByWoman[w.id] else { return false }
+        return linked != pendingMember.id
+    }
+
+    private var trimmedNewName: String { newName.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private var canSubmit: Bool {
+        guard requestInfo != nil, !adminRequestVM.isLoading else { return false }
+        switch choice {
+        case .woman: return true
+        case .newDaughter: return father != nil && !trimmedNewName.isEmpty
+        case nil: return false
+        }
+    }
+
+    private var selectedWoman: FamilyMember? {
+        guard case .woman(let id) = choice else { return nil }
+        return women.first { $0.id == id }
+    }
+
+    // MARK: المربّع
+
+    private var mainBox: some View {
+        DSComposer(
+            title: L10n.t("ربط بشجرة النساء", "Link to Women's Tree"),
+            subtitle: pendingMember.displayFullName,
+            icon: "figure.stand.dress",
+            tint: DS.Color.actionNavy,
+            actionTitle: choice == .newDaughter ? L10n.t("إضافة وربط", "Add & Link") : L10n.t("ربط بهذه", "Link to her"),
+            actionIcon: "link",
+            canSubmit: canSubmit,
+            isBusy: adminRequestVM.isLoading,
+            hasUnsavedChanges: choice != nil,
+            onSubmit: { showConfirm = true },
+            onCancel: { dismiss() }
+        ) {
+            fatherSection
+            if loaded {
+                daughtersSection
+                if !otherMatches.isEmpty { otherMatchesSection }
+                newDaughterSection
+                if requestInfo == nil {
+                    DSNoteCard(L10n.t("لا يوجد طلب انضمام معلّق لهذا الحساب — ربما عولج من قبل.",
+                                      "No pending join request for this account — it may have been handled already."),
+                               icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
+                }
+            } else {
+                DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
+                    .padding(.vertical, DS.Spacing.md)
+            }
+            if let errorText {
+                DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+            }
+        }
+        .animation(reduceMotion ? nil : DS.Anim.snappy, value: choice)
+        .dsAlert(
+            L10n.t("تأكيد الربط", "Confirm Link"),
+            isPresented: $showConfirm
+        ) {
+            Button(L10n.t("ربط", "Link"), role: .none) { submit() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(confirmText)
+        }
+    }
+
+    private var confirmText: String {
+        if let w = selectedWoman {
+            return L10n.t("سيُربط حساب \(pendingMember.firstName) بـ «\(w.fullName)» في شجرة النساء ويُفعَّل.",
+                          "\(pendingMember.firstName)'s account will be linked to «\(w.fullName)» in the women's tree and activated.")
+        }
+        return L10n.t("ستُضاف «\(trimmedNewName)» بنتاً تحت \(fatherDisplayName) في شجرة النساء ويُربط بها الحساب ويُفعَّل.",
+                      "«\(trimmedNewName)» will be added as a daughter of \(fatherDisplayName) in the women's tree, linked and activated.")
+    }
+
+    // MARK: الأب
+
+    private var fatherSection: some View {
+        DSComposerSection(title: L10n.t("الأب", "Father"),
+                          icon: "figure.and.child.holdinghands",
+                          tint: DS.Color.palm,
+                          index: 0) {
+            Button {
+                fatherCandidates = buildFatherCandidates()
+                fatherSearch = ""
+                pickingFather = true
+            } label: {
+                DSRow(icon: "person.fill", tint: DS.Color.palm,
+                      title: father == nil ? L10n.t("اختر الأب", "Choose the father") : fatherDisplayName,
+                      subtitle: father == nil
+                        ? L10n.t("من شجرة الرجال", "From the men's tree")
+                        : (fatherFromRequest ? L10n.t("اختارته في التسجيل · تغيير", "Chosen at sign-up · Change")
+                                             : L10n.t("تغيير", "Change"))) {
+                    DSChevron()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var fatherPicker: some View {
+        DSMemberPickerBox(
+            title: L10n.t("اختيار الأب", "Choose father"),
+            subtitle: pendingMember.displayFullName,
+            icon: "figure.and.child.holdinghands",
+            candidates: fatherCandidates,
+            search: $fatherSearch,
+            searchLabel: L10n.t("بحث بالاسم", "Search by name"),
+            searchPlaceholder: L10n.t("اسم الأب", "Father's name"),
+            selectedId: father?.id,
+            onPick: { m in
+                if father?.id != m.id {
+                    father = m
+                    fatherFromRequest = false
+                    // بنت الأب السابق المختارة لا تبقى مختارة
+                    if case .woman = choice { choice = nil }
+                }
+                pickingFather = false
+            },
+            onCancel: { pickingFather = false }
+        )
+    }
+
+    // MARK: بنات الأب
+
+    private var daughtersSection: some View {
+        let list = daughters
+        return DSComposerSection(title: L10n.t("بناته في شجرة النساء", "His daughters in the women's tree"),
+                                 icon: "person.2.fill",
+                                 tint: DS.Color.female,
+                                 trailing: list.isEmpty ? nil : "\(list.count)",
+                                 index: 1) {
+            if father == nil {
+                DSNoteCard(L10n.t("اختر الأب لتظهر بناته.", "Choose the father to see his daughters."),
+                           icon: "info.circle.fill", tint: DS.Color.info)
+            } else if list.isEmpty {
+                DSNoteCard(L10n.t("لا توجد بنات له في شجرة النساء — أضِفها بنتاً جديدة.",
+                                  "He has no daughters in the women's tree — add her as a new daughter."),
+                           icon: "person.badge.plus", tint: DS.Color.warning)
+            } else {
+                ForEach(list) { w in
+                    womanRow(w, caption: nil)
+                }
+            }
+        }
+    }
+
+    // MARK: الأقرب لاسمها
+
+    private var otherMatchesSection: some View {
+        let list = otherMatches
+        let families = NameMatcher.familyKeys()
+        let applicant = applicantChain
+        return DSComposerSection(title: L10n.t("أسماء قريبة في شجرة النساء", "Close names in the women's tree"),
+                                 icon: "sparkles",
+                                 tint: DS.Color.success,
+                                 trailing: "\(list.count)",
+                                 index: 2) {
+            ForEach(list) { w in
+                let percent = NameMatcher.compare(applicant, NameMatcher.chain(w.fullName, families: families)).percent
+                womanRow(w, caption: L10n.t("تطابق \(percent)٪", "\(percent)% match"))
+            }
+        }
+    }
+
+    // MARK: بنت جديدة
+
+    private var newDaughterSection: some View {
+        DSComposerSection(title: L10n.t("بنت جديدة", "New daughter"),
+                          icon: "person.badge.plus",
+                          tint: DS.Color.warning,
+                          index: 3) {
+            if father != nil {
+                let isSelected = choice == .newDaughter
+                Button {
+                    choice = isSelected ? nil : .newDaughter
+                } label: {
+                    HStack(spacing: DS.Spacing.sm) {
+                        DSFieldIcon(name: isSelected ? "checkmark" : "plus",
+                                    tint: isSelected ? DS.Color.success : DS.Color.warning)
+                            .accessibilityHidden(true)
+                        Text(L10n.t("إضافة بنت جديدة تحت \(fatherDisplayName) باسم «\(trimmedNewName)»",
+                                    "Add a new daughter under \(fatherDisplayName) named «\(trimmedNewName)»"))
+                            .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
+                            .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .dsRowBox()
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .strokeBorder(DS.Color.success.opacity(isSelected ? DS.Opacity.selectedStroke : 0),
+                                          lineWidth: DS.Border.widthBold)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+
+                if isSelected {
+                    DSComposerField(icon: "person.fill",
+                                    label: L10n.t("اسمها", "Her name"),
+                                    placeholder: L10n.t("الاسم الأول", "First name"),
+                                    text: $newName,
+                                    tint: DS.Color.female,
+                                    required: true)
+                }
+            } else {
+                DSNoteCard(L10n.t("اختر الأب أولاً لإضافتها بنتاً له.", "Choose the father first to add her as his daughter."),
+                           icon: "info.circle.fill", tint: DS.Color.info)
+            }
+        }
+    }
+
+    // MARK: صفّ امرأة في الشجرة
+
+    private func womanRow(_ w: FamilyMember, caption: String?) -> some View {
+        let taken = isTaken(w)
+        let isSelected = choice == .woman(w.id)
+        return Button {
+            choice = isSelected ? nil : .woman(w.id)
+        } label: {
+            HStack(spacing: DS.Spacing.sm) {
+                Group {
+                    if isSelected {
+                        DSFieldIcon(name: "checkmark", tint: DS.Color.success)
+                    } else {
+                        memberInitialBadge(w.fullName, tint: DS.Color.female)
+                    }
+                }
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(w.fullName)
+                        .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
+                        .foregroundColor(taken ? DS.Color.textTertiary
+                                         : (isSelected ? DS.Color.textPrimary : DS.Color.fieldValue))
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                    if let caption {
+                        Text(caption)
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                Spacer(minLength: 0)
+                if taken {
+                    DSStatusChip(text: L10n.t("مربوطة بحساب", "Linked to an account"),
+                                 icon: "lock.fill", tint: DS.Color.slate, size: .mini)
+                } else if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .dsGlyph(DS.Glyph.xl, weight: .semibold)
+                        .foregroundColor(DS.Color.success)
+                        .accessibilityHidden(true)
+                }
+            }
+            .dsRowBox()
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(DS.Color.success.opacity(isSelected ? DS.Opacity.selectedStroke : 0),
+                                  lineWidth: DS.Border.widthBold)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .disabled(taken)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // MARK: التنفيذ
+
+    private func submit() {
+        guard let info = requestInfo else { return }
+        errorText = nil
+        let womanId = selectedWoman?.id
+        let fatherId = father?.id
+        let name = trimmedNewName
+        Task {
+            let failure = await adminRequestVM.linkWomanAccount(
+                requestId: info.requestId,
+                memberId: pendingMember.id,
+                womanId: womanId,
+                fatherId: womanId == nil ? fatherId : nil,
+                name: womanId == nil ? name : nil
+            )
+            if let failure {
+                errorText = failure
+            } else {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                onLinked?()
+                dismiss()
+                DSMomentToast.show(L10n.t("تم الربط", "Linked"), moment: .approved)
             }
         }
     }

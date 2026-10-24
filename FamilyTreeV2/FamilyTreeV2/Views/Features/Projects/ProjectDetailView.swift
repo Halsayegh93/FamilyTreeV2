@@ -442,11 +442,17 @@ struct ProjectCoverArc: Shape {
     }
 }
 
-/// خلفية قسم المشاريع — تدرّج ذهبي بلون التاب مع نقشة حقائب خفيفة.
-/// موحّدة لكل المشاريع (لا تُؤخذ من صور المشروع — طلب المالك).
+/// خلفية قسم المشاريع — تدرّج بلون التاب مع نقشة خفيفة من شعار العائلة «المحمدعلي»
+/// (كانت نقشة حقائب — طلب المالك ٢٠٢٦-١٠-٢٣). موحّدة لكل المشاريع (لا تُؤخذ من صور المشروع — طلب المالك).
 struct ProjectSectionBackdrop: View {
-    /// حجم أيقونات النقشة
+    /// ارتفاع الشعار في النقشة (العرض من نسبة الشعار)
     var symbolSize: CGFloat = 26
+    /// التعتيم الموحّد (`DS.Opacity.projectBackdropVeil`) — false حين يضعه الحاوي فوق طبقات أخرى معها
+    /// (رأس صفحة المشروع: الخلفية + الذوبان للغامق تحت تعتيم واحد)
+    var veiled: Bool = true
+
+    /// نسبة عرض شعار العائلة إلى ارتفاعه (من أصل `FamilyLogoCream`: ٧١٠ × ٥٢٩)
+    private static let logoAspect: CGFloat = 710.061 / 529.415
 
     var body: some View {
         ZStack {
@@ -456,22 +462,25 @@ struct ProjectSectionBackdrop: View {
                 endPoint: .bottomTrailing
             )
 
-            // نقشة مائلة من أيقونة القسم — خفيفة جداً حتى لا تزاحم الشعار
+            // نقشة مائلة من شعار العائلة (الكريمي على لون القسم) — خفيفة جداً حتى لا تزاحم شعار المشروع
             GeometryReader { geo in
-                let columns = Int(ceil(geo.size.width / (symbolSize * 2))) + 2
+                let logoW = symbolSize * Self.logoAspect
+                let columns = Int(ceil(geo.size.width / (logoW + symbolSize))) + 2
                 let rows = Int(ceil(geo.size.height / (symbolSize * 1.7))) + 2
                 VStack(spacing: symbolSize * 0.7) {
                     ForEach(0..<max(rows, 1), id: \.self) { row in
                         HStack(spacing: symbolSize) {
                             ForEach(0..<max(columns, 1), id: \.self) { _ in
-                                Image(systemName: "briefcase.fill")
-                                    .dsGlyph(symbolSize, weight: .light)
+                                Image("FamilyLogoCream")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: logoW, height: symbolSize)
                             }
                         }
-                        .offset(x: row.isMultiple(of: 2) ? 0 : symbolSize)
+                        .offset(x: row.isMultiple(of: 2) ? 0 : (logoW + symbolSize) / 2)
                     }
                 }
-                .foregroundColor(DS.Color.overlayFillSubtle)
+                .opacity(DS.Opacity.tintFillSoft)
                 .rotationEffect(.degrees(-18))
                 .frame(width: geo.size.width, height: geo.size.height)
                 .offset(x: -symbolSize, y: -symbolSize)
@@ -484,6 +493,54 @@ struct ProjectSectionBackdrop: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+
+            if veiled { ProjectBackdropVeil() }
+        }
+    }
+}
+
+/// التعتيم الواحد فوق خلفية المشاريع — نفس الدرجة في البطاقة ورأس صفحة المشروع
+struct ProjectBackdropVeil: View {
+    var body: some View {
+        Color.black.opacity(DS.Opacity.projectBackdropVeil)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// صورة بطاقة المشروع: خلفية القسم وعليها شعار المشروع أو مجسّم القسم — دائماً، ولو للمشروع صور
+/// (المالك ٢٠٢٦-١٠-٢٣: «ليش لمن احط صور للمشروع تصير صورة مكان الخلفية و الشعار» — الصور في «الصور» بصفحته).
+/// المقاس والقصّ من الحاوية (`Color.clear.aspectRatio(…).overlay { ProjectHeroImage }`).
+struct ProjectHeroImage: View {
+    let project: Project
+    /// ضلع الشعار/المجسّم حين لا توجد صورة
+    var markSize: CGFloat = DS.Icon.state
+
+    static let aspect: CGFloat = 16.0 / 10.0
+
+    var body: some View {
+        ZStack {
+            ProjectSectionBackdrop(symbolSize: DS.Glyph.lg)
+            mark
+        }
+        .clipped()
+        .accessibilityHidden(true)
+    }
+
+    /// البديل: شعار المشروع في دائرة، أو مجسّم المشاريع
+    @ViewBuilder
+    private var mark: some View {
+        if let logo = project.logoUrl, let url = URL(string: logo) {
+            CachedAsyncImage(url: url) { img in
+                img.resizable().scaledToFill()
+            } placeholder: { DS.Color.mutedBackground }
+            .frame(width: markSize, height: markSize)
+            // الشعار دائري بإطار رفيع (طلب المالك ٢٠٢٦-١٠-٢٣)
+            .clipShape(Circle())
+            .overlay(Circle().strokeBorder(DS.Color.surface, lineWidth: DS.Border.width))
+            .dsSubtleShadow()
+        } else {
+            DSStateIcon("briefcase.fill", tint: AppSection.projects.ink, size: markSize)
         }
     }
 }
@@ -496,8 +553,20 @@ struct ProjectDetailView: View {
     @Environment(\.openURL) private var openURL
     
     @State private var showDeleteAlert = false
+    @State private var showDeleteError = false
     @State private var showEditSheet = false
     @State private var didEdit = false
+    /// ارتفاع الرأس — المربّع بالمنتصف على قدر محتواه (`dsPanelContentHeight`)
+    @State private var headerH: CGFloat = 0
+    /// سقف صورة قسم «الصور» = ٧٠٪ من أقصى ارتفاع للمربّع (٨٦٪ من الشاشة عمودياً، والارتفاع ناقص الهامش
+    /// أفقياً — نفس `DSCenterPanel`). من الشاشة لا من المربّع: المربّع يحتضن محتواه فقياسه يدور على نفسه.
+    private var photoMaxHeight: CGFloat {
+        let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.size
+            ?? CGSize(width: 393, height: 852)
+        let short = min(screen.width, screen.height), long = max(screen.width, screen.height)
+        let boxMax = isLandscape ? short - DS.Landscape.panelMargin * 2 : long * 0.86
+        return boxMax * 0.7
+    }
     
     private var isOwnerOrAdmin: Bool {
         guard let user = authVM.currentUser else { return false }
@@ -509,17 +578,16 @@ struct ProjectDetailView: View {
     private var isLandscape: Bool { vSizeClass == .compact }
 
     /// رقم كل قسم في تسلسل الدخول — ٠، ١، ٢… بالترتيب الظاهر، بلا فجوة لقسم غائب
-    private var sectionOrder: (description: Int, photos: Int, social: Int, delete: Int) {
+    private var sectionOrder: (description: Int, photos: Int, delete: Int) {
         var next = 1   // ٠ = بطاقة المشروع
         func take(_ present: Bool) -> Int {
             defer { if present { next += 1 } }
             return next
         }
         let description = take(!(project.description ?? "").isEmpty)
-        let photos = take(!project.imageUrls.isEmpty)
-        let social = take(project.hasSocialLinks)
+        let photos = take(hasPhotos)
         let delete = take(isOwnerOrAdmin)
-        return (description, photos, social, delete)
+        return (description, photos, delete)
     }
 
     var body: some View {
@@ -531,13 +599,14 @@ struct ProjectDetailView: View {
                     DSHeaderButton(symbol: "pencil", label: L10n.t("تعديل", "Edit")) { showEditSheet = true }
                 }
             }
+            .readHeight($headerH)
 
             ZStack {
-                DS.Color.background.ignoresSafeArea()
+                // سطح صلب — أبيض في الفاتح وسطح الداكن في الداكن؛ لا يظهر ما خلف المربّع (طلب المالك ٢٠٢٦-١٠-٢٣)
+                DS.Color.surface.ignoresSafeArea()
                 
                 ScrollView(showsIndicators: false) {
-                    // الأقسام تدخل تباعاً بالترتيب الظاهر (dsStaggerIn): البطاقة ← النبذة ← الصور
-                    // ← الحسابات ← الحذف — «تقليل الحركة»: تلاشٍ فقط
+                    // الأقسام تدخل تباعاً بالترتيب الظاهر (dsStaggerIn): البطاقة ← النبذة ← الصور ← الحذف — «تقليل الحركة»: تلاشٍ فقط
                     let order = sectionOrder
                     Group {
                         if isLandscape {
@@ -552,13 +621,9 @@ struct ProjectDetailView: View {
                                         descriptionSection(desc)
                                             .dsStaggerIn(order.description)
                                     }
-                                    if !project.imageUrls.isEmpty {
-                                        ProjectPhotosMosaic(urls: project.imageUrls)
+                                    if hasPhotos {
+                                        ProjectPhotosCarousel(urls: project.imageUrls, maxHeight: photoMaxHeight)
                                             .dsStaggerIn(order.photos)
-                                    }
-                                    if project.hasSocialLinks {
-                                        socialLinksSection
-                                            .dsStaggerIn(order.social)
                                     }
                                     if isOwnerOrAdmin {
                                         deleteSection
@@ -580,16 +645,11 @@ struct ProjectDetailView: View {
                         }
 
                         // صور المشروع
-                        if !project.imageUrls.isEmpty {
-                            ProjectPhotosMosaic(urls: project.imageUrls)
+                        if hasPhotos {
+                            ProjectPhotosCarousel(urls: project.imageUrls, maxHeight: photoMaxHeight)
                                 .dsStaggerIn(order.photos)
                         }
                         
-                        // Social Media Links
-                        if project.hasSocialLinks {
-                            socialLinksSection
-                                .dsStaggerIn(order.social)
-                        }
                         
                         // Delete button for owner/admin
                         if isOwnerOrAdmin {
@@ -600,7 +660,9 @@ struct ProjectDetailView: View {
                         }
                     }
                     .padding(DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.xxxl)
+                    .padding(.bottom, DS.Spacing.md)
+                    // المربّع بالمنتصف يحتضن محتواه (والباقي يتمرّر داخله)
+                    .dsPanelContentHeight(extra: headerH)
                 }
             }
         }
@@ -620,8 +682,12 @@ struct ProjectDetailView: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             Button(L10n.t("حذف", "Delete"), role: .destructive) {
                 Task {
-                    await projectsVM.deleteProject(id: project.id)
-                    dismiss()
+                    // الإغلاق بعد نجاح الحذف فقط — وإلا رسالة خطأ
+                    if await projectsVM.deleteProject(id: project.id, ownerId: project.ownerId) {
+                        dismiss()
+                    } else {
+                        showDeleteError = true
+                    }
                 }
             }
         } message: {
@@ -630,62 +696,93 @@ struct ProjectDetailView: View {
                 "Are you sure you want to delete \"\(project.title)\"?"
             ))
         }
+        .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showDeleteError) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(projectsVM.errorMessage ?? L10n.t("تعذر حذف المشروع.", "Failed to delete project."))
+        }
         .dsSectionPage(.projects)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
     
-    // MARK: - Header — بطاقة المشروع (غلاف + شعار بارز + إجراءات سريعة)
+    // MARK: - Header — بطاقة المشروع (رأس واحد: الشعار + الاسم، ثم صاحب المشروع والإجراءات)
     //
-    // الفكرة: أول صورة للمشروع تصير غلافاً، والشعار يجلس على حافته مثل بطاقة
-    // تعريف، وتحته الاسم وصاحب المشروع وأزرار الاتصال المباشرة (طلب المالك).
+    // طلب المالك ٢٠٢٦-١٠-٢٣ (الخيار «ب»): الرأس يحمل الشعار والاسم فقط على خلفية القسم (التدرّج الذهبي)
+    // — كتلة واحدة؛ صور المشروع في قسم «الصور» تحت النبذة (`ProjectPhotosCarousel`). الاسم أبيض على
+    // تعتيم بلون القسم الغامق (`tileProjectsDeep` — تباين ≥ ٤٫٥:١).
     private var projectHeader: some View {
         VStack(spacing: 0) {
-            cover
-                .frame(height: coverHeight)
-                .frame(maxWidth: .infinity)
-                .clipShape(ProjectCoverArc(depth: arcDepth))
-
             VStack(spacing: DS.Spacing.sm) {
+                logoBadge
                 Text(project.title)
                     .dsFont(.emptyTitle)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .foregroundColor(DS.Color.textOnPrimary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .shadow(color: DS.Color.shadowMediumDark, radius: DS.Spacing.xs, y: 1)
+            }
+            .padding(.top, logoTop)
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.md + arcDepth)
+            .frame(maxWidth: .infinity)
+            .allowsHitTesting(false)
+            .background(alignment: .top) { headerBackdrop }
+            .clipShape(ProjectCoverArc(depth: arcDepth))
 
+            VStack(spacing: DS.Spacing.sm) {
                 ownerChip
 
-                if !quickActions.isEmpty {
-                    HStack(spacing: DS.Spacing.sm) {
-                        ForEach(quickActions, id: \.platform) { action in
-                            quickActionButton(action)
+                let actions = quickActions
+                if !actions.isEmpty {
+                    // صفّ واحد إن اتّسع، وإلا صفّان متوازنان (حتى ٧ حسابات)
+                    ViewThatFits(in: .horizontal) {
+                        quickActionRow(actions)
+                        VStack(spacing: DS.Spacing.xs) {
+                            let half = (actions.count + 1) / 2
+                            quickActionRow(Array(actions.prefix(half)))
+                            quickActionRow(Array(actions.dropFirst(half)))
                         }
                     }
-                    .padding(.top, DS.Spacing.xs)
                 }
             }
-            .padding(.top, logoSize / 2 + DS.Spacing.sm)
+            .padding(.top, DS.Spacing.xs)
             .padding(.horizontal, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.md)
             .frame(maxWidth: .infinity)
             .background(DS.Color.surface)
         }
         .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
-        // البطاقة الواحدة (`.dsCard`) — الشعار فوق حافة الغلاف
+        // البطاقة الواحدة (`.dsCard`)
         .dsCard(padding: nil)
-        .overlay(alignment: .top) { logoBadge.offset(y: coverHeight - logoSize / 2 + DS.Spacing.xs) }
     }
 
-    private var coverHeight: CGFloat { 150 }
-    private var logoSize: CGFloat { 92 }
-    /// عمق القوس في منتصف حافة الغلاف
-    private var arcDepth: CGFloat { 26 }
-
-    /// الغلاف: خلفية قسم المشاريع الموحّدة — صور المشروع تبقى في معرض الصور
-    private var cover: some View {
-        ProjectSectionBackdrop()
+    /// خلفية الرأس: لون القسم، ثم تعتيم بلون القسم الغامق تحت الشعار والاسم
+    private var headerBackdrop: some View {
+        ZStack(alignment: .top) {
+            ProjectSectionBackdrop(symbolSize: DS.Glyph.lg, veiled: false)
+                .accessibilityHidden(true)
+            // الذوبان إلى لون القسم الغامق — يبدأ عند منتصف الشعار
+            VStack(spacing: 0) {
+                Color.clear.frame(height: logoTop + logoSize / 2)
+                LinearGradient(colors: [DS.Color.tileProjectsDeep.opacity(0), DS.Color.tileProjectsDeep],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: logoSize / 2)
+                DS.Color.tileProjectsDeep
+            }
+            // تعتيم واحد فوق الخلفية والذوبان معاً — نفس درجة البطاقة في القائمة
+            ProjectBackdropVeil()
+        }
     }
 
-    /// الشعار على حافة الغلاف — مربّع بزوايا ناعمة بإطار بلون البطاقة
+    /// الشعار أكبر (٨٤ ← ١٠٤ ← ١١٦، والأفقي ٩٦ ← ١٠٦) وإطاره رفيع (طلب المالك ٢٠٢٦-١٠-٢٣)
+    private var logoSize: CGFloat { isLandscape ? 106 : 116 }
+    /// عمق القوس في منتصف حافة الرأس
+    private var arcDepth: CGFloat { 22 }
+    /// أعلى الشعار — هامش يُظهر خلفية القسم فوقه
+    private var logoTop: CGFloat { DS.Spacing.lg }
+    private var hasPhotos: Bool { project.imageUrls.contains { !$0.isEmpty } }
+
+    /// شعار المشروع في الرأس — دائرة بإطار بلون البطاقة
     private var logoBadge: some View {
         Group {
             if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
@@ -695,16 +792,13 @@ struct ProjectDetailView: View {
                     DS.Color.mutedBackground
                 }
             } else {
-                // قرص «مجسّمات» الموحّد
                 DSStateIcon("briefcase.fill", tint: AppSection.projects.ink, size: logoSize)
             }
         }
         .frame(width: logoSize, height: logoSize)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
-                .strokeBorder(DS.Color.surface, lineWidth: DS.Spacing.xs)
-        )
+        // الشعار دائري بإطار دائري رفيع (طلب المالك ٢٠٢٦-١٠-٢٣)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(DS.Color.surface, lineWidth: DS.Spacing.xxs))
         .dsCardShadow()
         // الشعار يتفتّح بعد صعود بطاقته بقليل — نفس أيقونات أقسام المربّعات («تقليل الحركة»: تلاشٍ)
         .modifier(DSIconPop(delay: DSMotion.staggerDelay(0, base: DSMotion.sectionsOnPage) + 0.08,
@@ -724,30 +818,54 @@ struct ProjectDetailView: View {
         let title: String
     }
 
-    /// أهم ثلاثة إجراءات — اتصال، واتساب، الموقع (ما يتوفّر منها)
+    /// الإجراءات السريعة — اتصال، إنستغرام (مكان واتساب — طلب المالك ٢٠٢٦-١٠-٢٣)، الموقع، واتساب، إكس،
+    /// سناب، الموقع الإلكتروني (ما يتوفّر منها). أزرار أيقونات صغيرة فيتّسع الصفّ لها كلها؛ وهي المكان الوحيد
+    /// لحسابات المشروع (قسم «حسابات المشروع» حُذف بطلب المالك ٢٠٢٦-١٠-٢٣).
     private var quickActions: [QuickAction] {
         var actions: [QuickAction] = []
-        if let v = project.phoneNumber, !v.isEmpty {
-            actions.append(QuickAction(platform: .phone, value: v, title: L10n.t("اتصال", "Call")))
+        func add(_ platform: SocialPlatform, _ value: String?, _ title: String) {
+            guard let value, !value.isEmpty else { return }
+            actions.append(QuickAction(platform: platform, value: value, title: title))
         }
-        if let v = project.whatsappNumber, !v.isEmpty {
-            actions.append(QuickAction(platform: .whatsapp, value: v, title: L10n.t("واتساب", "WhatsApp")))
-        }
-        if let v = project.locationUrl, !v.isEmpty {
-            actions.append(QuickAction(platform: .location, value: v, title: L10n.t("الموقع", "Location")))
-        }
-        if actions.count < 3, let v = project.websiteUrl, !v.isEmpty {
-            actions.append(QuickAction(platform: .website, value: v, title: L10n.t("الموقع الإلكتروني", "Website")))
-        }
+        add(.phone, project.phoneNumber, L10n.t("اتصال", "Call"))
+        add(.instagram, project.instagramUrl, L10n.t("إنستغرام", "Instagram"))
+        add(.location, project.locationUrl, L10n.t("الموقع", "Location"))
+        add(.whatsapp, project.whatsappNumber, L10n.t("واتساب", "WhatsApp"))
+        add(.twitter, project.twitterUrl, SocialPlatform.twitter.label)
+        add(.snapchat, project.snapchatUrl, SocialPlatform.snapchat.label)
+        add(.website, project.websiteUrl, L10n.t("الموقع الإلكتروني", "Website"))
         return actions
     }
 
-    /// إجراء سريع — الزرّ الواحد بلون المنصّة (معنى)
+    private func quickActionRow(_ actions: [QuickAction]) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(actions, id: \.platform) { action in
+                quickActionButton(action)
+            }
+        }
+    }
+
+    /// إجراء سريع — دائرة صغيرة بلون المنصّة (أيقونة المنصّة الموحّدة) ولمس ٤٤ (حدّ أبل)
     private func quickActionButton(_ action: QuickAction) -> some View {
-        DSButton(action.title, icon: action.platform.sfSymbol, tint: action.platform.brandColor) {
+        Button {
             openSocialLink(platform: action.platform, value: action.value)
+        } label: {
+            action.platform.iconView(size: DS.Icon.rowLarge)
+                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                .contentShape(Circle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        // الضغط المطوّل: المعرّف/الرقم/الرابط نفسه + «نسخ» — فلا يضيع اسم الحساب بعد حذف قسم الحسابات
+        .contextMenu {
+            Text(verbatim: shortValue(action))
+            Button {
+                UIPasteboard.general.string = action.value
+            } label: {
+                Label(L10n.t("نسخ", "Copy"), systemImage: "doc.on.doc")
+            }
         }
         .accessibilityLabel(action.title)
+        .accessibilityValue(Text(verbatim: shortValue(action)))
     }
 
     // MARK: - Description — شريط لوني جانبي بدل بطاقة عادية
@@ -772,86 +890,14 @@ struct ProjectDetailView: View {
         .dsCard(padding: DS.Spacing.lg)
     }
 
-    // MARK: - Social Links — شبكة أيقونات بألوان المنصّات
-    //
-    // بدل صفوف طويلة متكرّرة: مربّعات صغيرة بلون كل منصّة، الضغط يفتحها مباشرة،
-    // والضغط المطوّل ينسخ الرابط أو الرقم (طلب المالك).
-    private var socialLinksSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            // عنوان القسم الموحّد (قرص مجسّم + عنوان + العدد)
-            DSSectionTitle(title: L10n.t("حسابات المشروع", "Project Accounts"), icon: "link",
-                           tint: AppSection.projects.ink, trailing: "\(availableLinks.count)", iconSize: DS.Icon.inline)
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: DS.Spacing.sm)],
-                      spacing: DS.Spacing.sm) {
-                ForEach(availableLinks, id: \.platform) { link in
-                    socialTile(link)
-                }
-            }
-        }
-        // البطاقة الواحدة (`.dsCard`)
-        .dsCard(padding: DS.Spacing.lg)
-    }
-
-    /// كل الحسابات المتوفّرة بالترتيب
-    private var availableLinks: [QuickAction] {
-        var links: [QuickAction] = []
-        func add(_ platform: SocialPlatform, _ value: String?) {
-            guard let value, !value.isEmpty else { return }
-            links.append(QuickAction(platform: platform, value: value, title: platform.label))
-        }
-        add(.phone, project.phoneNumber)
-        add(.whatsapp, project.whatsappNumber)
-        add(.instagram, project.instagramUrl)
-        add(.twitter, project.twitterUrl)
-        add(.snapchat, project.snapchatUrl)
-        add(.website, project.websiteUrl)
-        add(.location, project.locationUrl)
-        return links
-    }
-
-    private func socialTile(_ link: QuickAction) -> some View {
-        Button {
-            openSocialLink(platform: link.platform, value: link.value)
-        } label: {
-            VStack(spacing: DS.Spacing.xs) {
-                link.platform.iconView(size: DS.Icon.tapTarget)
-                Text(link.platform.label)
-                    .dsFont(.badge)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Text(shortValue(link))
-                    .dsFont(.micro)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.md)
-            // صندوق داخل البطاقة — البطاقة الواحدة بسطح الصفحة
-            .dsCard(padding: nil, fill: DS.Color.background)
-            .contentShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .contextMenu {
-            Button {
-                UIPasteboard.general.string = link.value
-            } label: {
-                Label(L10n.t("نسخ", "Copy"), systemImage: "doc.on.doc")
-            }
-        }
-        .accessibilityLabel("\(link.platform.label) \(link.value)")
-    }
-
-    /// عرض مختصر للقيمة تحت الاسم — @معرّف أو النطاق أو الرقم
+    /// عرض مختصر للقيمة في قائمة الضغط المطوّل — @معرّف أو النطاق أو الرقم (والخريطة رابطها كاملاً)
     private func shortValue(_ link: QuickAction) -> String {
         let value = link.value.trimmingCharacters(in: .whitespacesAndNewlines)
         switch link.platform {
         case .phone, .whatsapp:
             return value
         case .location:
-            return L10n.t("افتح الخريطة", "Open map")
+            return value
         case .website:
             return value
                 .replacingOccurrences(of: "https://", with: "")

@@ -179,14 +179,13 @@ class NotificationViewModel: ObservableObject {
         }.count
     }
 
-    /// عدد حركات «سجل النشاط» غير المقروءة — للإدارة فقط.
-    /// يستثني ما يُعدّ في جرس الإشعارات حتى لا يُحسب الشيء مرّتين.
-    var unreadActivityLogCount: Int {
+    /// غير المقروء في «إشعارات الإدارة» (جرس «اليوم») — للإدارة فقط. تصنيف واحد (`AdminNotices`) فلا يُحسب
+    /// إشعار في الجرسين معاً.
+    var unreadAdminNoticesCount: Int {
         guard canModerate else { return 0 }
         let myId = currentUser?.id
         return notifications.filter { n in
-            guard !n.read else { return false }
-            return !Self.isVisibleToUser(n, myId: myId, isAdmin: true)
+            !n.read && AdminNotices.category(of: n, me: myId) != nil
         }.count
     }
 
@@ -196,6 +195,8 @@ class NotificationViewModel: ObservableObject {
         // «المستجدات» — تحديثات التطبيق
         if n.kind == "app_update" { return true }
         guard let myId else { return false }
+        // إشعارات الإدارة مكانها صفحتها (جرس «اليوم») — لا تُعدّ هنا (مرآة `NotificationsCenterView`)
+        if isAdmin, AdminNotices.category(of: n, me: myId) != nil { return false }
 
         let isPending = Self.pendingApprovalKindsRaw.contains(n.kind)
         let isCompleted = Self.completedActionKindsRaw.contains(n.kind)
@@ -1289,6 +1290,50 @@ class NotificationViewModel: ObservableObject {
         } catch {
             Log.error("[SCHEDULE] تعذّر إلغاء الإشعار المجدول: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    /// نتيجة تعديل إشعار مجدول
+    enum ScheduledEditResult { case saved, gone, failed }
+
+    /// تعديل إشعار مجدول لم يُرسل بعد (الدفعة ١١): نفس الصف — سياسة السيرفر `scheduled_notifications_update_admin`
+    /// (المالك والمدير) — بشرط أنه ما زال «pending» فلا يُعدَّل ما أرسلته المهمة للتو. `gone` = أُرسل أو أُلغي قبل الحفظ.
+    /// `targetMemberIds` nil = للجميع (NULL)؛ قائمة فارغة مرفوضة كما في `scheduleNotification` (ب-٩).
+    func updateScheduledNotification(
+        _ id: UUID,
+        title: String,
+        body: String,
+        targetMemberIds: [UUID]?,
+        scheduledFor: Date
+    ) async -> ScheduledEditResult {
+        guard authVM?.isAdmin == true else { return .failed }
+        if let ids = targetMemberIds, ids.isEmpty { return .failed }
+        let payload: [String: AnyEncodable] = [
+            "title":             AnyEncodable(title),
+            "body":              AnyEncodable(body),
+            "scheduled_for":     AnyEncodable(ISO8601DateFormatter().string(from: scheduledFor)),
+            "target_member_ids": AnyEncodable(targetMemberIds?.map(\.uuidString))
+        ]
+        do {
+            let rows: [ScheduledNotification] = try await supabase
+                .from("scheduled_notifications")
+                .update(payload)
+                .eq("id", value: id.uuidString)
+                .eq("status", value: "pending")
+                .select()
+                .execute()
+                .value
+            guard let row = rows.first else {
+                Log.warning("[SCHEDULE] الإشعار المجدول \(id) لم يعد معلّقاً — لم يُعدَّل")
+                scheduledNotifications.removeAll { $0.id == id }
+                return .gone
+            }
+            if let i = scheduledNotifications.firstIndex(where: { $0.id == id }) { scheduledNotifications[i] = row }
+            Log.info("[SCHEDULE] عُدّل إشعار مجدول \(id)")
+            return .saved
+        } catch {
+            Log.error("[SCHEDULE] تعذّر تعديل الإشعار المجدول: \(error.localizedDescription)")
+            return .failed
         }
     }
 

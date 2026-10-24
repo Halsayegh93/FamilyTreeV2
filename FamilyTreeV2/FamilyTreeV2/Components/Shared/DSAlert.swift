@@ -220,6 +220,13 @@ struct DSCenterCard<Content: View>: View {
     }
 }
 
+/// تعتيم ما خلف المربّع بالمنتصف (`DSCenterPanel(dim:)`)
+enum DSCenterPanelDim {
+    static let standard: Double = 0.45
+    /// مربّعا تفاصيل المشروع والمكتبة (طلب المالك ٢٠٢٦-١٠-٢٣ «الخلفية أغمق شوي») — القائمة خلفه بوضوح
+    static let strong: Double = 0.6
+}
+
 /// لوح كبير بمنتصف الشاشة — لمحتوى طويل (نموذج) بدل الورقة السفلية.
 /// نفس روح `DSCenterCard` لكنه أوسع وأطول، ومحتواه يتمرّر داخله.
 struct DSCenterPanel<Content: View>: View {
@@ -229,6 +236,8 @@ struct DSCenterPanel<Content: View>: View {
     /// يجعل ارتفاع اللوح على قدر محتواه (يقرأ `SheetContentHeightKey` من الداخل)
     /// بدل الارتفاع الكامل — طلب المالك لمربّعات «طلب تعديل».
     var hugsContent: Bool = false
+    /// تعتيم ما خلف المربّع — ٠٫٤٥ للكل؛ مربّعا تفاصيل المشروع والمكتبة أغمق (`DSCenterPanelDim.strong`)
+    var dim: Double = DSCenterPanelDim.standard
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
     @State private var contentHeight: CGFloat = 0
@@ -249,7 +258,7 @@ struct DSCenterPanel<Content: View>: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                Color.black.opacity(appeared ? 0.45 : 0)
+                Color.black.opacity(appeared ? dim : 0)
                     .ignoresSafeArea()
                     .onTapGesture { onBackgroundTap?() }
 

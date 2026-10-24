@@ -9,7 +9,7 @@ import SwiftUI
 // • `DSOptionTiles` — مربّعات اختيار واحد بأيقونة (نوع الخبر، نوع الديوانية، التصنيف، المظهر…).
 // • `DSChipButton`  — شريحة/زرّ صغير بارتفاع واحد (`DSBox.chipHeight`).
 // • نسخ مشتركة من عُدّة `Sys*` (كانت داخل ملف صفحة إدارة ويستعملها ~٢٧ ملفاً):
-//   `DSStatusChip`، `DSRow`، `DSSectionTitle`، `DSChevron`، `DSActionButton`، `DSRing`، `DSDistributionBar`؛
+//   `DSStatusChip`، `DSRow`، `DSSectionTitle`، `DSChevron`، `DSActionButton`، `DSRing`، `DSDistributionBar` (غلافان للمؤشرات الموحّدة في `DSGauges.swift`)؛
 //   و`SysGradientIcon` ← `DSStateIcon` (ArtTrial.swift). دفعة الإدارة تحذف `Sys*` من
 //   `AdminSystemHealthView.swift` وتضع مكانها أسماء بديلة (`typealias SysRow = DSRow` …) أو تعيد التسمية.
 // كل الأبعاد والخطوط والشفافيات من DesignSystem.swift (`DS`، `DSBox`، `DS.TextRole`).
@@ -582,6 +582,69 @@ struct DSChipButton: View {
     }
 }
 
+// MARK: - زرّا تفاصيل العضو (طلب المالك ٢٠٢٦-١٠-٢٤ «تصميم جديد» لـ«تعديل مباشر» و«عرض التفاصيل»)
+
+/// كبسولة ناعمة: تعبئة خفيفة بلون القسم وإطار رفيع منه، والأيقونة والنص بحبر القسم — إجراء واضح بلا ثقل الممتلئ
+struct DSSoftPillButton: View {
+    let title: String
+    let icon: String
+    var tint: Color = DS.Color.primary
+    let action: () -> Void
+    @Environment(\.dsSection) private var section
+
+    init(_ title: String, icon: String, tint: Color = DS.Color.primary, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.tint = tint
+        self.action = action
+    }
+
+    var body: some View {
+        let ink = tint.dsChrome(in: section)
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xsm) {
+                Image(systemName: icon).dsGlyph(DS.Glyph.md)
+                Text(title).dsFont(.button)
+            }
+            .foregroundColor(ink)
+            .padding(.horizontal, DS.Spacing.lg)
+            .frame(minHeight: DSBox.buttonHeight)
+            .background(Capsule().fill(ink.opacity(DS.Opacity.tintFill)))
+            .overlay(Capsule().strokeBorder(ink.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(DSPressStyle())
+    }
+}
+
+/// رابط نصّي بسهم — بلا خلفية، للتوسيع والطيّ («عرض التفاصيل» / «إخفاء التفاصيل»)، لمسه ٤٤
+struct DSTextLinkButton: View {
+    let title: String
+    let icon: String
+    let action: () -> Void
+    @Environment(\.dsSection) private var section
+
+    init(_ title: String, icon: String, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xs) {
+                Text(title).dsFont(.subtitle)
+                Image(systemName: icon).dsGlyph(DS.Glyph.sm)
+            }
+            .foregroundColor(DS.Color.primary.dsChrome(in: section))
+            .frame(minHeight: DS.Icon.tapTarget)
+            .padding(.horizontal, DS.Spacing.sm)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSPressStyle())
+    }
+}
+
 // MARK: - عُدّة صفحات النظام المشتركة (كانت `Sys*` في AdminSystemHealthView.swift)
 
 /// كبسولة حالة صغيرة: منتظر = warning، مفعّل = success، مرفوض/مجمّد = error، معلومة = primary
@@ -716,36 +779,33 @@ struct DSActionButton: View {
     }
 }
 
-/// حلقة نسبة (٠…١) بلون الحالة — تمتلئ بحركة ناعمة (ثابتة مع «تقليل الحركة»)
+/// حلقة نسبة (٠…١) بمحتوى حرّ في وسطها — نفس رسم الحلقة الموحّدة وحركتها (`DSRingArcs`، `DS.Ring`). للمؤشرات في لوحة
+/// الإدارة استعمل `DSRingGauge` (المقاس والرقم الذي يعدّ من مكان واحد)؛ هذه للحالات التي وسطها ليس رقماً
 struct DSRing<Center: View>: View {
     let progress: Double
     var tint: Color = DS.Color.success
-    var lineWidth: CGFloat = DS.Spacing.sm
-    var size: CGFloat = 84
+    var lineWidth: CGFloat = DS.Ring.medium.line
+    var size: CGFloat = DS.Ring.medium.side
+    var track: Color? = nil
     @ViewBuilder var center: () -> Center
-    @State private var shown = false
+    @State private var reveal: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            Circle()
-                .stroke(tint.opacity(DS.Opacity.tintFill), lineWidth: lineWidth)
-            Circle()
-                .trim(from: 0, to: shown || reduceMotion ? max(0, min(1, progress)) : 0)
-                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+            DSRingArcs(parts: [DSGaugePart("p", share: progress, tint: tint)], reveal: reduceMotion ? 1 : reveal,
+                       line: lineWidth, side: size, track: track ?? tint.opacity(DS.Opacity.tintFill))
             center()
         }
         .frame(width: size, height: size)
         .onAppear {
-            guard !reduceMotion else { shown = true; return }
-            withAnimation(.easeOut(duration: 0.9).delay(0.2)) { shown = true }
+            guard !reduceMotion, reveal == 0 else { return }
+            withAnimation(DS.Ring.fill.delay(DS.Ring.fillDelay)) { reveal = 1 }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: progress)
     }
 }
 
-/// شريط أفقي مقسّم بنسب ملوّنة (توزيع فئات) — لمحة بدل جدول أرقام
+/// شريط أفقي مقسّم بنسب ملوّنة (توزيع فئات) — الشريط الموحّد `DSMeterBar` بأعداد بدل النسب
 struct DSDistributionBar: View {
     struct Segment: Identifiable {
         let id: String
@@ -753,27 +813,11 @@ struct DSDistributionBar: View {
         let tint: Color
     }
     let segments: [Segment]
-    var height: CGFloat = 10
+    var height: CGFloat = DS.Ring.barHeight
 
     var body: some View {
-        let visible = segments.filter { $0.value > 0 }
-        let total = max(1, visible.reduce(0) { $0 + $1.value })
-        let gap = DS.Spacing.xxs
-        let gaps = CGFloat(max(0, visible.count - 1)) * gap
-        GeometryReader { geo in
-            HStack(spacing: gap) {
-                ForEach(visible) { seg in
-                    RoundedRectangle(cornerRadius: height / 2, style: .continuous)
-                        .fill(seg.tint)
-                        .frame(width: max(height, (geo.size.width - gaps) * CGFloat(seg.value) / CGFloat(total)))
-                }
-                Spacer(minLength: 0)
-            }
-        }
-        .frame(height: height)
-        .background(Capsule().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke)))
-        .clipShape(Capsule())
-        .accessibilityHidden(true)
+        DSMeterBar(parts: DSGaugePart.counts(segments.map { ($0.id, $0.value, $0.tint) }), track: DS.Ring.emptyTrack,
+                   height: height)
     }
 }
 

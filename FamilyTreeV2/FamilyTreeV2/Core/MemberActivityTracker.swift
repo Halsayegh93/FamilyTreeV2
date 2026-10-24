@@ -50,6 +50,15 @@ enum MemberActivityTracker {
         }
     }
 
+    /// تسجيل الخروج: يوقف الـ heartbeat — كان يستمر بلا جلسة كل ٦٠ ث، وبعد تبديل الحساب يرسل
+    /// أول نبضة بشاشة الحساب السابق
+    static func stop() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+        lastReportedScreen = nil
+        lastReportTime = .distantPast
+    }
+
     /// مسح الشاشة الحالية (عند الخروج من التطبيق)
     static func clear() {
         lastReportedScreen = nil

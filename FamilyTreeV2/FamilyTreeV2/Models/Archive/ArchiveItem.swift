@@ -25,6 +25,17 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
     var approvalStatus: ApprovalStatus
     var approvedBy: UUID?
     var approvedAt: Date?
+    /// وقت التثبيت — nil = غير مثبَّت. المثبَّتة تظهر أولاً، والأحدث تثبيتاً قبل الأقدم.
+    var pinnedAt: Date? = nil
+
+    var isPinned: Bool { pinnedAt != nil }
+
+    /// ترتيب القائمة: المثبَّتة أولاً (الأحدث تثبيتاً أولاً) ثم الترتيب الحالي كما هو (ترتيب مستقر).
+    static func pinnedFirst(_ list: [ArchiveItem]) -> [ArchiveItem] {
+        let pinned = list.filter { $0.pinnedAt != nil }
+            .sorted { ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
+        return pinned + list.filter { $0.pinnedAt == nil }
+    }
 
     enum ApprovalStatus: String, Codable {
         case pending, approved, rejected
@@ -156,6 +167,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         case approvedBy     = "approved_by"
         case approvedAt     = "approved_at"
         case categoryKey = "category_key"
+        case pinnedAt = "pinned_at"
     }
 
     // Decoder متسامح: يفترض القيم الافتراضية للحقول الجديدة (للتوافق مع
@@ -181,5 +193,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         approvalStatus  = try c.decodeIfPresent(ApprovalStatus.self, forKey: .approvalStatus) ?? .approved
         approvedBy      = try c.decodeIfPresent(UUID.self, forKey: .approvedBy)
         approvedAt      = try c.decodeIfPresent(Date.self, forKey: .approvedAt)
+        // قبل تطبيق migration التثبيت لا يوجد العمود — يبقى nil
+        pinnedAt        = try? c.decodeIfPresent(Date.self, forKey: .pinnedAt)
     }
 }

@@ -508,12 +508,21 @@ struct EditNewsView: View {
         } else {
             finalContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
             imageURLs = existingImageURLs
+            var uploadedCount = 0
             if let authorId = authVM.currentUser?.id {
                 for image in selectedImages {
                     if let url = await newsVM.uploadNewsImage(image: image, for: authorId) {
                         imageURLs.append(url)
+                        uploadedCount += 1
                     }
                 }
+            }
+            // صورة لم تُرفع → لا نحفظ بدونها بصمت؛ تبقى الصور في المربّع ليعيد المحاولة أو يلغي
+            if uploadedCount < selectedImages.count {
+                newsVM.newsPostErrorMessage = L10n.t("تعذّر رفع بعض الصور. حاول مرة أخرى.",
+                                                     "Some photos couldn't be uploaded. Please try again.")
+                showEditErrorAlert = true
+                return
             }
         }
 

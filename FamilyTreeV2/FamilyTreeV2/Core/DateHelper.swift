@@ -12,6 +12,8 @@ enum DateHelper {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.locale = Locale(identifier: "en_US_POSIX")
+        // ميلادي دائماً — لا يتأثر بتقويم الجهاز (هجري/بوذي)، واليوم بتوقيت الجهاز
+        f.calendar = Calendar(identifier: .gregorian)
         return f
     }()
 

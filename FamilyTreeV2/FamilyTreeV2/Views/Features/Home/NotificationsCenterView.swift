@@ -128,8 +128,6 @@ struct NotificationsCenterView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
-    /// نشر تحديث تطبيق من تبويب «المستجدات» (للإدارة)
-    @State private var showingAppUpdateComposer = false
     /// العضو المختار لفتح تفاصيله من داخل الإشعار (مثل الشجرة).
     @State private var selectedMember: FamilyMember? = nil
     /// طلب admin_requests المرتبط بالإشعار الحالي — يُحمَّل عند فتح الشيت (للمرحلة ٣)
@@ -258,15 +256,13 @@ struct NotificationsCenterView: View {
             notificationVM.pendingJoinDeepLinkRequestId = nil
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        // جلسات الاستخدام: «الإشعارات» ما دام المركز ظاهراً
+        .appUsageScreen(.notifications)
         // تفاصيل الإشعار مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك) — للعرض فقط،
         // فيُغلق أيضاً بالضغط خارجه (بدل سحب الورقة للأسفل سابقاً)
         .dsCenterBox(item: $selectedNotification,
                      onBackgroundTap: { selectedNotification = nil }) { notification in
             notificationDetailSheet(notification)
-        }
-        // المربّع الطويل الموحّد من الأسفل بدل ورقة النظام
-        .dsTallBox(isPresented: $showingAppUpdateComposer) {
-            NavigationStack { AdminAppUpdateView() }
         }
         .dsAlert(
             {
@@ -304,23 +300,14 @@ struct NotificationsCenterView: View {
 
     private var actionBar: some View {
         let unreadCount = filteredNotifications.filter { !$0.read }.count
-        let canPublish = selectedTab == .activity && authVM.canSendNotifications && !isSelecting
         let showSelect = !isSelecting && !filteredNotifications.isEmpty
         let showReadAll = !isSelecting && unreadCount > 0
-        let hasButtons = isSelecting || canPublish || showSelect || showReadAll
+        // «نشر تحديث» كان هنا — بيته الوحيد صار «المناسبات والإعلانات» ← «إنشاء» ← «إعلان تحديث التطبيق» (٢٠٢٦-١٠-٢٠)
+        let hasButtons = isSelecting || showSelect || showReadAll
 
         return Group {
             if hasButtons {
                 HStack(spacing: DS.Spacing.sm) {
-                    // «المستجدات» هي قناة تحديثات التطبيق — والإدارة تنشر منها مباشرة
-                    if canPublish {
-                        barButton(icon: "megaphone.fill", label: L10n.t("نشر تحديث", "Publish Update"),
-                                  style: .filled) {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            showingAppUpdateComposer = true
-                        }
-                    }
-
                     if isSelecting {
                         // ── وضع التحديد ──
                         barButton(icon: "xmark", label: L10n.t("إلغاء", "Cancel"),
@@ -495,6 +482,10 @@ struct NotificationsCenterView: View {
         // «المستجدات» لها تبويبها المستقل
         if belongsToActivityTab(n) { return false }
 
+        // إشعارات الإدارة (الطلبات، نشاط الفريق، تنبيهات النظام) مكانها «إشعارات الإدارة» — جرس «اليوم»
+        // (طلب المالك ٢٠٢٦-١٠-٢٠: صفحة واحدة)، فلا يظهر الإشعار نفسه في قائمتين. العضو العادي لا يتأثر.
+        if authVM.canModerate, AdminNotices.category(of: n, me: myId) != nil { return false }
+
         let isPendingApproval = Self.pendingApprovalKinds.contains(n.kind)
         let isCompletedAction = Self.completedActionKinds.contains(n.kind)
         let titleIndicatesCompleted = n.title.hasPrefix("تم قبول")
@@ -503,8 +494,7 @@ struct NotificationsCenterView: View {
             || n.title.contains("Rejected")
 
         // إشعاراتي = ما يخصّني أنا: وضع طلباتي، وأي تغيير على بياناتي.
-        // طلبات الآخرين وحركات الإدارة شغل إداري — مكانها أقسام الإدارة
-        // وسجل النشاط، لا هنا (طلب المالك).
+        // طلبات الآخرين وحركات الإدارة شغل إداري — مكانها «إشعارات الإدارة»، لا هنا (طلب المالك).
         if isPendingApproval || isCompletedAction || titleIndicatesCompleted {
             if n.createdBy == myId { return false }   // أنا من نفّذها
             return n.subjectMemberId == myId          // تخصّني شخصياً فقط
@@ -536,7 +526,7 @@ struct NotificationsCenterView: View {
     ]
 
     /// تاب «المستجدات»: إعلانات الإدارة وتحديثات التطبيق فقط.
-    /// (تنبيهات مثل «فلان نشر منشوراً» هي حركة إدارية ومكانها «سجل النشاط»
+    /// (تنبيهات مثل «فلان نشر منشوراً» هي حركة إدارية ومكانها «إشعارات الإدارة»
     /// في لوحة الإدارة — طلب المالك)
     /// «المستجدات» = ما يخصّ التطبيق نفسه: إصدار جديد، ميزة، صيانة، تنويه.
     /// أي رسالة موجّهة للأعضاء (بث إداري) مكانها «إشعاراتي» — فهي تخصّ العضو
@@ -959,7 +949,17 @@ struct NotificationsCenterView: View {
             }
         }
 
-        if let requesterId = matchesRequesterId {
+        // دخول النساء (٢٠٢٦-١٠-٢٤): طلب الأنثى لا يُربط بشجرة الرجال — «ربط بشجرة النساء» من «الوارد»
+        if let requesterId = matchesRequesterId, memberVM.member(byId: requesterId)?.isFemale == true {
+            DSComposerSection(title: L10n.t("شجرة النساء", "Women's tree"),
+                              icon: "figure.stand.dress",
+                              tint: DS.Color.female,
+                              index: matchesIndex) {
+                DSNoteCard(L10n.t("طلب أنثى — يُربط بعقدتها في شجرة النساء من «الوارد» ← «ربط بشجرة النساء».",
+                                  "A woman's request — link her to her node in the women's tree from the inbox ← «Link to women's tree»."),
+                           icon: "link.badge.plus", tint: DS.Color.female)
+            }
+        } else if let requesterId = matchesRequesterId {
             joinMatchesCard(
                 candidates: joinMatchCandidates,
                 requesterId: requesterId,
@@ -975,6 +975,19 @@ struct NotificationsCenterView: View {
         // والطاقم «فتح في طلبات المراجعة» والمسار شغّال (داخل approvalLinkSection)
         if notification.details?.type == "approval_workflow" {
             approvalLinkSection(notification, index: bodyIndex + 1)
+        }
+
+        // «رصيد رسائل الدخول منخفض» ← صفحة رسائل الدخول في «الدخول والأمان» (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠)
+        if notification.kind == "sms_balance_low" && authVM.canViewSystemSettings {
+            DSButton(L10n.t("فتح رسائل الدخول", "Open sign-in messages"), icon: "ellipsis.message.fill") {
+                selectedNotification = nil
+                NotificationCenter.default.post(name: .openAdminRequests, object: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil,
+                                                    userInfo: ["kind": "sms_balance_low"])
+                }
+            }
+            .dsStaggerIn(bodyIndex + 1)
         }
 
         if authVM.isAdmin,
@@ -1013,7 +1026,7 @@ struct NotificationsCenterView: View {
                 ApprovalStageChips(snapshot: flow, audience: .member)
             }
         } else if authVM.canModerate && adminRequestVM.approvalsWorkflowOn {
-            DSButton(L10n.t("فتح في طلبات المراجعة", "Open in Review Requests"),
+            DSButton(L10n.t("فتح في الوارد", "Open in the inbox"),
                      icon: "point.topleft.down.to.point.bottomright.curvepath.fill") {
                 selectedNotification = nil
                 NotificationCenter.default.post(name: .openAdminRequests, object: nil)
@@ -1439,6 +1452,12 @@ struct NotificationsCenterView: View {
                 await memberVM.fetchAllMembers(force: true)
                 requester = memberVM.member(byId: rid)
             }
+        }
+
+        // الأنثى: لا مطابقات (ولا «ربط») من شجرة الرجال
+        if requester?.isFemale == true {
+            Log.info("[JoinMatch] skip — طلب أنثى يُربط بشجرة النساء")
+            return
         }
 
         // 2) استخرج الاسم الكامل للمتقدم من requester أو من body كـ fallback

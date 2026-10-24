@@ -205,6 +205,11 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     var isFemale: Bool {
         return (gender ?? "").lowercased() == "female"
     }
+
+    /// حساب امرأة في التطبيق (دخول النساء، ٢٠٢٦-١٠-٢٤) — لصفوف `profiles` فقط: أنثى، مخفية من شجرة الرجال، بلا أب؛
+    /// موقعها عقدتها في شجرة النساء (`women_members.linked_user_id` = معرّفها — `WomenStore.node(forAccount:)`).
+    /// لا تُعدّ ولا تُعرض رجلاً أبداً. (صفوف شجرة النساء نفسها كلها إناث — لا تُستعمل عليها)
+    var isWomanAccount: Bool { isFemale }
     
     /// الاسم العلني للمستوى — المالك يظهر كـ "مدير" للباقي
     var roleName: String {
@@ -319,13 +324,25 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     ///   - role == .pending (طلبات تحت الموافقة)
     ///   - status == .frozen (مجمّد)
     ///   - isHiddenFromTree (مخفيّ يدوياً)
+    ///   - حساب امرأة (`isWomanAccount` — يُعدّ في شجرة النساء)
     ///   - أسماء فارغة (سجلّات معطوبة)
     var isCountable: Bool {
         if role == .pending { return false }
+        // حساب امرأة ليس فرداً في شجرة الرجال — تُعدّ من شجرة النساء
+        if isWomanAccount { return false }
         if status == .frozen { return false }
         if isHiddenFromTree { return false }
-        if fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        if !hasName { return false }
         return true
+    }
+
+    /// للسجلّ اسم حقيقي — سجلّ بلا اسم (فارغ أو «بدون اسم») ينشئه الدخول بالرمز تلقائياً: رقم/حساب دخول بلا اسم ولا أب.
+    /// ليس فرداً في العائلة: لا يُعدّ في «إحصاء الأفراد» ولا صفحة الأعضاء ولا الإحصاءات ولا التقارير
+    /// (طلب المالك ٢٠٢٦-١٠-٢٤ «ارقام مو مرتبط فيهم اسماء لا تحط الرقم متصلين بعدد العائلة») — يظهر للإدارة في
+    /// «مشكلات الشجرة ← بلا اسم» فقط.
+    var hasName: Bool {
+        let name = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !name.isEmpty && name != "بدون اسم"
     }
 
     enum CodingKeys: String, CodingKey {

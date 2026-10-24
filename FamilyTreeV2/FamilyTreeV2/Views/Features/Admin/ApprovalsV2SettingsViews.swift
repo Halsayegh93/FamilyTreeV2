@@ -56,7 +56,7 @@ struct ApprovalTemplatesBox: View {
 
     var body: some View {
         DSComposer(
-            title: L10n.t("الردود الجاهزة", "Ready replies"),
+            title: L10n.t("نماذج الردود", "Reply templates"),
             subtitle: L10n.t("تظهر فوق ملاحظة القرار بحسب نوعه", "Shown above the decision note, by kind"),
             icon: "text.badge.plus",
             tint: DS.Color.actionNavy,
@@ -161,26 +161,74 @@ struct ApprovalTemplatesBox: View {
 
 // MARK: مبدّل الساعات الصغير
 
-/// «− ٢٤ ساعة +» بارتفاع الشريحة الصغيرة ومساحة ضغط ٤٤ — للمهلة (تذكير/تصعيد)
+/// «− ٢٤ ساعة +» بارتفاع الشريحة الصغيرة ومساحة ضغط ٤٤ — للمهلة (تذكير/تصعيد)، وبالنقاط لعتبات رصيد الرسائل،
+/// وبالثواني/العدد/الأيام لحدود رسائل الدخول (درجات ثابتة `ladder` بدل خطوة واحدة)
 struct ApprovalHoursStepper: View {
+    /// وحدة الرقم المعروض: ساعات (المهلة، فواصل التنبيه) · نقاط (عتبات رصيد KWT SMS) · ثوانٍ · عدد · أيام (حدود الرسائل)
+    /// · دقائق (حماية رسائل الدخول — الساعات الكاملة تظهر بالساعات)
+    enum Unit { case hours, points, seconds, count, days, minutes }
+
     let value: Int
     let range: ClosedRange<Int>
     var step: Int = 1
     let label: String
     let onChange: (Int) -> Void
+    var unit: Unit = .hours
+    /// درجات محددة (مرتّبة تصاعدياً) — «−/+» ينتقل للدرجة السابقة/التالية بدل `step`؛ قيمة خارج الدرجات تذهب لأقرب درجة
+    var ladder: [Int]? = nil
+    /// نص القيمة صفر («مطفأ») بدل الرقم
+    var zeroText: String? = nil
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.dsSection) private var section
+
+    /// القيمة التالية/السابقة داخل المدى — nil = لا شيء بعدها (الزر معطّل)
+    private var next: Int? {
+        if let ladder { return ladder.filter(range.contains).first { $0 > value } }
+        return value + step <= range.upperBound ? value + step : nil
+    }
+    private var previous: Int? {
+        if let ladder { return ladder.filter(range.contains).last { $0 < value } }
+        return value - step >= range.lowerBound ? value - step : nil
+    }
+
+    private var shortText: String {
+        if value == 0, let zeroText { return zeroText }
+        switch unit {
+        case .hours:   return L10n.t("\(value) س", "\(value) h")
+        case .points:  return L10n.t("\(value) نقطة", "\(value) pts")
+        case .seconds: return L10n.t("\(value) ث", "\(value) s")
+        case .count:   return "\(value)"
+        case .days:    return L10n.t("\(value) يوم", "\(value) d")
+        case .minutes:
+            if value >= 60, value % 60 == 0 { return L10n.t("\(value / 60) س", "\(value / 60) h") }
+            return L10n.t("\(value) د", "\(value) min")
+        }
+    }
+
+    private var spokenText: String {
+        if value == 0, let zeroText { return zeroText }
+        switch unit {
+        case .hours:   return L10n.t("\(value) ساعة", "\(value) hours")
+        case .points:  return L10n.t("\(value) نقطة", "\(value) points")
+        case .seconds: return L10n.t("\(value) ثانية", "\(value) seconds")
+        case .count:   return "\(value)"
+        case .days:    return L10n.t("\(value) يوم", "\(value) days")
+        case .minutes:
+            if value >= 60, value % 60 == 0 { return L10n.t("\(value / 60) ساعة", "\(value / 60) hours") }
+            return L10n.t("\(value) دقيقة", "\(value) minutes")
+        }
+    }
 
     var body: some View {
         let ink = DS.Color.primary.dsChrome(in: section).dsReadableGlyph
         HStack(spacing: DS.Spacing.xxs) {
-            button("minus", enabled: value - step >= range.lowerBound) { onChange(max(range.lowerBound, value - step)) }
-            Text(L10n.t("\(value) س", "\(value) h"))
+            button("minus", enabled: previous != nil) { if let previous { onChange(previous) } }
+            Text(shortText)
                 .dsFont(.chipCompact)
                 .monospacedDigit()
                 .foregroundColor(DS.Color.fieldLabel)
                 .frame(minWidth: DS.Icon.tapTarget)
-            button("plus", enabled: value + step <= range.upperBound) { onChange(min(range.upperBound, value + step)) }
+            button("plus", enabled: next != nil) { if let next { onChange(next) } }
         }
         .padding(.horizontal, DS.Spacing.xxs)
         .frame(minHeight: DSBox.chipHeightSmall)
@@ -189,11 +237,11 @@ struct ApprovalHoursStepper: View {
         .opacity(isEnabled ? 1 : DSActionFill.disabledOpacity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue(L10n.t("\(value) ساعة", "\(value) hours"))
+        .accessibilityValue(spokenText)
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: if value + step <= range.upperBound { onChange(value + step) }
-            case .decrement: if value - step >= range.lowerBound { onChange(value - step) }
+            case .increment: if let next { onChange(next) }
+            case .decrement: if let previous { onChange(previous) }
             @unknown default: break
             }
         }

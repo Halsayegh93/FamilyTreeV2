@@ -1,12 +1,17 @@
 import SwiftUI
 
-/// إدارة أسماء العوائل — الإدارة تضع القائمة، والأعضاء يختارون منها
-/// عند التسجيل أو من تعديل الملف الشخصي.
-/// تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧، «أسلوب واحد» ٢٠٢٦-١٠-٠٧): صفّ أرقام حيّة ←
-/// «إضافة عائلة» (لمن يدير) ← «العوائل» صفوفاً `.dsRowBox()` وقائمة خيارات لكل صف.
+/// «أسماء العوائل والفروع» — صفحة واحدة في «التطبيق ← القوائم» (الدفعة ج، ٢٠٢٦-١٠-٢٠؛ كانتا صفحتين):
+/// أسماء العوائل (الإدارة تضع القائمة، والأعضاء يختارون منها عند التسجيل أو تعديل الملف) وأسماء الفروع (تظهر في قائمة
+/// اختيار الفرع فقط). بشكل «اليوم» (`AdminPageKit`): رأس كحلي بالأرقام ← «إضافة عائلة» (لمن يدير) تصعد فوقه ←
+/// «أسماء الفروع» (صفّ يفتح شجرة الفروع بوضع التسمية) ← «العوائل» صفوفاً بقائمة خيارات لكل صف. بلا تبويبات.
+/// العوائل: المالك والمدير يضيفان ويعدّلان · الفروع: المالك يسمّي والمدير يقرأ (كما كانتا).
 struct AdminFamilyNamesView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @StateObject private var vm = FamilyNamesViewModel()
+    /// مربّع «أسماء الفروع» (شجرة الفروع بوضع التسمية)
+    @State private var branchNamesOpen = false
 
     @State private var newName = ""
     @State private var renaming: FamilyNameOption?
@@ -23,23 +28,26 @@ struct AdminFamilyNamesView: View {
     private var isFirstLoad: Bool { vm.isLoading && vm.options.isEmpty }
 
     var body: some View {
-        ZStack {
-            DS.Color.background.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    hero
-                    if canManage { addSection }
-                    listSection
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xxxl)
-            }
-            .scrollDismissesKeyboard(.interactively)
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        AdminPage(header: header,
+                  lead: AnyView(canManage ? AnyView(addSection) : AnyView(branchesSection)),
+                  content: AnyView(VStack(spacing: DS.Hub.stackSpacing) {
+                      if canManage { AnyView(branchesSection) }
+                      AnyView(listSection)
+                  }))
         .task { await vm.fetch(force: true) }
+        .task { await appSettingsVM.fetchSettings() }
+        // أسماء الفروع — شجرة الفروع نفسها بوضع التسمية (كما كانت في «إعدادات التطبيق»)
+        .dsTallBox(isPresented: $branchNamesOpen) {
+            BranchPickerSheet(
+                allMembers: memberVM.allMembers,
+                renamesBranches: true,
+                canRename: authVM.canManageSettings,
+                onRename: { id, name in
+                    Task { await appSettingsVM.updateBranchName(name, for: id, updatedBy: authVM.currentUser?.id) }
+                }
+            )
+            .environmentObject(appSettingsVM)
+        }
         .refreshable { await vm.fetch(force: true) }
         .dsAlert(L10n.t("تعديل الاسم", "Rename"), isPresented: Binding(
             get: { renaming != nil }, set: { if !$0 { renaming = nil } }
@@ -66,17 +74,44 @@ struct AdminFamilyNamesView: View {
         }
     }
 
-    // MARK: - الأرقام السريعة (العنوان والوصف في رأس «إدارة الأعضاء» الملوّن)
+    // MARK: - الرأس الكحلي بالأرقام
 
-    private var hero: some View {
-        DSStatsRow([
-            DSHeroStat(value: isFirstLoad ? "—" : "\(vm.options.count)",
-                       label: L10n.t("عائلة", "Families"), icon: "list.bullet"),
-            DSHeroStat(value: isFirstLoad ? "—" : "\(activeCount)",
-                       label: L10n.t("متاحة للاختيار", "Selectable"), icon: "checkmark.circle.fill"),
-            DSHeroStat(value: isFirstLoad ? "—" : "\(vm.options.count - activeCount)",
-                       label: L10n.t("معطّلة", "Disabled"), icon: "eye.slash.fill")
-        ], tint: tint)
+    private var header: AdminPageHeader {
+        let ready = !isFirstLoad
+        return AdminPageHeader(
+            title: L10n.t("أسماء العوائل والفروع", "Family and branch names"),
+            subtitle: L10n.t("يختار العضو عائلته منها، وأسماء الفروع تظهر في قائمة اختيار الفرع.",
+                             "Members pick their family from this list; branch names show in the branch picker."),
+            glyph: "person.2.crop.square.stack.fill",
+            kpis: [
+                AdminPageKPI(AdminPageKPI.count(vm.options.count, ready: ready), L10n.t("عائلة", "Families"),
+                             icon: "list.bullet"),
+                AdminPageKPI(AdminPageKPI.count(activeCount, ready: ready), L10n.t("متاحة للاختيار", "Selectable"),
+                             icon: "checkmark.circle", tint: DS.Hub.kpiMine),
+                AdminPageKPI("\(customBranchNamesCount)", L10n.t("فروع بأسماء", "Named branches"),
+                             icon: "arrow.triangle.branch")
+            ])
+    }
+
+    // MARK: - أسماء الفروع (طلب المالك ٢٠٢٦-١٠-٠٩)
+
+    /// عدد الفروع التي لها اسم مخصّص
+    private var customBranchNamesCount: Int {
+        (appSettingsVM.settings.branchNames ?? [:]).values
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+    }
+
+    private var branchesSection: some View {
+        AdminSectionCard(title: L10n.t("أسماء الفروع", "Branch names"),
+                         tag: customBranchNamesCount > 0
+                            ? L10n.t("\(customBranchNamesCount) اسم مخصّص", "\(customBranchNamesCount) custom") : nil) {
+            AdminTapRow(icon: "arrow.triangle.branch", tint: DS.Color.palm,
+                        title: L10n.t("تسمية الفروع", "Name the branches"),
+                        subtitle: authVM.canManageSettings
+                            ? L10n.t("اسم يظهر في قائمة اختيار الفرع فقط", "A name shown in the branch picker list only")
+                            : AdminPageHeader.readOnlyText,
+                        tap: .action { branchNamesOpen = true })
+        }
     }
 
     // MARK: - إضافة عائلة
@@ -86,10 +121,7 @@ struct AdminFamilyNamesView: View {
     }
 
     private var addSection: some View {
-        DSComposerSection(title: L10n.t("إضافة عائلة", "Add a family"),
-                          icon: "plus.circle.fill",
-                          tint: tint,
-                          index: 1) {
+        AdminSectionCard(title: L10n.t("إضافة عائلة", "Add a family")) {
             // الحقل الموحّد (`DSComposerField`) + شريحة «إضافة» ممتلئة بلون القسم
             HStack(spacing: DS.Spacing.sm) {
                 DSComposerField(icon: "person.2.fill",
@@ -112,31 +144,25 @@ struct AdminFamilyNamesView: View {
     @ViewBuilder
     private var listSection: some View {
         if isFirstLoad {
-            DSPageLoader(L10n.t("جارٍ تحميل العوائل…", "Loading families…"), fillsSpace: false)
+            AdminPageStateCard(.loading(L10n.t("جارٍ تحميل العوائل…", "Loading families…")))
         } else if vm.options.isEmpty, let error = vm.errorMessage {
             // الجدول قد لا يكون مُهاجَراً بعد — السبب ظاهر بدل قائمة فارغة صامتة
-            DSStateCard(icon: "exclamationmark.triangle.fill",
-                         title: L10n.t("تعذّر تحميل العوائل", "Couldn't load families"),
-                         hint: error,
-                         tint: DS.Color.error,
-                         actionTitle: L10n.t("إعادة المحاولة", "Retry")) {
-                Task { await vm.fetch(force: true) }
-            }
+            AdminPageStateCard(.error(L10n.t("تعذّر تحميل العوائل", "Couldn't load families"),
+                                      message: error,
+                                      retry: { Task { await vm.fetch(force: true) } }))
         } else if vm.options.isEmpty {
-            DSEmptyView(L10n.t("لا توجد عوائل بعد — أضف أول اسم.",
-                               "No families yet — add the first one."),
-                        style: .compact)
+            AdminPageStateCard(.empty(L10n.t("لا توجد عوائل بعد — أضف أول اسم.",
+                                             "No families yet — add the first one.")))
         } else {
-            DSComposerSection(title: L10n.t("العوائل", "Families"),
-                              icon: "list.bullet",
-                              tint: tint,
-                              trailing: vm.isLoading ? L10n.t("تحديث…", "Updating…") : "\(vm.options.count)",
-                              index: 2) {
+            AdminSectionCard(title: L10n.t("العوائل", "Families"),
+                             tag: vm.isLoading ? L10n.t("تحديث…", "Updating…") : "\(vm.options.count)") {
                 if let error = vm.errorMessage {
                     errorRow(error)
                 }
-                ForEach(vm.options) { option in
-                    row(option)
+                AdminRowsCardBody {
+                    ForEach(vm.options) { option in
+                        row(option)
+                    }
                 }
             }
         }
@@ -159,18 +185,17 @@ struct AdminFamilyNamesView: View {
     }
 
     private func row(_ option: FamilyNameOption) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: option.isActive ? "checkmark.circle.fill" : "circle.slash",
-                        tint: option.isActive ? DS.Color.success : DS.Color.textTertiary)
-                .accessibilityHidden(true)
+        HStack(spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: option.isActive ? "checkmark.circle.fill" : "circle.slash",
+                            tint: option.isActive ? DS.Color.success : DS.Color.textTertiary)
 
             Text(option.name)
-                .dsFieldFont(.rowTitle)
-                .foregroundColor(option.isActive ? DS.Color.fieldLabel : DS.Color.textTertiary)
+                .dsFont(.hubRow)
+                .foregroundColor(option.isActive ? DS.Color.textPrimary : DS.Color.textTertiary)
                 .lineLimit(2)
 
             if !option.isActive {
-                DSStatusChip(text: L10n.t("معطّلة", "Disabled"), tint: DS.Color.textTertiary)
+                DSStatusChip(text: L10n.t("مخفية من الاختيار", "Hidden from the picker"), tint: DS.Color.textTertiary)
             }
 
             Spacer(minLength: 0)
@@ -185,8 +210,8 @@ struct AdminFamilyNamesView: View {
                     Button {
                         Task { await vm.setActive(id: option.id, !option.isActive) }
                     } label: {
-                        Label(option.isActive ? L10n.t("تعطيل", "Disable")
-                                              : L10n.t("تفعيل", "Enable"),
+                        Label(option.isActive ? L10n.t("إخفاء من الاختيار", "Hide from the picker")
+                                              : L10n.t("إظهار في الاختيار", "Show in the picker"),
                               systemImage: option.isActive ? "eye.slash" : "eye")
                     }
 
@@ -204,8 +229,8 @@ struct AdminFamilyNamesView: View {
                 .accessibilityLabel(L10n.t("خيارات \(option.name)", "Options for \(option.name)"))
             }
         }
+        .padding(.vertical, DS.Spacing.sm)
         .frame(minHeight: DSBox.fieldMinHeight)
-        .dsRowBox()
         .accessibilityElement(children: .contain)
     }
 

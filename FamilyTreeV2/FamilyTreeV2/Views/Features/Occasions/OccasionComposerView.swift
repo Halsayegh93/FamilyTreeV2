@@ -12,6 +12,8 @@ struct OccasionComposerView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @StateObject private var vm = OccasionComposerViewModel()
+    /// القالب المختار في «تصميم بطاقة» (نافذة «إنشاء») — nil = الافتراضي
+    var startTemplateId: String? = nil
     @StateObject private var diwaniyasVM = DiwaniyasViewModel()
     @StateObject private var familyNamesVM = FamilyNamesViewModel()
     @ObservedObject private var kit = OccasionKit.shared
@@ -64,11 +66,14 @@ struct OccasionComposerView: View {
             }
         }
         // الرأس الموحّد: العنوان، وفي الطرف حفظ الصورة (الأساسي) والمشاركة
-        .dsSubPageHeader(L10n.t("منشورات المناسبات", "Occasion Posts"), icon: "") {
+        .dsSubPageHeader(L10n.t("بطاقات التهنئة والتعزية", "Greeting & condolence cards"), icon: "") {
             if authVM.canModerate { headerActions }
         }
         .task(id: vm.assetKey) { await vm.prepareAssets() }
         .task { await loadData() }
+        .onAppear {
+            if let id = startTemplateId, let t = OccasionTemplate.all.first(where: { $0.id == id }) { vm.select(t) }
+        }
         .onChange(of: memberVM.membersVersion) { _ in
             vm.updateFamily(memberVM.allMembers)
         }

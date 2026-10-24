@@ -258,6 +258,7 @@ class AdminRequestViewModel: ObservableObject {
                     p_overrides: silent ? Overrides(silent: true) : nil))
                 .execute()
                 .value
+            decisionOutcomes[requestId] = true
             if let push = result.adminPush {
                 await notificationVM?.pushAdminsExternally(title: push.title, body: push.body, kind: push.kind)
             }
@@ -276,6 +277,7 @@ class AdminRequestViewModel: ObservableObject {
             return result
         } catch {
             Log.error("[Decide] \(approve ? "قبول" : "رفض") \(requestId) فشل: \(error)")
+            decisionOutcomes[requestId] = false
             errorMessage = Self.decisionErrorMessage(error)
             return nil
         }
@@ -341,6 +343,11 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
+    /// نتيجة آخر قرار على السيرفر لكل طلب (`decideOnServer`) — تقرؤها العمليات الجماعية لعدّ الناجح فعلاً
+    private var decisionOutcomes: [UUID: Bool] = [:]
+    /// عمل الخلفية لكل طلب أُزيل تفاؤلياً — العمليات الجماعية تنتظره قبل قراءة النتيجة
+    private var pendingDecisionWork: [AnyHashable: Task<Void, Never>] = [:]
+
     /// حذف فوري ثم تنفيذ API + تحديث بالخلفية (optimistic)
     private func optimisticRemove<T: Identifiable>(
         from array: inout [T],
@@ -351,11 +358,24 @@ class AdminRequestViewModel: ObservableObject {
         withAnimation(.snappy(duration: 0.25)) {
             array.removeAll { $0.id as AnyHashable == id as AnyHashable }
         }
-        Task {
-            await apiWork()
+        let key = id as AnyHashable
+        let work = Task { await apiWork() }
+        pendingDecisionWork[key] = work
+        Task { [weak self] in
+            await work.value
             try? await Task.sleep(nanoseconds: 500_000_000)
             await refresh()
+            self?.pendingDecisionWork.removeValue(forKey: key)
         }
+    }
+
+    /// للعمليات الجماعية: بعد استدعاء قبول/رفض طلب، انتظر تنفيذه على السيرفر وأرجع هل نجح فعلاً.
+    /// طلب رفضه حارس محلي (صلاحية، طلبك أنت…) لا عمل له ولا نتيجة → false
+    func awaitDecision(_ requestId: UUID) async -> Bool {
+        if let work = pendingDecisionWork.removeValue(forKey: requestId as AnyHashable) {
+            await work.value
+        }
+        return decisionOutcomes.removeValue(forKey: requestId) ?? false
     }
 
     // Schema error helpers delegated to ErrorHelper
@@ -540,17 +560,37 @@ class AdminRequestViewModel: ObservableObject {
             Log.warning("[MyRequests] محاولة إلغاء طلب لا يخص المستخدم — تم التجاهل")
             return
         }
-        // إزالة فورية محلياً ثم حذف بالخلفية
+        errorMessage = nil
+        // إزالة فورية محلياً ثم الحذف — يُرجَع الصف مكانه إن لم يُحذف شيء
+        let originalIndex = myPendingRequests.firstIndex(where: { $0.id == request.id })
         withAnimation(.snappy(duration: 0.25)) {
             myPendingRequests.removeAll { $0.id == request.id }
         }
+        nonisolated struct DeletedRow: Decodable { let id: UUID }
         do {
-            try await supabase
+            // المعلّق فقط، ونطلب الصفوف المحذوفة: صفر صفوف (عُولج الطلب أو منعته السياسة) لا يعطي خطأ
+            // فكان الطلب «يرجع» بعد اختفائه بلا تفسير
+            let deleted: [DeletedRow] = try await supabase
                 .from("admin_requests")
                 .delete()
                 .eq("id", value: request.id.uuidString)
                 .eq("requester_id", value: uid.uuidString)
+                .eq("status", value: ApprovalStatus.pending.rawValue)
+                .select("id")
                 .execute()
+                .value
+            guard !deleted.isEmpty else {
+                Log.warning("[MyRequests] لم يُحذف الطلب (0 صفوف): \(request.id)")
+                withAnimation(.snappy(duration: 0.25)) {
+                    if !myPendingRequests.contains(where: { $0.id == request.id }) {
+                        myPendingRequests.insert(request, at: min(originalIndex ?? 0, myPendingRequests.count))
+                    }
+                }
+                errorMessage = L10n.t("تعذّر سحب الطلب — ربما تمت معالجته",
+                                      "Couldn't withdraw the request — it may have been handled already")
+                await fetchMyPendingRequests(force: true)
+                return
+            }
             Log.info("[MyRequests] تم إلغاء الطلب: \(request.id)")
             // سحب «إضافة ابن» = إلغاء الإضافة: الابن المضاف يُحذف معه — لكل عضو عبر remove_self_child
             // (أبناؤه هو فقط، بلا حساب دخول)؛ قبل رفع الدالة للسيرفر: المالك والمدير بالحذف المباشر.
@@ -573,7 +613,14 @@ class AdminRequestViewModel: ObservableObject {
             }
         } catch {
             Log.error("[MyRequests] فشل إلغاء الطلب: \(error.localizedDescription)")
-            // فشل الحذف → أعد التحميل لاستعادة الحالة الصحيحة
+            // فشل الحذف → الصف يرجع مكانه، ورسالة، ثم إعادة التحميل لاستعادة الحالة الصحيحة
+            withAnimation(.snappy(duration: 0.25)) {
+                if !myPendingRequests.contains(where: { $0.id == request.id }) {
+                    myPendingRequests.insert(request, at: min(originalIndex ?? 0, myPendingRequests.count))
+                }
+            }
+            errorMessage = L10n.t("تعذّر سحب الطلب — ربما تمت معالجته",
+                                  "Couldn't withdraw the request — it may have been handled already")
             await fetchMyPendingRequests(force: true)
         }
     }
@@ -968,36 +1015,24 @@ class AdminRequestViewModel: ObservableObject {
         return successCount
     }
 
+    /// قبول جماعي لطلبات الانضمام — كل طلب بمسار التفعيل الواحد (`activateAccount`): لا تفعيل بلا أب،
+    /// إغلاق طلب الانضمام، وإشعار العضو والإدارة. كان يكتب role/status مباشرة على الكل بلا حارس الأب
+    /// ولا إغلاق ولا إشعار. يرجّع عدد ما تفعّل فعلاً؛ الناقص (بلا أب، رفضه السيرفر) يبقى معلّقاً
     func bulkApproveJoinRequests(memberIds: [UUID]) async -> Int {
         guard !memberIds.isEmpty else { return 0 }
         isLoading = true
         var approved = 0
-        do {
-            let payload: [String: AnyEncodable] = [
-                "role": AnyEncodable("member"),
-                "status": AnyEncodable("active"),
-                "is_hidden_from_tree": AnyEncodable(false)
-            ]
-            try await supabase
-                .from("profiles")
-                .update(payload)
-                .in("id", values: memberIds.map { $0.uuidString })
-                .execute()
-
-            for id in memberIds {
-                if let index = memberVM?.allMembers.firstIndex(where: { $0.id == id }) {
-                    memberVM?.allMembers[index].role = .member
-                    memberVM?.allMembers[index].status = .active
-                    memberVM?.allMembers[index].isHiddenFromTree = false
-                    approved += 1
-                }
-            }
-            memberVM?.objectWillChange.send()
-            Log.info("تم قبول \(approved) عضو جماعياً")
-        } catch {
-            self.errorMessage = L10n.t("فشل القبول الجماعي", "Bulk approve failed")
-            Log.error("فشل القبول الجماعي: \(error.localizedDescription)")
+        // دخول النساء (٢٠٢٦-١٠-٢٤): طلب الأنثى لا يُقبل جماعياً — يُربط بعقدتها في شجرة النساء واحدة واحدة
+        var skippedWomen = 0
+        for id in memberIds {
+            if memberById(id)?.isFemale == true { skippedWomen += 1; continue }
+            if await activateAccount(memberId: id, approvingJoin: true) { approved += 1 }
         }
+        if skippedWomen > 0 {
+            errorMessage = Self.womenOneByOneMessage
+        }
+        // آخر سبب (مثل «غير مربوط بالشجرة») يبقى في errorMessage — شاشة الطلبات تضمّه لملخّص «N من M»
+        Log.info("تم قبول \(approved)/\(memberIds.count) طلب انضمام جماعياً")
         isLoading = false
         return approved
     }
@@ -1228,12 +1263,14 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Phone Change Requests
 
-    func requestPhoneNumberChange(memberId: UUID, newPhoneNumber: String) async {
+    /// يرجع نجاح إرسال الطلب — كان يُسجَّل الخطأ فقط فتقول الشاشة «أُرسل»
+    @discardableResult
+    func requestPhoneNumberChange(memberId: UUID, newPhoneNumber: String) async -> Bool {
         self.isLoading = true
         guard let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(newPhoneNumber) else {
             Log.error("رقم طلب التغيير غير صالح.")
             self.isLoading = false
-            return
+            return false
         }
         do {
             let phoneRequestId = UUID()
@@ -1267,8 +1304,11 @@ class AdminRequestViewModel: ObservableObject {
             Log.info("تم إرسال طلب تغيير الرقم للإدارة: \(Log.masked(normalizedPhone))")
         } catch {
             Log.error("خطأ في إرسال طلب التغيير: \(error.localizedDescription)")
+            self.isLoading = false
+            return false
         }
         self.isLoading = false
+        return true
     }
 
     // MARK: - Family Change Requests (العائلة بطلب فقط — طلب المالك)
@@ -1306,7 +1346,9 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Name Change Requests
 
-    func requestNameChange(memberId: UUID, newName: String) async {
+    /// يرجع نجاح إرسال الطلب — كان يُسجَّل الخطأ فقط فتقول الشاشة «أُرسل»
+    @discardableResult
+    func requestNameChange(memberId: UUID, newName: String) async -> Bool {
         self.isLoading = true
         do {
             let nameRequestId = UUID()
@@ -1340,8 +1382,11 @@ class AdminRequestViewModel: ObservableObject {
             Log.info("تم إرسال طلب تغيير الاسم للإدارة: \(newName)")
         } catch {
             Log.error("خطأ في إرسال طلب تغيير الاسم: \(error.localizedDescription)")
+            self.isLoading = false
+            return false
         }
         self.isLoading = false
+        return true
     }
 
     // MARK: - Fetch / Approve / Reject Name Change Requests
@@ -1483,8 +1528,18 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Account Activation & Member Approval
 
-    func activateAccount(memberId: UUID) async {
-        guard canModerate else { return }
+    /// «تسجيل في التطبيق» / قبول طلب انضمام — المسار الواحد للتفعيل: لا تفعيل بلا أب، يغلق طلب الانضمام
+    /// المعلّق، ويُشعر العضو والإدارة. يرجّع true فقط إذا تفعّل الصف فعلاً على السيرفر.
+    /// - approvingJoin: قبول طلب انضمام (القبول الجماعي) — من «معلّق» فقط، يصير «عضواً» ويظهر في الشجرة،
+    ///   وإشعاره «تم اعتماد انضمامك» بدل «تم تفعيل حسابك»
+    @discardableResult
+    func activateAccount(memberId: UUID, approvingJoin: Bool = false) async -> Bool {
+        guard canModerate else { return false }
+        // طلب انضمام أنثى: مكانها شجرة النساء — «ربط بشجرة النساء» (`linkWomanAccount`) لا التفعيل
+        if let m = memberById(memberId), m.isFemale, approvingJoin || m.role == .pending {
+            errorMessage = Self.womenOneByOneMessage
+            return false
+        }
         // لا تفعيل لحساب خارج الشجرة (بلا أب): يصير معلّقاً بالهواء — لا يظهر في الشجرة ولا يعمل له «موقعي»
         // (حدث مع «عبدالله اياد» ٢٠٢٦-١٠-٠٥). الربط بسجله أو إضافته تحت أبيه أولاً.
         var fatherId = memberVM?.allMembers.first(where: { $0.id == memberId })?.fatherId
@@ -1498,19 +1553,65 @@ class AdminRequestViewModel: ObservableObject {
         guard fatherId != nil else {
             errorMessage = L10n.t("هذا الحساب غير مربوط بالشجرة. اربطه بسجله الصحيح من «ربط بالشجرة»، أو أضِفه تحت أبيه أولاً.",
                                   "This account isn't linked to the tree. Link it to its record with «Link to tree», or add it under its father first.")
-            return
+            return false
         }
+        nonisolated struct UpdatedRow: Decodable { let id: UUID }
+        // «معلّق» يصير «عضواً» (كما في تفعيل الرقم) — لا يُمسّ دور أحد الإدارة
+        let localRole = memberById(memberId)?.role
+        let promotesRole = localRole == .pending || (approvingJoin && localRole == nil)
         do {
-            try await supabase
-                .from("profiles")
-                .update(["status": AnyEncodable("active")])
-                .eq("id", value: memberId.uuidString)
+            var payload: [String: AnyEncodable] = ["status": AnyEncodable("active")]
+            if promotesRole { payload["role"] = AnyEncodable("member") }
+            if approvingJoin { payload["is_hidden_from_tree"] = AnyEncodable(false) }
+            // نطلب الصف المحدَّث: صفر صفوف = رفضه حارس السيرفر بلا خطأ — لا يُحسب تفعيلاً
+            let updated: [UpdatedRow]
+            if approvingJoin {
+                // المجمّد لا يُفك تجميده بقبول جماعي
+                updated = try await supabase
+                    .from("profiles")
+                    .update(payload)
+                    .eq("id", value: memberId.uuidString)
+                    .or("status.is.null,status.neq.frozen")
+                    .select("id")
+                    .execute()
+                    .value
+            } else {
+                updated = try await supabase
+                    .from("profiles")
+                    .update(payload)
+                    .eq("id", value: memberId.uuidString)
+                    .select("id")
+                    .execute()
+                    .value
+            }
+            guard !updated.isEmpty else {
+                Log.warning("لم يتفعّل الحساب (0 صفوف): \(memberId)")
+                errorMessage = L10n.t("تعذّر تفعيل الحساب — ربما عولج من قبل أو ليس لديك صلاحية.",
+                                      "Couldn't activate the account — it may have been handled already, or you lack permission.")
+                return false
+            }
+
+            // طلب الانضمام/الربط المعلّق يُغلق مع التفعيل
+            _ = try? await supabase
+                .from("admin_requests")
+                .update(["status": AnyEncodable(ApprovalStatus.approved.rawValue)])
+                .eq("member_id", value: memberId.uuidString)
+                .in("request_type", values: [RequestType.joinRequest.rawValue, RequestType.linkRequest.rawValue])
+                .eq("status", value: ApprovalStatus.pending.rawValue)
                 .execute()
 
             // Update local data through memberVM
             if let index = memberVM?.allMembers.firstIndex(where: { $0.id == memberId }) {
                 memberVM?.allMembers[index].status = .active
+                if promotesRole { memberVM?.allMembers[index].role = .member }
+                if approvingJoin { memberVM?.allMembers[index].isHiddenFromTree = false }
                 memberVM?.objectWillChange.send()
+            }
+
+            if approvingJoin {
+                // نفس إشعار قبول الانضمام (العضو + الإدارة)
+                await notifyJoinApproval(memberId: memberId, fatherName: fatherId.flatMap { memberById($0)?.fullName })
+                return true
             }
 
             let memberName = getSafeMemberName(for: memberId)
@@ -1545,14 +1646,22 @@ class AdminRequestViewModel: ObservableObject {
                 kind: "account_activated",
                 subjectMemberId: memberId
             )
+            return true
         } catch {
             Log.error("فشل تفعيل الحساب: \(error.localizedDescription)")
+            errorMessage = L10n.t("تعذّر تفعيل الحساب. حاول مرة أخرى.", "Couldn't activate the account. Try again.")
+            return false
         }
     }
 
     /// Approve a new member and activate their account with father linkage
     func approveMember(memberId: UUID, fatherId: UUID?) async {
         guard canModerate else { Log.warning("قبول العضو مرفوض: لا صلاحية"); return }
+        // الأنثى لا تُكتب تحت أب في شجرة الرجال — «ربط بشجرة النساء»
+        if memberById(memberId)?.isFemale == true {
+            errorMessage = Self.womenOneByOneMessage
+            return
+        }
         self.isLoading = true
         let fatherName = fatherId.flatMap { id in
             memberById(id)?.fullName
@@ -1612,6 +1721,11 @@ class AdminRequestViewModel: ObservableObject {
             self.mergeResult = .failure(L10n.t("لا يمكن دمج العضو مع نفسه.", "Cannot merge a member with itself."))
             return
         }
+        // «ربط بالشجرة» لملفات الرجال فقط — حساب الأنثى يُربط بعقدتها في شجرة النساء
+        if memberById(newMemberId)?.isFemale == true {
+            self.mergeResult = .failure(Self.womenOneByOneMessage)
+            return
+        }
 
         Log.info("[MERGE] بدء الدمج: \(newMemberId) ← \(existingTreeMemberId)")
         self.isLoading = true
@@ -1667,6 +1781,124 @@ class AdminRequestViewModel: ObservableObject {
         }
 
         self.isLoading = false
+    }
+
+    // MARK: - دخول النساء (طلب المالك ٢٠٢٦-١٠-٢٤): ربط طلب انضمام أنثى بعقدتها في شجرة النساء
+
+    /// طلب الأنثى لا يمرّ بالتفعيل أو «ربط بالشجرة» أو القبول الجماعي
+    static var womenOneByOneMessage: String {
+        L10n.t("النساء يُربطن واحدة واحدة من «ربط بشجرة النساء».",
+               "Women are linked one at a time with «Link to women's tree».")
+    }
+
+    /// طلب الانضمام/الربط المعلّق + الأب الذي اختارته في التسجيل (`|father_id:…|father_name:…` في `details`)
+    struct WomanJoinRequestInfo {
+        let requestId: UUID
+        let fatherId: UUID?
+        let fatherName: String?
+    }
+
+    /// يقرأ أحدث طلب انضمام/ربط معلّق للعضو — nil = لا طلب أو تعذّرت القراءة
+    func fetchWomanJoinRequest(for memberId: UUID) async -> WomanJoinRequestInfo? {
+        nonisolated struct Row: Decodable { let id: UUID; let details: String? }
+        do {
+            let rows: [Row] = try await supabase
+                .from("admin_requests")
+                .select("id, details")
+                .eq("member_id", value: memberId.uuidString)
+                .in("request_type", values: [RequestType.linkRequest.rawValue, RequestType.joinRequest.rawValue])
+                .eq("status", value: ApprovalStatus.pending.rawValue)
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+                .value
+            guard let row = rows.first else { return nil }
+            let fields = Self.joinDetailFields(row.details)
+            let name = fields["father_name"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return WomanJoinRequestInfo(requestId: row.id,
+                                        fatherId: fields["father_id"].flatMap { UUID(uuidString: $0) },
+                                        fatherName: (name?.isEmpty == false) ? name : nil)
+        } catch {
+            Log.warning("[WomenLink] تعذّرت قراءة طلب الانضمام: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// حقول `details` بصيغة «نص|مفتاح:قيمة|مفتاح:قيمة» (التسجيل)
+    static func joinDetailFields(_ details: String?) -> [String: String] {
+        var out: [String: String] = [:]
+        for part in (details ?? "").split(separator: "|") {
+            guard let colon = part.firstIndex(of: ":") else { continue }
+            let key = part[..<colon].trimmingCharacters(in: .whitespaces)
+            let value = part[part.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            if !key.isEmpty { out[key] = value }
+        }
+        return out
+    }
+
+    /// `link_woman_account`: بعقدة موجودة (`womanId`) أو بنت جديدة باسم `name` تحت `fatherId`.
+    /// السيرفر يفعّل الحساب ويغلق الطلب ويُدرج «مرحباً بك في العائلة». يرجّع nil عند النجاح أو رسالة الخطأ.
+    func linkWomanAccount(requestId: UUID, memberId: UUID, womanId: UUID?, fatherId: UUID?, name: String?) async -> String? {
+        guard NetworkMonitor.shared.requireOnline() else {
+            return L10n.t("لا يوجد اتصال بالإنترنت.", "No internet connection.")
+        }
+        guard authVM?.canApproveTreeRequests == true else {
+            return Self.womanLinkMessage("not_allowed")
+        }
+        let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // المفاتيح الأربعة دائماً — الفارغ null
+        let params: [String: AnyEncodable] = [
+            "p_request_id": AnyEncodable(requestId.uuidString),
+            "p_woman_id": AnyEncodable(womanId?.uuidString),
+            "p_father_id": AnyEncodable(womanId == nil ? fatherId?.uuidString : Optional<String>.none),
+            "p_name": AnyEncodable(womanId == nil ? trimmedName : Optional<String>.none)
+        ]
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await supabase.rpc("link_woman_account", params: params).execute()
+            Log.info("[WomenLink] ✅ رُبط حساب \(memberId.uuidString.prefix(8)) بشجرة النساء")
+            // الطلب يختفي فوراً من «الوارد» (طلبات الانضمام = الدور «معلّق»)
+            if let index = memberVM?.allMembers.firstIndex(where: { $0.id == memberId }) {
+                memberVM?.allMembers[index].role = .member
+                memberVM?.allMembers[index].status = .active
+                memberVM?.allMembers[index].isHiddenFromTree = true
+                memberVM?.objectWillChange.send()
+            }
+            await memberVM?.fetchAllMembers(force: true)
+            _ = try? await WomenStore.fetch()
+            NotificationCenter.default.post(name: .womenMembersChanged, object: nil)
+            return nil
+        } catch {
+            let hint = (error as? PostgrestError)?.hint ?? ""
+            Log.error("[WomenLink] ❌ فشل الربط (\(hint)): \(error.localizedDescription)")
+            return Self.womanLinkMessage(hint)
+        }
+    }
+
+    /// رسائل `link_woman_account` بالـ hint
+    static func womanLinkMessage(_ hint: String) -> String {
+        switch hint {
+        case "not_allowed":
+            return L10n.t("ربط النساء للمالك والمدير والمراقب.", "Linking women is for the owner, admins and monitors.")
+        case "request_not_found", "already_handled":
+            return alreadyHandledMessage
+        case "not_female":
+            return L10n.t("صاحب الطلب ليس مسجّلاً كأنثى.", "The applicant isn't registered as female.")
+        case "has_father":
+            return L10n.t("الحساب مربوط بشجرة الرجال (له أب أو أبناء) — صحّحه أولاً.",
+                          "The account is tied to the men's tree (has a father or children) — fix it first.")
+        case "node_taken":
+            return L10n.t("هذا الاسم مربوط بحساب آخر.", "This name is linked to another account.")
+        case "not_female_node":
+            return L10n.t("هذا الاسم ليس أنثى في شجرة النساء.", "This name isn't a female in the women's tree.")
+        case "no_father":
+            return L10n.t("الأب غير موجود في الشجرة — اختر الأب.", "The father isn't in the tree — choose the father.")
+        case "name_required":
+            return L10n.t("اكتب اسمها.", "Type her name.")
+        default:
+            return L10n.t("تعذّر الربط. حاول مرة أخرى.", "Couldn't link. Try again.")
+        }
     }
 
     private func notifyJoinApproval(memberId: UUID, fatherName: String?) async {
@@ -1785,22 +2017,50 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
-    /// Reject a join request or permanently delete a member
-    func rejectOrDeleteMember(memberId: UUID) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
+    /// رفض طلب انضمام أو حذف عضو نهائياً — ينتظر الحذف ويرجّع true إذا حُذف فعلاً.
+    /// إشعار «لم تتم الموافقة على طلب انضمامك» لطلب انضمام معلّق فقط (لا لعضو حقيقي يُحذف)
+    @discardableResult
+    func rejectOrDeleteMember(memberId: UUID) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         guard authVM?.canDeleteMembers == true else {
             Log.error("تم رفض حذف السجل: الصلاحية للمالك فقط")
             self.errorMessage = L10n.t("ليس لديك صلاحية لرفض الطلبات.", "You don't have permission to reject requests.")
-            return
+            return false
         }
         // لا يُحذف المالك ولا سجلك أنت (السيرفر يرفضهما أيضاً — فحص الثغرات)
         if memberId == currentUser?.id || memberById(memberId)?.role == .owner {
             self.errorMessage = L10n.t("لا يمكن حذف هذا السجل.", "This record can't be deleted.")
-            return
+            return false
         }
 
-        // حذف فوري محلياً — ثم API بالخلفية
-        let deletedName = memberById(memberId)?.fourPartName ?? "عضو"
+        let target = memberById(memberId)
+        let deletedName = target?.fourPartName ?? "عضو"
+        // طلب انضمام معلّق (دوره «معلّق» — نفس قائمة طلبات الانضمام) — وحده يُبلَّغ بالرفض.
+        // لا يُعتمد status: أعضاء الشجرة بلا دخول حالتهم التاريخية «معلّق»
+        let isPendingJoin = target?.role == .pending
+
+        // إشعار الرفض يُدرج قبل الحذف: صف الإشعار وأجهزة المتقدّم تُحذف مع ملفه (CASCADE)، فلا يصله شيء
+        // بعده. الإدراج يُطلق الدفع فوراً — لطلب انضمام معلّق فقط، ويُسحب الصف إن فشل الحذف
+        var rejectNotifId: UUID? = nil
+        if isPendingJoin, let creator = currentUser?.id {
+            let notifId = UUID()
+            let rejectNotif: [String: AnyEncodable] = [
+                "id": AnyEncodable(notifId.uuidString),
+                "target_member_id": AnyEncodable(memberId.uuidString),
+                "title": AnyEncodable(L10n.t("طلب الانضمام", "Join Request")),
+                "body": AnyEncodable(L10n.t(
+                    "لم تتم الموافقة على طلب انضمامك — تواصل مع إدارة العائلة",
+                    "Your join request was not approved — please contact the family administration"
+                )),
+                "kind": AnyEncodable("request_rejected"),
+                "created_by": AnyEncodable(creator.uuidString)
+            ]
+            if (try? await supabase.from("notifications").insert(rejectNotif).execute()) != nil {
+                rejectNotifId = notifId
+            }
+        }
+
+        // حذف فوري محلياً — يُستعاد من السيرفر إن فشل
         withAnimation(.snappy(duration: 0.25)) {
             memberVM?.allMembers.removeAll(where: { $0.id == memberId })
             memberVM?.currentMemberChildren.removeAll(where: { $0.id == memberId })
@@ -1808,59 +2068,62 @@ class AdminRequestViewModel: ObservableObject {
             memberVM?.objectWillChange.send()
         }
 
-        Task { [weak self] in
-            // إشعار المتقدّم المرفوض قبل حذف ملفه — الإدراج يُطلق push تلقائياً عبر
-            // trigger على جدول notifications. (الصف نفسه سيُحذف مع الملف [cascade]،
-            // لكن الدفع يخرج لحظة الإدراج فيصل المتقدّم على جهازه.)
-            if let creator = self?.currentUser?.id {
-                let rejectNotif: [String: AnyEncodable] = [
-                    "target_member_id": AnyEncodable(memberId.uuidString),
-                    "title": AnyEncodable(L10n.t("طلب الانضمام", "Join Request")),
-                    "body": AnyEncodable(L10n.t(
-                        "لم تتم الموافقة على طلب انضمامك — تواصل مع إدارة العائلة",
-                        "Your join request was not approved — please contact the family administration"
-                    )),
-                    "kind": AnyEncodable("request_rejected"),
-                    "created_by": AnyEncodable(creator.uuidString)
-                ]
-                _ = try? await self?.supabase.from("notifications").insert(rejectNotif).execute()
+        nonisolated struct DeletedRow: Decodable { let id: UUID }
+        do {
+            // الحذف أولاً — السيرفر يحذف طلبات العضو وإشعاراته تلقائياً (ON DELETE)، ويرفض حذف من له
+            // أبناء/زوجة مرتبطون (حماية روابط العائلة). نطلب الصف المحذوف: صفر صفوف = لم يُحذف
+            let deleted: [DeletedRow] = try await supabase
+                .from("profiles")
+                .delete()
+                .eq("id", value: memberId.uuidString)
+                .select("id")
+                .execute()
+                .value
+            guard !deleted.isEmpty else {
+                Log.warning("لم يُحذف العضو (0 صفوف): \(memberId)")
+                await undoRejectNotification(rejectNotifId)
+                await memberVM?.fetchAllMembers(force: true)
+                errorMessage = L10n.t("تعذّر حذف العضو — ربما حُذف من قبل أو ليس لديك صلاحية.",
+                                      "Couldn't delete the member — it may already be gone, or you lack permission.")
+                return false
             }
 
-            do {
-                // الحذف أولاً — السيرفر يفرّغ father_id للأبناء ويحذف طلبات العضو
-                // تلقائياً (ON DELETE). كان التفريغ يسبق الحذف فيبقى الأبناء بلا أب لو فشل.
-                try await self?.supabase
-                    .from("profiles")
-                    .delete()
-                    .eq("id", value: memberId.uuidString)
-                    .execute()
+            _ = try? await supabase
+                .from("admin_requests")
+                .delete()
+                .eq("requester_id", value: memberId.uuidString)
+                .execute()
 
-                _ = try? await self?.supabase
-                    .from("admin_requests")
-                    .delete()
-                    .eq("requester_id", value: memberId.uuidString)
-                    .execute()
-
-                await self?.notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("حذف عضو", "Member Removed"),
-                    body: L10n.t(
-                        "تم حذف عضو من شجرة العائلة\n\(deletedName)",
-                        "Removed from the family tree\n\(deletedName)"
-                    ),
-                    kind: "member_delete"
+            await notificationVM?.notifyAdminsWithPush(
+                title: L10n.t("حذف عضو", "Member Removed"),
+                body: L10n.t(
+                    "تم حذف عضو من شجرة العائلة\n\(deletedName)",
+                    "Removed from the family tree\n\(deletedName)"
+                ),
+                kind: "member_delete"
+            )
+            Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
+            return true
+        } catch {
+            Log.error("خطأ في الحذف: \(error.localizedDescription)")
+            await undoRejectNotification(rejectNotifId)
+            await memberVM?.fetchAllMembers(force: true)
+            if let pgError = error as? PostgrestError, pgError.hint == "family_links_protected" {
+                errorMessage = pgError.message
+            } else {
+                errorMessage = L10n.t(
+                    "فشل حذف العضو: \(error.localizedDescription)",
+                    "Failed to delete member: \(error.localizedDescription)"
                 )
-                Log.info("تم حذف العضو مع تنظيف المراجع المرتبطة بنجاح")
-            } catch {
-                Log.error("خطأ في الحذف: \(error.localizedDescription)")
-                await self?.memberVM?.fetchAllMembers(force: true)
-                await MainActor.run {
-                    self?.errorMessage = L10n.t(
-                        "فشل حذف العضو: \(error.localizedDescription)",
-                        "Failed to delete member: \(error.localizedDescription)"
-                    )
-                }
             }
+            return false
         }
+    }
+
+    /// فشل حذف المتقدّم: صف إشعار الرفض الذي أُدرج قبله يُسحب (الدفع نفسه خرج لحظة الإدراج)
+    private func undoRejectNotification(_ id: UUID?) async {
+        guard let id else { return }
+        _ = try? await supabase.from("notifications").delete().eq("id", value: id.uuidString).execute()
     }
 
     /// حذف نهائي لصف طلب من جدول admin_requests — يمسح الطلب كلياً من قاعدة البيانات

@@ -40,6 +40,11 @@ private struct WomenRow: Decodable {
     }
 }
 
+/// فشل كتابة برسالة جاهزة للمستخدم (نداء رجع بلا نتيجة، أو رسالة من الـ ViewModel) — يعرضها `failureMessage`
+struct WomenWriteFailure: Error {
+    let message: String
+}
+
 /// طبقة بيانات شجرة النساء — قراءة/إضافة/تعديل/حذف (الكتابة للإدارة عبر RLS).
 enum WomenStore {
     /// كاش بالذاكرة — يخلي الانتقال لتبويب التفرّع فورياً (بلا إعادة جلب كل مرة).
@@ -47,6 +52,12 @@ enum WomenStore {
     /// ربط حساب التطبيق ↔ اسم في شجرة النساء (مرجع إداري + زر موقعي).
     static var womanByLinkedUser: [UUID: UUID] = [:]   // userId → womanId
     static var linkedUserByWoman: [UUID: UUID] = [:]   // womanId → userId
+
+    /// عقدة حساب المرأة في شجرة النساء (`linked_user_id` = معرّف حسابها) — من آخر جلب؛ nil = غير مربوطة بعد
+    static func node(forAccount userId: UUID) -> FamilyMember? {
+        guard let womanId = womanByLinkedUser[userId] else { return nil }
+        return cache.first { $0.id == womanId }
+    }
 
     static func fetch() async throws -> [FamilyMember] {
         // سجلّات «الموقع فقط» لا وجود لها في التطبيق — تُستبعد على السيرفر
@@ -94,11 +105,12 @@ enum WomenStore {
     static func addChild(parentId: UUID, name: String, sortOrder: Int,
                          gender: String = "male", parentFullName: String = "",
                          birthDate: String? = nil, isDeceased: Bool = false,
-                         deathDate: String? = nil, isMarried: Bool = false) async throws {
+                         deathDate: String? = nil, isMarried: Bool = false,
+                         motherId: UUID? = nil) async throws {
         // تسلسل الاسم: «الاسم + اسم الأب الكامل» (مثل الشجرة العامة).
         let chained = parentFullName.trimmingCharacters(in: .whitespaces).isEmpty
             ? name : "\(name) \(parentFullName)"
-        let payload: [String: AnyEncodable] = [
+        var payload: [String: AnyEncodable] = [
             "first_name": AnyEncodable(name),
             "full_name": AnyEncodable(chained),
             "parent_id": AnyEncodable(parentId.uuidString),
@@ -109,7 +121,33 @@ enum WomenStore {
             "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
             "is_married": AnyEncodable(gender == "female" && isMarried)
         ]
+        // ابن/ابنة امرأة متزوجة من العائلة: الأب زوجها والأم هي (كان الأب = المرأة فيتكرّر الفرع تحتها)
+        if let motherId { payload["mother_id"] = AnyEncodable(motherId.uuidString) }
         try await SupabaseConfig.client.from("women_members").insert(payload).execute()
+    }
+
+    /// إضافة ابن/ابنة عبر السيرفر (`add_family_child`): الذكر يُكتب في الشجرة العامة (profiles) وينعكس
+    /// لشجرة النساء بنفس المعرّف، والأنثى في شجرة النساء وحدها. كان «إضافة ابن» من شجرة النساء يكتب
+    /// الذكر في women_members مباشرة فلا يظهر في شجرة العائلة أبداً (المزامنة باتجاه واحد).
+    /// السيرفر: المالك/المدير/المراقب لأي أب، والعضو لعقدته هو فقط. يرجّع معرّف الفرد الجديد.
+    @discardableResult
+    static func addFamilyChild(parentId: UUID, name: String, gender: String,
+                               birthDate: String?, sortOrder: Int,
+                               parentFullName: String) async throws -> UUID {
+        // مفاتيح فارغة تُرسل null صريحة — وإلا نقص توقيع الدالة على السيرفر
+        let params: [String: AnyEncodable] = [
+            "p_parent_id": AnyEncodable(parentId.uuidString),
+            "p_name": AnyEncodable(name),
+            "p_gender": AnyEncodable(gender),
+            "p_birth": AnyEncodable(birthDate),
+            "p_deceased": AnyEncodable(false),
+            "p_death": AnyEncodable(Optional<String>.none),
+            "p_sort": AnyEncodable(sortOrder),
+            "p_parent_full_name": AnyEncodable(parentFullName)
+        ]
+        let newId: UUID = try await SupabaseConfig.client
+            .rpc("add_family_child", params: params).execute().value
+        return newId
     }
 
     /// إضافة زوجة لعقدة (تظهر كشارة على الزوج) — أنثى husband_id = العقدة.
@@ -130,12 +168,14 @@ enum WomenStore {
         try await SupabaseConfig.client.from("women_members").insert(payload).execute()
     }
 
-    /// إضافة أمّ لعقدة — تُنشئ أنثى ثم تربطها mother_id بالعقدة.
-    static func addMother(childId: UUID, name: String, birthDate: String? = nil,
+    /// إضافة أمّ لعقدة — تُنشئ أنثى (زوجةً للأب `husbandId` إن عُرف) ثم تربطها mother_id بالعقدة.
+    /// بلا زوج كانت الأم تظهر جذراً مستقلاً في أعلى الشجرة (ليست بنتاً لأحد ولا زوجة لأحد).
+    static func addMother(childId: UUID, name: String, husbandId: UUID? = nil,
+                          birthDate: String? = nil,
                           isDeceased: Bool = false, deathDate: String? = nil,
                           isMarried: Bool = false) async throws {
         struct InsertedRow: Decodable { let id: UUID }
-        let payload: [String: AnyEncodable] = [
+        var payload: [String: AnyEncodable] = [
             "first_name": AnyEncodable(name),
             "full_name": AnyEncodable(name),
             "gender": AnyEncodable("female"),
@@ -145,12 +185,25 @@ enum WomenStore {
             "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
             "is_married": AnyEncodable(isMarried)
         ]
+        if let husbandId {
+            payload["husband_id"] = AnyEncodable(husbandId.uuidString)
+            payload["is_married"] = AnyEncodable(true)
+        }
         let rows: [InsertedRow] = try await SupabaseConfig.client.from("women_members")
             .insert(payload).select("id").execute().value
-        guard let newId = rows.first?.id else { return }
-        try await SupabaseConfig.client.from("women_members")
-            .update(["mother_id": AnyEncodable(newId.uuidString)])
-            .eq("id", value: childId.uuidString).execute()
+        // بلا معرّف راجع = لم تُنشأ — خطأ لا نجاح صامت
+        guard let newId = rows.first?.id else {
+            throw WomenWriteFailure(message: L10n.t("لم تُحفظ الأم. حاول مرة أخرى.", "The mother wasn't saved. Try again."))
+        }
+        do {
+            try await SupabaseConfig.client.from("women_members")
+                .update(["mother_id": AnyEncodable(newId.uuidString)])
+                .eq("id", value: childId.uuidString).execute()
+        } catch {
+            // فشل الربط → لا نترك أمّاً يتيمة بلا ابن (أفضل جهد، والخطأ الأصلي يُعرض)
+            try? await SupabaseConfig.client.from("women_members").delete().eq("id", value: newId.uuidString).execute()
+            throw error
+        }
     }
 
     static func update(id: UUID, fullName: String, isDeceased: Bool, deathDate: String?,
@@ -167,6 +220,18 @@ enum WomenStore {
         ]
         if let gender { payload["gender"] = AnyEncodable(gender) }
         try await SupabaseConfig.client.from("women_members").update(payload).eq("id", value: id.uuidString).execute()
+    }
+
+    /// ذكر من الشجرة العامة معروض هنا بنفس المعرّف: الوفاة والتواريخ تُكتب في `profiles` أيضاً — المزامنة
+    /// باتجاه واحد (profiles → women_members)، فالكتابة هنا وحدها لا تظهر في شجرة العائلة وتمحوها المزامنة لاحقاً
+    static func updateMirroredProfileLife(id: UUID, isDeceased: Bool, deathDate: String?,
+                                          birthDate: String?) async throws {
+        let payload: [String: AnyEncodable] = [
+            "is_deceased": AnyEncodable(isDeceased),
+            "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
+            "birth_date": AnyEncodable(birthDate)
+        ]
+        try await SupabaseConfig.client.from("profiles").update(payload).eq("id", value: id.uuidString).execute()
     }
 
     /// تعليم/إلغاء «متزوجة» — تُستبعد من مرشّحات الزوجة عند التعليم.
@@ -216,6 +281,25 @@ enum WomenStore {
         try await SupabaseConfig.client
             .rpc("add_self_mother", params: ["p_name": AnyEncodable(name)]).execute()
     }
+    /// ربط أنثى موجودة زوجةً للعضو نفسه (RPC set_self_wife — مقيّدة على عقدته).
+    static func setSelfWife(wifeId: UUID) async throws {
+        try await SupabaseConfig.client
+            .rpc("set_self_wife", params: ["p_wife_id": AnyEncodable(wifeId.uuidString)]).execute()
+    }
+    /// «إضافة أخت» — بنت جديدة تحت أبي العضو نفسه (RPC add_or_link_self_relative، طلب المالك ٢٠٢٦-١٠-٢٤:
+    /// الأخت تُضاف من الشجرة فقط لا من الملف الشخصي). المفاتيح الأربعة كلها تُرسل (null صريحة).
+    @discardableResult
+    static func addSelfSister(fatherId: UUID, name: String) async throws -> UUID {
+        let params: [String: AnyEncodable] = [
+            "p_kind": AnyEncodable("sister"),
+            "p_father_id": AnyEncodable(fatherId.uuidString),
+            "p_woman_id": AnyEncodable(Optional<String>.none),
+            "p_name": AnyEncodable(name)
+        ]
+        let newId: UUID = try await SupabaseConfig.client
+            .rpc("add_or_link_self_relative", params: params).execute().value
+        return newId
+    }
     static func setSelfMother(motherId: UUID?) async throws {
         try await SupabaseConfig.client
             .rpc("set_self_mother", params: ["p_mother_id": AnyEncodable(motherId?.uuidString)]).execute()
@@ -224,7 +308,25 @@ enum WomenStore {
     /// نص خطأ الكتابة للمستخدم (م-٢ فحص ٢٠٢٦-١٠-٠٧): رسالة السيرفر العربية حين يرفض حارس روابط العائلة
     /// الحذف (`hint = family_links_protected`، كما في شجرة العائلة) — وإلا رسالة عامة
     static func failureMessage(_ error: Error) -> String {
-        if let pg = error as? PostgrestError, pg.hint == "family_links_protected" { return pg.message }
+        if let failure = error as? WomenWriteFailure { return failure.message }
+        if let pg = error as? PostgrestError {
+            switch pg.hint ?? "" {
+            case "family_links_protected": return pg.message
+            // أخطاء «إضافة أخت» (add_or_link_self_relative)
+            case "no_own_father", "no_father":
+                return L10n.t("أبوك غير مسجّل في الشجرة — اطلب ربطك من الإدارة.",
+                              "Your father isn't in the tree — ask the administration to link you.")
+            case "not_daughter":
+                return L10n.t("الأخت تُضاف تحت أبيك أنت فقط.", "A sister can only be added under your own father.")
+            case "name_required":
+                return L10n.t("اكتب الاسم.", "Enter the name.")
+            case "not_allowed":
+                return L10n.t("حسابك غير مفعّل بعد.", "Your account isn't active yet.")
+            case "no_node":
+                return L10n.t("لا توجد لك عقدة في الشجرة بعد.", "You don't have a node in the tree yet.")
+            default: break
+            }
+        }
         return L10n.t("لم يتم الحفظ. تحقّق من الاتصال وحاول مرة أخرى.",
                       "Not saved. Check your connection and try again.")
     }

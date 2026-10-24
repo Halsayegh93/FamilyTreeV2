@@ -299,6 +299,9 @@ struct DSComposer<Content: View>: View {
     /// «رفض» و«حذف نهائي» في تفاصيل الطلب (طلب المالك ٢٠٢٦-١٠-٠٧ «أدمج أزرار الإجراءات مع بوكس
     /// العمل»). فارغ = الشريط كما كان.
     var extraActions: [DSComposerAction] = []
+    /// الإجراء بعرض الشريط في صفّ وحده و«إلغاء» تحته — لنصّ إجراء يقول بالضبط ما سيحدث
+    /// («أرسل الحين ← 32 عضو»، منشئ الإعلان، الدفعة ١١). false = الزرّان جنباً إلى جنب كما كانا
+    var actionFullRow: Bool = false
     let onSubmit: () -> Void
     let onCancel: () -> Void
     @ViewBuilder let content: () -> Content
@@ -394,11 +397,19 @@ struct DSComposer<Content: View>: View {
                 .buttonStyle(DSPressStyle())
             }
             // صفّ الأزرار بمواصفة `DSBox` الواحدة (نفس أزرار التنبيه والبطاقات)
-            HStack(spacing: DSBox.buttonSpacing) {
-                if showsAction { actionButton }
-                cancelButton
+            if actionFullRow && showsAction {
+                VStack(spacing: DSBox.buttonSpacing) {
+                    actionButton
+                    cancelButton
+                }
+                .buttonStyle(DSPressStyle())
+            } else {
+                HStack(spacing: DSBox.buttonSpacing) {
+                    if showsAction { actionButton }
+                    cancelButton
+                }
+                .buttonStyle(DSPressStyle())
             }
-            .buttonStyle(DSPressStyle())
         }
         // الأزرار آخر التسلسل: تصعد قليلاً مع تلاشٍ (والشريط نفسه ثابت)
         .opacity(footerIn ? 1 : 0)
@@ -432,8 +443,9 @@ struct DSComposer<Content: View>: View {
                     .opacity(actionEnabled ? 1 : DSActionFill.labelDisabledOpacity)
             }
             .foregroundColor(DSActionFill.label())
-            // نفس نص الزرّ الواحد: سطر يصغر بدل الالتفاف والقصّ، والارتفاع ٤٤ حدّ أدنى يكبر مع الخط (ن-٥)
-            .dsButtonLabelFit()
+            // نفس نص الزرّ الواحد: سطر يصغر بدل الالتفاف والقصّ، والارتفاع ٤٤ حدّ أدنى يكبر مع الخط (ن-٥).
+            // الإجراء بعرض الشريط (نصّ يقول ما سيحدث) يلتفّ حتى ٣ أسطر مع الخط الكبير جداً بدل أن يُقصّ
+            .modifier(DSComposerActionLabelFit(wraps: actionFullRow))
             .frame(maxWidth: .infinity).frame(minHeight: DSBox.buttonHeight)
             // نفس DSActionFill.style(enabled:) — لكن الشفافية على الطبقة فتتحرّك بسلاسة
             // (الشكل من الهيكل الموحّد `DSBox` — نفس زرّ التنبيه)
@@ -503,6 +515,23 @@ struct DSComposer<Content: View>: View {
             withAnimation(DSMotion.footer.delay(DSMotion.footerDelay(lastSection: lastSection))) {
                 footerIn = true
             }
+        }
+    }
+}
+
+/// نصّ زرّ الإجراء: سطر يصغر (`dsButtonLabelFit`)، أو — بعرض الشريط — يلتفّ حتى ٣ أسطر في الوسط
+private struct DSComposerActionLabelFit: ViewModifier {
+    let wraps: Bool
+    func body(content: Content) -> some View {
+        if wraps {
+            content
+                .lineLimit(3)
+                .minimumScaleFactor(DSBox.buttonLabelMinScale)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, DS.Spacing.xs)
+        } else {
+            content.dsButtonLabelFit()
         }
     }
 }
@@ -808,6 +837,8 @@ struct DSComposerField: View {
     @Binding var text: String
     var tint: Color = DS.Color.primary
     var multiline: Bool = false
+    /// أسطر الحقل متعدد الأسطر (يكبر بالكتابة حتى الحد الأعلى)
+    var lines: ClosedRange<Int> = 1...4
     var limit: Int? = nil
     var keyboard: UIKeyboardType = .default
     var ltr: Bool = false
@@ -866,7 +897,7 @@ struct DSComposerField: View {
                 }
                 Group {
                     if multiline {
-                        TextField(placeholder, text: $text, axis: .vertical).lineLimit(1...4)
+                        TextField(placeholder, text: $text, axis: .vertical).lineLimit(lines)
                     } else {
                         TextField(placeholder, text: $text)
                     }
@@ -1430,6 +1461,7 @@ private struct DSCenterBoxItemModifier<Item: Identifiable, Box: View>: ViewModif
     @Binding var item: Item?
     var onDismiss: (() -> Void)?
     var onBackgroundTap: (() -> Void)?
+    var dim: Double = DSCenterPanelDim.standard
     let box: (Item) -> Box
     /// لون قسم الواجهة التي فتحت المربّع — يُعاد وضعه داخل المربّع
     @Environment(\.dsSection) private var section
@@ -1440,7 +1472,7 @@ private struct DSCenterBoxItemModifier<Item: Identifiable, Box: View>: ViewModif
             // حركة المجسّمات خلف المربّع المفتوح تسكن (كما في `dsCenterBox(isPresented:)`)
             .environment(\.ftAnimationsPaused, pausedAbove || item != nil)
             .fullScreenCover(item: $item, onDismiss: onDismiss) { value in
-                DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true) { box(value) }
+                DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true, dim: dim) { box(value) }
                     .dsSection(section ?? AppSection.current)
                     .background(ClearPresentationBackground())
             }
@@ -1462,9 +1494,10 @@ extension View {
     func dsCenterBox<Item: Identifiable, Box: View>(item: Binding<Item?>,
                                                     onDismiss: (() -> Void)? = nil,
                                                     onBackgroundTap: (() -> Void)? = nil,
+                                                    dim: Double = DSCenterPanelDim.standard,
                                                     @ViewBuilder content: @escaping (Item) -> Box) -> some View {
         modifier(DSCenterBoxItemModifier(item: item, onDismiss: onDismiss,
-                                         onBackgroundTap: onBackgroundTap, box: content))
+                                         onBackgroundTap: onBackgroundTap, dim: dim, box: content))
     }
 }
 

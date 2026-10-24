@@ -13,13 +13,22 @@ struct TreeTabContainer: View {
     /// واختفى الشريط الذي ضُغط عليه لحظة — التبديل يبقى تلاشياً متقاطعاً كما هو.
     @State private var chromeAppeared = false
     @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
+    @EnvironmentObject private var authVM: AuthViewModel
+    /// اختير التبويب الافتراضي مرة (حساب المرأة يبدأ بشجرة النساء — دخول النساء ٢٠٢٦-١٠-٢٤)
+    @State private var pickedDefaultTab = false
+    /// «شجرة النساء» من قسم «العائلة» في لوحة الإدارة (٢٠٢٦-١٠-٢٠) — يُقرأ عند ظهور التبويب إن لم يكن حياً
+    static var openWomenOnAppear = false
 
     /// «شجرة النساء» ظاهرة؟ — مفتاح في «الإدارة ← إعدادات التطبيق ← الميزات» (طلب المالك ٢٠٢٦-١٠-٠٧)
     private var womenTreeEnabled: Bool { appSettingsVM.settings.womenTreeEnabled ?? true }
 
+    /// حساب امرأة: موقعها في شجرة النساء لا شجرة الرجال
+    private var isWomanAccount: Bool { authVM.currentUser?.isWomanAccount ?? false }
+
     var body: some View {
         Group {
-            if treeTab == 1 && womenTreeEnabled {
+            // أول رسم قبل `onAppear`: حساب المرأة يرى النساء مباشرة بلا ومضة شجرة الرجال
+            if (treeTab == 1 || (!pickedDefaultTab && isWomanAccount)) && womenTreeEnabled {
                 WomenTreeView(selectedTab: $selectedTab, treeTab: $treeTab)
             } else {
                 // مخفية: شجرة العائلة وحدها بلا مبدّل «العائلة/النساء»
@@ -34,8 +43,21 @@ struct TreeTabContainer: View {
         // قسم الشجرة دائماً (العُدّة المشتركة تأخذ لونها من البيئة — هنا مرة لكل الشجرتين)
         .dsSection(.tree)
         .onAppear {
+            if !pickedDefaultTab {
+                pickedDefaultTab = true
+                // حساب المرأة يبدأ بشجرة النساء (والشجرة تتمركز على عقدتها — `autoLocate`)، والرجال كما كانوا
+                if isWomanAccount && womenTreeEnabled { treeTab = 1 }
+            }
+            if Self.openWomenOnAppear {
+                Self.openWomenOnAppear = false
+                if womenTreeEnabled { treeTab = 1 }
+            }
             guard !chromeAppeared else { return }
             chromeAppeared = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openWomenTree)) { _ in
+            Self.openWomenOnAppear = false
+            if womenTreeEnabled { treeTab = 1 }
         }
         // طلب صلة القرابة يُرسم في شجرة العائلة — من تبويب النساء نرجع لها أولاً
         .onReceive(NotificationCenter.default.publisher(for: .requestKinshipPath)) { _ in
