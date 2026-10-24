@@ -949,6 +949,38 @@ private struct WomanDetailSheet: View {
         /// إجراء لا رجعة فيه — اسمه بالأحمر
         var destructive: Bool = false
         let run: () -> Void
+
+        /// مجموعة الإجراء في المربّع (طلب المالك ٢٠٢٦-١٠-٢٤ «مو مرتبة») — من المعرّف فلا يتغيّر كل إجراء
+        var group: ActionGroup {
+            switch id {
+            case "child", "wife", "addMother", "sister": return .add
+            case "linkWife", "husband", "mother": return .link
+            case "delete": return .danger
+            default: return .record
+            }
+        }
+    }
+
+    /// أقسام مربّع الإجراءات بالترتيب: الإضافة · الربط · السجل — والحذف زرّ أحمر وحده في الآخر
+    private enum ActionGroup: Int, CaseIterable {
+        case add, link, record, danger
+
+        var title: String {
+            switch self {
+            case .add: return L10n.t("إضافة", "Add")
+            case .link: return L10n.t("ربط", "Link")
+            case .record: return L10n.t("السجل", "Record")
+            case .danger: return ""
+            }
+        }
+        var icon: String {
+            switch self {
+            case .add: return "plus.circle.fill"
+            case .link: return "link"
+            case .record: return "pencil"
+            case .danger: return "trash"
+            }
+        }
     }
 
     /// عنوان إجراء الوفاة حسب حالة السجل
@@ -972,6 +1004,11 @@ private struct WomanDetailSheet: View {
             AdminAction(id: "child", title: L10n.t("إضافة ابن أو ابنة", "Add son or daughter"),
                         icon: "person.badge.plus", color: DS.Color.male) { startAdd(.child) }
         ]
+        // على عقدة أبيه هو: «إضافة أخت» للإدارة أيضاً (طلب المالك ٢٠٢٦-١٠-٢٤)
+        if isMyFatherNode {
+            list.append(AdminAction(id: "sister", title: L10n.t("إضافة أخت", "Add sister"),
+                                    icon: "figure.stand.dress", color: DS.Color.female) { startAdd(.sister) })
+        }
         if !woman.isFemale {
             list.append(AdminAction(id: "wife", title: L10n.t("إضافة زوجة", "Add wife"),
                                     icon: "heart.fill", color: DS.Color.female) { startAdd(.wife) })
@@ -1132,26 +1169,35 @@ private struct WomanDetailSheet: View {
                 onSubmit: {},
                 onCancel: { showAdminBox = false }
             ) {
-                DSComposerSection(title: L10n.t("الإجراءات", "Actions"),
-                                  icon: "square.grid.2x2.fill",
-                                  tint: DS.Color.primary,
-                                  index: 0) {
-                    // صفوف عادية لا LazyVGrid (الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً فيُقصّ آخر صف)
-                    VStack(spacing: DS.Spacing.sm) {
-                        ForEach(Array(stride(from: 0, to: actions.count, by: perRow)), id: \.self) { start in
-                            let end = min(start + perRow, actions.count)
-                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                ForEach(actions[start..<end]) { adminTile($0) }
-                                ForEach(0..<(perRow - (end - start)), id: \.self) { _ in
-                                    Color.clear.frame(maxWidth: .infinity, maxHeight: DS.Border.width)
-                                }
-                            }
-                        }
+                // أقسام مرتّبة: إضافة · ربط · السجل (مربّعات)، ثم الحذف زرّاً أحمر عريضاً وحده
+                let groups = ActionGroup.allCases.filter { g in g != .danger && actions.contains { $0.group == g } }
+                ForEach(Array(groups.enumerated()), id: \.element) { index, group in
+                    DSComposerSection(title: group.title, icon: group.icon, tint: DS.Color.primary, index: index) {
+                        tileRows(actions.filter { $0.group == group }, perRow: perRow)
                     }
+                    .disabled(draft.busy)
                 }
-                .disabled(draft.busy)
+                ForEach(actions.filter { $0.group == .danger }) { action in
+                    DSButton(action.title, icon: action.icon, role: .destructive, action: action.run)
+                        .disabled(draft.busy)
+                }
             }
         )
+    }
+
+    /// صفوف المربّعات — عادية لا LazyVGrid (الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً فيُقصّ آخر صف)
+    private func tileRows(_ items: [AdminAction], perRow: Int) -> some View {
+        VStack(spacing: DS.Spacing.sm) {
+            ForEach(Array(stride(from: 0, to: items.count, by: perRow)), id: \.self) { start in
+                let end = min(start + perRow, items.count)
+                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                    ForEach(items[start..<end]) { adminTile($0) }
+                    ForEach(0..<(perRow - (end - start)), id: \.self) { _ in
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: DS.Border.width)
+                    }
+                }
+            }
+        }
     }
 
     /// مربّع إجراء مربّع الشكل (طلب المالك ٢٠٢٦-١٠-٢٤ «أزرار مربعة»): الأيقونة المجسّمة فوق واسم الإجراء
