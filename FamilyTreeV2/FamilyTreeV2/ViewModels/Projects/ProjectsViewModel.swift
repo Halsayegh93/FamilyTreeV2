@@ -61,7 +61,9 @@ class ProjectsViewModel: ObservableObject {
     
     // MARK: - Add
     
-    func addProject(ownerId: UUID, ownerName: String, title: String,
+    /// `ownerName` فارغ = المُرسل ليس صاحب المشروع (سؤال «هل أنت صاحب المشروع؟») — الإدارة تحدّده لاحقاً؛
+    /// `submitterName` اسم المُرسل في إشعار الإدارة (يُغني عن صاحبٍ فارغ)
+    func addProject(ownerId: UUID, ownerName: String, submitterName: String? = nil, title: String,
                     description: String?, logoUrl: String?,
                     websiteUrl: String?, instagramUrl: String?,
                     twitterUrl: String?,
@@ -100,11 +102,12 @@ class ProjectsViewModel: ObservableObject {
             await fetchProjects()
 
             // إشعار للأدمن بطلب جديد
+            let submitter = submitterName ?? ownerName
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("مشروع جديد يحتاج موافقة", "New Project Needs Approval"),
                 body: L10n.t(
-                    "«\(ownerName)» قدّم مشروع: «\(title)»",
-                    "«\(ownerName)» submitted a project: «\(title)»"
+                    "«\(submitter)» قدّم مشروع: «\(title)»" + (ownerName.isEmpty ? " — ليس صاحبه" : ""),
+                    "«\(submitter)» submitted a project: «\(title)»" + (ownerName.isEmpty ? " — not the owner" : "")
                 ),
                 kind: NotificationKind.projectPending.rawValue,
                 requestType: "project_pending"
@@ -202,8 +205,8 @@ class ProjectsViewModel: ObservableObject {
                     await self?.notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("تم اعتماد مشروع", "Project Approved"),
                         body: L10n.t(
-                            "تم اعتماد مشروع «\(info.title)» لـ «\(info.ownerName)»",
-                            "Project «\(info.title)» for «\(info.ownerName)» was approved"
+                            "تم اعتماد مشروع «\(info.title)»" + (info.ownerName.isEmpty ? "" : " لـ «\(info.ownerName)»"),
+                            "Project «\(info.title)»" + (info.ownerName.isEmpty ? "" : " for «\(info.ownerName)»") + " was approved"
                         ),
                         kind: NotificationKind.projectApproved.rawValue
                     )
@@ -250,8 +253,8 @@ class ProjectsViewModel: ObservableObject {
                     await self?.notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("تم رفض مشروع", "Project Rejected"),
                         body: L10n.t(
-                            "تم رفض مشروع «\(info.title)» لـ «\(info.ownerName)»",
-                            "Project «\(info.title)» for «\(info.ownerName)» was rejected"
+                            "تم رفض مشروع «\(info.title)»" + (info.ownerName.isEmpty ? "" : " لـ «\(info.ownerName)»"),
+                            "Project «\(info.title)»" + (info.ownerName.isEmpty ? "" : " for «\(info.ownerName)»") + " was rejected"
                         ),
                         kind: NotificationKind.projectRejected.rawValue
                     )

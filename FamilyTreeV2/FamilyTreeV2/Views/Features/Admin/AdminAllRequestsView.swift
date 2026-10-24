@@ -3818,7 +3818,9 @@ struct AdminAllRequestsView: View {
             infoCard(icon: "briefcase.fill", label: L10n.t("اسم المشروع", "Project"),
                      value: project.title, color: DS.Color.accent)
             infoCard(icon: "person.fill", label: L10n.t("صاحب المشروع", "Owner"),
-                     value: project.ownerName, color: AppSection.admin.ink)
+                     value: project.ownerName.trimmingCharacters(in: .whitespaces).isEmpty
+                         ? L10n.t("المُرسل ليس صاحبه — لم يُحدَّد", "Not the sender — not set") : project.ownerName,
+                     color: AppSection.admin.ink)
             if let desc = project.description, !desc.isEmpty {
                 longTextCard(icon: "doc.text.fill",
                              label: L10n.t("الوصف", "Description"),

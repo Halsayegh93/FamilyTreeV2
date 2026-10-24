@@ -730,7 +730,8 @@ struct ProjectDetailView: View {
             .clipShape(ProjectCoverArc(depth: arcDepth))
 
             VStack(spacing: DS.Spacing.sm) {
-                ownerChip
+                // بلا صاحب محدّد (المُرسل ليس صاحبه) — لا كبسولة فارغة
+                if !project.ownerName.trimmingCharacters(in: .whitespaces).isEmpty { ownerChip }
 
                 let actions = quickActions
                 if !actions.isEmpty {
@@ -1097,7 +1098,9 @@ struct EditProjectView: View {
                                   tint: tint, index: 0) {
                     // الصفّ الموحّد (`DSRow`) — قرص مجسّم + الاسم + سهم
                     Button { showOwnerPicker = true } label: {
-                        DSRow(icon: "person.fill", tint: tint, title: ownerName) { DSChevron() }
+                        DSRow(icon: "person.fill", tint: tint,
+                              title: ownerName.trimmingCharacters(in: .whitespaces).isEmpty
+                                  ? L10n.t("اختر صاحب المشروع", "Choose the owner") : ownerName) { DSChevron() }
                     }
                     .buttonStyle(DSScaleButtonStyle())
                 }
