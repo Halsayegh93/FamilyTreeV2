@@ -573,10 +573,10 @@ private struct WomanDetailSheet: View {
     /// «عرض التفاصيل» / «إخفاء التفاصيل» — يوسّع المربّع أو يصغّره
     private var detailsToggleButton: some View {
         let expanded = isExpanded
-        // زرّ ناعم (طلب المالك ٢٠٢٦-١٠-٢٤) — شريحة بتلوين القسم الخفيف، مثل تفاصيل العضو في شجرة العائلة
-        return DSChipButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
-                                     : L10n.t("عرض التفاصيل", "Show details"),
-                            icon: expanded ? "chevron.down" : "chevron.up") {
+        // رابط نصّي بسهم بلا خلفية — مثل تفاصيل العضو في شجرة العائلة (طلب المالك ٢٠٢٦-١٠-٢٤)
+        return DSTextLinkButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
+                                         : L10n.t("عرض التفاصيل", "Show details"),
+                                icon: expanded ? "chevron.down" : "chevron.up") {
             withAnimation(DS.Anim.snappy) { isExpanded.toggle() }
         }
     }

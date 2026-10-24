@@ -374,10 +374,10 @@ struct MemberDetailsView: View {
     /// «عرض التفاصيل» / «إخفاء التفاصيل» — يوسّع المربّع أو يصغّره
     private var detailsToggleButton: some View {
         let expanded = detent == .large
-        // زرّ ناعم (طلب المالك ٢٠٢٦-١٠-٢٤) — شريحة بتلوين القسم الخفيف بدل التعبئة الممتلئة، فلا ينافس أزرار التعديل
-        return DSChipButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
-                                     : L10n.t("عرض التفاصيل", "Show details"),
-                            icon: expanded ? "chevron.down" : "chevron.up") {
+        // رابط نصّي بسهم بلا خلفية (طلب المالك ٢٠٢٦-١٠-٢٤ «غيّر تصميمه») — لا ينافس أزرار التعديل
+        return DSTextLinkButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
+                                         : L10n.t("عرض التفاصيل", "Show details"),
+                                icon: expanded ? "chevron.down" : "chevron.up") {
             withAnimation(DS.Anim.snappy) { detent = expanded ? .fraction(0.46) : .large }
         }
     }
@@ -1142,7 +1142,7 @@ struct MemberDetailsView: View {
     /// «تعديل مباشر» داخل التفاصيل تحت الاسم — للمالك والمدير والمراقب (`canEditMembers`) فقط
     @ViewBuilder private var editEntryButton: some View {
         if authVM.canEditMembers && !member.isDeleted {
-            DSButton(L10n.t("تعديل مباشر", "Direct Edit"), icon: "pencil", fullWidth: false) {
+            DSSoftPillButton(L10n.t("تعديل مباشر", "Direct Edit"), icon: "pencil") {
                 showAdminControl = true
             }
         }
