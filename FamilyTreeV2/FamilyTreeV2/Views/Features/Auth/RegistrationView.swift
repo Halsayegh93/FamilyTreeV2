@@ -35,14 +35,14 @@ struct RegistrationView: View {
 
             VStack(spacing: 0) {
                 // Top bar
-                topBar
+                AnyView(topBar)
 
                 ScrollView(showsIndicators: false) {
                     // مسافات أضيق (طلب المالك ٢٠٢٦-١٠-١٩ «أبسط»)
                     VStack(spacing: DS.Spacing.lg) {
                         if topInset > 0 { Color.clear.frame(height: topInset) }
                         // الصورة الشخصية — في الأعلى مثل حسابي
-                        photoSection
+                        AnyView(photoSection)
                             .scaleEffect(headerScale)
                             .opacity(headerOpacity)
 
@@ -54,16 +54,17 @@ struct RegistrationView: View {
                                               icon: "person.text.rectangle.fill",
                                               tint: DS.Color.primary,
                                               index: 0) {
-                                nameFieldSection
-                                familyNameSection
-                                birthDateSection
-                                genderSection
+                                // كل حقل خلف AnyView — مكدس iOS 16 (انظر RootView)
+                                AnyView(nameFieldSection)
+                                AnyView(familyNameSection)
+                                AnyView(birthDateSection)
+                                AnyView(genderSection)
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // زر الإرسال
-                        submitButton
+                        AnyView(submitButton)
                             .dsStaggerIn(2)
                     }
                     // الحقول تبدأ بعد الصورة (نفس «بعد الرأس» في المربّعات)

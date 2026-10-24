@@ -8,46 +8,48 @@ struct RootView: View {
 
     var body: some View {
         Group {
+            // كل شاشة خلف AnyView — حدّ نوع يقصّر مكدس البناء الأول (iOS 16 يستهلك مكدساً أكثر لكل طبقة؛
+            // جوال الوالدة آيفون X بقي على «جاري التحقق» لأن «التسجيل» لم تُبنَ — ٢٠٢٦-١٠-٢٤)
             switch authVM.status {
             case .unauthenticated:
-                LoginView()
+                AnyView(LoginView())
 
             case .checking:
-                SplashScreenView()
+                AnyView(SplashScreenView())
 
             case .authenticatedNoProfile:
-                RegistrationView()
+                AnyView(RegistrationView())
 
             case .pendingApproval:
-                WaitingForApprovalView()
+                AnyView(WaitingForApprovalView())
 
             case .accountFrozen:
-                FrozenAccountView()
+                AnyView(FrozenAccountView())
 
             case .deviceLimitExceeded:
-                DeviceLimitView()
-                    .environmentObject(appSettingsVM)
+                AnyView(DeviceLimitView()
+                    .environmentObject(appSettingsVM))
 
             case .deviceRevoked:
-                DeviceRevokedView()
+                AnyView(DeviceRevokedView()
                     .environmentObject(notificationVM)
-                    .environmentObject(appSettingsVM)
+                    .environmentObject(appSettingsVM))
 
             case .deviceOverLimit:
-                DeviceOverLimitView()
+                AnyView(DeviceOverLimitView()
                     .environmentObject(notificationVM)
-                    .environmentObject(appSettingsVM)
+                    .environmentObject(appSettingsVM))
 
             case .fullyAuthenticated:
                 // التحديث الإجباري — النسخة أقل من الحد الأدنى. المالك مستثنى حتى
                 // لا يقفل نفسه خارج التطبيق لو رفع الحد قبل ما يحدّث جهازه.
                 if AppBuild.current < (appSettingsVM.settings.iosMinBuild ?? 0)
                     && authVM.currentUser?.role != .owner {
-                    ForceUpdateView()
+                    AnyView(ForceUpdateView())
                 } else if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
-                    MaintenanceModeView()
+                    AnyView(MaintenanceModeView())
                 } else {
-                    MainTabView()
+                    AnyView(MainTabView())
                 }
             }
         }
