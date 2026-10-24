@@ -4,7 +4,6 @@ import SwiftUI
 struct DiwaniyasView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var viewModel = DiwaniyasViewModel()
     @Binding var selectedTab: Int
     @State private var showingNotifications = false
@@ -15,11 +14,9 @@ struct DiwaniyasView: View {
     @State private var reportReason = ""
     @State private var reportSent = false
     @State private var appeared = false
-    @State private var cachedFilteredDiwaniyas: [Diwaniya] = []
-    /// كل الظاهرة قبل فلتر النوع — للعدّاد في الشريط
+    /// الظاهرة للمستخدم (المعتمدة + طلباته/المعلّقة للإدارة) — كلها في قائمة واحدة: شريط «الديوانيات/الحسينيات»
+    /// شيل (طلب المالك ٢٠٢٦-١٠-٢٤)، والنوع علامة على البطاقة
     @State private var cachedVisibleDiwaniyas: [Diwaniya] = []
-    /// ديوانيات / حسينيات (nil = الكل) — قسم الحسينيات (طلب المالك)
-    @State private var kindFilter: DiwaniyaKind? = nil
 
     var body: some View {
         NavigationStack {
@@ -37,8 +34,6 @@ struct DiwaniyasView: View {
                         icon: AppSection.diwaniyas.symbol,   // «مجلس»
                         section: .diwaniyas
                     )
-
-                    kindFilterBar
 
                     if viewModel.isLoading && filteredDiwaniyas.isEmpty {
                         // التحميل الموحّد: مجسّم «المجلس» يتنفّس (بدل الدوّارة)
@@ -170,9 +165,6 @@ struct DiwaniyasView: View {
                 rebuildFilteredDiwaniyas()
             }
             .onChange(of: viewModel.diwaniyas.count) { _ in rebuildFilteredDiwaniyas() }
-            .onChange(of: kindFilter) { _ in
-                withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.4, dampingFraction: 0.85)) { rebuildFilteredDiwaniyas() }
-            }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .dsAlert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
@@ -192,7 +184,7 @@ struct DiwaniyasView: View {
 
 
     // MARK: - Filtered Diwaniyas
-    private var filteredDiwaniyas: [Diwaniya] { cachedFilteredDiwaniyas }
+    private var filteredDiwaniyas: [Diwaniya] { cachedVisibleDiwaniyas }
 
     private func rebuildFilteredDiwaniyas() {
         let userId = authVM.currentUser?.id
@@ -204,41 +196,12 @@ struct DiwaniyasView: View {
             }
             return false
         }
-        cachedFilteredDiwaniyas = cachedVisibleDiwaniyas.filter { d in
-            switch kindFilter {
-            case nil: return true
-            case .husseiniya?: return d.isHusseiniya
-            case .diwaniya?: return !d.isHusseiniya
-            }
-        }
-    }
-
-    // MARK: - شريط الأقسام: الكل / ديوانيات / حسينيات
-
-    /// الفلاتر الموحّدة (`DSFilterChips`) — نفس شريط المكتبة والإدارة: المختار بتعبئة القسم، والعدد لكل قسم
-    private var kindFilterBar: some View {
-        DSFilterChips(options: kindFilterOptions, selection: $kindFilter)
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
-    }
-
-    /// «الكل» ثم الأنواع برمزها الموحّد (`DiwaniyaKind.icon`: «مجلس» / «راية»)
-    private var kindFilterOptions: [DSFilterOption<DiwaniyaKind?>] {
-        let all = DSFilterOption<DiwaniyaKind?>(id: nil, title: L10n.t("الكل", "All"),
-                                                icon: "square.grid.2x2.fill",
-                                                count: cachedVisibleDiwaniyas.count)
-        let kinds = DiwaniyaKind.allCases.map { k in
-            DSFilterOption<DiwaniyaKind?>(id: k, title: k.plural, icon: k.icon,
-                                          count: cachedVisibleDiwaniyas.filter { k == .husseiniya ? $0.isHusseiniya : !$0.isHusseiniya }.count)
-        }
-        return [all] + kinds
     }
 
     // MARK: - Empty State
     private var emptyStateView: some View {
         // الصفحة الفاضية الموحّدة: مجسّم «المجلس» + عنوان + سطر
-        DSEmptyView(kindFilter == .husseiniya ? L10n.t("لا توجد حسينيات", "No Husseiniyas Yet")
-                                              : L10n.t("لا توجد ديوانيات", "No Diwaniyas Yet"),
+        DSEmptyView(L10n.t("لا توجد ديوانيات", "No Diwaniyas Yet"),
                     message: L10n.t("اضغط + لإضافة ديوانيتك.\nتُعرض بعد موافقة الإدارة.",
                                     "Tap + to add your diwaniya.\nIt appears after admin approval."),
                     section: .diwaniyas)
