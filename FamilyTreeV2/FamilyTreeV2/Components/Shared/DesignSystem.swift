@@ -85,8 +85,9 @@ enum DS {
             colors: [primaryFill, primaryFill],
             startPoint: .bottomTrailing, endPoint: .topLeading
         )
-        // الأشرطة الكحلية الغامقة (band): الهيدرات ولوحات الترحيب — كحلي المصمم، وفي الداكن #1B2638 (نفس band في الموقع)
-        static let bandFill = SwiftUI.Color.adaptive(light: "#172536", dark: "#1B2638")
+        // الأشرطة الكحلية الغامقة (band): الهيدرات ولوحات الترحيب — كحلي المصمم أقرب للأزرق بدرجتين
+        // (طلب المالك ٢٠٢٦-١٠-٢٤ «قريب لون الازرق درجتين مو وايد تغير»؛ كان #172536 / الداكن #1B2638)
+        static let bandFill = SwiftUI.Color.adaptive(light: "#182E4D", dark: "#1A2B45")
         /// خلفية شاشة البداية: أبيض #FFFFFF في الفاتح (طلب المالك 17/10/2026 — كان كحلياً)، وأسود صافٍ في الداكن.
         /// من لون الأصول LaunchBackground نفسه الذي تستعمله شاشة الإقلاع في Info.plist، فلا يومض لون بينهما.
         static let splashBackground = SwiftUI.Color("LaunchBackground")
@@ -141,7 +142,7 @@ enum DS {
         static let headerVeil       = SwiftUI.Color.white.opacity(0.08)
         static let headerBorder     = SwiftUI.Color.white.opacity(0.16)
         /// خلفية أزرار الهيدر — أفتح بدرجة من لون الهيدر الكحلي، فتبدو منه
-        static let headerControlFill = SwiftUI.Color.adaptive(light: "#2A3A52", dark: "#26344B")
+        static let headerControlFill = SwiftUI.Color.adaptive(light: "#293D5C", dark: "#26344B")
 
         // Text
         static let textPrimary   = SwiftUI.Color.adaptive(light: "#172536", dark: "#FFFFFF") // ink
@@ -344,14 +345,16 @@ enum DS {
         enum Plex {
             /// خط الآيفون نفسه (SF Arabic) لكل نصوص التطبيق — طلب المالك ٢٠٢٦-١٠-٢٤ «الخط يصير طبيعي افتراضي».
             /// `false` يرجع خط الهوية أدناه (Cairo أو IBM Plex). ملفات PDF وما يُرسم بـ UIKit تبقى على خط الهوية.
-            static let useSystem = true
+            static let useSystem = !useAlexandria
+            /// تجربة Alexandria (٢٠٢٦-١٠-٢٤، للمقارنة بالصور): تُشغَّل بـ `-tmpFont alexandria` مثل `tmpTheme`
+            static let useAlexandria = UserDefaults.standard.string(forKey: "tmpFont") == "alexandria"
             /// تجربة Cairo (٢٠٢٦-١٠-٢٣) — لم تعجب المالك؛ خط الهوية لملفات PDF = IBM Plex
             static let useCairo = false
-            // Cairo.ttf خط متغيّر — أسماء النسخ المسمّاة (named instances) للأوزان
-            static let regular  = useCairo ? "Cairo-Regular"          : "IBMPlexSansArabic-Regular"
-            static let medium   = useCairo ? "Cairo-Regular_Medium"   : "IBMPlexSansArabic-Medium"
-            static let semibold = useCairo ? "Cairo-Regular_SemiBold" : "IBMPlexSansArabic-SemiBold"
-            static let bold     = useCairo ? "Cairo-Regular_Bold"     : "IBMPlexSansArabic-Bold"
+            // Cairo.ttf وAlexandria.ttf خطّان متغيّران — أسماء النسخ المسمّاة (named instances) للأوزان
+            static let regular  = useAlexandria ? "Alexandria-Regular"          : useCairo ? "Cairo-Regular"          : "IBMPlexSansArabic-Regular"
+            static let medium   = useAlexandria ? "Alexandria-Regular_Medium"   : useCairo ? "Cairo-Regular_Medium"   : "IBMPlexSansArabic-Medium"
+            static let semibold = useAlexandria ? "Alexandria-Regular_SemiBold" : useCairo ? "Cairo-Regular_SemiBold" : "IBMPlexSansArabic-SemiBold"
+            static let bold     = useAlexandria ? "Alexandria-Regular_Bold"     : useCairo ? "Cairo-Regular_Bold"     : "IBMPlexSansArabic-Bold"
 
             /// وزن الواجهة المطلوب ← ملف الخط (نفس `DS.Font.plexName`) — اسم main للتوافق
             static func name(for weight: SwiftUI.Font.Weight) -> String { DS.Font.plexName(weight) }
@@ -2230,8 +2233,8 @@ extension DS {
         /// في الداكن. البطاقات فوقها تنفصل بالإطار الرفيع وظلّ البطاقة الخفيف
         static let background = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#000000")
         /// طرفا تدرّج الرأس: كحلي المصمم ← كحلي أفتح؛ وفي الداكن أعمق
-        static let bandTop = SwiftUI.Color.adaptive(light: "#172536", dark: "#0B111A")
-        static let bandBottom = SwiftUI.Color.adaptive(light: "#2A3E5C", dark: "#1B2638")
+        static let bandTop = SwiftUI.Color.adaptive(light: "#182E4D", dark: "#0B111A")
+        static let bandBottom = SwiftUI.Color.adaptive(light: "#29446B", dark: "#1A2B45")
         /// عمودي (حافته العليا كحلي واحد فتلتقي بشريط الحالة الثابت بلا خطّ)
         static let band = LinearGradient(colors: [bandTop, bandBottom], startPoint: .top, endPoint: .bottom)
         /// زجاج الرأس (الأزرار الدائرية، مربّعات الأرقام، شرائح الفلتر) وإطاره الداخلي

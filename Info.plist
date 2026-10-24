@@ -16,6 +16,7 @@
 		<string>IBMPlexSansArabic-SemiBold.ttf</string>
 		<string>IBMPlexSansArabic-Bold.ttf</string>
 		<string>Cairo.ttf</string>
+		<string>Alexandria.ttf</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>ar</string>
