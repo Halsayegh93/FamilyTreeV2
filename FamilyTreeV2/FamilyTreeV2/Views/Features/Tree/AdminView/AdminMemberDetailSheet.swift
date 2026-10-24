@@ -313,7 +313,12 @@ struct AdminMemberDetailSheet: View {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         guard canDeleteMember else { return }
-                        await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
+                        // الإغلاق وإعلان الحذف بعد نجاحه فقط — الفشل (روابط عائلة، صلاحية…) يُعرض والمربّع باقٍ
+                        adminRequestVM.errorMessage = nil
+                        guard await adminRequestVM.rejectOrDeleteMember(memberId: member.id) else {
+                            showDeleteFailure()
+                            return
+                        }
                         dismiss()
                         NotificationCenter.default.post(name: .memberDeleted, object: member.id)
                     }
@@ -333,9 +338,15 @@ struct AdminMemberDetailSheet: View {
                     if let child = childToDelete {
                         let capturedChild = child
                         Task {
-                            await adminRequestVM.rejectOrDeleteMember(memberId: capturedChild.id)
-                            localChildren.removeAll { $0.id == capturedChild.id }
+                            adminRequestVM.errorMessage = nil
+                            let deleted = await adminRequestVM.rejectOrDeleteMember(memberId: capturedChild.id)
                             childToDelete = nil
+                            // إشعار «حذف ابن» بعد نجاح الحذف فقط
+                            guard deleted else {
+                                showDeleteFailure()
+                                return
+                            }
+                            localChildren.removeAll { $0.id == capturedChild.id }
                             let adminName = authVM.currentUser?.firstName ?? "مدير"
                             await memberVM.notificationVM?.notifyAdminsWithPush(
                                 title: L10n.t("حذف ابن", "Child Removed"),
@@ -947,6 +958,14 @@ struct AdminMemberDetailSheet: View {
         }
     }
 
+    /// فشل الحذف: السبب من الـ VM (مثل حماية روابط العائلة) في مربّع «تعذّر التنفيذ»
+    private func showDeleteFailure() {
+        accountErrorText = adminRequestVM.errorMessage
+            ?? L10n.t("تعذّر حذف العضو. حاول مرة أخرى.", "Couldn't delete the member. Try again.")
+        adminRequestVM.errorMessage = nil
+        accountError = true
+    }
+
     private func performAccountAction(_ action: AccountAction) {
         pendingAccountAction = nil
         accountBusy = action
@@ -964,6 +983,13 @@ struct AdminMemberDetailSheet: View {
                 }
                 await refreshStatus()
             case .freeze, .unfreeze:
+                // الإيقاف ورفعه للمالك والمدير فقط (`canFreezeMembers`) — `setMemberStatus` يقبل `canEditMembers`
+                guard authVM.canFreezeMembers else {
+                    accountErrorText = L10n.t("إيقاف الحسابات ورفعه للمالك والمدير فقط.",
+                                              "Only the owner and admins can suspend accounts.")
+                    ok = false
+                    break
+                }
                 let target: FamilyMember.MemberStatus = action == .freeze ? .frozen : .active
                 ok = await memberVM.setMemberStatus(memberId: member.id, status: target)
                 if ok { withAnimation(DS.Anim.snappy) { accountStatus = target } }

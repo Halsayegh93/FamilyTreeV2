@@ -390,12 +390,10 @@ struct AdminAllRequestsView: View {
         ) {
             Button(L10n.t("الموافقة على الكل", "Approve All"), role: .destructive) {
                 Task {
+                    let total = adminRequestVM.childAddRequests.count
                     let count = await adminRequestVM.bulkApproveChildAddRequests()
                     if count > 0 { UINotificationFeedbackGenerator().notificationOccurred(.success) }
-                    bulkApproveResult = L10n.t(
-                        "تم قبول \(count) طلب بنجاح",
-                        "Successfully approved \(count) requests"
-                    )
+                    bulkApproveResult = bulkResultText(done: count, total: total, approving: true)
                     showBulkApproveResult = true
                 }
             }
@@ -421,10 +419,11 @@ struct AdminAllRequestsView: View {
         ) {
             Button(L10n.t("قبول الكل", "Approve All"), role: .none) {
                 Task {
+                    let total = bulkAttemptCount(approving: true)
                     let count = await bulkApproveSelected()
                     await MainActor.run {
                         if count > 0 { UINotificationFeedbackGenerator().notificationOccurred(.success) }
-                        bulkSelectApproveResult = L10n.t("تم قبول \(count) طلب بنجاح", "Successfully approved \(count) requests")
+                        bulkSelectApproveResult = bulkResultText(done: count, total: total, approving: true)
                         showBulkSelectApproveResult = true
                         isSelectMode = false
                         selectedIds.removeAll()
@@ -454,9 +453,10 @@ struct AdminAllRequestsView: View {
         ) {
             Button(L10n.t("رفض الكل", "Reject All"), role: .destructive) {
                 Task {
+                    let total = bulkAttemptCount(approving: false)
                     let count = await bulkRejectSelected()
                     await MainActor.run {
-                        bulkSelectRejectResult = L10n.t("تم رفض \(count) طلب", "Rejected \(count) requests")
+                        bulkSelectRejectResult = bulkResultText(done: count, total: total, approving: false)
                         showBulkSelectRejectResult = true
                         isSelectMode = false
                         selectedIds.removeAll()
@@ -867,8 +867,11 @@ struct AdminAllRequestsView: View {
     }
 
     /// هل يقدر يرفضها؟ (المشرف يتعامل مع البلاغات فقط)
+    /// رفض طلب الانضمام = حذف ملف المتقدّم (`rejectOrDeleteMember`) — للمالك والمدير (`canDeleteMembers`) وحدهما،
+    /// كان يظهر للمراقب فيفشل دائماً
     private func canReject(_ tab: RequestTab) -> Bool {
         if tab == .reports { return authVM.canModerateContent }
+        if tab == .joinRequests { return authVM.canDeleteMembers }
         return Self.contentTabs.contains(tab) ? authVM.canApproveContent : authVM.canRejectRequests
     }
 
@@ -1034,8 +1037,8 @@ struct AdminAllRequestsView: View {
 
             Spacer(minLength: 0)
 
-            // زر الرفض — يظهر فقط لمن يملك الصلاحية
-            if authVM.canRejectRequests {
+            // زر الرفض — يظهر فقط لمن يملك الصلاحية (في التبويب نفسه: صلاحية مجاله، ومنها رفض الانضمام للمالك/المدير)
+            if selectedTab == .all ? authVM.canRejectRequests : canReject(selectedTab) {
                 DSButton(L10n.t("رفض", "Reject"), icon: "xmark.circle.fill", role: .destructive, tint: DS.Color.reject, fullWidth: false) {
                     showBulkRejectConfirm = true
                 }
@@ -1574,6 +1577,32 @@ struct AdminAllRequestsView: View {
         }
     }
 
+    /// عدد ما ستحاوله العملية الجماعية (بعد مسار الموافقات ومجال الدور) — لعرض «تم قبول N من M»
+    private func bulkAttemptCount(approving: Bool) -> Int {
+        let ids = approvalScopedIds(Array(selectedIds), approving: approving)
+        guard selectedTab == .all else { return ids.count }
+        let scope = idsInRoleScope(approving: approving)
+        return ids.filter { scope.contains($0) }.count
+    }
+
+    /// نتيجة العملية الجماعية بالعدد الحقيقي — ما فشل أو رفضه حارس لا يُحسب، ويُذكر آخر سبب
+    private func bulkResultText(done: Int, total: Int, approving: Bool) -> String {
+        // رسائل الطلبات المفردة تُجمع هنا بدل مربّع «تنبيه» فوق مربّع النتيجة
+        let reason = adminRequestVM.errorMessage
+        adminRequestVM.errorMessage = nil
+        if done >= total {
+            return approving ? L10n.t("تم قبول \(done) طلب بنجاح", "Successfully approved \(done) requests")
+                             : L10n.t("تم رفض \(done) طلب", "Rejected \(done) requests")
+        }
+        let summary = approving
+            ? L10n.t("تم قبول \(done) من \(total) — الباقي لم يُقبل وبقي معلّقاً",
+                     "Approved \(done) of \(total) — the rest weren't approved and stay pending")
+            : L10n.t("تم رفض \(done) من \(total) — الباقي لم يُرفض وبقي معلّقاً",
+                     "Rejected \(done) of \(total) — the rest weren't rejected and stay pending")
+        guard let reason, !reason.isEmpty else { return summary }
+        return summary + "\n" + reason
+    }
+
     private func bulkApproveSelected() async -> Int {
         let ids = approvalScopedIds(Array(selectedIds), approving: true)
         var count = 0
@@ -1596,21 +1625,21 @@ struct AdminAllRequestsView: View {
             for id in ids {
                 if let req = adminRequestVM.newsReportRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.approveNewsReport(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .phone:
             for id in ids {
                 if let req = adminRequestVM.phoneChangeRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.approvePhoneChangeRequest(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .nameChange:
             for id in ids {
                 if let req = adminRequestVM.nameChangeRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.approveNameChangeRequest(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .diwaniya:
@@ -1626,21 +1655,21 @@ struct AdminAllRequestsView: View {
             for id in ids {
                 if let req = adminRequestVM.deceasedRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.approveDeceasedRequest(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .children:
             for id in ids {
                 if let req = adminRequestVM.childAddRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.acknowledgeChildAddRequest(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .photos:
             for id in ids {
                 if let req = adminRequestVM.photoSuggestionRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.approvePhotoSuggestion(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .projects:
@@ -1663,7 +1692,7 @@ struct AdminAllRequestsView: View {
             for id in ids {
                 if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.approveTreeEditRequest(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         }
@@ -1680,8 +1709,7 @@ struct AdminAllRequestsView: View {
             count = await bulkRejectAcrossAllTypes(ids: ids)
         case .joinRequests:
             for id in ids {
-                await adminRequestVM.rejectOrDeleteMember(memberId: id)
-                count += 1
+                if await adminRequestVM.rejectOrDeleteMember(memberId: id) { count += 1 }
             }
         case .news:
             for id in ids {
@@ -1694,21 +1722,21 @@ struct AdminAllRequestsView: View {
             for id in ids {
                 if let req = adminRequestVM.newsReportRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.rejectNewsReport(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .phone:
             for id in ids {
                 if let req = adminRequestVM.phoneChangeRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.rejectPhoneChangeRequest(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .nameChange:
             for id in ids {
                 if let req = adminRequestVM.nameChangeRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.rejectNameChangeRequest(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .diwaniya:
@@ -1722,21 +1750,21 @@ struct AdminAllRequestsView: View {
             for id in ids {
                 if let req = adminRequestVM.deceasedRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.rejectDeceasedRequest(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .children:
             for id in ids {
                 if let req = adminRequestVM.childAddRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.rejectChildAddRequest(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .photos:
             for id in ids {
                 if let req = adminRequestVM.photoSuggestionRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.rejectPhotoSuggestion(request: req)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         case .projects:
@@ -1757,7 +1785,7 @@ struct AdminAllRequestsView: View {
             for id in ids {
                 if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                     await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil)
-                    count += 1
+                    if await adminRequestVM.awaitDecision(req.id) { count += 1 }
                 }
             }
         }
@@ -2154,32 +2182,38 @@ struct AdminAllRequestsView: View {
 
         for id in ids where idSet.contains(id) {
             if pendingMembers.contains(where: { $0.id == id }) {
-                _ = await adminRequestVM.bulkApproveJoinRequests(memberIds: [id])
-                count += 1
+                count += await adminRequestVM.bulkApproveJoinRequests(memberIds: [id])
             } else if let post = newsVM.pendingNewsRequests.first(where: { $0.id == id }) {
                 await newsVM.approveNewsPost(postId: post.id); count += 1
             } else if let req = adminRequestVM.newsReportRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.approveNewsReport(request: req); count += 1
+                await adminRequestVM.approveNewsReport(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let req = adminRequestVM.phoneChangeRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.approvePhoneChangeRequest(request: req); count += 1
+                await adminRequestVM.approvePhoneChangeRequest(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let req = adminRequestVM.nameChangeRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.approveNameChangeRequest(request: req); count += 1
+                await adminRequestVM.approveNameChangeRequest(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let d = diwaniyaVM.pendingDiwaniyas.first(where: { $0.id == id }),
                       let adminId = authVM.currentUser?.id {
                 await diwaniyaVM.approveDiwaniya(id: d.id, adminId: adminId); count += 1
             } else if let req = adminRequestVM.deceasedRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.approveDeceasedRequest(request: req); count += 1
+                await adminRequestVM.approveDeceasedRequest(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let req = adminRequestVM.childAddRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.acknowledgeChildAddRequest(request: req); count += 1
+                await adminRequestVM.acknowledgeChildAddRequest(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let req = adminRequestVM.photoSuggestionRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.approvePhotoSuggestion(request: req); count += 1
+                await adminRequestVM.approvePhotoSuggestion(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let proj = projectsVM.pendingProjects.first(where: { $0.id == id }),
                       let adminId = authVM.currentUser?.id {
                 await projectsVM.approveProject(id: proj.id, approvedBy: adminId); count += 1
             } else if let item = pendingArchiveItems.first(where: { $0.id == id }) {
                 await archiveVM.approveItem(item); count += 1
             } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.approveTreeEditRequest(request: req); count += 1
+                await adminRequestVM.approveTreeEditRequest(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             }
         }
         return count
@@ -2193,29 +2227,36 @@ struct AdminAllRequestsView: View {
 
         for id in ids where idSet.contains(id) {
             if pendingMembers.contains(where: { $0.id == id }) {
-                await adminRequestVM.rejectOrDeleteMember(memberId: id); count += 1
+                if await adminRequestVM.rejectOrDeleteMember(memberId: id) { count += 1 }
             } else if let post = newsVM.pendingNewsRequests.first(where: { $0.id == id }) {
                 await newsVM.rejectNewsPost(postId: post.id); count += 1
             } else if let req = adminRequestVM.newsReportRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.rejectNewsReport(request: req); count += 1
+                await adminRequestVM.rejectNewsReport(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let req = adminRequestVM.phoneChangeRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.rejectPhoneChangeRequest(request: req); count += 1
+                await adminRequestVM.rejectPhoneChangeRequest(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let req = adminRequestVM.nameChangeRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.rejectNameChangeRequest(request: req); count += 1
+                await adminRequestVM.rejectNameChangeRequest(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let d = diwaniyaVM.pendingDiwaniyas.first(where: { $0.id == id }) {
                 await diwaniyaVM.rejectDiwaniya(id: d.id); count += 1
             } else if let req = adminRequestVM.deceasedRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.rejectDeceasedRequest(request: req); count += 1
+                await adminRequestVM.rejectDeceasedRequest(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let req = adminRequestVM.childAddRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.rejectChildAddRequest(request: req); count += 1
+                await adminRequestVM.rejectChildAddRequest(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let req = adminRequestVM.photoSuggestionRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.rejectPhotoSuggestion(request: req); count += 1
+                await adminRequestVM.rejectPhotoSuggestion(request: req)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if projectsVM.pendingProjects.contains(where: { $0.id == id }) {
                 await projectsVM.rejectProject(id: id); count += 1
             } else if let item = pendingArchiveItems.first(where: { $0.id == id }) {
                 await archiveVM.rejectItem(item); count += 1
             } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
-                await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil); count += 1
+                await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil)
+                if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             }
         }
         return count
@@ -3611,7 +3652,9 @@ struct AdminAllRequestsView: View {
                 phoneEditPendingMember = member
             })
         }
-        if decision && authVM.canRejectRequests {
+        // رفض طلب الانضمام يحذف ملف المتقدّم — للمالك والمدير فقط (`canReject(.joinRequests)`)
+        let isJoin: Bool = { if case .join = detail { return true } else { return false } }()
+        if decision && (isJoin ? canReject(.joinRequests) : authVM.canRejectRequests) {
             // الرفض برتقالي والحذف النهائي أحمر — لونان مختلفان (طلب المالك)
             items.append(DSComposerAction(id: "reject", title: L10n.t("رفض", "Reject"),
                                           icon: "xmark", role: .destructive, tint: DS.Color.reject) {

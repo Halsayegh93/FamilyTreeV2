@@ -29,6 +29,8 @@ struct AddSonByAdminSheet: View {
     @State private var deathDate: Date = Date()
     @State private var isSaving = false
     @State private var showOfflineAlert = false
+    @State private var showSaveError = false
+    @State private var saveErrorText = ""
 
     // MARK: - تغييرات لم تُحفظ (توصية أبل)
 
@@ -150,6 +152,11 @@ struct AddSonByAdminSheet: View {
                 "Cannot \(isEditMode ? "update" : "add") the child without an internet connection. Check your connection and try again."
             ))
         }
+        .dsAlert(L10n.t("تعذّر الحفظ", "Couldn't Save"), isPresented: $showSaveError) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(saveErrorText)
+        }
         .onAppear {
             if editingChild == nil, !lastAuthDialingCode.isEmpty {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
@@ -222,7 +229,10 @@ struct AddSonByAdminSheet: View {
     }
 
 
-    // MARK: - Save Action (unchanged logic)
+    // MARK: - Save Action
+    /// الحفظ ينتظر النتيجة: المربّع يُغلق وإشعار الإدارة يخرج بعد النجاح فقط، والفشل يُعرض.
+    /// الأنثى لا تُكتب في `profiles` أبداً: الإضافة عبر `addFamilyChild` (شجرة النساء) وتغيير الجنس
+    /// عبر `moveChildGender` — نفس مسار «حسابي» (AddChildSheet / EditChildSheet)
     private func saveAction() {
         guard !isSaving else { return }
         guard NetworkMonitor.shared.isConnected else {
@@ -241,10 +251,12 @@ struct AddSonByAdminSheet: View {
         let capturedBirthDate = hasBirthDate ? formatter.string(from: birthDate) : nil
         let capturedIsDeceased = isDeceased
         let capturedDeathDate = (isDeceased && hasDeathDate) ? formatter.string(from: deathDate) : nil
+        // نفس التواريخ كـ Date — لدوال شجرة النساء
+        let capturedBirthDay: Date? = hasBirthDate ? birthDate : nil
+        let capturedDeathDay: Date? = (isDeceased && hasDeathDate) ? deathDate : nil
         let capturedGender = selectedGender
+        let nowFemale = capturedGender == "female"
         let vm = memberVM
-
-        dismiss()
 
         let adminName = authVM.currentUser?.firstName ?? "مدير"
         let parentName = parent.fullName
@@ -260,22 +272,67 @@ struct AddSonByAdminSheet: View {
             let deceasedChanged = capturedIsDeceased != (child.isDeceased ?? false)
             let deathChanged = capturedDeathDate != child.deathDate
             let genderChanged = capturedGender != (child.gender ?? "male")
+            // النقل بين الشجرتين فقط إذا تغيّر ذكر ↔ أنثى فعلاً
+            let wasFemale = (child.gender ?? "male").lowercased() == "female"
+            let movesTree = nowFemale != wasFemale
 
             let somethingChanged = nameChanged || phoneChanged || birthChanged || deceasedChanged || deathChanged || genderChanged
 
-            guard somethingChanged else { return }
+            guard somethingChanged else {
+                isSaving = false
+                dismiss()
+                return
+            }
+
+            let finalFullName = PersonName.replacingFirstName(
+                in: child.fullName, old: child.firstName, new: capturedFirstName,
+                fatherFullName: child.fatherId.flatMap { vm.member(byId: $0)?.fullName })
 
             Task {
-                await vm.updateChildData(
-                    member: child,
-                    firstName: capturedFirstName,
-                    // الرقم فقط إن تغيّر (ب-٢) — لا يُعاد كتابته مع كل تعديل
-                    phoneNumber: phoneChanged ? capturedPhone : nil,
-                    birthDate: capturedBirthDate,
-                    isDeceased: capturedIsDeceased,
-                    deathDate: capturedDeathDate,
-                    gender: capturedGender
-                )
+                vm.errorMessage = nil
+                // تغيير الجنس: النقل عبر السيرفر أولاً (يحفظ الروابط)، ثم بقية الحقول على السجل بعد النقل
+                var targetId = child.id
+                if movesTree {
+                    guard let movedId = await vm.moveChildGender(childId: child.id,
+                                                                 toGender: nowFemale ? "female" : "male") else {
+                        failSave(vm.errorMessage)
+                        return
+                    }
+                    targetId = movedId
+                }
+
+                let success: Bool
+                if movesTree && nowFemale {
+                    // صارت في شجرة النساء — لا هاتف للأنثى
+                    success = await vm.updateWomanMember(
+                        id: targetId,
+                        firstName: capturedFirstName,
+                        birthDate: capturedBirthDay,
+                        isDeceased: capturedIsDeceased,
+                        deathDate: capturedDeathDay,
+                        gender: "female",
+                        fullName: finalFullName
+                    )
+                    if let fatherId = child.fatherId { await vm.fetchChildren(for: fatherId) }
+                } else {
+                    success = await vm.updateChildRow(
+                        id: targetId,
+                        fatherId: child.fatherId,
+                        fullName: finalFullName,
+                        firstName: capturedFirstName,
+                        // الرقم فقط إن تغيّر (ب-٢) — لا يُعاد كتابته مع كل تعديل
+                        phoneNumber: phoneChanged ? capturedPhone : nil,
+                        birthDate: capturedBirthDate,
+                        isDeceased: capturedIsDeceased,
+                        deathDate: capturedDeathDate,
+                        // بعد النقل الجنس كتبه السيرفر — لا يُكتب مباشرة
+                        gender: movesTree ? nil : capturedGender
+                    )
+                }
+                guard success else {
+                    failSave(vm.errorMessage)
+                    return
+                }
 
                 var changedFields: [String] = []
                 if nameChanged { changedFields.append(L10n.t("الاسم", "Name")) }
@@ -283,6 +340,9 @@ struct AddSonByAdminSheet: View {
                 if birthChanged { changedFields.append(L10n.t("تاريخ الميلاد", "Birth date")) }
                 if deceasedChanged || deathChanged { changedFields.append(L10n.t("حالة الوفاة", "Deceased status")) }
                 if genderChanged { changedFields.append(L10n.t("الجنس", "Gender")) }
+
+                isSaving = false
+                dismiss()
 
                 let fieldsList = changedFields.joined(separator: "، ")
                 await vm.notificationVM?.notifyAdminsWithPush(
@@ -298,26 +358,58 @@ struct AddSonByAdminSheet: View {
         } else {
             let capturedParentId = parent.id
             Task {
-                _ = await vm.addChild(
-                    firstNameOnly: capturedFirstName,
-                    phoneNumber: capturedPhone,
-                    birthDate: capturedBirthDate,
-                    fatherId: capturedParentId,
-                    isDeceased: capturedIsDeceased,
-                    deathDate: capturedDeathDate,
-                    gender: capturedGender,
-                    silent: true
-                )
+                vm.errorMessage = nil
+                let success: Bool
+                if nowFemale {
+                    // أنثى → شجرة النساء عبر RPC add_family_child (لا profiles)
+                    let newId = await vm.addFamilyChild(
+                        parentId: capturedParentId,
+                        name: capturedFirstName,
+                        gender: "female",
+                        birthDate: capturedBirthDay,
+                        isDeceased: capturedIsDeceased,
+                        deathDate: capturedDeathDay,
+                        parentFullName: parentName
+                    )
+                    success = newId != nil
+                } else {
+                    let childId = await vm.addChild(
+                        firstNameOnly: capturedFirstName,
+                        phoneNumber: capturedPhone,
+                        birthDate: capturedBirthDate,
+                        fatherId: capturedParentId,
+                        isDeceased: capturedIsDeceased,
+                        deathDate: capturedDeathDate,
+                        gender: capturedGender,
+                        silent: true
+                    )
+                    success = childId != nil
+                }
+                guard success else {
+                    failSave(vm.errorMessage)
+                    return
+                }
+
+                isSaving = false
+                dismiss()
+
                 await vm.notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("إضافة ابن جديد", "New Child Added"),
                     body: L10n.t(
-                        "تم إضافة ابن: \(capturedFirstName) لـ: \(parentName)",
+                        "تم إضافة \(nowFemale ? "ابنة" : "ابن"): \(capturedFirstName) لـ: \(parentName)",
                         "Child added: \(capturedFirstName) to: \(parentName)"
                     ),
                     kind: "admin_edit_child_add"
                 )
-                Log.info("[Admin] \(adminName) أضاف الابن \(capturedFirstName) لـ \(parentName)")
+                Log.info("[Admin] \(adminName) أضاف \(nowFemale ? "الابنة" : "الابن") \(capturedFirstName) لـ \(parentName)")
             }
         }
+    }
+
+    /// فشل الحفظ: المربّع يبقى مفتوحاً بما كُتب، ويُعرض السبب
+    private func failSave(_ message: String?) {
+        isSaving = false
+        saveErrorText = message ?? L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
+        showSaveError = true
     }
 }
