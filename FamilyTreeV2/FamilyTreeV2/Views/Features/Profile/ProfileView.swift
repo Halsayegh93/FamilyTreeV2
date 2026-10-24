@@ -897,13 +897,7 @@ struct ProfileView: View {
                             )
                         }
                     }
-                    // إضافة أخت تحت أبيه في شجرة النساء — لمن له أب في الشجرة (طلب المالك ٢٠٢٦-١٠-٢٤)
-                    if user?.fatherId != nil {
-                        addFamilyActionCell(title: L10n.t("إضافة أخت", "Add Sister"),
-                                            icon: "person.badge.plus", color: DS.Color.female) {
-                            treeDaughterKind = .sister
-                        }
-                    }
+                    // الأخت لا تظهر ولا تُضاف من «حسابي» — من الشجرة فقط، تحت الأب (طلب المالك ٢٠٢٦-١٠-٢٤)
                 }
                 DSDivider()
             }

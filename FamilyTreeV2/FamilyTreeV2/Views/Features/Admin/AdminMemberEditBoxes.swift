@@ -377,16 +377,42 @@ struct EditGenderSheet: View {
             DSGenderPicker(selection: $gender)
                 .dsCard()
                 .dsStaggerIn(1)
+
+            // الأنثى مكانها شجرة النساء — كان الحفظ يكتب العمود فقط فتبقى في شجرة الرجال
+            if gender == "female" {
+                DSNoteCard(L10n.t("ستُنقل إلى شجرة النساء تحت أبيها، بدون الرقم والصورة.",
+                                  "She will move to the women's tree under her father, without phone and photo."),
+                           tint: DS.Color.warning)
+                    .dsStaggerIn(2)
+            }
+            if let failure {
+                DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
+    @State private var failure: String?
+
     private func save() {
         isSaving = true
+        failure = nil
         Task {
-            await memberVM.updateMemberGender(memberId: member.id, gender: gender)
-            isSaving = false
-            dismiss()
+            if gender == "female" {
+                // النقل بين الشجرتين عبر السيرفر (يحفظ الروابط) — مثل «تعديل الابن»
+                let moved = await memberVM.moveChildGender(childId: member.id, toGender: "female")
+                isSaving = false
+                guard moved != nil else {
+                    failure = memberVM.errorMessage ?? L10n.t("تعذّر النقل. حاول مرة أخرى.", "Couldn't move. Try again.")
+                    return
+                }
+                if let fatherId = member.fatherId { await memberVM.fetchChildren(for: fatherId) }
+                dismiss()
+            } else {
+                await memberVM.updateMemberGender(memberId: member.id, gender: gender)
+                isSaving = false
+                dismiss()
+            }
         }
     }
 }
