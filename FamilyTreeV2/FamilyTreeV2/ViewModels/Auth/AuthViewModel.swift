@@ -652,6 +652,12 @@ class AuthViewModel: ObservableObject {
             access = .pendingApproval
         }
 
+        // شاشة حد الأجهزة/الجهاز المُزال للعضو نفسه تبقى حتى يزيل جهازاً — إعادة الفحص (الرجوع للتطبيق،
+        // عودة الاتصال) كانت تكتب فوقها «مفعّل» فيفتح التطبيق على الجهاز الزائد
+        let deviceGates: [AuthStatus] = [.deviceLimitExceeded, .deviceRevoked, .deviceOverLimit]
+        if access == .fullyAuthenticated, deviceGates.contains(self.status), self.currentUser?.id == profile.id {
+            access = self.status
+        }
         self.currentUser = profile
         self.status = access
 
@@ -1256,6 +1262,14 @@ class AuthViewModel: ObservableObject {
         self.status = .authenticatedNoProfile
     }
 
+    /// بعد إزالة جهاز من شاشة حد الأجهزة: الشاشة الصحيحة لحالة الحساب — كانت تفتح التطبيق كاملاً لكل من
+    /// يزيل جهازاً ولو كان تسجيله معلّقاً
+    func releaseDeviceGate() {
+        guard let profile = currentUser else { status = .fullyAuthenticated; return }
+        let access = resolveAuthAccess(for: profile)
+        status = access == .unauthenticated ? .fullyAuthenticated : access
+    }
+
     /// العضو المفعّل من كاش حسابه (جلسة محفوظة على الجهاز، بلا شبكة) — للدخول الفوري عند فتح التطبيق.
     /// غير المفعّل (معلّق، مجمّد، بلا رقم…) ينتظر التحقق من الخادم كما كان.
     private func restoreActiveMemberFromCache() {
@@ -1384,6 +1398,7 @@ class AuthViewModel: ObservableObject {
     
     private func clearLocalSession() {
         sessionGeneration = UUID()
+        MemberActivityTracker.stop()
         activeProfileCheckTask?.cancel()
         CacheManager.shared.clearAll()
         SharedSessionStore.clear()
@@ -1641,11 +1656,17 @@ class AuthViewModel: ObservableObject {
             // فشل التسجيل (شبكة/خادم) → أظهر خطأً للمستخدم بدل الطرد الصامت،
             // ثم أعد فحص البروفايل (يُبقيه في شاشة التسجيل إن لم يُنشأ السجل).
             let raw = "\(error) \(error.localizedDescription)".lowercased()
-            self.registrationError = raw.contains("phone_in_use")
-                ? L10n.t("هذا الرقم مسجّل لعضو آخر. تواصل مع إدارة العائلة.",
-                         "This number is registered to another member. Please contact the family administration.")
-                : L10n.t("تعذّر إكمال التسجيل. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
-                         "Registration couldn't be completed. Check your internet connection and try again.")
+            if raw.contains("phone_banned") {
+                // حارس السيرفر يرفض الرقم المحظور — كانت الرسالة «تأكد من اتصالك» فيعيد المحاولة بلا فائدة
+                self.registrationError = L10n.t("هذا الرقم محظور من استخدام التطبيق.",
+                                                "This phone number is banned from using the app.")
+            } else {
+                self.registrationError = raw.contains("phone_in_use")
+                    ? L10n.t("هذا الرقم مسجّل لعضو آخر. تواصل مع إدارة العائلة.",
+                             "This number is registered to another member. Please contact the family administration.")
+                    : L10n.t("تعذّر إكمال التسجيل. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
+                             "Registration couldn't be completed. Check your internet connection and try again.")
+            }
             await checkUserProfile()
         }
         self.isLoading = false
