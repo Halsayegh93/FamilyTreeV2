@@ -949,7 +949,17 @@ struct NotificationsCenterView: View {
             }
         }
 
-        if let requesterId = matchesRequesterId {
+        // دخول النساء (٢٠٢٦-١٠-٢٤): طلب الأنثى لا يُربط بشجرة الرجال — «ربط بشجرة النساء» من «الوارد»
+        if let requesterId = matchesRequesterId, memberVM.member(byId: requesterId)?.isFemale == true {
+            DSComposerSection(title: L10n.t("شجرة النساء", "Women's tree"),
+                              icon: "figure.stand.dress",
+                              tint: DS.Color.female,
+                              index: matchesIndex) {
+                DSNoteCard(L10n.t("طلب أنثى — يُربط بعقدتها في شجرة النساء من «الوارد» ← «ربط بشجرة النساء».",
+                                  "A woman's request — link her to her node in the women's tree from the inbox ← «Link to women's tree»."),
+                           icon: "link.badge.plus", tint: DS.Color.female)
+            }
+        } else if let requesterId = matchesRequesterId {
             joinMatchesCard(
                 candidates: joinMatchCandidates,
                 requesterId: requesterId,
@@ -1442,6 +1452,12 @@ struct NotificationsCenterView: View {
                 await memberVM.fetchAllMembers(force: true)
                 requester = memberVM.member(byId: rid)
             }
+        }
+
+        // الأنثى: لا مطابقات (ولا «ربط») من شجرة الرجال
+        if requester?.isFemale == true {
+            Log.info("[JoinMatch] skip — طلب أنثى يُربط بشجرة النساء")
+            return
         }
 
         // 2) استخرج الاسم الكامل للمتقدم من requester أو من body كـ fallback

@@ -20,6 +20,13 @@ struct RegistrationView: View {
     @State private var birthDateChosen = false
     /// الجنس مطلوب بلا اختيار مسبق (الدفعة ١٢ — كان «ذكر» ثابتاً فيُسجَّل كل منضم ذكراً): «male» أو «female»
     @State private var selectedGender: String = ""
+    /// دخول النساء (٢٠٢٦-١٠-٢٤): الأنثى تختار أباها من شجرة الرجال — يُحمل في طلب الانضمام لا في ملفها
+    /// (مكانها شجرة النساء تحت أبيها، تربطها الإدارة)
+    @State private var selectedFather: FamilyMember? = nil
+    @State private var showFatherPicker = false
+    @State private var fatherSearch = ""
+    @State private var fatherResults: [FamilyMember] = []
+    @State private var fatherSearching = false
     @State private var selectedImage: UIImage? = nil
 
     // Animation states
@@ -59,6 +66,9 @@ struct RegistrationView: View {
                                 AnyView(familyNameSection)
                                 AnyView(birthDateSection)
                                 AnyView(genderSection)
+                                if selectedGender == "female" {
+                                    AnyView(fatherSection)
+                                }
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -95,6 +105,9 @@ struct RegistrationView: View {
                 if !t.isEmpty { familyName = t }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        }
+        .dsCenterBox(isPresented: $showFatherPicker) {
+            fatherPickerBox
         }
         .task {
             await familyNamesVM.fetch()
@@ -306,6 +319,82 @@ struct RegistrationView: View {
                 validationError(L10n.t("اختيار الجنس مطلوب", "Choosing a gender is required"))
             }
         }
+        // الأب لغير الأنثى لا يُحمل
+        .onChange(of: selectedGender) { g in
+            if g != "female" { selectedFather = nil }
+        }
+    }
+
+    // MARK: - Father (الأنثى) — صفّ يفتح منتقي الأعضاء الموحّد ببحث السيرفر
+    private var fatherSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Button {
+                if fatherSearch.isEmpty { fatherSearch = suggestedFatherQuery }
+                showFatherPicker = true
+            } label: {
+                DSRow(icon: "figure.and.child.holdinghands", tint: DS.Color.palm,
+                      title: L10n.t("الأب", "Father"),
+                      subtitle: selectedFather?.fullName ?? L10n.t("اختاري أباك من الشجرة", "Pick your father from the tree")) {
+                    DSStateIcon("magnifyingglass", tint: DS.Color.primary, size: DS.Icon.row)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(L10n.t("يفتح البحث عن الأب", "Opens the father search"))
+
+            Text(L10n.t("تُربطين بشجرة النساء تحت أبيك — يسهّل على الإدارة قبول طلبك",
+                        "You'll be placed in the women's tree under your father — it helps the admins approve you"))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// اسم الأب المقترح للبحث: الاسم المكتوب بلا الاسم الأول
+    private var suggestedFatherQuery: String {
+        let parts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
+        return parts.count > 1 ? parts.dropFirst().joined(separator: " ") : ""
+    }
+
+    private var fatherPickerBox: some View {
+        DSMemberPickerBox(
+            title: L10n.t("اختيار الأب", "Choose father"),
+            subtitle: L10n.t("من شجرة العائلة", "From the family tree"),
+            icon: "figure.and.child.holdinghands",
+            candidates: fatherResults,
+            search: $fatherSearch,
+            isLoading: fatherSearching,
+            requiresSpecificQuery: true,
+            searchLabel: L10n.t("اسم الأب", "Father's name"),
+            searchPlaceholder: L10n.t("اسم الأب الثلاثي", "Father's three-part name"),
+            hintTitle: L10n.t("اكتبي اسم أبيك الثلاثي", "Type your father's three-part name"),
+            hintMessage: L10n.t("بدون اسم العائلة", "Without the family name"),
+            noMatchTitle: L10n.t("لم نجد هذا الاسم", "Name not found"),
+            emptyMessage: L10n.t("جرّبي الاسم بدون اسم العائلة، أو اتركيه وتربطك الإدارة",
+                                 "Try without the family name, or skip it and the admins will place you"),
+            selectedId: selectedFather?.id,
+            onPick: { m in
+                selectedFather = m
+                showFatherPicker = false
+            },
+            onCancel: { showFatherPicker = false }
+        )
+        // بحث السيرفر بعد توقّف الكتابة قليلاً
+        .task(id: fatherSearch) {
+            let q = fatherSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard q.split(whereSeparator: \.isWhitespace).count >= 2 else {
+                fatherResults = []
+                fatherSearching = false
+                return
+            }
+            fatherSearching = true
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            let found = await authVM.searchFatherCandidates(q)
+            guard !Task.isCancelled else { return }
+            fatherResults = found
+            fatherSearching = false
+        }
     }
 
     // MARK: - Submit Button
@@ -351,6 +440,8 @@ struct RegistrationView: View {
                             familyName: trimmedFamily,
                             birthDate: birthDateChosen ? birthDate : nil,
                             gender: selectedGender,
+                            fatherId: selectedGender == "female" ? selectedFather?.id : nil,
+                            fatherName: selectedGender == "female" ? selectedFather?.fullName : nil,
                             avatarImage: selectedImage
                         )
                     }

@@ -554,8 +554,10 @@ struct AdminAllRequestsView: View {
             ))
         }
         .dsTallBox(item: $memberToLink) { member in   // قائمة أعضاء طويلة (توصية أبل)
+            // طلب الأنثى: المربّع نفسه يفتح «ربط بشجرة النساء» (دخول النساء ٢٠٢٦-١٠-٢٤)
             LinkToExistingMemberSheet(pendingMember: member,
-                                      suggested: orderedMatchList(for: member).map(\.member))
+                                      suggested: orderedMatchList(for: member).map(\.member),
+                                      onWomanLinked: { recalculateCounts() })
                 .environmentObject(memberVM)
                 .environmentObject(adminRequestVM)
         }
@@ -2179,9 +2181,12 @@ struct AdminAllRequestsView: View {
         var count = 0
         // ما خرج عن مجال الدور لا يُقبل ولو حُدّد (فحص الثغرات ب-٧)
         let idSet = idsInRoleScope(approving: true)
+        // طلبات النساء لا تُقبل جماعياً — تُربط واحدة واحدة بشجرة النساء (تُحسب «لم تُقبل»)
+        var skippedWomen = 0
 
         for id in ids where idSet.contains(id) {
-            if pendingMembers.contains(where: { $0.id == id }) {
+            if let joiner = pendingMembers.first(where: { $0.id == id }) {
+                if joiner.isFemale { skippedWomen += 1; continue }
                 count += await adminRequestVM.bulkApproveJoinRequests(memberIds: [id])
             } else if let post = newsVM.pendingNewsRequests.first(where: { $0.id == id }) {
                 await newsVM.approveNewsPost(postId: post.id); count += 1
@@ -2215,6 +2220,9 @@ struct AdminAllRequestsView: View {
                 await adminRequestVM.approveTreeEditRequest(request: req)
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             }
+        }
+        if skippedWomen > 0 {
+            adminRequestVM.errorMessage = AdminRequestViewModel.womenOneByOneMessage
         }
         return count
     }
@@ -2306,7 +2314,8 @@ struct AdminAllRequestsView: View {
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
-                    joinStatusLine(matches: results.count, fromWeb: fromWeb)
+                    // الأنثى لا تُطابق بشجرة الرجال — سطرها «تُربط بشجرة النساء»
+                    if !member.isFemale { joinStatusLine(matches: results.count, fromWeb: fromWeb) }
                     if member.isFemale { Self.femaleJoinTag }
                 }
 
@@ -2343,7 +2352,7 @@ struct AdminAllRequestsView: View {
     /// صورة المنضم في صفّه (= مساحة الضغط) وفي بطاقة تفاصيله
     private static let joinAvatar: CGFloat = DS.Icon.tapTarget
 
-    /// «أنثى · تُربط بشجرة النساء» (الدفعة ١٢) — التسجيل صار يسأل عن الجنس؛ الربط والموافقة كما هما
+    /// «أنثى · تُربط بشجرة النساء» (الدفعة ١٢) — والربط «ربط بشجرة النساء» (`LinkWomanAccountSheet`، ٢٠٢٦-١٠-٢٤)
     static var femaleJoinTag: some View {
         HStack(spacing: DS.Spacing.xs) {
             DSStatusChip(text: L10n.t("أنثى", "Female"), icon: "figure.stand.dress", tint: DS.Color.female, size: .mini)
@@ -2589,6 +2598,8 @@ struct AdminAllRequestsView: View {
     /// وفرق حرف واحد مقبول. يُعرض من تطابقت أول ٣ أجزاء من اسمه بالترتيب (أو كلها إن كانت أقل)، ومطابقات السيرفر
     /// (`search_members_by_name` + لقطة التسجيل) تُدمج بلا تكرار متى تطابق الاسم الأول — ثم الكل بالنتيجة.
     func orderedMatchList(for member: FamilyMember) -> [JoinMatch] {
+        // الأنثى تُربط بشجرة النساء — لا مطابقات (ولا «ربط») من شجرة الرجال
+        guard !member.isFemale else { return [] }
         let families = NameMatcher.familyKeys()
         let applicant = NameMatcher.chain(member.fullName, families: families)
         guard !applicant.isEmpty else { return [] }
@@ -3465,21 +3476,32 @@ struct AdminAllRequestsView: View {
             .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
         }
 
-        // ٣) في الشجرة — المطابقات بزر «ربط»، أو اسم جديد
-        DSComposerSection(title: L10n.t("في الشجرة", "In the tree"),
-                          icon: results.isEmpty ? "sparkles" : "person.2.fill",
-                          tint: results.isEmpty ? DS.Color.warning : DS.Color.success,
-                          trailing: results.isEmpty ? nil : "\(results.count)",
-                          index: 2) {
-            if results.isEmpty {
-                // الملاحظة الموحّدة
-                DSNoteCard(L10n.t("لا يوجد اسم مطابق في الشجرة — عند «ربط بالشجرة» يُضاف عضواً جديداً.",
-                                  "No matching name in the tree — linking adds them as a new member."),
-                           icon: "person.badge.plus", tint: DS.Color.warning)
-            } else {
-                VStack(spacing: DS.Spacing.xsm) {
-                    ForEach(results, id: \.member.id) { match in
-                        joinMatchRow(match: match, pendingMember: member)
+        // ٣) في الشجرة — المطابقات بزر «ربط»، أو اسم جديد. الأنثى: شجرة النساء (زرّ المربّع «ربط بشجرة النساء»)
+        if member.isFemale {
+            DSComposerSection(title: L10n.t("في شجرة النساء", "In the women's tree"),
+                              icon: "figure.stand.dress",
+                              tint: DS.Color.female,
+                              index: 2) {
+                DSNoteCard(L10n.t("تُربط بعقدتها في شجرة النساء تحت أبيها، أو تُضاف بنتاً جديدة له — من «ربط بشجرة النساء».",
+                                  "She's linked to her node in the women's tree under her father, or added as his new daughter — via «Link to women's tree»."),
+                           icon: "link.badge.plus", tint: DS.Color.female)
+            }
+        } else {
+            DSComposerSection(title: L10n.t("في الشجرة", "In the tree"),
+                              icon: results.isEmpty ? "sparkles" : "person.2.fill",
+                              tint: results.isEmpty ? DS.Color.warning : DS.Color.success,
+                              trailing: results.isEmpty ? nil : "\(results.count)",
+                              index: 2) {
+                if results.isEmpty {
+                    // الملاحظة الموحّدة
+                    DSNoteCard(L10n.t("لا يوجد اسم مطابق في الشجرة — عند «ربط بالشجرة» يُضاف عضواً جديداً.",
+                                      "No matching name in the tree — linking adds them as a new member."),
+                               icon: "person.badge.plus", tint: DS.Color.warning)
+                } else {
+                    VStack(spacing: DS.Spacing.xsm) {
+                        ForEach(results, id: \.member.id) { match in
+                            joinMatchRow(match: match, pendingMember: member)
+                        }
                     }
                 }
             }
@@ -4099,7 +4121,8 @@ struct AdminAllRequestsView: View {
 
     private func approveLabelFor(_ detail: RequestDetail) -> String {
         switch detail {
-        case .join:    return L10n.t("ربط بالشجرة", "Link to Tree")
+        case .join(let m):
+            return m.isFemale ? L10n.t("ربط بشجرة النساء", "Link to Women's Tree") : L10n.t("ربط بالشجرة", "Link to Tree")
         case .child:   return L10n.t("تأكيد", "Confirm")
         default:       return L10n.t("موافقة", "Approve")
         }

@@ -1022,8 +1022,14 @@ class AdminRequestViewModel: ObservableObject {
         guard !memberIds.isEmpty else { return 0 }
         isLoading = true
         var approved = 0
+        // دخول النساء (٢٠٢٦-١٠-٢٤): طلب الأنثى لا يُقبل جماعياً — يُربط بعقدتها في شجرة النساء واحدة واحدة
+        var skippedWomen = 0
         for id in memberIds {
+            if memberById(id)?.isFemale == true { skippedWomen += 1; continue }
             if await activateAccount(memberId: id, approvingJoin: true) { approved += 1 }
+        }
+        if skippedWomen > 0 {
+            errorMessage = Self.womenOneByOneMessage
         }
         // آخر سبب (مثل «غير مربوط بالشجرة») يبقى في errorMessage — شاشة الطلبات تضمّه لملخّص «N من M»
         Log.info("تم قبول \(approved)/\(memberIds.count) طلب انضمام جماعياً")
@@ -1529,6 +1535,11 @@ class AdminRequestViewModel: ObservableObject {
     @discardableResult
     func activateAccount(memberId: UUID, approvingJoin: Bool = false) async -> Bool {
         guard canModerate else { return false }
+        // طلب انضمام أنثى: مكانها شجرة النساء — «ربط بشجرة النساء» (`linkWomanAccount`) لا التفعيل
+        if let m = memberById(memberId), m.isFemale, approvingJoin || m.role == .pending {
+            errorMessage = Self.womenOneByOneMessage
+            return false
+        }
         // لا تفعيل لحساب خارج الشجرة (بلا أب): يصير معلّقاً بالهواء — لا يظهر في الشجرة ولا يعمل له «موقعي»
         // (حدث مع «عبدالله اياد» ٢٠٢٦-١٠-٠٥). الربط بسجله أو إضافته تحت أبيه أولاً.
         var fatherId = memberVM?.allMembers.first(where: { $0.id == memberId })?.fatherId
@@ -1646,6 +1657,11 @@ class AdminRequestViewModel: ObservableObject {
     /// Approve a new member and activate their account with father linkage
     func approveMember(memberId: UUID, fatherId: UUID?) async {
         guard canModerate else { Log.warning("قبول العضو مرفوض: لا صلاحية"); return }
+        // الأنثى لا تُكتب تحت أب في شجرة الرجال — «ربط بشجرة النساء»
+        if memberById(memberId)?.isFemale == true {
+            errorMessage = Self.womenOneByOneMessage
+            return
+        }
         self.isLoading = true
         let fatherName = fatherId.flatMap { id in
             memberById(id)?.fullName
@@ -1705,6 +1721,11 @@ class AdminRequestViewModel: ObservableObject {
             self.mergeResult = .failure(L10n.t("لا يمكن دمج العضو مع نفسه.", "Cannot merge a member with itself."))
             return
         }
+        // «ربط بالشجرة» لملفات الرجال فقط — حساب الأنثى يُربط بعقدتها في شجرة النساء
+        if memberById(newMemberId)?.isFemale == true {
+            self.mergeResult = .failure(Self.womenOneByOneMessage)
+            return
+        }
 
         Log.info("[MERGE] بدء الدمج: \(newMemberId) ← \(existingTreeMemberId)")
         self.isLoading = true
@@ -1760,6 +1781,124 @@ class AdminRequestViewModel: ObservableObject {
         }
 
         self.isLoading = false
+    }
+
+    // MARK: - دخول النساء (طلب المالك ٢٠٢٦-١٠-٢٤): ربط طلب انضمام أنثى بعقدتها في شجرة النساء
+
+    /// طلب الأنثى لا يمرّ بالتفعيل أو «ربط بالشجرة» أو القبول الجماعي
+    static var womenOneByOneMessage: String {
+        L10n.t("النساء يُربطن واحدة واحدة من «ربط بشجرة النساء».",
+               "Women are linked one at a time with «Link to women's tree».")
+    }
+
+    /// طلب الانضمام/الربط المعلّق + الأب الذي اختارته في التسجيل (`|father_id:…|father_name:…` في `details`)
+    struct WomanJoinRequestInfo {
+        let requestId: UUID
+        let fatherId: UUID?
+        let fatherName: String?
+    }
+
+    /// يقرأ أحدث طلب انضمام/ربط معلّق للعضو — nil = لا طلب أو تعذّرت القراءة
+    func fetchWomanJoinRequest(for memberId: UUID) async -> WomanJoinRequestInfo? {
+        nonisolated struct Row: Decodable { let id: UUID; let details: String? }
+        do {
+            let rows: [Row] = try await supabase
+                .from("admin_requests")
+                .select("id, details")
+                .eq("member_id", value: memberId.uuidString)
+                .in("request_type", values: [RequestType.linkRequest.rawValue, RequestType.joinRequest.rawValue])
+                .eq("status", value: ApprovalStatus.pending.rawValue)
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+                .value
+            guard let row = rows.first else { return nil }
+            let fields = Self.joinDetailFields(row.details)
+            let name = fields["father_name"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return WomanJoinRequestInfo(requestId: row.id,
+                                        fatherId: fields["father_id"].flatMap { UUID(uuidString: $0) },
+                                        fatherName: (name?.isEmpty == false) ? name : nil)
+        } catch {
+            Log.warning("[WomenLink] تعذّرت قراءة طلب الانضمام: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// حقول `details` بصيغة «نص|مفتاح:قيمة|مفتاح:قيمة» (التسجيل)
+    static func joinDetailFields(_ details: String?) -> [String: String] {
+        var out: [String: String] = [:]
+        for part in (details ?? "").split(separator: "|") {
+            guard let colon = part.firstIndex(of: ":") else { continue }
+            let key = part[..<colon].trimmingCharacters(in: .whitespaces)
+            let value = part[part.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            if !key.isEmpty { out[key] = value }
+        }
+        return out
+    }
+
+    /// `link_woman_account`: بعقدة موجودة (`womanId`) أو بنت جديدة باسم `name` تحت `fatherId`.
+    /// السيرفر يفعّل الحساب ويغلق الطلب ويُدرج «مرحباً بك في العائلة». يرجّع nil عند النجاح أو رسالة الخطأ.
+    func linkWomanAccount(requestId: UUID, memberId: UUID, womanId: UUID?, fatherId: UUID?, name: String?) async -> String? {
+        guard NetworkMonitor.shared.requireOnline() else {
+            return L10n.t("لا يوجد اتصال بالإنترنت.", "No internet connection.")
+        }
+        guard authVM?.canApproveTreeRequests == true else {
+            return Self.womanLinkMessage("not_allowed")
+        }
+        let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // المفاتيح الأربعة دائماً — الفارغ null
+        let params: [String: AnyEncodable] = [
+            "p_request_id": AnyEncodable(requestId.uuidString),
+            "p_woman_id": AnyEncodable(womanId?.uuidString),
+            "p_father_id": AnyEncodable(womanId == nil ? fatherId?.uuidString : Optional<String>.none),
+            "p_name": AnyEncodable(womanId == nil ? trimmedName : Optional<String>.none)
+        ]
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await supabase.rpc("link_woman_account", params: params).execute()
+            Log.info("[WomenLink] ✅ رُبط حساب \(memberId.uuidString.prefix(8)) بشجرة النساء")
+            // الطلب يختفي فوراً من «الوارد» (طلبات الانضمام = الدور «معلّق»)
+            if let index = memberVM?.allMembers.firstIndex(where: { $0.id == memberId }) {
+                memberVM?.allMembers[index].role = .member
+                memberVM?.allMembers[index].status = .active
+                memberVM?.allMembers[index].isHiddenFromTree = true
+                memberVM?.objectWillChange.send()
+            }
+            await memberVM?.fetchAllMembers(force: true)
+            _ = try? await WomenStore.fetch()
+            NotificationCenter.default.post(name: .womenMembersChanged, object: nil)
+            return nil
+        } catch {
+            let hint = (error as? PostgrestError)?.hint ?? ""
+            Log.error("[WomenLink] ❌ فشل الربط (\(hint)): \(error.localizedDescription)")
+            return Self.womanLinkMessage(hint)
+        }
+    }
+
+    /// رسائل `link_woman_account` بالـ hint
+    static func womanLinkMessage(_ hint: String) -> String {
+        switch hint {
+        case "not_allowed":
+            return L10n.t("ربط النساء للمالك والمدير والمراقب.", "Linking women is for the owner, admins and monitors.")
+        case "request_not_found", "already_handled":
+            return alreadyHandledMessage
+        case "not_female":
+            return L10n.t("صاحب الطلب ليس مسجّلاً كأنثى.", "The applicant isn't registered as female.")
+        case "has_father":
+            return L10n.t("الحساب مربوط بشجرة الرجال (له أب أو أبناء) — صحّحه أولاً.",
+                          "The account is tied to the men's tree (has a father or children) — fix it first.")
+        case "node_taken":
+            return L10n.t("هذا الاسم مربوط بحساب آخر.", "This name is linked to another account.")
+        case "not_female_node":
+            return L10n.t("هذا الاسم ليس أنثى في شجرة النساء.", "This name isn't a female in the women's tree.")
+        case "no_father":
+            return L10n.t("الأب غير موجود في الشجرة — اختر الأب.", "The father isn't in the tree — choose the father.")
+        case "name_required":
+            return L10n.t("اكتب اسمها.", "Type her name.")
+        default:
+            return L10n.t("تعذّر الربط. حاول مرة أخرى.", "Couldn't link. Try again.")
+        }
     }
 
     private func notifyJoinApproval(memberId: UUID, fatherName: String?) async {

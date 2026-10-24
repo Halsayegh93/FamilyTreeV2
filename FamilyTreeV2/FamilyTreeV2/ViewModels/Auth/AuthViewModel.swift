@@ -716,6 +716,34 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    /// اختيار الأب في تسجيل الأنثى — بحث السيرفر بالاسم (`search_members_by_name`، كلمتان على الأقل).
+    /// المسجّل الجديد لا يقرأ الشجرة كاملة، فالنتائج من السيرفر فقط
+    func searchFatherCandidates(_ query: String) async -> [FamilyMember] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.split(whereSeparator: \.isWhitespace).count >= 2 else { return [] }
+        nonisolated struct Row: Decodable {
+            let memberId: UUID
+            let fullName: String
+            enum CodingKeys: String, CodingKey {
+                case memberId = "member_id"
+                case fullName = "full_name"
+            }
+        }
+        do {
+            let rows: [Row] = try await supabase
+                .rpc("search_members_by_name", params: ["p_query": AnyEncodable(trimmed)])
+                .execute()
+                .value
+            return rows.map { row in
+                let first = row.fullName.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
+                return FamilyMember(id: row.memberId, firstName: first, fullName: row.fullName)
+            }
+        } catch {
+            Log.warning("[REGISTER] فشل البحث عن الأب: \(error.localizedDescription)")
+            return []
+        }
+    }
+
     // MARK: - OTP Send / Verify
 
     /// Feature flag — اقلب لـ true بعد إعداد WhatsApp Business Account في Twilio Verify.
@@ -1460,7 +1488,8 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - Registration
     
-    func registerNewUser(firstName: String, familyName: String, birthDate: Date?, gender: String, fatherId: UUID? = nil, avatarImage: UIImage? = nil) async {
+    /// - fatherId/fatherName: للأنثى (دخول النساء ٢٠٢٦-١٠-٢٤) الأب الذي اختارته — يُحمل في طلب الانضمام لا في ملفها
+    func registerNewUser(firstName: String, familyName: String, birthDate: Date?, gender: String, fatherId: UUID? = nil, fatherName: String? = nil, avatarImage: UIImage? = nil) async {
         self.isLoading = true
         self.registrationError = nil
         guard let user = try? await supabase.auth.session.user else {
@@ -1539,8 +1568,10 @@ class AuthViewModel: ObservableObject {
             "sort_order": AnyEncodable(0),
             "created_at": AnyEncodable(DateHelper.now)
         ]
-        // الأب يُكتب فقط إن اختير — لا تفريغ لأب موجود
-        if let fatherId { profileData["father_id"] = AnyEncodable(fatherId.uuidString) }
+        // الأب يُكتب فقط إن اختير — لا تفريغ لأب موجود. الأنثى مكانها شجرة النساء: أبوها لا يُكتب في ملفها
+        // (`link_woman_account` يرفض حساباً له أب — has_father) بل يُحمل في طلب الانضمام لتربطها الإدارة تحت أبيها
+        let isFemale = gender.lowercased() == "female"
+        if let fatherId, !isFemale { profileData["father_id"] = AnyEncodable(fatherId.uuidString) }
         // تاريخ الميلاد فقط إن اختاره فعلاً — لا يُحفظ تاريخ «قبل ٢٠ سنة» الافتراضي (٢٠٢٦-١٠-٠٥)
         if let birthDate { profileData["birth_date"] = AnyEncodable(DateHelper.format(birthDate)) }
         
@@ -1602,11 +1633,21 @@ class AuthViewModel: ObservableObject {
             }
             
             // بناء تفاصيل الطلب مع المطابقات المحتملة
+            // الأب المختار (الأنثى) قبل matched_ids — قارئها يأخذ كل ما بعدها (`fetchMatchedMemberIds`)
+            var fatherInfo = ""
+            if isFemale, let fatherId {
+                let cleanFather = (fatherName ?? "")
+                    .replacingOccurrences(of: "|", with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                fatherInfo = "|father_id:\(fatherId.uuidString.lowercased())"
+                if !cleanFather.isEmpty { fatherInfo += "|father_name:\(cleanFather)" }
+            }
             let matchInfo: String
             if matchedMemberIds.isEmpty {
-                matchInfo = "طلب انضمام جديد — لا توجد مطابقات بالاسم في الشجرة"
+                matchInfo = "طلب انضمام جديد — لا توجد مطابقات بالاسم في الشجرة" + fatherInfo
             } else {
-                matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة|matched_ids:\(matchedMemberIds.joined(separator: ","))"
+                matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة" + fatherInfo
+                    + "|matched_ids:\(matchedMemberIds.joined(separator: ","))"
             }
             
             // طلب ربط واحد فقط — «تعديل البيانات» لا يكرّره
