@@ -374,10 +374,10 @@ struct MemberDetailsView: View {
     /// «عرض التفاصيل» / «إخفاء التفاصيل» — يوسّع المربّع أو يصغّره
     private var detailsToggleButton: some View {
         let expanded = detent == .large
-        // الزرّ الواحد (٤٤) بعرض محتواه — لون ممتلئ مختلف عن شارة العمر (طلب المالك)
-        return DSButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
-                                 : L10n.t("عرض التفاصيل", "Show details"),
-                        icon: expanded ? "chevron.down" : "chevron.up", fullWidth: false) {
+        // زرّ ناعم (طلب المالك ٢٠٢٦-١٠-٢٤) — شريحة بتلوين القسم الخفيف بدل التعبئة الممتلئة، فلا ينافس أزرار التعديل
+        return DSChipButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
+                                     : L10n.t("عرض التفاصيل", "Show details"),
+                            icon: expanded ? "chevron.down" : "chevron.up") {
             withAnimation(DS.Anim.snappy) { detent = expanded ? .fraction(0.46) : .large }
         }
     }
