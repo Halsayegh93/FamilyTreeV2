@@ -57,6 +57,8 @@ struct WomenClassicTreeView: View {
     var treeTab: Binding<Int>? = nil
     /// عقدة المرأة المرتبطة بالمستخدم الحالي — لزر «موقعي».
     var meWomanId: UUID? = nil
+    /// حساب امرأة (دخول النساء): الشجرة تفتح متمركزة على عقدتها («موقعي» تلقائياً) — ومع «عرض في شجرة النساء»
+    var autoLocate: Bool = false
 
     // أبعاد العقدة والفجوات: `WomenTreeMetrics` × معامل «حجم النص» — يُقرأ مرة هنا ويُخزَّن مع التخطيط
     @Environment(\.dsTreeScale) private var envTreeScale
@@ -515,6 +517,13 @@ struct WomenClassicTreeView: View {
                     initIfNeeded()
                     let L = rebuild()
                     fit(in: geo.size, layout: L)
+                    // حساب المرأة: تفتح على عقدتها
+                    if autoLocate, let mid = meWomanId { locate(mid) }
+                }
+                // «عرض في شجرة النساء» من «حسابي» والشجرة مفتوحة أصلاً — تمركز على عقدتها
+                .onReceive(NotificationCenter.default.publisher(for: .openWomenTree)) { _ in
+                    guard autoLocate, let mid = meWomanId else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { locate(mid) }
                 }
                 .onChange(of: geo.size) { newSize in
                     // تدوير الشاشة: أعد ضبط موضع الشجرة للاتجاه الجديد (طلب المالك)
@@ -677,10 +686,13 @@ struct WomenClassicTreeView: View {
 
     /// «موقعي»: يوسّع مسار الأجداد حتى العضو، ويعرض **النسب كامل من الجذر لين اسمك** معًا.
     private func locate(_ id: UUID) {
-        guard byId[id] != nil else { if let r = activeRoot { centerOn(r, in: layout) }; return }
+        guard let node = byId[id] else { if let r = activeRoot { centerOn(r, in: layout) }; return }
+        // الزوجة الوافدة (بلا أب في الشجرة) تُرسم كبسولة جنب زوجها — فالمسار والتمركز على الزوج، وفرعه يُفتح فتظهر
+        var target = id
+        if node.fatherId.flatMap({ byId[$0] }) == nil, let hid = node.husbandId, byId[hid] != nil { target = hid }
         // مسار الأجداد (عبر الأب) من العضو للأعلى
         var path: [UUID] = []
-        var cur: UUID? = id
+        var cur: UUID? = target
         var seen = Set<UUID>()
         while let c = cur, !seen.contains(c) {
             seen.insert(c)
@@ -693,10 +705,10 @@ struct WomenClassicTreeView: View {
         collapsed = next
         let L = rebuild()
         // بدون زوم: تكبير طبيعي (1.0) وتمركز على اسمك — تقدر تسحب لأعلى وتشوف الجذر.
-        guard let p = L.positions[id], viewport.width > 0 else { centerOn(id, in: L); return }
+        guard let p = L.positions[target], viewport.width > 0 else { centerOn(target, in: L); return }
         userInteracted = true
         let s: CGFloat = 1.0
-        let h = L.heights[id] ?? L.m.nodeH
+        let h = L.heights[target] ?? L.m.nodeH
         let cx = (p.x + L.m.nodeW / 2) * s
         let cy = (p.y + h / 2) * s
         withAnimation(DS.Anim.smooth) {

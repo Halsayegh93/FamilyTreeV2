@@ -205,6 +205,11 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     var isFemale: Bool {
         return (gender ?? "").lowercased() == "female"
     }
+
+    /// حساب امرأة في التطبيق (دخول النساء، ٢٠٢٦-١٠-٢٤) — لصفوف `profiles` فقط: أنثى، مخفية من شجرة الرجال، بلا أب؛
+    /// موقعها عقدتها في شجرة النساء (`women_members.linked_user_id` = معرّفها — `WomenStore.node(forAccount:)`).
+    /// لا تُعدّ ولا تُعرض رجلاً أبداً. (صفوف شجرة النساء نفسها كلها إناث — لا تُستعمل عليها)
+    var isWomanAccount: Bool { isFemale }
     
     /// الاسم العلني للمستوى — المالك يظهر كـ "مدير" للباقي
     var roleName: String {
@@ -319,9 +324,12 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     ///   - role == .pending (طلبات تحت الموافقة)
     ///   - status == .frozen (مجمّد)
     ///   - isHiddenFromTree (مخفيّ يدوياً)
+    ///   - حساب امرأة (`isWomanAccount` — يُعدّ في شجرة النساء)
     ///   - أسماء فارغة (سجلّات معطوبة)
     var isCountable: Bool {
         if role == .pending { return false }
+        // حساب امرأة ليس فرداً في شجرة الرجال — تُعدّ من شجرة النساء
+        if isWomanAccount { return false }
         if status == .frozen { return false }
         if isHiddenFromTree { return false }
         if !hasName { return false }

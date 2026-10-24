@@ -53,6 +53,12 @@ enum WomenStore {
     static var womanByLinkedUser: [UUID: UUID] = [:]   // userId → womanId
     static var linkedUserByWoman: [UUID: UUID] = [:]   // womanId → userId
 
+    /// عقدة حساب المرأة في شجرة النساء (`linked_user_id` = معرّف حسابها) — من آخر جلب؛ nil = غير مربوطة بعد
+    static func node(forAccount userId: UUID) -> FamilyMember? {
+        guard let womanId = womanByLinkedUser[userId] else { return nil }
+        return cache.first { $0.id == womanId }
+    }
+
     static func fetch() async throws -> [FamilyMember] {
         // سجلّات «الموقع فقط» لا وجود لها في التطبيق — تُستبعد على السيرفر
         // فلا تُنقل أصلاً، بدل تصفيتها بعد الوصول.

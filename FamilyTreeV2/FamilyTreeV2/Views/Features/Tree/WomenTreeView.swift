@@ -68,7 +68,9 @@ struct WomenTreeView: View {
                         members: allMembers,
                         onSelect: { selectedWoman = $0 },
                         treeTab: treeTab,
-                        meWomanId: resolveMyWomanId()
+                        meWomanId: resolveMyWomanId(),
+                        // حساب امرأة: تفتح الشجرة على عقدتها
+                        autoLocate: authVM.currentUser?.isWomanAccount ?? false
                     )
                 }
             }
@@ -145,6 +147,8 @@ struct WomenTreeView: View {
         if allMembers.contains(where: { $0.id == me.id }) { return me.id }
         // ٢) عقدة مرتبطة بالحساب (للإناث المربوطات)
         if let linked = WomenStore.womanByLinkedUser[me.id] { return linked }
+        // حساب المرأة موقعها عقدتها المربوطة وحدها — لا تخمين بالاسم (تربطها الإدارة)
+        if me.isWomanAccount { return nil }
         // ٣) مطابقة بالاسم (احتياطي أخير)
         let target = normalizeName(me.fullName)
         guard !target.isEmpty else { return nil }
@@ -285,6 +289,8 @@ private struct WomanDetailSheet: View {
     private var mode: ActionMode {
         if canEdit { return .direct }
         guard isActiveMember else { return .viewOnly }
+        // حساب المرأة: دوال `*_self_*` للرجال (عقدة بمعرّف الحساب) — تعديل عائلتها بطلب للإدارة
+        if me?.isWomanAccount == true { return .request }
         return isMyNode ? .selfFamily : .request
     }
 
@@ -344,7 +350,8 @@ private struct WomanDetailSheet: View {
                 return $0.sortOrder < $1.sortOrder
             }
     }
-    private var isViewingSelf: Bool { woman.id == me?.id }
+    /// عقدتها هي — ومنها حساب المرأة المربوط (`isMyNode`): ترى زوجها ولا «صلة قرابة» بنفسها
+    private var isViewingSelf: Bool { woman.id == me?.id || isMyNode }
 
     /// خصوصية الأنثى: زوجها لا يُعرض للعضو العادي — تراه الإدارة، وهي نفسها،
     /// وزوجها (فبطاقته تعرض «الزوجة» أصلاً).
@@ -625,6 +632,13 @@ private struct WomanDetailSheet: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .offset(y: heroIn || reduceMotion ? 0 : 10)
                 .opacity(heroIn ? 1 : 0)
+
+            // «لها حساب» — امرأة مربوطة بحساب في التطبيق (دخول النساء)
+            if woman.isFemale && WomenStore.linkedUserByWoman[woman.id] != nil {
+                DSStatusChip(text: L10n.t("لها حساب", "Has an account"), icon: "checkmark.seal.fill",
+                             tint: DS.Color.success, size: .mini)
+                    .opacity(heroIn ? 1 : 0)
+            }
         }
         .onAppear {
             withAnimation(reduceMotion ? .easeInOut(duration: 0.2)

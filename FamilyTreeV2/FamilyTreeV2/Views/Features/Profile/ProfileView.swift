@@ -56,6 +56,11 @@ struct ProfileView: View {
     @State private var cancelRequestError: String? = nil
     /// «مسار الموافقات»: تأكيد «وصل ردّك للإدارة» بعد الرد من «طلباتي»
     @State private var showApprovalReplySent = false
+    /// حساب امرأة (دخول النساء ٢٠٢٦-١٠-٢٤): شجرة النساء لعقدتها وأمها وزوجها وأبنائها
+    @State private var womenRows: [FamilyMember] = WomenStore.cache
+    @State private var womenLoaded = !WomenStore.cache.isEmpty
+    /// قريب من شجرة الرجال (الأب، الزوج، الابن) — يفتح تفاصيله
+    @State private var relativeDetails: FamilyMember? = nil
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — الأقسام تتوزع على عمودين
     private var isLandscape: Bool { vSizeClass == .compact }
@@ -117,7 +122,10 @@ struct ProfileView: View {
                                         VStack(spacing: DS.Spacing.md) {
                                             myRequestsSection
                                                 .dsCardCascade(2, appeared: appeared)
-                                            if isCurrentUserMarried {
+                                            if isWomanAccount {
+                                                womenPositionSection
+                                                    .dsCardCascade(4, appeared: appeared)
+                                            } else if isCurrentUserMarried {
                                                 serverSonsSection
                                                     .dsCardCascade(4, appeared: appeared)
                                             }
@@ -142,8 +150,12 @@ struct ProfileView: View {
                                         myRequestsSection
                                             .dsCardCascade(2, appeared: appeared)
 
-                                        // قسم «عائلتي» — يظهر فقط عند «متزوج»، ويختفي كاملاً عند «أعزب»
-                                        if isCurrentUserMarried {
+                                        // حساب امرأة: «موقعي في شجرة النساء» بدل «عائلتي» (روابطه من شجرة الرجال)
+                                        if isWomanAccount {
+                                            womenPositionSection
+                                                .dsCardCascade(4, appeared: appeared)
+                                        } else if isCurrentUserMarried {
+                                            // قسم «عائلتي» — يظهر فقط عند «متزوج»، ويختفي كاملاً عند «أعزب»
                                             serverSonsSection
                                                 .dsCardCascade(4, appeared: appeared)
                                         }
@@ -165,8 +177,10 @@ struct ProfileView: View {
                             await memberVM.fetchAllMembers(force: true)
                             await memberVM.fetchChildren(for: currentUser.id)
                             await adminRequestVM.fetchMyPendingRequests(force: true)
+                            if isWomanAccount { await loadWomenPosition() }
                         }
                         .task {
+                            if isWomanAccount { await loadWomenPosition() }
                             isLoadingChildren = true
                             await memberVM.fetchChildren(for: currentUser.id)
                             isLoadingChildren = false
@@ -286,6 +300,12 @@ struct ProfileView: View {
                     .background(ClearPresentationBackground())
             }
             .transaction { t in if editingChild != nil { t.disablesAnimations = true } }
+            // حساب امرأة: الأب/الزوج/الابن من شجرة الرجال — نفس تفاصيل العضو
+            .fullScreenCover(item: $relativeDetails) { m in
+                MemberDetailsView(member: m, centered: true)
+                    .background(ClearPresentationBackground())
+            }
+            .transaction { t in if relativeDetails != nil { t.disablesAnimations = true } }
             // تعديل فرد من «عائلتي» — مربّع بمنتصف الشاشة بتصميم مربّعات الإضافة (طلب المالك)
             .dsCenterBox(item: $editingFamilyMember) { entry in
                 WomanMemberEditSheet(memberVM: memberVM, entry: entry,
@@ -513,7 +533,9 @@ struct ProfileView: View {
                 icon: "heart.fill",
                 color: DS.Color.textSecondary,
                 title: L10n.t("الحالة الاجتماعية", "Status"),
-                value: married ? L10n.t("متزوج", "Married") : L10n.t("أعزب", "Single")
+                value: user.isWomanAccount
+                    ? (married ? L10n.t("متزوجة", "Married") : L10n.t("عزباء", "Single"))
+                    : (married ? L10n.t("متزوج", "Married") : L10n.t("أعزب", "Single"))
             ))
         }
 
@@ -568,6 +590,105 @@ struct ProfileView: View {
         }
         Self.displayDateFormatter.locale = LanguageManager.shared.locale
         return Self.displayDateFormatter.string(from: date)
+    }
+
+    // MARK: - موقعي في شجرة النساء (حساب امرأة — دخول النساء ٢٠٢٦-١٠-٢٤)
+    // حسابها صفّ في `profiles` مخفيّ بلا أب؛ موقعها عقدتها في `women_members` (`linked_user_id` = معرّفها).
+    // روابط «عائلتي» (أم/زوجة/أبناء profiles ودوال `*_self_*`) للرجال — لا تُعرض لها؛ التصحيح بطلب للإدارة.
+
+    private var isWomanAccount: Bool { user?.isWomanAccount ?? false }
+
+    /// عقدتها في شجرة النساء — من آخر جلب
+    private var myWomanNode: FamilyMember? {
+        guard let me = user, let womanId = WomenStore.womanByLinkedUser[me.id] else { return nil }
+        return womenRows.first { $0.id == womanId }
+    }
+
+    private func loadWomenPosition() async {
+        do {
+            womenRows = try await WomenStore.fetch()
+        } catch {
+            Log.warning("[Women] تعذّر جلب موقع الحساب في شجرة النساء: \(error.localizedDescription)")
+        }
+        womenLoaded = true
+    }
+
+    private var womenPositionSection: some View {
+        DSFormCard(L10n.t("موقعي في شجرة النساء", "My place in the women tree"),
+                   icon: "figure.stand.dress", color: DS.Color.female) {
+            if let node = myWomanNode {
+                womenPositionContent(node)
+            } else if !womenLoaded {
+                DSPageLoader(fillsSpace: false)
+                    .padding(.vertical, DS.Spacing.sm)
+            } else {
+                DSNoteCard(L10n.t("حسابك غير مربوط بشجرة النساء بعد — تربطك الإدارة.",
+                                  "Your account isn't linked to the women tree yet — the administration will link you."),
+                           icon: "link")
+            }
+        }
+        .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    private func womenPositionContent(_ node: FamilyMember) -> some View {
+        let byId = Dictionary(womenRows.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        // الأب والزوج والأبناء الذكور لهم نفس المعرّف في شجرة الرجال — تفتح تفاصيلهم
+        let fatherProfile = node.fatherId.flatMap { memberVM.member(byId: $0) }
+        let fatherName = fatherProfile?.displayFullName ?? node.fatherId.flatMap { byId[$0]?.fullName }
+        let mother = node.motherId.flatMap { byId[$0] }
+        let husband = node.husbandId.flatMap { byId[$0] }
+        let husbandProfile = node.husbandId.flatMap { memberVM.member(byId: $0) }
+        let children = womenRows
+            .filter { $0.id != node.id && ($0.motherId == node.id || $0.fatherId == node.id) }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(node.fullName.isEmpty ? node.firstName : node.fullName)
+                .dsFont(.rowTitle)
+                .foregroundColor(DS.Color.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let fatherName, !fatherName.isEmpty {
+                womanRelationRow(icon: "person.fill", tint: DS.Color.male, title: L10n.t("الأب", "Father"),
+                                 name: fatherName, open: fatherProfile)
+            }
+            if let mother {
+                womanRelationRow(icon: "figure.stand.dress", tint: DS.Color.female, title: L10n.t("الأم", "Mother"),
+                                 name: mother.fullName.isEmpty ? mother.firstName : mother.fullName, open: nil)
+            }
+            if let husband {
+                womanRelationRow(icon: "heart.fill", tint: DS.Color.male, title: L10n.t("الزوج", "Husband"),
+                                 name: husbandProfile?.displayFullName ?? husband.fullName, open: husbandProfile)
+            }
+            ForEach(children, id: \.id) { child in
+                womanRelationRow(icon: child.isFemale ? "figure.stand.dress" : "person.fill",
+                                 tint: child.isFemale ? DS.Color.female : DS.Color.male,
+                                 title: child.isFemale ? L10n.t("ابنة", "Daughter") : L10n.t("ابن", "Son"),
+                                 name: child.firstName.isEmpty ? child.fullName : child.firstName,
+                                 open: child.isFemale ? nil : memberVM.member(byId: child.id))
+            }
+            DSButton(L10n.t("عرض في شجرة النساء", "Show in the women tree"), icon: "location.fill") {
+                openMyWomenNode()
+            }
+        }
+    }
+
+    /// صفّ قرابة — يفتح تفاصيل العضو إن كان من شجرة الرجال
+    @ViewBuilder
+    private func womanRelationRow(icon: String, tint: Color, title: String, name: String,
+                                  open member: FamilyMember?) -> some View {
+        if let member {
+            Button { relativeDetails = member } label: {
+                DSRow(icon: icon, tint: tint, title: title, subtitle: name) { DSChevron() }
+            }
+            .buttonStyle(DSPressStyle())
+        } else {
+            DSRow(icon: icon, tint: tint, title: title, subtitle: name)
+        }
+    }
+
+    /// تبويب الشجرة ← النساء متمركزة على عقدتها (`WomenClassicTreeView.autoLocate`)
+    private func openMyWomenNode() {
+        TreeTabContainer.openWomenOnAppear = true
+        NotificationCenter.default.post(name: .openWomenTree, object: nil)
     }
 
     // MARK: - Children Section

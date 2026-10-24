@@ -226,8 +226,9 @@ struct AdminMemberCounts: Equatable {
     mutating func setMen(from all: [FamilyMember]) {
         guard !all.isEmpty else { return }
         var total = 0, alive = 0
-        // سجلّ بلا اسم (رقم دخول بلا اسم) ليس فرداً في العائلة — `FamilyMember.hasName`
-        for m in all where m.role != .pending && m.hasName {
+        // سجلّ بلا اسم (رقم دخول بلا اسم) ليس فرداً في العائلة — `FamilyMember.hasName`؛
+        // وحساب المرأة (`isWomanAccount`) ليس رجلاً — تُعدّ مرة واحدة بعقدتها في شجرة النساء (`setWomen`)
+        for m in all where m.role != .pending && m.hasName && !m.isWomanAccount {
             total += 1
             if m.isDeceased != true { alive += 1 }
         }

@@ -681,8 +681,11 @@ struct AdminMemberListRow: View {
         case .deceased:
             return []
         default:
-            if let status = entry.status { return [(status.title, status.tint)] }
-            return []
+            var list: [(String, Color)] = []
+            // حساب امرأة (دخول النساء) — «أنثى» أولاً (الشارة الظاهرة)، فليست من شجرة الرجال
+            if member.isWomanAccount { list.append((L10n.t("أنثى", "Female"), DS.Color.female)) }
+            if let status = entry.status { list.append((status.title, status.tint)) }
+            return list
         }
     }
 

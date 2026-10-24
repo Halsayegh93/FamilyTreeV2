@@ -591,7 +591,9 @@ struct AdminMembersIndex {
 
         for (i, m) in pool.enumerated() {
             let info = accounts[m.id]
-            let status = AdminMemberFacts.status(m, hasLogin: accountsReady ? info != nil : nil)
+            var status = AdminMemberFacts.status(m, hasLogin: accountsReady ? info != nil : nil)
+            // حساب المرأة (دخول النساء) له دخول بطبيعته — لا يُعرض «مقيّداً في الشجرة» ولو غاب عن قوائم الاستخدام
+            if m.isWomanAccount && status == .treeOnly { status = .registered }
             let registered = status == .registered || (status == .frozen && info != nil)
             let gaps = AdminMemberFacts.gaps(m, registered: registered)
             let problems = AdminMemberFacts.problems(m, in: ctx)
@@ -618,6 +620,25 @@ struct AdminMembersIndex {
             guard m.hasName else {
                 if m.status != .frozen { checked += 1 }
                 addProblems()
+                continue
+            }
+            // حساب امرأة: ليس من شجرة الرجال — بيته «مسجّلون» وحده (بشارة «أنثى» في الصفّ)، خارج «الكل» والفروع
+            // والنواقص والمشكلات و«تحقق من الأحياء»؛ تُعدّ وتُرى بعقدتها في شجرة النساء
+            if m.isWomanAccount {
+                switch status {
+                case .frozen:
+                    add(.registered, .all, i)
+                    add(.registered, .frozen, i)
+                case .registered:
+                    add(.registered, .all, i)
+                    switch info?.usage {
+                    case .active: add(.registered, .usingApp, i)
+                    case .idle: add(.registered, .inactive, i)
+                    default: add(.registered, .noPush, i)
+                    }
+                default:
+                    break
+                }
                 continue
             }
             add(.all, .all, i)
@@ -681,7 +702,7 @@ struct AdminMembersIndex {
 
         // الفروع: أبناء رأس الشجرة المباشرون، ثم «خارج الفروع» (الرأس نفسه ومن لا يتصل به)
         var byBranch: [UUID?: [Int]] = [:]
-        for (i, e) in entries.enumerated() where e.member.hasName { byBranch[e.branch, default: []].append(i) }
+        for (i, e) in entries.enumerated() where e.member.hasName && !e.member.isWomanAccount { byBranch[e.branch, default: []].append(i) }
         let headMembers = Set(heads.values).compactMap { id in all.first { $0.id == id } }
             .sorted { ($0.sortOrder, $0.firstName) < ($1.sortOrder, $1.firstName) }
         var branches: [Branch] = headMembers.compactMap { head in
