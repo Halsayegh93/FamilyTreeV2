@@ -560,6 +560,7 @@ class AdminRequestViewModel: ObservableObject {
             Log.warning("[MyRequests] محاولة إلغاء طلب لا يخص المستخدم — تم التجاهل")
             return
         }
+        errorMessage = nil
         // إزالة فورية محلياً ثم الحذف — يُرجَع الصف مكانه إن لم يُحذف شيء
         let originalIndex = myPendingRequests.firstIndex(where: { $0.id == request.id })
         withAnimation(.snappy(duration: 0.25)) {
@@ -1256,12 +1257,14 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Phone Change Requests
 
-    func requestPhoneNumberChange(memberId: UUID, newPhoneNumber: String) async {
+    /// يرجع نجاح إرسال الطلب — كان يُسجَّل الخطأ فقط فتقول الشاشة «أُرسل»
+    @discardableResult
+    func requestPhoneNumberChange(memberId: UUID, newPhoneNumber: String) async -> Bool {
         self.isLoading = true
         guard let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(newPhoneNumber) else {
             Log.error("رقم طلب التغيير غير صالح.")
             self.isLoading = false
-            return
+            return false
         }
         do {
             let phoneRequestId = UUID()
@@ -1295,8 +1298,11 @@ class AdminRequestViewModel: ObservableObject {
             Log.info("تم إرسال طلب تغيير الرقم للإدارة: \(Log.masked(normalizedPhone))")
         } catch {
             Log.error("خطأ في إرسال طلب التغيير: \(error.localizedDescription)")
+            self.isLoading = false
+            return false
         }
         self.isLoading = false
+        return true
     }
 
     // MARK: - Family Change Requests (العائلة بطلب فقط — طلب المالك)
@@ -1334,7 +1340,9 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Name Change Requests
 
-    func requestNameChange(memberId: UUID, newName: String) async {
+    /// يرجع نجاح إرسال الطلب — كان يُسجَّل الخطأ فقط فتقول الشاشة «أُرسل»
+    @discardableResult
+    func requestNameChange(memberId: UUID, newName: String) async -> Bool {
         self.isLoading = true
         do {
             let nameRequestId = UUID()
@@ -1368,8 +1376,11 @@ class AdminRequestViewModel: ObservableObject {
             Log.info("تم إرسال طلب تغيير الاسم للإدارة: \(newName)")
         } catch {
             Log.error("خطأ في إرسال طلب تغيير الاسم: \(error.localizedDescription)")
+            self.isLoading = false
+            return false
         }
         self.isLoading = false
+        return true
     }
 
     // MARK: - Fetch / Approve / Reject Name Change Requests

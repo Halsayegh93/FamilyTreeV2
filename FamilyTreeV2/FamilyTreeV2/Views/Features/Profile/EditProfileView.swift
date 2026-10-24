@@ -755,6 +755,9 @@ struct EditProfileView: View {
                 recordCooldowns(changes: changes)
                 collectSummary(changes: changes)
                 if changes.anyNeedsApproval { requestsDueToLimit = true }
+                // طلب الاسم/الرقم فشل (applyPendingChanges رفع الخطأ) — تبقى الشاشة مفتوحة برسالة الخطأ،
+                // لا إغلاق ولا ملخّص يخفيها
+                if showSaveError { return }
                 // بعد التأكيد لا رسالة ثانية؛ غير ذلك ملخّص ما تغيّر (طلب المالك)
                 if !confirmed && (!savedItems.isEmpty || !sentItems.isEmpty) {
                     showRequestSentAlert = true
@@ -834,10 +837,13 @@ struct EditProfileView: View {
 
         // 2) الاسم — طلب دائماً
         if let newName = pendingNameRequest {
-            await adminRequestVM.requestNameChange(memberId: member.id, newName: newName)
-            requestsSent = true
-            sentItems.append(L10n.t("الاسم", "Name"))
-            pendingNameRequest = nil
+            if await adminRequestVM.requestNameChange(memberId: member.id, newName: newName) {
+                requestsSent = true
+                sentItems.append(L10n.t("الاسم", "Name"))
+                pendingNameRequest = nil
+            } else {
+                showSaveError = true
+            }
         }
 
         // 3) العائلة — طلب دائماً
@@ -862,24 +868,30 @@ struct EditProfileView: View {
                     showSaveError = true
                 }
             } else {
-                await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
-                                                              newPhoneNumber: verified.e164)
-                pendingPhoneRequest = verified.display
-                requestsSent = true
-                requestsDueToLimit = true
-                sentItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                if await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
+                                                                 newPhoneNumber: verified.e164) {
+                    pendingPhoneRequest = verified.display
+                    requestsSent = true
+                    requestsDueToLimit = true
+                    sentItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                } else {
+                    showSaveError = true
+                }
             }
             pendingPhoneVerified = nil
         }
 
         // 5) رقم عليه حساب آخر — لا يُحفظ ذاتياً، يُرسل للإدارة دائماً
         if let pending = pendingPhoneForAdmins {
-            await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
-                                                          newPhoneNumber: pending.storage)
-            pendingPhoneRequest = pending.display
-            requestsSent = true
-            sentItems.append(L10n.t("رقم الهاتف", "Phone number"))
-            pendingPhoneForAdmins = nil
+            if await adminRequestVM.requestPhoneNumberChange(memberId: member.id,
+                                                             newPhoneNumber: pending.storage) {
+                pendingPhoneRequest = pending.display
+                requestsSent = true
+                sentItems.append(L10n.t("رقم الهاتف", "Phone number"))
+                pendingPhoneForAdmins = nil
+            } else {
+                showSaveError = true
+            }
         }
     }
 

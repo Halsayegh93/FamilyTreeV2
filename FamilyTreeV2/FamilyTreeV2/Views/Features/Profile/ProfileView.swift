@@ -48,6 +48,8 @@ struct ProfileView: View {
     @State private var isLoadingChildren = true
     /// الطلب المُختار للإلغاء — يشغّل حوار تأكيد السحب في «طلباتي».
     @State private var requestToCancel: AdminRequest? = nil
+    /// سحب الطلب فشل — الرسالة من adminRequestVM
+    @State private var cancelRequestError: String? = nil
     /// «مسار الموافقات»: تأكيد «وصل ردّك للإدارة» بعد الرد من «طلباتي»
     @State private var showApprovalReplySent = false
     @Environment(\.verticalSizeClass) private var vSizeClass
@@ -243,13 +245,30 @@ struct ProfileView: View {
             ) { request in
                 Button(L10n.t("تراجع", "Keep"), role: .cancel) {}
                 Button(L10n.t("سحب الطلب", "Withdraw"), role: .destructive) {
-                    Task { await adminRequestVM.cancelMyRequest(request) }
+                    Task {
+                        await adminRequestVM.cancelMyRequest(request)
+                        // فشل السحب (عولج الطلب أو انقطاع) — الطلب رجع للقائمة، وتظهر الرسالة
+                        if let message = adminRequestVM.errorMessage, !message.isEmpty {
+                            cancelRequestError = message
+                        }
+                    }
                 }
             } message: { _ in
                 Text(L10n.t(
                     "سيتم إلغاء هذا الطلب ولن يصل للإدارة.",
                     "This request will be cancelled and won't be sent to the admins."
                 ))
+            }
+            .dsAlert(
+                L10n.t("خطأ", "Error"),
+                isPresented: Binding(
+                    get: { cancelRequestError != nil },
+                    set: { if !$0 { cancelRequestError = nil } }
+                )
+            ) {
+                Button(L10n.t("حسناً", "OK")) { cancelRequestError = nil }
+            } message: {
+                Text(cancelRequestError ?? "")
             }
             // «مسار الموافقات»: تأكيد وصول ردّ العضو للإدارة (الرد نفسه داخل «طلباتي»)
             .dsAlert(L10n.t("تم إرسال ردّك", "Reply sent"), isPresented: $showApprovalReplySent, moment: .sentForApproval) {
