@@ -7,6 +7,7 @@ struct NewsCommentsSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     let news: NewsPost
     @State private var commentInput = ""
     @State private var isLoadingComments = false
@@ -194,7 +195,7 @@ struct NewsCommentsSheet: View {
                 // قرص «مجسّمات» الموحّد
                 DSStateIcon("person.fill", tint: AppSection.news.ink, size: DS.Icon.section)
                     .accessibilityHidden(true)
-                Text(comment.author_name)
+                Text(memberVM.displayName(id: comment.author_id, stored: comment.author_name, .four))
                     .dsFieldFont(.sectionTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)

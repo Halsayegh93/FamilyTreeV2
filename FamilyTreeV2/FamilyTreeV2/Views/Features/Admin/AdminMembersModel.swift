@@ -599,7 +599,7 @@ struct AdminMembersIndex {
             let problems = AdminMemberFacts.problems(m, in: ctx)
             entries.append(Entry(member: m, status: status, usage: info?.usage, gaps: gaps, problems: problems,
                                  branch: heads[m.id], living: oldLiving[m.id],
-                                 needle: ArabicTextNormalizer.normalizeForSearch(m.fullName),
+                                 needle: ArabicTextNormalizer.normalizeForSearch(m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName),
                                  digits: AdminMemberFacts.asciiDigits(m.phoneNumber ?? "")))
             func addProblems() {
                 guard !problems.isEmpty else { return }

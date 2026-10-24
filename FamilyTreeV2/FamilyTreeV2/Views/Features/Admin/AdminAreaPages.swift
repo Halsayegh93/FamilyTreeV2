@@ -419,7 +419,7 @@ struct AdminSearchView: View {
         let needle = ArabicTextNormalizer.normalizeForSearch(q)
         let digits = q.filter(\.isNumber)
         return Array(memberVM.allMembers.filter { m in
-            ArabicTextNormalizer.normalizeForSearch(m.fullName).contains(needle)
+            ArabicTextNormalizer.normalizeForSearch(m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName).contains(needle)
                 || (digits.count >= 3 && (m.phoneNumber ?? "").contains(digits))
         }.prefix(20))
     }

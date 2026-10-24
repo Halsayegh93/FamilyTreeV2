@@ -58,9 +58,9 @@ struct HomeNewsCardView: View {
     private var shortDisplayName: String {
         // هوية الإدارة: نعرض الاسم المحفوظ كما هو ولا نستبدله باسم العضو
         if isAdminIdentityPost { return authorName }
-        let name = authorMember?.fullName ?? authorName
+        let name = authorMember?.displayFullName ?? authorName
         // وحدات لا كلمات (PersonName): عضو معروف ← سلسلة الشجرة، وإلا النص الحرّ
-        let parts = authorMember?.nameUnits ?? PersonName.units(name)
+        let parts = authorMember?.nameUnitsWithFamily ?? PersonName.units(name)   // بالعائلة المختارة
         guard parts.count > 3, let last = parts.last else { return name }
         let first3 = parts.prefix(3).joined(separator: " ")
         if parts.dropFirst(2).first == last { return first3 }

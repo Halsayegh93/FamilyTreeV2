@@ -492,7 +492,7 @@ private struct SmsAttemptRowMain: View {
                 NavigationLink {
                     AdminLazyPage {
                         AnyView(SmsNumberDetailsPage(phoneE164: e164, days: days,
-                                                     name: member?.fullName ?? item.name)
+                                                     name: member?.displayFullName ?? item.name)
                             .adminArea(area).adminBackTitle(backTitle))
                     }
                 } label: {

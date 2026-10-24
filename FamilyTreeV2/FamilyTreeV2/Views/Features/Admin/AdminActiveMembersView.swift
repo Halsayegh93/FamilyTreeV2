@@ -211,7 +211,8 @@ struct AdminActiveMembersView: View {
     private func activeNowRow(_ row: ActiveMemberRow) -> some View {
         // نقطة خضراء فقط لو نشط فعلاً خلال آخر 5 دقائق
         let trulyOnline = row.secondsSinceActive < 300
-        return activityRow(avatarUrl: row.avatarUrl, online: trulyOnline, name: row.fullName,
+        return activityRow(avatarUrl: row.avatarUrl, online: trulyOnline,
+                           name: memberVM.displayName(id: row.memberId, stored: row.fullName, .four),
                            icon: sourceIcon(row.source), iconTint: DS.Color.textSecondary,
                            detail: screenLabel(row.currentScreen, source: row.source)) {
             DSStatusChip(text: secondsLabel(row.secondsSinceActive), tint: DS.Color.success)
@@ -220,7 +221,7 @@ struct AdminActiveMembersView: View {
 
     // MARK: - Action row (24h)
     private func actionRowView(_ row: RecentActionRow) -> some View {
-        activityRow(avatarUrl: row.avatarUrl, online: false, name: row.fullName,
+        activityRow(avatarUrl: row.avatarUrl, online: false, name: memberVM.displayName(id: row.memberId, stored: row.fullName, .four),
                     icon: actionIcon(row.actionKind, source: row.source),
                     iconTint: actionColor(row.actionKind, source: row.source),
                     detail: actionLabel(row)) {
@@ -230,7 +231,7 @@ struct AdminActiveMembersView: View {
 
     // MARK: - Recently active row (no online dot)
     private func recentlyActiveRow(_ row: RecentlyActiveRow) -> some View {
-        activityRow(avatarUrl: row.avatarUrl, online: false, name: row.fullName,
+        activityRow(avatarUrl: row.avatarUrl, online: false, name: memberVM.displayName(id: row.memberId, stored: row.fullName, .four),
                     icon: sourceIcon(row.source), iconTint: DS.Color.textTertiary,
                     detail: screenLabel(row.currentScreen, source: row.source)) {
             timeText(hoursLabel(row.hoursSinceActive))

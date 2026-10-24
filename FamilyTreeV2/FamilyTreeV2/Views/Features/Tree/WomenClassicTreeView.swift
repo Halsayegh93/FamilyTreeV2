@@ -970,7 +970,7 @@ struct WomenClassicTreeView: View {
         let full = w.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         let first = w.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = full.split(separator: " ").count >= 2
-            ? w.nameUnits
+            ? w.nameUnitsWithFamily
             : PersonName.units(first.isEmpty ? full : first)
         guard let f = parts.first else { return "" }
         guard parts.count > 1, let l = parts.last else { return f }

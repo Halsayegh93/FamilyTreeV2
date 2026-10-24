@@ -199,7 +199,7 @@ struct AdminMemberDetailSheet: View {
         // تباعاً، و«حفظ» / «إلغاء» أسفل المربّع
         DSComposer(
             title: deathOnly ? L10n.t("تسجيل الوفاة", "Record death") : L10n.t("بيانات العضو", "Member details"),
-            subtitle: member.fullName,
+            subtitle: member.displayFullName,
             icon: deathOnly ? "heart.text.square.fill" : "person.badge.shield.checkmark.fill",
             tint: deathOnly || member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
             actionTitle: L10n.t("حفظ", "Save"),

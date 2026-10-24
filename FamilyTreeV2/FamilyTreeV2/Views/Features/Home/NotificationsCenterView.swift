@@ -1745,10 +1745,12 @@ struct NotificationsCenterView: View {
             creator.firstName,
             creator.shortFullName,
             fourPartName(creator),
+            creator.displayFullName,   // النصوص الجديدة تُحفظ بالعائلة المختارة
             creator.fullName
         ]
 
-        for name in candidates {
+        // الأطول أولاً — حتى لا يُحذف الاسم الأول وحده من نصّ يبدأ بالاسم الكامل
+        for name in candidates.sorted(by: { $0.count > $1.count }) {
             let n = name.trimmingCharacters(in: .whitespaces)
             guard !n.isEmpty else { continue }
             if trimmed.hasPrefix(n) {

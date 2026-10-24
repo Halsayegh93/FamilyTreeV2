@@ -158,6 +158,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
             && lhs.role == rhs.role
             && lhs.firstName == rhs.firstName
             && lhs.fullName == rhs.fullName
+            && lhs.familyName == rhs.familyName   // العائلة المختارة تغيّر الاسم المعروض
             && lhs.status == rhs.status
             && lhs.phoneNumber == rhs.phoneNumber
             && lhs.avatarUrl == rhs.avatarUrl

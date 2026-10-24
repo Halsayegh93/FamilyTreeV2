@@ -382,7 +382,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// Helper to get a member name by ID — fallback to UUID if not found
     private func getSafeMemberName(for memberId: UUID) -> String {
-        return memberById(memberId)?.fullName ?? memberId.uuidString
+        return memberById(memberId)?.displayFullName ?? memberId.uuidString
     }
 
     /// Lookup a member by ID from authVM's member cache
@@ -1328,7 +1328,7 @@ class AdminRequestViewModel: ObservableObject {
             ]
             try await supabase.from("admin_requests").insert(requestData).execute()
 
-            let requesterFullName = currentUser?.fullName ?? "عضو"
+            let requesterFullName = currentUser?.displayFullName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("طلب تغيير العائلة", "Family Change Request"),
                 body: L10n.t("طلب تغيير عائلة: \(requesterFullName) إلى \(newFamily)",
@@ -2253,7 +2253,7 @@ class AdminRequestViewModel: ObservableObject {
             let urlString = publicUrl.absoluteString
 
             // 2. إنشاء طلب إداري
-            let memberName = memberById(memberId)?.fullName ?? "عضو"
+            let memberName = memberById(memberId)?.displayFullName ?? "عضو"
             let photoRequestId = UUID()
 
             let basePayload: [String: AnyEncodable] = [

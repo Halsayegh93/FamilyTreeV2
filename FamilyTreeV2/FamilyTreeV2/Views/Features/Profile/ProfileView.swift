@@ -812,13 +812,13 @@ struct ProfileView: View {
         // اسم العضو المستهدف — نُخفيه إن كان العضو نفسه (زائد بلا فائدة)
         let targetName: String? = {
             guard let m = request.member, m.id != selfId else { return nil }
-            return m.fullName
+            return m.displayFullName
         }()
 
         switch request.requestType {
         case RequestType.treeEdit.rawValue:
             let action = request.treeEditPayload?.resolvedAction
-            let name = request.treeEditPayload?.targetMemberName
+            let name = memberVM.treeEditTargetName(request.treeEditPayload)
                 ?? request.treeEditPayload?.newMemberName
                 ?? targetName
             return MyRequestDisplay(

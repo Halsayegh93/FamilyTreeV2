@@ -143,12 +143,14 @@ struct FamilyProjectsView: View {
             ProjectDetailView(project: project)
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)
+                .environmentObject(memberVM)
         }
         .fullScreenCover(item: $projectToEdit) { project in
             DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
                 EditProjectView(project: project, didEdit: $didEditProject)
                     .environmentObject(projectsVM)
                     .environmentObject(authVM)
+                    .environmentObject(memberVM)
                     .dsSectionPage(.projects)
             }
             .background(ClearPresentationBackground())
@@ -712,7 +714,7 @@ struct AddProjectView: View {
         isSaving = true
 
         let ownerId = currentUser.id
-        let ownerName = isOwner ? currentUser.displayFullName : ""
+        let ownerName = isOwner ? currentUser.displayFullName : ""   // بالعائلة المختارة (طلب المالك ٢٠٢٦-١٠-٢٤)
 
         // Upload logo if selected
         var uploadedLogoUrl: String? = nil

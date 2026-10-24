@@ -1937,7 +1937,7 @@ struct TreeMemberNode: View, Equatable {
     }
 
     private var fullDisplayName: String {
-        let full = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let full = member.displayFullName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !full.isEmpty { return full }
         let first = member.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !first.isEmpty { return first }

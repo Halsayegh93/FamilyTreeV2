@@ -152,7 +152,7 @@ struct AdminMemberSheet: View {
                 if ok { liveStatus = target }
             case .block:
                 ok = await authVM.banPhone((m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
-                                           reason: L10n.t("من «بيانات العضو»: \(m.fullName)", "From Member details: \(m.fullName)"))
+                                           reason: L10n.t("من «بيانات العضو»: \(m.displayFullName)", "From Member details: \(m.displayFullName)"))
                 await refreshBan(m)
                 if let status = await memberVM.fetchMemberStatus(memberId: m.id) { liveStatus = status }
             case .unblock:

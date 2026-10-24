@@ -36,7 +36,7 @@ struct EditChildSheet: View {
             title: L10n.t("تعديل بيانات الابن", "Edit Child Info"),
             // الاسم الثلاثي للابن بدل الجملة العامة — ليعرف المستخدم بيانات من يعدّل (طلب المالك ٢٠٢٦-١٠-٠٧)
             subtitle: member.fullName.isEmpty ? L10n.t("عدّل بياناته في الشجرة", "Update the details in the tree")
-                                              : member.threePartName,
+                                              : member.shortFullName,   // بالعائلة المختارة
             icon: "person.crop.circle.badge.checkmark",
             tint: DS.Color.actionNavy,
             actionTitle: L10n.t("حفظ", "Save"),

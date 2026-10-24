@@ -468,6 +468,8 @@ struct TreeSearchOverlay: View {
             current = father
             visited.insert(father.id)
         }
+        // لقب العائلة المختارة بين قوسين («ابراهيم(العطار)») — صاحبه وما بعده يُختصر بالعائلة نفسها
+        if let head = FamilyNameCatalog.unitsBeforeNickname(parts, family: member.familyName) { parts = head }
         // الاسم الأخير = العائلة المختارة (طلب المالك)، وإلا آخر كلمة من الاسم الكامل
         let lastNameStr = member.lastName
         if !lastNameStr.isEmpty, lastNameStr != parts.last, lastNameStr != member.firstName || parts.count > 1 {
