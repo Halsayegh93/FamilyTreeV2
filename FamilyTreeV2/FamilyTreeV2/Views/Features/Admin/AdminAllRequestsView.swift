@@ -2286,7 +2286,8 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Join Request Row
 
-    /// مطابقة في الشجرة (`NameMatcher`): `score` النسبة ٠…١٠٠، `total` أجزاء اسم المتقدّم، `fuzzy` منها بفرق حرف
+    /// مطابقة في الشجرة (`NameMatcher.linkSuggestions`): `matchCount` عمق التطابق بالترتيب (٢ = الأول + الأب)،
+    /// `score` نسبته ٠…١٠٠ من `total` أجزاء اسم المتقدّم (بلا العائلة)، `fuzzy` لم يعد يُستعمل (صفر)
     typealias JoinMatch = (member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool,
                            score: Int, total: Int, fuzzy: Int)
 
@@ -2468,14 +2469,14 @@ struct AdminAllRequestsView: View {
     }
 
     private func joinMatchRow(match: JoinMatch, pendingMember: FamilyMember) -> some View {
-        // النتيجة الموزونة من `NameMatcher` (الأول أثقل ثم الأب ثم الجد…) — بلا اسم العائلة والروابط
+        // عمق التطابق بالترتيب (الأول ثم الأب ثم الجد…) من أجزاء اسم المتقدّم — بلا اسم العائلة والروابط
         let totalParts = max(match.total, 1)
-        let matchPercent = min(100, max(0, match.score))
+        let birth = match.member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         return HStack(spacing: DS.Spacing.sm) {
-            // نسبة التطابق — الحلقة الصغيرة الموحّدة (الدفعة ١٠)
-            DSRingGauge(progress: Double(matchPercent) / 100, tint: AppSection.admin.ink, size: DS.Ring.small,
-                        center: .percent(matchPercent), ink: AppSection.admin.ink)
+            // كم جزءاً تطابق — الحلقة الصغيرة الموحّدة (الدفعة ١٠) بالعدد في وسطها
+            DSRingGauge(progress: min(1, Double(match.matchCount) / Double(totalParts)), tint: AppSection.admin.ink,
+                        size: DS.Ring.small, center: .count(match.matchCount), ink: AppSection.admin.ink)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(match.member.displayFullName)
@@ -2484,14 +2485,11 @@ struct AdminAllRequestsView: View {
                     .dsNameLines()
 
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(match.fuzzy > 0
-                         ? L10n.t("\(match.matchCount) من \(totalParts) أسماء متطابقة · \(match.fuzzy) بفرق حرف",
-                                  "\(match.matchCount) of \(totalParts) names match · \(match.fuzzy) one letter off")
-                         : L10n.t("\(match.matchCount) من \(totalParts) أسماء متطابقة",
-                                  "\(match.matchCount) of \(totalParts) names match"))
+                    // السبب: «الاسم الأول + الأب + الجد»
+                    Text(NameMatcher.linkReason(depth: match.matchCount))
                     .dsFieldFont(.footnote)
                     .foregroundColor(DS.Color.fieldValue)
-                    .lineLimit(1)
+                    .lineLimit(2)   // السبب كاملاً ولو بخط كبير
                     .minimumScaleFactor(0.85)
 
                     if match.isRegistrationMatch {
@@ -2499,9 +2497,9 @@ struct AdminAllRequestsView: View {
                     }
                 }
 
-                // رقم الهاتف
-                if let phone = match.member.phoneNumber, !phone.isEmpty {
-                    metaItem("phone.fill", KuwaitPhone.display(phone))
+                // تاريخ الميلاد — يُقارن بتاريخ المنضم (الأقرب أولاً بين المتساويين)
+                if !birth.isEmpty {
+                    metaItem("calendar", birth)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -2593,46 +2591,24 @@ struct AdminAllRequestsView: View {
         return editDistance(Array(na), Array(nb)) <= 1
     }
 
-    /// لستة مرتبة بالأقرب (طلب المالك ٢٠٢٦-١٠-٢٤ «تقريب الاسم اكثر نظم الالية») — `NameMatcher`:
-    /// تطبيع عربي، «عبد الله» = «عبدالله»، بلا اسم العائلة والروابط، مقارنة بالترتيب بوزن أعلى للأول ثم الأب ثم الجد،
-    /// وفرق حرف واحد مقبول. يُعرض من تطابقت أول ٣ أجزاء من اسمه بالترتيب (أو كلها إن كانت أقل)، ومطابقات السيرفر
-    /// (`search_members_by_name` + لقطة التسجيل) تُدمج بلا تكرار متى تطابق الاسم الأول — ثم الكل بالنتيجة.
+    /// لستة مرتّبة صارمة (طلب المالك ٢٠٢٦-١٠-٢٤ «تطلع اسماء ماله شغل بالربط») — `NameMatcher.linkSuggestions`:
+    /// الاسم الأول ثم الأب ثم الجد بالترتيب (الاسم المركّب وحدة)، والعائلة في آخر الاسم ضجيج لا دليل، ولا يُقترح إلا
+    /// من طابق الأول والأب على الأقل — ومطابقات السيرفر (`search_members_by_name` + لقطة التسجيل) بنفس الشرط.
+    /// لا يُقترح من له حساب أو متوفى. الترتيب بعمق التطابق ثم قرب تاريخ الميلاد.
     func orderedMatchList(for member: FamilyMember) -> [JoinMatch] {
         // الأنثى تُربط بشجرة النساء — لا مطابقات (ولا «ربط») من شجرة الرجال
         guard !member.isFemale else { return [] }
-        let families = NameMatcher.familyKeys()
-        let applicant = NameMatcher.chain(member.fullName, families: families)
-        guard !applicant.isEmpty else { return [] }
-
-        // فقط سجلات الشجرة: بدون هاتف + أحياء + لها اسم + مو pending
+        let accounts = AdminAccountsStore.shared
+        // سجلات الشجرة فقط: رجال أحياء لهم اسم، مو pending، وبلا حساب (بلا هاتف، وليس في قائمة الحسابات إن حُمّلت)
         let existingMembers = memberVM.allMembers.filter { m in
-            m.role != .pending && m.id != member.id && m.hasName &&
+            m.role != .pending && m.id != member.id && m.hasName && !m.isFemale &&
             (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            m.isDeceased != true
+            m.isDeceased != true && accounts.info(m.id) == nil
         }
         let serverIds = Set(registrationMatches[member.id] ?? [])
-
-        var scored: [(member: FamilyMember, result: NameMatcher.Result, isServer: Bool)] = []
-        for existing in existingMembers {
-            let isServer = serverIds.contains(existing.id)
-            let result = NameMatcher.compare(applicant, NameMatcher.chain(existing.fullName, families: families))
-            // المحلي: أول ٣ أجزاء بالترتيب · السيرفر: يكفي الاسم الأول (السيرفر وجده بمنطقه)
-            guard result.isStrong || (isServer && result.prefix >= 1) else { continue }
-            scored.append((member: existing, result: result, isServer: isServer))
-        }
-
-        scored.sort { a, b in
-            if a.result.score != b.result.score || a.result.prefix != b.result.prefix {
-                return NameMatcher.ranksBefore(a.result, b.result)
-            }
-            if a.isServer != b.isServer { return a.isServer }
-            return a.member.fullName.localizedStandardCompare(b.member.fullName) == .orderedAscending
-        }
-
-        return scored.prefix(20).map { item in
-            (member: item.member, matchCount: item.result.matched.count, matchedParts: item.result.matched,
-             isRegistrationMatch: item.isServer, score: item.result.percent, total: item.result.total,
-             fuzzy: item.result.fuzzy)
+        return NameMatcher.linkSuggestions(for: member, among: existingMembers, serverIds: serverIds).map { s in
+            (member: s.member, matchCount: s.depth, matchedParts: [], isRegistrationMatch: s.isServer,
+             score: s.total > 0 ? s.depth * 100 / s.total : 0, total: s.total, fuzzy: 0)
         }
     }
 

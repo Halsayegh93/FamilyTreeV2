@@ -168,3 +168,131 @@ enum NameMatcher {
         return a.prefix > b.prefix
     }
 }
+
+// MARK: - ربط طلب الانضمام بسجلّ في الشجرة (طلب المالك ٢٠٢٦-١٠-٢٤: «تطلع اسماء ماله شغل بالربط»)
+//
+// صارم ومرتّب — يُستعمل في «الوارد» ← طلب الانضمام ← «في الشجرة» (`AdminAllRequestsView.orderedMatchList`):
+// ١) الاسم الأول يطابق بعد التطبيع، ثم الأب ثم الجد… بالترتيب. الاسم المركّب وحدة واحدة: سلسلة الشجرة
+//    (`PersonName.chainUnits`) ونصّ المتقدّم (`PersonName.units`)؛ وما بين القوسين لقب لا يُقارن («ابراهيم(العطار)» = «ابراهيم»).
+// ٢) العائلة في آخر الاسم ضجيج لا دليل: «المحمدعلي»/«محمدعلي» وعوائل القائمة والعائلة المختارة.
+// ٣) لا يُقترح إلا من طابق الاسم الأول والأب على الأقل، ويُعرض السبب («الاسم الأول + الأب + الجد»).
+// ٤) الترتيب بعمق التطابق، ثم قرب تاريخ الميلاد إن عُرف للطرفين. (من له حساب أو متوفى يُستبعد قبل الاستدعاء)
+extension NameMatcher {
+
+    /// أقلّ عمق للاقتراح: الاسم الأول + الأب
+    static let minLinkDepth = 2
+
+    /// مفتاح وحدة للربط: بلا ما بين القوسين، ثم التطبيع نفسه (`tokens`) ملصوقاً — «عبد الله» = «عبدالله»
+    static func linkKey(_ unit: String) -> String {
+        var plain = ""
+        var depth = 0
+        for ch in unit {
+            if ch == "(" || ch == "[" { depth += 1 }
+            else if ch == ")" || ch == "]" { depth = max(0, depth - 1) }
+            else if depth == 0 { plain.append(ch) }
+        }
+        return tokens(plain).joined()
+    }
+
+    /// مفاتيح الضجيج في آخر الاسم: عوائل القائمة + «المحمدعلي» و«محمدعلي» + عائلة مختارة إن وُجدت
+    static func linkNoise(_ extra: String? = nil) -> Set<String> {
+        var keys = familyKeys()
+        keys.insert(linkKey("محمدعلي"))
+        if let extra {
+            let k = linkKey(extra)
+            if !k.isEmpty { keys.insert(k) }
+        }
+        return keys
+    }
+
+    /// سلسلة الربط: مفاتيح الوحدات (بلا الروابط) وبلا الضجيج في آخرها
+    static func linkChain(_ units: [String], noise: Set<String>) -> [String] {
+        var keys = units.map { linkKey($0) }.filter { !$0.isEmpty }
+        while let last = keys.last, noise.contains(last) { keys.removeLast() }
+        return keys
+    }
+
+    /// عمق التطابق من البداية بالترتيب — الاسم المركّب قد يُكتب كلمتين في طرف وكلمة في الآخر
+    static func linkDepth(_ a: [String], _ b: [String]) -> Int {
+        var i = 0, j = 0, depth = 0
+        while i < a.count, j < b.count {
+            if a[i] == b[j] { i += 1; j += 1 }
+            else if i + 1 < a.count, a[i] + a[i + 1] == b[j] { i += 2; j += 1 }
+            else if j + 1 < b.count, a[i] == b[j] + b[j + 1] { i += 1; j += 2 }
+            else { break }
+            depth += 1
+        }
+        return depth
+    }
+
+    /// سبب الاقتراح: «الاسم الأول + الأب + الجد»
+    static func linkReason(depth: Int) -> String {
+        var parts = [L10n.t("الاسم الأول", "First name")]
+        if depth >= 2 { parts.append(L10n.t("الأب", "father")) }
+        if depth >= 3 { parts.append(L10n.t("الجد", "grandfather")) }
+        if depth == 4 { parts.append(L10n.t("جد الأب", "great-grandfather")) }
+        if depth > 4 { parts.append(L10n.t("\(depth - 3) أجداد", "\(depth - 3) more ancestors")) }
+        return parts.joined(separator: " + ")
+    }
+
+    /// تاريخ الميلاد للمقارنة: «yyyy-MM-dd» أو السنة وحدها
+    static func linkBirth(_ raw: String?) -> Date? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), raw.count >= 4 else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        if raw.count >= 10, let d = f.date(from: String(raw.prefix(10))) { return d }
+        f.dateFormat = "yyyy"
+        return f.date(from: String(raw.prefix(4)))
+    }
+
+    struct LinkSuggestion {
+        let member: FamilyMember
+        /// كم جزءاً من السلسلة تطابق بالترتيب (٢ = الأول + الأب)
+        let depth: Int
+        /// أجزاء سلسلة المتقدّم (بلا العائلة)
+        let total: Int
+        /// فرق الميلاد بالأيام — nil إن جُهل أحدهما
+        let birthGapDays: Int?
+        /// وجده بحث السيرفر أيضاً (`search_members_by_name` أو لقطة التسجيل)
+        let isServer: Bool
+    }
+
+    /// المقترحون للربط مرتّبين — `candidates` سجلّات الشجرة المسموح بها (الاستبعاد عند المستدعي)
+    static func linkSuggestions(for applicant: FamilyMember, among candidates: [FamilyMember],
+                                serverIds: Set<UUID> = [], limit: Int = 20) -> [LinkSuggestion] {
+        let noise = linkNoise(applicant.familyName)
+        let chainA = linkChain(applicant.nameUnits, noise: noise)
+        guard chainA.count >= minLinkDepth, let firstA = chainA.first else { return [] }
+        let birthA = linkBirth(applicant.birthDate)
+        var out: [LinkSuggestion] = []
+        for m in candidates {
+            // فحص سريع بالاسم الأول قبل بناء السلسلة (آلاف السجلّات)
+            let full = m.fullName.trimmingCharacters(in: .whitespaces)
+            let first = full.hasPrefix(m.firstName) ? m.firstName : PersonName.firstUnit(full)
+            let firstKey = linkKey(first)
+            guard firstKey == firstA || firstA.hasPrefix(firstKey) || firstKey.hasPrefix(firstA) else { continue }
+            let chainB = linkChain(m.nameUnits, noise: m.familyName.map { noise.union([linkKey($0)]) } ?? noise)
+            let depth = linkDepth(chainA, chainB)
+            guard depth >= minLinkDepth else { continue }
+            let gap: Int? = birthA.flatMap { a in
+                linkBirth(m.birthDate).map { Int(abs(a.timeIntervalSince($0)) / 86_400) }
+            }
+            out.append(LinkSuggestion(member: m, depth: depth, total: chainA.count, birthGapDays: gap,
+                                      isServer: serverIds.contains(m.id)))
+        }
+        out.sort { a, b in
+            if a.depth != b.depth { return a.depth > b.depth }
+            switch (a.birthGapDays, b.birthGapDays) {
+            case let (x?, y?) where x != y: return x < y
+            case (.some, nil): return true
+            case (nil, .some): return false
+            default: break
+            }
+            if a.isServer != b.isServer { return a.isServer }
+            return a.member.fullName.localizedStandardCompare(b.member.fullName) == .orderedAscending
+        }
+        return Array(out.prefix(limit))
+    }
+}
