@@ -66,7 +66,8 @@ private struct AdminAppSettingsGroups: View {
     var body: some View {
         VStack(spacing: DS.Hub.stackSpacing) {
             group(L10n.t("الأقسام الظاهرة للأعضاء", "Sections members see")) { AnyView(sectionsRows) }
-            group(L10n.t("القوائم", "Lists")) { AnyView(listsRows) }
+            // القوائم: مربّعان بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٤ «الايقونات بالمنتصف مع المسميات») — المفاتيح تبقى صفوفاً
+            tilesGroup(L10n.t("القوائم", "Lists")) { AnyView(listsTiles) }
             group(L10n.t("التعديلات الذاتية", "Self-edits")) { AnyView(selfEditRows) }
             group(L10n.t("التشغيل", "Operations")) { AnyView(operationRows) }
             group(L10n.t("النظام", "System")) { AnyView(systemRows) }
@@ -166,17 +167,30 @@ private struct AdminAppSettingsGroups: View {
 
     // MARK: ٢ القوائم
 
-    private var listsRows: some View {
-        AdminRowsCardBody {
-            AdminTapRow(icon: "tag.fill", tint: DS.Color.accent,
-                        title: L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"),
-                        subtitle: L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب", "Name, icon, colour, hide and order"),
-                        tap: .page { AnyView(CategoriesManagerView()) })
-            AdminTapRow(icon: "person.2.crop.square.stack.fill", tint: DS.Color.palm,
-                        title: L10n.t("أسماء العوائل والفروع", "Family and branch names"),
-                        subtitle: L10n.t("يختار منها العضو عائلته، وأسماء قائمة الفروع", "Members pick their family; branch list names"),
-                        value: branchNamesCount > 0 ? L10n.t("\(branchNamesCount) فرع باسم", "\(branchNamesCount) named") : nil,
-                        tap: .page { AnyView(AdminFamilyNamesView()) })
+    /// مجموعة مربّعات: العنوان الصغير ثم الشبكة (بلا بطاقة صفوف — كل مربّع بطاقته)
+    private func tilesGroup(_ title: String, tiles: () -> AnyView) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            AdminSectionLabel(title: title)
+            tiles()
+        }
+    }
+
+    /// تصنيفات الأخبار والمكتبة · أسماء العوائل والفروع (وعدد الفروع المسمّاة تحت الاسم) — نفس الصفحتين ونفس الدفع.
+    /// سطر الرقم محجوز في المربّعين معاً حين يوجد (طول واحد)، ولا فراغ له حين لا يوجد
+    private var listsTiles: some View {
+        let named = branchNamesCount > 0
+        return AdminTileGrid(count: 2) {
+            AdminTapWrap(tap: .page { AnyView(CategoriesManagerView()) }, feel: .tile, label: AnyView(
+                AdminHubTile(icon: "tag.fill", fill: DS.Color.goldFill,
+                             title: L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"),
+                             reservesCaption: named, index: 0,
+                             hint: L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب", "Name, icon, colour, hide and order"))))
+            AdminTapWrap(tap: .page { AnyView(AdminFamilyNamesView()) }, feel: .tile, label: AnyView(
+                AdminHubTile(icon: "person.2.crop.square.stack.fill", fill: DS.Color.palmFill,
+                             title: L10n.t("أسماء العوائل والفروع", "Family and branch names"),
+                             caption: named ? L10n.t("\(branchNamesCount) فرع باسم", "\(branchNamesCount) named") : nil,
+                             reservesCaption: named, index: 1,
+                             hint: L10n.t("يختار منها العضو عائلته، وأسماء قائمة الفروع", "Members pick their family; branch list names"))))
         }
     }
 

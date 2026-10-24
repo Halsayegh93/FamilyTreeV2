@@ -34,7 +34,9 @@ struct AdminTeamAreaView: View {
                 AnyView(AdminTeamCard())
             }
             if !tools.isEmpty {
-                AdminToolCards(tools: tools, hints: [:], warnings: sms.needsTopUp ? ["access.sms"] : [])
+                // مربّعات بالمنتصف — الرصيد المنخفض شارة «!» على أيقونة رسائل الدخول (طلب المالك ٢٠٢٦-١٠-٢٤)
+                AdminToolCards(tools: tools, hints: [:], warnings: sms.needsTopUp ? ["access.sms"] : [],
+                               style: .tiles(captions: false))
             }
         }
         // ما يُدفع من الإشارات وبطاقة الفريق يرجع باسم القسم

@@ -63,7 +63,6 @@ struct AdminDashboardView: View {
     @State private var appeared = false
 
     @Environment(\.dsLandscape) private var landscape
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -511,41 +510,49 @@ struct AdminDashboardView: View {
 
     // MARK: الأقسام
 
-    /// الأقسام الستة: ٣ أعمدة × صفّان — وعمودان مع الخط الكبير جداً، أو حين يرى الدور قسمين أو أربعة (المشرف ٢،
-    /// المراقب ٤: صفوف كاملة بلا خانة فارغة). كل مربّع أيقونة واسم فقط (طلب المالك ٢٠٢٦-١٠-٢٢: بلا سطر وصف) ويحجز سطري
-    /// الاسم فتتساوى المربّعات بلا قياس إضافي (حارس المكدس). كل مربّع يفتح صفحة القسم بقيمة في المسار، فيستبدلها شريط
-    /// الأقسام بلا تراكم
+    /// «الأقسام» (طلب المالك ٢٠٢٦-١٠-٢٤ «الايقونات بالمنتصف مع المسميات»): عنوان صغير ثم مربّعات بالمنتصف — الأيقونة بلون
+    /// القسم فوق والاسم تحتها (`AdminHubTile`)، ٣ أعمدة × صفّان، وعمودان حين يرى الدور قسمين أو أربعة أو مع الخط الكبير
+    /// جداً، وعمود صفوف من أحجام إمكانية الوصول (`AdminTileGrid`). شارة على أيقونة «الوارد» بما ينتظر القرار، وعلى
+    /// «المناسبات» بالوفيات التي لم يُعلن عنها (المالك والمدير) — رقم حيّ يفتح بيته فقط. كل مربّع يفتح صفحة القسم بقيمة في
+    /// المسار، فيستبدلها شريط الأقسام بلا تراكم
     private func areasSection() -> some View {
-        let shown = visibleAreas.count
-        let narrow = (typeSize >= .xxxLarge && !landscape) || shown <= 2 || shown == 4
-        let count = narrow ? DS.Hub.areaColumnsLargeText : DS.Hub.areaColumns
-        let columns = Array(repeating: GridItem(.flexible(), spacing: AdminGrid.spacing), count: count)
+        let areas = visibleAreas
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            LazyVGrid(columns: columns, spacing: AdminGrid.spacing) {
-                ForEach(visibleAreas) { area in
+            AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
+            AdminTileGrid(count: areas.count) {
+                ForEach(Array(areas.enumerated()), id: \.element) { index, area in
                     NavigationLink(value: AdminReviewDestination.area(area, 0)) {
-                        areaTile(area)
+                        AdminHubTile(icon: area.icon, fill: area.fill, title: area.title,
+                                     badge: areaBadge(area), badgeFill: areaBadgeFill(area),
+                                     badgeSpoken: areaBadgeSpoken(area), index: index, hint: area.subtitle)
                     }
-                    .buttonStyle(DSPressStyle())
+                    .buttonStyle(AdminTilePressStyle())
                 }
             }
         }
     }
 
-    private func areaTile(_ area: AdminArea) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminIconSquare(symbol: area.icon, tint: area.fill, side: DS.Hub.tileIcon,
-                            radius: DS.Hub.tileIconRadius, filled: true, glyph: DS.Glyph.lg)
-            Text(area.title)
-                .dsFont(.hubRow)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(2, reservesSpace: true)
-                .minimumScaleFactor(0.85)
+    /// الشارة على أيقونة القسم: «الوارد» ما ينتظر القرار في مجال الدور، و«المناسبات» وفاة لم يُعلن عنها — وإلا لا شيء
+    private func areaBadge(_ area: AdminArea) -> AdminTileBadge.Kind? {
+        guard !isInitialLoading else { return nil }
+        switch area {
+        case .inbox:     return inboxTotal > 0 ? .count(inboxTotal) : nil
+        case .occasions: return unannounced.isEmpty ? nil : .count(unannounced.count)
+        default:         return nil
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .dsCard(padding: DS.Spacing.md, radius: DS.Hub.tileRadius)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(area.subtitle)
+    }
+
+    /// العدد أحمر (بانتظار القرار)، والوفاة كهرماني هادئ (تنبيه لا خطأ)
+    private func areaBadgeFill(_ area: AdminArea) -> Color {
+        area == .occasions ? DS.Color.warningFill : DS.Color.errorFill
+    }
+
+    private func areaBadgeSpoken(_ area: AdminArea) -> String? {
+        switch area {
+        case .inbox:     return L10n.t("\(inboxTotal) بانتظار القرار", "\(inboxTotal) awaiting a decision")
+        case .occasions: return L10n.t("وفاة لم يُعلن عنها: \(unannounced.count)", "Deaths not announced: \(unannounced.count)")
+        default:         return nil
+        }
     }
 }
 

@@ -433,23 +433,24 @@ struct AdminNotificationsPage: View {
         }
     }
 
-    /// الأيام بالترتيب: اليوم · أمس · التاريخ
-    private func days(_ items: [AdminNoticeItem]) -> [(title: String, items: [AdminNoticeItem])] {
-        var order: [String] = []
-        var map: [String: [AdminNoticeItem]] = [:]
-        let cal = Calendar.current
-        let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.isArabic ? "ar_KW@numbers=latn" : "en_US")
-        f.dateFormat = "EEEE d MMMM"
-        for item in items {
-            let key: String
-            if cal.isDateInToday(item.date) { key = L10n.t("اليوم", "Today") }
-            else if cal.isDateInYesterday(item.date) { key = L10n.t("أمس", "Yesterday") }
-            else { key = f.string(from: item.date) }
-            if map[key] == nil { order.append(key) }
-            map[key, default: []].append(item)
+    /// قسم في الخطّ الزمني: «يحتاج إجراء الآن» (الحالات المشتقة — ليست أحداثاً بوقت) ثم الأيام: اليوم · أمس · التاريخ
+    private struct NoticeSection: Identifiable {
+        let id: String
+        let title: String
+        let items: [AdminNoticeItem]
+    }
+
+    /// ترتيب الصفحة (طلب المالك ٢٠٢٦-١٠-٢٤ «ابي ارتبها»): ما يحتاج إجراء الآن أولاً بقسمه، ثم كل يوم بطاقة واحدة
+    private func sections(_ items: [AdminNoticeItem]) -> [NoticeSection] {
+        let pinned = items.filter(\.pinned)
+        var list: [NoticeSection] = []
+        if !pinned.isEmpty {
+            list.append(NoticeSection(id: "now", title: L10n.t("يحتاج إجراء الآن", "Needs action now"), items: pinned))
         }
-        return order.map { ($0, map[$0] ?? []) }
+        for day in DSDayBuckets.group(items.filter { !$0.pinned }, date: \.date) {
+            list.append(NoticeSection(id: "day.\(day.day.timeIntervalSince1970)", title: day.title, items: day.items))
+        }
+        return list
     }
 
     // MARK: الرأس
@@ -519,23 +520,24 @@ struct AdminNotificationsPage: View {
                 AnyView(noResults)
                     .adminPageRow(top: DS.Hub.stackSpacing)
             } else {
-                ForEach(days(shown), id: \.title) { day in
-                    AdminSectionLabel(title: day.title, trailing: "\(day.items.count)")
+                // كل قسم: عنوانه بعدده، ثم صفوفه بطاقة واحدة (كل صفّ جزءه منها — السحب لكل صفّ)؛ البطاقة تصعد كلها معاً
+                ForEach(sections(shown)) { section in
+                    DSDayHeader(title: section.title, count: section.items.count)
                         .dsCardCascade(1, appeared: appeared)
-                        .adminPageRow(top: DS.Hub.stackSpacing, bottom: 0)
-                    ForEach(day.items) { item in
-                        row(item)
+                        .adminPageRow(top: DS.Hub.stackSpacing, bottom: DSNoticeMetrics.headerGap)
+                    ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
+                        row(item, position: DSGroupPosition(index: index, count: section.items.count))
                     }
                 }
             }
         }
     }
 
-    private func row(_ item: AdminNoticeItem) -> some View {
+    private func row(_ item: AdminNoticeItem, position: DSGroupPosition) -> some View {
         let picked = item.notificationId.map(selectedIds.contains) ?? false
-        return AdminNoticeRow(item: item, selecting: isSelecting, picked: picked, onTap: { tap(item) })
+        return AdminNoticeRow(item: item, selecting: isSelecting, picked: picked, position: position, onTap: { tap(item) })
             .dsCardCascade(1, appeared: appeared)
-            .adminPageRow()
+            .adminPageRow(top: 0, bottom: 0)
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if let id = item.notificationId {
                     Button(role: .destructive) {
@@ -633,50 +635,32 @@ struct AdminNotificationsPage: View {
 
 // MARK: - الصفّ
 
-/// صفّ بطاقة: مربّع النوع (ونقطة «جديد») · العنوان · السطر · الوقت — وزرّ البيت الواحد لما يحتاج إجراء
+/// صفّ مختصر في بطاقة يومه (`DSNoticeRow`): مربّع النوع بلونه · العنوان وفي طرفه الوقت (ونقطة «جديد» الذهبية) · السطر —
+/// وزرّ البيت الواحد لما يحتاج إجراء في طرف السطر. غير المقروء عنوانه أعرض؛ المحدَّد بتعبئة خفيفة
 struct AdminNoticeRow: View {
     let item: AdminNoticeItem
     let selecting: Bool
     let picked: Bool
+    var position: DSGroupPosition = .single
     let onTap: () -> Void
 
+    private var showsCircle: Bool { selecting && item.notificationId != nil }
+
     var body: some View {
-        HStack(alignment: .center, spacing: DS.Spacing.sm) {
-            if selecting && item.notificationId != nil {
-                Image(systemName: picked ? "checkmark.circle.fill" : "circle")
-                    .dsGlyph(DS.Glyph.xl, weight: .regular)
-                    .foregroundColor(picked ? AppSection.admin.ink : DS.Color.textTertiary)
-                    .accessibilityHidden(true)
+        DSNoticeRow(title: item.title, time: item.pinned ? "" : Self.relative(item.date), unread: item.isUnread,
+                    tint: AppSection.admin.ink) {
+            HStack(spacing: DSNoticeMetrics.selectGap) {
+                if showsCircle {
+                    DSNoticeSelectCircle(picked: picked, tint: AppSection.admin.ink)
+                }
+                AdminIconSquare(symbol: item.icon, tint: item.tint)
             }
-            AdminIconSquare(symbol: item.icon, tint: item.tint)
-                .overlay(alignment: .topTrailing) {
-                    if item.isUnread {
-                        Circle()
-                            .fill(DS.Hub.bellDot)
-                            .frame(width: DS.Icon.legendDot, height: DS.Icon.legendDot)
-                            .overlay(Circle().strokeBorder(DS.Color.surface, lineWidth: DS.Border.widthBold))
-                            .offset(x: L10n.isArabic ? -DS.Spacing.xxs : DS.Spacing.xxs, y: -DS.Spacing.xxs)
-                    }
-                }
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(verbatim: item.title)
-                    .dsFont(.hubRow)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !item.subtitle.isEmpty {
-                    Text(verbatim: item.subtitle)
-                        .dsFont(.footnote)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .lineLimit(item.pinned ? 3 : 1)
-                }
-                if !item.pinned {
-                    Text(verbatim: Self.relative(item.date))
-                        .dsFont(.caption)
-                        .foregroundColor(item.isUnread ? AppSection.admin.ink : DS.Color.textTertiary)
-                }
+        } detail: {
+            if !item.subtitle.isEmpty {
+                // الحالة المشتقة (الآن) نصّها كاملاً حتى ٣ أسطر، والإشعار سطر واحد
+                DSNoticeText(text: item.subtitle, unread: item.isUnread || item.pinned, lines: item.pinned ? 3 : 1)
             }
-            Spacer(minLength: 0)
+        } accessory: {
             if let button = item.button, !selecting {
                 AdminTapWrap(tap: .page { AdminNoticeRoutes.page(item.target) },
                              label: AnyView(AdminPillLabel(title: button, style: item.pinned ? .navy : .soft)
@@ -685,16 +669,9 @@ struct AdminNoticeRow: View {
                     .fixedSize()
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, DS.Hub.cardPadding)
-        .padding(.vertical, DS.Spacing.md)
-        .adminCard(padding: nil)
-        .overlay {
-            if selecting && picked {
-                RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous)
-                    .strokeBorder(AppSection.admin.ink.opacity(DS.Opacity.selectedStroke), lineWidth: DS.Border.widthBold)
-            }
-        }
+        .dsGroupedRow(position, radius: DS.Hub.cardRadius,
+                      dividerInset: DSNoticeMetrics.dividerInset(icon: DS.Hub.iconSquare, selecting: showsCircle),
+                      highlight: selecting && picked ? AppSection.admin.ink.opacity(DS.Opacity.tintFill) : nil)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
         // بزرّ: يبقى الزرّ عنصراً مستقلاً للقارئ الصوتي

@@ -260,14 +260,23 @@ struct AdminAreaView: View {
     }
 }
 
-/// بطاقات أدوات القسم مجمّعة بعنوان كل مجموعة
+/// أدوات القسم مجمّعة بعنوان كل مجموعة: في صفحات الأقسام مربّعات بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٤ «الايقونات بالمنتصف مع
+/// المسميات»)، وفي البحث الشامل صفوف بوصفها (قائمة نتائج)
 struct AdminToolCards: View {
+    enum Style {
+        /// بطاقة صفوف (نتائج البحث)
+        case rows
+        /// عنوان صغير ثم شبكة مربّعات؛ `captions` = سطر الرقم الحيّ محجوز في كل مربّع (يصل الرقم بلا قفزة)
+        case tiles(captions: Bool)
+    }
+
     let tools: [AdminTool]
     var hints: [String: String] = [:]
-    /// تلميحات تحذير (بلون التحذير)
+    /// تلميحات تحذير (بلون التحذير) — في المربّعات شارة «!» على الأيقونة
     var warnings: Set<String> = []
     /// وصف الصف يظهر في البحث فقط (صفوف الأقسام تكتفي بالعنوان — الوصف يكرر عنوان الصفحة)
     var showsSubtitle: Bool = false
+    var style: Style = .rows
 
     private var groups: [(title: String, tools: [AdminTool])] {
         var order: [String] = []
@@ -281,15 +290,28 @@ struct AdminToolCards: View {
 
     var body: some View {
         ForEach(groups, id: \.title) { group in
-            VStack(alignment: .leading, spacing: 0) {
-                AdminCardHeader(title: group.title)
-                ForEach(Array(group.tools.enumerated()), id: \.element.id) { index, tool in
-                    if index > 0 { AdminRowDivider() }
-                    AdminToolRow(tool: tool, hint: hints[tool.id], warn: warnings.contains(tool.id), showsSubtitle: showsSubtitle)
+            switch style {
+            case .rows:
+                VStack(alignment: .leading, spacing: 0) {
+                    AdminCardHeader(title: group.title)
+                    ForEach(Array(group.tools.enumerated()), id: \.element.id) { index, tool in
+                        if index > 0 { AdminRowDivider() }
+                        AdminToolRow(tool: tool, hint: hints[tool.id], warn: warnings.contains(tool.id), showsSubtitle: showsSubtitle)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .adminCard()
+            case .tiles(let captions):
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    AdminSectionLabel(title: group.title)
+                    AdminTileGrid(count: group.tools.count) {
+                        ForEach(Array(group.tools.enumerated()), id: \.element.id) { index, tool in
+                            AdminToolTile(tool: tool, caption: hints[tool.id], warn: warnings.contains(tool.id),
+                                          reservesCaption: captions, index: index)
+                        }
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .adminCard()
         }
     }
 }
