@@ -30,7 +30,9 @@ private struct WomenTreeMetrics: Equatable {
     init(k: CGFloat) {
         self.k = k
         circle = 44 * k; corner = 12 * k; ring = 1.5 * k
-        pillH = 22 * k; badgeH = 17 * k; lifeH = 13 * k; nodeW = 62 * k
+        // الاسم وشريط السنوات بمقاس شجرة العائلة نفسه (طلب المالك ٢٠٢٦-١٠-٢٥ «نبي حجم موحد نفس العائلة»):
+        // كبسولة ٣٠ (٢٨ + ٢ في TreeView)، شريط ٢١، وعرض يتّسع للاسم بخط Headline (كان ٢٢ / ١٣ / ٦٢ بخط Caption)
+        pillH = 30 * k; badgeH = 17 * k; lifeH = 19 * k; nodeW = 104 * k
         hGap = 6 * k; vGap = 22 * k; rowGap = 3 * k; wrapGap = 16 * k
         spineRoom = 10 * k; spineOut = 6 * k; lineCorner = 6 * k; pad = 32 * k
     }
@@ -869,7 +871,7 @@ struct WomenClassicTreeView: View {
                 // (نفس تصميم شجرة العائلة، بمقاس عقد النساء الصغيرة)
                 VStack(spacing: 0) {
                     Text(m.firstName)
-                        .dsTreeFont(.caption, k)
+                        .dsTreeFont(.headline, k)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
@@ -878,7 +880,7 @@ struct WomenClassicTreeView: View {
                         .frame(height: PILL_H)
                         .background(DS.Color.surface)
                     Text(lifeSpanNeat(m) ?? L10n.t(m.isFemale ? "متوفية" : "متوفى", "Deceased"))
-                        .dsTreeFont(.treeNodeMicro, k)
+                        .dsTreeFont(.badge, k)
                         .foregroundColor(DS.Color.textOnPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -896,7 +898,7 @@ struct WomenClassicTreeView: View {
                 .onTapGesture { if TreeTapGuard.allowsTap { onSelect?(m) } }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             } else {
                 Text(m.firstName)
-                    .dsTreeFont(.caption, k)
+                    .dsTreeFont(.headline, k)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)   // تصغير أكبر → الاسم الطويل يظهر كاملاً بلا اقتطاع
