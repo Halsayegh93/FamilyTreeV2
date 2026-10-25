@@ -346,8 +346,9 @@ enum DS {
             /// خط الآيفون نفسه (SF Arabic) لكل نصوص التطبيق — طلب المالك ٢٠٢٦-١٠-٢٤ «الخط يصير طبيعي افتراضي».
             /// `false` يرجع خط الهوية أدناه (Cairo أو IBM Plex). ملفات PDF وما يُرسم بـ UIKit تبقى على خط الهوية.
             static let useSystem = !useAlexandria
-            /// تجربة Alexandria (٢٠٢٦-١٠-٢٤، للمقارنة بالصور): تُشغَّل بـ `-tmpFont alexandria` مثل `tmpTheme`
-            static let useAlexandria = UserDefaults.standard.string(forKey: "tmpFont") == "alexandria"
+            /// Alexandria لكل نصوص التطبيق (تجربة المالك ٢٠٢٦-١٠-٢٥ «حط السكندر») — `-tmpFont system` يرجع خط الآيفون
+            /// للمقارنة (مثل `tmpTheme`). للرجوع نهائياً: `== "alexandria"` بدل `!= "system"`
+            static let useAlexandria = UserDefaults.standard.string(forKey: "tmpFont") != "system"
             /// تجربة Cairo (٢٠٢٦-١٠-٢٣) — لم تعجب المالك؛ خط الهوية لملفات PDF = IBM Plex
             static let useCairo = false
             // Cairo.ttf وAlexandria.ttf خطّان متغيّران — أسماء النسخ المسمّاة (named instances) للأوزان
@@ -355,6 +356,8 @@ enum DS {
             static let medium   = useAlexandria ? "Alexandria-Regular_Medium"   : useCairo ? "Cairo-Regular_Medium"   : "IBMPlexSansArabic-Medium"
             static let semibold = useAlexandria ? "Alexandria-Regular_SemiBold" : useCairo ? "Cairo-Regular_SemiBold" : "IBMPlexSansArabic-SemiBold"
             static let bold     = useAlexandria ? "Alexandria-Regular_Bold"     : useCairo ? "Cairo-Regular_Bold"     : "IBMPlexSansArabic-Bold"
+            /// Alexandria الخفيف (٣٠٠) — للنص العادي حين يُخفَّف الخط (`plexName`)
+            static let light    = useAlexandria ? "Alexandria-Regular_Light"    : regular
 
             /// وزن الواجهة المطلوب ← ملف الخط (نفس `DS.Font.plexName`) — اسم main للتوافق
             static func name(for weight: SwiftUI.Font.Weight) -> String { DS.Font.plexName(weight) }
@@ -362,6 +365,16 @@ enum DS {
 
         /// اسم ملف الوزن (Plex فيه أربعة أوزان: الأثقل من العريض يُرسم عريضاً)
         static func plexName(_ weight: SwiftUI.Font.Weight) -> String {
+            // Alexandria أثقل بصرياً من خط الآيفون بنفس الوزن — درجة أخف لكل وزن (طلب المالك ٢٠٢٦-١٠-٢٥
+            // «مابي الخط يكون bold»): العريض شبه عريض، وشبه العريض متوسط، والمتوسط عادي، والعادي خفيف
+            if Plex.useAlexandria {
+                switch weight {
+                case .black, .heavy, .bold: return Plex.semibold
+                case .semibold:             return Plex.medium
+                case .medium:               return Plex.regular
+                default:                    return Plex.light
+                }
+            }
             switch weight {
             case .black, .heavy, .bold: return Plex.bold
             case .semibold:             return Plex.semibold
