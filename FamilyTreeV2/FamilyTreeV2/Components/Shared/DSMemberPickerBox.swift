@@ -58,6 +58,11 @@ struct DSMemberPickerBox: View {
     let onCancel: () -> Void
 
     @Environment(\.dsSection) private var section
+    /// البحث المؤجَّل قليلاً (١٥٠ م ث بعد آخر حرف) — الكتابة تبقى سلسة ولا تُعاد التصفية مع كل حرف (طلب المالك
+    /// ٢٠٢٦-١٠-٢٥ «في بطء في الكتابة»)
+    @State private var settledSearch = ""
+    /// أقصى ما يُرسم من النتائج بعد الكتابة — «ح» وحدها كانت ترسم مئات الصفوف بصورها
+    private static let maxShown = 50
     /// القوائم الطويلة (مئات الأعضاء) كسولة؛ القصيرة عادية حتى يُقاس ارتفاع المربّع كاملاً
     private static let lazyThreshold = 40
     private static let specificWords = 2
@@ -66,17 +71,20 @@ struct DSMemberPickerBox: View {
     private var ink: Color { tint ?? DS.Color.primary.dsChrome(in: section) }
 
     var body: some View {
-        let query = search.trimmingCharacters(in: .whitespaces)
+        let query = settledSearch.trimmingCharacters(in: .whitespaces)
         let queryWords = query.split(whereSeparator: \.isWhitespace).count
         let queryIsSpecific = queryWords >= Self.specificWords || query.count >= Self.specificLength
         // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب، والاسم الأول التام أولاً
-        let list: [FamilyMember] = {
+        let matched: [FamilyMember] = {
             if requiresSpecificQuery {
                 return queryIsSpecific ? NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName } : []
             }
             guard !query.isEmpty else { return listsAllWhenEmpty ? candidates : [] }
             return NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName.isEmpty ? $0.firstName : $0.fullName }
         }()
+        // بعد الكتابة: أول ٥٠ فقط وسطر «اكتب أكثر» — القائمة الكاملة بلا بحث (المنتقيات التي تعرض الكل) كما هي
+        let capped = !query.isEmpty && matched.count > Self.maxShown
+        let list = capped ? Array(matched.prefix(Self.maxShown)) : matched
         var extras: [DSComposerAction] = []
         if let removeTitle, let onRemove {
             extras.append(DSComposerAction(id: "remove", title: removeTitle, role: .destructive, action: onRemove))
@@ -103,7 +111,7 @@ struct DSMemberPickerBox: View {
             }
             DSComposerSection(title: L10n.t("النتيجة", "Result"), icon: "person.crop.circle",
                               tint: DS.Color.accent,
-                              trailing: requiresSpecificQuery || isLoading || list.isEmpty ? nil : "\(list.count)",
+                              trailing: requiresSpecificQuery || isLoading || matched.isEmpty ? nil : "\(matched.count)",
                               index: 1) {
                 if isLoading {
                     // التحميل الواحد: المجسّم يتنفّس
@@ -131,6 +139,14 @@ struct DSMemberPickerBox: View {
                         ForEach(list) { row($0) }
                     }
                 }
+                if capped {
+                    Text(L10n.t("تظهر أول \(Self.maxShown) من \(matched.count) — اكتب أكثر لتضييق النتائج",
+                                "Showing the first \(Self.maxShown) of \(matched.count) — type more to narrow"))
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
+                }
             }
             if let missingTitle, let onMissing, !isLoading {   // ظاهر من البداية (طلب المالك) — قبل الكتابة وبعدها
                 // رابط نصّي بسيط بلا إطار (طلب المالك ٢٠٢٦-١٠-٢٥ «خل الزر أبسط») — مساحة لمس ٤٤
@@ -144,6 +160,20 @@ struct DSMemberPickerBox: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+        // التأجيل: المسح فوري، والكتابة تُصفّى بعد توقّف قصير
+        .task(id: search) {
+            if search.isEmpty || settledSearch.isEmpty && search.count == 1 && candidates.count < 200 {
+                settledSearch = search; return
+            }
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard !Task.isCancelled else { return }
+            settledSearch = search
+        }
+        // تجهيز كلمات الأسماء في الخلفية عند الفتح — أول حرف لا ينتظر تطبيع آلاف الأسماء
+        .task(id: candidates.count) {
+            let texts = candidates.map { $0.fullName.isEmpty ? $0.firstName : $0.fullName }
+            await Task.detached(priority: .utility) { for t in texts { _ = NameSearch.words(t) } }.value
         }
     }
 

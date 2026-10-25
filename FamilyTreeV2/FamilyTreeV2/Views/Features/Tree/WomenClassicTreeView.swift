@@ -186,6 +186,8 @@ struct WomenClassicTreeView: View {
     private func computeLayout() -> Layout {
         // المقاسات بمعامل «حجم النص» — مرة لكل تخطيط
         let M = WomenTreeMetrics(k: treeScale), k = M.k
+        // جدول المعرّفات مرة لكل تخطيط — `byId` محسوبة تبني جدولاً لكل السجلات (~٣٠٠٠) مع كل نداء، وكانت تُنادى لكل عقدة
+        let deceasedIds = Set(members.lazy.filter { $0.isDeceased == true }.map(\.id))
         var L = Layout()
         L.m = M
         guard let root = activeRoot else { return L }
@@ -248,7 +250,7 @@ struct WomenClassicTreeView: View {
         }
         // ارتفاع صندوق العقدة نفسها (بلا الأبناء) — متغيّر.
         func boxH(_ id: UUID) -> CGFloat {
-            M.boxHeight(deceased: byId[id]?.isDeceased == true)
+            M.boxHeight(deceased: deceasedIds.contains(id))
         }
         func measureBlock(_ list: [FamilyMember], _ per: Int) -> CGSize {
             list.isEmpty ? .zero : blockDims(list.map { measure($0.id) }, per, rowGapFor(list, per))
