@@ -1779,7 +1779,9 @@ struct WomanDetailSheet: View {
             // الإدارة تصلح بنفسها — غيرها يطلب
             onFatherMissing: mode == .direct ? nil : { typed in
                 draft.showWifeFlow = false
-                sendRequest(WifeCandidateRules.missingFatherPayload(typed: typed, memberId: woman.id,
+                // member_id يشير لحساب (profiles) — عقدة امرأة ليست حساباً، فالمرساة نفسها كبقية طلبات الشجرة
+                guard let anchor = requestAnchor(preferHusband: false) else { return }
+                sendRequest(WifeCandidateRules.missingFatherPayload(typed: typed, memberId: anchor,
                                                                     memberName: displayName(woman),
                                                                     relation: draft.flowRelation))
             },

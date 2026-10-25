@@ -182,8 +182,13 @@ enum WifeCandidateRules {
             L10n.t("لـ: ", "For: ") + memberName,
             L10n.t("المطلوب: إضافة الأب في الشجرة أو تصحيح بياناته (الميلاد)، ثم ربط ال", "Needed: add the father or fix his birth date, then link the ") + what
         ]
-        return TreeEditPayload.make(action: .other, targetMemberId: memberId.uuidString, targetMemberName: memberName,
-                                    notes: lines.joined(separator: "\n"))
+        // «إضافة» بلا اسم ابن (`newMemberName` = nil) مثل طلبات ربط شجرة النساء — السيرفر يقبل «طلب آخر» لتعديلات الملف
+        // الثلاثة فقط (`guard_admin_request_insert`)، والقبول هنا يدوي من الإدارة
+        return TreeEditPayload.make(action: .add, targetMemberId: memberId.uuidString, targetMemberName: memberName,
+                                    parentMemberId: memberId.uuidString, parentMemberName: memberName,
+                                    notes: (lines + [L10n.t("التنفيذ يدوي: تضيف الإدارة الأب أو تصلحه ثم تكمل الربط، ثم يُقبل الطلب.",
+                                                            "Manual: the admins add or fix the father, link, then approve.")])
+                                        .joined(separator: "\n"))
     }
 
     /// رسالة خطأ الكتابة في مسار الزوجة (رموز `add_or_link_self_relative`)، وإلا الرسالة العامة
