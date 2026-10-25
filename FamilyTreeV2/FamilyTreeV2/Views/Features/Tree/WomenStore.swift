@@ -19,6 +19,8 @@ private struct WomenRow: Decodable {
     let avatarUrl: String?
     let linkedUserId: UUID?
     let isMarried: Bool?
+    /// وقت إضافة السجل — «المضافة حديثاً» تُستبعد من مرشّحات الزوجة (`WifeCandidateRules`)
+    let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -37,6 +39,7 @@ private struct WomenRow: Decodable {
         case avatarUrl = "avatar_url"
         case linkedUserId = "linked_user_id"
         case isMarried = "is_married"
+        case createdAt = "created_at"
     }
 }
 
@@ -95,7 +98,8 @@ enum WomenStore {
                 status: .active,
                 avatarUrl: r.avatarUrl,
                 isMarried: r.isMarried ?? false,
-                gender: (r.gender?.isEmpty == false ? r.gender! : "male")
+                gender: (r.gender?.isEmpty == false ? r.gender! : "male"),
+                createdAt: r.createdAt
             )
         }
         cache = mapped
@@ -106,7 +110,7 @@ enum WomenStore {
                          gender: String = "male", parentFullName: String = "",
                          birthDate: String? = nil, isDeceased: Bool = false,
                          deathDate: String? = nil, isMarried: Bool = false,
-                         motherId: UUID? = nil) async throws {
+                         motherId: UUID? = nil, husbandId: UUID? = nil) async throws {
         // تسلسل الاسم: «الاسم + اسم الأب الكامل» (مثل الشجرة العامة).
         let chained = parentFullName.trimmingCharacters(in: .whitespaces).isEmpty
             ? name : "\(name) \(parentFullName)"
@@ -123,6 +127,11 @@ enum WomenStore {
         ]
         // ابن/ابنة امرأة متزوجة من العائلة: الأب زوجها والأم هي (كان الأب = المرأة فيتكرّر الفرع تحتها)
         if let motherId { payload["mother_id"] = AnyEncodable(motherId.uuidString) }
+        // «أضفها تحت أبيها» (الإدارة): بنت جديدة لأبيها وزوجةٌ لهذا الرجل في إدراج واحد — لا بنت يتيمة إن فشل ربط ثانٍ
+        if let husbandId, gender == "female" {
+            payload["husband_id"] = AnyEncodable(husbandId.uuidString)
+            payload["is_married"] = AnyEncodable(true)
+        }
         try await SupabaseConfig.client.from("women_members").insert(payload).execute()
     }
 
@@ -133,14 +142,15 @@ enum WomenStore {
     @discardableResult
     static func addFamilyChild(parentId: UUID, name: String, gender: String,
                                birthDate: String?, sortOrder: Int,
-                               parentFullName: String) async throws -> UUID {
-        // مفاتيح فارغة تُرسل null صريحة — وإلا نقص توقيع الدالة على السيرفر
+                               parentFullName: String, isDeceased: Bool = false) async throws -> UUID {
+        // مفاتيح فارغة تُرسل null صريحة — وإلا نقص توقيع الدالة على السيرفر.
+        // «متوفّى/متوفّاة» من مربّع الأسماء (الدالة تقبلها أصلاً — بلا تاريخ وفاة)
         let params: [String: AnyEncodable] = [
             "p_parent_id": AnyEncodable(parentId.uuidString),
             "p_name": AnyEncodable(name),
             "p_gender": AnyEncodable(gender),
             "p_birth": AnyEncodable(birthDate),
-            "p_deceased": AnyEncodable(false),
+            "p_deceased": AnyEncodable(isDeceased),
             "p_death": AnyEncodable(Optional<String>.none),
             "p_sort": AnyEncodable(sortOrder),
             "p_parent_full_name": AnyEncodable(parentFullName)
@@ -299,6 +309,20 @@ enum WomenStore {
         let newId: UUID = try await SupabaseConfig.client
             .rpc("add_or_link_self_relative", params: params).execute().value
         return newId
+    }
+    /// «إضافة زوجة» من العائلة للعضو نفسه (نفس الدالة بنوع 'wife'، مقيّدة على عقدته): `womanId` = بنت موجودة لأبيها
+    /// تُربط زوجةً له، وإلا `name` = بنت جديدة تحت أبيها ثم تُربط. السيرفر يرفض المتزوجة بغيره وغير بنات الأب.
+    @discardableResult
+    static func addOrLinkSelfWife(fatherId: UUID, womanId: UUID?, name: String?) async throws -> UUID {
+        let params: [String: AnyEncodable] = [
+            "p_kind": AnyEncodable("wife"),
+            "p_father_id": AnyEncodable(fatherId.uuidString),
+            "p_woman_id": AnyEncodable(womanId?.uuidString),   // null صريح
+            "p_name": AnyEncodable(name)                         // null صريح
+        ]
+        let wifeId: UUID = try await SupabaseConfig.client
+            .rpc("add_or_link_self_relative", params: params).execute().value
+        return wifeId
     }
     static func setSelfMother(motherId: UUID?) async throws {
         try await SupabaseConfig.client

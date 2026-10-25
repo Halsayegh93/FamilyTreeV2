@@ -39,10 +39,8 @@ struct MemberDetailsView: View {
     @State private var showDeleteBioAlert = false
 
     @State private var showEditActions = false
-    /// «طلب إضافة» (ابن، ابنة، زوجة) — مربّع اختيار بمنتصف الشاشة مثل «طلب تعديل»
+    /// نموذج الطلب المختار من «طلب تعديل» — «ابن» هنا أبناء ذكور فقط (البنت والزوجة في شجرة النساء)
     @State private var pendingEditAction: TreeEditAction? = nil
-    /// من يُطلب إضافته مع «إضافة» (`pendingEditAction == .add`)
-    @State private var pendingAddKind: TreeAddKind = .son
     @State private var showReportConfirm = false
     @State private var reportReason = ""
     @State private var reportSent = false
@@ -305,8 +303,7 @@ struct MemberDetailsView: View {
             // «طلب تعديل» كذلك لوح بمنتصف الشاشة (طلب المالك)
             .fullScreenCover(item: $pendingEditAction) { action in
                 DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    TreeEditRequestView(member: member, action: action,
-                                        addKind: action == .add ? pendingAddKind : .son)
+                    TreeEditRequestView(member: member, action: action)
                 }
                 .background(ClearPresentationBackground())
             }
@@ -996,15 +993,15 @@ struct MemberDetailsView: View {
                 let actions = availableEditActions.filter { $0 != .delete }
                 DSActionTileGrid {
                     ForEach(Array(actions.enumerated()), id: \.element.rawValue) { i, action in
-                        DSActionTile(editActionLabel(for: action), icon: action.iconName,
-                                     tint: editActionTint(action)) { pick(action) }
+                        DSActionTile(editActionLabel(for: action), subtitle: editActionSubtitle(action),
+                                     icon: action.iconName, tint: editActionTint(action)) { pick(action) }
                             .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
                                         y: DSMotion.rise, scale: DSMotion.riseScale)
                     }
                 }
                 if availableEditActions.contains(.delete) {
-                    DSActionTile(editActionLabel(for: .delete), icon: TreeEditAction.delete.iconName,
-                                 tint: DS.Color.error) { pick(.delete) }
+                    DSActionTile(editActionLabel(for: .delete), subtitle: editActionSubtitle(.delete),
+                                 icon: TreeEditAction.delete.iconName, tint: DS.Color.error) { pick(.delete) }
                 }
             }
         }
@@ -1030,17 +1027,33 @@ struct MemberDetailsView: View {
 
 
     /// نُغلق مربّع الاختيار أولاً ثم نفتح نموذج الطلب (عرضان متتاليان)
-    private func pick(_ action: TreeEditAction, kind: TreeAddKind = .son, closing: (() -> Void)? = nil) {
-        pendingAddKind = kind
+    private func pick(_ action: TreeEditAction, closing: (() -> Void)? = nil) {
         if let closing { closing() } else { showEditActions = false }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
             pendingEditAction = action
         }
     }
 
+    /// سطر «لمن» تحت كل بطاقة طلب (طلب المالك ٢٠٢٦-١٠-٢٥ «حط توضيح») — من اسم العضو المختار
+    private func editActionSubtitle(_ action: TreeEditAction) -> String {
+        let who = "«" + (member.firstName.isEmpty ? member.fullName : member.firstName) + "»"
+        switch action {
+        case .add: return L10n.t("ابن لـ", "Son of ") + who
+        case .editName: return L10n.t("اسم ", "Name of ") + who
+        case .editPhone: return L10n.t("رقم ", "Phone of ") + who
+        case .editBirth: return L10n.t("ميلاد ", "Birth of ") + who
+        case .deceased: return L10n.t("وفاة ", "Death of ") + who
+        case .addDeathDate: return L10n.t("تاريخ وفاة ", "Death date of ") + who
+        case .addPhoto: return L10n.t("صورة لـ", "Photo of ") + who
+        case .delete: return L10n.t("حذف ", "Remove ") + who + L10n.t(" من الشجرة", " from the tree")
+        case .other: return who
+        }
+    }
+
     private func editActionLabel(for action: TreeEditAction) -> String {
         switch action {
-        case .add: return L10n.t("إضافة ابن", "Add Son")
+        // «ابن» (طلب المالك ٢٠٢٦-١٠-٢٥ «خلها مسمى ابن») — أبناء ذكور فقط، والسطر تحته يقول لمن
+        case .add: return L10n.t("ابن", "Son")
         case .editName: return L10n.t("تعديل اسم", "Edit Name")
         case .editPhone: return L10n.t("تعديل رقم", "Edit Phone")
         case .editBirth: return L10n.t("تعديل ميلاد", "Edit Birth")

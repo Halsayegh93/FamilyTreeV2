@@ -395,12 +395,15 @@ struct DSTileGridLayout: Layout {
 /// اللون وإطار رفيع منه — اثنتان في السطر (`DSActionTileGrid`)، و`fullWidth` لبطاقة الحذف وحدها في آخر المربّع
 struct DSActionTile: View {
     let title: String
+    /// سطر صغير تحت الاسم: لمن الإجراء (طلب المالك ٢٠٢٦-١٠-٢٥ «حط توضيح مثلا اضافة اخت لعضو المختار») — nil = الاسم وحده
+    var subtitle: String? = nil
     let icon: String
     let tint: Color
     let action: () -> Void
 
-    init(_ title: String, icon: String, tint: Color, action: @escaping () -> Void) {
+    init(_ title: String, subtitle: String? = nil, icon: String, tint: Color, action: @escaping () -> Void) {
         self.title = title
+        self.subtitle = subtitle
         self.icon = icon
         self.tint = tint
         self.action = action
@@ -421,17 +424,27 @@ struct DSActionTile: View {
                     .frame(width: DSMemberKit.chipDisc, height: DSMemberKit.chipDisc)
                     .background(Circle().fill(tint.dsSolidFill))
                     .accessibilityHidden(true)
-                Text(title)
-                    .dsFieldFont(.chip)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(2)
-                    .minimumScaleFactor(DSBox.buttonLabelMinScale)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(title)
+                        .dsFieldFont(.chip)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(DSBox.buttonLabelMinScale)
+                    if let subtitle {
+                        Text(subtitle)
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(DSBox.buttonLabelMinScale)
+                    }
+                }
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xsm)
-            .frame(maxWidth: .infinity, minHeight: DSMemberKit.chipHeight)
+            // كل البطاقات بارتفاع سطرها (`DSTileGridLayout`) — بسطر شرح أو بدونه
+            .frame(maxWidth: .infinity, minHeight: DSMemberKit.chipHeight, maxHeight: .infinity)
             .background(shape.fill(LinearGradient(colors: [tint.opacity(DS.Opacity.tintFillStrong),
                                                            tint.opacity(DS.Opacity.tintFillSoft)],
                                                   startPoint: .leading, endPoint: .trailing)))
@@ -440,6 +453,7 @@ struct DSActionTile: View {
         }
         .buttonStyle(DSPressStyle())
         .accessibilityLabel(title)
+        .accessibilityHint(subtitle ?? "")
     }
 }
 

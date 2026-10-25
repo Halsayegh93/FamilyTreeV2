@@ -25,27 +25,15 @@ struct ProfileView: View {
     /// ستر أسماء النساء (الأم/الزوجة/البنات) — مغبّشة افتراضياً، وهزّ الجهاز يبدّل
     /// الأسماء ظاهرة دائماً — أُزيل الإخفاء بهزّ الجهاز (طلب المالك)
     private let womenRevealed = true
-    // إضافة/اختيار الزوجة والأم
-    @State private var showAddWife = false
-    @State private var newWifeName = ""
-    @State private var newWifeHidden = false
-    /// ما فُتح عليه مربّع «إضافة زوجة» (الاسم قد يأتي من البحث) — «إلغاء» يسأل فقط
-    /// إذا تغيّر شيء داخل المربّع (توصية أبل)
-    @State private var addWifeStartName = ""
-    @State private var addWifeStartHidden = false
     /// «تقليل الحركة» من إعدادات الجهاز (توصية أبل): بلا انزلاق لقائمة الترتيب
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// خطأ إضافة الزوجة — كان الفشل صامتاً تماماً (النتيجة مُهمَلة).
-    @State private var addWifeError: String? = nil
-    // مصدر إضافة الزوجة: بالاسم أو اختيار من العائلة
+    // «إضافة زوجة» الواحدة (طلب المالك ٢٠٢٦-١٠-٢٥): من أين هي؟ عند الخانة نفسها — من خارج العائلة بالاسم هناك،
+    // ومن العائلة مربّع «أبوها ← بناته» المشترك مع شجرة النساء
     @State private var showWifeSource = false
-    @State private var showWifePicker = false
-    @State private var wifeCandidates: [FamilyMember] = []
-    @State private var wifeSearch = ""
-    @State private var isLoadingWifeCandidates = false
+    @State private var showWifeFamily = false
     @State private var showMotherOptions = false
     @State private var fatherWives: [WomanMember] = []
-    /// الأم/الزوجة من بنات الشجرة (أبوها في الشجرة) أو إضافة أخت — مربّع بخطوتين (طلب المالك ٢٠٢٦-١٠-٢٤)
+    /// الأم من بنات الشجرة (أبوها في الشجرة) أو إضافة أخت — مربّع بخطوتين (طلب المالك ٢٠٢٦-١٠-٢٤)
     @State private var treeDaughterKind: TreeDaughterLinkBox.Kind? = nil
     @State private var treeDaughterDoneMessage: String? = nil
     @State private var appeared = false
@@ -311,18 +299,21 @@ struct ProfileView: View {
                 WomanMemberEditSheet(memberVM: memberVM, entry: entry,
                                      canEditGender: authVM.canEditMembers)
             }
-            // إضافة زوجة واختيارها — مربّعات بمنتصف الشاشة (طلب المالك)
-            .dsCenterBox(isPresented: $showAddWife) { addWifeSheet }
-            .dsCenterBox(isPresented: $showWifePicker) {
-                wifePickerSheet
-                    // التحميل بعد ظهور المربّع — فتُبنى القائمة على بيانات حاضرة
-                    .task {
-                        isLoadingWifeCandidates = true
-                        wifeCandidates = await loadWifeCandidates()
-                        isLoadingWifeCandidates = false
-                    }
+            // «إضافة زوجة» من العائلة: أبوها من الشجرة ← بناته المتاحات (لا متزوجة ولا دون ١٨ ولا مولودة حديثاً)
+            // أو تُضاف تحته — نفس مربّع شجرة النساء (`DSWifeFlowBox`) ودالة السيرفر الذاتية
+            .dsCenterBox(isPresented: $showWifeFamily) {
+                if let me = user {
+                    ProfileWifeFamilyBox(
+                        memberVM: memberVM, me: me,
+                        onDone: { message in
+                            showWifeFamily = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { treeDaughterDoneMessage = message }
+                        },
+                        onCancel: { showWifeFamily = false }
+                    )
+                }
             }
-            // الأم/الزوجة من بنات الشجرة، وإضافة أخت — مربّع واحد بخطوتين
+            // الأم من بنات الشجرة، وإضافة أخت — مربّع واحد بخطوتين
             .dsCenterBox(item: $treeDaughterKind) { kind in
                 if let me = user {
                     TreeDaughterLinkBox(
@@ -996,23 +987,18 @@ struct ProfileView: View {
                                             icon: "heart.fill", color: DS.Color.neonPink) {
                             showWifeSource = true
                         }
-                        // مصدر الزوجة + الإضافة بالاسم في مربّع عند الخانة نفسها (طلب المالك)
+                        // «من أين الزوجة؟» + الإضافة بالاسم في مربّع عند الخانة نفسها (طلب المالك)
                         .anchoredPopover(isPresented: $showWifeSource) {
                             WifeSourceCard(
                                 onFamily: {
                                     showWifeSource = false
-                                    // الشيت يُفتح فوراً ويحمّل بداخله
-                                    wifeCandidates = []
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showWifePicker = true }
+                                    // المربّع يُفتح فوراً ويحمّل بداخله
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showWifeFamily = true }
                                 },
                                 onAdd: { name, hidden in
                                     let ok = await memberVM.addSelfWife(name: name, hidden: hidden)
                                     if ok { showWifeSource = false; return nil }
                                     return memberVM.errorMessage ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
-                                },
-                                onTree: {
-                                    showWifeSource = false
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { treeDaughterKind = .wife }
                                 },
                                 onCancel: { showWifeSource = false }
                             )
@@ -1067,185 +1053,6 @@ struct ProfileView: View {
     }
 
     /// أبناء شجرة النساء بالترتيب الحالي (للترتيب).
-    // MARK: - اختيار الزوجة من العائلة
-
-    /// إناث شجرة النساء المتاحات (بلا زوج) — مرشّحات «زوجة من العائلة».
-    /// نموذج «إضافة زوجة بالاسم» — الاسم + خيار إخفائها من الشجرة.
-    private var addWifeSheet: some View {
-        DSComposer(
-            title: L10n.t("إضافة زوجة", "Add Wife"),
-            subtitle: L10n.t("تُسجَّل في عائلتك", "Recorded in your family"),
-            icon: "person.crop.circle.badge.plus",
-            tint: DS.Color.actionNavy,
-            actionTitle: L10n.t("إضافة", "Add"),
-            actionIcon: "plus",
-            canSubmit: !newWifeName.trimmingCharacters(in: .whitespaces).isEmpty,
-            // تغيّر الاسم أو الإخفاء عمّا فُتح عليه المربّع → «إلغاء» يسأل قبل التجاهل
-            hasUnsavedChanges: newWifeName != addWifeStartName || newWifeHidden != addWifeStartHidden,
-            onSubmit: {
-                let n = newWifeName, h = newWifeHidden
-                addWifeError = nil
-                Task {
-                    let ok = await memberVM.addSelfWife(name: n, hidden: h)
-                    await MainActor.run {
-                        if ok {
-                            showAddWife = false
-                        } else {
-                            // المربّع يبقى مفتوحاً مع سبب الفشل بدل اختفاء صامت
-                            addWifeError = memberVM.errorMessage
-                                ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
-                        }
-                    }
-                }
-            },
-            onCancel: { showAddWife = false }
-        ) {
-            DSComposerSection(title: L10n.t("الاسم", "Name"), icon: "person.fill",
-                              tint: DS.Color.primary, index: 0) {
-                DSComposerField(icon: "person.fill",
-                                label: L10n.t("اسم الزوجة", "Wife's name"),
-                                placeholder: L10n.t("اسم الزوجة", "Wife's name"),
-                                text: $newWifeName)
-            }
-            DSComposerSection(title: L10n.t("الظهور", "Visibility"), icon: "eye.slash.fill",
-                              tint: DS.Color.accent, index: 1) {
-                VStack(spacing: DS.Spacing.sm) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        DSFieldIcon(name: "eye.slash.fill", tint: DS.Color.accent)
-                            .accessibilityHidden(true)
-                        Text(L10n.t("إخفاؤها من الشجرة", "Hide from the tree"))
-                            .dsFieldFont(.rowTitle)
-                            .foregroundColor(DS.Color.fieldLabel)
-                            .accessibilityHidden(true)   // يُقرأ اسماً للمفتاح نفسه
-                        Spacer(minLength: DS.Spacing.sm)
-                        Toggle("", isOn: $newWifeHidden)
-                            .labelsHidden()
-                            .tint(AppSection.profile.ink)
-                            .accessibilityLabel(L10n.t("إخفاؤها من الشجرة", "Hide from the tree"))
-                    }
-                    .dsRowBox()
-                    Text(L10n.t("المخفيّة لا تظهر لأي أحد في الشجرة — تبقى مسجّلة عندك فقط.",
-                                "A hidden wife appears to no one in the tree — she stays recorded for you only."))
-                        .dsFont(.footnote)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            if let addWifeError {
-                DSNoteCard(addWifeError, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
-            }
-        }
-        // نقطة البداية لمقارنة «تغييرات لم تُحفظ» — الاسم المعبّأ من البحث ليس تغييراً
-        .onAppear {
-            addWifeStartName = newWifeName
-            addWifeStartHidden = newWifeHidden
-        }
-    }
-
-    private func loadWifeCandidates() async -> [FamilyMember] {
-        guard let user = authVM.currentUser else { return [] }
-        let me = user.id
-        let all = (try? await WomenStore.fetch()) ?? []
-
-        // ذرّية أبي: تشمل أخواتي وبنات إخوتي وأخواتي وبناتي — كلهنّ محارم
-        // فلا يصحّ ظهورهنّ. نبني الشجرة من الرجال والنساء معاً.
-        // لو لم تُحمَّل قائمة الرجال بعد لصار حساب المحارم ناقصاً (بنات الإخوة
-        // تظهر) — نضمن تحميلها قبل الحساب.
-        if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers(force: true) }
-        var kidsOf: [UUID: [UUID]] = [:]
-        for m in memberVM.allMembers {
-            if let f = m.fatherId { kidsOf[f, default: []].append(m.id) }
-        }
-        for w in all {
-            if let f = w.fatherId { kidsOf[f, default: []].append(w.id) }
-        }
-        var mahram = Set<UUID>()
-        if let myFather = user.fatherId {
-            var stack = [myFather]
-            while let node = stack.popLast() {
-                for child in kidsOf[node] ?? [] where !mahram.contains(child) {
-                    mahram.insert(child)
-                    stack.append(child)
-                }
-            }
-        }
-        // بناتي وذرّيتهنّ (لو لم يكن لي أب مسجّل)
-        var stack = [me]
-        while let node = stack.popLast() {
-            for child in kidsOf[node] ?? [] where !mahram.contains(child) {
-                mahram.insert(child)
-                stack.append(child)
-            }
-        }
-
-        /// أقلّ من ١٧ سنة لا تظهر. مجهولة الميلاد تُعرض (لا يمكن التحقّق).
-        func isUnderAge(_ w: FamilyMember) -> Bool {
-            guard let raw = w.birthDate, raw.count >= 10 else { return false }
-            let f = DateFormatter()
-            f.calendar = Calendar(identifier: .gregorian)
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.dateFormat = "yyyy-MM-dd"
-            guard let born = f.date(from: String(raw.prefix(10))) else { return false }
-            let years = Calendar.current.dateComponents([.year], from: born, to: Date()).year ?? 99
-            return years < 17
-        }
-
-        return all
-            .filter {
-                $0.isFemale
-                && $0.isDeceased != true                                             // المتوفيات لا تُعرض
-                && $0.husbandId == nil                                              // غير مرتبطة بزوج
-                && $0.isMarried != true                                             // ولا مُعلَّمة متزوجة
-                && $0.id != me
-                && $0.fatherId != nil                                               // من نسل العائلة لا مُصاهَرة
-                && !mahram.contains($0.id)                                          // ليست من محارمه
-                && !isUnderAge($0)                                                  // ١٧ سنة فأكثر
-                && WomenStore.linkedUserByWoman[$0.id] == nil                        // ليست عضواً بحساب
-                && !$0.fullName.trimmingCharacters(in: .whitespaces).isEmpty         // لها اسم
-            }
-            .sorted { $0.fullName.localizedCompare($1.fullName) == .orderedAscending }
-    }
-
-    /// ربط أنثى موجودة كزوجة للمستخدم الحالي (RPC مقيّد على النفس — يعمل لأي دور).
-    private func linkWife(_ womanId: UUID) {
-        showWifePicker = false; wifeSearch = ""
-        Task { await memberVM.setSelfWife(wifeId: womanId) }
-    }
-
-    /// مربّع اختيار زوجة من العائلة (مع بحث) — بمنتصف الشاشة (طلب المالك). «المربّع المتطوّر»
-    /// المشترك `DSMemberPickerBox` (يستعمله مربّع إدارة شجرة النساء أيضاً) — هنا بوضع الخصوصية:
-    /// لا تُستعرض أسماء نساء العائلة، تظهر النتيجة فقط لمن يكتب اسماً محدّداً بما يكفي.
-    private var wifePickerSheet: some View {
-        DSMemberPickerBox(
-            title: L10n.t("اختيار زوجة من العائلة", "Choose wife"),
-            subtitle: L10n.t("اكتب الاسم الرباعي الصحيح", "Type the full name"),
-            candidates: wifeCandidates,
-            search: $wifeSearch,
-            isLoading: isLoadingWifeCandidates,
-            requiresSpecificQuery: true,
-            searchLabel: L10n.t("الاسم الرباعي", "Full name"),
-            searchPlaceholder: L10n.t("اكتب الاسم الرباعي", "Type the full name"),
-            hintTitle: L10n.t("اكتب الاسم الرباعي الصحيح لزوجتك", "Type your wife's full name"),
-            hintMessage: L10n.t("حفاظاً على الخصوصية لا تُعرض أسماء نساء العائلة — تظهر النتيجة عند كتابة الاسم كاملاً.",
-                                "For privacy, family women aren't listed — results appear once you type the full name."),
-            noMatchTitle: L10n.t("ما لقينا اسماً مطابقاً", "No matching name"),
-            emptyMessage: L10n.t("تأكّد من الاسم، أو أضفها بالاسم وتراجعها الإدارة.",
-                                 "Check the name, or add by name for admin review."),
-            onAddByName: { query in
-                showWifePicker = false
-                newWifeName = query
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    showAddWife = true
-                }
-            },
-            rowHint: L10n.t("ربطها زوجةً لك", "Link as your wife"),
-            tint: AppSection.profile.ink,
-            onPick: { linkWife($0.id) },
-            onCancel: { showWifePicker = false; wifeSearch = "" }
-        )
-    }
-
     private var womenChildrenList: [WomanMember] {
         womenOnlyChildren.map { $0.member }
     }
@@ -1994,16 +1801,27 @@ private struct AnchoredCardButtons: View {
 private struct AnchoredChoiceRow: View {
     let title: String
     let icon: String
+    /// سطر صغير يشرح الخيار تحت عنوانه (اختياري)
+    var hint: String? = nil
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            // صفّ بإطار حقول المربّعات: قرص مجسّم + عنوان
+            // صفّ بإطار حقول المربّعات: قرص مجسّم + عنوان (+ سطر الشرح)
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: icon, tint: AppSection.profile.ink)
-                Text(title)
-                    .dsFont(.rowTitle)
-                    .foregroundColor(DS.Color.textPrimary)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(title)
+                        .dsFont(.rowTitle)
+                        .foregroundColor(DS.Color.textPrimary)
+                    if let hint {
+                        Text(hint)
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
             }
             .frame(minHeight: DSBox.fieldMinHeight)
@@ -2078,13 +1896,13 @@ private struct MotherPickCard: View {
     }
 }
 
-/// الزوجة: من العائلة، أو إضافة بالاسم (مع خيار الإخفاء) — في نفس المربّع
+/// «إضافة زوجة» الواحدة (طلب المالك ٢٠٢٦-١٠-٢٥): من أين هي؟ — من العائلة (مربّع «أبوها ← بناته» المشترك
+/// مع شجرة النساء)، أو من خارجها بالاسم (مع خيار الإخفاء) في نفس المربّع
 private struct WifeSourceCard: View {
+    /// «من العائلة» — كان خياران: «اختيار من العائلة» بالاسم الرباعي و«من بنات الشجرة»
     let onFamily: () -> Void
     /// يرجع رسالة الخطأ، أو nil عند النجاح
     let onAdd: (String, Bool) async -> String?
-    /// «من بنات الشجرة (أبوها في الشجرة)»
-    let onTree: () -> Void
     let onCancel: () -> Void
     @State private var adding = false
     @State private var name = ""
@@ -2131,13 +1949,15 @@ private struct WifeSourceCard: View {
                     },
                     onCancel: { withAnimation(.easeInOut(duration: 0.2)) { adding = false; error = nil } })
             } else {
-                AnchoredChoiceRow(title: L10n.t("اختيار من العائلة", "Choose from family"),
-                                  icon: "magnifyingglass", action: onFamily)
-                AnchoredChoiceRow(title: L10n.t("إضافة بالاسم", "Add by name"), icon: "plus") {
+                AnchoredChoiceRow(title: L10n.t("من العائلة", "From the family"), icon: "tree.fill",
+                                  hint: L10n.t("أبوها في الشجرة — تختارها من بناته أو تضيفها تحته",
+                                               "Her father is in the tree — pick her or add her under him"),
+                                  action: onFamily)
+                AnchoredChoiceRow(title: L10n.t("من خارج العائلة", "From outside the family"),
+                                  icon: "person.crop.circle.badge.plus",
+                                  hint: L10n.t("تكتب اسمها", "Type her name")) {
                     withAnimation(.easeInOut(duration: 0.2)) { adding = true }
                 }
-                AnchoredChoiceRow(title: L10n.t("من بنات الشجرة (أبوها في الشجرة)", "From the tree (her father is in it)"),
-                                  icon: "person.2.fill", action: onTree)
                 DSButton(L10n.t("إلغاء", "Cancel"), role: .cancel, action: onCancel)
             }
         }
@@ -2147,15 +1967,16 @@ private struct WifeSourceCard: View {
     }
 }
 
-// MARK: - الأم/الزوجة من بنات الشجرة + إضافة أخت (طلب المالك ٢٠٢٦-١٠-٢٤)
-// «أبو الأم أو الزوجة موجود بالشجرة»: اختيار الأب من الشجرة ← اختيار إحدى بناته أو إضافتها بالاسم
-// بنتاً جديدة له ← تصير أمّه/زوجته. «إضافة أخت»: بنت جديدة تحت أبيه هو (والأخوات الموجودات فوق الحقل).
+// MARK: - الأم من بنات الشجرة + إضافة أخت (طلب المالك ٢٠٢٦-١٠-٢٤)
+// «أبو الأم موجود بالشجرة»: اختيار الأب من الشجرة ← اختيار إحدى بناته أو إضافتها بالاسم
+// بنتاً جديدة له ← تصير أمّه. «إضافة أخت»: بنت جديدة تحت أبيه هو (والأخوات الموجودات فوق الحقل).
 // كله في دالة السيرفر الواحدة `add_or_link_self_relative` (مقيّدة على النفس).
+// (الزوجة صارت في «إضافة زوجة» الواحدة — `ProfileWifeFamilyBox` أسفل، طلب المالك ٢٠٢٦-١٠-٢٥)
 
 /// مربّع الربط بخطوتين في المربّع نفسه: ١) الأب (`DSMemberPickerBox`) ٢) بناته + «إضافة بنت جديدة باسم…»
 private struct TreeDaughterLinkBox: View {
     enum Kind: String, Identifiable {
-        case wife, mother, sister
+        case mother, sister
         var id: String { rawValue }
     }
 
@@ -2212,14 +2033,13 @@ private struct TreeDaughterLinkBox: View {
 
     // MARK: ١) الأب من الشجرة
 
-    /// رجال الشجرة — بلا العضو نفسه، وللزوجة بلا أبيه (أخواته)
+    /// رجال الشجرة — بلا العضو نفسه
     private var fatherCandidates: [FamilyMember] {
         memberVM.allMembers
             .filter { m in
                 !m.isFemale
                 && m.id != me.id
                 && !m.isHiddenFromTree
-                && !(kind == .wife && m.id == me.fatherId)
                 && !m.fullName.trimmingCharacters(in: .whitespaces).isEmpty
             }
             .sorted { $0.fullName.localizedCompare($1.fullName) == .orderedAscending }
@@ -2227,8 +2047,7 @@ private struct TreeDaughterLinkBox: View {
 
     private var fatherStep: some View {
         DSMemberPickerBox(
-            title: kind == .wife ? L10n.t("أبو زوجتك في الشجرة", "Your wife's father in the tree")
-                                 : L10n.t("أبو أمك في الشجرة", "Your mother's father in the tree"),
+            title: L10n.t("أبو أمك في الشجرة", "Your mother's father in the tree"),
             subtitle: L10n.t("اختر الأب، ثم اخترها من بناته أو أضفها", "Pick the father, then pick or add her"),
             icon: "person.2.fill",
             candidates: fatherCandidates,
@@ -2252,13 +2071,8 @@ private struct TreeDaughterLinkBox: View {
 
     private func daughtersStep(fatherId: UUID) -> some View {
         let isSister = kind == .sister
-        let title: String = {
-            switch kind {
-            case .wife:   return L10n.t("زوجتك من بنات الشجرة", "Wife from the tree")
-            case .mother: return L10n.t("أمك من بنات الشجرة", "Mother from the tree")
-            case .sister: return L10n.t("إضافة أخت", "Add Sister")
-            }
-        }()
+        let title = isSister ? L10n.t("إضافة أخت", "Add Sister")
+                             : L10n.t("أمك من بنات الشجرة", "Mother from the tree")
         let subtitle = fatherName.isEmpty
             ? L10n.t("بنات الأب", "The father's daughters")
             : L10n.t("بنات \(fatherName)", "Daughters of \(fatherName)")
@@ -2331,10 +2145,9 @@ private struct TreeDaughterLinkBox: View {
         }
     }
 
-    /// صفّ بنت — للأخت عرض فقط (لا تكرار)، وللزوجة المرتبطة بزوج معطّلة بملاحظة
+    /// صفّ بنت — للأخت عرض فقط (لا تكرار)
     private func daughterRow(_ d: FamilyMember) -> some View {
         let isSister = kind == .sister
-        let taken = kind == .wife && d.husbandId != nil
         let selected = selectedId == d.id
         let name = d.firstName.isEmpty ? d.fullName : d.firstName
         return Button {
@@ -2343,17 +2156,10 @@ private struct TreeDaughterLinkBox: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "person.fill", tint: AppSection.profile.ink)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(name)
-                        .dsFieldFont(.rowTitle)
-                        .foregroundColor(DS.Color.fieldValue)
-                        .multilineTextAlignment(.leading)
-                    if taken {
-                        Text(L10n.t("مرتبطة بزوج — لا يمكن اختيارها", "Already married — can't be picked"))
-                            .dsFont(.footnote)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
+                Text(name)
+                    .dsFieldFont(.rowTitle)
+                    .foregroundColor(DS.Color.fieldValue)
+                    .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
@@ -2367,8 +2173,7 @@ private struct TreeDaughterLinkBox: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
-        .disabled(taken || isSister)
-        .opacity(taken ? DS.Opacity.disabled : 1)
+        .disabled(isSister)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -2404,11 +2209,10 @@ private struct TreeDaughterLinkBox: View {
                 _ = try await SupabaseConfig.client
                     .rpc("add_or_link_self_relative", params: params).execute()
                 Log.info("[Women] add_or_link_self_relative \(kind.rawValue) \(womanId == nil ? "new" : "link")")
-                // نفس التحديث بعد اختيار/إضافة الأم والزوجة
+                // نفس التحديث بعد اختيار/إضافة الأم
                 await memberVM.fetchWomenFamily(for: me.id)
                 busy = false
                 switch kind {
-                case .wife:   onDone(L10n.t("صارت زوجتك في «عائلتي».", "She's now your wife in «My family»."))
                 case .mother: onDone(L10n.t("صارت أمك في «عائلتي».", "She's now your mother in «My family»."))
                 case .sister: onDone(L10n.t("أُضيفت أختك تحت أبيك في الشجرة.", "Your sister was added under your father."))
                 }
@@ -2439,6 +2243,60 @@ private struct TreeDaughterLinkBox: View {
             return L10n.t("أبوك غير مسجّل في الشجرة بعد.", "Your father isn't in the tree yet.")
         default:
             return WomenStore.failureMessage(error)
+        }
+    }
+}
+
+// MARK: - «إضافة زوجة» من العائلة في «حسابي» (طلب المالك ٢٠٢٦-١٠-٢٥ «حتى في الملف الشخصي»)
+
+/// نفس مربّع شجرة النساء (`DSWifeFlowBox`) بآلية «عائلتي»: أبوها من الشجرة ← بناته المتاحات (قواعد
+/// `WifeCandidateRules`: لا متزوجة ولا دون ١٨ ولا مولودة حديثاً) ← ربطها، أو «أضفها تحت أبيها» — كله بدالة
+/// السيرفر الذاتية `add_or_link_self_relative` (كان «اختيار من العائلة» بالاسم الرباعي و«من بنات الشجرة» خيارين)
+private struct ProfileWifeFamilyBox: View {
+    @ObservedObject var memberVM: MemberViewModel
+    let me: FamilyMember
+    let onDone: (String) -> Void
+    let onCancel: () -> Void
+
+    @State private var people: [FamilyMember] = WomenStore.cache
+    @State private var isLoading = WomenStore.cache.isEmpty
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        DSWifeFlowBox(mode: .selfFamily, husbandId: me.id,
+                      husbandName: me.firstName.isEmpty ? me.fullName : me.firstName,
+                      subtitle: L10n.t("زوجتك من العائلة", "Your wife from the family"),
+                      people: people, isLoading: isLoading, startsAtFather: true,
+                      isBusy: busy, error: error,
+                      onLink: { daughter, father in write(father: father, womanId: daughter.id, name: nil) },
+                      onAddUnderFather: { name, father in write(father: father, womanId: nil, name: name) },
+                      onCancel: onCancel)
+            // شجرة النساء طازجة (الآباء والبنات) — جلب فارغ أو فاشل يُبقي آخر نسخة
+            .task {
+                let cached = WomenStore.cache
+                let fresh = (try? await WomenStore.fetch()) ?? []
+                people = fresh.isEmpty ? cached : fresh
+                isLoading = false
+            }
+    }
+
+    private func write(father: FamilyMember, womanId: UUID?, name: String?) {
+        guard !busy, NetworkMonitor.shared.requireOnline() else { return }
+        busy = true; error = nil
+        Task {
+            do {
+                try await WomenStore.addOrLinkSelfWife(fatherId: father.id, womanId: womanId, name: name)
+                Log.info("[Women] add_or_link_self_relative wife \(womanId == nil ? "new" : "link")")
+                // نفس التحديث بعد اختيار الأم وإضافتها
+                await memberVM.fetchWomenFamily(for: me.id)
+                busy = false
+                onDone(L10n.t("صارت زوجتك في «عائلتي».", "She's now your wife in «My family»."))
+            } catch {
+                busy = false
+                Log.error("[Women] add_or_link_self_relative wife: \(error.localizedDescription)")
+                self.error = TreeDaughterLinkBox.message(for: error)
+            }
         }
     }
 }
