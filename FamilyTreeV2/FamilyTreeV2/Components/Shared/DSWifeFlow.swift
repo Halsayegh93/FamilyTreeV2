@@ -59,9 +59,9 @@ enum WifeCandidateRules {
     // MARK: الآباء والبنات
 
     /// أقل عمر للأب في قائمة «أبوها» (طلب المالك ٢٠٢٦-١٠-٢٥ «لازم تراعي عمر الأب… المولود حديثاً شلون يكون أب؟»).
-    /// من السيرفر إن وُجد المفتاح `father_candidate_min_age`، وإلا ٥٠ (المالك ٢٠٢٦-١٠-٢٥ «خل عمر الأب فوق ٥٠»)
+    /// من السيرفر إن وُجد المفتاح `father_candidate_min_age`، وإلا ٣٠ (المالك ٢٠٢٦-١٠-٢٥: «خله الى ٣٠»)
     static let fatherMinAgeKey = "father_candidate_min_age"
-    static var fatherMinimumAge: Int { AppConfigValues.shared.int(fatherMinAgeKey, default: 50) }
+    static var fatherMinimumAge: Int { AppConfigValues.shared.int(fatherMinAgeKey, default: 30) }
     /// أبو الأم أكبر من صاحب العقدة بهذا على الأقل (جدّه) — ٣٠
     static let motherFatherGap = 30
 
