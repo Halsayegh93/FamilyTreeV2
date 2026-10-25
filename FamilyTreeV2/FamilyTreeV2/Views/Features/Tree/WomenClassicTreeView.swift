@@ -706,10 +706,11 @@ struct WomenClassicTreeView: View {
         for a in path { next.remove(a) }
         collapsed = next
         let L = rebuild()
-        // بدون زوم: تكبير طبيعي (1.0) وتمركز على اسمك — تقدر تسحب لأعلى وتشوف الجذر.
+        // تمركز على اسمك — تقدر تسحب لأعلى وتشوف الجذر.
         guard let p = L.positions[target], viewport.width > 0 else { centerOn(target, in: L); return }
         userInteracted = true
-        let s: CGFloat = 1.0
+        // بلا زوم (طلب المالك ٢٠٢٦-١٠-٢٥): نفس الحجم الحالي أو أكبر بخطوة صغيرة (+٠٫١، بسقف ملاءمة الشجرة ١٫١) — كان ١٫٠ ثابتاً
+        let s: CGFloat = scale < 1.1 ? min(scale + 0.1, 1.1) : scale
         let h = L.heights[target] ?? L.m.nodeH
         let cx = (p.x + L.m.nodeW / 2) * s
         let cy = (p.y + h / 2) * s
