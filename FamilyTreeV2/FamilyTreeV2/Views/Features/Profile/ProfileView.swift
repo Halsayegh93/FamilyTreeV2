@@ -437,15 +437,12 @@ struct ProfileView: View {
             // User Info
             VStack(spacing: DS.Spacing.sm) {
                 Button { showEditProfile = true } label: {
-                    (
-                        Text(user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.displayFullName)
-                            .font(DS.Font.role(.pageTitle))
-                            .foregroundColor(DS.Color.textPrimary)
-                        + Text("  ")
-                        + Text(Image(systemName: "pencil.circle.fill"))
-                            .font(DS.Glyph.font(DS.Glyph.xl))
-                            .foregroundColor(AppSection.profile.ink)
-                    )
+                    // سطر واحد إن وسع، وإلا سطران متوازنان (`DSBalanced`) — القلم ملتصق بآخر الاسم
+                    let name = user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.displayFullName
+                    ViewThatFits(in: .horizontal) {
+                        profileNameLine(name).lineLimit(1)
+                        profileNameLine(DSBalanced.twoLines(name)).lineLimit(2)
+                    }
                     .multilineTextAlignment(.center)
                 }
                 .buttonStyle(DSScaleButtonStyle())
@@ -1976,6 +1973,19 @@ private struct WifeSourceCard: View {
         .padding(DS.Spacing.md)
         .frame(width: DSBox.popoverWidth)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+}
+
+// MARK: - اسم «حسابي» مع القلم
+extension ProfileView {
+    func profileNameLine(_ name: String) -> Text {
+        Text(name)
+            .font(DS.Font.role(.pageTitle))
+            .foregroundColor(DS.Color.textPrimary)
+        + Text("  ")
+        + Text(Image(systemName: "pencil.circle.fill"))
+            .font(DS.Glyph.font(DS.Glyph.xl))
+            .foregroundColor(AppSection.profile.ink)
     }
 }
 
