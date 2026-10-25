@@ -58,6 +58,24 @@ enum WifeCandidateRules {
 
     // MARK: الآباء والبنات
 
+    /// أقل عمر للأب في قائمة «أبوها» (طلب المالك ٢٠٢٦-١٠-٢٥ «لازم تراعي عمر الأب… المولود حديثاً شلون يكون أب؟»).
+    /// من السيرفر إن وُجد المفتاح `father_candidate_min_age`، وإلا ٣٠
+    static let fatherMinAgeKey = "father_candidate_min_age"
+    static var fatherMinimumAge: Int { AppConfigValues.shared.int(fatherMinAgeKey, default: 30) }
+
+    /// يصلح أباً؟ المتوفّى يظهر دائماً. الحيّ: لا يظهر إن عُرف عمره وكان دون الحد، ولا إن كان «مضافاً حديثاً»
+    /// بلا تاريخ ميلاد تحت أب (نفس قاعدة البنت الجديدة). `childBorn`: ميلاد صاحب العقدة في مسار الأم —
+    /// أبو الأم أكبر منه بالحد على الأقل حين يُعرف الميلادان
+    static func canBeFather(_ m: FamilyMember, childBorn: Date? = nil, now: Date = Date()) -> Bool {
+        if m.isDeceased == true { return true }
+        let minAge = fatherMinimumAge
+        if let years = age(m, now: now), years < minAge { return false }
+        if isRecentNewborn(m, now: now) { return false }
+        if let childBorn, let born = birthDay(m.birthDate),
+           let gap = calendar.dateComponents([.year], from: born, to: childBorn).year, gap < minAge { return false }
+        return true
+    }
+
     /// آباء لا تُعرض بناتهم لهذا الرجل (محارمه): هو نفسه، وأبوه وأجداده (أخواته وعمّاته)، وذكور ذرّية أبيه —
     /// إخوته وأبناؤه وأحفادهم (بنات إخوته وبناته وحفيداته). بلا أب معروف: ذرّيته هو
     static func blockedFathers(for husbandId: UUID, in people: [FamilyMember]) -> Set<UUID> {
@@ -87,7 +105,7 @@ enum WifeCandidateRules {
         let blocked = blockedFathers(for: husbandId, in: people)
         return people
             .filter { m in
-                !m.isFemale && !blocked.contains(m.id)
+                !m.isFemale && !blocked.contains(m.id) && canBeFather(m)
                     && (showsHidden || !m.isHiddenFromTree)
                     && !m.fullName.trimmingCharacters(in: .whitespaces).isEmpty
             }
@@ -108,10 +126,12 @@ enum WifeCandidateRules {
 
     /// آباء «الأم من العائلة»: رجال الشجرة عدا صاحب العقدة وأبيه (الأم ليست أخت أبيه في الشجرة)
     static func motherFathers(for personId: UUID, in people: [FamilyMember], showsHidden: Bool) -> [FamilyMember] {
-        let personFather = people.first { $0.id == personId }?.fatherId
+        let person = people.first { $0.id == personId }
+        let personFather = person?.fatherId
+        let personBorn = person.flatMap { birthDay($0.birthDate) }
         return people
             .filter { m in
-                !m.isFemale && m.id != personId && m.id != personFather
+                !m.isFemale && m.id != personId && m.id != personFather && canBeFather(m, childBorn: personBorn)
                     && (showsHidden || !m.isHiddenFromTree)
                     && !m.fullName.trimmingCharacters(in: .whitespaces).isEmpty
             }
