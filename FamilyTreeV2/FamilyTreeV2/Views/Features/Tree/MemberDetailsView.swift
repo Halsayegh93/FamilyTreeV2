@@ -1158,14 +1158,14 @@ struct MemberDetailsView: View {
         if authVM.canEditMembers && !member.isDeleted {
             DSLiveButton(L10n.t("تعديل مباشر", "Direct Edit"), icon: "pencil",
                          tint: DSMemberKit.directTint, motion: .write,
-                         hint: L10n.t("يفتح إدارة السجل", "Opens the member record")) {
+                         hint: L10n.t("يفتح إدارة السجل", "Opens the member record"), size: .compact) {
                 showAdminControl = true
             }
         } else if showsRequestAdd {
             DSLiveButton(L10n.t("طلب إضافة", "Request addition"), icon: "person.badge.plus",
                          tint: DSMemberKit.addTint, motion: .pop,
                          hint: L10n.t("ابن أو ابنة أو زوجة — يصل الطلب للإدارة",
-                                      "A son, daughter or wife — the request goes to the admins")) {
+                                      "A son, daughter or wife — the request goes to the admins"), size: .compact) {
                 showAddActions = true
             }
         }

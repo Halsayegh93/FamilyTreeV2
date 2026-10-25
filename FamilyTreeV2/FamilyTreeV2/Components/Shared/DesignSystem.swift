@@ -1417,6 +1417,11 @@ enum DSBox {
     static let buttonSpacing: CGFloat = 7
     static var buttonFont: Font { DS.Font.role(.button) }
     static var buttonFontLarge: Font { DS.Font.role(.buttonLarge) }
+    /// الزرّ المدمج (أزرار رأس تفاصيل العضو — طلب المالك ٢٠٢٦-١٠-٢٥ «صغر حجمه شوي زيادة»): شكله ٣٦، ومساحة
+    /// لمسه تبقى ٤٤ بحشوة شفافة فوقه وتحته (حدّ أبل الأدنى للمس)
+    static let buttonHeightCompact: CGFloat = 36
+    static var buttonHitInsetCompact: CGFloat { (buttonHeight - buttonHeightCompact) / 2 }
+    static var buttonFontCompact: Font { DS.Font.role(.chip) }
     /// نص الزرّ سطر واحد يصغر حتى هذه النسبة قبل أن يُقصّ (مع الخط الكبير في الجهاز) — والارتفاع
     /// `buttonHeight` حدّ أدنى يكبر مع الخط (ن-٥ فحص ٢٠٢٦-١٠-٠٧: كان «حفظ/إضافة/نشر» يلتفّ ويُقصّ)
     static let buttonLabelMinScale: CGFloat = 0.7
@@ -1590,17 +1595,39 @@ struct DSBoxTitleRow: View {
 // كل الأزرار تُرسم هنا: `DSBoxButtonStyle` (و`.buttonStyle(.ds(...))`)، `DSButton`، `DSBoxButtons`،
 // `DSPrimaryButton`، `DSSecondaryButton`، `DSDestructiveButton`، `UnifiedButtonStyle`، `DSApproveRejectButtons`.
 
-/// مقاس الزرّ — اثنان فقط
+/// مقاس الزرّ
 enum DSButtonSize {
-    /// ٤٠ — داخل المربّعات والصفحات
+    /// ٤٤ — داخل المربّعات والصفحات
     case regular
     /// ٤٨ — الإجراء الرئيسي في شاشات ملء الشاشة
     case large
+    /// ٣٦ بمساحة لمس ٤٤ — أزرار رأس تفاصيل العضو بعرض نصّها
+    case compact
 
-    var height: CGFloat { self == .large ? DSBox.buttonHeightLarge : DSBox.buttonHeight }
-    var font: Font { self == .large ? DSBox.buttonFontLarge : DSBox.buttonFont }
+    var height: CGFloat {
+        switch self {
+        case .regular: return DSBox.buttonHeight
+        case .large:   return DSBox.buttonHeightLarge
+        case .compact: return DSBox.buttonHeightCompact
+        }
+    }
+    var font: Font {
+        switch self {
+        case .regular: return DSBox.buttonFont
+        case .large:   return DSBox.buttonFontLarge
+        case .compact: return DSBox.buttonFontCompact
+        }
+    }
     /// رمز الزرّ (قبل النص)
-    var glyph: CGFloat { self == .large ? DS.Glyph.lg : DS.Glyph.md }
+    var glyph: CGFloat {
+        switch self {
+        case .regular: return DS.Glyph.md
+        case .large:   return DS.Glyph.lg
+        case .compact: return DS.Glyph.sm
+        }
+    }
+    /// حشوة شفافة فوق الشكل وتحته — تبقي مساحة اللمس ٤٤ للمدمج
+    var hitInset: CGFloat { self == .compact ? DSBox.buttonHitInsetCompact : 0 }
 }
 
 /// شكل زرّ المربّعات في كل مكان (تنبيه، بطاقة، شريط مربّع العمل، الصفحات): الإجراء بتدرّج القسم ونص
@@ -1664,11 +1691,13 @@ struct DSButtonFace: ViewModifier {
             .foregroundColor(cancel ? DS.Color.textPrimary : .white)
             // سطر واحد يصغر بدل الالتفاف والقصّ، والارتفاع حدّ أدنى (ن-٥ فحص ٢٠٢٦-١٠-٠٧)
             .dsButtonLabelFit()
-            .padding(.horizontal, fullWidth ? 0 : DS.Spacing.lg)
+            .padding(.horizontal, fullWidth ? 0 : (size == .compact ? DS.Spacing.md : DS.Spacing.lg))
             .frame(maxWidth: fullWidth ? (capped ? DS.Landscape.buttonMaxWidth : .infinity) : nil)
             .frame(minHeight: size.height)
             .background { fill }
-            .contentShape(DSBox.buttonShape)
+            // المدمج: مساحة لمس ٤٤ رغم شكله الأصغر
+            .padding(.vertical, size.hitInset)
+            .contentShape(size == .compact ? AnyShape(Rectangle()) : AnyShape(DSBox.buttonShape))
             // المعطّل: نفس الشكل بشفافية الهيكل (كزرّ الإجراء في مربّع العمل)
             .opacity(enabled ? 1 : DSActionFill.disabledOpacity)
             .frame(maxWidth: capped ? .infinity : nil)

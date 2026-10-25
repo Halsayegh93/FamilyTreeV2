@@ -70,16 +70,20 @@ struct DSLiveButton: View {
     var isLoading: Bool = false
     /// ما يفعله الزرّ للقارئ الصوتي
     var hint: String? = nil
+    /// `.compact` = بعرض نصّه وشكل أصغر (رأس تفاصيل العضو)، و`.regular` = بعرض السطر (شريط الأزرار)
+    var size: DSButtonSize = .regular
     let action: () -> Void
 
     init(_ title: String, icon: String, tint: Color? = nil, motion: Motion = .pop,
-         isLoading: Bool = false, hint: String? = nil, action: @escaping () -> Void) {
+         isLoading: Bool = false, hint: String? = nil, size: DSButtonSize = .regular,
+         action: @escaping () -> Void) {
         self.title = title
         self.icon = icon
         self.tint = tint
         self.motion = motion
         self.isLoading = isLoading
         self.hint = hint
+        self.size = size
         self.action = action
     }
 
@@ -101,7 +105,7 @@ struct DSLiveButton: View {
                         .scaleEffect(DS.Spinner.buttonScale)
                 } else {
                     Image(dsSymbol: icon)
-                        .dsGlyph(DSButtonSize.regular.glyph)
+                        .dsGlyph(size.glyph)
                         .rotationEffect(.degrees(iconAngle), anchor: .bottomLeading)
                         .scaleEffect(iconScale)
                         .accessibilityHidden(true)
@@ -109,8 +113,8 @@ struct DSLiveButton: View {
                 Text(title)
             }
         }
-        .buttonStyle(DSBoxButtonStyle(tint: tint))
-        .overlay { shine }
+        .buttonStyle(DSBoxButtonStyle(size: size, tint: tint, fullWidth: size != .compact))
+        .overlay { shine.padding(.vertical, size.hitInset) }
         .allowsHitTesting(!isLoading)
         .accessibilityHint(hint ?? "")
         .onAppear(perform: play)
@@ -162,9 +166,9 @@ struct DSLiveButton: View {
 
 // MARK: - «عرض التفاصيل» / «إخفاء التفاصيل»
 
-/// زرّ واضح بمواصفة الزرّ الواحد (٤٤، زوايا ١٢، خط الزرّ) بوزن أخفّ: تعبئة خفيفة بلون المعلومة وإطار رفيع
-/// منه، وسهم في قرص ملوّن يدور نصف دورة مع التوسيع ويومئ للأسفل مرة عند الظهور. نفسه في الشجرتين —
-/// والسحب لأعلى على المربّع (ولأسفل على رأسه) يفعل الشيء نفسه (`dsDetailsSwipe`).
+/// زرّ مدمج ممتلئ بلون المعلومة ونصّ أبيض (طلب المالك ٢٠٢٦-١٠-٢٥ «مملوء وصغر حجمه»): شكله ٣٦ بعرض نصّه
+/// ومساحة لمسه ٤٤، وسهم في قرص أبيض يدور نصف دورة مع التوسيع ويومئ للأسفل مرة عند الظهور. نفسه في
+/// الشجرتين — والسحب لأعلى على المربّع (ولأسفل على رأسه) يفعل الشيء نفسه (`dsDetailsSwipe`).
 struct DSDetailsToggle: View {
     let isExpanded: Bool
     let action: () -> Void
@@ -180,26 +184,26 @@ struct DSDetailsToggle: View {
         } label: {
             HStack(spacing: DSBox.buttonSpacing) {
                 Text(isExpanded ? L10n.t("إخفاء التفاصيل", "Hide details") : L10n.t("عرض التفاصيل", "Show details"))
-                    .font(DSBox.buttonFont)
+                    .font(DSBox.buttonFontCompact)
                     .dsButtonLabelFit()
                     .id(isExpanded)
                     .transition(.opacity)
                 Image(systemName: "chevron.down")
                     .dsGlyph(DS.Glyph.xs)
-                    .foregroundColor(DS.Color.onTint)
+                    .foregroundColor(ink.dsSolidFill)
                     .rotationEffect(.degrees(isExpanded ? 180 : 0))
                     .frame(width: DS.Icon.section, height: DS.Icon.section)
-                    .background(Circle().fill(ink))
+                    .background(Circle().fill(DS.Color.textOnPrimary))
                     .offset(y: nudge)
                     .accessibilityHidden(true)
             }
-            .foregroundColor(ink)
+            .foregroundColor(DS.Color.textOnPrimary)
             .padding(.horizontal, DS.Spacing.md)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: DSBox.buttonHeight)
-            .background(DSBox.buttonShape.fill(ink.opacity(DS.Opacity.tintFill)))
-            .overlay(DSBox.buttonShape.strokeBorder(ink.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
-            .contentShape(DSBox.buttonShape)
+            .frame(minHeight: DSBox.buttonHeightCompact)
+            .background(DSBox.buttonShape.fill(ink.dsSolidFill))
+            // مساحة لمس ٤٤ رغم الشكل الأصغر (حدّ أبل)
+            .padding(.vertical, DSButtonSize.compact.hitInset)
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSPressStyle())
         .animation(reduceMotion ? nil : DS.Anim.smooth, value: isExpanded)
@@ -323,13 +327,14 @@ struct DSActionTile: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             action()
         } label: {
-            VStack(spacing: DS.Spacing.sm) {
+            // ملمومة وأصغر (طلب المالك ٢٠٢٦-١٠-٢٥ «ملمومة يم بعض وحجمهم أصغر»): قرص ٣٢ وحشوة ٤
+            VStack(spacing: DS.Spacing.xs) {
                 // قرص ممتلئ بلون المجموعة ورمز أبيض (مثل أيقونات الإعدادات في الآيفون) — التعبئة الثابتة
                 // (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين
                 Image(dsSymbol: icon)
-                    .dsGlyph(DS.Glyph.xl)
+                    .dsGlyph(DS.Glyph.md)
                     .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(width: DS.Icon.tile, height: DS.Icon.tile)
+                    .frame(width: DS.Icon.row, height: DS.Icon.row)
                     .background(Circle().fill(tint.dsSolidFill))
                     .accessibilityHidden(true)
                 Text(title)
@@ -339,7 +344,8 @@ struct DSActionTile: View {
                     .lineLimit(2)
                     .minimumScaleFactor(DSBox.buttonLabelMinScale)
             }
-            .padding(DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.sm)
+            .padding(.horizontal, DS.Spacing.xs)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(shape.fill(tint.opacity(DS.Opacity.tintFillSoft)))
             .overlay(shape.strokeBorder(tint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
@@ -350,14 +356,15 @@ struct DSActionTile: View {
     }
 }
 
-/// شبكة مربّعات جاهزة: ٣ في السطر (و٢ مع خطوط إمكانية الوصول، فتطول المربّعات بنصّها بدل أن يُقصّ)
+/// شبكة مربّعات جاهزة: ٣ في السطر (و٢ مع خطوط إمكانية الوصول) — ملمومة: فاصل ٤ وارتفاع المربّع على قدر
+/// محتواه (لا مربّع كامل) فتقصر الشبكة
 struct DSActionTileGrid<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let large = typeSize.isAccessibilitySize
-        DSTileGridLayout(columns: large ? 2 : 3, spacing: DS.Spacing.sm, square: !large) {
+        DSTileGridLayout(columns: large ? 2 : 3, spacing: DS.Spacing.xs, square: false) {
             content()
         }
     }
