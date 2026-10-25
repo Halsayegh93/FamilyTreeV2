@@ -300,31 +300,33 @@ struct DiwaniyasView: View {
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.vertical, DS.Spacing.md)
 
-            // ═══ شرائح المعلومات — أفقية متمرّرة بدل الصفوف الطويلة ═══
+            // ═══ شرائح المعلومات — كل شريحة بسطر تحت الأخرى: الأيام ثم العنوان (طلب المالك ٢٠٢٦-١٠-٢٥؛ كانت أفقية
+            // متمرّرة فينقص العنوان)، والنص الطويل يلتفّ بدل «…» ═══
             let infoItems = buildDiwaniyaInfoItems(item)
             if !infoItems.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        ForEach(Array(infoItems.enumerated()), id: \.offset) { _, info in
-                            HStack(spacing: DS.Spacing.xsm) {
-                                Image(systemName: info.icon)
-                                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
-                                    .foregroundColor(info.color)
-                                Text(info.text)
-                                    .dsFont(.subtitle)
-                                    .foregroundColor(DS.Color.textSecondary)
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, DSBox.chipPadding)
-                            .padding(.vertical, DS.Spacing.xsm)
-                            .background(info.color.opacity(DS.Opacity.tintFillSoft), in: Capsule())
-                            .overlay(Capsule().strokeBorder(info.color.opacity(DS.Opacity.tintStroke),
-                                                            lineWidth: DS.Border.width))
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    ForEach(Array(infoItems.enumerated()), id: \.offset) { _, info in
+                        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
+                            Image(systemName: info.icon)
+                                .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                                .foregroundColor(info.color)
+                            Text(info.text)
+                                .dsFont(.subtitle)
+                                .foregroundColor(DS.Color.textSecondary)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                        .padding(.horizontal, DSBox.chipPadding)
+                        .padding(.vertical, DS.Spacing.xsm)
+                        .background(info.color.opacity(DS.Opacity.tintFillSoft),
+                                    in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .strokeBorder(info.color.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .padding(.bottom, DS.Spacing.md)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.bottom, DS.Spacing.md)
             }
 
             // ═══ إجراءات صغيرة — الشريحة الموحّدة (`DSChipButton`) ═══
@@ -370,9 +372,7 @@ struct DiwaniyasView: View {
         if let addr = item.address, !addr.isEmpty {
             items.append(DiwaniyaInfoItem(icon: "mappin.and.ellipse", color: DS.Color.accent, text: addr))
         }
-        if let phone = item.contactPhone, !phone.isEmpty {
-            items.append(DiwaniyaInfoItem(icon: "phone.fill", color: DS.Color.sea, text: KuwaitPhone.display(phone)))
-        }
+        // الرقم يُوصل له بزرّ «اتصال» تحت — لا سطر ثالث مكرر (الأيام ثم العنوان فقط)
         return items
     }
 }

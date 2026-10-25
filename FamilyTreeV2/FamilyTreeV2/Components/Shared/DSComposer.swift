@@ -659,11 +659,13 @@ struct DSComposerHeader: View {
                 .transition(.opacity)
                 .dsEntrance(delay: DSMotion.titleDelay, x: -DSMotion.textShift, animation: DSMotion.text)
             if !(compact && subtitle.isEmpty) {
+                // الاسم الطويل (اسم العضو في مربّعات الطلبات) سطران بدل «…» (طلب المالك ٢٠٢٦-١٠-٢٥)
                 Text(subtitle)
                     .font(DSBox.subtitleFont)
                     .foregroundColor(DS.Color.boxHeaderSubtitle)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
                     .dsEntrance(delay: DSMotion.subtitleDelay, x: -DSMotion.textShift, animation: DSMotion.text)
             }
         }
