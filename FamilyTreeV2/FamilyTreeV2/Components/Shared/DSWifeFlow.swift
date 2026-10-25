@@ -241,7 +241,7 @@ struct DSWifeFlowBox: View {
     enum Mode { case direct, selfFamily, request }
     /// زوجة لهذا الرجل، أو أمّ لهذا الشخص (طلب المالك ٢٠٢٦-١٠-٢٥ «الأم نفس طريقة الزوجة»)
     enum Relation { case wife, mother }
-    private enum Step: Equatable { case choice, father, daughters(UUID) }
+    private enum Step: Equatable { case choice, father, daughters(UUID), missingFather }
 
     let mode: Mode
     var relation: Relation = .wife
@@ -310,6 +310,7 @@ struct DSWifeFlowBox: View {
             case .choice: AnyView(choiceStep)
             case .father: AnyView(fatherStep)
             case .daughters(let id): AnyView(daughtersStep(fatherId: id))
+            case .missingFather: AnyView(missingFatherStep)
             }
         }
         // رقما القواعد من السيرفر (أقل عمر، «المضافة حديثاً») — جلب مرة كل ٥ دقائق على الأكثر
@@ -399,13 +400,53 @@ struct DSWifeFlowBox: View {
             emptyTitle: L10n.t("لا رجال في الشجرة بعد", "No men in the tree yet"),
             noMatchTitle: L10n.t("ما لقينا اسماً مطابقاً", "No matching name"),
             rowHint: L10n.t("عرض بناته", "Show his daughters"),
-            missingTitle: onFatherMissing == nil ? nil : L10n.t("الأب غير موجود؟ اطلب من الإدارة", "Father missing? Ask the admins"),
+            missingTitle: onFatherMissing == nil ? nil : L10n.t("الأب غير موجود؟", "Father not listed?"),
             // البحث من الاسم الأول: «علي» = من اسمه علي، «علي حسين» = علي بن حسين (طلب المالك «الأسماء راح تقل»)
             matchesFromFirstName: true,
-            onMissing: onFatherMissing,
+            // «الأب غير موجود؟» ← خطوة الاسم الرباعي (طلب المالك ٢٠٢٦-١٠-٢٥) والمكتوب يبدأ به الحقل
+            onMissing: onFatherMissing == nil ? nil : { typed in go(.missingFather); newName = typed },
             onPick: { go(.daughters($0.id)) },
             onCancel: onCancel
         )
+    }
+
+    // MARK: «الأب غير موجود؟» — اسمه الرباعي للإدارة
+
+    /// الاسم الرباعي: أربع كلمات على الأقل (يُعدّ «عبد» مع ما بعده كلمة — نفس قاعدة البحث)
+    private var fatherNameIsFull: Bool { NameSearch.words(trimmedName).count >= 4 }
+
+    private var missingFatherStep: some View {
+        DSComposer(
+            title: L10n.t("الأب غير موجود", "Father not listed"),
+            subtitle: forLine,
+            icon: "person.fill.questionmark",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("إرسال للإدارة", "Send to the admins"),
+            actionIcon: "paperplane.fill",
+            cancelTitle: L10n.t("رجوع", "Back"),
+            canSubmit: fatherNameIsFull,
+            isBusy: isBusy,
+            note: L10n.t("تضيف الإدارة الأب في الشجرة أو تصلح بياناته، ثم تكمل الربط.",
+                         "The admins add the father or fix his details, then complete the link."),
+            hasUnsavedChanges: !trimmedName.isEmpty,
+            onSubmit: { if fatherNameIsFull { onFatherMissing?(trimmedName) } },
+            onCancel: { go(.father) }
+        ) {
+            DSComposerSection(title: L10n.t("اسم الأب", "Father's name"), icon: "person.fill", tint: DS.Color.primary, index: 0) {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    DSComposerField(icon: "person.text.rectangle",
+                                    label: L10n.t("الاسم الرباعي للأب", "Father's four-part name"),
+                                    placeholder: L10n.t("مثل: علي حسين محمد حسن", "e.g. Ali Hussain Mohammad Hasan"),
+                                    text: $newName)
+                    Text(fatherNameIsFull || trimmedName.isEmpty
+                         ? L10n.t("اكتب اسمه الرباعي كاملاً — أربعة أسماء على الأقل.", "Write his full four-part name.")
+                         : L10n.t("الاسم ناقص — يلزم أربعة أسماء.", "Incomplete — four names needed."))
+                        .dsFont(.footnote)
+                        .foregroundColor(fatherNameIsFull || trimmedName.isEmpty ? DS.Color.textTertiary : DS.Color.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 
     // MARK: ٣) بناته — أو «أضفها تحت أبيها»

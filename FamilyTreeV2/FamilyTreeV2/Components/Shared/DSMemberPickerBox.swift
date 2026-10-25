@@ -133,9 +133,16 @@ struct DSMemberPickerBox: View {
                 }
             }
             if let missingTitle, let onMissing, !isLoading {   // ظاهر من البداية (طلب المالك) — قبل الكتابة وبعدها
-                DSChipButton(missingTitle, icon: "exclamationmark.bubble.fill", tint: DS.Color.textSecondary,
-                             size: .small) { onMissing(query) }
-                    .frame(maxWidth: .infinity)
+                // رابط نصّي بسيط بلا إطار (طلب المالك ٢٠٢٦-١٠-٢٥ «خل الزر أبسط») — مساحة لمس ٤٤
+                Button { onMissing(query) } label: {
+                    Text(missingTitle)
+                        .dsFont(.footnote)
+                        .underline()
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
