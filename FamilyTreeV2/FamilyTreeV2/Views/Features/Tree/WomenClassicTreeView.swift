@@ -29,12 +29,12 @@ private struct WomenTreeMetrics: Equatable {
 
     init(k: CGFloat) {
         self.k = k
-        circle = 44 * k; corner = 12 * k; ring = 1.5 * k
-        // الاسم وشريط السنوات بمقاس شجرة العائلة نفسه (طلب المالك ٢٠٢٦-١٠-٢٥ «نبي حجم موحد نفس العائلة»):
-        // كبسولة ٣٠ (٢٨ + ٢ في TreeView)، شريط ٢١، وعرض يتّسع للاسم بخط Headline (كان ٢٢ / ١٣ / ٦٢ بخط Caption)
-        pillH = 30 * k; badgeH = 17 * k; lifeH = 19 * k; nodeW = 104 * k
-        hGap = 6 * k; vGap = 22 * k; rowGap = 3 * k; wrapGap = 16 * k
-        spineRoom = 10 * k; spineOut = 6 * k; lineCorner = 6 * k; pad = 32 * k
+        // نفس عقدة شجرة العائلة (`FamilyTreeMetrics`) — طلب المالك ٢٠٢٦-١٠-٢٥ «نبي حجم موحد نفس العائلة» و«الاسم صار
+        // أكبر من الصورة»: الصورة ١٠٥، العقدة ١٢٤، كبسولة الاسم ٣٢، شريط السنوات ٢٠، ومسافات العائلة (كانت ٤٤ / ٦٢ / ٢٢ / ١٣)
+        circle = 105 * k; corner = 28 * k; ring = 2.5 * k
+        pillH = 32 * k; badgeH = 17 * k; lifeH = 18 * k; nodeW = 124 * k
+        hGap = 14 * k; vGap = 48 * k; rowGap = 6 * k; wrapGap = 34 * k
+        spineRoom = 18 * k; spineOut = 12 * k; lineCorner = 10 * k; pad = 60 * k
     }
 
     var nodeH: CGFloat { circle + 4 * k + pillH + lifeH + badgeH - 6 * k }
@@ -780,7 +780,7 @@ struct WomenClassicTreeView: View {
                             } else if female {
                                 // الإناث: كلمة «ابنة» بدل الحرف الأول
                                 Text(L10n.t("ابنة", "Daughter"))
-                                    .dsTreeFont(.badge, k)
+                                    .dsTreeFont(.headline, k)
                                     .minimumScaleFactor(0.7)
                                     .lineLimit(1)
                                     .foregroundColor(DS.Color.textOnPrimary)
@@ -836,14 +836,14 @@ struct WomenClassicTreeView: View {
                         if !kids.isEmpty {
                             HStack(spacing: DS.Spacing.xxs * k) {
                                 Text("\(kids.count)")
-                                    .dsTreeFont(.treeNodeMicro, k)
+                                    .dsTreeFont(.nodeCount, k)   // نفس شارة شجرة العائلة
                                 Image(systemName: "chevron.down")
-                                    .dsTreeGlyph(DS.Glyph.nano, k, weight: .heavy)
+                                    .dsTreeGlyph(DS.Glyph.xs, k, weight: .heavy)
                                     .rotationEffect(.degrees(isCollapsed ? 0 : 180))
                             }
                             .foregroundColor(DS.Color.textOnPrimary)
-                            .padding(.horizontal, DS.Spacing.xs * k)
-                            .frame(minWidth: 16 * k, minHeight: 16 * k)
+                            .padding(.horizontal, DS.Spacing.sm * k)
+                            .frame(minWidth: 34 * k, minHeight: 32 * k)
                             // غامق قسم الشجرة (كان كحلياً ثابتاً) — أغمق من لون العضو بلا صورة (طلب المالك)
                             .background(Capsule().fill(AppSection.tree.deep))
                             .overlay(Capsule().stroke(DS.Color.textOnPrimary, lineWidth: 1.2 * k))
@@ -1027,7 +1027,7 @@ struct WomenClassicTreeView: View {
         let landscape = size.width > size.height
         // الملاءمة بوحدات العقدة الافتراضية (العرض ÷ معامل «حجم النص»): مع الخط الأكبر تظهر الشجرة أكبر
         // وتمتدّ خارج الشاشة للسحب (اختيار المالك ٢٠٢٦-١٠-٠٨)
-        let s = max(0.35, min(landscape ? 0.85 : 1.2, (size.width - 32) / (L.size.width / L.m.k)))
+        let s = max(0.28, min(landscape ? 0.65 : 1.1, (size.width - 48) / (L.size.width / L.m.k)))   // نفس ملاءمة شجرة العائلة
         scale = s; baseScale = s
         // عمودي: 72 = ارتفاع البار العائم — الجذر يبدأ تحته لا خلفه
         offset = CGSize(width: (size.width - L.size.width * s) / 2, height: landscape ? 16 : 72)
