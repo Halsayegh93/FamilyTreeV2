@@ -1,6 +1,6 @@
 -- «المؤشرات» ليست للمراقب (طلب المالك ٢٠٢٦-١٠-٢٤): تقرير الموافقات (approvals_report) للمالك والمدير فقط — كان المراقب
 -- يقرؤه أيضاً (بيته الوحيد «المؤشرات ← الموافقات»، ورقم «هذا الأسبوع» فيها). مستقلّ عن 20261025100000 ليوافق عليه المالك
--- وحده. لم يُطبَّق. التراجع: supabase/rollback/20261025100100_insights_owner_admin_only_rollback.sql
+-- وحده. طُبِّق على السيرفر الحي ٢٠٢٦-١٠-٢٥. التراجع: supabase/rollback/20261025100100_insights_owner_admin_only_rollback.sql
 -- التجربة المحلية: cd supabase/tests/family_links && node owner_only_system_areas.test.mjs
 -- التعريف الحي وقت الكتابة: approvals_report(timestamptz,timestamptz) md5 f2a84524782fd2593849b1ac333b70c3
 -- (الشرط وحده يُستبدل، والترحيل يفشل إن لم يوجد مرة واحدة بالضبط). باقي «المؤشرات» (app_usage_stats/trend/engagement)
