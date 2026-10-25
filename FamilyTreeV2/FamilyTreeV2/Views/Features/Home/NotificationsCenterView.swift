@@ -1151,7 +1151,7 @@ struct NotificationsCenterView: View {
                         .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(fullDateTime(date))
-                        .dsFieldFont(.body)
+                        .dsFieldFont(.fieldValue)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)

@@ -234,7 +234,7 @@ struct TreeEditRequestView: View {
             // عنوان الحقل بخط عناوين حقول المربّعات، والصورة بلا صندوق حقل حولها (مثل «إضافة ابن»)
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 Text(L10n.t("الصورة المقترحة", "Suggested Photo"))
-                    .dsFieldFont(DSBox.fieldLabelSize, weight: .heavy)
+                    .dsFieldFont(DSBox.fieldLabelSize, weight: DS.TextRole.label.weight)
                     .foregroundColor(DS.Color.fieldLabel)
                 DSProfilePhotoPicker(
                     selectedImage: $selectedPhoto,

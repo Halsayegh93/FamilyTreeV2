@@ -659,7 +659,7 @@ struct EditNameSheet: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(phone)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.fieldValue)
                     .monospacedDigit()
                     .environment(\.layoutDirection, .leftToRight)

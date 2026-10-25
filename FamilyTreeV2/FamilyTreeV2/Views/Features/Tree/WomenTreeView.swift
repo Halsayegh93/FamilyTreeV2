@@ -1418,7 +1418,7 @@ struct WomanDetailSheet: View {
                         .lineLimit(1)
                 } else {
                     Text(placeholder)
-                        .dsFieldFont(.body)
+                        .dsFieldFont(.fieldValue)
                         .foregroundColor(DS.Color.textSecondary)
                 }
                 Spacer(minLength: 0)

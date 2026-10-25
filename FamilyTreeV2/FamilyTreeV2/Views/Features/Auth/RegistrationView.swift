@@ -232,7 +232,7 @@ struct RegistrationView: View {
                         Text(familyName.isEmpty
                              ? L10n.t("اختر عائلتك", "Choose your family")
                              : familyName)
-                            .dsFieldFont(.body)
+                            .dsFieldFont(.fieldValue)
                             .foregroundColor(familyName.isEmpty
                                              ? DS.Color.textTertiary
                                              : DS.Color.textPrimary)

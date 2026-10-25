@@ -244,7 +244,7 @@ struct NewsCommentsSheet: View {
             }
 
             Text(comment.content)
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.fieldValue)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -270,7 +270,7 @@ struct NewsCommentsSheet: View {
         HStack(alignment: .bottom, spacing: DS.Spacing.sm) {
             TextField(L10n.t("اكتب تعليقك...", "Write a comment..."), text: $commentInput, axis: .vertical)
                 .lineLimit(1...3)
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.textPrimary)
                 .focused($inputFocused)
                 .padding(.horizontal, DS.Spacing.md)

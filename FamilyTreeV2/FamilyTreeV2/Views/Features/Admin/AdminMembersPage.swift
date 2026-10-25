@@ -849,7 +849,7 @@ struct AdminBandSearchField: View {
                 .foregroundColor(DS.Hub.onBandMuted)
                 .accessibilityHidden(true)
             TextField("", text: $text, prompt: Text(placeholder).foregroundColor(DS.Hub.onBandMuted))
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.textOnPrimary)
                 .tint(DS.Color.accentLight)
                 .submitLabel(.search)

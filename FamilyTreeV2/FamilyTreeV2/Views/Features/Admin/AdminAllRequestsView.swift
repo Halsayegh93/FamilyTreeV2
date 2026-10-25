@@ -2960,7 +2960,7 @@ struct AdminAllRequestsView: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(valueColor)
                     .lineLimit(2)
             }
@@ -3953,7 +3953,7 @@ struct AdminAllRequestsView: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
             }
@@ -3977,7 +3977,7 @@ struct AdminAllRequestsView: View {
                         .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(value)
-                        .dsFieldFont(.body)
+                        .dsFieldFont(.fieldValue)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -4015,7 +4015,7 @@ struct AdminAllRequestsView: View {
                 Spacer(minLength: 0)
             }
             Text(text)
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -4037,7 +4037,7 @@ struct AdminAllRequestsView: View {
                         .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(oldValue)
-                        .dsFieldFont(.body)
+                        .dsFieldFont(.fieldValue)
                         .foregroundColor(DS.Color.fieldValue)
                         .strikethrough(true, color: DS.Color.error.opacity(DS.Opacity.disabled))
                         .fixedSize(horizontal: false, vertical: true)
@@ -4060,7 +4060,7 @@ struct AdminAllRequestsView: View {
                         .dsFieldFont(.label)
                         .foregroundColor(DS.Color.success)
                     Text(newValue)
-                        .dsFieldFont(.headline)
+                        .dsFieldFont(.fieldValueStrong)
                         .foregroundColor(DS.Color.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

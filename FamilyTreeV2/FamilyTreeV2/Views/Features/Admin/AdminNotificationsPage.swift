@@ -768,7 +768,7 @@ struct AdminNoticeDetailBox: View {
         DSComposerSection(title: L10n.t("التفاصيل", "Details"), icon: "text.alignright",
                           tint: AppSection.admin.ink, index: bodyIndex) {
             Text(item.body)
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.fieldValue)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -801,7 +801,7 @@ struct AdminNoticeDetailBox: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)

@@ -800,8 +800,13 @@ extension DS.TextRole {
     static let subtitle     = DS.TextRole(.subheadline)
     /// وصف رأس الصفحة الفرعية — Subheadline (١٥)
     static let pageSubtitle = DS.TextRole(.subheadline, weight: .medium)
-    /// عنوان الحقل في الصفحات (`DSFieldLabel`) — Footnote (١٣)
-    static let label        = DS.TextRole(.footnote, weight: .heavy)
+    /// عنوان الحقل (`DSFieldLabel`، فوق القيمة في كل مكان) — Footnote (١٣) عادي، رمادي
+    /// (طلب المالك ٢٠٢٦-١٠-٢٥: «الفرق بين عنوان الحقل وقيمته» + «مانبي شي غامق ونفضل الأحجام الصغيرة» — كان ١٣ ثقيل مقابل قيمة ١٧)
+    static let label        = DS.TextRole(.footnote)
+    /// قيمة الحقل (تحت عنوانه، وداخل مربّع الإدخال) — Subheadline (١٥) عادي
+    static let fieldValue   = DS.TextRole(.subheadline)
+    /// القيمة الجديدة في مقارنة «قبل ← بعد» — Subheadline (١٥) متوسط (لا عريض)
+    static let fieldValueStrong = DS.TextRole(.subheadline, weight: .medium)
     /// الشرائح والأزرار الصغيرة — Subheadline (١٥)
     static let chip         = DS.TextRole(.subheadline, weight: .semibold)
     /// نص جانبي وتلميح (طرف عنوان القسم) — Caption 1 (١٢)
@@ -1386,7 +1391,7 @@ enum DSBox {
     static let fieldVerticalPadding: CGFloat = 4
     static let fieldHorizontalPadding: CGFloat = 7
     static let fieldMinHeight: CGFloat = 36
-    static var fieldValueSize: CGFloat { DS.TextRole.body.size }
+    static var fieldValueSize: CGFloat { DS.TextRole.fieldValue.size }
     static var fieldLabelSize: CGFloat { DS.TextRole.label.size }
     /// صور المربّع: مربّع الصورة المصغّرة في شريط الصور (٧٦ ← ٥٦) ودائرة الشعار (٩٢ ← ٦٤) — كانت
     /// أرقاماً في الشاشات (٦٨/٨٠/٨٨)، والآن من هنا فقط

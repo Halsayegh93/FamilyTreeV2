@@ -893,11 +893,11 @@ struct DSComposerField: View {
                 HStack {
                     HStack(spacing: DS.Spacing.xxs) {
                         Text(label)
-                            .dsFieldFont(DSBox.fieldLabelSize, weight: .heavy)
+                            .dsFieldFont(DSBox.fieldLabelSize, weight: DS.TextRole.label.weight)
                             .foregroundColor(focused ? tint : DS.Color.fieldLabel)
                         if required {
                             Text("*")
-                                .dsFieldFont(DSBox.fieldLabelSize, weight: .heavy)
+                                .dsFieldFont(DSBox.fieldLabelSize, weight: DS.TextRole.label.weight)
                                 .foregroundColor(DS.Color.error)
                                 .accessibilityHidden(true)
                         }
@@ -917,7 +917,7 @@ struct DSComposerField: View {
                         TextField(placeholder, text: $text)
                     }
                 }
-                .dsFieldFont(DSBox.fieldValueSize)
+                .dsFieldFont(DSBox.fieldValueSize, weight: DS.TextRole.fieldValue.weight)
                 .foregroundColor(DS.Color.textPrimary)
                 .keyboardType(keyboard)
                 .autocorrectionDisabled(ltr && !ltrKeepsAutocorrect)

@@ -801,7 +801,7 @@ private struct MessageDetailSheet: View {
                         .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(preferred)
-                        .dsFieldFont(.body)
+                        .dsFieldFont(.fieldValue)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                         .environment(\.layoutDirection, .leftToRight)
@@ -1105,7 +1105,7 @@ private struct ReplyComposerField: View {
                     .foregroundColor(focused ? tint : DS.Color.fieldLabel)
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(6...12)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.textPrimary)
                     .focused($focused)
             }

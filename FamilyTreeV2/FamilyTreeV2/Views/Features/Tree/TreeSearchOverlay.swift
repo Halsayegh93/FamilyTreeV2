@@ -176,7 +176,7 @@ struct TreeSearchOverlay: View {
                 isSearchFocused = focused
             })
             .focused($fieldFocused)
-            .dsFieldFont(.body)
+            .dsFieldFont(.fieldValue)
             .foregroundColor(DS.Color.textPrimary)
             .multilineTextAlignment(.leading)
             .submitLabel(.search)

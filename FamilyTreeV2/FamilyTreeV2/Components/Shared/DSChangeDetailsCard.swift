@@ -55,8 +55,8 @@ struct DSChangeDetailsCard: View {
     private func changeRow(_ change: AppNotification.NotificationDetails.ChangeEntry) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             Text(AppNotification.NotificationDetails.localizedFieldName(change.field))
-                .dsFont(.rowTitleCompact)
-                .foregroundColor(DS.Color.textPrimary)
+                .dsFont(.label)
+                .foregroundColor(DS.Color.fieldLabel)
 
             if AppNotification.NotificationDetails.isOpaqueField(change.field) {
                 opaqueSummary(for: change)
@@ -93,11 +93,11 @@ struct DSChangeDetailsCard: View {
 
             HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
                 Text(label)
-                    .dsFont(.chip)
+                    .dsFont(.label)
                     .foregroundColor(color)
 
                 Text(value)
-                    .dsFont(.calloutMedium)
+                    .dsFont(.fieldValue)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(3)
                     .multilineTextAlignment(.leading)
@@ -115,7 +115,7 @@ struct DSChangeDetailsCard: View {
                 .clipShape(Capsule())
 
             Text(opaqueSummaryLabel(for: change.field))
-                .dsFont(.calloutMedium)
+                .dsFont(.fieldValue)
                 .foregroundColor(DS.Color.textPrimary)
 
             Spacer(minLength: 0)
