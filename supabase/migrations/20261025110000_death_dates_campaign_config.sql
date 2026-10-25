@@ -1,11 +1,12 @@
 -- «إدارة تواريخ الوفاة» لفترة معيّنة (طلب المالك ٢٠٢٦-١٠-٢٤): مفتاحان في app_config (قاعدة «من السيرفر» — تتغيّر بلا
--- بناء تطبيق). لم يُطبَّق — بانتظار موافقة المالك. التراجع: supabase/rollback/20261025110000_death_dates_campaign_config_rollback.sql
+-- بناء تطبيق). طُبِّق على السيرفر ٢٠٢٦-١٠-٢٥ بموافقة المالك («كمل على السيرفر»).
+-- التراجع: supabase/rollback/20261025110000_death_dates_campaign_config_rollback.sql
 -- التجربة المحلية: cd supabase/tests/family_links && node death_dates_campaign_config.test.mjs
 --   • death_dates_campaign (bool، افتراضي true): إبراز «إدارة تواريخ الوفاة» في «اليوم». false = يرجع مكانها «ذكرى الراحلين».
 --   • death_dates_campaign_until (text، افتراضي ''): آخر يوم للحملة YYYY-MM-DD بتوقيت الكويت — فارغ = حتى تكتمل التواريخ.
 -- القيم يقرؤها كل الأعضاء عبر app_config() (التطبيق يقرؤها للإدارة فقط)، والتعديل للمالك عبر set_app_config الموجودة
 -- (من صفحة «إدارة تواريخ الوفاة» في الآيفون). الفحص trg_app_config_guard يتحقق من القيمتين والافتراضيين.
--- قبل تطبيقه: التطبيق يُظهر الحملة ما دام في التواريخ ناقص، وتعطّل أدوات الإيقاف عند المالك بملاحظة.
+-- بدون المفتاحين (قبل تطبيقه): التطبيق يُظهر الحملة ما دام في التواريخ ناقص، ويُخفي أدوات الإيقاف عند المالك.
 
 insert into public.app_config (key, value, default_value, kind, category, label_ar, help_ar, rules, is_public, sort)
 values
