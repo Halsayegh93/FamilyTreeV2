@@ -65,6 +65,20 @@ class NotificationViewModel: ObservableObject {
     }
     
     /// الحصول على نوع الجهاز الحقيقي (مثل iPhone 16 Pro Max)
+    /// بيئة APNs من ملف التوقيع نفسه (`aps-environment` في embedded.mobileprovision): «development» ← sandbox،
+    /// وبلا ملف (App Store/TestFlight) أو «production» ← production. كانت `#if DEBUG` — فنسخة الإصدار المثبّتة بتوقيع
+    /// التطوير (أسرع على الجهاز، ٢٠٢٦-١٠-٢٥) كانت تسجّل production وتفشل إشعاراتها
+    static let apnsEnvironment: String = {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let text = String(data: data, encoding: .isoLatin1),
+              let key = text.range(of: "<key>aps-environment</key>"),
+              let open = text.range(of: "<string>", range: key.upperBound..<text.endIndex),
+              let close = text.range(of: "</string>", range: open.upperBound..<text.endIndex)
+        else { return "production" }
+        return text[open.upperBound..<close.lowerBound] == "development" ? "sandbox" : "production"
+    }()
+
     static var deviceModelName: String {
         var size = 0
         sysctlbyname("hw.machine", nil, &size, nil, 0)
@@ -267,11 +281,7 @@ class NotificationViewModel: ObservableObject {
 
         let deviceModelName = NotificationViewModel.deviceModelName
         let platform = UIDevice.current.userInterfaceIdiom == .pad ? "ipados" : "ios"
-        #if DEBUG
-        let apnsEnvironment = "sandbox"
-        #else
-        let apnsEnvironment = "production"
-        #endif
+        let apnsEnvironment = NotificationViewModel.apnsEnvironment
 
         Log.info("[DEVICE] بدء تسجيل الجهاز: \(deviceModelName) (\(platform)/\(apnsEnvironment)), deviceId=\(deviceId.prefix(8))...")
 
@@ -460,11 +470,7 @@ class NotificationViewModel: ObservableObject {
         do {
             let platform = UIDevice.current.userInterfaceIdiom == .pad ? "ipados" : "ios"
             let deviceModelName = NotificationViewModel.deviceModelName
-            #if DEBUG
-            let apnsEnvironment = "sandbox"
-            #else
-            let apnsEnvironment = "production"
-            #endif
+            let apnsEnvironment = NotificationViewModel.apnsEnvironment
             let isoNow = DateHelper.now
             let payload: [String: AnyEncodable] = [
                 "member_id": AnyEncodable(memberId.uuidString),
