@@ -49,12 +49,20 @@ enum DSMemberKit {
     static let swipeDistance: CGFloat = 36
     static let swipeMinimum: CGFloat = 12
 
-    // MARK: المستطيل الصغير — أزرار رأس التفاصيل (طلب المالك ٢٠٢٦-١٠-٢٥ «اصغر» ثم «مستطيل مو مربع»):
-    // رمز فوق واسم صغير تحته بزوايا دائرية، بتعبئة لون الدور — ٩٢×٥٠ (أكبر من حدّ اللمس ٤٤)
-    static let tileWidth: CGFloat = 92
-    static let tileHeight: CGFloat = 50
-    static let tileRadius: CGFloat = 14
+    // MARK: المستطيل الصغير — أزرار رأس التفاصيل (طلب المالك ٢٠٢٦-١٠-٢٥ «اصغر» ثم «مستطيل مو مربع» ثم
+    // «الايقونة جنب الكلمة… وسع المستطيل شوي»): رمز صغير جنب الاسم بزوايا دائرية، بتعبئة لون الدور —
+    // ١٢٤×٤٠، ومساحة اللمس ٤٤ بحشوة شفافة فوقه وتحته (حدّ أبل)
+    static let tileWidth: CGFloat = 124
+    static let tileHeight: CGFloat = 40
+    static let tileRadius: CGFloat = 12
+    static var tileHitInset: CGFloat { (DSBox.buttonHeight - tileHeight) / 2 }
     static var tileShape: RoundedRectangle { RoundedRectangle(cornerRadius: tileRadius, style: .continuous) }
+
+    // MARK: بطاقة الإجراء — مربّعات «الإدارة» و«طلب تعديل» (طلب المالك ٢٠٢٦-١٠-٢٥ «تصميم جديد مرتب فكر بابداع»):
+    // قرص لون النوع ورمزه جنب الاسم على تدرّج خفيف من لونه، اثنتان في السطر
+    static let chipDisc: CGFloat = 28
+    static let chipHeight: CGFloat = 48
+    static let chipRadius: CGFloat = 14
 
     // MARK: علم دولة الرقم
     /// تعبئة الشارة فوق الرأس الملوّن (أبيض خفيف) وإطارها
@@ -112,30 +120,31 @@ struct DSLiveButton: View {
         action()
     }
 
-    /// المستطيل الصغير: الرمز بحركته فوق، والاسم بسطر صغير تحته، بتعبئة لون الدور ونصّ أبيض
+    /// المستطيل الصغير: الرمز الصغير بحركته جنب الاسم، بتعبئة لون الدور ونصّ أبيض
     private var tileBody: some View {
         Button(action: fire) {
-            VStack(spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.xsm) {
                 if isLoading {
                     ProgressView().tint(DS.Color.textOnPrimary).scaleEffect(DS.Spinner.buttonScale)
                 } else {
                     Image(dsSymbol: icon)
-                        .dsGlyph(DS.Glyph.md)
+                        .dsGlyph(DS.Glyph.xs)
                         .rotationEffect(.degrees(iconAngle), anchor: .bottomLeading)
                         .scaleEffect(iconScale)
                         .accessibilityHidden(true)
                 }
                 Text(title)
-                    .dsFont(.micro)
+                    .dsFont(.chip)
                     .lineLimit(1)
                     .minimumScaleFactor(DSBox.buttonLabelMinScale)
             }
             .foregroundColor(DS.Color.textOnPrimary)
-            .padding(.horizontal, DS.Spacing.xs)
+            .padding(.horizontal, DS.Spacing.sm)
             .frame(width: DSMemberKit.tileWidth, height: DSMemberKit.tileHeight)
             .background(DSMemberKit.tileShape.fill((tint ?? DS.Color.actionNavy).dsSolidFill))
             .overlay { shine.clipShape(DSMemberKit.tileShape) }
-            .contentShape(DSMemberKit.tileShape)
+            .padding(.vertical, DSMemberKit.tileHitInset)
+            .contentShape(Rectangle())
         }
         .buttonStyle(DSPressStyle())
         .allowsHitTesting(!isLoading)
@@ -242,28 +251,27 @@ struct DSDetailsToggle: View {
         .onAppear(perform: playNudge)
     }
 
-    /// السهم في قرص أبيض فوق، و«التفاصيل» تحته — مستطيل صغير ممتلئ بلون المعلومة
+    /// سهم صغير جنب «عرض التفاصيل» — مستطيل صغير ممتلئ بلون المعلومة، السهم يدور مع التوسيع
     private func tileLabel(_ ink: Color) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
+        HStack(spacing: DS.Spacing.xsm) {
             Image(systemName: "chevron.down")
                 .dsGlyph(DS.Glyph.xs)
-                .foregroundColor(ink.dsSolidFill)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                .frame(width: DS.Icon.section, height: DS.Icon.section)
-                .background(Circle().fill(DS.Color.textOnPrimary))
                 .offset(y: nudge)
                 .accessibilityHidden(true)
-            Text(isExpanded ? L10n.t("إخفاء", "Hide") : L10n.t("التفاصيل", "Details"))
-                .dsFont(.micro)
+            Text(isExpanded ? L10n.t("إخفاء التفاصيل", "Hide details") : L10n.t("عرض التفاصيل", "Show details"))
+                .dsFont(.chip)
                 .lineLimit(1)
                 .minimumScaleFactor(DSBox.buttonLabelMinScale)
                 .id(isExpanded)
                 .transition(.opacity)
         }
         .foregroundColor(DS.Color.textOnPrimary)
+        .padding(.horizontal, DS.Spacing.sm)
         .frame(width: DSMemberKit.tileWidth, height: DSMemberKit.tileHeight)
         .background(DSMemberKit.tileShape.fill(ink.dsSolidFill))
-        .contentShape(DSMemberKit.tileShape)
+        .padding(.vertical, DSMemberKit.tileHitInset)
+        .contentShape(Rectangle())
     }
 
     private func pillLabel(_ ink: Color) -> some View {
@@ -383,15 +391,13 @@ struct DSTileGridLayout: Layout {
     }
 }
 
-/// مربّع إجراء: قرص أيقونة بلون مجموعته وتحته اسم الإجراء، على تعبئة خفيفة من اللون وإطار رفيع منه —
-/// لون واحد لكل مجموعة (إضافة · ربط · السجل)، والحذف زرّ أحمر وحده خارج الشبكة
+/// بطاقة إجراء (طلب المالك ٢٠٢٦-١٠-٢٥ «تصميم جديد مرتب»): قرص بلون النوع ورمز أبيض جنب الاسم، على تدرّج خفيف من
+/// اللون وإطار رفيع منه — اثنتان في السطر (`DSActionTileGrid`)، و`fullWidth` لبطاقة الحذف وحدها في آخر المربّع
 struct DSActionTile: View {
     let title: String
     let icon: String
     let tint: Color
     let action: () -> Void
-    /// المربّعات الصغيرة (٤ في السطر — مربّع إدارة شجرة النساء): قرص ٣٠ وخط التعليق
-    @Environment(\.dsTileSmall) private var small
 
     init(_ title: String, icon: String, tint: Color, action: @escaping () -> Void) {
         self.title = title
@@ -401,33 +407,34 @@ struct DSActionTile: View {
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: DSMemberKit.chipRadius, style: .continuous)
         Button {
             guard TapDebouncer.shared.canFire("DSActionTile_\(title)") else { return }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             action()
         } label: {
-            // ملمومة وأصغر (طلب المالك ٢٠٢٦-١٠-٢٥ «ملمومة يم بعض وحجمهم أصغر»): قرص ٣٢ وحشوة ٤
-            VStack(spacing: DS.Spacing.xs) {
-                // قرص ممتلئ بلون المجموعة ورمز أبيض (مثل أيقونات الإعدادات في الآيفون) — التعبئة الثابتة
-                // (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين؛ الصغيرة أصغر قرصاً (٤ في السطر)
+            HStack(spacing: DS.Spacing.sm) {
+                // قرص ممتلئ بلون النوع ورمز أبيض — التعبئة الثابتة (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين
                 Image(dsSymbol: icon)
-                    .dsGlyph(small ? DS.Glyph.sm : DS.Glyph.md)
+                    .dsGlyph(DS.Glyph.sm)
                     .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(width: small ? DS.Icon.discSmall : DS.Icon.row, height: small ? DS.Icon.discSmall : DS.Icon.row)
+                    .frame(width: DSMemberKit.chipDisc, height: DSMemberKit.chipDisc)
                     .background(Circle().fill(tint.dsSolidFill))
                     .accessibilityHidden(true)
                 Text(title)
-                    .dsFieldFont(small ? .caption : .chip)
+                    .dsFieldFont(.chip)
                     .foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.center)
+                    .multilineTextAlignment(.leading)
                     .lineLimit(2)
                     .minimumScaleFactor(DSBox.buttonLabelMinScale)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.vertical, DS.Spacing.sm)
-            .padding(.horizontal, DS.Spacing.xs)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(shape.fill(tint.opacity(DS.Opacity.tintFillSoft)))
+            .padding(.horizontal, DS.Spacing.sm)
+            .padding(.vertical, DS.Spacing.xsm)
+            .frame(maxWidth: .infinity, minHeight: DSMemberKit.chipHeight)
+            .background(shape.fill(LinearGradient(colors: [tint.opacity(DS.Opacity.tintFillStrong),
+                                                           tint.opacity(DS.Opacity.tintFillSoft)],
+                                                  startPoint: .leading, endPoint: .trailing)))
             .overlay(shape.strokeBorder(tint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
             .contentShape(shape)
         }
@@ -436,25 +443,17 @@ struct DSActionTile: View {
     }
 }
 
-/// شبكة مربّعات جاهزة: ٣ في السطر (و٢ مع خطوط إمكانية الوصول) — ملمومة: فاصل ٤ وارتفاع المربّع على قدر
-/// محتواه (لا مربّع كامل) فتقصر الشبكة
+/// شبكة بطاقات الإجراءات: اثنتان في السطر (وواحدة مع خطوط إمكانية الوصول) بفاصل ٨ — السطر الناقص يتوسّط
 struct DSActionTileGrid<Content: View>: View {
-    /// عدد المربّعات في السطر (٣، أو ٤ للمربّعات الصغيرة) — ويقلّ مع خطوط إمكانية الوصول
-    var columns: Int = 3
-    /// الفاصل بين المربّعات
-    var spacing: CGFloat = DS.Spacing.xs
     @ViewBuilder let content: () -> Content
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let large = typeSize.isAccessibilitySize
-        DSTileGridLayout(columns: large ? max(2, columns - 2) : columns, spacing: spacing, square: false) {
+        DSTileGridLayout(columns: typeSize.isAccessibilitySize ? 1 : 2, spacing: DS.Spacing.sm, square: false) {
             content()
         }
     }
 }
-
-// MARK: - علم دولة الرقم (غير الكويت)
 
 /// دولة رقم الهاتف لعرض علمها — الكويت (الافتراضي) بلا علم، ودولة من قائمة `KuwaitPhone` بعلمها، وأي رمز
 /// دولي آخر بكرة أرضية
@@ -521,17 +520,5 @@ struct DSPhoneCountryBadge: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(L10n.t("رقم من \(origin.name)", "Phone from \(origin.name)"))
         }
-    }
-}
-
-// MARK: - المربّعات الصغيرة
-
-private struct DSTileSmallKey: EnvironmentKey { static let defaultValue = false }
-
-extension EnvironmentValues {
-    /// مربّعات الإجراءات الصغيرة (قرص ٣٠، خط التعليق) — مربّع إدارة شجرة النساء
-    var dsTileSmall: Bool {
-        get { self[DSTileSmallKey.self] }
-        set { self[DSTileSmallKey.self] = newValue }
     }
 }

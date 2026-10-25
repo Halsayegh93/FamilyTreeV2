@@ -413,8 +413,6 @@ struct WomanDetailSheet: View {
         box
             // «إدارة السجل» — مربّع طويل من الأسفل مثل «إدارة السجل» في شجرة العائلة (توصية أبل للنماذج الطويلة)
             .dsTallBox(isPresented: $draft.showEdit) { WomanDraftScope(draft: draft) { editBox } }
-            // «تسجيل وفاة» / «إلغاء الوفاة» — مربّعها الصغير
-            .dsCenterBox(isPresented: $draft.showDeath) { WomanDraftScope(draft: draft) { deathBox } }
             // «ترتيب الأبناء» — مربّعه
             .dsCenterBox(isPresented: $draft.showReorder) { WomanDraftScope(draft: draft) { reorderBox } }
             // إضافة (ابن أو ابنة / زوجة / أم) — مربّع واحد بنفس «إضافة ابن» في شجرة العائلة
@@ -944,15 +942,6 @@ struct WomanDetailSheet: View {
         draft.showEdit = true
     }
 
-    /// «تسجيل وفاة» / «إلغاء الوفاة» — المربّع يفتح والمفتاح مقلوب، يحدّد التاريخ ثم «حفظ»
-    private func openDeathBox() {
-        loadRecordDraft()
-        draft.deceased.toggle()
-        // نقطة البداية بعد القلب — «إلغاء» بلا تعديل لا يسأل «تجاهل التعديلات؟» (ن-٢ فحص ٢٠٢٦-١٠-٠٧)
-        draft.datesStart = datesSignature
-        draft.showDeath = true
-    }
-
     private func openReorderBox() {
         loadRecordDraft()
         draft.sorting = true
@@ -1018,11 +1007,6 @@ struct WomanDetailSheet: View {
         }
     }
 
-    /// عنوان إجراء الوفاة حسب حالة السجل
-    private var deathActionTitle: String {
-        woman.isDeceased == true ? L10n.t("إلغاء الوفاة", "Mark living") : L10n.t("تسجيل وفاة", "Deceased")
-    }
-
     /// الإجراءات حسب الآلية (`mode`): الإضافة ثم الربط، ثم (للإدارة) الترتيب والوفاة والتعديل والجنس والحذف
     private var adminActions: [AdminAction] {
         switch mode {
@@ -1070,16 +1054,9 @@ struct WomanDetailSheet: View {
             list.append(AdminAction(id: "reorder", title: L10n.t("ترتيب الأبناء", "Reorder"),
                                     icon: "arrow.up.arrow.down") { openReorderBox() })
         }
-        list.append(AdminAction(id: "deceased", title: deathActionTitle,
-                                icon: "heart.slash") { openDeathBox() })
+        // الوفاة والجنس بيانات — مكانها «تعديل البيانات» لا مربّعات مستقلّة (طلب المالك ٢٠٢٦-١٠-٢٥)
         list.append(AdminAction(id: "edit", title: L10n.t("تعديل البيانات", "Edit details"),
                                 icon: "pencil") { openEditBox() })
-        if genderTarget != nil {
-            list.append(AdminAction(id: "gender", title: genderChangeTitle,
-                                    icon: "arrow.left.arrow.right") {
-                draft.showGender = true
-            })
-        }
         // الحذف للمالك والمدير فقط (م-٣)، ومن المدخل الواحد `requestDelete`
         if canDelete {
             list.append(AdminAction(id: "delete", title: L10n.t("حذف", "Delete"),
@@ -1216,14 +1193,15 @@ struct WomanDetailSheet: View {
                 if !tiles.isEmpty {
                     DSComposerSection(title: L10n.t("الإجراءات", "Actions"), icon: "square.grid.2x2.fill",
                                       tint: DS.Color.actionNavy, index: 0) {
-                        // بلا خلفية للمجموعة، والمربّعات متباعدة قليلاً (طلب المالك ٢٠٢٦-١٠-٢٥)
-                        DSActionTileGrid(columns: 4, spacing: DS.Spacing.sm) {
-                            ForEach(tiles) { action in
+                        // بطاقات الإجراءات — اثنتان في السطر، تدخل تباعاً (طلب المالك ٢٠٢٦-١٠-٢٥ «تصميم جديد مرتب»)
+                        DSActionTileGrid {
+                            ForEach(Array(tiles.enumerated()), id: \.element.id) { i, action in
                                 DSActionTile(action.title, icon: action.icon, tint: groupTint(action.group),
                                              action: action.run)
+                                    .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
+                                                y: DSMotion.rise, scale: DSMotion.riseScale)
                             }
                         }
-                        .environment(\.dsTileSmall, true)
                     }
                     .disabled(draft.busy)
                 }
@@ -1260,26 +1238,6 @@ struct WomanDetailSheet: View {
             lineageCard.dsStaggerIn(4)
             // زرّ الحذف لمن يملك الحذف فقط (م-٣ فحص ٢٠٢٦-١٠-٠٧)
             if canDelete { deleteButton.dsStaggerIn(5) }
-        }
-    }
-
-    // MARK: - مربّع الوفاة — «التواريخ والحالة» نفسها (مفتاح «متوفّاة» + تاريخ الوفاة) و«حفظ» / «إلغاء»
-    private var deathBox: some View {
-        DSComposer(
-            title: deathActionTitle,
-            subtitle: displayName(woman),
-            icon: "heart.slash",
-            tint: woman.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
-            actionTitle: L10n.t("حفظ", "Save"),
-            actionIcon: "checkmark",
-            canSubmit: true,
-            isBusy: draft.busy,
-            // يقارن بما فُتح عليه المربّع (المفتاح مقلوب أصلاً) لا بالسجل — ن-٢ فحص ٢٠٢٦-١٠-٠٧
-            hasUnsavedChanges: datesSignature != draft.datesStart,
-            onSubmit: performSave,
-            onCancel: { draft.showDeath = false }
-        ) {
-            datesCard.dsStaggerIn(0)
         }
     }
 
@@ -1337,6 +1295,15 @@ struct WomanDetailSheet: View {
                 TextField(L10n.t("الاسم الكامل", "Full Name"), text: $draft.name, axis: .vertical)
                     .lineLimit(1...3)
                     .padding(.vertical, DS.Spacing.sm)
+            }
+            // تغيير الجنس من البيانات (كان مربّعاً مستقلاً في الإجراءات) — بتأكيد قبل النقل بين الشجرتين
+            if genderTarget != nil {
+                Button { draft.showGender = true } label: {
+                    DSRow(icon: "arrow.left.arrow.right", tint: chromeInk, title: genderChangeTitle,
+                          subtitle: woman.isFemale ? L10n.t("الجنس: أنثى", "Gender: female")
+                                                   : L10n.t("الجنس: ذكر", "Gender: male")) { DSChevron() }
+                }
+                .buttonStyle(DSScaleButtonStyle())
             }
         }
     }
@@ -1545,11 +1512,6 @@ struct WomanDetailSheet: View {
     private var draftBirthKey: String? { draft.hasBirth ? Self.dayKey(draft.birth) : nil }
     private var draftDeathKey: String? { draft.deceased && draft.hasDeath ? Self.dayKey(draft.death) : nil }
     private var orderChanged: Bool { draft.ordered.map(\.id) != children.map(\.id) }
-    /// بطاقة «التواريخ والحالة» كما هي الآن (الميلاد · الوفاة · تاريخها) — لمقارنة مربّع الوفاة بنقطة بدايته
-    private var datesSignature: String {
-        [draftBirthKey ?? "", draft.deceased ? "1" : "0", draftDeathKey ?? ""].joined(separator: "|")
-    }
-
     private var adminFormHasChanges: Bool {
         draft.name.trimmingCharacters(in: .whitespaces) != startName
             || draftBirthKey != startBirthKey
@@ -2217,7 +2179,6 @@ private final class WomanAdminDraft: ObservableObject {
     // ما يُفتح فوق مربّع الإجراءات
     @Published var addKind: WomanDetailSheet.AddKind? = nil
     @Published var showEdit = false
-    @Published var showDeath = false
     @Published var showReorder = false
     @Published var showMother = false
     @Published var showWifePicker = false
@@ -2230,18 +2191,16 @@ private final class WomanAdminDraft: ObservableObject {
     @Published var writeError: WomanWriteError? = nil
     /// نتيجة تحتاج إعلاماً (طلب أُرسل، ابن ينتظر الاعتماد) — «حسناً» يغلق التفاصيل
     @Published var notice: WomanWriteError? = nil
-    /// بطاقة التواريخ لحظة فتح مربّع الوفاة (ن-٢)
-    var datesStart = ""
 
     /// مربّع مفتوح فوق مربّع الإجراءات → يتقلّص خلفه قليلاً
     var boxOnTop: Bool {
-        addKind != nil || showEdit || showDeath || showReorder || showMother || showWifePicker
+        addKind != nil || showEdit || showReorder || showMother || showWifePicker
             || showHusbandPicker
     }
 
     func closeBoxes() {
         addKind = nil
-        showEdit = false; showDeath = false; showReorder = false
+        showEdit = false; showReorder = false
         showMother = false; showWifePicker = false; showHusbandPicker = false
     }
 }

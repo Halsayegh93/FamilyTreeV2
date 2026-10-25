@@ -40,7 +40,6 @@ struct MemberDetailsView: View {
 
     @State private var showEditActions = false
     /// «طلب إضافة» (ابن، ابنة، زوجة) — مربّع اختيار بمنتصف الشاشة مثل «طلب تعديل»
-    @State private var showAddActions = false
     @State private var pendingEditAction: TreeEditAction? = nil
     /// من يُطلب إضافته مع «إضافة» (`pendingEditAction == .add`)
     @State private var pendingAddKind: TreeAddKind = .son
@@ -292,7 +291,7 @@ struct MemberDetailsView: View {
             }
             .transaction { t in
                 // بلا انزلاق من الأسفل — اللوح يظهر بنفسه في المنتصف
-                if pendingEditAction != nil || showEditActions || showAddActions {
+                if pendingEditAction != nil || showEditActions {
                     t.disablesAnimations = true
                 }
             }
@@ -300,13 +299,6 @@ struct MemberDetailsView: View {
             .fullScreenCover(isPresented: $showEditActions) {
                 DSCenterPanel(onBackgroundTap: { showEditActions = false }, hugsContent: true) {
                     editActionsGrid
-                }
-                .background(ClearPresentationBackground())
-            }
-            // «طلب إضافة» — نفس المربّع: ابن، ابنة، زوجة
-            .fullScreenCover(isPresented: $showAddActions) {
-                DSCenterPanel(onBackgroundTap: { showAddActions = false }, hugsContent: true) {
-                    addActionsGrid
                 }
                 .background(ClearPresentationBackground())
             }
@@ -1000,53 +992,42 @@ struct MemberDetailsView: View {
             DSComposerSection(title: L10n.t("اختر نوع الطلب", "Choose Request Type"),
                               icon: "square.grid.2x2.fill",
                               tint: DS.Color.primary) {
-                // نفس مربّعات مربّع الإجراءات في شجرة النساء: مقاس واحد، أسطر متوازنة بلا يتيم (٦ = ٣+٣، ٥ = ٣+٢)
+                // نفس بطاقات مربّع الإجراءات في شجرة النساء — اثنتان في السطر بلون النوع، و«حذف» بعرض كامل آخراً
+                let actions = availableEditActions.filter { $0 != .delete }
                 DSActionTileGrid {
-                    ForEach(availableEditActions, id: \.rawValue) { action in
+                    ForEach(Array(actions.enumerated()), id: \.element.rawValue) { i, action in
                         DSActionTile(editActionLabel(for: action), icon: action.iconName,
-                                     tint: action == .delete ? DS.Color.error : chromeInk) { pick(action) }
+                                     tint: editActionTint(action)) { pick(action) }
+                            .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
+                                        y: DSMotion.rise, scale: DSMotion.riseScale)
                     }
+                }
+                if availableEditActions.contains(.delete) {
+                    DSActionTile(editActionLabel(for: .delete), icon: TreeEditAction.delete.iconName,
+                                 tint: DS.Color.error) { pick(.delete) }
                 }
             }
         }
     }
 
-    /// التعديلات — والإضافة صارت زرّها «طلب إضافة» تحت الاسم (طلب المالك ٢٠٢٦-١٠-٢٤ «اذا يبي يسوي طلبات اضافة؟»)
+    /// لون بطاقة الطلب بنوعه: الإضافة أخضر العائلة، الوفاة رمادي، والبيانات بلون المربّع
+    private func editActionTint(_ action: TreeEditAction) -> Color {
+        switch action {
+        case .add: return DSMemberKit.addTint
+        case .deceased, .addDeathDate: return DS.Color.textSecondary
+        case .delete: return DS.Color.error
+        default: return chromeInk
+        }
+    }
+
+    /// الطلبات — «إضافة ابن» أولها كما كان (طلب المالك ٢٠٢٦-١٠-٢٥: «طلب إضافة» بشجرة النساء وحدها)
     private var availableEditActions: [TreeEditAction] {
         if member.isDeceased == true {
-            return [.editName, .editBirth, .addDeathDate, .addPhoto, .delete]
+            return [.add, .editName, .editBirth, .addDeathDate, .addPhoto, .delete]
         }
-        return [.editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete]
+        return [.add, .editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete]
     }
 
-    /// «طلب إضافة» — ابن (يُضاف تلقائياً عند القبول)، أو ابنة أو زوجة (تُضيفها الإدارة في شجرة النساء)؛
-    /// كلها طلب «تعديل الشجرة» نفسه (`submitTreeEditRequest`) الذي يقبله السيرفر لأي عضو مفعّل
-    private var addActionsGrid: some View {
-        DSComposer(
-            title: L10n.t("طلب إضافة", "Request an addition"),
-            subtitle: member.displayFullName,
-            icon: "person.badge.plus",
-            tint: DS.Color.composerProject,
-            actionTitle: "",
-            showsAction: false,
-            canSubmit: false,
-            note: L10n.t("يصل الطلب للإدارة لمراجعته", "The request goes to the admins for review"),
-            onSubmit: {},
-            onCancel: { showAddActions = false }
-        ) {
-            DSComposerSection(title: L10n.t("من تريد إضافته؟", "Who are you adding?"),
-                              icon: "plus.circle.fill", tint: DSMemberKit.addTint) {
-                DSActionTileGrid {
-                    ForEach(TreeAddKind.allCases) { kind in
-                        DSActionTile(kind.tileTitle, icon: kind.icon, tint: DSMemberKit.addTint) {
-                            pick(.add, kind: kind, closing: { showAddActions = false })
-                        }
-                    }
-                }
-            }
-            .environment(\.dsBoxTint, nil)
-        }
-    }
 
     /// نُغلق مربّع الاختيار أولاً ثم نفتح نموذج الطلب (عرضان متتاليان)
     private func pick(_ action: TreeEditAction, kind: TreeAddKind = .son, closing: (() -> Void)? = nil) {
@@ -1148,25 +1129,14 @@ struct MemberDetailsView: View {
     /// للأعضاء والإدارة
     private var showsRequestEdit: Bool { !isViewingSelf && !member.isDeleted }
 
-    /// «طلب إضافة» لغير الإدارة على غيره — ابن أو ابنة أو زوجة (كان «إضافة ابن» مخفياً داخل «طلب تعديل»)
-    private var showsRequestAdd: Bool { !isViewingSelf && !member.isDeleted && !authVM.canEditMembers }
-
-    /// زرّ الدور تحت الاسم — بمقاس «طلب تعديل» و«إغلاق» نفسه ولون دوره (`DSMemberKit`، طلب المالك ٢٠٢٦-١٠-٢٤
-    /// «احجم الازرار نبي وحدها»): «تعديل مباشر» ذهبي للمالك والمدير والمراقب (`canEditMembers`) والقلم يكتب،
-    /// و«طلب إضافة» أخضر العائلة لغيرهم ورمزه يقفز
+    /// زرّ الدور تحت الاسم (`DSMemberKit`): «تعديل مباشر» ذهبي للمالك والمدير والمراقب (`canEditMembers`)
+    /// والقلم يكتب. «طلب إضافة» في شجرة النساء وحدها (طلب المالك ٢٠٢٦-١٠-٢٥) — هنا «إضافة ابن» داخل «طلب تعديل»
     @ViewBuilder private var roleActionButton: some View {
         if authVM.canEditMembers && !member.isDeleted {
             DSLiveButton(L10n.t("تعديل مباشر", "Direct Edit"), icon: "pencil",
                          tint: DSMemberKit.directTint, motion: .write,
                          hint: L10n.t("يفتح إدارة السجل", "Opens the member record"), tile: true) {
                 showAdminControl = true
-            }
-        } else if showsRequestAdd {
-            DSLiveButton(L10n.t("طلب إضافة", "Request addition"), icon: "person.badge.plus",
-                         tint: DSMemberKit.addTint, motion: .pop,
-                         hint: L10n.t("ابن أو ابنة أو زوجة — يصل الطلب للإدارة",
-                                      "A son, daughter or wife — the request goes to the admins"), tile: true) {
-                showAddActions = true
             }
         }
     }
