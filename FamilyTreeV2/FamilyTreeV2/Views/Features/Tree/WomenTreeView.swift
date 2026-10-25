@@ -1020,7 +1020,7 @@ struct WomanDetailSheet: View {
         case "husband": return L10n.t("زوج لـ", "Husband of ") + who
         // الأم: اسم أب العضو في السطر الثاني (طلب المالك ٢٠٢٦-١٠-٢٥) — الأم زوجة أبيه؛ بلا أب في الشجرة كما كان
         case "mother":
-            if let f = father { return L10n.t("من زوجات «", "From the wives of «") + shortName(f) + "»" }
+            if let f = father { return L10n.t("زوجات «", "Wives of «") + shortName(f) + "»" }   // «اختيار الأم» مختصر (طلب المالك)
             return L10n.t("من زوجات أبي ", "From the wives of the father of ") + who
         case "addMother":
             if let f = father { return L10n.t("زوجة «", "Wife of «") + shortName(f) + "»" }
